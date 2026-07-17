@@ -1,6 +1,8 @@
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Dtos;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Employees.Services;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 using TransportationService.Api.Tests.TestSupport;
@@ -19,7 +21,7 @@ public class EmployeeWithoutUserTests
         db.Context.TenantSettings.Add(new TenantSettings { Id = Guid.NewGuid(), TenantId = tenantId, EmployeeNumberPrefix = "EMP-", EmployeeNumberNextValue = 1 });
         await db.Context.SaveChangesAsync();
 
-        var sut = new EmployeeService(db.Context, new DevTenantContext(tenantId));
+        var sut = new EmployeeService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(Guid.NewGuid())));
 
         var created = await sut.CreateAsync(new CreateEmployeeRequest(
             "Jan", "Janssen", "Kerkstraat", "1", "1000", "Brussel", "BE",
@@ -43,8 +45,8 @@ public class EmployeeWithoutUserTests
         db.Context.TenantSettings.Add(new TenantSettings { Id = Guid.NewGuid(), TenantId = tenantB, EmployeeNumberPrefix = "B-", EmployeeNumberNextValue = 1 });
         await db.Context.SaveChangesAsync();
 
-        var sutA = new EmployeeService(db.Context, new DevTenantContext(tenantA));
-        var sutB = new EmployeeService(db.Context, new DevTenantContext(tenantB));
+        var sutA = new EmployeeService(db.Context, new DevTenantContext(tenantA), new AuditService(db.Context, new DevTenantContext(tenantA), new DevCurrentUserContext(Guid.NewGuid())));
+        var sutB = new EmployeeService(db.Context, new DevTenantContext(tenantB), new AuditService(db.Context, new DevTenantContext(tenantB), new DevCurrentUserContext(Guid.NewGuid())));
 
         await sutA.CreateAsync(new CreateEmployeeRequest("Jan", "Janssen", "Kerkstraat", "1", "1000", "Brussel", "BE", "+32", "jan@a.com", new DateOnly(1990, 1, 1), new DateOnly(2020, 1, 1), EmploymentStatus.Active, EmployeeFunction.DriverB, null, null, null), CancellationToken.None);
 

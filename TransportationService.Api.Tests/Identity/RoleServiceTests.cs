@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Dtos;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
@@ -17,7 +18,7 @@ public class RoleServiceTests
         db.Context.Roles.Add(new Role { Id = roleId, TenantId = tenantId, Name = "Administrator", IsSystemRole = true, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         await db.Context.SaveChangesAsync();
 
-        var sut = new RoleService(db.Context, new DevTenantContext(tenantId));
+        var sut = new RoleService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(Guid.NewGuid())));
 
         var result = await sut.DeactivateAsync(roleId, CancellationToken.None);
 
@@ -33,7 +34,7 @@ public class RoleServiceTests
         db.Context.Roles.Add(new Role { Id = roleId, TenantId = tenantId, Name = "Planner", IsSystemRole = false, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         await db.Context.SaveChangesAsync();
 
-        var sut = new RoleService(db.Context, new DevTenantContext(tenantId));
+        var sut = new RoleService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(Guid.NewGuid())));
 
         var result = await sut.DeactivateAsync(roleId, CancellationToken.None);
 
@@ -50,7 +51,7 @@ public class RoleServiceTests
         db.Context.Roles.Add(new Role { Id = roleId, TenantId = tenantId, Name = "Administrator", IsSystemRole = true, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         await db.Context.SaveChangesAsync();
 
-        var sut = new RoleService(db.Context, new DevTenantContext(tenantId));
+        var sut = new RoleService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(Guid.NewGuid())));
 
         var result = await sut.UpdateAsync(roleId, new UpdateRoleRequest("SuperAdmin", "renamed"), CancellationToken.None);
 
@@ -68,7 +69,7 @@ public class RoleServiceTests
         db.Context.Permissions.Add(new Permission { Id = permissionId, Code = "users.view", Module = "users", Action = "view", Description = "x" });
         await db.Context.SaveChangesAsync();
 
-        var sut = new RoleService(db.Context, new DevTenantContext(tenantId));
+        var sut = new RoleService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(Guid.NewGuid())));
 
         var result = await sut.AssignPermissionsAsync(roleId, new AssignPermissionsRequest(["users.view"]), CancellationToken.None);
 

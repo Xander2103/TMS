@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Dtos;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -10,11 +11,13 @@ public class RoleService : IRoleService
 {
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
+    private readonly IAuditService _auditService;
 
-    public RoleService(TransportationDbContext dbContext, ITenantContext tenantContext)
+    public RoleService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
+        _auditService = auditService;
     }
 
     public async Task<IReadOnlyList<RoleDto>> ListAsync(CancellationToken cancellationToken)
@@ -54,6 +57,9 @@ public class RoleService : IRoleService
         _dbContext.Roles.Add(role);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await _auditService.RecordAsync("Role", role.Id.ToString(), "Created", null,
+            new { role.Name, role.Description, role.IsActive }, cancellationToken);
+
         return (await MapAsync(role, cancellationToken))!;
     }
 
@@ -68,10 +74,14 @@ public class RoleService : IRoleService
             return new RoleOperationResult(RoleOperationOutcome.SystemRoleProtected, await MapAsync(role, cancellationToken));
         }
 
+        var oldValues = new { role.Name, role.Description, role.IsActive };
         role.Name = newName;
         role.Description = request.Description?.Trim();
         role.UpdatedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("Role", role.Id.ToString(), "Updated", oldValues,
+            new { role.Name, role.Description, role.IsActive }, cancellationToken);
 
         return new RoleOperationResult(RoleOperationOutcome.Success, await MapAsync(role, cancellationToken));
     }
@@ -90,6 +100,8 @@ public class RoleService : IRoleService
         role.UpdatedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await _auditService.RecordAsync("Role", role.Id.ToString(), "Deactivated", new { IsActive = true }, new { role.IsActive }, cancellationToken);
+
         return new RoleOperationResult(RoleOperationOutcome.Success, await MapAsync(role, cancellationToken));
     }
 
@@ -105,6 +117,7 @@ public class RoleService : IRoleService
             .ToListAsync(cancellationToken);
 
         var existing = await _dbContext.RolePermissions.Where(rp => rp.RoleId == id).ToListAsync(cancellationToken);
+        var oldPermissionIds = existing.Select(rp => rp.PermissionId).ToList();
         _dbContext.RolePermissions.RemoveRange(existing);
         foreach (var permissionId in permissionIds)
         {
@@ -113,6 +126,8 @@ public class RoleService : IRoleService
 
         role.UpdatedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("Role", role.Id.ToString(), "AssignPermissions", new { PermissionIds = oldPermissionIds }, new { PermissionIds = permissionIds }, cancellationToken);
 
         return new RoleOperationResult(RoleOperationOutcome.Success, await MapAsync(role, cancellationToken));
     }

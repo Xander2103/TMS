@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Dtos;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -12,11 +13,13 @@ public class UserService : IUserService
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
+    private readonly IAuditService _auditService;
 
-    public UserService(TransportationDbContext dbContext, ITenantContext tenantContext)
+    public UserService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
+        _auditService = auditService;
     }
 
     public async Task<IReadOnlyList<UserDto>> ListAsync(CancellationToken cancellationToken)
@@ -64,6 +67,9 @@ public class UserService : IUserService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await _auditService.RecordAsync("User", user.Id.ToString(), "Created", null,
+            new { user.Email, user.FirstName, user.LastName, user.IsActive, user.IsBlocked }, cancellationToken);
+
         return (await MapAsync(user, cancellationToken))!;
     }
 
@@ -72,6 +78,8 @@ public class UserService : IUserService
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == _tenantContext.TenantId, cancellationToken);
         if (user is null) return null;
 
+        var oldValues = new { user.Email, user.FirstName, user.LastName, user.IsActive, user.IsBlocked };
+
         user.FirstName = request.FirstName.Trim();
         user.LastName = request.LastName.Trim();
         user.EmployeeId = request.EmployeeId;
@@ -79,6 +87,9 @@ public class UserService : IUserService
         user.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("User", user.Id.ToString(), "Updated", oldValues,
+            new { user.Email, user.FirstName, user.LastName, user.IsActive, user.IsBlocked }, cancellationToken);
 
         return await MapAsync(user, cancellationToken);
     }
@@ -93,9 +104,12 @@ public class UserService : IUserService
             return new UserOperationResult(UserOperationOutcome.LastActiveAdministrator, await MapAsync(user, cancellationToken));
         }
 
+        var oldValues = new { user.IsActive };
         user.IsActive = isActive;
         user.UpdatedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("User", user.Id.ToString(), "SetActive", oldValues, new { user.IsActive }, cancellationToken);
 
         return new UserOperationResult(UserOperationOutcome.Success, await MapAsync(user, cancellationToken));
     }
@@ -110,9 +124,12 @@ public class UserService : IUserService
             return new UserOperationResult(UserOperationOutcome.LastActiveAdministrator, await MapAsync(user, cancellationToken));
         }
 
+        var oldValues = new { user.IsBlocked };
         user.IsBlocked = isBlocked;
         user.UpdatedAt = DateTime.UtcNow;
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("User", user.Id.ToString(), "SetBlocked", oldValues, new { user.IsBlocked }, cancellationToken);
 
         return new UserOperationResult(UserOperationOutcome.Success, await MapAsync(user, cancellationToken));
     }
@@ -132,6 +149,7 @@ public class UserService : IUserService
         }
 
         var existingRoles = await _dbContext.UserRoles.Where(ur => ur.UserId == id).ToListAsync(cancellationToken);
+        var oldRoleIds = existingRoles.Select(ur => ur.RoleId).ToList();
         _dbContext.UserRoles.RemoveRange(existingRoles);
         foreach (var roleId in newRoleIds)
         {
@@ -139,6 +157,8 @@ public class UserService : IUserService
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("User", user.Id.ToString(), "AssignRoles", new { RoleIds = oldRoleIds }, new { RoleIds = newRoleIds }, cancellationToken);
 
         return new UserOperationResult(UserOperationOutcome.Success, await MapAsync(user, cancellationToken));
     }

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Qualifications.Dtos;
 using TransportationService.Api.Modules.Qualifications.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -14,17 +15,20 @@ public class QualificationService : IQualificationService
     private readonly ITenantContext _tenantContext;
     private readonly IQualificationStatusCalculator _statusCalculator;
     private readonly TimeProvider _timeProvider;
+    private readonly IAuditService _auditService;
 
     public QualificationService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IQualificationStatusCalculator statusCalculator,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IAuditService auditService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _statusCalculator = statusCalculator;
         _timeProvider = timeProvider;
+        _auditService = auditService;
     }
 
     public async Task<IReadOnlyList<EmployeeQualificationDto>> ListForEmployeeAsync(Guid employeeId, CancellationToken cancellationToken)
@@ -66,6 +70,9 @@ public class QualificationService : IQualificationService
         _dbContext.EmployeeQualifications.Add(qualification);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await _auditService.RecordAsync("EmployeeQualification", qualification.Id.ToString(), "Created", null,
+            new { qualification.EmployeeId, qualification.QualificationTypeId, qualification.ObtainedDate, qualification.ExpiryDate, qualification.Status }, cancellationToken);
+
         return (await MapAsync(qualification, cancellationToken))!;
     }
 
@@ -90,12 +97,16 @@ public class QualificationService : IQualificationService
         var qualification = await _dbContext.EmployeeQualifications.FirstOrDefaultAsync(q => q.Id == id && q.TenantId == _tenantContext.TenantId, cancellationToken);
         if (qualification is null) return null;
 
+        var oldStatus = qualification.Status;
         qualification.Status = QualificationStatus.Valid;
         qualification.VerifiedAt = DateTime.UtcNow;
         qualification.VerifiedByUserId = verifyingUserId;
         qualification.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("EmployeeQualification", qualification.Id.ToString(), "Verified",
+            new { Status = oldStatus }, new { qualification.Status, qualification.VerifiedAt, qualification.VerifiedByUserId }, cancellationToken);
 
         return await MapAsync(qualification, cancellationToken);
     }
@@ -105,10 +116,14 @@ public class QualificationService : IQualificationService
         var qualification = await _dbContext.EmployeeQualifications.FirstOrDefaultAsync(q => q.Id == id && q.TenantId == _tenantContext.TenantId, cancellationToken);
         if (qualification is null) return null;
 
+        var oldStatus = qualification.Status;
         qualification.Status = QualificationStatus.Suspended;
         qualification.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("EmployeeQualification", qualification.Id.ToString(), "Suspended",
+            new { Status = oldStatus }, new { qualification.Status }, cancellationToken);
 
         return await MapAsync(qualification, cancellationToken);
     }

@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Dtos;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
@@ -28,7 +29,7 @@ public class AdminSafeguardTests
     {
         var (db, tenantId, _, userId) = await SeedSingleAdministratorAsync();
         using var _ = db;
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId));
+        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)));
 
         var result = await sut.SetActiveAsync(userId, false, CancellationToken.None);
 
@@ -47,7 +48,7 @@ public class AdminSafeguardTests
         db.Context.UserRoles.Add(new UserRole { UserId = secondAdminId, RoleId = adminRoleId });
         await db.Context.SaveChangesAsync();
 
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId));
+        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)));
 
         var result = await sut.SetActiveAsync(userId, false, CancellationToken.None);
 
@@ -59,7 +60,7 @@ public class AdminSafeguardTests
     {
         var (db, tenantId, _, userId) = await SeedSingleAdministratorAsync();
         using var _ = db;
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId));
+        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)));
 
         var result = await sut.SetBlockedAsync(userId, true, CancellationToken.None);
 
@@ -71,7 +72,7 @@ public class AdminSafeguardTests
     {
         var (db, tenantId, _, userId) = await SeedSingleAdministratorAsync();
         using var _ = db;
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId));
+        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)));
 
         var result = await sut.AssignRolesAsync(userId, new AssignRolesRequest([]), CancellationToken.None);
 
@@ -88,7 +89,7 @@ public class AdminSafeguardTests
         db.Context.UserRoles.Add(new UserRole { UserId = secondAdminId, RoleId = adminRoleId });
         await db.Context.SaveChangesAsync();
 
-        var sut = new UserService(db.Context, new DevTenantContext(tenantId));
+        var sut = new UserService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(userId)));
 
         var result = await sut.AssignRolesAsync(userId, new AssignRolesRequest([]), CancellationToken.None);
 

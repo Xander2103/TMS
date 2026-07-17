@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Dtos;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -10,11 +11,13 @@ public class EmployeeService : IEmployeeService
 {
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
+    private readonly IAuditService _auditService;
 
-    public EmployeeService(TransportationDbContext dbContext, ITenantContext tenantContext)
+    public EmployeeService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
+        _auditService = auditService;
     }
 
     public async Task<EmployeePagedResult> SearchAsync(string? searchText, bool? isActive, int page, int pageSize, CancellationToken cancellationToken)
@@ -95,6 +98,9 @@ public class EmployeeService : IEmployeeService
         _dbContext.Employees.Add(employee);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await _auditService.RecordAsync("Employee", employee.Id.ToString(), "Created", null,
+            new { employee.EmployeeNumber, employee.FirstName, employee.LastName, employee.EmploymentStatus, employee.IsActive }, cancellationToken);
+
         return MapToDetail(employee);
     }
 
@@ -102,6 +108,8 @@ public class EmployeeService : IEmployeeService
     {
         var employee = await _dbContext.Employees.FirstOrDefaultAsync(e => e.Id == id && e.TenantId == _tenantContext.TenantId, cancellationToken);
         if (employee is null) return null;
+
+        var oldValues = new { employee.FirstName, employee.LastName, employee.EmploymentStatus, employee.PrimaryFunction, employee.IsActive };
 
         employee.FirstName = request.FirstName.Trim();
         employee.LastName = request.LastName.Trim();
@@ -123,6 +131,9 @@ public class EmployeeService : IEmployeeService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await _auditService.RecordAsync("Employee", employee.Id.ToString(), "Updated", oldValues,
+            new { employee.FirstName, employee.LastName, employee.EmploymentStatus, employee.PrimaryFunction, employee.IsActive }, cancellationToken);
+
         return MapToDetail(employee);
     }
 
@@ -136,6 +147,9 @@ public class EmployeeService : IEmployeeService
         employee.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("Employee", employee.Id.ToString(), "Deactivated", new { IsActive = true },
+            new { employee.IsActive, employee.EmploymentEndDate }, cancellationToken);
 
         return true;
     }
