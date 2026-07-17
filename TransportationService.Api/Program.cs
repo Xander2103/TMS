@@ -55,6 +55,7 @@ if (app.Environment.IsDevelopment())
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<TransportationDbContext>();
     await TransportOrderSeeder.SeedAsync(dbContext);
+    await MasterDataSeeder.SeedAsync(dbContext);
 }
 
 app.UseHttpsRedirection();
