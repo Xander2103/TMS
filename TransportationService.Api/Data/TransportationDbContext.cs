@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Models;
+using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Tenancy.Entities;
 
@@ -22,6 +23,8 @@ public class TransportationDbContext : DbContext
     public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+
+    public DbSet<Employee> Employees => Set<Employee>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Employees.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tenancy;
 
@@ -30,6 +31,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPermissionAuthorizationService, PermissionAuthorizationService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
+builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 
 var app = builder.Build();
 
