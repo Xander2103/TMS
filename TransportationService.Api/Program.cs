@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tenancy;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,6 +27,7 @@ builder.Services.AddDbContext<TransportationDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTenantContextAccessors();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<IPermissionAuthorizationService, PermissionAuthorizationService>();
 
 var app = builder.Build();
 
