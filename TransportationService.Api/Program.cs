@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Eligibility.Services;
 using TransportationService.Api.Modules.Employees.Services;
 using TransportationService.Api.Modules.Identity.Services;
@@ -38,6 +39,8 @@ builder.Services.AddSingleton<IFileStorageService>(new LocalFileStorageService(P
 builder.Services.AddSingleton<IQualificationStatusCalculator, QualificationStatusCalculator>();
 builder.Services.AddScoped<IQualificationService, QualificationService>();
 builder.Services.AddScoped<IDriverEligibilityService, DriverEligibilityService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<IEligibilityOverrideService, EligibilityOverrideService>();
 
 var app = builder.Build();
 

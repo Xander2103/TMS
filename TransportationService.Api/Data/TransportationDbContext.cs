@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Models;
+using TransportationService.Api.Modules.Auditing.Entities;
+using TransportationService.Api.Modules.Eligibility.Entities;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Qualifications.Entities;
@@ -29,6 +31,9 @@ public class TransportationDbContext : DbContext
 
     public DbSet<QualificationType> QualificationTypes => Set<QualificationType>();
     public DbSet<EmployeeQualification> EmployeeQualifications => Set<EmployeeQualification>();
+
+    public DbSet<EligibilityOverride> EligibilityOverrides => Set<EligibilityOverride>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
