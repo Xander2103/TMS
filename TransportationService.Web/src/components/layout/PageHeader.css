@@ -1,0 +1,31 @@
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.page-header h2 {
+  margin: 0;
+}
+
+.primary-button {
+  display: inline-block;
+  font-size: 15px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary-button:hover {
+  opacity: 0.9;
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -1,0 +1,41 @@
+.sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: 24px 20px;
+  box-sizing: border-box;
+}
+
+.app-title {
+  font-size: 22px;
+  margin: 0 0 24px;
+}
+
+.sidebar nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nav-item {
+  display: block;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.nav-item.active {
+  background: var(--accent-bg);
+  color: var(--text-h);
+  font-weight: 500;
+}

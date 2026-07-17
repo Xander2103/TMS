@@ -1,0 +1,56 @@
+.transport-order-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 700px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-field label {
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.form-field input,
+.form-field select {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.form-field input[aria-invalid='true'],
+.form-field select[aria-invalid='true'] {
+  border-color: #d33;
+}
+
+.field-error {
+  color: #d33;
+  font-size: 14px;
+}
+
+.form-error {
+  color: #d33;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.secondary-link {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.secondary-link:hover {
+  text-decoration: underline;
+}
