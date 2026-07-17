@@ -28,6 +28,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddTenantContextAccessors();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<IPermissionAuthorizationService, PermissionAuthorizationService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IRoleService, RoleService>();
 
 var app = builder.Build();
 
