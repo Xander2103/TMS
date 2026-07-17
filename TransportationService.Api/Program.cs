@@ -34,6 +34,8 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddSingleton<IFileStorageService>(new LocalFileStorageService(Path.Combine(builder.Environment.ContentRootPath, "App_Data")));
+builder.Services.AddSingleton<IQualificationStatusCalculator, QualificationStatusCalculator>();
+builder.Services.AddScoped<IQualificationService, QualificationService>();
 
 var app = builder.Build();
 
