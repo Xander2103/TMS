@@ -136,6 +136,9 @@ public static class PermissionCodes
     public const string OrdersDelete = "orders.delete";
     public const string OrdersChangeStatus = "orders.change_status";
 
+    // --- Dashboard (company overview) ---
+    public const string DashboardView = "dashboard.view";
+
     // --- Invoices ---
     public const string InvoicesView = "invoices.view";
     public const string InvoicesCreate = "invoices.create";
@@ -250,6 +253,7 @@ public static class PermissionCodes
         (OrdersEdit, "orders", "edit", "Transportopdrachten bewerken"),
         (OrdersDelete, "orders", "delete", "Transportopdrachten verwijderen"),
         (OrdersChangeStatus, "orders", "change_status", "Status van transportopdrachten wijzigen"),
+        (DashboardView, "dashboard", "view", "Bedrijfsdashboard bekijken"),
         (InvoicesView, "invoices", "view", "Facturen bekijken"),
         (InvoicesCreate, "invoices", "create", "Facturen aanmaken"),
         (InvoicesEdit, "invoices", "edit", "Facturen bewerken"),

@@ -163,6 +163,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.I
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();
 
+// Reporting (company dashboard)
+builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.IDashboardService,
+    TransportationService.Api.Modules.Reporting.Services.DashboardService>();
+
 var app = builder.Build();
 
 // Development-only setup
