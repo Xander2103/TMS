@@ -86,6 +86,12 @@ public static class PermissionCodes
     public const string VehiclesEdit = "vehicles.edit";
     public const string VehiclesDelete = "vehicles.delete";
 
+    // --- Trailers (fleet) ---
+    public const string TrailersView = "trailers.view";
+    public const string TrailersCreate = "trailers.create";
+    public const string TrailersEdit = "trailers.edit";
+    public const string TrailersDelete = "trailers.delete";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -148,5 +154,9 @@ public static class PermissionCodes
         (VehiclesCreate, "vehicles", "create", "Voertuigen aanmaken"),
         (VehiclesEdit, "vehicles", "edit", "Voertuigen bewerken"),
         (VehiclesDelete, "vehicles", "delete", "Voertuigen verwijderen"),
+        (TrailersView, "trailers", "view", "Opleggers bekijken"),
+        (TrailersCreate, "trailers", "create", "Opleggers aanmaken"),
+        (TrailersEdit, "trailers", "edit", "Opleggers bewerken"),
+        (TrailersDelete, "trailers", "delete", "Opleggers verwijderen"),
     ];
 }

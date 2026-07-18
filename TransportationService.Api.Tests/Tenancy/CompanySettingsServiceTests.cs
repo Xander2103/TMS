@@ -43,6 +43,7 @@ public class CompanySettingsServiceTests
         TripNumberPrefix: "RIT-", TripNumberNextValue: 5,
         InvoiceNumberPrefix: "FAC-", InvoiceNumberNextValue: 5,
         VehicleNumberPrefix: "VRT-", VehicleNumberNextValue: 5,
+        TrailerNumberPrefix: "OPL-", TrailerNumberNextValue: 5,
         DefaultPageSize: 50, LogoReference: null);
 
     [Fact]

@@ -38,9 +38,8 @@ public class Driver : AuditableTenantEntity
     /// <summary>Prefer to always assign the same vehicle where possible.</summary>
     public bool FixedVehiclePreference { get; set; }
 
-    // References into Fleet. DefaultVehicleId/PreferredVehicleId are FK-constrained to Vehicle
-    // (see DriverConfiguration) now that the table exists. DefaultTrailerId remains a plain id
-    // until the Trailer table is added in a later Fleet wave.
+    // References into Fleet. All three are FK-constrained (see DriverConfiguration), SetNull on
+    // delete so removing a vehicle/trailer never blocks the delete or removes the driver.
     public Guid? DefaultVehicleId { get; set; }
     public Guid? PreferredVehicleId { get; set; }
     public Guid? DefaultTrailerId { get; set; }

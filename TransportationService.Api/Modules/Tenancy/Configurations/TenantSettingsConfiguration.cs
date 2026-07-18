@@ -19,6 +19,7 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(s => s.TripNumberPrefix).HasMaxLength(20);
         builder.Property(s => s.InvoiceNumberPrefix).HasMaxLength(20);
         builder.Property(s => s.VehicleNumberPrefix).HasMaxLength(20);
+        builder.Property(s => s.TrailerNumberPrefix).HasMaxLength(20);
         builder.Property(s => s.CompanyLegalName).HasMaxLength(200);
         builder.Property(s => s.TradingName).HasMaxLength(200);
         builder.Property(s => s.CompanyNumber).HasMaxLength(50);
@@ -51,6 +52,7 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(s => s.TripNumberNextValue).HasDefaultValue(1);
         builder.Property(s => s.InvoiceNumberNextValue).HasDefaultValue(1);
         builder.Property(s => s.VehicleNumberNextValue).HasDefaultValue(1);
+        builder.Property(s => s.TrailerNumberNextValue).HasDefaultValue(1);
         builder.Property(s => s.LogoReference).HasMaxLength(300);
         builder.Property(s => s.EnabledModulesJson).IsRequired();
         builder.HasIndex(s => s.TenantId).IsUnique();

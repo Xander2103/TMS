@@ -24,6 +24,8 @@ public class TenantSettings
     public int InvoiceNumberNextValue { get; set; } = 1;
     public string? VehicleNumberPrefix { get; set; } = "VRT-";
     public int VehicleNumberNextValue { get; set; } = 1;
+    public string? TrailerNumberPrefix { get; set; } = "OPL-";
+    public int TrailerNumberNextValue { get; set; } = 1;
 
     // Company profile (shown on documents, used for invoicing)
     public string? CompanyLegalName { get; set; }
