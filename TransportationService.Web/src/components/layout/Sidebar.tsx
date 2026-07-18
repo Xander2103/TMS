@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { LOOKUP_GROUP_LABELS, LOOKUP_RESOURCES, type LookupGroup } from '../../features/master-data/lookupRegistry'
-import { useAuth } from '../../features/auth/AuthContext'
+import { useAuth } from '../../features/auth/authContextValue'
 import './Sidebar.css'
 
 interface NavItem {

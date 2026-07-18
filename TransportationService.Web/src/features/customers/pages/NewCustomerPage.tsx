@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
-import { useToast } from '../../../components/ui/ToastProvider'
+import { useToast } from '../../../components/ui/toastContext'
 import { CustomerForm } from '../components/CustomerForm'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
 

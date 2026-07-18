@@ -46,31 +46,32 @@ export function usePagedQuery<T>(
     errorMessage = 'Gegevens konden niet worden geladen.',
   } = options
 
-  const [items, setItems] = useState<T[]>([])
-  const [totalCount, setTotalCount] = useState(0)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [state, setState] = useState<{ items: T[]; totalCount: number; error: string | null; loadedKey: string }>({
+    items: [],
+    totalCount: 0,
+    error: null,
+    loadedKey: '',
+  })
   const [reloadToken, setReloadToken] = useState(0)
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), [])
 
+  // Identifies the current request. Loading is derived from whether the loaded result matches it,
+  // so state is only ever mutated inside async callbacks (never synchronously in the effect body).
+  const requestKey = JSON.stringify({ search, isActive, page, pageSize, reloadToken })
+
   useEffect(() => {
     let isMounted = true
-    setIsLoading(true)
 
     const timeoutId = window.setTimeout(() => {
       fetcher({ search, isActive, page, pageSize })
         .then((data) => {
           if (!isMounted) return
-          setItems(data.items)
-          setTotalCount(data.totalCount)
-          setError(null)
-          setIsLoading(false)
+          setState({ items: data.items, totalCount: data.totalCount, error: null, loadedKey: requestKey })
         })
         .catch(() => {
           if (!isMounted) return
-          setError(errorMessage)
-          setIsLoading(false)
+          setState((current) => ({ ...current, error: errorMessage, loadedKey: requestKey }))
         })
     }, debounceMs)
 
@@ -79,7 +80,14 @@ export function usePagedQuery<T>(
       window.clearTimeout(timeoutId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, isActive, page, pageSize, reloadToken])
+  }, [requestKey])
 
-  return { items, totalCount, pageSize, isLoading, error, reload }
+  return {
+    items: state.items,
+    totalCount: state.totalCount,
+    pageSize,
+    isLoading: state.loadedKey !== requestKey,
+    error: state.error,
+    reload,
+  }
 }

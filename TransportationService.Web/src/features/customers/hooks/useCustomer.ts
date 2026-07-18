@@ -10,33 +10,39 @@ interface UseCustomerResult {
 }
 
 export function useCustomer(id: string | undefined): UseCustomerResult {
-  const [customer, setCustomer] = useState<CustomerDetail | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [state, setState] = useState<{ customer: CustomerDetail | null; error: string | null; loadedKey: string }>({
+    customer: null,
+    error: null,
+    loadedKey: '',
+  })
   const [reloadToken, setReloadToken] = useState(0)
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), [])
 
+  const requestKey = id ? `${id}:${reloadToken}` : ''
+
   useEffect(() => {
     if (!id) return
     let isMounted = true
-    setIsLoading(true)
     getCustomer(id)
       .then((data) => {
         if (!isMounted) return
-        setCustomer(data)
-        setError(null)
-        setIsLoading(false)
+        setState({ customer: data, error: null, loadedKey: requestKey })
       })
       .catch(() => {
         if (!isMounted) return
-        setError('Klant kon niet worden geladen.')
-        setIsLoading(false)
+        setState({ customer: null, error: 'Klant kon niet worden geladen.', loadedKey: requestKey })
       })
     return () => {
       isMounted = false
     }
-  }, [id, reloadToken])
+  }, [id, requestKey])
 
-  return { customer, isLoading, error, reload }
+  return {
+    customer: state.customer,
+    // Loading whenever an id is set but its result has not yet arrived.
+    isLoading: id !== undefined && state.loadedKey !== requestKey,
+    error: state.error,
+    reload,
+  }
 }

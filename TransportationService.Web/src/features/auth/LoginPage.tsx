@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { FormField } from '../../components/ui/FormField'
-import { useAuth } from './AuthContext'
+import { useAuth } from './authContextValue'
 import { LoginError } from './authApi'
 import './LoginPage.css'
 
