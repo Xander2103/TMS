@@ -11,6 +11,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
+import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
 import { deleteTrailer, getTrailer, updateTrailer } from '../api/trailersApi'
 import {
   TRAILER_OWNERSHIP_LABELS,
@@ -238,6 +239,7 @@ export function TrailerDetailPage() {
 
       {!editing && id && <FleetDocumentsPanel ownerType="trailer" ownerId={id} />}
       {!editing && id && <MaintenancePanel ownerType="trailer" ownerId={id} />}
+      {!editing && id && <InspectionsPanel ownerType="trailer" ownerId={id} />}
 
       {confirmDelete && (
         <ConfirmDialog

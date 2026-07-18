@@ -11,6 +11,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
+import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
 import { deleteVehicle, getVehicle, updateVehicle } from '../api/vehiclesApi'
 import {
   FUEL_TYPE_LABELS,
@@ -232,6 +233,7 @@ export function VehicleDetailPage() {
 
       {!editing && id && <FleetDocumentsPanel ownerType="vehicle" ownerId={id} />}
       {!editing && id && <MaintenancePanel ownerType="vehicle" ownerId={id} />}
+      {!editing && id && <InspectionsPanel ownerType="vehicle" ownerId={id} />}
 
       {confirmDelete && (
         <ConfirmDialog

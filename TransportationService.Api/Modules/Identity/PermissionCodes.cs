@@ -104,6 +104,12 @@ public static class PermissionCodes
     public const string MaintenanceEdit = "maintenance.edit";
     public const string MaintenanceDelete = "maintenance.delete";
 
+    // --- Inspections (vehicle/trailer/crane) ---
+    public const string InspectionsView = "inspections.view";
+    public const string InspectionsCreate = "inspections.create";
+    public const string InspectionsEdit = "inspections.edit";
+    public const string InspectionsDelete = "inspections.delete";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -178,5 +184,9 @@ public static class PermissionCodes
         (MaintenanceCreate, "maintenance", "create", "Onderhoud plannen"),
         (MaintenanceEdit, "maintenance", "edit", "Onderhoud bewerken en afronden"),
         (MaintenanceDelete, "maintenance", "delete", "Onderhoud verwijderen"),
+        (InspectionsView, "inspections", "view", "Keuringen bekijken"),
+        (InspectionsCreate, "inspections", "create", "Keuringen plannen"),
+        (InspectionsEdit, "inspections", "edit", "Keuringen bewerken en registreren"),
+        (InspectionsDelete, "inspections", "delete", "Keuringen verwijderen"),
     ];
 }
