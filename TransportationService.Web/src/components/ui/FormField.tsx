@@ -7,13 +7,14 @@ interface FormFieldProps {
   error?: string
   hint?: string
   required?: boolean
+  className?: string
   children: ReactNode
 }
 
 /** Label + control + inline validation error wrapper used by every form. */
-export function FormField({ label, htmlFor, error, hint, required, children }: FormFieldProps) {
+export function FormField({ label, htmlFor, error, hint, required, className, children }: FormFieldProps) {
   return (
-    <div className="ui-form-field">
+    <div className={['ui-form-field', className].filter(Boolean).join(' ')}>
       <label htmlFor={htmlFor}>
         {label}
         {required && <span className="ui-form-field-required" aria-hidden="true"> *</span>}

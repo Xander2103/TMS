@@ -67,7 +67,10 @@ public static class PermissionCodes
 
     // --- Drivers ---
     public const string DriversView = "drivers.view";
+    public const string DriversCreate = "drivers.create";
     public const string DriversEdit = "drivers.edit";
+    public const string DriversDelete = "drivers.delete";
+    public const string DriversBlock = "drivers.block";
 
     // --- Company settings ---
     public const string CompanySettingsView = "company_settings.view";
@@ -127,7 +130,10 @@ public static class PermissionCodes
         (LocationsEdit, "locations", "edit", "Locaties bewerken"),
         (LocationsDelete, "locations", "delete", "Locaties verwijderen"),
         (DriversView, "drivers", "view", "Chauffeurs bekijken"),
+        (DriversCreate, "drivers", "create", "Chauffeurs aanmaken"),
         (DriversEdit, "drivers", "edit", "Chauffeurs bewerken"),
+        (DriversDelete, "drivers", "delete", "Chauffeurs verwijderen"),
+        (DriversBlock, "drivers", "block", "Chauffeurs blokkeren"),
         (CompanySettingsView, "company_settings", "view", "Bedrijfsinstellingen bekijken"),
         (CompanySettingsManage, "company_settings", "manage", "Bedrijfsinstellingen beheren"),
         (QualificationTypesView, "qualification_types", "view", "Kwalificatietypes bekijken"),

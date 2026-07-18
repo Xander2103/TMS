@@ -11,6 +11,8 @@ import { CustomersPage } from '../features/customers/pages/CustomersPage'
 import { NewCustomerPage } from '../features/customers/pages/NewCustomerPage'
 import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage'
 import { DriversPage } from '../features/drivers/pages/DriversPage'
+import { NewDriverPage } from '../features/drivers/pages/NewDriverPage'
+import { DriverDetailPage } from '../features/drivers/pages/DriverDetailPage'
 import { VehiclesPage } from '../features/vehicles/pages/VehiclesPage'
 import { SettingsPage } from '../features/settings/pages/SettingsPage'
 import { UsersPage } from '../features/users/pages/UsersPage'
@@ -40,6 +42,8 @@ export function AppRoutes() {
           <Route path="/customers/new" element={<NewCustomerPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/drivers" element={<DriversPage />} />
+          <Route path="/drivers/new" element={<NewDriverPage />} />
+          <Route path="/drivers/:id" element={<DriverDetailPage />} />
           <Route path="/vehicles" element={<VehiclesPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/users/new" element={<NewUserPage />} />

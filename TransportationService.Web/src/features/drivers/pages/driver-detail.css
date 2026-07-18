@@ -1,0 +1,137 @@
+.driver-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.driver-form {
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.driver-form select,
+.driver-form textarea,
+.driver-grid select,
+.driver-grid textarea,
+.driver-block-reason input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.driver-form-error {
+  background: rgba(220, 38, 38, 0.1);
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  color: #dc2626;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.driver-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.driver-checkbox input {
+  width: auto;
+}
+
+.driver-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.driver-readiness {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.driver-readiness-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+.driver-reasons {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+}
+
+.driver-reasons-blocking {
+  color: #dc2626;
+}
+
+.driver-reasons-warning {
+  color: #b45309;
+}
+
+.driver-reasons-ok {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.driver-block-reason {
+  max-width: 560px;
+  margin-bottom: 20px;
+}
+
+.driver-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+  max-width: 720px;
+}
+
+.driver-grid-full {
+  grid-column: 1 / -1;
+}
+
+.driver-qualifications {
+  margin-top: 32px;
+}
+
+.driver-qual-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.driver-qual-table th,
+.driver-qual-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.driver-qual-table th {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text);
+}
+
+@media (max-width: 640px) {
+  .driver-grid {
+    grid-template-columns: 1fr;
+  }
+}

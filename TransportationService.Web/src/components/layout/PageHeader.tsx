@@ -3,13 +3,17 @@ import './PageHeader.css'
 
 interface PageHeaderProps {
   title: string
+  subtitle?: ReactNode
   action?: ReactNode
 }
 
-export function PageHeader({ title, action }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
   return (
     <div className="page-header">
-      <h2>{title}</h2>
+      <div>
+        <h2>{title}</h2>
+        {subtitle && <p className="page-header-subtitle">{subtitle}</p>}
+      </div>
       {action && <div className="page-header-action">{action}</div>}
     </div>
   )

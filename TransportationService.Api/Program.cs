@@ -110,6 +110,10 @@ builder.Services.AddScoped(typeof(TransportationService.Api.Common.Lookups.ILook
 builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerService,
     TransportationService.Api.Modules.Partners.Services.CustomerService>();
 
+// Drivers
+builder.Services.AddScoped<TransportationService.Api.Modules.Drivers.Services.IDriverService,
+    TransportationService.Api.Modules.Drivers.Services.DriverService>();
+
 var app = builder.Build();
 
 // Development-only setup

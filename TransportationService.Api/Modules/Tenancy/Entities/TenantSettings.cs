@@ -14,6 +14,8 @@ public class TenantSettings
     public int EmployeeNumberNextValue { get; set; } = 1;
     public string? CustomerNumberPrefix { get; set; } = "KL-";
     public int CustomerNumberNextValue { get; set; } = 1;
+    public string? DriverNumberPrefix { get; set; } = "CH-";
+    public int DriverNumberNextValue { get; set; } = 1;
 
     // Company profile (shown on documents, used for invoicing)
     public string? CompanyLegalName { get; set; }

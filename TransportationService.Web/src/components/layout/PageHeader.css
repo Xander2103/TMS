@@ -9,6 +9,12 @@
   margin: 0;
 }
 
+.page-header-subtitle {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
 .primary-button {
   display: inline-block;
   font-size: 15px;
