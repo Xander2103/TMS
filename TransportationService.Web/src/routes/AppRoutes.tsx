@@ -10,6 +10,8 @@ import { NewTransportOrderPage } from '../features/transport-orders/pages/NewTra
 import { TransportOrderDetailPage } from '../features/transport-orders/pages/TransportOrderDetailPage'
 import { PlanningPage } from '../features/planning/pages/PlanningPage'
 import { TripDetailPage } from '../features/planning/pages/TripDetailPage'
+import { MyTripsPage } from '../features/my-trips/pages/MyTripsPage'
+import { TripExecutionPage } from '../features/my-trips/pages/TripExecutionPage'
 import { CustomersPage } from '../features/customers/pages/CustomersPage'
 import { NewCustomerPage } from '../features/customers/pages/NewCustomerPage'
 import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage'
@@ -55,6 +57,8 @@ export function AppRoutes() {
           <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
           <Route path="/planning" element={<PlanningPage />} />
           <Route path="/planning/:id" element={<TripDetailPage />} />
+          <Route path="/my-trips" element={<MyTripsPage />} />
+          <Route path="/my-trips/:id" element={<TripExecutionPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/new" element={<NewCustomerPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />

@@ -156,6 +156,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.I
     TransportationService.Api.Modules.Planning.Services.PlanningConflictService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.ITripService,
     TransportationService.Api.Modules.Planning.Services.TripService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.ITripExecutionService,
+    TransportationService.Api.Modules.Planning.Services.TripExecutionService>();
 
 var app = builder.Build();
 

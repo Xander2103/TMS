@@ -32,6 +32,7 @@ public class TransportationDbContext : DbContext
     // Planning (Phase 6)
     public DbSet<Trip> Trips => Set<Trip>();
     public DbSet<TripOrder> TripOrders => Set<TripOrder>();
+    public DbSet<StopExecution> StopExecutions => Set<StopExecution>();
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();

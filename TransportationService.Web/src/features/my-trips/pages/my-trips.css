@@ -1,0 +1,136 @@
+.mt-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  max-width: 1000px;
+}
+
+.mt-card {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mt-card:hover {
+  border-color: var(--accent);
+}
+
+.mt-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mt-card-date {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.mt-card-meta,
+.mt-card-progress {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.mt-hint {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #b45309;
+}
+
+.mt-stops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+  counter-reset: stop;
+}
+
+.mt-stop {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mt-stop-completed {
+  opacity: 0.75;
+}
+
+.mt-stop-skipped {
+  opacity: 0.75;
+  border-style: dashed;
+}
+
+.mt-stop-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mt-stop-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.mt-stop-meta,
+.mt-stop-address,
+.mt-stop-times {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.mt-stop-instructions {
+  font-size: 14px;
+  color: var(--text-h);
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.mt-stop-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mt-form input,
+.mt-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.mt-pod-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}

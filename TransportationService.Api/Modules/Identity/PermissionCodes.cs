@@ -136,6 +136,10 @@ public static class PermissionCodes
     public const string OrdersDelete = "orders.delete";
     public const string OrdersChangeStatus = "orders.change_status";
 
+    // --- Driver workflow (trip execution) ---
+    public const string DriverWorkflowView = "driver_workflow.view";
+    public const string DriverWorkflowExecute = "driver_workflow.execute";
+
     // --- Absences (HR availability) ---
     public const string AbsencesView = "absences.view";
     public const string AbsencesCreate = "absences.create";
@@ -239,6 +243,8 @@ public static class PermissionCodes
         (OrdersEdit, "orders", "edit", "Transportopdrachten bewerken"),
         (OrdersDelete, "orders", "delete", "Transportopdrachten verwijderen"),
         (OrdersChangeStatus, "orders", "change_status", "Status van transportopdrachten wijzigen"),
+        (DriverWorkflowView, "driver_workflow", "view", "Eigen ritten en rituitvoering bekijken"),
+        (DriverWorkflowExecute, "driver_workflow", "execute", "Stops registreren tijdens rituitvoering"),
         (AbsencesView, "absences", "view", "Afwezigheden bekijken"),
         (AbsencesCreate, "absences", "create", "Afwezigheden aanvragen"),
         (AbsencesEdit, "absences", "edit", "Afwezigheden bewerken en annuleren"),
