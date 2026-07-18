@@ -140,6 +140,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.ITan
     TransportationService.Api.Modules.Fleet.Services.TankCardService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFuelService,
     TransportationService.Api.Modules.Fleet.Services.FuelService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFleetDashboardService,
+    TransportationService.Api.Modules.Fleet.Services.FleetDashboardService>();
 
 var app = builder.Build();
 

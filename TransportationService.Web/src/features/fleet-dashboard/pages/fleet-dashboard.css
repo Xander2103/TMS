@@ -1,0 +1,151 @@
+.fd-quick-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.fd-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  max-width: 720px;
+  margin-bottom: 24px;
+}
+
+.fd-count-card {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  cursor: pointer;
+}
+
+.fd-count-card:hover {
+  border-color: var(--accent);
+}
+
+.fd-count-card h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.fd-count-total {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-h);
+  margin-bottom: 8px;
+}
+
+.fd-count-card dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.fd-count-card dl > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.fd-count-card dt {
+  color: var(--text);
+}
+
+.fd-count-card dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.fd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px;
+  max-width: 1200px;
+}
+
+.fd-panel {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.fd-panel-wide {
+  grid-column: 1 / -1;
+}
+
+.fd-panel h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.fd-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fd-empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.fd-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 4px;
+  cursor: pointer;
+}
+
+.fd-row:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+li:last-child > .fd-row {
+  border-bottom: none;
+}
+
+.fd-row-owner {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--text-h);
+  white-space: nowrap;
+}
+
+.fd-row-main {
+  flex: 1;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fd-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}

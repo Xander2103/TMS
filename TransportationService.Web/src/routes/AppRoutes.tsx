@@ -19,6 +19,7 @@ import { VehicleDetailPage } from '../features/vehicles/pages/VehicleDetailPage'
 import { TrailersPage } from '../features/trailers/pages/TrailersPage'
 import { NewTrailerPage } from '../features/trailers/pages/NewTrailerPage'
 import { TrailerDetailPage } from '../features/trailers/pages/TrailerDetailPage'
+import { FleetDashboardPage } from '../features/fleet-dashboard/pages/FleetDashboardPage'
 import { TankCardsPage } from '../features/tank-cards/pages/TankCardsPage'
 import { LocationsPage } from '../features/locations/pages/LocationsPage'
 import { NewLocationPage } from '../features/locations/pages/NewLocationPage'
@@ -53,6 +54,7 @@ export function AppRoutes() {
           <Route path="/drivers" element={<DriversPage />} />
           <Route path="/drivers/new" element={<NewDriverPage />} />
           <Route path="/drivers/:id" element={<DriverDetailPage />} />
+          <Route path="/fleet" element={<FleetDashboardPage />} />
           <Route path="/vehicles" element={<VehiclesPage />} />
           <Route path="/vehicles/new" element={<NewVehiclePage />} />
           <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
