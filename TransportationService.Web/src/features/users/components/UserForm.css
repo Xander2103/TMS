@@ -1,0 +1,10 @@
+.user-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 500px;
+}
+
+.user-form input:disabled {
+  opacity: 0.6;
+}

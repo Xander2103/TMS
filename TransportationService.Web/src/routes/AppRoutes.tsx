@@ -8,6 +8,9 @@ import { CustomersPage } from '../features/customers/pages/CustomersPage'
 import { DriversPage } from '../features/drivers/pages/DriversPage'
 import { VehiclesPage } from '../features/vehicles/pages/VehiclesPage'
 import { SettingsPage } from '../features/settings/pages/SettingsPage'
+import { UsersPage } from '../features/users/pages/UsersPage'
+import { NewUserPage } from '../features/users/pages/NewUserPage'
+import { UserDetailPage } from '../features/users/pages/UserDetailPage'
 
 export function AppRoutes() {
   return (
@@ -21,6 +24,9 @@ export function AppRoutes() {
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/drivers" element={<DriversPage />} />
           <Route path="/vehicles" element={<VehiclesPage />} />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/users/new" element={<NewUserPage />} />
+          <Route path="/users/:id" element={<UserDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

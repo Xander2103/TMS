@@ -1,0 +1,57 @@
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.users-table th,
+.users-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.users-table th {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.badge-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+.muted-text {
+  color: var(--text);
+  opacity: 0.6;
+}
+
+.status-text {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 13px;
+}
+
+.status-active {
+  color: #15803d;
+}
+
+.status-inactive {
+  color: #a16207;
+}
+
+.status-blocked {
+  color: #dc2626;
+  font-weight: 500;
+}
