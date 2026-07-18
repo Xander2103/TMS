@@ -114,6 +114,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.I
 builder.Services.AddScoped<TransportationService.Api.Modules.Drivers.Services.IDriverService,
     TransportationService.Api.Modules.Drivers.Services.DriverService>();
 
+// Company / tenant settings
+builder.Services.AddScoped<TransportationService.Api.Modules.Tenancy.Services.ICompanySettingsService,
+    TransportationService.Api.Modules.Tenancy.Services.CompanySettingsService>();
+
 var app = builder.Build();
 
 // Development-only setup

@@ -1,0 +1,78 @@
+.settings-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.settings-dirty {
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--text-h);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.settings-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 900px;
+}
+
+.settings-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+.settings-card h2 {
+  font-size: 17px;
+  margin: 0 0 16px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+}
+
+.settings-grid-numbering {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-card input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.settings-card input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.settings-card input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.settings-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+@media (max-width: 720px) {
+  .settings-grid,
+  .settings-grid-numbering {
+    grid-template-columns: 1fr;
+  }
+}
