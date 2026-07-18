@@ -147,6 +147,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFle
 builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IAbsenceService,
     TransportationService.Api.Modules.Hr.Services.AbsenceService>();
 
+// Transport orders
+builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderService,
+    TransportationService.Api.Modules.Orders.Services.TransportOrderService>();
+
 var app = builder.Build();
 
 // Development-only setup
@@ -164,7 +168,6 @@ if (app.Environment.IsDevelopment())
     var dbContext = scope.ServiceProvider
         .GetRequiredService<TransportationDbContext>();
 
-    await TransportOrderSeeder.SeedAsync(dbContext);
     await MasterDataSeeder.SeedAsync(dbContext);
 
     // Idempotent every startup: keep the permission catalog in sync and seed starter lookups.

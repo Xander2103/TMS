@@ -7,6 +7,7 @@ import { NotFoundPage } from '../components/feedback/NotFoundPage'
 import { DashboardPage } from '../features/dashboard/pages/DashboardPage'
 import { TransportOrdersPage } from '../features/transport-orders/pages/TransportOrdersPage'
 import { NewTransportOrderPage } from '../features/transport-orders/pages/NewTransportOrderPage'
+import { TransportOrderDetailPage } from '../features/transport-orders/pages/TransportOrderDetailPage'
 import { CustomersPage } from '../features/customers/pages/CustomersPage'
 import { NewCustomerPage } from '../features/customers/pages/NewCustomerPage'
 import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage'
@@ -49,6 +50,7 @@ export function AppRoutes() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/transport-orders" element={<TransportOrdersPage />} />
           <Route path="/transport-orders/new" element={<NewTransportOrderPage />} />
+          <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/new" element={<NewCustomerPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />

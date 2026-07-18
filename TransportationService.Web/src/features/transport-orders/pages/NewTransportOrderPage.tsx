@@ -1,25 +1,27 @@
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
+import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
+import { useToast } from '../../../components/ui/toastContext'
+import { createTransportOrder } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
 
 export function NewTransportOrderPage() {
   const navigate = useNavigate()
-
-  function handleCreated() {
-    navigate('/transport-orders', { state: { created: true } })
-  }
+  const { showSuccess } = useToast()
 
   return (
-    <>
-      <PageHeader title="Nieuwe opdracht" />
+    <div>
+      <Breadcrumbs items={[{ label: 'Transportopdrachten', to: '/transport-orders' }, { label: 'Nieuwe opdracht' }]} />
+      <PageHeader title="Nieuwe transportopdracht" subtitle="De opdracht start als concept en kan daarna worden bevestigd." />
       <TransportOrderForm
-        onCreated={handleCreated}
-        secondaryAction={
-          <Link to="/transport-orders" className="secondary-link">
-            Annuleren
-          </Link>
-        }
+        submitLabel="Opdracht aanmaken"
+        onCancel={() => navigate('/transport-orders')}
+        onSubmit={async (input) => {
+          const created = await createTransportOrder(input)
+          showSuccess(`Opdracht ${created.orderNumber} aangemaakt.`)
+          navigate(`/transport-orders/${created.id}`)
+        }}
       />
-    </>
+    </div>
   )
 }

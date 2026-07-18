@@ -129,6 +129,13 @@ public static class PermissionCodes
     public const string FuelEdit = "fuel.edit";
     public const string FuelDelete = "fuel.delete";
 
+    // --- Transport orders ---
+    public const string OrdersView = "orders.view";
+    public const string OrdersCreate = "orders.create";
+    public const string OrdersEdit = "orders.edit";
+    public const string OrdersDelete = "orders.delete";
+    public const string OrdersChangeStatus = "orders.change_status";
+
     // --- Absences (HR availability) ---
     public const string AbsencesView = "absences.view";
     public const string AbsencesCreate = "absences.create";
@@ -227,6 +234,11 @@ public static class PermissionCodes
         (FuelCreate, "fuel", "create", "Tankbeurten registreren"),
         (FuelEdit, "fuel", "edit", "Tankbeurten bewerken"),
         (FuelDelete, "fuel", "delete", "Tankbeurten verwijderen"),
+        (OrdersView, "orders", "view", "Transportopdrachten bekijken"),
+        (OrdersCreate, "orders", "create", "Transportopdrachten aanmaken"),
+        (OrdersEdit, "orders", "edit", "Transportopdrachten bewerken"),
+        (OrdersDelete, "orders", "delete", "Transportopdrachten verwijderen"),
+        (OrdersChangeStatus, "orders", "change_status", "Status van transportopdrachten wijzigen"),
         (AbsencesView, "absences", "view", "Afwezigheden bekijken"),
         (AbsencesCreate, "absences", "create", "Afwezigheden aanvragen"),
         (AbsencesEdit, "absences", "edit", "Afwezigheden bewerken en annuleren"),

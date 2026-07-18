@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using TransportationService.Api.Models;
 using TransportationService.Api.Modules.Auditing.Entities;
 using TransportationService.Api.Modules.Authentication.Entities;
 using TransportationService.Api.Modules.Drivers.Entities;
@@ -9,6 +8,7 @@ using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Locations.Entities;
+using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Organization.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Qualifications.Entities;
@@ -24,7 +24,9 @@ public class TransportationDbContext : DbContext
     {
     }
 
+    // Transport orders (Phase 5)
     public DbSet<TransportOrder> TransportOrders => Set<TransportOrder>();
+    public DbSet<TransportOrderStop> TransportOrderStops => Set<TransportOrderStop>();
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();
