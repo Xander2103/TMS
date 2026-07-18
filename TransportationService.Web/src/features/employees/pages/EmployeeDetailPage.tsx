@@ -5,11 +5,12 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { EmployeeForm } from '../components/EmployeeForm'
 import { QualificationsTab } from '../components/QualificationsTab'
+import { AbsencesTab } from '../../absences/components/AbsencesTab'
 import { useEmployee } from '../hooks/useEmployee'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import './EmployeeDetailPage.css'
 
-type Tab = 'details' | 'qualifications'
+type Tab = 'details' | 'qualifications' | 'absences'
 
 export function EmployeeDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -48,6 +49,9 @@ export function EmployeeDetailPage() {
         <button type="button" role="tab" aria-selected={tab === 'qualifications'} className={tab === 'qualifications' ? 'employee-tab active' : 'employee-tab'} onClick={() => setTab('qualifications')}>
           Kwalificaties
         </button>
+        <button type="button" role="tab" aria-selected={tab === 'absences'} className={tab === 'absences' ? 'employee-tab active' : 'employee-tab'} onClick={() => setTab('absences')}>
+          Afwezigheden
+        </button>
       </div>
 
       {tab === 'details' && (
@@ -62,6 +66,8 @@ export function EmployeeDetailPage() {
       )}
 
       {tab === 'qualifications' && <QualificationsTab employeeId={employee.id} />}
+
+      {tab === 'absences' && <AbsencesTab employeeId={employee.id} />}
 
       <button type="button" className="secondary-link employee-detail-section" onClick={() => navigate('/employees')}>
         Terug naar overzicht

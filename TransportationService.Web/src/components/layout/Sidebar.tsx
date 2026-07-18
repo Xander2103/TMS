@@ -13,6 +13,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Transportopdrachten', to: '/transport-orders' },
   { label: 'Klanten', to: '/customers' },
   { label: 'Chauffeurs', to: '/drivers' },
+  { label: 'Afwezigheden', to: '/absences' },
   { label: 'Vloot', to: '/fleet' },
   { label: 'Voertuigen', to: '/vehicles' },
   { label: 'Opleggers', to: '/trailers' },

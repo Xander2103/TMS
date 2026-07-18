@@ -5,6 +5,7 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Drivers.Dtos;
 using TransportationService.Api.Modules.Drivers.Entities;
+using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Qualifications.Entities;
 using TransportationService.Api.Modules.Qualifications.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
@@ -71,11 +72,20 @@ public class DriverService : IDriverService
 
         var ordered = joined.OrderBy(x => x.e.LastName).ThenBy(x => x.e.FirstName);
 
+        // Effective availability: an approved absence covering today overrides the stored status.
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
         return await ordered.ToPagedResultAsync(
             page,
             x => new DriverListItemDto(
                 x.d.Id, x.d.DriverNumber, x.e.FirstName + " " + x.e.LastName, x.e.EmployeeNumber,
-                x.CategoryName, x.d.AvailabilityStatus, x.d.IsActive, x.d.IsBlocked),
+                x.CategoryName,
+                _dbContext.Absences.Any(a =>
+                    a.TenantId == x.d.TenantId && a.EmployeeId == x.d.EmployeeId
+                    && a.Status == AbsenceStatus.Approved
+                    && a.StartDate <= today && a.EndDate >= today)
+                    ? DriverAvailabilityStatus.OnLeave
+                    : x.d.AvailabilityStatus,
+                x.d.IsActive, x.d.IsBlocked),
             cancellationToken);
     }
 
@@ -257,14 +267,16 @@ public class DriverService : IDriverService
             : null;
 
         var qualifications = await LoadQualificationsAsync(driver.EmployeeId, cancellationToken);
-        var readiness = BuildReadiness(driver, qualifications);
+        var absenceToday = await CurrentAbsenceTypeAsync(driver.EmployeeId, cancellationToken);
+        var readiness = BuildReadiness(driver, qualifications, absenceToday);
 
         return new DriverDetailDto(
             driver.Id, driver.DriverNumber, driver.EmployeeId,
             employee is null ? string.Empty : $"{employee.FirstName} {employee.LastName}",
             employee?.EmployeeNumber ?? string.Empty,
             driver.DriverCategoryId, categoryName,
-            driver.AvailabilityStatus, driver.IsActive, driver.IsBlocked, driver.BlockReason,
+            absenceToday is not null ? DriverAvailabilityStatus.OnLeave : driver.AvailabilityStatus,
+            driver.IsActive, driver.IsBlocked, driver.BlockReason,
             driver.FixedVehiclePreference, driver.DefaultVehicleId, driver.PreferredVehicleId, driver.DefaultTrailerId,
             driver.Notes, readiness, qualifications);
     }
@@ -293,11 +305,36 @@ public class DriverService : IDriverService
             .ToList();
     }
 
+    /// <summary>An approved absence covering today, if any (drives readiness and effective availability).</summary>
+    private async Task<AbsenceType?> CurrentAbsenceTypeAsync(Guid employeeId, CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        return await _dbContext.Absences.AsNoTracking()
+            .Where(a => a.TenantId == _tenantContext.TenantId && a.EmployeeId == employeeId
+                        && a.Status == AbsenceStatus.Approved
+                        && a.StartDate <= today && a.EndDate >= today)
+            .Select(a => (AbsenceType?)a.Type)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private static readonly IReadOnlyDictionary<AbsenceType, string> AbsenceTypeLabels =
+        new Dictionary<AbsenceType, string>
+        {
+            [AbsenceType.Vacation] = "verlof",
+            [AbsenceType.Sick] = "ziekte",
+            [AbsenceType.Training] = "opleiding",
+            [AbsenceType.PersonalLeave] = "persoonlijk verlof",
+            [AbsenceType.Unpaid] = "onbetaald verlof",
+            [AbsenceType.Other] = "afwezigheid",
+        };
+
     /// <summary>
     /// Driver readiness summary computed on the server (never in the browser). Blocked overrides
     /// everything; otherwise expired qualifications make a driver not-ready and expiring ones warn.
+    /// An approved absence covering today also makes the driver not-ready.
     /// </summary>
-    private static DriverReadinessDto BuildReadiness(Driver driver, IReadOnlyList<DriverQualificationDto> qualifications)
+    private static DriverReadinessDto BuildReadiness(
+        Driver driver, IReadOnlyList<DriverQualificationDto> qualifications, AbsenceType? absenceToday)
     {
         var blocking = new List<string>();
         var warnings = new List<string>();
@@ -310,6 +347,11 @@ public class DriverService : IDriverService
         if (!driver.IsActive)
         {
             blocking.Add("Chauffeur is inactief.");
+        }
+
+        if (absenceToday is { } absence)
+        {
+            blocking.Add($"Vandaag afwezig ({AbsenceTypeLabels[absence]}).");
         }
 
         foreach (var q in qualifications)

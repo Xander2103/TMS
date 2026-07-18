@@ -19,6 +19,7 @@ import { VehicleDetailPage } from '../features/vehicles/pages/VehicleDetailPage'
 import { TrailersPage } from '../features/trailers/pages/TrailersPage'
 import { NewTrailerPage } from '../features/trailers/pages/NewTrailerPage'
 import { TrailerDetailPage } from '../features/trailers/pages/TrailerDetailPage'
+import { AbsencesPage } from '../features/absences/pages/AbsencesPage'
 import { FleetDashboardPage } from '../features/fleet-dashboard/pages/FleetDashboardPage'
 import { TankCardsPage } from '../features/tank-cards/pages/TankCardsPage'
 import { LocationsPage } from '../features/locations/pages/LocationsPage'
@@ -73,6 +74,7 @@ export function AppRoutes() {
           <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/employees/new" element={<NewEmployeePage />} />
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+          <Route path="/absences" element={<AbsencesPage />} />
           <Route
             path="/master-data"
             element={<Navigate to={`/master-data/${LOOKUP_RESOURCES[0].slug}`} replace />}

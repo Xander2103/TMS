@@ -143,6 +143,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFue
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFleetDashboardService,
     TransportationService.Api.Modules.Fleet.Services.FleetDashboardService>();
 
+// HR availability
+builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IAbsenceService,
+    TransportationService.Api.Modules.Hr.Services.AbsenceService>();
+
 var app = builder.Build();
 
 // Development-only setup

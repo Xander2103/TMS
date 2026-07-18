@@ -129,6 +129,13 @@ public static class PermissionCodes
     public const string FuelEdit = "fuel.edit";
     public const string FuelDelete = "fuel.delete";
 
+    // --- Absences (HR availability) ---
+    public const string AbsencesView = "absences.view";
+    public const string AbsencesCreate = "absences.create";
+    public const string AbsencesEdit = "absences.edit";
+    public const string AbsencesDelete = "absences.delete";
+    public const string AbsencesApprove = "absences.approve";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -220,5 +227,10 @@ public static class PermissionCodes
         (FuelCreate, "fuel", "create", "Tankbeurten registreren"),
         (FuelEdit, "fuel", "edit", "Tankbeurten bewerken"),
         (FuelDelete, "fuel", "delete", "Tankbeurten verwijderen"),
+        (AbsencesView, "absences", "view", "Afwezigheden bekijken"),
+        (AbsencesCreate, "absences", "create", "Afwezigheden aanvragen"),
+        (AbsencesEdit, "absences", "edit", "Afwezigheden bewerken en annuleren"),
+        (AbsencesDelete, "absences", "delete", "Afwezigheden verwijderen"),
+        (AbsencesApprove, "absences", "approve", "Afwezigheden goedkeuren of afwijzen"),
     ];
 }
