@@ -9,6 +9,8 @@ public enum TransportOrderStatus
     Planned,
     InProgress,
     Completed,
+    /// <summary>Set by the invoicing module (Phase 8); not reachable via the manual transition map.</summary>
+    Invoiced,
     Cancelled,
 }
 

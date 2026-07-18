@@ -159,6 +159,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.I
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.ITripExecutionService,
     TransportationService.Api.Modules.Planning.Services.TripExecutionService>();
 
+// Invoicing
+builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
+    TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();
+
 var app = builder.Build();
 
 // Development-only setup

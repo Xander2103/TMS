@@ -12,6 +12,9 @@ import { PlanningPage } from '../features/planning/pages/PlanningPage'
 import { TripDetailPage } from '../features/planning/pages/TripDetailPage'
 import { MyTripsPage } from '../features/my-trips/pages/MyTripsPage'
 import { TripExecutionPage } from '../features/my-trips/pages/TripExecutionPage'
+import { InvoicesPage } from '../features/invoices/pages/InvoicesPage'
+import { NewInvoicePage } from '../features/invoices/pages/NewInvoicePage'
+import { InvoiceDetailPage } from '../features/invoices/pages/InvoiceDetailPage'
 import { CustomersPage } from '../features/customers/pages/CustomersPage'
 import { NewCustomerPage } from '../features/customers/pages/NewCustomerPage'
 import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage'
@@ -59,6 +62,9 @@ export function AppRoutes() {
           <Route path="/planning/:id" element={<TripDetailPage />} />
           <Route path="/my-trips" element={<MyTripsPage />} />
           <Route path="/my-trips/:id" element={<TripExecutionPage />} />
+          <Route path="/invoices" element={<InvoicesPage />} />
+          <Route path="/invoices/new" element={<NewInvoicePage />} />
+          <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/new" element={<NewCustomerPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />

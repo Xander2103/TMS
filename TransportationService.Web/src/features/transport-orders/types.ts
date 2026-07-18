@@ -1,4 +1,4 @@
-export type TransportOrderStatus = 'Draft' | 'Confirmed' | 'Planned' | 'InProgress' | 'Completed' | 'Cancelled'
+export type TransportOrderStatus = 'Draft' | 'Confirmed' | 'Planned' | 'InProgress' | 'Completed' | 'Invoiced' | 'Cancelled'
 export type StopType = 'Loading' | 'Unloading'
 
 export const ORDER_STATUS_LABELS: Record<TransportOrderStatus, string> = {
@@ -7,10 +7,11 @@ export const ORDER_STATUS_LABELS: Record<TransportOrderStatus, string> = {
   Planned: 'Gepland',
   InProgress: 'In uitvoering',
   Completed: 'Afgerond',
+  Invoiced: 'Gefactureerd',
   Cancelled: 'Geannuleerd',
 }
 
-export const ORDER_STATUSES: TransportOrderStatus[] = ['Draft', 'Confirmed', 'Planned', 'InProgress', 'Completed', 'Cancelled']
+export const ORDER_STATUSES: TransportOrderStatus[] = ['Draft', 'Confirmed', 'Planned', 'InProgress', 'Completed', 'Invoiced', 'Cancelled']
 
 export const ORDER_STATUS_TONE: Record<TransportOrderStatus, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
   Draft: 'neutral',
@@ -18,6 +19,7 @@ export const ORDER_STATUS_TONE: Record<TransportOrderStatus, 'neutral' | 'succes
   Planned: 'info',
   InProgress: 'warning',
   Completed: 'success',
+  Invoiced: 'success',
   Cancelled: 'danger',
 }
 
@@ -26,6 +28,7 @@ export const ORDER_TRANSITION_LABELS: Record<TransportOrderStatus, string> = {
   Draft: 'Terug naar concept',
   Confirmed: 'Bevestigen',
   Planned: 'Plannen',
+  Invoiced: 'Factureren',
   InProgress: 'Start uitvoering',
   Completed: 'Afronden',
   Cancelled: 'Annuleren',

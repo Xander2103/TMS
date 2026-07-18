@@ -21,6 +21,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Opleggers', to: '/trailers' },
   { label: 'Tankkaarten', to: '/tank-cards' },
   { label: 'Locaties', to: '/locations' },
+  { label: 'Facturen', to: '/invoices' },
 ]
 
 const administrationNavItems: NavItem[] = [

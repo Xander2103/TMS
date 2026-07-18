@@ -1,0 +1,27 @@
+using TransportationService.Api.Common.Models;
+using TransportationService.Api.Modules.Invoicing.Dtos;
+using TransportationService.Api.Modules.Invoicing.Entities;
+
+namespace TransportationService.Api.Modules.Invoicing.Services;
+
+public interface IInvoiceService
+{
+    Task<PagedResult<InvoiceListItemDto>> SearchAsync(
+        string? search, InvoiceStatus? status, Guid? customerId, PageRequest page, CancellationToken cancellationToken);
+
+    Task<InvoiceDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Completed orders of a customer not yet on a non-cancelled invoice.</summary>
+    Task<IReadOnlyList<UninvoicedOrderDto>> ListUninvoicedOrdersAsync(Guid customerId, CancellationToken cancellationToken);
+
+    /// <summary>Builds a draft invoice from completed orders (+ manual lines); orders move to Invoiced.</summary>
+    Task<InvoiceOperationResult> CreateAsync(CreateInvoiceRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Draft-only edit; dropping an order-backed line releases that order back to Completed.</summary>
+    Task<InvoiceOperationResult> UpdateAsync(Guid id, UpdateInvoiceRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Draft→Sent→Paid with Cancelled branches; cancelling releases the orders.</summary>
+    Task<InvoiceOperationResult> ChangeStatusAsync(Guid id, InvoiceStatus target, CancellationToken cancellationToken);
+
+    Task<InvoiceOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
+}
