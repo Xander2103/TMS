@@ -57,6 +57,7 @@ public class TransportationDbContext : DbContext
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
     public DbSet<Trailer> Trailers => Set<Trailer>();
     public DbSet<FleetDocument> FleetDocuments => Set<FleetDocument>();
+    public DbSet<MaintenanceRecord> MaintenanceRecords => Set<MaintenanceRecord>();
 
     // Drivers
     public DbSet<Driver> Drivers => Set<Driver>();

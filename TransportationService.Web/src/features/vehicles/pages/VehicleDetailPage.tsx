@@ -10,6 +10,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
+import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { deleteVehicle, getVehicle, updateVehicle } from '../api/vehiclesApi'
 import {
   FUEL_TYPE_LABELS,
@@ -230,6 +231,7 @@ export function VehicleDetailPage() {
       )}
 
       {!editing && id && <FleetDocumentsPanel ownerType="vehicle" ownerId={id} />}
+      {!editing && id && <MaintenancePanel ownerType="vehicle" ownerId={id} />}
 
       {confirmDelete && (
         <ConfirmDialog

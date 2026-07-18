@@ -130,6 +130,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.ITra
     TransportationService.Api.Modules.Fleet.Services.TrailerService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFleetDocumentService,
     TransportationService.Api.Modules.Fleet.Services.FleetDocumentService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IMaintenanceService,
+    TransportationService.Api.Modules.Fleet.Services.MaintenanceService>();
 
 var app = builder.Build();
 

@@ -98,6 +98,12 @@ public static class PermissionCodes
     public const string FleetDocumentsEdit = "fleet_documents.edit";
     public const string FleetDocumentsDelete = "fleet_documents.delete";
 
+    // --- Maintenance (vehicle/trailer service jobs) ---
+    public const string MaintenanceView = "maintenance.view";
+    public const string MaintenanceCreate = "maintenance.create";
+    public const string MaintenanceEdit = "maintenance.edit";
+    public const string MaintenanceDelete = "maintenance.delete";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -168,5 +174,9 @@ public static class PermissionCodes
         (FleetDocumentsCreate, "fleet_documents", "create", "Voertuig- en opleggerdocumenten toevoegen"),
         (FleetDocumentsEdit, "fleet_documents", "edit", "Voertuig- en opleggerdocumenten bewerken"),
         (FleetDocumentsDelete, "fleet_documents", "delete", "Voertuig- en opleggerdocumenten verwijderen"),
+        (MaintenanceView, "maintenance", "view", "Onderhoud bekijken"),
+        (MaintenanceCreate, "maintenance", "create", "Onderhoud plannen"),
+        (MaintenanceEdit, "maintenance", "edit", "Onderhoud bewerken en afronden"),
+        (MaintenanceDelete, "maintenance", "delete", "Onderhoud verwijderen"),
     ];
 }
