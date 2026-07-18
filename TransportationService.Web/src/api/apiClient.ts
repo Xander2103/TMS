@@ -75,6 +75,10 @@ async function sendJson<TResponse, TBody>(
     throw new ApiError(`Request to ${path} failed with status ${response.status}`, response.status)
   }
 
+  if (response.status === 204) {
+    return undefined as TResponse
+  }
+
   return response.json() as Promise<TResponse>
 }
 

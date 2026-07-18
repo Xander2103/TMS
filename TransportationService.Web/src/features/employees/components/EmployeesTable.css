@@ -1,0 +1,28 @@
+.employees-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.employees-table th,
+.employees-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.employees-table th {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.employees-table .status-text {
+  font-size: 13px;
+}
+
+.employees-table .status-active {
+  color: #15803d;
+}
+
+.employees-table .status-inactive {
+  color: #a16207;
+}

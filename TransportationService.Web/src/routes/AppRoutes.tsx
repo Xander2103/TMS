@@ -13,6 +13,9 @@ import { NewUserPage } from '../features/users/pages/NewUserPage'
 import { UserDetailPage } from '../features/users/pages/UserDetailPage'
 import { RolesPage } from '../features/roles/pages/RolesPage'
 import { RoleDetailPage } from '../features/roles/pages/RoleDetailPage'
+import { EmployeesPage } from '../features/employees/pages/EmployeesPage'
+import { NewEmployeePage } from '../features/employees/pages/NewEmployeePage'
+import { EmployeeDetailPage } from '../features/employees/pages/EmployeeDetailPage'
 
 export function AppRoutes() {
   return (
@@ -31,6 +34,9 @@ export function AppRoutes() {
           <Route path="/users/:id" element={<UserDetailPage />} />
           <Route path="/roles" element={<RolesPage />} />
           <Route path="/roles/:id" element={<RoleDetailPage />} />
+          <Route path="/employees" element={<EmployeesPage />} />
+          <Route path="/employees/new" element={<NewEmployeePage />} />
+          <Route path="/employees/:id" element={<EmployeeDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

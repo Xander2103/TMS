@@ -17,6 +17,7 @@ const navItems: NavItem[] = [
 const masterDataNavItems: NavItem[] = [
   { label: 'Gebruikers', to: '/users' },
   { label: 'Rollen en rechten', to: '/roles' },
+  { label: 'Personeel', to: '/employees' },
 ]
 
 function renderNavItems(items: NavItem[]) {

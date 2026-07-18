@@ -1,0 +1,43 @@
+.qualifications-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.qualifications-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.qualifications-table th,
+.qualifications-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.qualifications-table th {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.qualification-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.qualification-actions button {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.qualification-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

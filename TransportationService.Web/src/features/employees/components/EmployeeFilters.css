@@ -1,0 +1,20 @@
+.employee-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.employee-filters input,
+.employee-filters select {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.employee-filters input {
+  flex: 1;
+  min-width: 240px;
+}
