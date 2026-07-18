@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Dtos;
@@ -44,6 +45,9 @@ public class UserService : IUserService
 
     public async Task<UserDto> CreateAsync(CreateUserRequest request, CancellationToken cancellationToken)
     {
+        await EnsureLinksInTenantAsync(request.EmployeeId, request.CustomerId, cancellationToken);
+        await EnsureRolesInTenantAsync(request.RoleIds, cancellationToken);
+
         var user = new User
         {
             Id = Guid.NewGuid(),
@@ -77,6 +81,8 @@ public class UserService : IUserService
     {
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id && u.TenantId == _tenantContext.TenantId, cancellationToken);
         if (user is null) return null;
+
+        await EnsureLinksInTenantAsync(request.EmployeeId, request.CustomerId, cancellationToken);
 
         var oldValues = new { user.Email, user.FirstName, user.LastName, user.IsActive, user.IsBlocked };
 
@@ -140,6 +146,8 @@ public class UserService : IUserService
         if (user is null) return new UserOperationResult(UserOperationOutcome.NotFound, null);
 
         var newRoleIds = request.RoleIds.Distinct().ToHashSet();
+        await EnsureRolesInTenantAsync(newRoleIds, cancellationToken);
+
         var wasAdministrator = await IsAdministratorAsync(user.Id, cancellationToken);
         var staysAdministrator = await RoleIdsIncludeAdministratorAsync(newRoleIds, cancellationToken);
 
@@ -161,6 +169,40 @@ public class UserService : IUserService
         await _auditService.RecordAsync("User", user.Id.ToString(), "AssignRoles", new { RoleIds = oldRoleIds }, new { RoleIds = newRoleIds }, cancellationToken);
 
         return new UserOperationResult(UserOperationOutcome.Success, await MapAsync(user, cancellationToken));
+    }
+
+    /// <summary>Employee/customer links on a user must resolve within the current tenant.</summary>
+    private async Task EnsureLinksInTenantAsync(Guid? employeeId, Guid? customerId, CancellationToken cancellationToken)
+    {
+        if (employeeId is { } emp && !await _dbContext.Employees
+                .AnyAsync(e => e.Id == emp && e.TenantId == _tenantContext.TenantId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("medewerker");
+        }
+
+        if (customerId is { } cust && !await _dbContext.Customers
+                .AnyAsync(c => c.Id == cust && c.TenantId == _tenantContext.TenantId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("klant");
+        }
+    }
+
+    /// <summary>Only roles belonging to the current tenant may be assigned.</summary>
+    private async Task EnsureRolesInTenantAsync(IReadOnlyCollection<Guid> roleIds, CancellationToken cancellationToken)
+    {
+        if (roleIds.Count == 0)
+        {
+            return;
+        }
+
+        var distinct = roleIds.Distinct().ToList();
+        var known = await _dbContext.Roles
+            .CountAsync(r => distinct.Contains(r.Id) && r.TenantId == _tenantContext.TenantId, cancellationToken);
+
+        if (known != distinct.Count)
+        {
+            throw new InvalidTenantReferenceException("rol");
+        }
     }
 
     private async Task<bool> IsAdministratorAsync(Guid userId, CancellationToken cancellationToken)

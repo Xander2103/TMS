@@ -106,6 +106,7 @@ public enum VehicleOperationOutcome
     Success,
     NotFound,
     DuplicateLicensePlate,
+    InvalidReference,
 }
 
 public record VehicleOperationResult(VehicleOperationOutcome Outcome, VehicleDetailDto? Vehicle)
@@ -113,4 +114,5 @@ public record VehicleOperationResult(VehicleOperationOutcome Outcome, VehicleDet
     public static VehicleOperationResult Success(VehicleDetailDto vehicle) => new(VehicleOperationOutcome.Success, vehicle);
     public static readonly VehicleOperationResult NotFound = new(VehicleOperationOutcome.NotFound, null);
     public static readonly VehicleOperationResult DuplicateLicensePlate = new(VehicleOperationOutcome.DuplicateLicensePlate, null);
+    public static readonly VehicleOperationResult InvalidReference = new(VehicleOperationOutcome.InvalidReference, null);
 }

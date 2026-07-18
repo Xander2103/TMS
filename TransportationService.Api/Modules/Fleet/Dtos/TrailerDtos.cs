@@ -80,6 +80,7 @@ public enum TrailerOperationOutcome
     Success,
     NotFound,
     DuplicateLicensePlate,
+    InvalidReference,
 }
 
 public record TrailerOperationResult(TrailerOperationOutcome Outcome, TrailerDetailDto? Trailer)
@@ -87,4 +88,5 @@ public record TrailerOperationResult(TrailerOperationOutcome Outcome, TrailerDet
     public static TrailerOperationResult Success(TrailerDetailDto trailer) => new(TrailerOperationOutcome.Success, trailer);
     public static readonly TrailerOperationResult NotFound = new(TrailerOperationOutcome.NotFound, null);
     public static readonly TrailerOperationResult DuplicateLicensePlate = new(TrailerOperationOutcome.DuplicateLicensePlate, null);
+    public static readonly TrailerOperationResult InvalidReference = new(TrailerOperationOutcome.InvalidReference, null);
 }

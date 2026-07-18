@@ -8,6 +8,11 @@ namespace TransportationService.Api.Modules.Authentication.Services;
 
 public sealed class AuthService : IAuthService
 {
+    // Verified against when the email matches no account, so unknown-email and wrong-password
+    // logins take comparable time (no user-enumeration via response timing).
+    private static readonly string TimingEqualizerHash =
+        new PasswordHasher().Hash(Guid.NewGuid().ToString("N"));
+
     private readonly TransportationDbContext _db;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
@@ -38,6 +43,12 @@ public sealed class AuthService : IAuthService
         var candidates = await _db.Users
             .Where(u => u.Email == normalized)
             .ToListAsync(cancellationToken);
+
+        if (candidates.Count == 0)
+        {
+            _passwordHasher.Verify(TimingEqualizerHash, password);
+            return AuthResult.InvalidCredentials;
+        }
 
         var user = candidates.FirstOrDefault(u =>
             _passwordHasher.Verify(u.PasswordHash, password) != PasswordVerificationResult.Failed);

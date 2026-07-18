@@ -92,6 +92,7 @@ public class LocationsController : ControllerBase
         LocationOperationOutcome.NotFound => NotFound(),
         LocationOperationOutcome.DuplicateCode => Conflict(new { message = "Er bestaat al een locatie met deze code." }),
         LocationOperationOutcome.InvalidCoordinates => BadRequest(new { message = "Ongeldige coördinaten (breedtegraad -90..90, lengtegraad -180..180)." }),
+        LocationOperationOutcome.InvalidReference => BadRequest(new { message = "De gekoppelde klant bestaat niet." }),
         _ => Conflict(),
     };
 }

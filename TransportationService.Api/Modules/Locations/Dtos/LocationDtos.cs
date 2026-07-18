@@ -102,6 +102,7 @@ public enum LocationOperationOutcome
     NotFound,
     DuplicateCode,
     InvalidCoordinates,
+    InvalidReference,
 }
 
 public record LocationOperationResult(LocationOperationOutcome Outcome, LocationDetailDto? Location)
@@ -110,4 +111,5 @@ public record LocationOperationResult(LocationOperationOutcome Outcome, Location
     public static readonly LocationOperationResult NotFound = new(LocationOperationOutcome.NotFound, null);
     public static readonly LocationOperationResult DuplicateCode = new(LocationOperationOutcome.DuplicateCode, null);
     public static readonly LocationOperationResult InvalidCoordinates = new(LocationOperationOutcome.InvalidCoordinates, null);
+    public static readonly LocationOperationResult InvalidReference = new(LocationOperationOutcome.InvalidReference, null);
 }

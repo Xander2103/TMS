@@ -40,16 +40,18 @@ public class TrailerService : ITrailerService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
+            // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
+            var term = search.Trim().ToLowerInvariant();
             query = query.Where(t =>
-                EF.Functions.Like(t.InternalNumber, pattern) ||
-                EF.Functions.Like(t.LicensePlate, pattern) ||
-                (t.Brand != null && EF.Functions.Like(t.Brand, pattern)) ||
-                (t.Model != null && EF.Functions.Like(t.Model, pattern)));
+                t.InternalNumber.ToLower().Contains(term) ||
+                t.LicensePlate.ToLower().Contains(term) ||
+                (t.Brand != null && t.Brand.ToLower().Contains(term)) ||
+                (t.Model != null && t.Model.ToLower().Contains(term)));
         }
 
         var projected = from t in query
-                        join c in _dbContext.TrailerCategories.AsNoTracking() on t.CategoryId equals c.Id into cats
+                        join c in _dbContext.TrailerCategories.AsNoTracking().Where(tc => tc.TenantId == _tenantContext.TenantId)
+                            on t.CategoryId equals c.Id into cats
                         from c in cats.DefaultIfEmpty()
                         orderby t.InternalNumber
                         select new TrailerListItemDto(
@@ -82,6 +84,11 @@ public class TrailerService : ITrailerService
             return TrailerOperationResult.DuplicateLicensePlate;
         }
 
+        if (!await CategoryInTenantAsync(request.CategoryId, cancellationToken))
+        {
+            return TrailerOperationResult.InvalidReference;
+        }
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
@@ -89,7 +96,6 @@ public class TrailerService : ITrailerService
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
-            InternalNumber = GenerateInternalNumber(settings),
             LicensePlate = plate,
             IsActive = true,
             OperationalStatus = TrailerOperationalStatus.Active,
@@ -101,9 +107,12 @@ public class TrailerService : ITrailerService
         _dbContext.Add(trailer);
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await TenantNumbering.SaveWithClaimedNumberAsync(
+                _dbContext, settings,
+                () => trailer.InternalNumber = GenerateInternalNumber(settings),
+                cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException e) when (e is not DbUpdateConcurrencyException)
         {
             return TrailerOperationResult.DuplicateLicensePlate;
         }
@@ -126,6 +135,11 @@ public class TrailerService : ITrailerService
         if (await TenantScoped().AnyAsync(t => t.LicensePlate == plate && t.Id != id, cancellationToken))
         {
             return TrailerOperationResult.DuplicateLicensePlate;
+        }
+
+        if (!await CategoryInTenantAsync(request.CategoryId, cancellationToken))
+        {
+            return TrailerOperationResult.InvalidReference;
         }
 
         var before = new { trailer.LicensePlate, trailer.OperationalStatus, trailer.IsActive };
@@ -191,10 +205,17 @@ public class TrailerService : ITrailerService
         t.Notes = Trim(notes);
     }
 
+    private async Task<bool> CategoryInTenantAsync(Guid? categoryId, CancellationToken cancellationToken) =>
+        categoryId is not { } id
+        || await _dbContext.TrailerCategories.AnyAsync(
+            c => c.Id == id && c.TenantId == _tenantContext.TenantId, cancellationToken);
+
     private async Task<TrailerDetailDto> MapToDetailAsync(Trailer t, CancellationToken cancellationToken)
     {
         var categoryName = t.CategoryId is { } catId
-            ? await _dbContext.TrailerCategories.AsNoTracking().Where(c => c.Id == catId).Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
+            ? await _dbContext.TrailerCategories.AsNoTracking()
+                .Where(c => c.Id == catId && c.TenantId == _tenantContext.TenantId)
+                .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
             : null;
 
         return new TrailerDetailDto(

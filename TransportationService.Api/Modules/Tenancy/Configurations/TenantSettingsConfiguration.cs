@@ -55,6 +55,18 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(s => s.TrailerNumberNextValue).HasDefaultValue(1);
         builder.Property(s => s.LogoReference).HasMaxLength(300);
         builder.Property(s => s.EnabledModulesJson).IsRequired();
+
+        // Numbering counters are optimistic-concurrency tokens: two requests claiming the same
+        // next value conflict at SaveChanges instead of silently producing duplicate numbers.
+        // Services retry via TenantNumbering.SaveWithClaimedNumberAsync (reload + re-claim).
+        builder.Property(s => s.EmployeeNumberNextValue).IsConcurrencyToken();
+        builder.Property(s => s.CustomerNumberNextValue).IsConcurrencyToken();
+        builder.Property(s => s.DriverNumberNextValue).IsConcurrencyToken();
+        builder.Property(s => s.VehicleNumberNextValue).IsConcurrencyToken();
+        builder.Property(s => s.TrailerNumberNextValue).IsConcurrencyToken();
+        builder.Property(s => s.OrderNumberNextValue).IsConcurrencyToken();
+        builder.Property(s => s.TripNumberNextValue).IsConcurrencyToken();
+        builder.Property(s => s.InvoiceNumberNextValue).IsConcurrencyToken();
         builder.HasIndex(s => s.TenantId).IsUnique();
         builder.HasOne<Tenant>().WithOne().HasForeignKey<TenantSettings>(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);
     }

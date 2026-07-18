@@ -43,6 +43,28 @@ public class PermissionAuthorizationServiceTests
     }
 
     [Fact]
+    public async Task UserHasPermissionAsync_ReturnsFalse_WhenRoleBelongsToOtherTenant()
+    {
+        using var db = new SqliteTestDbContext();
+        var userId = Guid.NewGuid();
+        var roleId = Guid.NewGuid();
+        var permissionId = Guid.NewGuid();
+
+        // The user's tenant differs from the role's tenant — the grant must not apply,
+        // even though the UserRole row exists.
+        db.Context.Users.Add(new User { Id = userId, TenantId = Guid.NewGuid(), Email = "a@b.com", FirstName = "A", LastName = "B", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        db.Context.Roles.Add(new Role { Id = roleId, TenantId = Guid.NewGuid(), Name = "ForeignAdmin", IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        db.Context.Permissions.Add(new Permission { Id = permissionId, Code = "employees.view", Module = "employees", Action = "view", Description = "x" });
+        db.Context.UserRoles.Add(new UserRole { UserId = userId, RoleId = roleId });
+        db.Context.RolePermissions.Add(new RolePermission { RoleId = roleId, PermissionId = permissionId });
+        await db.Context.SaveChangesAsync();
+
+        var sut = new PermissionAuthorizationService(db.Context);
+
+        Assert.False(await sut.UserHasPermissionAsync(userId, "employees.view", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task UserHasPermissionAsync_ReturnsFalse_WhenGrantingRoleIsInactive()
     {
         using var db = new SqliteTestDbContext();

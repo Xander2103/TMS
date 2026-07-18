@@ -104,14 +104,22 @@ public abstract class LookupControllerBase<TEntity> : ControllerBase where TEnti
     {
         if (_currentUser.CurrentUserId is not { } userId)
         {
-            return new ObjectResult(new { message = "Niet geauthenticeerd." }) { StatusCode = StatusCodes.Status401Unauthorized };
+            return ProblemResult(StatusCodes.Status401Unauthorized, "Unauthorized",
+                "Authentication is required to access this resource.");
         }
 
         if (!await _authorization.UserHasPermissionAsync(userId, permission, cancellationToken))
         {
-            return new ObjectResult(new { message = $"Missing permission: {permission}" }) { StatusCode = StatusCodes.Status403Forbidden };
+            return ProblemResult(StatusCodes.Status403Forbidden, "Forbidden", $"Missing permission: {permission}");
         }
 
         return null;
     }
+
+    private static ObjectResult ProblemResult(int status, string title, string detail) =>
+        new(new ProblemDetails { Title = title, Detail = detail, Status = status })
+        {
+            StatusCode = status,
+            ContentTypes = { "application/problem+json" },
+        };
 }

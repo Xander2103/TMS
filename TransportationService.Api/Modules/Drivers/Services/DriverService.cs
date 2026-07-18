@@ -49,21 +49,24 @@ public class DriverService : IDriverService
         if (isBlocked is { } blocked) query = query.Where(d => d.IsBlocked == blocked);
         if (categoryId is { } category) query = query.Where(d => d.DriverCategoryId == category);
 
-        // Join employee (for name/number and search) and category name.
+        // Join employee (for name/number and search) and category name — both tenant-scoped.
         var joined = from d in query
-                     join e in _dbContext.Employees.AsNoTracking() on d.EmployeeId equals e.Id
-                     join c in _dbContext.Set<DriverCategory>().AsNoTracking() on d.DriverCategoryId equals c.Id into cats
+                     join e in _dbContext.Employees.AsNoTracking().Where(e => e.TenantId == _tenantContext.TenantId)
+                         on d.EmployeeId equals e.Id
+                     join c in _dbContext.Set<DriverCategory>().AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId)
+                         on d.DriverCategoryId equals c.Id into cats
                      from c in cats.DefaultIfEmpty()
                      select new { d, e, CategoryName = c != null ? c.Name : null };
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
+            // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
+            var term = search.Trim().ToLowerInvariant();
             joined = joined.Where(x =>
-                EF.Functions.Like(x.d.DriverNumber, pattern) ||
-                EF.Functions.Like(x.e.FirstName, pattern) ||
-                EF.Functions.Like(x.e.LastName, pattern) ||
-                EF.Functions.Like(x.e.EmployeeNumber, pattern));
+                x.d.DriverNumber.ToLower().Contains(term) ||
+                x.e.FirstName.ToLower().Contains(term) ||
+                x.e.LastName.ToLower().Contains(term) ||
+                x.e.EmployeeNumber.ToLower().Contains(term));
         }
 
         var ordered = joined.OrderBy(x => x.e.LastName).ThenBy(x => x.e.FirstName);
@@ -97,6 +100,12 @@ public class DriverService : IDriverService
             return DriverOperationResult.EmployeeAlreadyDriver;
         }
 
+        if (!await ReferencesInTenantAsync(request.DriverCategoryId, request.DefaultVehicleId,
+                request.PreferredVehicleId, request.DefaultTrailerId, cancellationToken))
+        {
+            return DriverOperationResult.InvalidReference;
+        }
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
@@ -104,7 +113,6 @@ public class DriverService : IDriverService
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
-            DriverNumber = GenerateDriverNumber(settings),
             EmployeeId = request.EmployeeId,
             DriverCategoryId = request.DriverCategoryId,
             AvailabilityStatus = request.AvailabilityStatus,
@@ -117,7 +125,18 @@ public class DriverService : IDriverService
         };
 
         _dbContext.Add(driver);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await TenantNumbering.SaveWithClaimedNumberAsync(
+                _dbContext, settings,
+                () => driver.DriverNumber = GenerateDriverNumber(settings),
+                cancellationToken);
+        }
+        catch (DbUpdateException e) when (e is not DbUpdateConcurrencyException)
+        {
+            // The (TenantId, EmployeeId) unique index caught a race the pre-check missed.
+            return DriverOperationResult.EmployeeAlreadyDriver;
+        }
 
         await _auditService.RecordAsync(EntityType, driver.Id.ToString(), "Created", null,
             new { driver.DriverNumber, driver.EmployeeId }, cancellationToken);
@@ -131,6 +150,12 @@ public class DriverService : IDriverService
         if (driver is null)
         {
             return DriverOperationResult.NotFound;
+        }
+
+        if (!await ReferencesInTenantAsync(request.DriverCategoryId, request.DefaultVehicleId,
+                request.PreferredVehicleId, request.DefaultTrailerId, cancellationToken))
+        {
+            return DriverOperationResult.InvalidReference;
         }
 
         var oldValues = new { driver.DriverCategoryId, driver.AvailabilityStatus, driver.IsActive };
@@ -189,14 +214,46 @@ public class DriverService : IDriverService
         return true;
     }
 
+    /// <summary>All optional references on a driver must resolve within the current tenant.</summary>
+    private async Task<bool> ReferencesInTenantAsync(
+        Guid? categoryId, Guid? defaultVehicleId, Guid? preferredVehicleId, Guid? defaultTrailerId,
+        CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        if (categoryId is { } cat && !await _dbContext.DriverCategories
+                .AnyAsync(c => c.Id == cat && c.TenantId == tenantId, cancellationToken))
+        {
+            return false;
+        }
+
+        foreach (var vehicleId in new[] { defaultVehicleId, preferredVehicleId })
+        {
+            if (vehicleId is { } v && !await _dbContext.Vehicles
+                    .AnyAsync(x => x.Id == v && x.TenantId == tenantId, cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        if (defaultTrailerId is { } t && !await _dbContext.Trailers
+                .AnyAsync(x => x.Id == t && x.TenantId == tenantId, cancellationToken))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     private async Task<DriverDetailDto> MapToDetailAsync(Driver driver, CancellationToken cancellationToken)
     {
         var employee = await _dbContext.Employees.AsNoTracking()
-            .FirstOrDefaultAsync(e => e.Id == driver.EmployeeId, cancellationToken);
+            .FirstOrDefaultAsync(e => e.Id == driver.EmployeeId && e.TenantId == _tenantContext.TenantId, cancellationToken);
 
         var categoryName = driver.DriverCategoryId is { } catId
             ? await _dbContext.Set<DriverCategory>().AsNoTracking()
-                .Where(c => c.Id == catId).Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
+                .Where(c => c.Id == catId && c.TenantId == _tenantContext.TenantId)
+                .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
             : null;
 
         var qualifications = await LoadQualificationsAsync(driver.EmployeeId, cancellationToken);

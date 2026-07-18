@@ -15,7 +15,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Controllers + enums als tekst in JSON
 builder.Services
-    .AddControllers()
+    .AddControllers(options =>
+        options.Filters.Add<TransportationService.Api.Common.InvalidTenantReferenceExceptionFilter>())
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(
             new JsonStringEnumConverter()

@@ -34,6 +34,31 @@ public class CompanySettingsService : ICompanySettingsService
 
         var before = new { settings.CompanyLegalName, settings.VatNumber, settings.DefaultCurrency, settings.Timezone };
 
+        // Retry once/twice if a concurrent create claimed a numbering counter between our read
+        // and save (the counters are concurrency tokens): reload and re-apply the request.
+        for (var attempt = 0; ; attempt++)
+        {
+            ApplyRequest(settings, request);
+
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                break;
+            }
+            catch (DbUpdateConcurrencyException) when (attempt < 3)
+            {
+                await _dbContext.Entry(settings).ReloadAsync(cancellationToken);
+            }
+        }
+
+        await _auditService.RecordAsync(EntityType, settings.TenantId.ToString(), "Updated", before,
+            new { settings.CompanyLegalName, settings.VatNumber, settings.DefaultCurrency, settings.Timezone }, cancellationToken);
+
+        return Map(settings);
+    }
+
+    private static void ApplyRequest(TenantSettings settings, UpdateCompanySettingsRequest request)
+    {
         settings.CompanyLegalName = Trim(request.CompanyLegalName);
         settings.TradingName = Trim(request.TradingName);
         settings.CompanyNumber = Trim(request.CompanyNumber);
@@ -91,13 +116,6 @@ public class CompanySettingsService : ICompanySettingsService
 
         settings.DefaultPageSize = Clamp(request.DefaultPageSize, 5, 200);
         settings.LogoReference = Trim(request.LogoReference);
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        await _auditService.RecordAsync(EntityType, settings.TenantId.ToString(), "Updated", before,
-            new { settings.CompanyLegalName, settings.VatNumber, settings.DefaultCurrency, settings.Timezone }, cancellationToken);
-
-        return Map(settings);
     }
 
     private async Task<TenantSettings> GetOrCreateAsync(CancellationToken cancellationToken)
@@ -109,7 +127,17 @@ public class CompanySettingsService : ICompanySettingsService
         {
             settings = new TenantSettings { Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId };
             _dbContext.TenantSettings.Add(settings);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // A concurrent request created the row first (unique TenantId index): use theirs.
+                _dbContext.Entry(settings).State = EntityState.Detached;
+                settings = await _dbContext.TenantSettings
+                    .FirstAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
+            }
         }
 
         return settings;

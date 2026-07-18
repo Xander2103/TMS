@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Dtos;
@@ -33,12 +34,13 @@ public class EmployeeService : IEmployeeService
 
         if (!string.IsNullOrWhiteSpace(searchText))
         {
-            var pattern = $"%{searchText.Trim()}%";
+            // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
+            var term = searchText.Trim().ToLowerInvariant();
             query = query.Where(e =>
-                EF.Functions.Like(e.EmployeeNumber, pattern) ||
-                EF.Functions.Like(e.FirstName, pattern) ||
-                EF.Functions.Like(e.LastName, pattern) ||
-                EF.Functions.Like(e.Email, pattern));
+                e.EmployeeNumber.ToLower().Contains(term) ||
+                e.FirstName.ToLower().Contains(term) ||
+                e.LastName.ToLower().Contains(term) ||
+                e.Email.ToLower().Contains(term));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -67,13 +69,10 @@ public class EmployeeService : IEmployeeService
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
-        var employeeNumber = GenerateEmployeeNumber(settings);
-
         var employee = new Employee
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
-            EmployeeNumber = employeeNumber,
             FirstName = request.FirstName.Trim(),
             LastName = request.LastName.Trim(),
             Street = request.Street.Trim(),
@@ -96,7 +95,10 @@ public class EmployeeService : IEmployeeService
         };
 
         _dbContext.Employees.Add(employee);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await TenantNumbering.SaveWithClaimedNumberAsync(
+            _dbContext, settings,
+            () => employee.EmployeeNumber = GenerateEmployeeNumber(settings),
+            cancellationToken);
 
         await _auditService.RecordAsync("Employee", employee.Id.ToString(), "Created", null,
             new { employee.EmployeeNumber, employee.FirstName, employee.LastName, employee.EmploymentStatus, employee.IsActive }, cancellationToken);

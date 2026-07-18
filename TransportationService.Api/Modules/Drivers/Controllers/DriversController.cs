@@ -56,6 +56,7 @@ public class DriversController : ControllerBase
             DriverOperationOutcome.Success => CreatedAtAction(nameof(GetById), new { id = result.Driver!.Id }, result.Driver),
             DriverOperationOutcome.EmployeeNotFound => BadRequest(new { message = "De opgegeven medewerker bestaat niet." }),
             DriverOperationOutcome.EmployeeAlreadyDriver => Conflict(new { message = "Deze medewerker is al gekoppeld aan een chauffeur." }),
+            DriverOperationOutcome.InvalidReference => BadRequest(new { message = "Eén of meer gekoppelde records (categorie, voertuig of oplegger) bestaan niet." }),
             _ => NotFound(),
         };
     }
@@ -87,6 +88,7 @@ public class DriversController : ControllerBase
     {
         DriverOperationOutcome.Success => Ok(result.Driver),
         DriverOperationOutcome.NotFound => NotFound(),
+        DriverOperationOutcome.InvalidReference => BadRequest(new { message = "Eén of meer gekoppelde records (categorie, voertuig of oplegger) bestaan niet." }),
         _ => Conflict(),
     };
 }

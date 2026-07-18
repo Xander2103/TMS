@@ -71,6 +71,7 @@ public enum DriverOperationOutcome
     NotFound,
     EmployeeNotFound,
     EmployeeAlreadyDriver,
+    InvalidReference,
 }
 
 public record DriverOperationResult(DriverOperationOutcome Outcome, DriverDetailDto? Driver)
@@ -79,4 +80,5 @@ public record DriverOperationResult(DriverOperationOutcome Outcome, DriverDetail
     public static readonly DriverOperationResult NotFound = new(DriverOperationOutcome.NotFound, null);
     public static readonly DriverOperationResult EmployeeNotFound = new(DriverOperationOutcome.EmployeeNotFound, null);
     public static readonly DriverOperationResult EmployeeAlreadyDriver = new(DriverOperationOutcome.EmployeeAlreadyDriver, null);
+    public static readonly DriverOperationResult InvalidReference = new(DriverOperationOutcome.InvalidReference, null);
 }

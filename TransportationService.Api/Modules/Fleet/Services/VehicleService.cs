@@ -40,16 +40,18 @@ public class VehicleService : IVehicleService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
+            // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
+            var term = search.Trim().ToLowerInvariant();
             query = query.Where(v =>
-                EF.Functions.Like(v.InternalNumber, pattern) ||
-                EF.Functions.Like(v.LicensePlate, pattern) ||
-                (v.Brand != null && EF.Functions.Like(v.Brand, pattern)) ||
-                (v.Model != null && EF.Functions.Like(v.Model, pattern)));
+                v.InternalNumber.ToLower().Contains(term) ||
+                v.LicensePlate.ToLower().Contains(term) ||
+                (v.Brand != null && v.Brand.ToLower().Contains(term)) ||
+                (v.Model != null && v.Model.ToLower().Contains(term)));
         }
 
         var projected = from v in query
-                        join c in _dbContext.VehicleCategories.AsNoTracking() on v.CategoryId equals c.Id into cats
+                        join c in _dbContext.VehicleCategories.AsNoTracking().Where(vc => vc.TenantId == _tenantContext.TenantId)
+                            on v.CategoryId equals c.Id into cats
                         from c in cats.DefaultIfEmpty()
                         orderby v.InternalNumber
                         select new VehicleListItemDto(
@@ -82,6 +84,11 @@ public class VehicleService : IVehicleService
             return VehicleOperationResult.DuplicateLicensePlate;
         }
 
+        if (!await ReferencesInTenantAsync(request.CategoryId, request.FixedDriverId, request.CurrentDriverId, cancellationToken))
+        {
+            return VehicleOperationResult.InvalidReference;
+        }
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
@@ -89,7 +96,6 @@ public class VehicleService : IVehicleService
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
-            InternalNumber = GenerateInternalNumber(settings),
             LicensePlate = plate,
             IsActive = true,
             OperationalStatus = VehicleOperationalStatus.Active,
@@ -103,9 +109,12 @@ public class VehicleService : IVehicleService
         _dbContext.Add(vehicle);
         try
         {
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            await TenantNumbering.SaveWithClaimedNumberAsync(
+                _dbContext, settings,
+                () => vehicle.InternalNumber = GenerateInternalNumber(settings),
+                cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException e) when (e is not DbUpdateConcurrencyException)
         {
             return VehicleOperationResult.DuplicateLicensePlate;
         }
@@ -128,6 +137,11 @@ public class VehicleService : IVehicleService
         if (await TenantScoped().AnyAsync(v => v.LicensePlate == plate && v.Id != id, cancellationToken))
         {
             return VehicleOperationResult.DuplicateLicensePlate;
+        }
+
+        if (!await ReferencesInTenantAsync(request.CategoryId, request.FixedDriverId, request.CurrentDriverId, cancellationToken))
+        {
+            return VehicleOperationResult.InvalidReference;
         }
 
         var before = new { vehicle.LicensePlate, vehicle.OperationalStatus, vehicle.IsActive };
@@ -205,10 +219,36 @@ public class VehicleService : IVehicleService
         v.Notes = Trim(notes);
     }
 
+    /// <summary>All optional references on a vehicle must resolve within the current tenant.</summary>
+    private async Task<bool> ReferencesInTenantAsync(
+        Guid? categoryId, Guid? fixedDriverId, Guid? currentDriverId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        if (categoryId is { } cat && !await _dbContext.VehicleCategories
+                .AnyAsync(c => c.Id == cat && c.TenantId == tenantId, cancellationToken))
+        {
+            return false;
+        }
+
+        foreach (var driverId in new[] { fixedDriverId, currentDriverId })
+        {
+            if (driverId is { } d && !await _dbContext.Drivers
+                    .AnyAsync(x => x.Id == d && x.TenantId == tenantId, cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private async Task<VehicleDetailDto> MapToDetailAsync(Vehicle v, CancellationToken cancellationToken)
     {
         var categoryName = v.CategoryId is { } catId
-            ? await _dbContext.VehicleCategories.AsNoTracking().Where(c => c.Id == catId).Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
+            ? await _dbContext.VehicleCategories.AsNoTracking()
+                .Where(c => c.Id == catId && c.TenantId == _tenantContext.TenantId)
+                .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
             : null;
 
         var fixedDriverName = await ResolveDriverNameAsync(v.FixedDriverId, cancellationToken);
@@ -230,7 +270,7 @@ public class VehicleService : IVehicleService
         }
 
         return await _dbContext.Set<TransportationService.Api.Modules.Drivers.Entities.Driver>().AsNoTracking()
-            .Where(d => d.Id == id)
+            .Where(d => d.Id == id && d.TenantId == _tenantContext.TenantId)
             .Join(_dbContext.Employees.AsNoTracking(), d => d.EmployeeId, e => e.Id, (d, e) => e.FirstName + " " + e.LastName)
             .FirstOrDefaultAsync(cancellationToken);
     }

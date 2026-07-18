@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
@@ -45,17 +46,19 @@ public class CustomerService : ICustomerService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
+            // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
+            var term = search.Trim().ToLowerInvariant();
             query = query.Where(c =>
-                EF.Functions.Like(c.CustomerNumber, pattern) ||
-                EF.Functions.Like(c.Name, pattern) ||
-                (c.VatNumber != null && EF.Functions.Like(c.VatNumber, pattern)) ||
-                (c.City != null && EF.Functions.Like(c.City, pattern)));
+                c.CustomerNumber.ToLower().Contains(term) ||
+                c.Name.ToLower().Contains(term) ||
+                (c.VatNumber != null && c.VatNumber.ToLower().Contains(term)) ||
+                (c.City != null && c.City.ToLower().Contains(term)));
         }
 
-        // Left join to category name via GroupJoin projection.
+        // Left join to category name via GroupJoin projection (tenant-scoped, defense in depth).
         var projected = from c in query
-                        join cat in _dbContext.CustomerCategories on c.CategoryId equals cat.Id into cats
+                        join cat in _dbContext.CustomerCategories.Where(cc => cc.TenantId == _tenantContext.TenantId)
+                            on c.CategoryId equals cat.Id into cats
                         from cat in cats.DefaultIfEmpty()
                         orderby c.Name
                         select new CustomerListItemDto(
@@ -83,6 +86,8 @@ public class CustomerService : ICustomerService
 
     public async Task<CustomerDetailDto> CreateAsync(CreateCustomerRequest request, CancellationToken cancellationToken)
     {
+        await EnsureCategoryInTenantAsync(request.CategoryId, cancellationToken);
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
@@ -90,7 +95,6 @@ public class CustomerService : ICustomerService
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
-            CustomerNumber = GenerateCustomerNumber(settings),
             Name = request.Name.Trim(),
             LegalName = Trim(request.LegalName),
             VatNumber = Trim(request.VatNumber),
@@ -111,7 +115,10 @@ public class CustomerService : ICustomerService
         };
 
         _dbContext.Customers.Add(customer);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await TenantNumbering.SaveWithClaimedNumberAsync(
+            _dbContext, settings,
+            () => customer.CustomerNumber = GenerateCustomerNumber(settings),
+            cancellationToken);
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "Created", null,
             new { customer.CustomerNumber, customer.Name }, cancellationToken);
@@ -127,6 +134,8 @@ public class CustomerService : ICustomerService
         {
             return null;
         }
+
+        await EnsureCategoryInTenantAsync(request.CategoryId, cancellationToken);
 
         var oldValues = new { customer.Name, customer.IsActive, customer.CategoryId };
 
@@ -289,6 +298,16 @@ public class CustomerService : ICustomerService
         }
     }
 
+    private async Task EnsureCategoryInTenantAsync(Guid? categoryId, CancellationToken cancellationToken)
+    {
+        if (categoryId is { } id
+            && !await _dbContext.CustomerCategories.AnyAsync(
+                c => c.Id == id && c.TenantId == _tenantContext.TenantId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("klantcategorie");
+        }
+    }
+
     private async Task<string?> ResolveCategoryNameAsync(Guid? categoryId, CancellationToken cancellationToken)
     {
         if (categoryId is not { } id)
@@ -297,7 +316,7 @@ public class CustomerService : ICustomerService
         }
 
         return await _dbContext.CustomerCategories
-            .Where(c => c.Id == id)
+            .Where(c => c.Id == id && c.TenantId == _tenantContext.TenantId)
             .Select(c => c.Name)
             .FirstOrDefaultAsync(cancellationToken);
     }

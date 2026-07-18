@@ -14,12 +14,20 @@ public class PermissionAuthorizationService : IPermissionAuthorizationService
 
     public async Task<bool> UserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken)
     {
-        return await _dbContext.UserRoles
-            .AsNoTracking()
-            .Where(ur => ur.UserId == userId)
-            .Join(_dbContext.Roles.AsNoTracking().Where(r => r.IsActive), ur => ur.RoleId, r => r.Id, (ur, r) => r.Id)
-            .Join(_dbContext.RolePermissions.AsNoTracking(), roleId => roleId, rp => rp.RoleId, (roleId, rp) => rp.PermissionId)
-            .Join(_dbContext.Permissions.AsNoTracking(), permissionId => permissionId, p => p.Id, (permissionId, p) => p.Code)
-            .AnyAsync(code => code == permissionCode, cancellationToken);
+        // Defense in depth: a role only grants permissions when it belongs to the user's own
+        // tenant, even if a cross-tenant UserRole row were ever to exist.
+        var query =
+            from ur in _dbContext.UserRoles.AsNoTracking()
+            join u in _dbContext.Users.AsNoTracking() on ur.UserId equals u.Id
+            join r in _dbContext.Roles.AsNoTracking() on ur.RoleId equals r.Id
+            join rp in _dbContext.RolePermissions.AsNoTracking() on r.Id equals rp.RoleId
+            join p in _dbContext.Permissions.AsNoTracking() on rp.PermissionId equals p.Id
+            where ur.UserId == userId
+                  && r.IsActive
+                  && r.TenantId == u.TenantId
+                  && p.Code == permissionCode
+            select 1;
+
+        return await query.AnyAsync(cancellationToken);
     }
 }

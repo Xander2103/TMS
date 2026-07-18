@@ -41,10 +41,13 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
+            // ToLower().Contains translates to LOWER(x) LIKE on both PostgreSQL and SQLite,
+            // giving case-insensitive search consistently (plain LIKE is case-sensitive on
+            // PostgreSQL) and escaping user-typed wildcard characters.
+            var term = search.Trim().ToLowerInvariant();
             query = query.Where(e =>
-                EF.Functions.Like(e.Code, pattern) ||
-                EF.Functions.Like(e.Name, pattern));
+                e.Code.ToLower().Contains(term) ||
+                e.Name.ToLower().Contains(term));
         }
 
         return await query

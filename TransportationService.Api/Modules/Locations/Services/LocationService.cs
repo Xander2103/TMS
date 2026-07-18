@@ -40,11 +40,12 @@ public class LocationService : ILocationService
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var pattern = $"%{search.Trim()}%";
+            // Case-insensitive on both PostgreSQL and SQLite (plain LIKE is case-sensitive on PostgreSQL).
+            var term = search.Trim().ToLowerInvariant();
             query = query.Where(l =>
-                EF.Functions.Like(l.Code, pattern) ||
-                EF.Functions.Like(l.Name, pattern) ||
-                (l.City != null && EF.Functions.Like(l.City, pattern)));
+                l.Code.ToLower().Contains(term) ||
+                l.Name.ToLower().Contains(term) ||
+                (l.City != null && l.City.ToLower().Contains(term)));
         }
 
         var descending = string.Equals(dir, "desc", StringComparison.OrdinalIgnoreCase);
@@ -57,7 +58,8 @@ public class LocationService : ILocationService
         };
 
         var projected = from l in query
-                        join c in _dbContext.Customers.AsNoTracking() on l.CustomerId equals c.Id into custs
+                        join c in _dbContext.Customers.AsNoTracking().Where(cu => cu.TenantId == _tenantContext.TenantId)
+                            on l.CustomerId equals c.Id into custs
                         from c in custs.DefaultIfEmpty()
                         select new LocationListItemDto(
                             l.Id, l.Code, l.Name, l.Type, l.City, l.CountryCode,
@@ -89,6 +91,11 @@ public class LocationService : ILocationService
         if (!CoordinatesValid(request.Latitude, request.Longitude))
         {
             return LocationOperationResult.InvalidCoordinates;
+        }
+
+        if (!await CustomerInTenantAsync(request.CustomerId, cancellationToken))
+        {
+            return LocationOperationResult.InvalidReference;
         }
 
         if (await TenantScoped().AnyAsync(l => l.Code == code, cancellationToken))
@@ -139,6 +146,11 @@ public class LocationService : ILocationService
         if (!CoordinatesValid(request.Latitude, request.Longitude))
         {
             return LocationOperationResult.InvalidCoordinates;
+        }
+
+        if (!await CustomerInTenantAsync(request.CustomerId, cancellationToken))
+        {
+            return LocationOperationResult.InvalidReference;
         }
 
         if (await TenantScoped().AnyAsync(l => l.Code == code && l.Id != id, cancellationToken))
@@ -227,10 +239,17 @@ public class LocationService : ILocationService
         l.Notes = Trim(notes);
     }
 
+    private async Task<bool> CustomerInTenantAsync(Guid? customerId, CancellationToken cancellationToken) =>
+        customerId is not { } id
+        || await _dbContext.Customers.AnyAsync(
+            c => c.Id == id && c.TenantId == _tenantContext.TenantId, cancellationToken);
+
     private async Task<LocationDetailDto> MapToDetailAsync(Location l, CancellationToken cancellationToken)
     {
         string? customerName = l.CustomerId is { } cid
-            ? await _dbContext.Customers.AsNoTracking().Where(c => c.Id == cid).Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
+            ? await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.Id == cid && c.TenantId == _tenantContext.TenantId)
+                .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
             : null;
 
         return new LocationDetailDto(

@@ -88,6 +88,7 @@ public class TrailersController : ControllerBase
         TrailerOperationOutcome.Success => Ok(result.Trailer),
         TrailerOperationOutcome.NotFound => NotFound(),
         TrailerOperationOutcome.DuplicateLicensePlate => Conflict(new { message = "Er bestaat al een oplegger met dit kenteken." }),
+        TrailerOperationOutcome.InvalidReference => BadRequest(new { message = "De gekoppelde categorie bestaat niet." }),
         _ => Conflict(),
     };
 }

@@ -2,9 +2,15 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Models;
+using TransportationService.Api.Modules.Identity;
+using TransportationService.Api.Modules.Identity.Authorization;
 
 namespace TransportationService.Api.Controllers;
 
+/// <summary>
+/// Legacy demo transport-order endpoints from the initial scaffold, now permission-protected.
+/// Phase 5 (Transport Operations) replaces this module with the real tenant-scoped order domain.
+/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class TransportOrdersController : ControllerBase
@@ -26,6 +32,7 @@ public class TransportOrdersController : ControllerBase
     }
 
     [HttpGet]
+    [RequirePermission(PermissionCodes.PlanningView)]
     public async Task<ActionResult<IEnumerable<TransportOrder>>> GetAll()
     {
         var orders = await _dbContext.TransportOrders
@@ -37,6 +44,7 @@ public class TransportOrdersController : ControllerBase
     }
 
     [HttpGet("{id}")]
+    [RequirePermission(PermissionCodes.PlanningView)]
     public async Task<ActionResult<TransportOrder>> GetById(Guid id)
     {
         var order = await _dbContext.TransportOrders
@@ -52,6 +60,7 @@ public class TransportOrdersController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission(PermissionCodes.PlanningCreate)]
     public async Task<ActionResult<TransportOrder>> Create(TransportOrder order)
     {
         var reference = order.Reference.Trim();

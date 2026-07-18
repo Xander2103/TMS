@@ -133,3 +133,7 @@ Desktop.ini
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.example.json
+
+# Local startup notes
+StartUp.txt
+StartUp

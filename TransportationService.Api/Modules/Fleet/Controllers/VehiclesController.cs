@@ -88,6 +88,7 @@ public class VehiclesController : ControllerBase
         VehicleOperationOutcome.Success => Ok(result.Vehicle),
         VehicleOperationOutcome.NotFound => NotFound(),
         VehicleOperationOutcome.DuplicateLicensePlate => Conflict(new { message = "Er bestaat al een voertuig met dit kenteken." }),
+        VehicleOperationOutcome.InvalidReference => BadRequest(new { message = "Eén of meer gekoppelde records (categorie of chauffeur) bestaan niet." }),
         _ => Conflict(),
     };
 }
