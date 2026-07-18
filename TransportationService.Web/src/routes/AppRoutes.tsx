@@ -11,6 +11,8 @@ import { SettingsPage } from '../features/settings/pages/SettingsPage'
 import { UsersPage } from '../features/users/pages/UsersPage'
 import { NewUserPage } from '../features/users/pages/NewUserPage'
 import { UserDetailPage } from '../features/users/pages/UserDetailPage'
+import { RolesPage } from '../features/roles/pages/RolesPage'
+import { RoleDetailPage } from '../features/roles/pages/RoleDetailPage'
 
 export function AppRoutes() {
   return (
@@ -27,6 +29,8 @@ export function AppRoutes() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/users/new" element={<NewUserPage />} />
           <Route path="/users/:id" element={<UserDetailPage />} />
+          <Route path="/roles" element={<RolesPage />} />
+          <Route path="/roles/:id" element={<RoleDetailPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

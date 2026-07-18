@@ -1,0 +1,45 @@
+.roles-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.roles-table th,
+.roles-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.roles-table th {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.roles-table .badge {
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--accent-bg);
+  color: var(--text-h);
+}
+
+.roles-table .muted-text {
+  color: var(--text);
+  opacity: 0.6;
+}
+
+.roles-table .status-text {
+  font-size: 13px;
+}
+
+.roles-table .status-active {
+  color: #15803d;
+}
+
+.roles-table .status-inactive {
+  color: #a16207;
+}

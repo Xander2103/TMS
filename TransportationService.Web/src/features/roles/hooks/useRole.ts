@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
-import { getRoles } from '../api/rolesApi'
+import { getRole } from '../api/rolesApi'
 import type { Role } from '../types/role'
 
-interface UseRolesResult {
-  roles: Role[]
+interface UseRoleResult {
+  role: Role | null
   isLoading: boolean
   error: string | null
   reload: () => void
 }
 
-const LOAD_ERROR_MESSAGE = 'Rollen konden niet worden geladen.'
+const LOAD_ERROR_MESSAGE = 'Rol kon niet worden geladen.'
 
-export function useRoles(): UseRolesResult {
-  const [roles, setRoles] = useState<Role[]>([])
+export function useRole(id: string): UseRoleResult {
+  const [role, setRole] = useState<Role | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
@@ -20,10 +20,10 @@ export function useRoles(): UseRolesResult {
   useEffect(() => {
     let isMounted = true
 
-    getRoles()
+    getRole(id)
       .then((data) => {
         if (!isMounted) return
-        setRoles(data)
+        setRole(data)
         setError(null)
         setIsLoading(false)
       })
@@ -36,11 +36,11 @@ export function useRoles(): UseRolesResult {
     return () => {
       isMounted = false
     }
-  }, [reloadToken])
+  }, [id, reloadToken])
 
   function reload() {
     setReloadToken((token) => token + 1)
   }
 
-  return { roles, isLoading, error, reload }
+  return { role, isLoading, error, reload }
 }
