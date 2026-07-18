@@ -84,6 +84,8 @@ public class CompanySettingsService : ICompanySettingsService
         settings.TripNumberNextValue = AtLeast(request.TripNumberNextValue, 1);
         settings.InvoiceNumberPrefix = Trim(request.InvoiceNumberPrefix);
         settings.InvoiceNumberNextValue = AtLeast(request.InvoiceNumberNextValue, 1);
+        settings.VehicleNumberPrefix = Trim(request.VehicleNumberPrefix);
+        settings.VehicleNumberNextValue = AtLeast(request.VehicleNumberNextValue, 1);
 
         settings.DefaultPageSize = Clamp(request.DefaultPageSize, 5, 200);
         settings.LogoReference = Trim(request.LogoReference);
@@ -126,6 +128,7 @@ public class CompanySettingsService : ICompanySettingsService
         s.OrderNumberPrefix, s.OrderNumberNextValue,
         s.TripNumberPrefix, s.TripNumberNextValue,
         s.InvoiceNumberPrefix, s.InvoiceNumberNextValue,
+        s.VehicleNumberPrefix, s.VehicleNumberNextValue,
         s.DefaultPageSize, s.LogoReference);
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

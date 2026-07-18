@@ -80,6 +80,12 @@ public static class PermissionCodes
     public const string QualificationTypesView = "qualification_types.view";
     public const string QualificationTypesManage = "qualification_types.manage";
 
+    // --- Vehicles (fleet) ---
+    public const string VehiclesView = "vehicles.view";
+    public const string VehiclesCreate = "vehicles.create";
+    public const string VehiclesEdit = "vehicles.edit";
+    public const string VehiclesDelete = "vehicles.delete";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -138,5 +144,9 @@ public static class PermissionCodes
         (CompanySettingsManage, "company_settings", "manage", "Bedrijfsinstellingen beheren"),
         (QualificationTypesView, "qualification_types", "view", "Kwalificatietypes bekijken"),
         (QualificationTypesManage, "qualification_types", "manage", "Kwalificatietypes beheren"),
+        (VehiclesView, "vehicles", "view", "Voertuigen bekijken"),
+        (VehiclesCreate, "vehicles", "create", "Voertuigen aanmaken"),
+        (VehiclesEdit, "vehicles", "edit", "Voertuigen bewerken"),
+        (VehiclesDelete, "vehicles", "delete", "Voertuigen verwijderen"),
     ];
 }

@@ -43,6 +43,8 @@ export interface CompanySettings {
   tripNumberNextValue: number
   invoiceNumberPrefix: string | null
   invoiceNumberNextValue: number
+  vehicleNumberPrefix: string | null
+  vehicleNumberNextValue: number
   defaultPageSize: number
   logoReference: string | null
 }

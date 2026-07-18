@@ -53,6 +53,9 @@ public class TransportationDbContext : DbContext
     public DbSet<DriverCategory> DriverCategories => Set<DriverCategory>();
     public DbSet<CustomerCategory> CustomerCategories => Set<CustomerCategory>();
 
+    // Fleet
+    public DbSet<Vehicle> Vehicles => Set<Vehicle>();
+
     // Drivers
     public DbSet<Driver> Drivers => Set<Driver>();
 

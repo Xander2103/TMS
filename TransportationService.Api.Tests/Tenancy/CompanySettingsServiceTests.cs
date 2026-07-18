@@ -42,6 +42,7 @@ public class CompanySettingsServiceTests
         OrderNumberPrefix: "ORD-", OrderNumberNextValue: 5,
         TripNumberPrefix: "RIT-", TripNumberNextValue: 5,
         InvoiceNumberPrefix: "FAC-", InvoiceNumberNextValue: 5,
+        VehicleNumberPrefix: "VRT-", VehicleNumberNextValue: 5,
         DefaultPageSize: 50, LogoReference: null);
 
     [Fact]

@@ -38,8 +38,9 @@ public class Driver : AuditableTenantEntity
     /// <summary>Prefer to always assign the same vehicle where possible.</summary>
     public bool FixedVehiclePreference { get; set; }
 
-    // Forward references to Fleet (Phase 3). Kept as plain ids now; FK constraints + navigations
-    // are added when the Vehicle/Trailer tables exist, so drivers can be configured up front.
+    // References into Fleet. DefaultVehicleId/PreferredVehicleId are FK-constrained to Vehicle
+    // (see DriverConfiguration) now that the table exists. DefaultTrailerId remains a plain id
+    // until the Trailer table is added in a later Fleet wave.
     public Guid? DefaultVehicleId { get; set; }
     public Guid? PreferredVehicleId { get; set; }
     public Guid? DefaultTrailerId { get; set; }

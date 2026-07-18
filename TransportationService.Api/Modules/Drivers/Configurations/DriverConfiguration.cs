@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TransportationService.Api.Modules.Drivers.Entities;
+using TransportationService.Api.Modules.Fleet.Entities;
 
 namespace TransportationService.Api.Modules.Drivers.Configurations;
 
@@ -24,5 +25,11 @@ public class DriverConfiguration : IEntityTypeConfiguration<Driver>
         builder.HasIndex(d => new { d.TenantId, d.IsActive });
 
         builder.HasQueryFilter(d => !d.IsDeleted);
+
+        // Forward references into Fleet, now that the Vehicle table exists. A vehicle being
+        // deleted merely clears the preference/default (SetNull) rather than blocking the delete
+        // or removing the driver.
+        builder.HasOne<Vehicle>().WithMany().HasForeignKey(d => d.DefaultVehicleId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<Vehicle>().WithMany().HasForeignKey(d => d.PreferredVehicleId).OnDelete(DeleteBehavior.SetNull);
     }
 }

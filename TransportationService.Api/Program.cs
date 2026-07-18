@@ -122,6 +122,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Tenancy.Services.IC
 builder.Services.AddScoped<TransportationService.Api.Modules.Locations.Services.ILocationService,
     TransportationService.Api.Modules.Locations.Services.LocationService>();
 
+// Fleet
+builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IVehicleService,
+    TransportationService.Api.Modules.Fleet.Services.VehicleService>();
+
 var app = builder.Build();
 
 // Development-only setup

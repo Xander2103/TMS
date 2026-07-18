@@ -48,6 +48,7 @@ public record CompanySettingsDto(
     string? OrderNumberPrefix, int OrderNumberNextValue,
     string? TripNumberPrefix, int TripNumberNextValue,
     string? InvoiceNumberPrefix, int InvoiceNumberNextValue,
+    string? VehicleNumberPrefix, int VehicleNumberNextValue,
     // Presentation
     int DefaultPageSize,
     string? LogoReference);
@@ -91,5 +92,6 @@ public record UpdateCompanySettingsRequest(
     string? OrderNumberPrefix, int OrderNumberNextValue,
     string? TripNumberPrefix, int TripNumberNextValue,
     string? InvoiceNumberPrefix, int InvoiceNumberNextValue,
+    string? VehicleNumberPrefix, int VehicleNumberNextValue,
     int DefaultPageSize,
     string? LogoReference);

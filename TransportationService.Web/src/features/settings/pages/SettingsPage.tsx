@@ -21,6 +21,7 @@ type NumericField =
   | 'orderNumberNextValue'
   | 'tripNumberNextValue'
   | 'invoiceNumberNextValue'
+  | 'vehicleNumberNextValue'
   | 'defaultPageSize'
 
 export function SettingsPage() {
@@ -235,6 +236,8 @@ export function SettingsPage() {
             {num('tripNumberNextValue', 'Rit volgnr', { min: 1 })}
             {text('invoiceNumberPrefix', 'Factuur prefix', { maxLength: 20 })}
             {num('invoiceNumberNextValue', 'Factuur volgnr', { min: 1 })}
+            {text('vehicleNumberPrefix', 'Voertuig prefix', { maxLength: 20 })}
+            {num('vehicleNumberNextValue', 'Voertuig volgnr', { min: 1 })}
           </div>
         </section>
 
