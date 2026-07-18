@@ -14,6 +14,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Klanten', to: '/customers' },
   { label: 'Chauffeurs', to: '/drivers' },
   { label: 'Voertuigen', to: '/vehicles' },
+  { label: 'Locaties', to: '/locations' },
 ]
 
 const administrationNavItems: NavItem[] = [

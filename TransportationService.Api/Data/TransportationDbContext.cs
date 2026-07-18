@@ -7,6 +7,7 @@ using TransportationService.Api.Modules.Eligibility.Entities;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Identity.Entities;
+using TransportationService.Api.Modules.Locations.Entities;
 using TransportationService.Api.Modules.Organization.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Qualifications.Entities;
@@ -54,6 +55,9 @@ public class TransportationDbContext : DbContext
 
     // Drivers
     public DbSet<Driver> Drivers => Set<Driver>();
+
+    // Locations
+    public DbSet<Location> Locations => Set<Location>();
 
     // Partners
     public DbSet<Customer> Customers => Set<Customer>();

@@ -118,6 +118,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Drivers.Services.ID
 builder.Services.AddScoped<TransportationService.Api.Modules.Tenancy.Services.ICompanySettingsService,
     TransportationService.Api.Modules.Tenancy.Services.CompanySettingsService>();
 
+// Locations
+builder.Services.AddScoped<TransportationService.Api.Modules.Locations.Services.ILocationService,
+    TransportationService.Api.Modules.Locations.Services.LocationService>();
+
 var app = builder.Build();
 
 // Development-only setup

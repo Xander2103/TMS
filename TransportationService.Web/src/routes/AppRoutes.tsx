@@ -14,6 +14,9 @@ import { DriversPage } from '../features/drivers/pages/DriversPage'
 import { NewDriverPage } from '../features/drivers/pages/NewDriverPage'
 import { DriverDetailPage } from '../features/drivers/pages/DriverDetailPage'
 import { VehiclesPage } from '../features/vehicles/pages/VehiclesPage'
+import { LocationsPage } from '../features/locations/pages/LocationsPage'
+import { NewLocationPage } from '../features/locations/pages/NewLocationPage'
+import { LocationDetailPage } from '../features/locations/pages/LocationDetailPage'
 import { SettingsPage } from '../features/settings/pages/SettingsPage'
 import { UsersPage } from '../features/users/pages/UsersPage'
 import { NewUserPage } from '../features/users/pages/NewUserPage'
@@ -45,6 +48,9 @@ export function AppRoutes() {
           <Route path="/drivers/new" element={<NewDriverPage />} />
           <Route path="/drivers/:id" element={<DriverDetailPage />} />
           <Route path="/vehicles" element={<VehiclesPage />} />
+          <Route path="/locations" element={<LocationsPage />} />
+          <Route path="/locations/new" element={<NewLocationPage />} />
+          <Route path="/locations/:id" element={<LocationDetailPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/users/new" element={<NewUserPage />} />
           <Route path="/users/:id" element={<UserDetailPage />} />
