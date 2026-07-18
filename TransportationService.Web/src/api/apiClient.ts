@@ -1,4 +1,6 @@
-import { apiBaseUrl, devTenantId, devUserId } from '../config/env'
+import { apiBaseUrl } from '../config/env'
+import { getAccessToken, getRefreshToken, storeTokens, clearTokens } from '../features/auth/authStorage'
+import { refresh as refreshTokens } from '../features/auth/authApi'
 
 export class ApiError extends Error {
   readonly status?: number
@@ -14,61 +16,76 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
+type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
 }
 
-function devHeaders(): Record<string, string> {
+// Called when authentication cannot be recovered (refresh failed). The AuthProvider registers a
+// handler that clears state and redirects to the login page.
+let onUnauthorized: (() => void) | null = null
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler
+}
+
+// Single-flight refresh: concurrent 401s share one refresh attempt instead of stampeding.
+let refreshInFlight: Promise<boolean> | null = null
+
+function attemptRefresh(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    const refreshToken = getRefreshToken()
+    if (!refreshToken) return false
+    const tokens = await refreshTokens(refreshToken)
+    if (!tokens) return false
+    storeTokens(tokens)
+    return true
+  })().finally(() => {
+    refreshInFlight = null
+  })
+  return refreshInFlight
+}
+
+function buildHeaders(hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {}
-  if (devTenantId) headers['X-Dev-Tenant-Id'] = devTenantId
-  if (devUserId) headers['X-Dev-User-Id'] = devUserId
+  if (hasBody) headers['Content-Type'] = 'application/json'
+  const token = getAccessToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
   return headers
 }
 
-async function getJson<T>(path: string, options?: RequestOptions): Promise<T> {
+async function request<T>(method: Method, path: string, body?: unknown, options?: RequestOptions): Promise<T> {
   const url = `${apiBaseUrl}${path}`
-  let response: Response
+  const hasBody = body !== undefined
+  const serialized = hasBody ? JSON.stringify(body) : undefined
 
+  const send = (): Promise<Response> =>
+    fetch(url, { method, headers: buildHeaders(hasBody), body: serialized, signal: options?.signal })
+
+  let response: Response
   try {
-    response = await fetch(url, { headers: devHeaders(), signal: options?.signal })
+    response = await send()
   } catch (err) {
-    if (isAbortError(err)) {
-      throw err
-    }
+    if (isAbortError(err)) throw err
     throw new ApiError(`Unable to reach ${path}`)
   }
 
-  if (!response.ok) {
-    throw new ApiError(`Request to ${path} failed with status ${response.status}`, response.status)
-  }
-
-  return response.json() as Promise<T>
-}
-
-async function sendJson<TResponse, TBody>(
-  method: 'POST' | 'PUT' | 'PATCH',
-  path: string,
-  body: TBody,
-  options?: RequestOptions,
-): Promise<TResponse> {
-  const url = `${apiBaseUrl}${path}`
-  let response: Response
-
-  try {
-    response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...devHeaders(),
-      },
-      body: JSON.stringify(body),
-      signal: options?.signal,
-    })
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err
+  if (response.status === 401) {
+    const refreshed = await attemptRefresh()
+    if (refreshed) {
+      try {
+        response = await send()
+      } catch (err) {
+        if (isAbortError(err)) throw err
+        throw new ApiError(`Unable to reach ${path}`)
+      }
     }
-    throw new ApiError(`Unable to reach ${path}`)
+
+    if (response.status === 401) {
+      clearTokens()
+      onUnauthorized?.()
+      throw new ApiError('Authentication required', 401)
+    }
   }
 
   if (!response.ok) {
@@ -76,56 +93,30 @@ async function sendJson<TResponse, TBody>(
   }
 
   if (response.status === 204) {
-    return undefined as TResponse
+    return undefined as T
   }
 
-  return response.json() as Promise<TResponse>
+  return (await response.json()) as T
 }
 
-async function postJson<TResponse, TBody>(
-  path: string,
-  body: TBody,
-  options?: RequestOptions,
-): Promise<TResponse> {
-  return sendJson<TResponse, TBody>('POST', path, body, options)
+async function getJson<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>('GET', path, undefined, options)
 }
 
-async function putJson<TResponse, TBody>(
-  path: string,
-  body: TBody,
-  options?: RequestOptions,
-): Promise<TResponse> {
-  return sendJson<TResponse, TBody>('PUT', path, body, options)
+async function postJson<TResponse, TBody>(path: string, body: TBody, options?: RequestOptions): Promise<TResponse> {
+  return request<TResponse>('POST', path, body, options)
 }
 
-async function patchJson<TResponse, TBody>(
-  path: string,
-  body: TBody,
-  options?: RequestOptions,
-): Promise<TResponse> {
-  return sendJson<TResponse, TBody>('PATCH', path, body, options)
+async function putJson<TResponse, TBody>(path: string, body: TBody, options?: RequestOptions): Promise<TResponse> {
+  return request<TResponse>('PUT', path, body, options)
+}
+
+async function patchJson<TResponse, TBody>(path: string, body: TBody, options?: RequestOptions): Promise<TResponse> {
+  return request<TResponse>('PATCH', path, body, options)
 }
 
 async function deleteRequest(path: string, options?: RequestOptions): Promise<void> {
-  const url = `${apiBaseUrl}${path}`
-  let response: Response
-
-  try {
-    response = await fetch(url, {
-      method: 'DELETE',
-      headers: devHeaders(),
-      signal: options?.signal,
-    })
-  } catch (err) {
-    if (isAbortError(err)) {
-      throw err
-    }
-    throw new ApiError(`Unable to reach ${path}`)
-  }
-
-  if (!response.ok) {
-    throw new ApiError(`Request to ${path} failed with status ${response.status}`, response.status)
-  }
+  await request<void>('DELETE', path, undefined, options)
 }
 
 export const apiClient = {

@@ -1,0 +1,43 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using TransportationService.Api.Modules.Partners.Entities;
+
+namespace TransportationService.Api.Modules.Partners.Configurations;
+
+public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
+{
+    public void Configure(EntityTypeBuilder<Customer> builder)
+    {
+        builder.ToTable("customers");
+        builder.HasKey(c => c.Id);
+
+        builder.Property(c => c.CustomerNumber).IsRequired().HasMaxLength(30);
+        builder.Property(c => c.Name).IsRequired().HasMaxLength(200);
+        builder.Property(c => c.LegalName).HasMaxLength(200);
+        builder.Property(c => c.VatNumber).HasMaxLength(30);
+        builder.Property(c => c.Email).HasMaxLength(250);
+        builder.Property(c => c.PhoneNumber).HasMaxLength(30);
+        builder.Property(c => c.Website).HasMaxLength(200);
+        builder.Property(c => c.Street).HasMaxLength(150);
+        builder.Property(c => c.HouseNumber).HasMaxLength(20);
+        builder.Property(c => c.PostalCode).HasMaxLength(20);
+        builder.Property(c => c.City).HasMaxLength(100);
+        builder.Property(c => c.CountryCode).HasMaxLength(2);
+        builder.Property(c => c.InvoiceEmail).HasMaxLength(250);
+        builder.Property(c => c.DefaultLanguageCode).HasMaxLength(10);
+        builder.Property(c => c.Notes).HasMaxLength(2000);
+        builder.Property(c => c.BlockReason).HasMaxLength(500);
+
+        builder.HasIndex(c => new { c.TenantId, c.CustomerNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        builder.HasIndex(c => c.TenantId);
+        builder.HasIndex(c => new { c.TenantId, c.IsActive });
+        builder.HasIndex(c => new { c.TenantId, c.CategoryId });
+
+        builder.HasMany(c => c.Contacts)
+            .WithOne()
+            .HasForeignKey(contact => contact.CustomerId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasQueryFilter(c => !c.IsDeleted);
+    }
+}

@@ -1,0 +1,38 @@
+.ui-breadcrumbs {
+  margin-bottom: 8px;
+}
+
+.ui-breadcrumbs ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.ui-breadcrumbs li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ui-breadcrumbs a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.ui-breadcrumbs a:hover {
+  color: var(--accent);
+}
+
+.ui-breadcrumbs span[aria-current='page'] {
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.ui-breadcrumbs-sep {
+  color: var(--border);
+}

@@ -33,6 +33,50 @@ public static class PermissionCodes
 
     public const string AuditLogsView = "audit_logs.view";
 
+    // --- Organisation master data ---
+    public const string DepartmentsView = "departments.view";
+    public const string DepartmentsManage = "departments.manage";
+    public const string JobFunctionsView = "job_functions.view";
+    public const string JobFunctionsManage = "job_functions.manage";
+
+    // --- Classification categories ---
+    public const string VehicleCategoriesView = "vehicle_categories.view";
+    public const string VehicleCategoriesManage = "vehicle_categories.manage";
+    public const string TrailerCategoriesView = "trailer_categories.view";
+    public const string TrailerCategoriesManage = "trailer_categories.manage";
+    public const string DriverCategoriesView = "driver_categories.view";
+    public const string DriverCategoriesManage = "driver_categories.manage";
+    public const string CustomerCategoriesView = "customer_categories.view";
+    public const string CustomerCategoriesManage = "customer_categories.manage";
+
+    // --- Reference data (countries, languages, nationalities, contract types) ---
+    public const string ReferenceDataView = "reference_data.view";
+    public const string ReferenceDataManage = "reference_data.manage";
+
+    // --- Customers ---
+    public const string CustomersView = "customers.view";
+    public const string CustomersCreate = "customers.create";
+    public const string CustomersEdit = "customers.edit";
+    public const string CustomersDelete = "customers.delete";
+
+    // --- Locations (sites/addresses) ---
+    public const string LocationsView = "locations.view";
+    public const string LocationsCreate = "locations.create";
+    public const string LocationsEdit = "locations.edit";
+    public const string LocationsDelete = "locations.delete";
+
+    // --- Drivers ---
+    public const string DriversView = "drivers.view";
+    public const string DriversEdit = "drivers.edit";
+
+    // --- Company settings ---
+    public const string CompanySettingsView = "company_settings.view";
+    public const string CompanySettingsManage = "company_settings.manage";
+
+    // --- Qualification types (catalog) ---
+    public const string QualificationTypesView = "qualification_types.view";
+    public const string QualificationTypesManage = "qualification_types.manage";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -60,5 +104,33 @@ public static class PermissionCodes
         (PlanningEdit, "planning", "edit", "Planning bewerken"),
         (PlanningOverrideRestriction, "planning", "override_restriction", "Planningsbeperkingen overschrijven"),
         (AuditLogsView, "audit_logs", "view", "Auditlogboek bekijken"),
+        (DepartmentsView, "departments", "view", "Afdelingen bekijken"),
+        (DepartmentsManage, "departments", "manage", "Afdelingen beheren"),
+        (JobFunctionsView, "job_functions", "view", "Functies bekijken"),
+        (JobFunctionsManage, "job_functions", "manage", "Functies beheren"),
+        (VehicleCategoriesView, "vehicle_categories", "view", "Voertuigcategorieën bekijken"),
+        (VehicleCategoriesManage, "vehicle_categories", "manage", "Voertuigcategorieën beheren"),
+        (TrailerCategoriesView, "trailer_categories", "view", "Opleggercategorieën bekijken"),
+        (TrailerCategoriesManage, "trailer_categories", "manage", "Opleggercategorieën beheren"),
+        (DriverCategoriesView, "driver_categories", "view", "Chauffeurcategorieën bekijken"),
+        (DriverCategoriesManage, "driver_categories", "manage", "Chauffeurcategorieën beheren"),
+        (CustomerCategoriesView, "customer_categories", "view", "Klantcategorieën bekijken"),
+        (CustomerCategoriesManage, "customer_categories", "manage", "Klantcategorieën beheren"),
+        (ReferenceDataView, "reference_data", "view", "Referentiegegevens bekijken"),
+        (ReferenceDataManage, "reference_data", "manage", "Referentiegegevens beheren"),
+        (CustomersView, "customers", "view", "Klanten bekijken"),
+        (CustomersCreate, "customers", "create", "Klanten aanmaken"),
+        (CustomersEdit, "customers", "edit", "Klanten bewerken"),
+        (CustomersDelete, "customers", "delete", "Klanten verwijderen"),
+        (LocationsView, "locations", "view", "Locaties bekijken"),
+        (LocationsCreate, "locations", "create", "Locaties aanmaken"),
+        (LocationsEdit, "locations", "edit", "Locaties bewerken"),
+        (LocationsDelete, "locations", "delete", "Locaties verwijderen"),
+        (DriversView, "drivers", "view", "Chauffeurs bekijken"),
+        (DriversEdit, "drivers", "edit", "Chauffeurs bewerken"),
+        (CompanySettingsView, "company_settings", "view", "Bedrijfsinstellingen bekijken"),
+        (CompanySettingsManage, "company_settings", "manage", "Bedrijfsinstellingen beheren"),
+        (QualificationTypesView, "qualification_types", "view", "Kwalificatietypes bekijken"),
+        (QualificationTypesManage, "qualification_types", "manage", "Kwalificatietypes beheren"),
     ];
 }

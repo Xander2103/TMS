@@ -1,0 +1,53 @@
+.ui-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ui-form-field > label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ui-form-field-required {
+  color: #dc2626;
+}
+
+.ui-form-field input,
+.ui-form-field select,
+.ui-form-field textarea {
+  font: inherit;
+  font-size: 15px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ui-form-field input:focus,
+.ui-form-field select:focus,
+.ui-form-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.ui-form-field input[aria-invalid='true'],
+.ui-form-field select[aria-invalid='true'],
+.ui-form-field textarea[aria-invalid='true'] {
+  border-color: #dc2626;
+}
+
+.ui-form-field-hint {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ui-form-field-error {
+  font-size: 13px;
+  color: #dc2626;
+}

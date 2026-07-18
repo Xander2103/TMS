@@ -1,0 +1,125 @@
+.customer-status-badges {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.customer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 900px;
+}
+
+.customer-form-section {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px 20px;
+  margin: 0;
+}
+
+.customer-form-section legend {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-h);
+  padding: 0 6px;
+}
+
+.customer-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.customer-form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.customer-form-checkbox input {
+  width: 18px;
+  height: 18px;
+}
+
+.customer-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.customer-detail-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .customer-detail-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.customer-summary {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.customer-summary dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 15px;
+}
+
+.customer-summary dt {
+  color: var(--text);
+}
+
+.customer-summary dd {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.customer-contacts {
+  margin-top: 8px;
+}
+
+.customer-contact-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customer-contact-card h4 {
+  margin: 0 0 4px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.customer-contact-meta {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.customer-contact-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.customer-detail-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

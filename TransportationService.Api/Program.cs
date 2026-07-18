@@ -1,7 +1,10 @@
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
+using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Authentication;
 using TransportationService.Api.Modules.Eligibility.Services;
 using TransportationService.Api.Modules.Employees.Services;
 using TransportationService.Api.Modules.Identity.Services;
@@ -10,59 +13,145 @@ using TransportationService.Api.Modules.Tenancy;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Controllers + enums als tekst in JSON
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter()
+        )
+    );
 
-builder.Services.AddControllers()
-    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+// OpenAPI
 builder.Services.AddOpenApi();
 
+// Consistent RFC7807 error responses
+builder.Services.AddProblemDetails();
+
+// JWT authentication + authorization (password hashing, token + auth services)
+builder.Services.AddJwtAuthentication(builder.Configuration);
+
+// CORS voor React frontend
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy
+            .WithOrigins("http://localhost:5173")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
-builder.Services.AddDbContext<TransportationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
+// Algemene services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTenantContextAccessors();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddScoped<IPermissionAuthorizationService, PermissionAuthorizationService>();
+
+// Cross-cutting persistence behaviour (audit stamps, soft delete)
+builder.Services.AddSingleton<AuditingSaveChangesInterceptor>();
+
+// PostgreSQL + EF Core
+builder.Services.AddDbContext<TransportationDbContext>((serviceProvider, options) =>
+    options
+        .UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+        .AddInterceptors(serviceProvider.GetRequiredService<AuditingSaveChangesInterceptor>())
+);
+
+// Identity en permissions
+builder.Services.AddScoped<
+    IPermissionAuthorizationService,
+    PermissionAuthorizationService
+>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
+
+// Employees
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
-builder.Services.AddSingleton<IFileStorageService>(new LocalFileStorageService(Path.Combine(builder.Environment.ContentRootPath, "App_Data")));
-builder.Services.AddSingleton<IQualificationStatusCalculator, QualificationStatusCalculator>();
-builder.Services.AddScoped<IQualificationService, QualificationService>();
-builder.Services.AddScoped<IDriverEligibilityService, DriverEligibilityService>();
+
+// Qualification file storage
+builder.Services.AddSingleton<IFileStorageService>(
+    new LocalFileStorageService(
+        Path.Combine(
+            builder.Environment.ContentRootPath,
+            "App_Data"
+        )
+    )
+);
+
+// Qualifications
+builder.Services.AddSingleton<
+    IQualificationStatusCalculator,
+    QualificationStatusCalculator
+>();
+builder.Services.AddScoped<
+    IQualificationService,
+    QualificationService
+>();
+
+// Eligibility
+builder.Services.AddScoped<
+    IDriverEligibilityService,
+    DriverEligibilityService
+>();
+builder.Services.AddScoped<
+    IEligibilityOverrideService,
+    EligibilityOverrideService
+>();
+
+// Audit
 builder.Services.AddScoped<IAuditService, AuditService>();
-builder.Services.AddScoped<IEligibilityOverrideService, EligibilityOverrideService>();
+
+// Generic tenant lookup CRUD (departments, functions, categories, reference data, ...)
+builder.Services.AddScoped(typeof(TransportationService.Api.Common.Lookups.ILookupService<>),
+    typeof(TransportationService.Api.Common.Lookups.LookupService<>));
+
+// Partners
+builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerService,
+    TransportationService.Api.Modules.Partners.Services.CustomerService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Development-only setup
 if (app.Environment.IsDevelopment())
 {
+    // OpenAPI JSON
     app.MapOpenApi();
-}
 
-if (app.Environment.IsDevelopment())
-{
+    // Interactieve Scalar API-interface
+    app.MapScalarApiReference();
+
+    // Development seed data
     using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<TransportationDbContext>();
+
+    var dbContext = scope.ServiceProvider
+        .GetRequiredService<TransportationDbContext>();
+
     await TransportOrderSeeder.SeedAsync(dbContext);
     await MasterDataSeeder.SeedAsync(dbContext);
+
+    // Idempotent every startup: keep the permission catalog in sync and seed starter lookups.
+    await PermissionCatalogSeeder.SyncAsync(dbContext);
+    await ReferenceDataSeeder.SeedAsync(dbContext);
+
+    // Ensure the development administrator has a usable password (only when unset, so a
+    // deliberately-changed password is never reset). Reported to the console below.
+    var passwordHasher = scope.ServiceProvider
+        .GetRequiredService<TransportationService.Api.Modules.Authentication.Services.IPasswordHasher>();
+    await DevAdminSeeder.EnsurePasswordAsync(dbContext, passwordHasher, app.Logger);
 }
 
-app.UseHttpsRedirection();
+// Enforce HTTPS in real environments. In Development the SPA talks to the API over http
+// (http://localhost:5019); redirecting to https there would drop the Authorization header on the
+// cross-scheme 307, so redirection is intentionally skipped for local development only.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseCors("Frontend");
+
+app.UseAuthentication();
 
 app.UseMiddleware<TenantContextMiddleware>();
 
