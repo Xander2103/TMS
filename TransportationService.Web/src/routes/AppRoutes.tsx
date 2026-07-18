@@ -8,6 +8,8 @@ import { DashboardPage } from '../features/dashboard/pages/DashboardPage'
 import { TransportOrdersPage } from '../features/transport-orders/pages/TransportOrdersPage'
 import { NewTransportOrderPage } from '../features/transport-orders/pages/NewTransportOrderPage'
 import { TransportOrderDetailPage } from '../features/transport-orders/pages/TransportOrderDetailPage'
+import { PlanningPage } from '../features/planning/pages/PlanningPage'
+import { TripDetailPage } from '../features/planning/pages/TripDetailPage'
 import { CustomersPage } from '../features/customers/pages/CustomersPage'
 import { NewCustomerPage } from '../features/customers/pages/NewCustomerPage'
 import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage'
@@ -51,6 +53,8 @@ export function AppRoutes() {
           <Route path="/transport-orders" element={<TransportOrdersPage />} />
           <Route path="/transport-orders/new" element={<NewTransportOrderPage />} />
           <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+          <Route path="/planning" element={<PlanningPage />} />
+          <Route path="/planning/:id" element={<TripDetailPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/new" element={<NewCustomerPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />

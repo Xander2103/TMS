@@ -11,6 +11,7 @@ using TransportationService.Api.Modules.Locations.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Organization.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
+using TransportationService.Api.Modules.Planning.Entities;
 using TransportationService.Api.Modules.Qualifications.Entities;
 using TransportationService.Api.Modules.Reference.Entities;
 using TransportationService.Api.Modules.Tenancy.Entities;
@@ -27,6 +28,10 @@ public class TransportationDbContext : DbContext
     // Transport orders (Phase 5)
     public DbSet<TransportOrder> TransportOrders => Set<TransportOrder>();
     public DbSet<TransportOrderStop> TransportOrderStops => Set<TransportOrderStop>();
+
+    // Planning (Phase 6)
+    public DbSet<Trip> Trips => Set<Trip>();
+    public DbSet<TripOrder> TripOrders => Set<TripOrder>();
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();

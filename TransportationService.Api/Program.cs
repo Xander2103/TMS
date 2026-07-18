@@ -151,6 +151,12 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IAbsenc
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderService,
     TransportationService.Api.Modules.Orders.Services.TransportOrderService>();
 
+// Planning (trips + conflict engine)
+builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IPlanningConflictService,
+    TransportationService.Api.Modules.Planning.Services.PlanningConflictService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.ITripService,
+    TransportationService.Api.Modules.Planning.Services.TripService>();
+
 var app = builder.Build();
 
 // Development-only setup
