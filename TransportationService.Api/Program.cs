@@ -136,6 +136,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IIns
     TransportationService.Api.Modules.Fleet.Services.InspectionService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IDamageReportService,
     TransportationService.Api.Modules.Fleet.Services.DamageReportService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.ITankCardService,
+    TransportationService.Api.Modules.Fleet.Services.TankCardService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFuelService,
+    TransportationService.Api.Modules.Fleet.Services.FuelService>();
 
 var app = builder.Build();
 

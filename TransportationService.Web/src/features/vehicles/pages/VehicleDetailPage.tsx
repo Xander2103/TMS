@@ -12,6 +12,7 @@ import { ApiError } from '../../../api/apiClient'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { DamagePanel } from '../../damage/components/DamagePanel'
+import { FuelPanel } from '../../fuel/components/FuelPanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
 import { deleteVehicle, getVehicle, updateVehicle } from '../api/vehiclesApi'
 import {
@@ -236,6 +237,7 @@ export function VehicleDetailPage() {
       {!editing && id && <MaintenancePanel ownerType="vehicle" ownerId={id} />}
       {!editing && id && <InspectionsPanel ownerType="vehicle" ownerId={id} />}
       {!editing && id && <DamagePanel ownerType="vehicle" ownerId={id} />}
+      {!editing && id && <FuelPanel vehicleId={id} />}
 
       {confirmDelete && (
         <ConfirmDialog

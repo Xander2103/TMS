@@ -116,6 +116,19 @@ public static class PermissionCodes
     public const string DamageReportsEdit = "damage_reports.edit";
     public const string DamageReportsDelete = "damage_reports.delete";
 
+    // --- Tank cards ---
+    public const string TankCardsView = "tank_cards.view";
+    public const string TankCardsCreate = "tank_cards.create";
+    public const string TankCardsEdit = "tank_cards.edit";
+    public const string TankCardsDelete = "tank_cards.delete";
+    public const string TankCardsBlock = "tank_cards.block";
+
+    // --- Fuel transactions ---
+    public const string FuelView = "fuel.view";
+    public const string FuelCreate = "fuel.create";
+    public const string FuelEdit = "fuel.edit";
+    public const string FuelDelete = "fuel.delete";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -198,5 +211,14 @@ public static class PermissionCodes
         (DamageReportsCreate, "damage_reports", "create", "Schademeldingen aanmaken"),
         (DamageReportsEdit, "damage_reports", "edit", "Schademeldingen bewerken"),
         (DamageReportsDelete, "damage_reports", "delete", "Schademeldingen verwijderen"),
+        (TankCardsView, "tank_cards", "view", "Tankkaarten bekijken"),
+        (TankCardsCreate, "tank_cards", "create", "Tankkaarten aanmaken"),
+        (TankCardsEdit, "tank_cards", "edit", "Tankkaarten bewerken"),
+        (TankCardsDelete, "tank_cards", "delete", "Tankkaarten verwijderen"),
+        (TankCardsBlock, "tank_cards", "block", "Tankkaarten blokkeren"),
+        (FuelView, "fuel", "view", "Tankbeurten bekijken"),
+        (FuelCreate, "fuel", "create", "Tankbeurten registreren"),
+        (FuelEdit, "fuel", "edit", "Tankbeurten bewerken"),
+        (FuelDelete, "fuel", "delete", "Tankbeurten verwijderen"),
     ];
 }

@@ -15,6 +15,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Chauffeurs', to: '/drivers' },
   { label: 'Voertuigen', to: '/vehicles' },
   { label: 'Opleggers', to: '/trailers' },
+  { label: 'Tankkaarten', to: '/tank-cards' },
   { label: 'Locaties', to: '/locations' },
 ]
 
