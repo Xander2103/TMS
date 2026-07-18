@@ -15,6 +15,7 @@ import { TripExecutionPage } from '../features/my-trips/pages/TripExecutionPage'
 import { InvoicesPage } from '../features/invoices/pages/InvoicesPage'
 import { NewInvoicePage } from '../features/invoices/pages/NewInvoicePage'
 import { InvoiceDetailPage } from '../features/invoices/pages/InvoiceDetailPage'
+import { NotificationsPage } from '../features/notifications/pages/NotificationsPage'
 import { CustomersPage } from '../features/customers/pages/CustomersPage'
 import { NewCustomerPage } from '../features/customers/pages/NewCustomerPage'
 import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage'
@@ -65,6 +66,7 @@ export function AppRoutes() {
           <Route path="/invoices" element={<InvoicesPage />} />
           <Route path="/invoices/new" element={<NewInvoicePage />} />
           <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/new" element={<NewCustomerPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />

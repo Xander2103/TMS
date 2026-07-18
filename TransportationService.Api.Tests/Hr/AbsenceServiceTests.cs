@@ -4,6 +4,7 @@ using TransportationService.Api.Modules.Hr.Dtos;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Hr.Services;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 using TransportationService.Api.Tests.TestSupport;
@@ -34,7 +35,8 @@ public class AbsenceServiceTests
         var tenant = new DevTenantContext(tenantId);
         var sut = new AbsenceService(
             db.Context, tenant, new DevCurrentUserContext(DeciderId),
-            new AuditService(db.Context, tenant, new DevCurrentUserContext(DeciderId)), new TestClock(Now));
+            new AuditService(db.Context, tenant, new DevCurrentUserContext(DeciderId)),
+            new NotificationService(db.Context, tenant, new DevCurrentUserContext(DeciderId), new TestClock(Now)), new TestClock(Now));
         return new Harness(db, sut, tenantId, employeeId);
     }
 

@@ -3,7 +3,9 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Hr.Dtos;
 using TransportationService.Api.Modules.Hr.Entities;
+using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Hr.Services;
@@ -19,6 +21,7 @@ public class AbsenceService : IAbsenceService
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IAuditService _auditService;
+    private readonly INotificationService _notificationService;
     private readonly TimeProvider _timeProvider;
 
     public AbsenceService(
@@ -26,12 +29,14 @@ public class AbsenceService : IAbsenceService
         ITenantContext tenantContext,
         ICurrentUserContext currentUserContext,
         IAuditService auditService,
+        INotificationService notificationService,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUserContext = currentUserContext;
         _auditService = auditService;
+        _notificationService = notificationService;
         _timeProvider = timeProvider;
     }
 
@@ -128,7 +133,15 @@ public class AbsenceService : IAbsenceService
         await _auditService.RecordAsync(EntityType, absence.Id.ToString(), "Created", null,
             new { absence.EmployeeId, absence.Type, absence.StartDate, absence.EndDate }, cancellationToken);
 
-        return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
+        var dto = await RequireDtoAsync(absence.Id, cancellationToken);
+
+        await _notificationService.NotifyPermissionHoldersAsync(
+            PermissionCodes.AbsencesApprove, "absence_requested",
+            "Afwezigheid aangevraagd",
+            $"{dto.EmployeeName}: {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}.",
+            "/absences", cancellationToken);
+
+        return AbsenceOperationResult.Success(dto);
     }
 
     public async Task<AbsenceOperationResult> UpdateAsync(
@@ -196,6 +209,16 @@ public class AbsenceService : IAbsenceService
         await _auditService.RecordAsync(EntityType, absence.Id.ToString(),
             request.Approve ? "Approved" : "Rejected", before,
             new { absence.Status, absence.DecisionNote }, cancellationToken);
+
+        // Tell the employee's own user account (if it exists) about the decision.
+        var recipient = await _dbContext.Users.AsNoTracking()
+            .Where(u => u.TenantId == _tenantContext.TenantId && u.EmployeeId == absence.EmployeeId)
+            .Select(u => (Guid?)u.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        await _notificationService.NotifyAsync(recipient, "absence_decided",
+            request.Approve ? "Afwezigheid goedgekeurd" : "Afwezigheid afgewezen",
+            $"Je {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy} is {(request.Approve ? "goedgekeurd" : "afgewezen")}.",
+            "/absences", cancellationToken);
 
         return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
     }

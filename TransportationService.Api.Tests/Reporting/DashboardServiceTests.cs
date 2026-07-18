@@ -1,6 +1,7 @@
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Fleet.Services;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
@@ -39,7 +40,8 @@ public class DashboardServiceTests
             new DamageReportService(db.Context, tenant, audit),
             new FuelService(db.Context, tenant, audit));
         var trips = new TripService(db.Context, tenant, audit,
-            new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock));
+            new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock),
+            new NotificationService(db.Context, tenant, new DevCurrentUserContext(null), clock));
         var sut = new DashboardService(db.Context, tenant, fleet, trips, clock);
         return new Harness(db, sut, tenantId, customerId);
     }

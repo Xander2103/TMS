@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Planning.Dtos;
 using TransportationService.Api.Modules.Planning.Entities;
@@ -28,17 +29,20 @@ public class TripService : ITripService
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly IPlanningConflictService _conflictService;
+    private readonly INotificationService _notificationService;
 
     public TripService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
-        IPlanningConflictService conflictService)
+        IPlanningConflictService conflictService,
+        INotificationService notificationService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _conflictService = conflictService;
+        _notificationService = notificationService;
     }
 
     private IQueryable<Trip> TenantScoped() =>
@@ -226,6 +230,20 @@ public class TripService : ITripService
 
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "StatusChanged", before,
             new { trip.Status, Overridden = allowOverride }, cancellationToken);
+
+        // Planning a trip tells the assigned driver's user account.
+        if (target == TripStatus.Planned && trip.DriverId is { } assignedDriver)
+        {
+            var recipient = await _dbContext.Drivers.AsNoTracking()
+                .Where(d => d.Id == assignedDriver && d.TenantId == _tenantContext.TenantId)
+                .Join(_dbContext.Users.AsNoTracking().Where(u => u.TenantId == _tenantContext.TenantId),
+                    d => d.EmployeeId, u => u.EmployeeId, (d, u) => (Guid?)u.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+            await _notificationService.NotifyAsync(recipient, "trip_assigned",
+                "Rit toegewezen",
+                $"Rit {trip.TripNumber} op {trip.TripDate:dd-MM-yyyy} is aan jou toegewezen.",
+                $"/my-trips/{trip.Id}", cancellationToken);
+        }
 
         return TripOperationResult.Success(await MapDetailAsync(trip, cancellationToken));
     }

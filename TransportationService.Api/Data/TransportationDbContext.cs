@@ -9,6 +9,7 @@ using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Locations.Entities;
+using TransportationService.Api.Modules.Notifications.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Organization.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
@@ -38,6 +39,9 @@ public class TransportationDbContext : DbContext
     // Invoicing (Phase 8)
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();
+
+    // Notifications (Phase 10)
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantSettings> TenantSettings => Set<TenantSettings>();

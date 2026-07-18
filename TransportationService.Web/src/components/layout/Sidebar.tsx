@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { LOOKUP_GROUP_LABELS, LOOKUP_RESOURCES, type LookupGroup } from '../../features/master-data/lookupRegistry'
 import { useAuth } from '../../features/auth/authContextValue'
+import { getUnreadCount } from '../../features/notifications/api/notificationsApi'
+import '../../features/notifications/pages/notifications.css'
 import './Sidebar.css'
 
 interface NavItem {
@@ -46,14 +49,43 @@ function initials(firstName: string, lastName: string): string {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || '?'
 }
 
+const UNREAD_POLL_MS = 60_000
+
 export function Sidebar() {
   const { user, logout } = useAuth()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Light poll so the badge stays roughly current without a push channel.
+  useEffect(() => {
+    let mounted = true
+    const load = () => {
+      getUnreadCount()
+        .then((data) => {
+          if (mounted) setUnreadCount(data.count)
+        })
+        .catch(() => {})
+    }
+    load()
+    const timer = window.setInterval(load, UNREAD_POLL_MS)
+    return () => {
+      mounted = false
+      window.clearInterval(timer)
+    }
+  }, [])
 
   return (
     <aside className="sidebar">
       <h1 className="app-title">Transportation Service</h1>
       <nav>
-        <ul>{renderNavItems(operationsNavItems)}</ul>
+        <ul>
+          {renderNavItems(operationsNavItems)}
+          <li>
+            <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+              Meldingen
+              {unreadCount > 0 && <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
+            </NavLink>
+          </li>
+        </ul>
 
         <div className="nav-group-label">Beheer</div>
         <ul>{renderNavItems(administrationNavItems)}</ul>
