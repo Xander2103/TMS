@@ -9,6 +9,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
+import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { deleteTrailer, getTrailer, updateTrailer } from '../api/trailersApi'
 import {
   TRAILER_OWNERSHIP_LABELS,
@@ -233,6 +234,8 @@ export function TrailerDetailPage() {
           </form>
         )
       )}
+
+      {!editing && id && <FleetDocumentsPanel ownerType="trailer" ownerId={id} />}
 
       {confirmDelete && (
         <ConfirmDialog

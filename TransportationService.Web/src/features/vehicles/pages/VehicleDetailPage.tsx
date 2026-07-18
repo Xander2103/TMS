@@ -9,6 +9,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
+import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { deleteVehicle, getVehicle, updateVehicle } from '../api/vehiclesApi'
 import {
   FUEL_TYPE_LABELS,
@@ -227,6 +228,8 @@ export function VehicleDetailPage() {
           </form>
         )
       )}
+
+      {!editing && id && <FleetDocumentsPanel ownerType="vehicle" ownerId={id} />}
 
       {confirmDelete && (
         <ConfirmDialog

@@ -92,6 +92,12 @@ public static class PermissionCodes
     public const string TrailersEdit = "trailers.edit";
     public const string TrailersDelete = "trailers.delete";
 
+    // --- Fleet documents (vehicle/trailer certificates & papers) ---
+    public const string FleetDocumentsView = "fleet_documents.view";
+    public const string FleetDocumentsCreate = "fleet_documents.create";
+    public const string FleetDocumentsEdit = "fleet_documents.edit";
+    public const string FleetDocumentsDelete = "fleet_documents.delete";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -158,5 +164,9 @@ public static class PermissionCodes
         (TrailersCreate, "trailers", "create", "Opleggers aanmaken"),
         (TrailersEdit, "trailers", "edit", "Opleggers bewerken"),
         (TrailersDelete, "trailers", "delete", "Opleggers verwijderen"),
+        (FleetDocumentsView, "fleet_documents", "view", "Voertuig- en opleggerdocumenten bekijken"),
+        (FleetDocumentsCreate, "fleet_documents", "create", "Voertuig- en opleggerdocumenten toevoegen"),
+        (FleetDocumentsEdit, "fleet_documents", "edit", "Voertuig- en opleggerdocumenten bewerken"),
+        (FleetDocumentsDelete, "fleet_documents", "delete", "Voertuig- en opleggerdocumenten verwijderen"),
     ];
 }
