@@ -9,6 +9,9 @@ public class EmployeeQualification
     public string? DocumentNumber { get; set; }
     public DateOnly ObtainedDate { get; set; }
     public DateOnly? ExpiryDate { get; set; }
+
+    /// <summary>ISO alpha-2 code of the issuing country (e.g. driving licence issued in "BE").</summary>
+    public string? IssuingCountryCode { get; set; }
     public QualificationStatus Status { get; set; }
     public string? DocumentPath { get; set; }
     public string? Notes { get; set; }

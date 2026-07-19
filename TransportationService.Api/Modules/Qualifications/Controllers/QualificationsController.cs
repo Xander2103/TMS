@@ -65,16 +65,69 @@ public class QualificationsController : ControllerBase
 
     [HttpGet("api/qualifications/expiring")]
     [RequirePermission(PermissionCodes.EmployeeDocumentsView)]
-    public async Task<ActionResult<IReadOnlyList<EmployeeQualificationDto>>> ListExpiring([FromQuery] int days = 30, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<IReadOnlyList<ExpiringQualificationDto>>> ListExpiring([FromQuery] int days = 30, CancellationToken cancellationToken = default)
     {
-        return Ok(await _qualificationService.ListExpiringWithinDaysAsync(days, cancellationToken));
+        return Ok(await _qualificationService.ListExpiringWithinDaysAsync(Math.Clamp(days, 1, 365), cancellationToken));
     }
 
     [HttpGet("api/qualifications/expired")]
     [RequirePermission(PermissionCodes.EmployeeDocumentsView)]
-    public async Task<ActionResult<IReadOnlyList<EmployeeQualificationDto>>> ListExpired(CancellationToken cancellationToken)
+    public async Task<ActionResult<IReadOnlyList<ExpiringQualificationDto>>> ListExpired(CancellationToken cancellationToken)
     {
         return Ok(await _qualificationService.ListExpiredAsync(cancellationToken));
+    }
+
+    private const long MaxDocumentBytes = 10 * 1024 * 1024;
+    private static readonly string[] AllowedDocumentExtensions = [".pdf", ".jpg", ".jpeg", ".png"];
+
+    [HttpPost("api/employees/{employeeId:guid}/qualifications/{id:guid}/document")]
+    [RequirePermission(PermissionCodes.EmployeeDocumentsEdit)]
+    [RequestSizeLimit(MaxDocumentBytes + 1024)]
+    public async Task<ActionResult<EmployeeQualificationDto>> UploadDocument(
+        Guid employeeId, Guid id, IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0 || file.Length > MaxDocumentBytes)
+        {
+            return BadRequest(new { message = "Het document moet tussen 1 byte en 10 MB groot zijn." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!AllowedDocumentExtensions.Contains(extension))
+        {
+            return BadRequest(new { message = "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan." });
+        }
+
+        await using var stream = file.OpenReadStream();
+        var updated = await _qualificationService.AttachDocumentAsync(employeeId, id, file.FileName, stream, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpGet("api/employees/{employeeId:guid}/qualifications/{id:guid}/document")]
+    [RequirePermission(PermissionCodes.EmployeeDocumentsView)]
+    public async Task<IActionResult> DownloadDocument(Guid employeeId, Guid id, CancellationToken cancellationToken)
+    {
+        var document = await _qualificationService.OpenDocumentAsync(employeeId, id, cancellationToken);
+        if (document is not { } found)
+        {
+            return NotFound();
+        }
+
+        var contentType = Path.GetExtension(found.FileName).ToLowerInvariant() switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            _ => "application/octet-stream",
+        };
+        return File(found.Content, contentType, found.FileName);
+    }
+
+    [HttpDelete("api/employees/{employeeId:guid}/qualifications/{id:guid}/document")]
+    [RequirePermission(PermissionCodes.EmployeeDocumentsDelete)]
+    public async Task<IActionResult> DeleteDocument(Guid employeeId, Guid id, CancellationToken cancellationToken)
+    {
+        var removed = await _qualificationService.RemoveDocumentAsync(employeeId, id, cancellationToken);
+        return removed ? NoContent() : NotFound();
     }
 
     [HttpGet("api/qualification-types")]

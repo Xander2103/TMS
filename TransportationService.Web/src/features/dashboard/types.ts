@@ -26,6 +26,8 @@ export interface Dashboard {
   inspectionsDueCount: number
   documentsExpiringCount: number
   openDamageCount: number
+  qualificationsExpiring30d: number
+  qualificationsExpired: number
   recentOrders: RecentOrder[]
   tripsToday: TripListItem[]
 }

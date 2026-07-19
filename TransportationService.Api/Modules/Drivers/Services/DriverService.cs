@@ -42,13 +42,47 @@ public class DriverService : IDriverService
         _dbContext.Set<Driver>().Where(d => d.TenantId == _tenantContext.TenantId);
 
     public async Task<PagedResult<DriverListItemDto>> SearchAsync(
-        string? search, bool? isActive, bool? isBlocked, Guid? categoryId, PageRequest page, CancellationToken cancellationToken)
+        string? search, bool? isActive, bool? isBlocked, Guid? categoryId,
+        DriverAvailabilityStatus? availabilityStatus, Guid? qualificationTypeId,
+        int? expiringWithinDays, bool hasExpired, bool eligibleOnly,
+        PageRequest page, CancellationToken cancellationToken)
     {
+        var tenantId = _tenantContext.TenantId;
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
         var query = TenantScoped().AsNoTracking();
 
         if (isActive is { } active) query = query.Where(d => d.IsActive == active);
         if (isBlocked is { } blocked) query = query.Where(d => d.IsBlocked == blocked);
         if (categoryId is { } category) query = query.Where(d => d.DriverCategoryId == category);
+        if (availabilityStatus is { } availability) query = query.Where(d => d.AvailabilityStatus == availability);
+
+        if (qualificationTypeId is { } qualType)
+        {
+            query = query.Where(d => _dbContext.EmployeeQualifications.Any(q =>
+                q.TenantId == tenantId && q.EmployeeId == d.EmployeeId && q.QualificationTypeId == qualType));
+        }
+
+        if (expiringWithinDays is { } withinDays)
+        {
+            var limit = today.AddDays(Math.Clamp(withinDays, 1, 365));
+            query = query.Where(d => _dbContext.EmployeeQualifications.Any(q =>
+                q.TenantId == tenantId && q.EmployeeId == d.EmployeeId
+                && q.ExpiryDate != null && q.ExpiryDate >= today && q.ExpiryDate <= limit));
+        }
+
+        if (hasExpired)
+        {
+            query = query.Where(d => _dbContext.EmployeeQualifications.Any(q =>
+                q.TenantId == tenantId && q.EmployeeId == d.EmployeeId && q.ExpiryDate != null && q.ExpiryDate < today));
+        }
+
+        if (eligibleOnly)
+        {
+            // Inzetbaar: administratively active, not blocked, and no expired qualification.
+            query = query.Where(d => d.IsActive && !d.IsBlocked
+                && !_dbContext.EmployeeQualifications.Any(q =>
+                    q.TenantId == tenantId && q.EmployeeId == d.EmployeeId && q.ExpiryDate != null && q.ExpiryDate < today));
+        }
 
         // Join employee (for name/number and search) and category name — both tenant-scoped.
         var joined = from d in query
@@ -73,7 +107,6 @@ public class DriverService : IDriverService
         var ordered = joined.OrderBy(x => x.e.LastName).ThenBy(x => x.e.FirstName);
 
         // Effective availability: an approved absence covering today overrides the stored status.
-        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
         return await ordered.ToPagedResultAsync(
             page,
             x => new DriverListItemDto(

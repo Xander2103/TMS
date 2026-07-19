@@ -1,12 +1,17 @@
 import { apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
-import type { CreateDriverInput, DriverDetail, DriverListItem, UpdateDriverInput } from '../types'
+import type { CreateDriverInput, DriverAvailabilityStatus, DriverDetail, DriverListItem, UpdateDriverInput } from '../types'
 
 export interface SearchDriversParams {
   search?: string
   isActive?: boolean
   isBlocked?: boolean
   categoryId?: string
+  availabilityStatus?: DriverAvailabilityStatus
+  qualificationTypeId?: string
+  expiringWithinDays?: number
+  hasExpired?: boolean
+  eligibleOnly?: boolean
   page: number
   pageSize: number
 }
@@ -17,6 +22,11 @@ export function searchDrivers(params: SearchDriversParams): Promise<PagedResult<
   if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
   if (params.isBlocked !== undefined) query.set('isBlocked', String(params.isBlocked))
   if (params.categoryId) query.set('categoryId', params.categoryId)
+  if (params.availabilityStatus) query.set('availabilityStatus', params.availabilityStatus)
+  if (params.qualificationTypeId) query.set('qualificationTypeId', params.qualificationTypeId)
+  if (params.expiringWithinDays !== undefined) query.set('expiringWithinDays', String(params.expiringWithinDays))
+  if (params.hasExpired) query.set('hasExpired', 'true')
+  if (params.eligibleOnly) query.set('eligibleOnly', 'true')
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<DriverListItem>>(`/api/drivers?${query.toString()}`)

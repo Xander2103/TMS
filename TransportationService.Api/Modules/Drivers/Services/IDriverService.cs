@@ -6,7 +6,10 @@ namespace TransportationService.Api.Modules.Drivers.Services;
 public interface IDriverService
 {
     Task<PagedResult<DriverListItemDto>> SearchAsync(
-        string? search, bool? isActive, bool? isBlocked, Guid? categoryId, PageRequest page, CancellationToken cancellationToken);
+        string? search, bool? isActive, bool? isBlocked, Guid? categoryId,
+        Entities.DriverAvailabilityStatus? availabilityStatus, Guid? qualificationTypeId,
+        int? expiringWithinDays, bool hasExpired, bool eligibleOnly,
+        PageRequest page, CancellationToken cancellationToken);
 
     Task<DriverDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

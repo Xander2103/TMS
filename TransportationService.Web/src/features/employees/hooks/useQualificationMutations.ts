@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ApiError } from '../../../api/apiClient'
 import {
   createEmployeeQualification,
   suspendQualification,
@@ -40,9 +41,9 @@ export function useQualificationMutations(): UseQualificationMutationsResult {
         setIsSubmitting(false)
       }
       return result
-    } catch {
+    } catch (err) {
       if (isMountedRef.current) {
-        setError(SUBMIT_ERROR_MESSAGE)
+        setError(err instanceof ApiError && err.status === 400 ? err.message : SUBMIT_ERROR_MESSAGE)
         setIsSubmitting(false)
       }
       return null

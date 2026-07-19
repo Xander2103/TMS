@@ -1,0 +1,36 @@
+.qual-overview-section {
+  margin-bottom: 32px;
+}
+
+.qual-overview-section h2 {
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+
+.qual-overview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.qual-overview-header h2 {
+  margin-bottom: 0;
+}
+
+.qual-overview-window {
+  display: flex;
+  gap: 6px;
+}
+
+.qual-overview-name {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.qual-overview-number {
+  font-size: 13px;
+  color: var(--text);
+}

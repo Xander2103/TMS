@@ -1,3 +1,5 @@
+import type { BadgeTone } from '../../../components/ui/Badge'
+
 export type QualificationStatus = 'Pending' | 'Valid' | 'ExpiringSoon' | 'Expired' | 'Rejected' | 'Suspended'
 
 export const QUALIFICATION_STATUS_LABELS: Record<QualificationStatus, string> = {
@@ -6,7 +8,16 @@ export const QUALIFICATION_STATUS_LABELS: Record<QualificationStatus, string> = 
   ExpiringSoon: 'Verloopt binnenkort',
   Expired: 'Verlopen',
   Rejected: 'Afgewezen',
-  Suspended: 'Geschorst',
+  Suspended: 'Ingetrokken',
+}
+
+export const QUALIFICATION_STATUS_TONES: Record<QualificationStatus, BadgeTone> = {
+  Pending: 'info',
+  Valid: 'success',
+  ExpiringSoon: 'warning',
+  Expired: 'danger',
+  Rejected: 'danger',
+  Suspended: 'neutral',
 }
 
 export interface QualificationType {
@@ -28,12 +39,25 @@ export interface EmployeeQualification {
   documentNumber: string | null
   obtainedDate: string
   expiryDate: string | null
+  issuingCountryCode: string | null
   storedStatus: QualificationStatus
   effectiveStatus: QualificationStatus
-  documentPath: string | null
+  hasDocument: boolean
   notes: string | null
   verifiedAt: string | null
   verifiedByUserId: string | null
+}
+
+export interface ExpiringQualification {
+  id: string
+  employeeId: string
+  employeeName: string
+  employeeNumber: string
+  qualificationTypeCode: string
+  qualificationTypeName: string
+  expiryDate: string | null
+  effectiveStatus: QualificationStatus
+  employeeIsDriver: boolean
 }
 
 export interface CreateEmployeeQualificationInput {
@@ -42,6 +66,7 @@ export interface CreateEmployeeQualificationInput {
   obtainedDate: string
   expiryDate: string | null
   notes: string | null
+  issuingCountryCode: string | null
 }
 
 export interface UpdateEmployeeQualificationInput {
@@ -49,4 +74,5 @@ export interface UpdateEmployeeQualificationInput {
   obtainedDate: string
   expiryDate: string | null
   notes: string | null
+  issuingCountryCode: string | null
 }

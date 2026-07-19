@@ -31,6 +31,7 @@ const administrationNavItems: NavItem[] = [
   { label: 'Gebruikers', to: '/users' },
   { label: 'Rollen en rechten', to: '/roles' },
   { label: 'Personeel', to: '/employees' },
+  { label: 'Kwalificaties', to: '/qualifications' },
 ]
 
 const lookupGroupOrder: LookupGroup[] = ['organisatie', 'categorieen', 'referentie']

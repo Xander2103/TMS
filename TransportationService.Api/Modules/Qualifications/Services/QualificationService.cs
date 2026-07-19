@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Qualifications.Dtos;
@@ -16,19 +17,25 @@ public class QualificationService : IQualificationService
     private readonly IQualificationStatusCalculator _statusCalculator;
     private readonly TimeProvider _timeProvider;
     private readonly IAuditService _auditService;
+    private readonly ICountryCodeValidator _countryValidator;
+    private readonly IFileStorageService _fileStorage;
 
     public QualificationService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IQualificationStatusCalculator statusCalculator,
         TimeProvider timeProvider,
-        IAuditService auditService)
+        IAuditService auditService,
+        ICountryCodeValidator countryValidator,
+        IFileStorageService fileStorage)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _statusCalculator = statusCalculator;
         _timeProvider = timeProvider;
         _auditService = auditService;
+        _countryValidator = countryValidator;
+        _fileStorage = fileStorage;
     }
 
     public async Task<IReadOnlyList<EmployeeQualificationDto>> ListForEmployeeAsync(Guid employeeId, CancellationToken cancellationToken)
@@ -61,6 +68,7 @@ public class QualificationService : IQualificationService
             DocumentNumber = request.DocumentNumber,
             ObtainedDate = request.ObtainedDate,
             ExpiryDate = request.ExpiryDate,
+            IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken),
             Status = QualificationStatus.Pending,
             Notes = request.Notes,
             CreatedAt = DateTime.UtcNow,
@@ -84,6 +92,7 @@ public class QualificationService : IQualificationService
         qualification.DocumentNumber = request.DocumentNumber;
         qualification.ObtainedDate = request.ObtainedDate;
         qualification.ExpiryDate = request.ExpiryDate;
+        qualification.IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken);
         qualification.Notes = request.Notes;
         qualification.UpdatedAt = DateTime.UtcNow;
 
@@ -128,34 +137,133 @@ public class QualificationService : IQualificationService
         return await MapAsync(qualification, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<EmployeeQualificationDto>> ListExpiringWithinDaysAsync(int days, CancellationToken cancellationToken)
+    // The overview is an expiry RADAR: it goes by the expiry date itself (also for Pending
+    // items and for windows wider than the tenant's warning window), and only leaves out
+    // qualifications that are administratively inactive (suspended/rejected).
+    private static bool CountsForExpiryRadar(EmployeeQualificationDto q) =>
+        q.StoredStatus is not (QualificationStatus.Suspended or QualificationStatus.Rejected);
+
+    public async Task<IReadOnlyList<ExpiringQualificationDto>> ListExpiringWithinDaysAsync(int days, CancellationToken cancellationToken)
     {
         var today = Today();
-        var warningDays = await GetExpiryWarningDaysAsync(cancellationToken);
+        var limit = today.AddDays(days);
+        return await ListOverviewAsync(
+            q => CountsForExpiryRadar(q) && q.ExpiryDate is { } expiry && expiry >= today && expiry <= limit,
+            cancellationToken);
+    }
 
+    public async Task<IReadOnlyList<ExpiringQualificationDto>> ListExpiredAsync(CancellationToken cancellationToken)
+    {
+        var today = Today();
+        return await ListOverviewAsync(
+            q => CountsForExpiryRadar(q) && q.ExpiryDate is { } expiry && expiry < today,
+            cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<ExpiringQualificationDto>> ListOverviewAsync(
+        Func<EmployeeQualificationDto, bool> predicate, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
         var qualifications = await _dbContext.EmployeeQualifications
             .AsNoTracking()
-            .Where(q => q.TenantId == _tenantContext.TenantId)
+            .Where(q => q.TenantId == tenantId)
             .ToListAsync(cancellationToken);
 
-        var mapped = await MapManyAsync(qualifications, cancellationToken);
+        var mapped = (await MapManyAsync(qualifications, cancellationToken)).Where(predicate).ToList();
+        if (mapped.Count == 0)
+        {
+            return [];
+        }
+
+        var employeeIds = mapped.Select(q => q.EmployeeId).Distinct().ToList();
+        var employees = await _dbContext.Employees
+            .AsNoTracking()
+            .Where(e => e.TenantId == tenantId && employeeIds.Contains(e.Id))
+            .Select(e => new
+            {
+                e.Id,
+                Name = e.FirstName + " " + e.LastName,
+                e.EmployeeNumber,
+                IsDriver = _dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId),
+            })
+            .ToDictionaryAsync(e => e.Id, cancellationToken);
 
         return mapped
-            .Where(q => q.EffectiveStatus == QualificationStatus.ExpiringSoon && q.ExpiryDate is { } expiry && expiry <= today.AddDays(days))
+            .OrderBy(q => q.ExpiryDate)
+            .Select(q =>
+            {
+                var employee = employees.GetValueOrDefault(q.EmployeeId);
+                return new ExpiringQualificationDto(
+                    q.Id, q.EmployeeId,
+                    employee?.Name ?? "Onbekend", employee?.EmployeeNumber ?? "?",
+                    q.QualificationTypeCode, q.QualificationTypeName,
+                    q.ExpiryDate, q.EffectiveStatus, employee?.IsDriver ?? false);
+            })
             .ToList();
     }
 
-    public async Task<IReadOnlyList<EmployeeQualificationDto>> ListExpiredAsync(CancellationToken cancellationToken)
+    public async Task<EmployeeQualificationDto?> AttachDocumentAsync(
+        Guid employeeId, Guid id, string fileName, Stream content, CancellationToken cancellationToken)
     {
-        var qualifications = await _dbContext.EmployeeQualifications
-            .AsNoTracking()
-            .Where(q => q.TenantId == _tenantContext.TenantId)
-            .ToListAsync(cancellationToken);
+        var qualification = await FindScopedAsync(employeeId, id, cancellationToken);
+        if (qualification is null)
+        {
+            return null;
+        }
 
-        var mapped = await MapManyAsync(qualifications, cancellationToken);
+        // Replace: remove the previous document so storage never accumulates orphans.
+        if (qualification.DocumentPath is { } existing)
+        {
+            await _fileStorage.DeleteAsync(existing, cancellationToken);
+        }
 
-        return mapped.Where(q => q.EffectiveStatus == QualificationStatus.Expired).ToList();
+        qualification.DocumentPath = await _fileStorage.SaveAsync(
+            _tenantContext.TenantId, "qualifications", fileName, content, cancellationToken);
+        qualification.UpdatedAt = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("EmployeeQualification", qualification.Id.ToString(), "DocumentUploaded",
+            null, new { FileName = fileName }, cancellationToken);
+
+        return await MapAsync(qualification, cancellationToken);
     }
+
+    public async Task<(Stream Content, string FileName)?> OpenDocumentAsync(
+        Guid employeeId, Guid id, CancellationToken cancellationToken)
+    {
+        var qualification = await FindScopedAsync(employeeId, id, cancellationToken);
+        if (qualification?.DocumentPath is not { } storageKey)
+        {
+            return null;
+        }
+
+        var stream = await _fileStorage.OpenReadAsync(storageKey, cancellationToken);
+        var fileName = Path.GetFileName(storageKey);
+        return (stream, fileName);
+    }
+
+    public async Task<bool> RemoveDocumentAsync(Guid employeeId, Guid id, CancellationToken cancellationToken)
+    {
+        var qualification = await FindScopedAsync(employeeId, id, cancellationToken);
+        if (qualification?.DocumentPath is not { } storageKey)
+        {
+            return false;
+        }
+
+        await _fileStorage.DeleteAsync(storageKey, cancellationToken);
+        qualification.DocumentPath = null;
+        qualification.UpdatedAt = DateTime.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("EmployeeQualification", qualification.Id.ToString(), "DocumentRemoved",
+            null, null, cancellationToken);
+
+        return true;
+    }
+
+    private Task<EmployeeQualification?> FindScopedAsync(Guid employeeId, Guid id, CancellationToken cancellationToken) =>
+        _dbContext.EmployeeQualifications.FirstOrDefaultAsync(
+            q => q.Id == id && q.EmployeeId == employeeId && q.TenantId == _tenantContext.TenantId, cancellationToken);
 
     public async Task<IReadOnlyList<QualificationTypeDto>> ListQualificationTypesAsync(CancellationToken cancellationToken)
     {
@@ -201,8 +309,8 @@ public class QualificationService : IQualificationService
 
                 return new EmployeeQualificationDto(
                     q.Id, q.EmployeeId, q.QualificationTypeId, type?.Code ?? string.Empty, type?.Name ?? string.Empty,
-                    q.DocumentNumber, q.ObtainedDate, q.ExpiryDate, q.Status, effectiveStatus,
-                    q.DocumentPath, q.Notes, q.VerifiedAt, q.VerifiedByUserId);
+                    q.DocumentNumber, q.ObtainedDate, q.ExpiryDate, q.IssuingCountryCode, q.Status, effectiveStatus,
+                    q.DocumentPath is not null, q.Notes, q.VerifiedAt, q.VerifiedByUserId);
             })
             .ToList();
     }

@@ -95,6 +95,16 @@ export function DashboardPage() {
       to: '/fleet',
       alert: dashboard.documentsExpiringCount + dashboard.openDamageCount > 0,
     },
+    {
+      label: 'Kwalificaties',
+      value: String(dashboard.qualificationsExpiring30d),
+      hint:
+        dashboard.qualificationsExpired > 0
+          ? `vervallen binnen 30 dagen · ${dashboard.qualificationsExpired} verlopen`
+          : 'vervallen binnen 30 dagen',
+      to: '/qualifications',
+      alert: dashboard.qualificationsExpiring30d + dashboard.qualificationsExpired > 0,
+    },
   ]
 
   return (

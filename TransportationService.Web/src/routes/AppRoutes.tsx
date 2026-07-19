@@ -48,6 +48,7 @@ import { UserDetailPage } from '../features/users/pages/UserDetailPage'
 import { RolesPage } from '../features/roles/pages/RolesPage'
 import { RoleDetailPage } from '../features/roles/pages/RoleDetailPage'
 import { EmployeesPage } from '../features/employees/pages/EmployeesPage'
+import { QualificationsOverviewPage } from '../features/qualifications/pages/QualificationsOverviewPage'
 import { NewEmployeePage } from '../features/employees/pages/NewEmployeePage'
 import { EmployeeDetailPage } from '../features/employees/pages/EmployeeDetailPage'
 import { LookupPage } from '../features/master-data/pages/LookupPage'
@@ -108,6 +109,7 @@ const router = createBrowserRouter(
           <Route path="/employees/new" element={<NewEmployeePage />} />
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
           <Route path="/absences" element={<AbsencesPage />} />
+          <Route path="/qualifications" element={<QualificationsOverviewPage />} />
           <Route
             path="/master-data"
             element={<Navigate to={`/master-data/${LOOKUP_RESOURCES[0].slug}`} replace />}

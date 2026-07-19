@@ -25,11 +25,18 @@ public class DriversController : ControllerBase
         [FromQuery] bool? isActive,
         [FromQuery] bool? isBlocked,
         [FromQuery] Guid? categoryId,
-        [FromQuery] int? page,
-        [FromQuery] int? pageSize,
-        CancellationToken cancellationToken)
+        [FromQuery] Entities.DriverAvailabilityStatus? availabilityStatus,
+        [FromQuery] Guid? qualificationTypeId,
+        [FromQuery] int? expiringWithinDays,
+        [FromQuery] bool hasExpired = false,
+        [FromQuery] bool eligibleOnly = false,
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _driverService.SearchAsync(search, isActive, isBlocked, categoryId, PageRequest.Of(page, pageSize), cancellationToken);
+        var result = await _driverService.SearchAsync(
+            search, isActive, isBlocked, categoryId, availabilityStatus, qualificationTypeId,
+            expiringWithinDays, hasExpired, eligibleOnly, PageRequest.Of(page, pageSize), cancellationToken);
         return Ok(result);
     }
 

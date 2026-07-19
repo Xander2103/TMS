@@ -119,7 +119,7 @@ public class DriverServiceTests
         h.Db.Context.Set<Driver>().Add(new Driver { Id = Guid.NewGuid(), TenantId = otherTenant, DriverNumber = "CH-9999", EmployeeId = otherEmployeeId, IsActive = true });
         await h.Db.Context.SaveChangesAsync();
 
-        var page = await h.Sut.SearchAsync(null, null, null, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var page = await h.Sut.SearchAsync(null, null, null, null, null, null, null, false, false, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Equal(1, page.TotalCount);
         Assert.Equal(tenantId, h.TenantId);

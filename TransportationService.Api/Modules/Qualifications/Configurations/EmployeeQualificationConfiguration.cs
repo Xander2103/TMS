@@ -13,6 +13,7 @@ public class EmployeeQualificationConfiguration : IEntityTypeConfiguration<Emplo
         builder.HasKey(q => q.Id);
         builder.Property(q => q.DocumentNumber).HasMaxLength(100);
         builder.Property(q => q.DocumentPath).HasMaxLength(500);
+        builder.Property(q => q.IssuingCountryCode).HasMaxLength(2);
         builder.Property(q => q.Notes).HasMaxLength(2000);
         builder.Property(q => q.Status).HasConversion<string>();
         builder.HasIndex(q => new { q.TenantId, q.EmployeeId });

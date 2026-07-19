@@ -28,5 +28,7 @@ public record DashboardDto(
     int InspectionsDueCount,
     int DocumentsExpiringCount,
     int OpenDamageCount,
+    int QualificationsExpiring30d,
+    int QualificationsExpired,
     IReadOnlyList<RecentOrderDto> RecentOrders,
     IReadOnlyList<TripListItemDto> TripsToday);

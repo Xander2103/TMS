@@ -64,7 +64,7 @@ public class DriverAbsenceIntegrationTests
         h.Db.Context.Absences.Add(Approved(h.TenantId, h.EmployeeId, "2026-07-13", "2026-07-24"));
         await h.Db.Context.SaveChangesAsync();
 
-        var list = await h.Sut.SearchAsync(null, null, null, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var list = await h.Sut.SearchAsync(null, null, null, null, null, null, null, false, false, PageRequest.Of(1, 25), CancellationToken.None);
         Assert.Equal(DriverAvailabilityStatus.OnLeave, list.Items[0].AvailabilityStatus);
 
         var detail = await h.Sut.GetByIdAsync(h.DriverId, CancellationToken.None);
@@ -86,7 +86,7 @@ public class DriverAbsenceIntegrationTests
             Approved(h.TenantId, h.EmployeeId, "2026-06-01", "2026-06-05", AbsenceType.Sick));
         await h.Db.Context.SaveChangesAsync();
 
-        var list = await h.Sut.SearchAsync(null, null, null, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var list = await h.Sut.SearchAsync(null, null, null, null, null, null, null, false, false, PageRequest.Of(1, 25), CancellationToken.None);
         Assert.Equal(DriverAvailabilityStatus.Available, list.Items[0].AvailabilityStatus);
 
         var detail = await h.Sut.GetByIdAsync(h.DriverId, CancellationToken.None);

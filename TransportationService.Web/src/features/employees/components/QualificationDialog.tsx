@@ -1,56 +1,63 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
+import { Button } from '../../../components/ui/Button'
+import { FormField } from '../../../components/ui/FormField'
+import { Modal } from '../../../components/ui/Modal'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { useQualificationTypes } from '../hooks/useQualificationTypes'
 import { useQualificationMutations } from '../hooks/useQualificationMutations'
 import type { EmployeeQualification } from '../types/qualification'
-import './QualificationDialog.css'
 
 interface QualificationDialogProps {
   employeeId: string
+  /** When set, the dialog edits this qualification instead of creating a new one. */
+  existing?: EmployeeQualification
   onSaved: (qualification: EmployeeQualification) => void
   onCancel: () => void
 }
 
-export function QualificationDialog({ employeeId, onSaved, onCancel }: QualificationDialogProps) {
+export function QualificationDialog({ employeeId, existing, onSaved, onCancel }: QualificationDialogProps) {
   const { qualificationTypes, isLoading: typesLoading } = useQualificationTypes()
-  const { isSubmitting, error, create } = useQualificationMutations()
+  const { isSubmitting, error, create, update } = useQualificationMutations()
 
-  const [qualificationTypeId, setQualificationTypeId] = useState('')
-  const [documentNumber, setDocumentNumber] = useState('')
-  const [obtainedDate, setObtainedDate] = useState('')
-  const [expiryDate, setExpiryDate] = useState('')
-  const [notes, setNotes] = useState('')
+  const [qualificationTypeId, setQualificationTypeId] = useState<string | null>(existing?.qualificationTypeId ?? null)
+  const [documentNumber, setDocumentNumber] = useState(existing?.documentNumber ?? '')
+  const [obtainedDate, setObtainedDate] = useState(existing?.obtainedDate ?? '')
+  const [expiryDate, setExpiryDate] = useState(existing?.expiryDate ?? '')
+  const [issuingCountryCode, setIssuingCountryCode] = useState<string | null>(existing?.issuingCountryCode ?? null)
+  const [notes, setNotes] = useState(existing?.notes ?? '')
   const [validationError, setValidationError] = useState<string | null>(null)
 
   const selectedType = qualificationTypes.find((type) => type.id === qualificationTypeId)
 
-  function handleTypeChange(event: ChangeEvent<HTMLSelectElement>) {
-    setQualificationTypeId(event.target.value)
-    setValidationError(null)
-  }
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    if (!qualificationTypeId) {
+    if (!existing && !qualificationTypeId) {
       setValidationError('Kies een kwalificatietype.')
       return
     }
     if (!obtainedDate) {
-      setValidationError('Behaaldatum is verplicht.')
+      setValidationError('Behaal-/uitgiftedatum is verplicht.')
       return
     }
     if (selectedType?.requiresExpiryDate && !expiryDate) {
       setValidationError('Vervaldatum is verplicht voor dit type.')
       return
     }
+    setValidationError(null)
 
-    const saved = await create(employeeId, {
-      qualificationTypeId,
+    const payload = {
       documentNumber: documentNumber.trim() || null,
       obtainedDate,
       expiryDate: expiryDate || null,
       notes: notes.trim() || null,
-    })
+      issuingCountryCode,
+    }
+
+    const saved = existing
+      ? await update(employeeId, existing.id, payload)
+      : await create(employeeId, { ...payload, qualificationTypeId: qualificationTypeId! })
 
     if (saved) {
       onSaved(saved)
@@ -58,59 +65,71 @@ export function QualificationDialog({ employeeId, onSaved, onCancel }: Qualifica
   }
 
   return (
-    <div className="qualification-dialog-overlay">
-      <div className="qualification-dialog" role="dialog" aria-modal="true" aria-label="Kwalificatie toevoegen">
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="form-field">
-            <label htmlFor="qualificationType">Type</label>
-            <select id="qualificationType" value={qualificationTypeId} onChange={handleTypeChange} disabled={typesLoading} required>
-              <option value="">Kies een type...</option>
-              {qualificationTypes.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
+    <Modal
+      title={existing ? `${existing.qualificationTypeName} bewerken` : 'Kwalificatie toevoegen'}
+      onClose={onCancel}
+      busy={isSubmitting}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+            Annuleren
+          </Button>
+          <Button type="submit" form="qualification-form" disabled={isSubmitting}>
+            {isSubmitting ? 'Opslaan…' : existing ? 'Opslaan' : 'Toevoegen'}
+          </Button>
+        </>
+      }
+    >
+      <form id="qualification-form" onSubmit={handleSubmit} noValidate>
+        {(validationError || error) && (
+          <p className="ui-form-field-error" role="alert">
+            {validationError ?? error}
+          </p>
+        )}
 
-          <div className="form-field">
-            <label htmlFor="documentNumber">Documentnummer</label>
-            <input id="documentNumber" type="text" value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} />
-          </div>
+        {!existing && (
+          <FormField label="Type" htmlFor="qualificationType" required>
+            <SearchableSelect
+              id="qualificationType"
+              value={qualificationTypeId}
+              onChange={setQualificationTypeId}
+              options={qualificationTypes.map((type) => ({
+                value: type.id,
+                label: type.name,
+                description: type.category,
+                keywords: type.code,
+              }))}
+              isLoading={typesLoading}
+              placeholder="Kies een type…"
+            />
+          </FormField>
+        )}
 
-          <div className="form-field">
-            <label htmlFor="obtainedDate">Behaaldatum</label>
-            <input id="obtainedDate" type="date" required value={obtainedDate} onChange={(e) => setObtainedDate(e.target.value)} />
-          </div>
+        <FormField label="Document-/licentienummer" htmlFor="documentNumber">
+          <input id="documentNumber" type="text" value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} maxLength={100} />
+        </FormField>
 
-          {selectedType?.requiresExpiryDate && (
-            <div className="form-field">
-              <label htmlFor="expiryDate">Vervaldatum</label>
-              <input id="expiryDate" type="date" required value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-            </div>
-          )}
+        <FormField label="Behaal-/uitgiftedatum" htmlFor="obtainedDate" required>
+          <input id="obtainedDate" type="date" value={obtainedDate} onChange={(e) => setObtainedDate(e.target.value)} />
+        </FormField>
 
-          <div className="form-field">
-            <label htmlFor="qualificationNotes">Notities</label>
-            <textarea id="qualificationNotes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
+        <FormField
+          label="Vervaldatum"
+          htmlFor="expiryDate"
+          required={selectedType?.requiresExpiryDate}
+          hint={selectedType?.requiresExpiryDate ? 'Verplicht voor dit type.' : 'Leeg = geen vervaldatum.'}
+        >
+          <input id="expiryDate" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+        </FormField>
 
-          {(validationError || error) && (
-            <p className="form-error" role="alert">
-              {validationError ?? error}
-            </p>
-          )}
+        <FormField label="Uitgifteland" htmlFor="issuingCountry">
+          <CountryCombobox id="issuingCountry" value={issuingCountryCode} onChange={setIssuingCountryCode} placeholder="— Onbekend —" />
+        </FormField>
 
-          <div className="form-actions">
-            <button type="submit" className="primary-button" disabled={isSubmitting}>
-              {isSubmitting ? 'Opslaan...' : 'Toevoegen'}
-            </button>
-            <button type="button" className="secondary-link" onClick={onCancel}>
-              Annuleren
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <FormField label="Notities" htmlFor="qualificationNotes">
+          <textarea id="qualificationNotes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
+        </FormField>
+      </form>
+    </Modal>
   )
 }

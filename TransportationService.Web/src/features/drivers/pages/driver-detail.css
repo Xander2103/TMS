@@ -135,3 +135,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+.driver-filter-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14.5px;
+  color: var(--text-h);
+  white-space: nowrap;
+  cursor: pointer;
+}

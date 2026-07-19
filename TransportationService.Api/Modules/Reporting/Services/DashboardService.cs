@@ -104,6 +104,14 @@ public class DashboardService : IDashboardService
             .CountAsync(v => v.TenantId == tenantId && v.IsActive
                              && v.OperationalStatus == VehicleOperationalStatus.Active, cancellationToken);
 
+        // Qualification expiry alerts (30-day window; suspended/rejected excluded by expiry logic).
+        var expiryLimit = today.AddDays(30);
+        var qualificationsExpiring = await _dbContext.EmployeeQualifications.AsNoTracking()
+            .CountAsync(q => q.TenantId == tenantId && q.ExpiryDate != null
+                             && q.ExpiryDate >= today && q.ExpiryDate <= expiryLimit, cancellationToken);
+        var qualificationsExpired = await _dbContext.EmployeeQualifications.AsNoTracking()
+            .CountAsync(q => q.TenantId == tenantId && q.ExpiryDate != null && q.ExpiryDate < today, cancellationToken);
+
         // Today's planning board (conflicts computed live by the trip service).
         var tripsToday = await _tripService.ListAsync(today, today, null, null, cancellationToken);
 
@@ -132,6 +140,8 @@ public class DashboardService : IDashboardService
             fleet.InspectionsDueCount,
             fleet.DocumentsExpiringCount,
             fleet.OpenDamageCount,
+            qualificationsExpiring,
+            qualificationsExpired,
             recentOrders,
             tripsToday);
     }
