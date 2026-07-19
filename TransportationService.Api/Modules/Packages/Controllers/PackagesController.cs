@@ -57,6 +57,15 @@ public class PackagesController : ControllerBase
         return package is null ? NotFound() : Ok(package);
     }
 
+    [HttpGet("api/packages/{id:guid}/events")]
+    [RequirePermission(PermissionCodes.PackagesView, PermissionCodes.DriverWorkflowView, PermissionCodes.WarehouseView)]
+    public async Task<ActionResult<IReadOnlyList<TransportationService.Api.Modules.Packages.Dtos.PackageTimelineEventDto>>> Timeline(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var timeline = await _service.GetTimelineAsync(id, cancellationToken);
+        return timeline is null ? NotFound() : Ok(timeline);
+    }
+
     [HttpGet("api/packages/{id:guid}/barcodes")]
     [RequirePermission(PermissionCodes.PackagesView, PermissionCodes.PackagesManage)]
     public async Task<ActionResult<IReadOnlyList<PackageBarcodeDto>>> Barcodes(Guid id, CancellationToken cancellationToken)

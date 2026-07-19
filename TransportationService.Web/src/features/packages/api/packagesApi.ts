@@ -7,10 +7,41 @@ import type {
   ImportCommit,
   ImportPreview,
   Package,
+  PackageBarcodeRow,
   PackageIncidentAction,
+  PackageLabelVersion,
+  PackageTimelineEvent,
   TripPackageChecklist,
   TripPackageReadiness,
 } from '../types'
+
+export function getPackageTimeline(id: string): Promise<PackageTimelineEvent[]> {
+  return apiClient.getJson<PackageTimelineEvent[]>(`/api/packages/${id}/events`)
+}
+
+export function getPackageBarcodes(id: string): Promise<PackageBarcodeRow[]> {
+  return apiClient.getJson<PackageBarcodeRow[]>(`/api/packages/${id}/barcodes`)
+}
+
+export function listLabelVersions(id: string): Promise<PackageLabelVersion[]> {
+  return apiClient.getJson<PackageLabelVersion[]>(`/api/packages/${id}/labels`)
+}
+
+export async function downloadLabelVersion(id: string, version: number): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/packages/${id}/labels/${version}/pdf`, {
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+  })
+  if (!response.ok) {
+    throw new Error('Het etiket kon niet worden gedownload.')
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `etiket-v${version}.pdf`
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
 
 export function getTripPackageChecklist(tripId: string, stopId?: string): Promise<TripPackageChecklist> {
   const suffix = stopId ? `?stopId=${stopId}` : ''

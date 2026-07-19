@@ -61,6 +61,23 @@ public record TripPackageReadinessDto(
 
 public record MarkPackageMissingRequest(Guid StopId, string? Note);
 
+/// <summary>One appended custody event, resolved for display. The chain is read-only by design.</summary>
+public record PackageTimelineEventDto(
+    Guid Id,
+    string EventType,
+    PackageLifecycleStatus? OldStatus,
+    PackageLifecycleStatus? NewStatus,
+    DateTime OccurredAt,
+    string? UserName,
+    string? TripNumber,
+    string? StopLabel,
+    string? BarcodeUsed,
+    string? Result,
+    string? Notes,
+    bool IsOverride,
+    Guid? ExceptionId,
+    Guid? ScanEventId);
+
 public enum PackageIncidentAction
 {
     Found,

@@ -218,6 +218,73 @@ export interface TripPackageReadiness {
   outstandingPackages: TripPackageChecklistItem[]
 }
 
+export interface PackageTimelineEvent {
+  id: string
+  eventType: string
+  oldStatus: PackageLifecycleStatus | null
+  newStatus: PackageLifecycleStatus | null
+  occurredAt: string
+  userName: string | null
+  tripNumber: string | null
+  stopLabel: string | null
+  barcodeUsed: string | null
+  result: string | null
+  notes: string | null
+  isOverride: boolean
+  exceptionId: string | null
+  scanEventId: string | null
+}
+
+export const PACKAGE_EVENT_LABELS: Record<string, string> = {
+  Created: 'Aangemaakt',
+  Labelled: 'Geëtiketteerd',
+  LabelReprinted: 'Etiket opnieuw afgedrukt',
+  Relabelled: 'Heretiketteerd',
+  StatusChanged: 'Status gewijzigd',
+  LoadScan: 'Laadscan',
+  LoadMissing: 'Ontbrak bij laden',
+  WrongPackageScan: 'Verkeerde scan',
+  UnloadScan: 'Losscan',
+  Delivered: 'Afgeleverd',
+  Refused: 'Geweigerd',
+  PartialDelivery: 'Gedeeltelijke levering',
+  DamageReported: 'Schade gemeld',
+  MarkedMissing: 'Vermist gemeld',
+  ExceptionResolved: 'Melding opgelost',
+  GroupAssigned: 'Aan groep toegevoegd',
+  GroupRemoved: 'Uit groep gehaald',
+  GroupBroken: 'Groep opgeheven',
+  MovedToTrip: 'Naar andere rit',
+  Cancelled: 'Geannuleerd',
+  DispositionSet: 'Vervolgactie gekozen',
+  ReturnLoaded: 'Retour geladen',
+  ReturnedToDepot: 'Terug in depot',
+  ReturnedToSender: 'Terug naar afzender',
+  RedeliveryLoaded: 'Geladen voor herlevering',
+  Quarantined: 'In quarantaine',
+  DepartureOverride: 'Vertrek vrijgegeven',
+  CompletionOverride: 'Stop afgerond met vrijgave',
+  PodFinalized: 'POD vastgelegd',
+}
+
+export interface PackageBarcodeRow {
+  id: string
+  value: string
+  type: string
+  isActive: boolean
+  createdAt: string
+  retiredAt: string | null
+  retireReason: string | null
+}
+
+export interface PackageLabelVersion {
+  id: string
+  version: number
+  format: string
+  printedAt: string
+  reprintReason: string | null
+}
+
 export type PackageIncidentAction =
   | 'Found'
   | 'ReleaseToLoad'

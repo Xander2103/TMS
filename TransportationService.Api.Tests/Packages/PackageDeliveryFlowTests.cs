@@ -326,6 +326,38 @@ public class PackageDeliveryFlowTests
     }
 
     [Fact]
+    public async Task Timeline_ResolvesContext_InAppendOrder_AndIsolatesTenants()
+    {
+        using var h = await SeedAsync();
+        await Scan(h, h.LoadStopId, ScanType.Load);
+        await Scan(h, h.UnloadStopId, ScanType.Unload, refused: true, note: "Geweigerd");
+
+        var tenant = new DevTenantContext(h.TenantId);
+        var clock = new TestClock(Now);
+        var currentUser = new DevCurrentUserContext(null);
+        var packageService = new TransportationService.Api.Modules.Packages.Services.PackageService(
+            h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, currentUser),
+            new TransportationService.Api.Modules.Packages.Services.PackageBarcodeService(h.Db.Context, tenant, currentUser, clock),
+            new TransportationService.Api.Modules.Packages.Services.PackageEventWriter(h.Db.Context, tenant, currentUser, clock));
+
+        var timeline = await packageService.GetTimelineAsync(h.PackageId, CancellationToken.None);
+
+        Assert.NotNull(timeline);
+        Assert.Equal(new[] { "LoadScan", "Refused" }, timeline!.Select(e => e.EventType).ToArray());
+        Assert.All(timeline, e => Assert.Equal("RIT-0001", e.TripNumber));
+        Assert.Equal("Jan Jansen", timeline[0].UserName);
+        Assert.NotNull(timeline[1].ExceptionId);
+
+        // A foreign tenant sees nothing — not even that the package exists.
+        var foreignService = new TransportationService.Api.Modules.Packages.Services.PackageService(
+            h.Db.Context, new DevTenantContext(Guid.NewGuid()),
+            new AuditService(h.Db.Context, tenant, currentUser),
+            new TransportationService.Api.Modules.Packages.Services.PackageBarcodeService(h.Db.Context, tenant, currentUser, clock),
+            new TransportationService.Api.Modules.Packages.Services.PackageEventWriter(h.Db.Context, tenant, currentUser, clock));
+        Assert.Null(await foreignService.GetTimelineAsync(h.PackageId, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ReturnScan_OnUnshippedPackage_IsBlocked()
     {
         using var h = await SeedAsync();

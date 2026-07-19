@@ -22,6 +22,7 @@ import { TripExecutionPage } from '../features/my-trips/pages/TripExecutionPage'
 import { ExceptionsPage } from '../features/exceptions/pages/ExceptionsPage'
 import { ExceptionDetailPage } from '../features/exceptions/pages/ExceptionDetailPage'
 import { PodDetailPage } from '../features/pod/pages/PodDetailPage'
+import { PackageDetailPage } from '../features/packages/pages/PackageDetailPage'
 import { PortalDashboardPage } from '../features/portal/pages/PortalDashboardPage'
 import { PortalPlanningPage } from '../features/portal/pages/PortalPlanningPage'
 import { EmployeePlanningPage } from '../features/employee-planning/pages/EmployeePlanningPage'
@@ -95,6 +96,7 @@ const router = createBrowserRouter(
           <Route path="/exceptions" element={<ExceptionsPage />} />
           <Route path="/exceptions/:id" element={<ExceptionDetailPage />} />
           <Route path="/pods/:id" element={<PodDetailPage />} />
+          <Route path="/packages/:id" element={<PackageDetailPage />} />
           <Route path="/portal" element={<PortalDashboardPage />} />
           <Route path="/portal/planning" element={<PortalPlanningPage />} />
           <Route path="/employee-planning" element={<EmployeePlanningPage />} />

@@ -130,3 +130,78 @@ strong.pk-danger {
     grid-template-columns: 1fr;
   }
 }
+
+.pk-header-badges {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.pk-barcodes,
+.pk-labels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.pk-barcodes li,
+.pk-labels li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.pk-barcode-retired {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.pk-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.pk-timeline li {
+  display: flex;
+  gap: 0.8rem;
+  border-left: 3px solid var(--border);
+  padding-left: 0.8rem;
+}
+
+.pk-timeline li.pk-event-override {
+  border-left-color: #b45309;
+}
+
+.pk-event-time {
+  font-family: var(--mono);
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 0.85rem;
+  padding-top: 0.1rem;
+}
+
+.pk-event-body {
+  display: grid;
+  gap: 0.15rem;
+  font-size: 0.9rem;
+}
+
+.pk-event-meta {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.pk-event-notes {
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.pk-event-link {
+  font-size: 0.85rem;
+}

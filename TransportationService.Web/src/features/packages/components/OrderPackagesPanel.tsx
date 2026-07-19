@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
@@ -246,7 +247,7 @@ export function OrderPackagesPanel({ orderId, unloadingStops }: OrderPackagesPan
               {packages.map((item) => (
                 <tr key={item.id}>
                   <td>
-                    {item.packageNumber}
+                    <Link to={`/packages/${item.id}`}>{item.packageNumber}</Link>
                     {item.parentPackageId && <span className="pk-child-marker" title="Onderdeel van een groep/pallet"> ⧉</span>}
                   </td>
                   <td>{item.description}</td>

@@ -15,6 +15,7 @@ public interface IPackageService
     Task<IReadOnlyList<PackageDto>> ListForOrderAsync(Guid transportOrderId, CancellationToken cancellationToken);
     Task<PackageDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<IReadOnlyList<PackageBarcodeDto>> ListBarcodesAsync(Guid id, CancellationToken cancellationToken);
+    Task<IReadOnlyList<PackageTimelineEventDto>?> GetTimelineAsync(Guid id, CancellationToken cancellationToken);
     Task<PackageOperationResult> CreateAsync(Guid transportOrderId, CreatePackageRequest request, CancellationToken cancellationToken);
     Task<(BulkCreateResultDto? Result, string? Error)> BulkCreateAsync(
         Guid transportOrderId, BulkCreatePackagesRequest request, CancellationToken cancellationToken);
@@ -73,6 +74,52 @@ public class PackageService : IPackageService
             .OrderByDescending(b => b.IsActive).ThenByDescending(b => b.CreatedAt)
             .Select(b => new PackageBarcodeDto(b.Id, b.Value, b.Type, b.IsActive, b.CreatedAt, b.RetiredAt, b.RetireReason))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PackageTimelineEventDto>?> GetTimelineAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var exists = await Scoped().AsNoTracking().AnyAsync(p => p.Id == id, cancellationToken);
+        if (!exists)
+        {
+            return null;
+        }
+
+        var events = await _dbContext.PackageEvents.AsNoTracking()
+            .Where(e => e.TenantId == _tenantContext.TenantId && e.PackageId == id)
+            .OrderBy(e => e.OccurredAt).ThenBy(e => e.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        var tripIds = events.Where(e => e.TripId is not null).Select(e => e.TripId!.Value).Distinct().ToList();
+        var trips = tripIds.Count == 0
+            ? []
+            : await _dbContext.Trips.AsNoTracking().IgnoreQueryFilters()
+                .Where(t => t.TenantId == _tenantContext.TenantId && tripIds.Contains(t.Id))
+                .Select(t => new { t.Id, t.TripNumber })
+                .ToDictionaryAsync(t => t.Id, t => t.TripNumber, cancellationToken);
+
+        var stopIds = events.Where(e => e.TransportOrderStopId is not null).Select(e => e.TransportOrderStopId!.Value).Distinct().ToList();
+        var stops = stopIds.Count == 0
+            ? []
+            : await _dbContext.TransportOrderStops.AsNoTracking().IgnoreQueryFilters()
+                .Where(s => s.TenantId == _tenantContext.TenantId && stopIds.Contains(s.Id))
+                .Select(s => new { s.Id, Label = s.LocationName ?? s.City })
+                .ToDictionaryAsync(s => s.Id, s => s.Label, cancellationToken);
+
+        var userIds = events.Where(e => e.UserId is not null).Select(e => e.UserId!.Value).Distinct().ToList();
+        var users = userIds.Count == 0
+            ? []
+            : await _dbContext.Users.AsNoTracking()
+                .Where(u => u.TenantId == _tenantContext.TenantId && userIds.Contains(u.Id))
+                .Select(u => new { u.Id, Name = u.FirstName + " " + u.LastName })
+                .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
+
+        return events.Select(e => new PackageTimelineEventDto(
+                e.Id, e.EventType.ToString(), e.OldStatus, e.NewStatus, e.OccurredAt,
+                e.UserId is { } uid ? users.GetValueOrDefault(uid) : null,
+                e.TripId is { } tid ? trips.GetValueOrDefault(tid) : null,
+                e.TransportOrderStopId is { } sid ? stops.GetValueOrDefault(sid) : null,
+                e.BarcodeUsed, e.Result, e.Notes, e.IsOverride, e.ExceptionId, e.ScanEventId))
+            .ToList();
     }
 
     public async Task<PackageOperationResult> CreateAsync(
