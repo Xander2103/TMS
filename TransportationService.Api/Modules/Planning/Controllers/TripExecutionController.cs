@@ -17,15 +17,27 @@ public class TripExecutionController : ControllerBase
     private readonly ITripExecutionService _service;
     private readonly IPermissionAuthorizationService _permissionService;
     private readonly ICurrentUserContext _currentUserContext;
+    private readonly TransportationService.Api.Modules.Eta.Services.IEtaService _etaService;
 
     public TripExecutionController(
         ITripExecutionService service,
         IPermissionAuthorizationService permissionService,
-        ICurrentUserContext currentUserContext)
+        ICurrentUserContext currentUserContext,
+        TransportationService.Api.Modules.Eta.Services.IEtaService etaService)
     {
         _service = service;
         _permissionService = permissionService;
         _currentUserContext = currentUserContext;
+        _etaService = etaService;
+    }
+
+    /// <summary>Stop progress shifts the remaining ETAs; recalculation is cheap and idempotent.</summary>
+    private async Task RefreshEtaAsync(Guid tripId, ExecutionResult result, CancellationToken cancellationToken)
+    {
+        if (result.Outcome == ExecutionOutcome.Success)
+        {
+            await _etaService.RecalculateTripAsync(tripId, cancellationToken);
+        }
     }
 
     private async Task<bool> IsDispatcherAsync(CancellationToken cancellationToken) =>
@@ -55,7 +67,9 @@ public class TripExecutionController : ControllerBase
         Guid tripId, Guid stopId, TransitionStopRequest request, CancellationToken cancellationToken)
     {
         var restrict = !await IsDispatcherAsync(cancellationToken);
-        return Handle(await _service.TransitionAsync(tripId, stopId, request, restrict, cancellationToken));
+        var result = await _service.TransitionAsync(tripId, stopId, request, restrict, cancellationToken);
+        await RefreshEtaAsync(tripId, result, cancellationToken);
+        return Handle(result);
     }
 
     [HttpGet("api/trips/{tripId:guid}/stops/{stopId:guid}/history")]

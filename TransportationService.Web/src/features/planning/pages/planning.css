@@ -215,3 +215,14 @@
 .pl-execution-late {
   color: #b45309;
 }
+
+.pl-eta-bar {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.pl-eta-note {
+  color: var(--text);
+  font-size: 12px;
+  font-style: italic;
+}

@@ -33,6 +33,10 @@ public class Trip : AuditableTenantEntity
 
     public string? Notes { get; set; }
 
+    /// <summary>Manual delay applied on top of the internal ETA raming (Wave 10); 0 = none.</summary>
+    public int ManualDelayMinutes { get; set; }
+    public string? DelayReason { get; set; }
+
     public List<TripOrder> Orders { get; set; } = [];
 }
 

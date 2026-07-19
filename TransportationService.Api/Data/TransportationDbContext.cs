@@ -47,6 +47,8 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Messaging.Entities.OutboxMessage> OutboxMessages => Set<TransportationService.Api.Modules.Messaging.Entities.OutboxMessage>();
     public DbSet<TransportationService.Api.Modules.Messaging.Entities.MessagingProfile> MessagingProfiles => Set<TransportationService.Api.Modules.Messaging.Entities.MessagingProfile>();
     public DbSet<TransportationService.Api.Modules.Messaging.Entities.MessageTemplate> MessageTemplates => Set<TransportationService.Api.Modules.Messaging.Entities.MessageTemplate>();
+    public DbSet<TransportationService.Api.Modules.Eta.Entities.StopEta> StopEtas => Set<TransportationService.Api.Modules.Eta.Entities.StopEta>();
+    public DbSet<TransportationService.Api.Modules.Eta.Entities.StopEtaHistory> StopEtaHistories => Set<TransportationService.Api.Modules.Eta.Entities.StopEtaHistory>();
 
     // Invoicing (Phase 8)
     public DbSet<Invoice> Invoices => Set<Invoice>();

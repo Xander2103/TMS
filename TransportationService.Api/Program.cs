@@ -214,6 +214,12 @@ builder.Services.AddScoped(sp => new TransportationService.Api.Modules.Messaging
     sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddHostedService<TransportationService.Api.Modules.Messaging.Services.OutboxDispatcherHostedService>();
 
+// ETA foundation (sequential raming; IRouteEstimationProvider is the future PTV seam)
+builder.Services.AddSingleton<TransportationService.Api.Modules.Eta.Services.IRouteEstimationProvider,
+    TransportationService.Api.Modules.Eta.Services.NoRouteEstimationProvider>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Eta.Services.IEtaService,
+    TransportationService.Api.Modules.Eta.Services.EtaService>();
+
 // Invoicing
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();

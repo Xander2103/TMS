@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ApiError } from '../../../api/apiClient'
+import { apiClient, ApiError } from '../../../api/apiClient'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
@@ -24,6 +24,7 @@ import { getTripExecution } from '../../my-trips/api/myTripsApi'
 import type { TripExecution } from '../../my-trips/types'
 import { STOP_EXECUTION_ICONS, STOP_EXECUTION_LABELS, STOP_EXECUTION_TONE } from '../../my-trips/types'
 import { getPodForStop } from '../../pod/api/podApi'
+import { Modal } from '../../../components/ui/Modal'
 import {
   TRIP_STATUS_LABELS,
   TRIP_STATUS_TONE,
@@ -64,6 +65,24 @@ export function TripDetailPage() {
 
   const canSeeExecution = hasPermission('driver_workflow.view')
   const canOpenPod = hasPermission('pod.view')
+  const canEditPlanning = hasPermission('planning.edit')
+
+  interface StopEtaInfo {
+    transportOrderStopId: string
+    currentEta: string
+    source: 'Heuristic' | 'Provider' | 'DispatcherOverride'
+    status: 'OnTime' | 'AtRisk' | 'Late'
+  }
+  interface TripEta {
+    manualDelayMinutes: number
+    delayReason: string | null
+    stops: StopEtaInfo[]
+  }
+  const [eta, setEta] = useState<TripEta | null>(null)
+  const [etaReload, setEtaReload] = useState(0)
+  const [delayOpen, setDelayOpen] = useState(false)
+  const [delayMinutes, setDelayMinutes] = useState('0')
+  const [delayReason, setDelayReason] = useState('')
 
   const applyTrip = useCallback((data: TripDetail) => {
     setTrip(data)
@@ -107,6 +126,38 @@ export function TripDetailPage() {
       mounted = false
     }
   }, [id, canSeeExecution, trip])
+
+  // Live ETA raming next to the execution snapshot (recalculated server-side on read).
+  useEffect(() => {
+    if (!canSeeExecution || !trip || trip.status !== 'InProgress') return
+    let mounted = true
+    apiClient
+      .getJson<TripEta>(`/api/trips/${id}/eta`)
+      .then((data) => {
+        if (mounted) setEta(data)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [id, canSeeExecution, trip, etaReload])
+
+  async function submitDelay() {
+    setBusy(true)
+    try {
+      await apiClient.postJson(`/api/trips/${id}/delay`, {
+        minutes: Number(delayMinutes || '0'),
+        reason: delayReason.trim() || null,
+      })
+      showSuccess('Vertraging geregistreerd; de ETA is herrekend.')
+      setDelayOpen(false)
+      setEtaReload((t) => t + 1)
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De vertraging kon niet worden geregistreerd.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function openPod(stopId: string) {
     try {
@@ -424,29 +475,84 @@ export function TripDetailPage() {
           <h2>
             Uitvoering ({execution.completedCount}/{execution.totalCount} stops afgehandeld)
           </h2>
+          {trip.status === 'InProgress' && canEditPlanning && (
+            <p className="pl-eta-bar">
+              {eta && eta.manualDelayMinutes > 0 && (
+                <span className="pl-execution-late">
+                  ⏱ {eta.manualDelayMinutes} min vertraging{eta.delayReason ? ` (${eta.delayReason})` : ''} ·{' '}
+                </span>
+              )}
+              <button
+                type="button"
+                className="pl-link"
+                onClick={() => {
+                  setDelayMinutes(String(eta?.manualDelayMinutes ?? 0))
+                  setDelayReason(eta?.delayReason ?? '')
+                  setDelayOpen(true)
+                }}
+              >
+                Vertraging melden
+              </button>
+              <span className="pl-eta-note"> · interne raming, geen routeoptimalisatie</span>
+            </p>
+          )}
           <ol className="pl-execution-stops">
-            {execution.stops.map((stop) => (
-              <li key={stop.transportOrderStopId}>
-                <Badge tone={stop.stopType === 'Loading' ? 'info' : 'success'}>
-                  {stop.stopType === 'Loading' ? 'Laden' : 'Lossen'}
-                </Badge>{' '}
-                <span className="pl-execution-location">
-                  {stop.locationName}
-                  {stop.city && stop.locationName !== stop.city ? ` — ${stop.city}` : ''}
-                </span>{' '}
-                <Badge tone={STOP_EXECUTION_TONE[stop.status]}>
-                  {STOP_EXECUTION_ICONS[stop.status]} {STOP_EXECUTION_LABELS[stop.status]}
-                </Badge>
-                {stop.lateArrivalReason && <span className="pl-execution-late"> · te laat: {stop.lateArrivalReason}</span>}
-                {stop.hasPod && canOpenPod && (
-                  <button type="button" className="pl-link" onClick={() => void openPod(stop.transportOrderStopId)}>
-                    ✍ POD bekijken
-                  </button>
-                )}
-              </li>
-            ))}
+            {execution.stops.map((stop) => {
+              const stopEta = eta?.stops.find((s) => s.transportOrderStopId === stop.transportOrderStopId)
+              return (
+                <li key={stop.transportOrderStopId}>
+                  <Badge tone={stop.stopType === 'Loading' ? 'info' : 'success'}>
+                    {stop.stopType === 'Loading' ? 'Laden' : 'Lossen'}
+                  </Badge>{' '}
+                  <span className="pl-execution-location">
+                    {stop.locationName}
+                    {stop.city && stop.locationName !== stop.city ? ` — ${stop.city}` : ''}
+                  </span>{' '}
+                  <Badge tone={STOP_EXECUTION_TONE[stop.status]}>
+                    {STOP_EXECUTION_ICONS[stop.status]} {STOP_EXECUTION_LABELS[stop.status]}
+                  </Badge>
+                  {stopEta && (
+                    <Badge tone={stopEta.status === 'Late' ? 'danger' : stopEta.status === 'AtRisk' ? 'warning' : 'success'}>
+                      ⏱ ETA {stopEta.currentEta.slice(11, 16)}
+                      {stopEta.source === 'DispatcherOverride' && ' (handmatig)'}
+                    </Badge>
+                  )}
+                  {stop.lateArrivalReason && <span className="pl-execution-late"> · te laat: {stop.lateArrivalReason}</span>}
+                  {stop.hasPod && canOpenPod && (
+                    <button type="button" className="pl-link" onClick={() => void openPod(stop.transportOrderStopId)}>
+                      ✍ POD bekijken
+                    </button>
+                  )}
+                </li>
+              )
+            })}
           </ol>
         </section>
+      )}
+
+      {delayOpen && (
+        <Modal
+          title="Vertraging melden"
+          onClose={() => setDelayOpen(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDelayOpen(false)} disabled={busy}>
+                Annuleren
+              </Button>
+              <Button onClick={() => void submitDelay()} disabled={busy}>
+                {busy ? 'Bezig…' : 'Opslaan'}
+              </Button>
+            </>
+          }
+        >
+          <FormField label="Vertraging (minuten)" htmlFor="pl-delay-min" hint="0 wist de vertraging.">
+            <input id="pl-delay-min" type="number" min={0} max={1440} value={delayMinutes} onChange={(e) => setDelayMinutes(e.target.value)} disabled={busy} />
+          </FormField>
+          <FormField label="Reden" htmlFor="pl-delay-reason">
+            <input id="pl-delay-reason" value={delayReason} onChange={(e) => setDelayReason(e.target.value)} disabled={busy} maxLength={500} placeholder="bv. file op de ring" />
+          </FormField>
+        </Modal>
       )}
 
       <section className="pl-section">
