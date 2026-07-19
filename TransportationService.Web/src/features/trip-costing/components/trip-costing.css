@@ -1,0 +1,187 @@
+.tc-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.tc-total {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tc-total-label {
+  font-size: 12px;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tc-total-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.tc-profitability {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.tc-profitability h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.tc-profit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px 16px;
+  margin-bottom: 8px;
+}
+
+.tc-profit-grid > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.tc-profit-grid span {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.tc-profit-grid strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.tc-positive { color: var(--success, #16a34a); }
+.tc-negative { color: var(--danger, #dc2626); }
+
+.tc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tc-phase-tabs {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tc-phase-tab {
+  border: none;
+  background: none;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+  min-height: 36px;
+}
+
+.tc-phase-tab-active {
+  background: var(--accent-bg, rgba(170, 59, 255, 0.12));
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.tc-distances {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.tc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.tc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tc-table th,
+.tc-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.tc-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tc-overridden td {
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.tc-override-note {
+  font-size: 12px;
+  color: var(--warning, #ca8a04);
+}
+
+.tc-row-actions {
+  white-space: nowrap;
+}
+
+.tc-link-button {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.tc-link-button.tc-danger {
+  color: var(--danger, #dc2626);
+}
+
+.tc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tc-form input,
+.tc-form select,
+.tc-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.tc-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 12px;
+}
+
+.tc-override-current {
+  margin: 0 0 4px;
+  font-size: 14px;
+}

@@ -38,6 +38,7 @@ const EMPTY: CreateVehicleInput = {
   heightMeters: null,
   volumeM3: null,
   odometerKm: 0,
+  consumptionLPer100Km: null,
   hasCrane: false,
   hasRefrigeration: false,
   hasTailLift: false,
@@ -171,6 +172,17 @@ export function NewVehiclePage() {
             </FormField>
             <FormField label="Kilometerstand" htmlFor="v-odometer">
               <input id="v-odometer" type="number" min={0} value={form.odometerKm} onChange={(e) => set('odometerKm', Number(e.target.value) || 0)} disabled={submitting} />
+            </FormField>
+            <FormField label="Normverbruik (l/100km)" htmlFor="v-consumption" hint="Voor kostenramingen; leeg = standaard uit de tarievenset.">
+              <input
+                id="v-consumption"
+                type="number"
+                min={0}
+                step="0.1"
+                value={form.consumptionLPer100Km ?? ''}
+                onChange={(e) => set('consumptionLPer100Km', e.target.value === '' ? null : Number(e.target.value) || 0)}
+                disabled={submitting}
+              />
             </FormField>
           </div>
           <div className="vehicle-form-checkboxes">

@@ -24,6 +24,7 @@ import { getTripExecution } from '../../my-trips/api/myTripsApi'
 import type { TripExecution } from '../../my-trips/types'
 import { STOP_EXECUTION_ICONS, STOP_EXECUTION_LABELS, STOP_EXECUTION_TONE } from '../../my-trips/types'
 import { getPodForStop } from '../../pod/api/podApi'
+import { TripCostingPanel } from '../../trip-costing/components/TripCostingPanel'
 import { Modal } from '../../../components/ui/Modal'
 import {
   CONFLICT_SEVERITY_META,
@@ -57,6 +58,8 @@ export function TripDetailPage() {
   const [tripDate, setTripDate] = useState('')
   const [notes, setNotes] = useState('')
   const [orderIds, setOrderIds] = useState<string[]>([])
+  const [plannedDistanceKm, setPlannedDistanceKm] = useState('')
+  const [plannedEmptyKm, setPlannedEmptyKm] = useState('')
   const [dirty, setDirty] = useState(false)
 
   const [overrideTarget, setOverrideTarget] = useState<{ status: TripStatus; conflicts: string[] } | null>(null)
@@ -93,6 +96,8 @@ export function TripDetailPage() {
     setTripDate(data.tripDate)
     setNotes(data.notes ?? '')
     setOrderIds(data.orders.map((o) => o.transportOrderId))
+    setPlannedDistanceKm(data.plannedDistanceKm?.toString() ?? '')
+    setPlannedEmptyKm(data.plannedEmptyKm?.toString() ?? '')
     setDirty(false)
   }, [])
 
@@ -217,6 +222,8 @@ export function TripDetailPage() {
     if (!trip) return
     setBusy(true)
     try {
+      const parsedDistance = plannedDistanceKm.trim() === '' ? null : Number(plannedDistanceKm.replace(',', '.'))
+      const parsedEmpty = plannedEmptyKm.trim() === '' ? null : Number(plannedEmptyKm.replace(',', '.'))
       const updated = await updateTrip(trip.id, {
         tripDate,
         driverId: driverId || null,
@@ -226,6 +233,8 @@ export function TripDetailPage() {
         plannedEnd: trip.plannedEnd,
         notes: notes.trim() || null,
         orderIds,
+        plannedDistanceKm: parsedDistance !== null && Number.isNaN(parsedDistance) ? null : parsedDistance,
+        plannedEmptyKm: parsedEmpty !== null && Number.isNaN(parsedEmpty) ? null : parsedEmpty,
       })
       applyTrip(updated)
       showSuccess('Rit bijgewerkt.')
@@ -391,6 +400,30 @@ export function TripDetailPage() {
                 </option>
               ))}
             </select>
+          </FormField>
+          <FormField label="Geplande afstand (km)" htmlFor="tr-distance" hint="Totaal, inclusief lege kilometers.">
+            <input
+              id="tr-distance"
+              inputMode="decimal"
+              value={plannedDistanceKm}
+              onChange={(e) => {
+                setPlannedDistanceKm(e.target.value)
+                markDirty()
+              }}
+              disabled={!editable || busy}
+            />
+          </FormField>
+          <FormField label="Waarvan leeg (km)" htmlFor="tr-empty">
+            <input
+              id="tr-empty"
+              inputMode="decimal"
+              value={plannedEmptyKm}
+              onChange={(e) => {
+                setPlannedEmptyKm(e.target.value)
+                markDirty()
+              }}
+              disabled={!editable || busy}
+            />
           </FormField>
         </div>
         <FormField label="Notities" htmlFor="tr-notes">
@@ -572,6 +605,8 @@ export function TripDetailPage() {
           </ul>
         )}
       </section>
+
+      {hasPermission('trip_costs.view') && <TripCostingPanel tripId={trip.id} tripStatus={trip.status} />}
 
       <div className="pl-detail-actions">
         {editable && dirty && (

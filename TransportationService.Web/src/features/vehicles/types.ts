@@ -84,6 +84,7 @@ export interface VehicleDetail {
   heightMeters: number | null
   volumeM3: number | null
   odometerKm: number
+  consumptionLPer100Km: number | null
   hasCrane: boolean
   hasRefrigeration: boolean
   hasTailLift: boolean

@@ -137,10 +137,16 @@ async function deleteRequest(path: string, options?: RequestOptions): Promise<vo
   await request<void>('DELETE', path, undefined, options)
 }
 
+/** DELETE that returns a response body (e.g. the refreshed aggregate after removing a child). */
+async function deleteJson<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>('DELETE', path, undefined, options)
+}
+
 export const apiClient = {
   getJson,
   postJson,
   putJson,
   patchJson,
   deleteRequest,
+  deleteJson,
 }

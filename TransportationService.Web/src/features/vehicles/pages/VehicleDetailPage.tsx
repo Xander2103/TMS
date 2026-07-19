@@ -116,6 +116,7 @@ export function VehicleDetailPage() {
       heightMeters: vehicle.heightMeters,
       volumeM3: vehicle.volumeM3,
       odometerKm: vehicle.odometerKm,
+      consumptionLPer100Km: vehicle.consumptionLPer100Km,
       hasCrane: vehicle.hasCrane,
       hasRefrigeration: vehicle.hasRefrigeration,
       hasTailLift: vehicle.hasTailLift,
@@ -287,6 +288,17 @@ export function VehicleDetailPage() {
             </FormField>
             <FormField label="Kilometerstand" htmlFor="e-odometer">
               <input id="e-odometer" type="number" min={0} value={form.odometerKm} onChange={(e) => set('odometerKm', Number(e.target.value) || 0)} disabled={saving} />
+            </FormField>
+            <FormField label="Normverbruik (l/100km)" htmlFor="e-consumption" hint="Voor kostenramingen; leeg = standaard uit de tarievenset.">
+              <input
+                id="e-consumption"
+                type="number"
+                min={0}
+                step="0.1"
+                value={form.consumptionLPer100Km ?? ''}
+                onChange={(e) => set('consumptionLPer100Km', e.target.value === '' ? null : Number(e.target.value) || 0)}
+                disabled={saving}
+              />
             </FormField>
           </FormSection>
 

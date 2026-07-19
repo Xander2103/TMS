@@ -60,6 +60,8 @@ export function PlanningPage() {
         plannedEnd: null,
         notes: null,
         orderIds: [],
+        plannedDistanceKm: null,
+        plannedEmptyKm: null,
       })
       navigate(`/planning/${trip.id}`)
     } catch {

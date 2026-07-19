@@ -109,6 +109,10 @@ export interface TripDetail {
   trailerNumber: string | null
   plannedStart: string | null
   plannedEnd: string | null
+  plannedDistanceKm: number | null
+  plannedEmptyKm: number | null
+  actualDistanceKm: number | null
+  actualEmptyKm: number | null
   notes: string | null
   orders: TripOrderSummary[]
   conflicts: PlanningConflict[]
@@ -124,4 +128,6 @@ export interface TripInput {
   plannedEnd: string | null
   notes: string | null
   orderIds: string[]
+  plannedDistanceKm: number | null
+  plannedEmptyKm: number | null
 }
