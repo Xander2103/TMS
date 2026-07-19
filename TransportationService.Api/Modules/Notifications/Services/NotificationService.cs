@@ -7,23 +7,72 @@ using TransportationService.Api.Modules.Tenancy.Services;
 namespace TransportationService.Api.Modules.Notifications.Services;
 
 public record NotificationDto(
-    Guid Id, string Type, string Title, string Message, string? LinkPath, bool IsRead, DateTime CreatedAt);
+    Guid Id, string Type, NotificationCategory Category, NotificationSeverity Severity,
+    string Title, string Message, string? LinkPath, bool IsRead, bool IsArchived, DateTime CreatedAt);
+
+public record NotificationQuery(bool UnreadOnly, NotificationCategory? Category, bool IncludeArchived, int Take);
+
+public record NotificationPreferenceDto(NotificationCategory Category, bool Enabled);
+
+/// <summary>
+/// Central mapping from machine type codes to category/severity. Producers only pass the
+/// type; routing metadata stays in one place (also the future channel-routing input).
+/// </summary>
+public static class NotificationTypeCatalog
+{
+    private static readonly IReadOnlyDictionary<string, (NotificationCategory Category, NotificationSeverity Severity)> Map =
+        new Dictionary<string, (NotificationCategory, NotificationSeverity)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["absence_requested"] = (NotificationCategory.Hr, NotificationSeverity.Info),
+            ["absence_decided"] = (NotificationCategory.Hr, NotificationSeverity.Info),
+            ["absence_changes_requested"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["qualification_expiring"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["document_expiring"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["trip_assigned"] = (NotificationCategory.Planning, NotificationSeverity.Info),
+            ["trip_changed"] = (NotificationCategory.Planning, NotificationSeverity.Warning),
+            ["shift_assigned"] = (NotificationCategory.Planning, NotificationSeverity.Info),
+            ["planning_changed"] = (NotificationCategory.Planning, NotificationSeverity.Warning),
+            ["exception_reported"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
+            ["exception_decided"] = (NotificationCategory.Execution, NotificationSeverity.Info),
+            ["pod_completed"] = (NotificationCategory.Execution, NotificationSeverity.Info),
+            ["eta_changed"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
+            ["customer_notification_failed"] = (NotificationCategory.System, NotificationSeverity.Critical),
+        };
+
+    public static (NotificationCategory Category, NotificationSeverity Severity) Resolve(string type) =>
+        Map.TryGetValue(type, out var entry) ? entry : (NotificationCategory.General, NotificationSeverity.Info);
+}
 
 public interface INotificationService
 {
-    /// <summary>Queues a notification; silently skipped when the recipient is null (no linked user).</summary>
+    /// <summary>Queues a notification; silently skipped when the recipient is null (no linked user)
+    /// or has disabled the resolved category (Critical always delivers).</summary>
     Task NotifyAsync(Guid? userId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
 
     /// <summary>Notifies every active user of the tenant that holds the given permission.</summary>
     Task NotifyPermissionHoldersAsync(string permissionCode, string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<NotificationDto>> ListMineAsync(bool unreadOnly, int take, CancellationToken cancellationToken);
+    /// <summary>Notifies every active member of one role.</summary>
+    Task NotifyRoleAsync(Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+
+    /// <summary>Notifies every active user of the tenant.</summary>
+    Task NotifyTenantAsync(string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<NotificationDto>> ListMineAsync(NotificationQuery query, CancellationToken cancellationToken);
 
     Task<int> UnreadCountAsync(CancellationToken cancellationToken);
 
     Task<bool> MarkReadAsync(Guid id, CancellationToken cancellationToken);
 
     Task MarkAllReadAsync(CancellationToken cancellationToken);
+
+    /// <summary>Archives (and implicitly reads) one notification.</summary>
+    Task<bool> ArchiveAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>All categories with the current user's enabled flag (default true).</summary>
+    Task<IReadOnlyList<NotificationPreferenceDto>> GetMyPreferencesAsync(CancellationToken cancellationToken);
+
+    Task SetMyPreferenceAsync(NotificationCategory category, bool enabled, CancellationToken cancellationToken);
 }
 
 public class NotificationService : INotificationService
@@ -53,17 +102,10 @@ public class NotificationService : INotificationService
             return;
         }
 
-        _dbContext.Add(new Notification
+        if (await AddIfEnabledAsync(recipient, type, title, message, linkPath, cancellationToken))
         {
-            Id = Guid.NewGuid(),
-            TenantId = _tenantContext.TenantId,
-            UserId = recipient,
-            Type = type,
-            Title = title,
-            Message = message,
-            LinkPath = linkPath,
-        });
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 
     public async Task NotifyPermissionHoldersAsync(
@@ -82,24 +124,82 @@ public class NotificationService : INotificationService
             .Distinct()
             .ToListAsync(cancellationToken);
 
+        await NotifyManyAsync(recipients, type, title, message, linkPath, cancellationToken);
+    }
+
+    public async Task NotifyRoleAsync(
+        Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var recipients = await (from ur in _dbContext.UserRoles.AsNoTracking().Where(ur => ur.RoleId == roleId)
+                                join u in _dbContext.Users.AsNoTracking().Where(u => u.TenantId == tenantId && u.IsActive)
+                                    on ur.UserId equals u.Id
+                                join r in _dbContext.Roles.AsNoTracking().Where(r => r.TenantId == tenantId && r.IsActive)
+                                    on ur.RoleId equals r.Id
+                                select u.Id)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        await NotifyManyAsync(recipients, type, title, message, linkPath, cancellationToken);
+    }
+
+    public async Task NotifyTenantAsync(
+        string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+    {
+        var recipients = await _dbContext.Users.AsNoTracking()
+            .Where(u => u.TenantId == _tenantContext.TenantId && u.IsActive)
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
+
+        await NotifyManyAsync(recipients, type, title, message, linkPath, cancellationToken);
+    }
+
+    private async Task NotifyManyAsync(
+        IReadOnlyList<Guid> recipients, string type, string title, string message, string? linkPath,
+        CancellationToken cancellationToken)
+    {
+        var added = false;
         foreach (var recipient in recipients)
         {
-            _dbContext.Add(new Notification
-            {
-                Id = Guid.NewGuid(),
-                TenantId = tenantId,
-                UserId = recipient,
-                Type = type,
-                Title = title,
-                Message = message,
-                LinkPath = linkPath,
-            });
+            added |= await AddIfEnabledAsync(recipient, type, title, message, linkPath, cancellationToken);
         }
 
-        if (recipients.Count > 0)
+        if (added)
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    /// <summary>Adds the row unless the recipient disabled the category (Critical always goes through).</summary>
+    private async Task<bool> AddIfEnabledAsync(
+        Guid recipient, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+    {
+        var (category, severity) = NotificationTypeCatalog.Resolve(type);
+
+        if (severity != NotificationSeverity.Critical)
+        {
+            var disabled = await _dbContext.Set<NotificationPreference>().AsNoTracking()
+                .AnyAsync(p => p.TenantId == _tenantContext.TenantId && p.UserId == recipient
+                               && p.Category == category && !p.Enabled, cancellationToken);
+            if (disabled)
+            {
+                return false;
+            }
+        }
+
+        _dbContext.Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenantContext.TenantId,
+            UserId = recipient,
+            Type = type,
+            Category = category,
+            Severity = severity,
+            Title = title,
+            Message = message,
+            LinkPath = linkPath,
+        });
+        return true;
     }
 
     private IQueryable<Notification> Mine()
@@ -110,23 +210,35 @@ public class NotificationService : INotificationService
     }
 
     public async Task<IReadOnlyList<NotificationDto>> ListMineAsync(
-        bool unreadOnly, int take, CancellationToken cancellationToken)
+        NotificationQuery query, CancellationToken cancellationToken)
     {
-        var query = Mine().AsNoTracking();
-        if (unreadOnly)
+        var rows = Mine().AsNoTracking();
+        if (query.UnreadOnly)
         {
-            query = query.Where(n => !n.IsRead);
+            rows = rows.Where(n => !n.IsRead);
         }
 
-        return await query
+        if (!query.IncludeArchived)
+        {
+            rows = rows.Where(n => !n.IsArchived);
+        }
+
+        if (query.Category is { } category)
+        {
+            rows = rows.Where(n => n.Category == category);
+        }
+
+        return await rows
             .OrderByDescending(n => n.CreatedAt)
-            .Take(Math.Clamp(take, 1, 100))
-            .Select(n => new NotificationDto(n.Id, n.Type, n.Title, n.Message, n.LinkPath, n.IsRead, n.CreatedAt))
+            .Take(Math.Clamp(query.Take, 1, 100))
+            .Select(n => new NotificationDto(
+                n.Id, n.Type, n.Category, n.Severity, n.Title, n.Message, n.LinkPath,
+                n.IsRead, n.IsArchived, n.CreatedAt))
             .ToListAsync(cancellationToken);
     }
 
     public Task<int> UnreadCountAsync(CancellationToken cancellationToken) =>
-        Mine().AsNoTracking().CountAsync(n => !n.IsRead, cancellationToken);
+        Mine().AsNoTracking().CountAsync(n => !n.IsRead && !n.IsArchived, cancellationToken);
 
     public async Task<bool> MarkReadAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -160,5 +272,68 @@ public class NotificationService : INotificationService
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    public async Task<bool> ArchiveAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var notification = await Mine().FirstOrDefaultAsync(n => n.Id == id, cancellationToken);
+        if (notification is null)
+        {
+            return false;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!notification.IsRead)
+        {
+            notification.IsRead = true;
+            notification.ReadAt = now;
+        }
+
+        if (!notification.IsArchived)
+        {
+            notification.IsArchived = true;
+            notification.ArchivedAt = now;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<IReadOnlyList<NotificationPreferenceDto>> GetMyPreferencesAsync(CancellationToken cancellationToken)
+    {
+        var userId = _currentUserContext.CurrentUserId ?? Guid.Empty;
+        var stored = await _dbContext.Set<NotificationPreference>().AsNoTracking()
+            .Where(p => p.TenantId == _tenantContext.TenantId && p.UserId == userId)
+            .ToDictionaryAsync(p => p.Category, p => p.Enabled, cancellationToken);
+
+        return Enum.GetValues<NotificationCategory>()
+            .Select(category => new NotificationPreferenceDto(category, stored.GetValueOrDefault(category, true)))
+            .ToList();
+    }
+
+    public async Task SetMyPreferenceAsync(
+        NotificationCategory category, bool enabled, CancellationToken cancellationToken)
+    {
+        var userId = _currentUserContext.CurrentUserId ?? Guid.Empty;
+        var preference = await _dbContext.Set<NotificationPreference>()
+            .FirstOrDefaultAsync(p => p.TenantId == _tenantContext.TenantId && p.UserId == userId
+                                      && p.Category == category, cancellationToken);
+        if (preference is null)
+        {
+            _dbContext.Add(new NotificationPreference
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                UserId = userId,
+                Category = category,
+                Enabled = enabled,
+            });
+        }
+        else
+        {
+            preference.Enabled = enabled;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }

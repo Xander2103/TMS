@@ -194,6 +194,9 @@ builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Se
 builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Services.ICalendarSyncService,
     TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService>();
 
+// Periodic expiry sweep (qualifications + fleet documents -> notifications)
+builder.Services.AddHostedService<TransportationService.Api.Modules.Notifications.Services.ExpiryNotificationHostedService>();
+
 // Invoicing
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();

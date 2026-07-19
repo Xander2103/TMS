@@ -2,13 +2,22 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
+import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import {
+  NOTIFICATION_CATEGORIES,
+  NOTIFICATION_CATEGORY_LABELS,
+  NOTIFICATION_SEVERITY_ICONS,
+  archiveNotification,
+  getNotificationPreferences,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  setNotificationPreference,
   type Notification,
+  type NotificationCategory,
+  type NotificationPreference,
 } from '../api/notificationsApi'
 import './notifications.css'
 
@@ -18,14 +27,21 @@ function formatMoment(value: string): string {
 
 export function NotificationsPage() {
   const navigate = useNavigate()
-  const { showError } = useToast()
+  const { showError, showSuccess } = useToast()
   const [notifications, setNotifications] = useState<Notification[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
+  const [categoryFilter, setCategoryFilter] = useState<NotificationCategory | ''>('')
+  const [includeArchived, setIncludeArchived] = useState(false)
+  const [preferences, setPreferences] = useState<NotificationPreference[] | null>(null)
 
   useEffect(() => {
     let mounted = true
-    listNotifications()
+    listNotifications({
+      category: categoryFilter || undefined,
+      includeArchived,
+      take: 50,
+    })
       .then((data) => {
         if (!mounted) return
         setNotifications(data)
@@ -37,7 +53,19 @@ export function NotificationsPage() {
     return () => {
       mounted = false
     }
-  }, [reloadToken])
+  }, [reloadToken, categoryFilter, includeArchived])
+
+  useEffect(() => {
+    let mounted = true
+    getNotificationPreferences()
+      .then((data) => {
+        if (mounted) setPreferences(data)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   async function open(notification: Notification) {
     try {
@@ -45,12 +73,22 @@ export function NotificationsPage() {
         await markNotificationRead(notification.id)
       }
       if (notification.linkPath) {
-        navigate(notification.linkPath)
+        // Producer dedupe markers ride as a #fragment; strip before navigating.
+        navigate(notification.linkPath.split('#')[0])
       } else {
         setReloadToken((t) => t + 1)
       }
     } catch {
       showError('De melding kon niet worden geopend.')
+    }
+  }
+
+  async function archive(notification: Notification) {
+    try {
+      await archiveNotification(notification.id)
+      setReloadToken((t) => t + 1)
+    } catch {
+      showError('De melding kon niet worden gearchiveerd.')
     }
   }
 
@@ -60,6 +98,18 @@ export function NotificationsPage() {
       setReloadToken((t) => t + 1)
     } catch {
       showError('Meldingen konden niet worden gemarkeerd.')
+    }
+  }
+
+  async function togglePreference(preference: NotificationPreference) {
+    try {
+      await setNotificationPreference(preference.category, !preference.enabled)
+      setPreferences((current) =>
+        current?.map((p) => (p.category === preference.category ? { ...p, enabled: !p.enabled } : p)) ?? null,
+      )
+      showSuccess('Voorkeur opgeslagen.')
+    } catch {
+      showError('De voorkeur kon niet worden opgeslagen.')
     }
   }
 
@@ -79,6 +129,25 @@ export function NotificationsPage() {
         }
       />
 
+      <div className="ntf-filters">
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value as NotificationCategory | '')}
+          aria-label="Categorie"
+        >
+          <option value="">Alle categorieën</option>
+          {NOTIFICATION_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {NOTIFICATION_CATEGORY_LABELS[category]}
+            </option>
+          ))}
+        </select>
+        <label>
+          <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />{' '}
+          Archief tonen
+        </label>
+      </div>
+
       {loadError && <p className="placeholder-text">{loadError}</p>}
       {!loadError && notifications === null && <p className="placeholder-text">Meldingen laden…</p>}
       {!loadError && notifications !== null && notifications.length === 0 && (
@@ -88,7 +157,7 @@ export function NotificationsPage() {
       {!loadError && notifications !== null && notifications.length > 0 && (
         <ul className="ntf-list">
           {notifications.map((notification) => (
-            <li key={notification.id}>
+            <li key={notification.id} className="ntf-row">
               <button
                 type="button"
                 className={notification.isRead ? 'ntf-item' : 'ntf-item ntf-unread'}
@@ -96,14 +165,55 @@ export function NotificationsPage() {
               >
                 <span className="ntf-title">
                   {!notification.isRead && <span className="ntf-dot" aria-label="Ongelezen" />}
+                  <span className={`ntf-severity ntf-severity-${notification.severity.toLowerCase()}`} aria-hidden="true">
+                    {NOTIFICATION_SEVERITY_ICONS[notification.severity]}
+                  </span>
                   {notification.title}
+                  <Badge tone={notification.severity === 'Critical' ? 'danger' : 'neutral'}>
+                    {NOTIFICATION_CATEGORY_LABELS[notification.category]}
+                  </Badge>
+                  {notification.isArchived && <Badge tone="neutral">gearchiveerd</Badge>}
                 </span>
                 <span className="ntf-message">{notification.message}</span>
                 <span className="ntf-time">{formatMoment(notification.createdAt)}</span>
               </button>
+              {!notification.isArchived && (
+                <button
+                  type="button"
+                  className="ntf-archive"
+                  onClick={() => void archive(notification)}
+                  aria-label={`Melding "${notification.title}" archiveren`}
+                  title="Archiveren"
+                >
+                  🗄
+                </button>
+              )}
             </li>
           ))}
         </ul>
+      )}
+
+      {preferences && (
+        <details className="ntf-preferences">
+          <summary>Voorkeuren per categorie</summary>
+          <p className="ntf-preferences-hint">
+            Uitgeschakelde categorieën bezorgen geen meldingen meer; kritieke systeemmeldingen komen altijd door.
+          </p>
+          <ul>
+            {preferences.map((preference) => (
+              <li key={preference.category}>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={preference.enabled}
+                    onChange={() => void togglePreference(preference)}
+                  />{' '}
+                  {NOTIFICATION_CATEGORY_LABELS[preference.category]}
+                </label>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   )

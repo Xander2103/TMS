@@ -1,17 +1,59 @@
 import { apiClient } from '../../../api/apiClient'
 
+export type NotificationCategory = 'General' | 'Orders' | 'Planning' | 'Execution' | 'Hr' | 'System'
+export type NotificationSeverity = 'Info' | 'Warning' | 'Critical'
+
+export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> = {
+  General: 'Algemeen',
+  Orders: 'Opdrachten',
+  Planning: 'Planning',
+  Execution: 'Uitvoering',
+  Hr: 'HR',
+  System: 'Systeem',
+}
+
+export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
+  'General',
+  'Orders',
+  'Planning',
+  'Execution',
+  'Hr',
+  'System',
+]
+
+export const NOTIFICATION_SEVERITY_ICONS: Record<NotificationSeverity, string> = {
+  Info: 'ℹ',
+  Warning: '⚠',
+  Critical: '⛔',
+}
+
 export interface Notification {
   id: string
   type: string
+  category: NotificationCategory
+  severity: NotificationSeverity
   title: string
   message: string
   linkPath: string | null
   isRead: boolean
+  isArchived: boolean
   createdAt: string
 }
 
-export function listNotifications(unreadOnly = false, take = 50): Promise<Notification[]> {
-  return apiClient.getJson<Notification[]>(`/api/notifications?unreadOnly=${unreadOnly}&take=${take}`)
+export interface NotificationPreference {
+  category: NotificationCategory
+  enabled: boolean
+}
+
+export function listNotifications(
+  options: { unreadOnly?: boolean; category?: NotificationCategory; includeArchived?: boolean; take?: number } = {},
+): Promise<Notification[]> {
+  const query = new URLSearchParams()
+  if (options.unreadOnly) query.set('unreadOnly', 'true')
+  if (options.category) query.set('category', options.category)
+  if (options.includeArchived) query.set('includeArchived', 'true')
+  query.set('take', String(options.take ?? 50))
+  return apiClient.getJson<Notification[]>(`/api/notifications?${query.toString()}`)
 }
 
 export function getUnreadCount(): Promise<{ count: number }> {
@@ -24,4 +66,19 @@ export function markNotificationRead(id: string): Promise<void> {
 
 export function markAllNotificationsRead(): Promise<void> {
   return apiClient.postJson<void, Record<string, never>>('/api/notifications/read-all', {})
+}
+
+export function archiveNotification(id: string): Promise<void> {
+  return apiClient.postJson<void, Record<string, never>>(`/api/notifications/${id}/archive`, {})
+}
+
+export function getNotificationPreferences(): Promise<NotificationPreference[]> {
+  return apiClient.getJson<NotificationPreference[]>('/api/notifications/preferences')
+}
+
+export function setNotificationPreference(category: NotificationCategory, enabled: boolean): Promise<void> {
+  return apiClient.putJson<void, { category: NotificationCategory; enabled: boolean }>(
+    '/api/notifications/preferences',
+    { category, enabled },
+  )
 }

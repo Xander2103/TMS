@@ -231,18 +231,28 @@ public class TripService : ITripService
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "StatusChanged", before,
             new { trip.Status, Overridden = allowOverride }, cancellationToken);
 
-        // Planning a trip tells the assigned driver's user account.
-        if (target == TripStatus.Planned && trip.DriverId is { } assignedDriver)
+        // Planning a trip tells the assigned driver's user account; a cancellation does too.
+        if (target is TripStatus.Planned or TripStatus.Cancelled && trip.DriverId is { } assignedDriver)
         {
             var recipient = await _dbContext.Drivers.AsNoTracking()
                 .Where(d => d.Id == assignedDriver && d.TenantId == _tenantContext.TenantId)
                 .Join(_dbContext.Users.AsNoTracking().Where(u => u.TenantId == _tenantContext.TenantId),
                     d => d.EmployeeId, u => u.EmployeeId, (d, u) => (Guid?)u.Id)
                 .FirstOrDefaultAsync(cancellationToken);
-            await _notificationService.NotifyAsync(recipient, "trip_assigned",
-                "Rit toegewezen",
-                $"Rit {trip.TripNumber} op {trip.TripDate:dd-MM-yyyy} is aan jou toegewezen.",
-                $"/my-trips/{trip.Id}", cancellationToken);
+            if (target == TripStatus.Planned)
+            {
+                await _notificationService.NotifyAsync(recipient, "trip_assigned",
+                    "Rit toegewezen",
+                    $"Rit {trip.TripNumber} op {trip.TripDate:dd-MM-yyyy} is aan jou toegewezen.",
+                    $"/my-trips/{trip.Id}", cancellationToken);
+            }
+            else
+            {
+                await _notificationService.NotifyAsync(recipient, "trip_changed",
+                    "Rit geannuleerd",
+                    $"Rit {trip.TripNumber} op {trip.TripDate:dd-MM-yyyy} is geannuleerd.",
+                    "/my-trips", cancellationToken);
+            }
         }
 
         return TripOperationResult.Success(await MapDetailAsync(trip, cancellationToken));

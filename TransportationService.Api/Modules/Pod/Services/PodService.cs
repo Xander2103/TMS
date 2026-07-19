@@ -2,7 +2,9 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Pod.Dtos;
 using TransportationService.Api.Modules.Pod.Entities;
 using TransportationService.Api.Modules.Qualifications.Services;
@@ -26,6 +28,7 @@ public class PodService : IPodService
     private readonly IAuditService _auditService;
     private readonly IScanService _scanService;
     private readonly IFileStorageService _fileStorageService;
+    private readonly INotificationService _notificationService;
     private readonly TimeProvider _timeProvider;
 
     public PodService(
@@ -35,6 +38,7 @@ public class PodService : IPodService
         IAuditService auditService,
         IScanService scanService,
         IFileStorageService fileStorageService,
+        INotificationService notificationService,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
@@ -43,6 +47,7 @@ public class PodService : IPodService
         _auditService = auditService;
         _scanService = scanService;
         _fileStorageService = fileStorageService;
+        _notificationService = notificationService;
         _timeProvider = timeProvider;
     }
 
@@ -126,6 +131,12 @@ public class PodService : IPodService
 
         await _auditService.RecordAsync(EntityType, pod.Id.ToString(), "Finalised", null,
             new { pod.TripId, pod.TransportOrderStopId, pod.RecipientName, pod.Outcome, pod.Version }, cancellationToken);
+
+        // Dispatch hears that proof landed (refused/partial outcomes stand out by message).
+        await _notificationService.NotifyPermissionHoldersAsync(
+            PermissionCodes.PlanningEdit, "pod_completed", "POD vastgelegd",
+            $"{trip.TripNumber}: POD voor {stop.LocationName ?? stop.City} — {pod.Outcome}.",
+            $"/pods/{pod.Id}", cancellationToken);
 
         return PodOperationResult.Success((await MapDetailAsync(pod.Id, cancellationToken))!);
     }

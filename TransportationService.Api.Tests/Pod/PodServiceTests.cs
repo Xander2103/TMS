@@ -99,6 +99,8 @@ public class PodServiceTests
             db.Context, tenant, user, audit,
             new ScanService(db.Context, tenant, user, audit, clock),
             new LocalFileStorageService(storageRoot),
+            new TransportationService.Api.Modules.Notifications.Services.NotificationService(
+                db.Context, tenant, user, clock),
             clock);
     }
 

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TransportationService.Api.Modules.Notifications.Entities;
 using TransportationService.Api.Modules.Notifications.Services;
 
 namespace TransportationService.Api.Modules.Notifications.Controllers;
@@ -22,9 +23,14 @@ public class NotificationsController : ControllerBase
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<NotificationDto>>> List(
-        [FromQuery] bool unreadOnly = false, [FromQuery] int take = 50, CancellationToken cancellationToken = default)
+        [FromQuery] bool unreadOnly = false,
+        [FromQuery] NotificationCategory? category = null,
+        [FromQuery] bool includeArchived = false,
+        [FromQuery] int take = 50,
+        CancellationToken cancellationToken = default)
     {
-        return Ok(await _service.ListMineAsync(unreadOnly, take, cancellationToken));
+        return Ok(await _service.ListMineAsync(
+            new NotificationQuery(unreadOnly, category, includeArchived, take), cancellationToken));
     }
 
     [HttpGet("unread-count")]
@@ -43,6 +49,27 @@ public class NotificationsController : ControllerBase
     public async Task<IActionResult> MarkAllRead(CancellationToken cancellationToken)
     {
         await _service.MarkAllReadAsync(cancellationToken);
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/archive")]
+    public async Task<IActionResult> Archive(Guid id, CancellationToken cancellationToken)
+    {
+        return await _service.ArchiveAsync(id, cancellationToken) ? NoContent() : NotFound();
+    }
+
+    [HttpGet("preferences")]
+    public async Task<ActionResult<IReadOnlyList<NotificationPreferenceDto>>> Preferences(CancellationToken cancellationToken)
+    {
+        return Ok(await _service.GetMyPreferencesAsync(cancellationToken));
+    }
+
+    public record SetPreferenceRequest(NotificationCategory Category, bool Enabled);
+
+    [HttpPut("preferences")]
+    public async Task<IActionResult> SetPreference(SetPreferenceRequest request, CancellationToken cancellationToken)
+    {
+        await _service.SetMyPreferenceAsync(request.Category, request.Enabled, cancellationToken);
         return NoContent();
     }
 }

@@ -37,7 +37,7 @@ public class NotificationServiceTests
         await sut.NotifyAsync(other, "test", "Voor ander", "Bericht", null, CancellationToken.None);
         await sut.NotifyAsync(null, "test", "Niemand", "Genegeerd", null, CancellationToken.None);
 
-        var mine = await sut.ListMineAsync(false, 50, CancellationToken.None);
+        var mine = await sut.ListMineAsync(new NotificationQuery(false, null, false, 50), CancellationToken.None);
         var single = Assert.Single(mine);
         Assert.Equal("Voor mij", single.Title);
         Assert.Equal(1, await sut.UnreadCountAsync(CancellationToken.None));
@@ -76,7 +76,7 @@ public class NotificationServiceTests
         await absences.DecideAsync(created.Absence!.Id, new DecideAbsenceRequest(true, null), CancellationToken.None);
 
         var employeeView = new NotificationService(db.Context, tenant, new DevCurrentUserContext(employeeUserId), clock);
-        var mine = await employeeView.ListMineAsync(false, 50, CancellationToken.None);
+        var mine = await employeeView.ListMineAsync(new NotificationQuery(false, null, false, 50), CancellationToken.None);
         var decision = Assert.Single(mine, n => n.Type == "absence_decided");
         Assert.Equal("Afwezigheid goedgekeurd", decision.Title);
     }
