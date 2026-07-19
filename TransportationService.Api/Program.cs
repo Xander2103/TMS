@@ -190,9 +190,18 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Portal.Services.IPo
 builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Services.IShiftService,
     TransportationService.Api.Modules.EmployeePlanning.Services.ShiftService>();
 
-// Integration seams (Wave 12 replaces the no-op with the real Outlook/Exchange sync queue)
-builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Services.ICalendarSyncService,
-    TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService>();
+// Outlook/Exchange foundation: queued calendar sync behind a provider seam. The fake provider
+// stands in until Microsoft Graph credentials exist; swap ICalendarProvider then.
+builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Services.QueueingCalendarSyncService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Services.ICalendarSyncService>(sp =>
+    sp.GetRequiredService<TransportationService.Api.Modules.Integrations.Services.QueueingCalendarSyncService>());
+builder.Services.AddSingleton<TransportationService.Api.Modules.Integrations.Services.ICalendarProvider,
+    TransportationService.Api.Modules.Integrations.Services.FakeCalendarProvider>();
+builder.Services.AddScoped(sp => new TransportationService.Api.Modules.Integrations.Services.CalendarSyncProcessor(
+    sp.GetRequiredService<TransportationService.Api.Data.TransportationDbContext>(),
+    sp.GetRequiredService<TransportationService.Api.Modules.Integrations.Services.ICalendarProvider>(),
+    sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddHostedService<TransportationService.Api.Modules.Integrations.Services.CalendarSyncHostedService>();
 
 // Periodic expiry sweep (qualifications + fleet documents -> notifications)
 builder.Services.AddHostedService<TransportationService.Api.Modules.Notifications.Services.ExpiryNotificationHostedService>();

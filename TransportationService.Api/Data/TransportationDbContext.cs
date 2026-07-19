@@ -52,6 +52,7 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Edi.Entities.TradingPartner> TradingPartners => Set<TransportationService.Api.Modules.Edi.Entities.TradingPartner>();
     public DbSet<TransportationService.Api.Modules.Edi.Entities.EdiPartnerLocation> EdiPartnerLocations => Set<TransportationService.Api.Modules.Edi.Entities.EdiPartnerLocation>();
     public DbSet<TransportationService.Api.Modules.Edi.Entities.EdiMessage> EdiMessages => Set<TransportationService.Api.Modules.Edi.Entities.EdiMessage>();
+    public DbSet<TransportationService.Api.Modules.Integrations.Entities.CalendarSyncItem> CalendarSyncItems => Set<TransportationService.Api.Modules.Integrations.Entities.CalendarSyncItem>();
 
     // Invoicing (Phase 8)
     public DbSet<Invoice> Invoices => Set<Invoice>();

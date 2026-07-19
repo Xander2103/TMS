@@ -503,10 +503,17 @@ public class AbsenceService : IAbsenceService
         }
 
         var before = new { absence.Status };
+        var wasApproved = absence.Status == AbsenceStatus.Approved;
 
         absence.Status = AbsenceStatus.Cancelled;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        // Withdrawn approved leave disappears from the external calendar too.
+        if (wasApproved)
+        {
+            await _calendarSyncService.CancelAsync("leave_approved", absence.Id, cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, absence.Id.ToString(), "Cancelled", before,
             new { absence.Status }, cancellationToken);

@@ -31,6 +31,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
   { label: 'Berichten (e-mail/SMS)', to: '/messaging', permissions: ['messaging.manage'] },
   { label: 'EDI', to: '/edi', permissions: ['edi.manage'] },
+  { label: 'Integraties', to: '/integrations', permissions: ['integrations.manage'] },
 ]
 
 const administrationNavItems: NavItem[] = [

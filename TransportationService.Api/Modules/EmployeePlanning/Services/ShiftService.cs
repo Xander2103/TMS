@@ -4,6 +4,7 @@ using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.EmployeePlanning.Dtos;
 using TransportationService.Api.Modules.EmployeePlanning.Entities;
 using TransportationService.Api.Modules.Hr.Entities;
+using TransportationService.Api.Modules.Integrations.Services;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
@@ -25,6 +26,7 @@ public class ShiftService : IShiftService
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly INotificationService _notificationService;
+    private readonly ICalendarSyncService _calendarSyncService;
     private readonly TimeProvider _timeProvider;
 
     public ShiftService(
@@ -32,12 +34,14 @@ public class ShiftService : IShiftService
         ITenantContext tenantContext,
         IAuditService auditService,
         INotificationService notificationService,
+        ICalendarSyncService calendarSyncService,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _notificationService = notificationService;
+        _calendarSyncService = calendarSyncService;
         _timeProvider = timeProvider;
     }
 
@@ -178,6 +182,15 @@ public class ShiftService : IShiftService
         {
             await NotifyEmployeeAsync(shift.EmployeeId, "shift_assigned", "Shift bevestigd",
                 $"{shift.Date:dd-MM-yyyy} {shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}", cancellationToken);
+
+            await _calendarSyncService.QueueAsync(new CalendarSyncEvent(
+                "shift_confirmed", shift.Id, shift.EmployeeId, shift.Date, shift.Date,
+                $"Shift {shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}"
+                + (shift.WorkLocation is { } location ? $" · {location}" : string.Empty)), cancellationToken);
+        }
+        else if (before.Status == ShiftStatus.Confirmed)
+        {
+            await _calendarSyncService.CancelAsync("shift_confirmed", shift.Id, cancellationToken);
         }
 
         return ShiftOperationResult.Success(await MapAsync(shift, cancellationToken));
@@ -262,6 +275,11 @@ public class ShiftService : IShiftService
 
         await NotifyEmployeeAsync(shift.EmployeeId, "planning_changed", "Shift geannuleerd",
             $"{shift.Date:dd-MM-yyyy} {shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm} is geschrapt.", cancellationToken);
+
+        if (shift.Status == ShiftStatus.Confirmed)
+        {
+            await _calendarSyncService.CancelAsync("shift_confirmed", shift.Id, cancellationToken);
+        }
 
         return true;
     }

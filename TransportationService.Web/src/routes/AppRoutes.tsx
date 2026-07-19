@@ -27,6 +27,7 @@ import { PortalPlanningPage } from '../features/portal/pages/PortalPlanningPage'
 import { EmployeePlanningPage } from '../features/employee-planning/pages/EmployeePlanningPage'
 import { MessagingPage } from '../features/messaging/pages/MessagingPage'
 import { EdiPage } from '../features/edi/pages/EdiPage'
+import { IntegrationsPage } from '../features/integrations/pages/IntegrationsPage'
 import { PortalAbsencesPage } from '../features/portal/pages/PortalAbsencesPage'
 import { PortalQualificationsPage } from '../features/portal/pages/PortalQualificationsPage'
 import { PortalProfilePage } from '../features/portal/pages/PortalProfilePage'
@@ -96,6 +97,7 @@ const router = createBrowserRouter(
           <Route path="/employee-planning" element={<EmployeePlanningPage />} />
           <Route path="/messaging" element={<MessagingPage />} />
           <Route path="/edi" element={<EdiPage />} />
+          <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/portal/absences" element={<PortalAbsencesPage />} />
           <Route path="/portal/qualifications" element={<PortalQualificationsPage />} />
           <Route path="/portal/profile" element={<PortalProfilePage />} />

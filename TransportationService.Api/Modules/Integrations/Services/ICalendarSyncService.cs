@@ -17,10 +17,15 @@ public record CalendarSyncEvent(
 public interface ICalendarSyncService
 {
     Task QueueAsync(CalendarSyncEvent syncEvent, CancellationToken cancellationToken);
+
+    /// <summary>Announces that the fact no longer holds (e.g. approved leave withdrawn).</summary>
+    Task CancelAsync(string eventType, Guid entityId, CancellationToken cancellationToken);
 }
 
-/// <summary>Development placeholder: accepts every event and intentionally does nothing.</summary>
+/// <summary>Inert stand-in for tests that don't care about calendar sync.</summary>
 public sealed class NoOpCalendarSyncService : ICalendarSyncService
 {
     public Task QueueAsync(CalendarSyncEvent syncEvent, CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task CancelAsync(string eventType, Guid entityId, CancellationToken cancellationToken) => Task.CompletedTask;
 }

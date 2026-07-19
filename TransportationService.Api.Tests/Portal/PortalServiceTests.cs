@@ -123,7 +123,8 @@ public class PortalServiceTests
             db.Context, tenant, user, absences, qualifications, notifications,
             new QualificationStatusCalculator(), new PasswordHasher(), audit,
             new TransportationService.Api.Modules.EmployeePlanning.Services.ShiftService(
-                db.Context, tenant, audit, notifications, clock),
+                db.Context, tenant, audit, notifications,
+                new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(), clock),
             clock);
     }
 

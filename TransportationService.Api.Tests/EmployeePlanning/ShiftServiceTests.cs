@@ -71,6 +71,7 @@ public class ShiftServiceTests
             db.Context, tenant,
             new AuditService(db.Context, tenant, user),
             new NotificationService(db.Context, tenant, user, new TestClock(Now)),
+            new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(),
             new TestClock(Now));
     }
 

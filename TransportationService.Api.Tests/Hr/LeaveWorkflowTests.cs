@@ -30,10 +30,17 @@ public class LeaveWorkflowTests
     private sealed class RecordingCalendarSync : ICalendarSyncService
     {
         public List<CalendarSyncEvent> Events { get; } = [];
+        public List<(string EventType, Guid EntityId)> Cancellations { get; } = [];
 
         public Task QueueAsync(CalendarSyncEvent syncEvent, CancellationToken cancellationToken)
         {
             Events.Add(syncEvent);
+            return Task.CompletedTask;
+        }
+
+        public Task CancelAsync(string eventType, Guid entityId, CancellationToken cancellationToken)
+        {
+            Cancellations.Add((eventType, entityId));
             return Task.CompletedTask;
         }
     }
