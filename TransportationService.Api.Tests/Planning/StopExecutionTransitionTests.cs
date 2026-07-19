@@ -99,7 +99,8 @@ public class StopExecutionTransitionTests
             planningSync, CostingTestFactory.Create(db.Context, tenant, clock),
             TripPackageTestFactory.Create(db.Context, tenant, clock));
         var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, planningSync,
-            TripPackageTestFactory.Create(db.Context, tenant, clock), clock);
+            TripPackageTestFactory.Create(db.Context, tenant, clock),
+            new TransportationService.Api.Modules.Notifications.Services.NotificationService(db.Context, tenant, new DevCurrentUserContext(userId), clock), clock);
         return new Harness(db, sut, clock, tenantId, tripId, orderId, loadStopId, unloadStopId, userId, locationId);
     }
 
@@ -322,7 +323,8 @@ public class StopExecutionTransitionTests
                 new NotificationService(h.Db.Context, otherTenant, new DevCurrentUserContext(null), clock),
                 foreignSync, CostingTestFactory.Create(h.Db.Context, otherTenant, clock),
                 TripPackageTestFactory.Create(h.Db.Context, otherTenant, clock)),
-            foreignSync, TripPackageTestFactory.Create(h.Db.Context, otherTenant, clock), clock);
+            foreignSync, TripPackageTestFactory.Create(h.Db.Context, otherTenant, clock),
+            new TransportationService.Api.Modules.Notifications.Services.NotificationService(h.Db.Context, otherTenant, new DevCurrentUserContext(null), clock), clock);
 
         var history = await foreign.GetStopHistoryAsync(h.TripId, h.LoadStopId, false, CancellationToken.None);
         Assert.Equal(ExecutionOutcome.NotFound, history.Outcome);

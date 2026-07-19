@@ -110,6 +110,7 @@ public class ScanServiceTests
                 db.Context, tenant, currentUser, clock),
             new TransportationService.Api.Modules.Packages.Services.PackageScanProcessor(
                 db.Context, tenant, currentUser, eventWriter, clock),
+            new TransportationService.Api.Modules.Notifications.Services.NotificationService(db.Context, tenant, currentUser, clock),
             clock);
     }
 

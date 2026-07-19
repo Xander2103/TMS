@@ -14,6 +14,8 @@ public static class TripPackageTestFactory
         return new TripPackageService(
             dbContext, tenant, currentUser,
             new PackageEventWriter(dbContext, tenant, currentUser, clock),
-            new AuditService(dbContext, tenant, currentUser), clock);
+            new AuditService(dbContext, tenant, currentUser),
+            new TransportationService.Api.Modules.Notifications.Services.NotificationService(dbContext, tenant, currentUser, clock),
+            clock);
     }
 }

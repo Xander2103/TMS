@@ -56,7 +56,12 @@ public sealed record PackageScanProcessResult(
     string Message,
     Package Package,
     Guid? ExceptionId,
-    IReadOnlyList<PackageChildScanResult> Children);
+    IReadOnlyList<PackageChildScanResult> Children)
+{
+    /// <summary>True when this scan OPENED the exception (deduped rescans keep it false), so
+    /// notification producers fire once per problem, not once per scan.</summary>
+    public bool ExceptionCreated { get; init; }
+}
 
 public interface IPackageScanProcessor
 {
@@ -166,13 +171,13 @@ public class PackageScanProcessor : IPackageScanProcessor
         // Wrong vehicle/route: the package's order is not on this trip at all.
         if (!input.TripOrderIds.Contains(package.TransportOrderId))
         {
-            var exceptionId = await EnsureExceptionAsync(input, package, ExecutionExceptionType.WrongRoutePackage,
+            var (exceptionId, exceptionCreated) = await EnsureExceptionAsync(input, package, ExecutionExceptionType.WrongRoutePackage,
                 ExceptionSeverity.High,
                 $"Colli {package.PackageNumber} gescand op een rit waar de opdracht niet op gepland staat.",
                 cancellationToken);
             return Blocked(package, PackageScanOutcome.WrongTrip, ScanResult.WrongItem,
                 $"{package.PackageNumber} hoort niet bij deze rit — melding aangemaakt voor planning.",
-                exceptionId, stageWrongScanEvent: true, input);
+                exceptionId, exceptionCreated, stageWrongScanEvent: true, input);
         }
 
         // Return/depot scans are not stop-directional; only load/unload must match the stop's order.
@@ -255,13 +260,13 @@ public class PackageScanProcessor : IPackageScanProcessor
 
         if (package.LoadingStopId is { } pinned && pinned != stop.Id)
         {
-            var exceptionId = await EnsureExceptionAsync(input, package, ExecutionExceptionType.WrongStopPackage,
+            var (exceptionId, exceptionCreated) = await EnsureExceptionAsync(input, package, ExecutionExceptionType.WrongStopPackage,
                 ExceptionSeverity.Medium,
                 $"Colli {package.PackageNumber} gescand bij een andere laadstop dan gepland.",
                 cancellationToken);
             return Blocked(package, PackageScanOutcome.WrongLoadingStop, ScanResult.WrongItem,
                 $"{package.PackageNumber} staat gepland voor een andere laadstop — melding aangemaakt.",
-                exceptionId, stageWrongScanEvent: true, input);
+                exceptionId, exceptionCreated, stageWrongScanEvent: true, input);
         }
 
         switch (package.CurrentLifecycleStatus)
@@ -312,7 +317,7 @@ public class PackageScanProcessor : IPackageScanProcessor
         if (input.Request.Damaged)
         {
             package.CurrentLifecycleStatus = PackageLifecycleStatus.Damaged;
-            var exceptionId = await EnsureExceptionAsync(input, package, ExecutionExceptionType.DamagedPackage,
+            var (exceptionId, exceptionCreated) = await EnsureExceptionAsync(input, package, ExecutionExceptionType.DamagedPackage,
                 ExceptionSeverity.High,
                 $"Colli {package.PackageNumber} beschadigd aangetroffen bij het laden."
                 + (string.IsNullOrWhiteSpace(input.Request.DamageNote) ? string.Empty : $" {input.Request.DamageNote!.Trim()}"),
@@ -322,7 +327,7 @@ public class PackageScanProcessor : IPackageScanProcessor
             return new PackageScanProcessResult(PackageScanOutcome.DamagedPackage, ScanResult.DamagedItem,
                 ScanFeedbackLevel.Warning,
                 $"Schade geregistreerd voor {package.PackageNumber}; het colli is niet geladen.",
-                package, exceptionId, []);
+                package, exceptionId, []) { ExceptionCreated = exceptionCreated };
         }
 
         package.CurrentLifecycleStatus = PackageLifecycleStatus.Loaded;
@@ -345,13 +350,13 @@ public class PackageScanProcessor : IPackageScanProcessor
 
         if (package.DeliveryStopId is { } pinned && pinned != stop.Id)
         {
-            var exceptionId = await EnsureExceptionAsync(input, package, ExecutionExceptionType.WrongStopPackage,
+            var (exceptionId, exceptionCreated) = await EnsureExceptionAsync(input, package, ExecutionExceptionType.WrongStopPackage,
                 ExceptionSeverity.High,
                 $"Colli {package.PackageNumber} gescand bij een andere losstop dan gepland.",
                 cancellationToken);
             return Blocked(package, PackageScanOutcome.WrongDeliveryStop, ScanResult.WrongItem,
                 $"{package.PackageNumber} hoort bij een andere losstop — melding aangemaakt.",
-                exceptionId, stageWrongScanEvent: true, input);
+                exceptionId, exceptionCreated, stageWrongScanEvent: true, input);
         }
 
         switch (package.CurrentLifecycleStatus)
@@ -396,7 +401,7 @@ public class PackageScanProcessor : IPackageScanProcessor
         if (request.Refused)
         {
             package.CurrentLifecycleStatus = PackageLifecycleStatus.Refused;
-            var exceptionId = await EnsureExceptionAsync(input, package, ExecutionExceptionType.RejectedDelivery,
+            var (exceptionId, exceptionCreated) = await EnsureExceptionAsync(input, package, ExecutionExceptionType.RejectedDelivery,
                 ExceptionSeverity.High,
                 $"Colli {package.PackageNumber} geweigerd door de ontvanger."
                 + (string.IsNullOrWhiteSpace(request.Note) ? string.Empty : $" {request.Note!.Trim()}"),
@@ -406,13 +411,13 @@ public class PackageScanProcessor : IPackageScanProcessor
             return new PackageScanProcessResult(PackageScanOutcome.Refused, ScanResult.Expected,
                 ScanFeedbackLevel.Warning,
                 $"Weigering geregistreerd voor {package.PackageNumber}; kies een vervolgactie (retour/herlevering).",
-                package, exceptionId, []);
+                package, exceptionId, []) { ExceptionCreated = exceptionCreated };
         }
 
         if (request.Partial)
         {
             package.CurrentLifecycleStatus = PackageLifecycleStatus.PartiallyDelivered;
-            var exceptionId = await EnsureExceptionAsync(input, package, ExecutionExceptionType.PartialDelivery,
+            var (exceptionId, exceptionCreated) = await EnsureExceptionAsync(input, package, ExecutionExceptionType.PartialDelivery,
                 ExceptionSeverity.Medium,
                 $"Colli {package.PackageNumber} gedeeltelijk afgeleverd."
                 + (string.IsNullOrWhiteSpace(request.Note) ? string.Empty : $" {request.Note!.Trim()}"),
@@ -421,13 +426,13 @@ public class PackageScanProcessor : IPackageScanProcessor
                 BuildContext(input, PackageScanOutcome.PartialDelivery.ToString(), exceptionId, request.Note));
             return new PackageScanProcessResult(PackageScanOutcome.PartialDelivery, ScanResult.Expected,
                 ScanFeedbackLevel.Warning,
-                $"Gedeeltelijke levering geregistreerd voor {package.PackageNumber}.", package, exceptionId, []);
+                $"Gedeeltelijke levering geregistreerd voor {package.PackageNumber}.", package, exceptionId, []) { ExceptionCreated = exceptionCreated };
         }
 
         if (request.Damaged)
         {
             package.CurrentLifecycleStatus = PackageLifecycleStatus.Damaged;
-            var exceptionId = await EnsureExceptionAsync(input, package, ExecutionExceptionType.DamagedPackage,
+            var (exceptionId, exceptionCreated) = await EnsureExceptionAsync(input, package, ExecutionExceptionType.DamagedPackage,
                 ExceptionSeverity.High,
                 $"Colli {package.PackageNumber} beschadigd aangetroffen bij aflevering."
                 + (string.IsNullOrWhiteSpace(request.DamageNote) ? string.Empty : $" {request.DamageNote!.Trim()}"),
@@ -437,7 +442,7 @@ public class PackageScanProcessor : IPackageScanProcessor
             return new PackageScanProcessResult(PackageScanOutcome.DamagedPackage, ScanResult.DamagedItem,
                 ScanFeedbackLevel.Warning,
                 $"Schade geregistreerd voor {package.PackageNumber}; kies een vervolgactie voordat het wordt afgeleverd.",
-                package, exceptionId, []);
+                package, exceptionId, []) { ExceptionCreated = exceptionCreated };
         }
 
         package.CurrentLifecycleStatus = PackageLifecycleStatus.Delivered;
@@ -450,7 +455,8 @@ public class PackageScanProcessor : IPackageScanProcessor
     /// <summary>Blocked outcomes never move custody, but wrong-context ones still leave a custody trace.</summary>
     private PackageScanProcessResult Blocked(
         Package package, PackageScanOutcome outcome, ScanResult ledgerResult, string message,
-        Guid? exceptionId = null, bool stageWrongScanEvent = false, PackageScanInput? input = null)
+        Guid? exceptionId = null, bool exceptionCreated = false, bool stageWrongScanEvent = false,
+        PackageScanInput? input = null)
     {
         if (stageWrongScanEvent && input is not null)
         {
@@ -458,14 +464,14 @@ public class PackageScanProcessor : IPackageScanProcessor
                 package.CurrentLifecycleStatus, BuildContext(input, outcome.ToString(), exceptionId));
         }
         return new PackageScanProcessResult(outcome, ledgerResult, ScanFeedbackLevel.Warning, message,
-            package, exceptionId, []);
+            package, exceptionId, []) { ExceptionCreated = exceptionCreated };
     }
 
     /// <summary>
     /// Opens an execution exception unless the same open exception already exists for this
     /// package and trip — repeated scanning of the same problem must not flood dispatch.
     /// </summary>
-    private async Task<Guid> EnsureExceptionAsync(
+    private async Task<(Guid Id, bool Created)> EnsureExceptionAsync(
         PackageScanInput input, Package package, ExecutionExceptionType type, ExceptionSeverity severity,
         string description, CancellationToken cancellationToken)
     {
@@ -477,7 +483,7 @@ public class PackageScanProcessor : IPackageScanProcessor
             .FirstOrDefaultAsync(cancellationToken);
         if (existing is { } id)
         {
-            return id;
+            return (id, false);
         }
 
         var exception = new ExecutionException
@@ -498,7 +504,7 @@ public class PackageScanProcessor : IPackageScanProcessor
         };
         _dbContext.Add(exception);
         package.CurrentExceptionStatus = PackageExceptionState.Open;
-        return exception.Id;
+        return (exception.Id, true);
     }
 
     private static PackageEventContext BuildContext(

@@ -16,6 +16,7 @@ public interface IPackageService
     Task<PackageDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<IReadOnlyList<PackageBarcodeDto>> ListBarcodesAsync(Guid id, CancellationToken cancellationToken);
     Task<IReadOnlyList<PackageTimelineEventDto>?> GetTimelineAsync(Guid id, CancellationToken cancellationToken);
+    Task<CustomerPackageSummaryDto?> GetCustomerSummaryAsync(Guid transportOrderId, CancellationToken cancellationToken);
     Task<PackageOperationResult> CreateAsync(Guid transportOrderId, CreatePackageRequest request, CancellationToken cancellationToken);
     Task<(BulkCreateResultDto? Result, string? Error)> BulkCreateAsync(
         Guid transportOrderId, BulkCreatePackagesRequest request, CancellationToken cancellationToken);
@@ -120,6 +121,60 @@ public class PackageService : IPackageService
                 e.TransportOrderStopId is { } sid ? stops.GetValueOrDefault(sid) : null,
                 e.BarcodeUsed, e.Result, e.Notes, e.IsOverride, e.ExceptionId, e.ScanEventId))
             .ToList();
+    }
+
+    /// <summary>Neutral customer label per lifecycle status; problems stay "in behandeling" — no operational detail leaks.</summary>
+    private static string CustomerStatusLabel(PackageLifecycleStatus status) => status switch
+    {
+        PackageLifecycleStatus.Created or PackageLifecycleStatus.Labelled or PackageLifecycleStatus.AwaitingLoading =>
+            "In voorbereiding",
+        PackageLifecycleStatus.Loaded or PackageLifecycleStatus.InTransit or PackageLifecycleStatus.AtStop => "Onderweg",
+        PackageLifecycleStatus.Delivered => "Geleverd",
+        PackageLifecycleStatus.PartiallyDelivered => "Gedeeltelijk geleverd",
+        PackageLifecycleStatus.RedeliveryPlanned => "Nieuwe levering gepland",
+        PackageLifecycleStatus.ReturnPending or PackageLifecycleStatus.ReturnLoaded
+            or PackageLifecycleStatus.ReturnedToDepot or PackageLifecycleStatus.ReturnedToSender => "Retour",
+        PackageLifecycleStatus.Cancelled => "Geannuleerd",
+        _ => "In behandeling",
+    };
+
+    public async Task<CustomerPackageSummaryDto?> GetCustomerSummaryAsync(
+        Guid transportOrderId, CancellationToken cancellationToken)
+    {
+        var orderExists = await _dbContext.TransportOrders.AsNoTracking()
+            .AnyAsync(o => o.Id == transportOrderId && o.TenantId == _tenantContext.TenantId, cancellationToken);
+        if (!orderExists)
+        {
+            return null;
+        }
+
+        var packages = await Scoped().AsNoTracking()
+            .Where(p => p.TransportOrderId == transportOrderId)
+            .OrderBy(p => p.PackageNumber)
+            .ToListAsync(cancellationToken);
+        var parentIds = packages.Where(p => p.ParentPackageId is not null)
+            .Select(p => p.ParentPackageId!.Value)
+            .ToHashSet();
+        var leaves = packages
+            .Where(p => !parentIds.Contains(p.Id) && p.CurrentLifecycleStatus != PackageLifecycleStatus.Cancelled)
+            .ToList();
+
+        var rows = leaves.Select(p => new CustomerPackageRowDto(
+                p.PackageNumber, p.Description, p.Quantity,
+                p.UnitTypeLabel ?? p.UnitType.ToString(), CustomerStatusLabel(p.CurrentLifecycleStatus)))
+            .ToList();
+
+        return new CustomerPackageSummaryDto(
+            Total: leaves.Count,
+            Delivered: leaves.Count(p => p.CurrentLifecycleStatus is PackageLifecycleStatus.Delivered),
+            InTransit: leaves.Count(p => p.CurrentLifecycleStatus
+                is PackageLifecycleStatus.Loaded or PackageLifecycleStatus.InTransit or PackageLifecycleStatus.AtStop),
+            Pending: leaves.Count(p => PackageLifecycleMachine.IsPreTransit(p.CurrentLifecycleStatus)),
+            InHandling: leaves.Count(p => p.CurrentLifecycleStatus
+                is PackageLifecycleStatus.Refused or PackageLifecycleStatus.DeliveryFailed
+                or PackageLifecycleStatus.Missing or PackageLifecycleStatus.Damaged
+                or PackageLifecycleStatus.Quarantined or PackageLifecycleStatus.PartiallyDelivered),
+            Packages: rows);
     }
 
     public async Task<PackageOperationResult> CreateAsync(

@@ -78,7 +78,8 @@ public class TripExecutionServiceTests
             planningSync, CostingTestFactory.Create(db.Context, tenant, clock),
             TripPackageTestFactory.Create(db.Context, tenant, clock));
         var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, planningSync,
-            TripPackageTestFactory.Create(db.Context, tenant, clock), clock);
+            TripPackageTestFactory.Create(db.Context, tenant, clock),
+            new TransportationService.Api.Modules.Notifications.Services.NotificationService(db.Context, tenant, new DevCurrentUserContext(userId), clock), clock);
         return new Harness(db, sut, tenantId, tripId, orderId, loadStopId, unloadStopId, userId);
     }
 

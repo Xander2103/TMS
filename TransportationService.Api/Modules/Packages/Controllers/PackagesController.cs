@@ -57,6 +57,16 @@ public class PackagesController : ControllerBase
         return package is null ? NotFound() : Ok(package);
     }
 
+    /// <summary>Customer-visible summary: neutral labels only, guarded by orders.view alone.</summary>
+    [HttpGet("api/transport-orders/{orderId:guid}/package-summary")]
+    [RequirePermission(PermissionCodes.OrdersView)]
+    public async Task<ActionResult<TransportationService.Api.Modules.Packages.Dtos.CustomerPackageSummaryDto>> CustomerSummary(
+        Guid orderId, CancellationToken cancellationToken)
+    {
+        var summary = await _service.GetCustomerSummaryAsync(orderId, cancellationToken);
+        return summary is null ? NotFound() : Ok(summary);
+    }
+
     [HttpGet("api/packages/{id:guid}/events")]
     [RequirePermission(PermissionCodes.PackagesView, PermissionCodes.DriverWorkflowView, PermissionCodes.WarehouseView)]
     public async Task<ActionResult<IReadOnlyList<TransportationService.Api.Modules.Packages.Dtos.PackageTimelineEventDto>>> Timeline(

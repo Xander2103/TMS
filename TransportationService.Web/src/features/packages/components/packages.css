@@ -289,3 +289,45 @@ strong.pk-danger {
   color: var(--text);
   font-size: 0.9rem;
 }
+
+.pk-reports-control {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pk-customer-counts {
+  margin: 0 0 0.6rem;
+  font-size: 0.95rem;
+}
+
+.pk-customer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.pk-customer-list li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.pk-customer-desc {
+  flex: 1;
+}
+
+.pk-customer-qty {
+  color: var(--text);
+}
+
+.kpi-export-actions {
+  display: inline-flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+}

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Packages.Services;
 using TransportationService.Api.Modules.Planning.Entities;
@@ -27,6 +28,7 @@ public class ScanService : IScanService
     private readonly IAuditService _auditService;
     private readonly IPackageBarcodeService _packageBarcodeService;
     private readonly IPackageScanProcessor _packageScanProcessor;
+    private readonly INotificationService _notificationService;
     private readonly TimeProvider _timeProvider;
 
     public ScanService(
@@ -36,6 +38,7 @@ public class ScanService : IScanService
         IAuditService auditService,
         IPackageBarcodeService packageBarcodeService,
         IPackageScanProcessor packageScanProcessor,
+        INotificationService notificationService,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
@@ -44,6 +47,7 @@ public class ScanService : IScanService
         _auditService = auditService;
         _packageBarcodeService = packageBarcodeService;
         _packageScanProcessor = packageScanProcessor;
+        _notificationService = notificationService;
         _timeProvider = timeProvider;
     }
 
@@ -265,6 +269,25 @@ public class ScanService : IScanService
         await _auditService.RecordAsync(EntityType, scanEvent.Id.ToString(), processed.Outcome.ToString(), null,
             new { scanEvent.TripId, scanEvent.TransportOrderStopId, scanEvent.Barcode, scanEvent.PackageId, Outcome = processed.Outcome.ToString() },
             cancellationToken);
+
+        // Dispatch hears about NEW package problems once (rescans of the same problem are
+        // deduped at the exception level) and about completed depot returns.
+        if (processed.ExceptionCreated && processed.ExceptionId is { } newExceptionId)
+        {
+            await _notificationService.NotifyPermissionHoldersAsync(
+                Modules.Identity.PermissionCodes.PlanningEdit, "package_incident",
+                "Colli-melding",
+                $"{processed.Package.PackageNumber}: {processed.Message}",
+                $"/exceptions/{newExceptionId}", cancellationToken);
+        }
+        else if (request.ScanType == ScanType.Depot && processed.Outcome == PackageScanOutcome.Success)
+        {
+            await _notificationService.NotifyPermissionHoldersAsync(
+                Modules.Identity.PermissionCodes.PlanningEdit, "package_returned_depot",
+                "Colli terug in depot",
+                $"{processed.Package.PackageNumber} is ontvangen in het depot.",
+                $"/packages/{processed.Package.Id}", cancellationToken);
+        }
 
         var summary = await BuildSummaryAsync(tripId, stop, request.ScanType, cancellationToken);
 

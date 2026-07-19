@@ -37,6 +37,10 @@ public static class NotificationTypeCatalog
             ["pod_completed"] = (NotificationCategory.Execution, NotificationSeverity.Info),
             ["eta_changed"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
             ["customer_notification_failed"] = (NotificationCategory.System, NotificationSeverity.Critical),
+            ["package_incident"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
+            ["package_departure_override"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
+            ["package_completion_override"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
+            ["package_returned_depot"] = (NotificationCategory.Execution, NotificationSeverity.Info),
         };
 
     public static (NotificationCategory Category, NotificationSeverity Severity) Resolve(string type) =>

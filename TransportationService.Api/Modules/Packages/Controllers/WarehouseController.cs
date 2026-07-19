@@ -39,3 +39,36 @@ public class WarehouseController : ControllerBase
         return Ok(await _service.SearchPackagesAsync(search ?? string.Empty, cancellationToken));
     }
 }
+
+/// <summary>Package XLSX reports; every workbook carries its criteria sheet.</summary>
+[ApiController]
+public class PackageReportsController : ControllerBase
+{
+    private readonly IPackageReportService _service;
+    private readonly TimeProvider _timeProvider;
+
+    public PackageReportsController(IPackageReportService service, TimeProvider timeProvider)
+    {
+        _service = service;
+        _timeProvider = timeProvider;
+    }
+
+    [HttpGet("api/reports/packages")]
+    [RequirePermission(PermissionCodes.PackageReportsExport)]
+    public ActionResult<IReadOnlyList<string>> Keys() => Ok(_service.ReportKeys);
+
+    [HttpGet("api/reports/packages/{report}")]
+    [RequirePermission(PermissionCodes.PackageReportsExport)]
+    public async Task<IActionResult> Download(
+        string report, [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        var result = await _service.BuildAsync(report, from ?? today.AddDays(-30), to ?? today, cancellationToken);
+        if (result is null)
+        {
+            return NotFound(new { message = "Onbekend rapport." });
+        }
+        return File(result.Value.Content,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", result.Value.FileName);
+    }
+}

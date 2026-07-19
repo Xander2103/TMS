@@ -150,7 +150,8 @@ public class PackageScanPipelineTests
         var scans = ScanServiceTests.CreateService(db, tenant, userId, clock);
         var tripPackages = new TripPackageService(db.Context, tenant, currentUser,
             new PackageEventWriter(db.Context, tenant, currentUser, clock),
-            new AuditService(db.Context, tenant, currentUser), clock);
+            new AuditService(db.Context, tenant, currentUser),
+            new TransportationService.Api.Modules.Notifications.Services.NotificationService(db.Context, tenant, currentUser, clock), clock);
 
         return new Harness
         {

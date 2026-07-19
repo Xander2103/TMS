@@ -7,6 +7,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useAuth } from '../../auth/authContextValue'
 import { ScanPanel } from '../../scanning/components/ScanPanel'
+import { PackageReportsControl } from '../components/PackageReportsControl'
 import { getWarehouseTrips, searchWarehousePackages } from '../api/packagesApi'
 import {
   PACKAGE_STATUS_LABELS,
@@ -89,6 +90,12 @@ export function WarehousePage() {
           </span>
         }
       />
+
+      {hasPermission('package_reports.export') && (
+        <section className="to-section">
+          <PackageReportsControl />
+        </section>
+      )}
 
       <section className="to-section">
         <h2>Colli zoeken</h2>

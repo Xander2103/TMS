@@ -290,6 +290,7 @@ public class TripService : ITripService
         }
 
         // Departure gate: mandatory packages must be on the vehicle, per the tenant's rule.
+        var departureOverrideApplied = false;
         if (target == TripStatus.InProgress)
         {
             var readiness = await _tripPackageService.EvaluateReadinessAsync(trip, cancellationToken);
@@ -307,8 +308,10 @@ public class TripService : ITripService
                 }
                 if (readiness.RequiresOverride)
                 {
-                    // The override trail commits atomically with the status change below.
+                    // The override trail commits atomically with the status change below;
+                    // dispatch is notified after the save further down.
                     await _tripPackageService.StageDepartureOverrideAsync(trip, overrideReason, cancellationToken);
+                    departureOverrideApplied = true;
                 }
             }
         }
@@ -330,6 +333,15 @@ public class TripService : ITripService
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "StatusChanged", before,
             new { trip.Status, Overridden = allowOverride }, cancellationToken);
         await AuditPlanningSyncAsync(sync, cancellationToken);
+
+        if (departureOverrideApplied)
+        {
+            await _notificationService.NotifyPermissionHoldersAsync(
+                Modules.Identity.PermissionCodes.PlanningEdit, "package_departure_override",
+                "Vertrek vrijgegeven",
+                $"Rit {trip.TripNumber} is vertrokken zonder volledige lading (vrijgave met reden).",
+                $"/planning/{trip.Id}", cancellationToken);
+        }
 
         // Planning a trip tells the assigned driver's user account; a cancellation does too.
         if (target is TripStatus.Planned or TripStatus.Cancelled && trip.DriverId is { } assignedDriver)

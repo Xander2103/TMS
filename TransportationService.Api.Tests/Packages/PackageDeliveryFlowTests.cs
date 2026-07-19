@@ -124,7 +124,8 @@ public class PackageDeliveryFlowTests
             planningSync, CostingTestFactory.Create(db.Context, tenant, clock),
             TripPackageTestFactory.Create(db.Context, tenant, clock));
         var execution = new TripExecutionService(db.Context, tenant, currentUser, audit, tripService, planningSync,
-            TripPackageTestFactory.Create(db.Context, tenant, clock), clock);
+            TripPackageTestFactory.Create(db.Context, tenant, clock),
+            new TransportationService.Api.Modules.Notifications.Services.NotificationService(db.Context, tenant, currentUser, clock), clock);
         var storageRoot = Path.Combine(Path.GetTempPath(), $"pod-tests-{Guid.NewGuid():N}");
         var pods = new PodService(
             db.Context, tenant, currentUser, audit,

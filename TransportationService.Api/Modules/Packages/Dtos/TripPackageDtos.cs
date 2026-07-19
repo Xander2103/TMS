@@ -61,6 +61,25 @@ public record TripPackageReadinessDto(
 
 public record MarkPackageMissingRequest(Guid StopId, string? Note);
 
+/// <summary>
+/// Customer-facing package view: neutral status labels only. Deliberately NO barcodes,
+/// internal notes, driver data, exception descriptions or operational detail.
+/// </summary>
+public record CustomerPackageSummaryDto(
+    int Total,
+    int Delivered,
+    int InTransit,
+    int Pending,
+    int InHandling,
+    IReadOnlyList<CustomerPackageRowDto> Packages);
+
+public record CustomerPackageRowDto(
+    string PackageNumber,
+    string Description,
+    decimal Quantity,
+    string UnitType,
+    string StatusLabel);
+
 /// <summary>One appended custody event, resolved for display. The chain is read-only by design.</summary>
 public record PackageTimelineEventDto(
     Guid Id,

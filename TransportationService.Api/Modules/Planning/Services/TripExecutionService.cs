@@ -3,6 +3,7 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Packages.Services;
 using TransportationService.Api.Modules.Planning.Dtos;
@@ -22,6 +23,7 @@ public class TripExecutionService : ITripExecutionService
     private readonly ITripService _tripService;
     private readonly ITripPlanningSyncService _planningSyncService;
     private readonly ITripPackageService _tripPackageService;
+    private readonly INotificationService _notificationService;
     private readonly TimeProvider _timeProvider;
 
     public TripExecutionService(
@@ -32,6 +34,7 @@ public class TripExecutionService : ITripExecutionService
         ITripService tripService,
         ITripPlanningSyncService planningSyncService,
         ITripPackageService tripPackageService,
+        INotificationService notificationService,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
@@ -41,6 +44,7 @@ public class TripExecutionService : ITripExecutionService
         _tripService = tripService;
         _planningSyncService = planningSyncService;
         _tripPackageService = tripPackageService;
+        _notificationService = notificationService;
         _timeProvider = timeProvider;
     }
 
@@ -136,6 +140,7 @@ public class TripExecutionService : ITripExecutionService
         // Completion gate: an unloading stop cannot close while mandatory packages still ride
         // the vehicle without a delivery outcome — unless an override holder gives a reason.
         var unresolved = await _tripPackageService.GetUnresolvedAtStopAsync(tripId, stopId, cancellationToken);
+        var overrideApplied = false;
         if (unresolved.Count > 0)
         {
             var reason = Trim(request.PackageOverrideReason);
@@ -148,13 +153,25 @@ public class TripExecutionService : ITripExecutionService
             }
             // The override custody trail commits atomically with the completion below.
             _tripPackageService.StageCompletionOverride(tripId, stopId, unresolved, reason);
+            overrideApplied = true;
         }
 
-        return await TransitionCoreAsync(tripId, stopId,
+        var result = await TransitionCoreAsync(tripId, stopId,
             new TransitionStopRequest(StopExecutionStatus.Completed, Reason: request.Reason, Notes: request.Remarks),
             restrictToOwnDriver,
             beforeSave: execution => execution.PodSignedBy = Trim(request.PodSignedBy),
             cancellationToken);
+
+        if (overrideApplied && result.Outcome == ExecutionOutcome.Success)
+        {
+            await _notificationService.NotifyPermissionHoldersAsync(
+                Modules.Identity.PermissionCodes.PlanningEdit, "package_completion_override",
+                "Stop afgerond met vrijgave",
+                $"Een losstop is afgerond terwijl {unresolved.Count} colli geen uitkomst hadden.",
+                $"/planning/{tripId}", cancellationToken);
+        }
+
+        return result;
     }
 
     public Task<ExecutionResult> SkipAsync(

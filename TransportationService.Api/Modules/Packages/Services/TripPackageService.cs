@@ -3,6 +3,7 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Exceptions.Entities;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Packages.Dtos;
 using TransportationService.Api.Modules.Packages.Entities;
@@ -52,6 +53,7 @@ public class TripPackageService : ITripPackageService
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IPackageEventWriter _eventWriter;
     private readonly IAuditService _auditService;
+    private readonly INotificationService _notificationService;
     private readonly TimeProvider _timeProvider;
 
     public TripPackageService(
@@ -60,6 +62,7 @@ public class TripPackageService : ITripPackageService
         ICurrentUserContext currentUserContext,
         IPackageEventWriter eventWriter,
         IAuditService auditService,
+        INotificationService notificationService,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
@@ -67,6 +70,7 @@ public class TripPackageService : ITripPackageService
         _currentUserContext = currentUserContext;
         _eventWriter = eventWriter;
         _auditService = auditService;
+        _notificationService = notificationService;
         _timeProvider = timeProvider;
     }
 
@@ -232,6 +236,12 @@ public class TripPackageService : ITripPackageService
         await _auditService.RecordAsync("Package", package.Id.ToString(), "MarkedMissing",
             new { OldStatus = old.ToString() },
             new { package.PackageNumber, TripId = trip.Id, request.Note }, cancellationToken);
+
+        await _notificationService.NotifyPermissionHoldersAsync(
+            Modules.Identity.PermissionCodes.PlanningEdit, "package_incident",
+            "Colli vermist",
+            $"{package.PackageNumber} niet aangetroffen bij het laden van {trip.TripNumber}.",
+            $"/exceptions/{exception.Id}", cancellationToken);
 
         return TripPackageOperationResult.Success(new { ExceptionId = exception.Id });
     }
