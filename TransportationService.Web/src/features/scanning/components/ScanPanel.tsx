@@ -14,6 +14,8 @@ import {
 } from '../../packages/types'
 import { correctScan, getStopScanSummary, listScans, submitScan } from '../api/scanningApi'
 import { deviceScanSignal } from '../deviceFeedback'
+import { scanQueue, type QueuedScan } from '../scanQueue'
+import { CameraScanner } from './CameraScanner'
 import {
   PACKAGE_SCAN_OUTCOME_LABELS,
   SCAN_RESULT_ICONS,
@@ -81,7 +83,32 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
   // Return-phase packages unlock the retour/depot scan modes on top of the stop's own mode.
   const [activeType, setActiveType] = useState<ScanType>(scanType)
 
+  const [queued, setQueued] = useState<QueuedScan[]>([])
+
   const barcodeRef = useRef<HTMLInputElement>(null)
+
+  // Offline queue: subscribe for this stop's items and replay when the network returns.
+  useEffect(() => {
+    const unsubscribe = scanQueue.subscribe((items) =>
+      setQueued(items.filter((i) => i.tripId === tripId && i.stopId === stopId)))
+    const replayNow = () => {
+      void scanQueue.replay(submitScan).then((outcome) => {
+        if (outcome.succeeded > 0) {
+          getStopScanSummary(tripId, stopId).then(setSummary).catch(() => {})
+          refreshPackages()
+        }
+      })
+    }
+    window.addEventListener('online', replayNow)
+    if (navigator.onLine) {
+      replayNow()
+    }
+    return () => {
+      unsubscribe()
+      window.removeEventListener('online', replayNow)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripId, stopId])
 
   useEffect(() => {
     let mounted = true
@@ -116,7 +143,11 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    const code = barcode.trim()
+    await doSubmit(barcode)
+  }
+
+  async function doSubmit(rawCode: string) {
+    const code = rawCode.trim()
     if (!code) {
       barcodeRef.current?.focus()
       return
@@ -126,20 +157,32 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
       showError('De hoeveelheid moet groter dan nul zijn.')
       return
     }
+    const input = {
+      scanType: activeType,
+      barcode: code,
+      quantity: qty,
+      damaged,
+      damageNote: damaged ? damageNote.trim() || null : null,
+      deviceInfo: 'web-portal',
+      clientEventId: crypto.randomUUID(),
+      refused: activeType === 'Unload' ? refused : false,
+      partial: activeType === 'Unload' ? partial : false,
+      note: refused || partial ? outcomeNote.trim() || null : null,
+    }
+
+    // Known-offline: queue directly with honest feedback; replay is idempotent server-side.
+    if (!navigator.onLine) {
+      scanQueue.enqueue(tripId, stopId, input)
+      deviceScanSignal.warning()
+      showSuccess(`Scan van ${code} in wachtrij; wordt verstuurd zodra er weer verbinding is.`)
+      setBarcode('')
+      barcodeRef.current?.focus()
+      return
+    }
+
     setBusy(true)
     try {
-      const result = await submitScan(tripId, stopId, {
-        scanType: activeType,
-        barcode: code,
-        quantity: qty,
-        damaged,
-        damageNote: damaged ? damageNote.trim() || null : null,
-        deviceInfo: 'web-portal',
-        clientEventId: crypto.randomUUID(),
-        refused: activeType === 'Unload' ? refused : false,
-        partial: activeType === 'Unload' ? partial : false,
-        note: refused || partial ? outcomeNote.trim() || null : null,
-      })
+      const result = await submitScan(tripId, stopId, input)
       setFeedback(result)
       setSummary(result.summary)
       if (result.package) {
@@ -183,7 +226,15 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
       setOutcomeNote('')
     } catch (err) {
       deviceScanSignal.warning()
-      showError(err instanceof ApiError ? err.message : 'De scan kon niet worden geregistreerd.')
+      if (err instanceof ApiError) {
+        showError(err.message)
+      } else {
+        // Network dropped mid-request: queue it — the ClientEventId makes the retry safe
+        // even if the original request did reach the server.
+        scanQueue.enqueue(tripId, stopId, input)
+        showSuccess(`Geen verbinding; scan van ${code} staat in de wachtrij.`)
+        setBarcode('')
+      }
     } finally {
       setBusy(false)
       barcodeRef.current?.focus()
@@ -317,6 +368,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
 
         {executable && (
           <form className="scan-form" onSubmit={handleSubmit} noValidate>
+            <CameraScanner disabled={busy} onDetected={(value) => void doSubmit(value)} />
             <label className="scan-barcode-label" htmlFor="scan-barcode">
               Barcode
             </label>
@@ -407,6 +459,37 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
               </FormField>
             )}
           </form>
+        )}
+
+        {queued.length > 0 && (
+          <section className="scan-queue" aria-label="Wachtrij">
+            <h3>
+              Wachtrij ({queued.length})
+              {!navigator.onLine && <span className="scan-queue-offline"> · offline</span>}
+            </h3>
+            <ul>
+              {queued.map((item) => (
+                <li key={item.clientEventId} className={item.state === 'failed' ? 'scan-queue-failed' : ''}>
+                  <code>{item.input.barcode}</code>
+                  <span className="scan-queue-state">
+                    {item.state === 'failed'
+                      ? `Afgekeurd: ${item.lastError ?? 'onbekende fout'}`
+                      : `Wacht op verbinding (${item.attempts} pogingen)`}
+                  </span>
+                  {item.state === 'failed' && (
+                    <>
+                      <button type="button" className="scan-correct-link" onClick={() => scanQueue.retry(item.clientEventId)}>
+                        Opnieuw
+                      </button>
+                      <button type="button" className="scan-correct-link" onClick={() => scanQueue.remove(item.clientEventId)}>
+                        Verwijderen
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         {packages.length > 0 && (

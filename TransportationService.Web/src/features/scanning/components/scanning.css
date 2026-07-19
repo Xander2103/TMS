@@ -342,3 +342,73 @@
     margin-left: 0;
   }
 }
+
+.scan-camera {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.scan-camera-view {
+  width: 100%;
+  max-height: 260px;
+  border-radius: 8px;
+  background: #000;
+  object-fit: cover;
+}
+
+.scan-queue {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+}
+
+.scan-queue h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+}
+
+.scan-queue ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.scan-queue li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+
+.scan-queue-state {
+  flex: 1;
+  color: var(--text);
+}
+
+.scan-queue-failed .scan-queue-state {
+  color: #b91c1c;
+}
+
+.scan-queue-offline {
+  color: #b45309;
+}
+
+/* Mobile: big touch targets for gloved warehouse/driver hands. */
+@media (max-width: 640px) {
+  .scan-barcode-input {
+    font-size: 1.15rem;
+    padding: 0.8rem;
+  }
+
+  .scan-qty button {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .scan-mode {
+    padding: 0.5rem 1.1rem;
+  }
+}
