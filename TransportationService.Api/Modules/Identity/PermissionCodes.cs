@@ -171,6 +171,7 @@ public static class PermissionCodes
     // --- Employee planning (personnel shifts) ---
     public const string EmployeePlanningView = "employee_planning.view";
     public const string EmployeePlanningManage = "employee_planning.manage";
+    public const string EmployeePlanningConflictOverride = "employee_planning.conflict_override";
 
     // --- Proof of delivery ---
     public const string PodView = "pod.view";
@@ -306,6 +307,7 @@ public static class PermissionCodes
         (MessageTemplatesManage, "message_templates", "manage", "Berichtsjablonen beheren"),
         (EmployeePlanningView, "employee_planning", "view", "Personeelsplanning bekijken"),
         (EmployeePlanningManage, "employee_planning", "manage", "Personeelsplanning en shifts beheren"),
+        (EmployeePlanningConflictOverride, "employee_planning", "conflict_override", "Blokkerende planningsconflicten overschrijven"),
         (PodView, "pod", "view", "Afleverbewijzen bekijken"),
         (PodFinalize, "pod", "finalize", "Afleverbewijzen opnemen en afronden"),
         (PodCorrect, "pod", "correct", "Afleverbewijzen corrigeren (nieuwe versie)"),

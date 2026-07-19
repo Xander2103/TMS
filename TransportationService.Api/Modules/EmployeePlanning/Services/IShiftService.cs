@@ -11,9 +11,15 @@ public interface IShiftService
 
     Task<ShiftDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<ShiftOperationResult> CreateAsync(CreateShiftRequest request, CancellationToken cancellationToken);
+    /// <summary>
+    /// Blocking schedule conflicts (trips, approved absences) refuse the save with outcome
+    /// Conflict unless the request asks to override AND the caller may (allowConflictOverride).
+    /// </summary>
+    Task<ShiftOperationResult> CreateAsync(
+        CreateShiftRequest request, bool allowConflictOverride, CancellationToken cancellationToken);
 
-    Task<ShiftOperationResult> UpdateAsync(Guid id, UpdateShiftRequest request, CancellationToken cancellationToken);
+    Task<ShiftOperationResult> UpdateAsync(
+        Guid id, UpdateShiftRequest request, bool allowConflictOverride, CancellationToken cancellationToken);
 
     /// <summary>Draft -> Planned -> Confirmed; Confirmed falls back to Planned, Planned to Draft.</summary>
     Task<ShiftOperationResult> ChangeStatusAsync(Guid id, ShiftStatus status, CancellationToken cancellationToken);

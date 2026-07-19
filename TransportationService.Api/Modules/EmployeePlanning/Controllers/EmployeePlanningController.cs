@@ -4,6 +4,7 @@ using TransportationService.Api.Modules.EmployeePlanning.Entities;
 using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
+using TransportationService.Api.Modules.Identity.Services;
 
 namespace TransportationService.Api.Modules.EmployeePlanning.Controllers;
 
@@ -15,11 +16,27 @@ namespace TransportationService.Api.Modules.EmployeePlanning.Controllers;
 public class EmployeePlanningController : ControllerBase
 {
     private readonly IShiftService _service;
+    private readonly IPermissionAuthorizationService _permissionService;
+    private readonly ICurrentUserContext _currentUserContext;
 
-    public EmployeePlanningController(IShiftService service)
+    public EmployeePlanningController(
+        IShiftService service,
+        IPermissionAuthorizationService permissionService,
+        ICurrentUserContext currentUserContext)
     {
         _service = service;
+        _permissionService = permissionService;
+        _currentUserContext = currentUserContext;
     }
+
+    /// <summary>Overriding blocking schedule conflicts is a separately guarded capability.</summary>
+    private async Task<bool> MayOverrideConflictsAsync(CancellationToken cancellationToken) =>
+        _currentUserContext.CurrentUserId is { } userId
+        && await _permissionService.UserHasPermissionAsync(
+            userId, PermissionCodes.EmployeePlanningConflictOverride, cancellationToken);
+
+    private ObjectResult OverrideForbidden() => StatusCode(StatusCodes.Status403Forbidden,
+        new { message = "Je hebt geen recht om planningsconflicten te overschrijven (employee_planning.conflict_override)." });
 
     [HttpGet("api/employee-planning")]
     [RequirePermission(PermissionCodes.EmployeePlanningView, PermissionCodes.EmployeePlanningManage)]
@@ -48,14 +65,34 @@ public class EmployeePlanningController : ControllerBase
     [RequirePermission(PermissionCodes.EmployeePlanningManage)]
     public async Task<ActionResult<ShiftDto>> Create(CreateShiftRequest request, CancellationToken cancellationToken)
     {
-        return Handle(await _service.CreateAsync(request, cancellationToken));
+        var allowOverride = false;
+        if (request.Override)
+        {
+            allowOverride = await MayOverrideConflictsAsync(cancellationToken);
+            if (!allowOverride)
+            {
+                return OverrideForbidden();
+            }
+        }
+
+        return Handle(await _service.CreateAsync(request, allowOverride, cancellationToken));
     }
 
     [HttpPut("api/shifts/{id:guid}")]
     [RequirePermission(PermissionCodes.EmployeePlanningManage)]
     public async Task<ActionResult<ShiftDto>> Update(Guid id, UpdateShiftRequest request, CancellationToken cancellationToken)
     {
-        return Handle(await _service.UpdateAsync(id, request, cancellationToken));
+        var allowOverride = false;
+        if (request.Override)
+        {
+            allowOverride = await MayOverrideConflictsAsync(cancellationToken);
+            if (!allowOverride)
+            {
+                return OverrideForbidden();
+            }
+        }
+
+        return Handle(await _service.UpdateAsync(id, request, allowOverride, cancellationToken));
     }
 
     public record ChangeShiftStatusRequest(ShiftStatus Status);
@@ -94,6 +131,7 @@ public class EmployeePlanningController : ControllerBase
         ShiftOutcome.Success => Ok(result.Shift),
         ShiftOutcome.NotFound => NotFound(),
         ShiftOutcome.Overlap => Conflict(new { message = result.Error }),
+        ShiftOutcome.Conflict => Conflict(new { message = result.Error, conflicts = result.Conflicts }),
         ShiftOutcome.InvalidState => BadRequest(new { message = result.Error }),
         ShiftOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
         _ => Conflict(),

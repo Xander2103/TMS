@@ -39,6 +39,9 @@ public record CompanySettingsDto(
     // Transport defaults
     int DefaultLoadingMinutes,
     int DefaultUnloadingMinutes,
+    // Schedule-conflict severities (Information | Warning | Blocking)
+    string TrainingConflictSeverity,
+    string ShiftOverlapConflictSeverity,
     // Qualifications
     int QualificationExpiryWarningDays,
     // Numbering
@@ -86,6 +89,8 @@ public record UpdateCompanySettingsRequest(
     decimal DefaultVatRatePercent,
     int DefaultLoadingMinutes,
     int DefaultUnloadingMinutes,
+    string TrainingConflictSeverity,
+    string ShiftOverlapConflictSeverity,
     int QualificationExpiryWarningDays,
     string? EmployeeNumberPrefix, int EmployeeNumberNextValue,
     string? CustomerNumberPrefix, int CustomerNumberNextValue,

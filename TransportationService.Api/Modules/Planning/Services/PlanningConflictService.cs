@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.EmployeePlanning.Entities;
+using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Planning.Dtos;
@@ -183,23 +186,66 @@ public class PlanningConflictService : IPlanningConflictService
             conflicts.Add(new(PlanningConflictCode.DriverInactive, true, $"Chauffeur {driverName} is inactief."));
         }
 
-        var absence = await _dbContext.Absences.AsNoTracking()
+        var settings = await _dbContext.TenantSettings.AsNoTracking()
+            .Where(s => s.TenantId == tenantId)
+            .Select(s => new { s.QualificationExpiryWarningDays, s.TrainingConflictSeverity, s.ShiftOverlapConflictSeverity })
+            .FirstOrDefaultAsync(cancellationToken);
+        var trainingSeverity = ScheduleConflictRules.Parse(settings?.TrainingConflictSeverity);
+        var shiftOverlapSeverity = ScheduleConflictRules.Parse(settings?.ShiftOverlapConflictSeverity);
+
+        var absenceTypes = await _dbContext.Absences.AsNoTracking()
             .Where(a => a.TenantId == tenantId && a.EmployeeId == driver.EmployeeId
                         && a.Status == AbsenceStatus.Approved
                         && a.StartDate <= trip.TripDate && a.EndDate >= trip.TripDate)
-            .Select(a => (AbsenceType?)a.Type)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (absence is { } absenceType)
+            .Select(a => a.Type)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        foreach (var absenceType in absenceTypes)
         {
-            conflicts.Add(new(PlanningConflictCode.DriverAbsent, true,
-                $"Chauffeur {driverName} is afwezig op {trip.TripDate:dd-MM-yyyy} ({absenceType})."));
+            var severity = ScheduleConflictRules.TripVsAbsence(absenceType, trainingSeverity);
+            if (absenceType == AbsenceType.Training)
+            {
+                conflicts.Add(new(PlanningConflictCode.DriverTraining, severity == ConflictSeverity.Blocking,
+                    $"Chauffeur {driverName} heeft een goedgekeurde opleiding op {trip.TripDate:dd-MM-yyyy}.", severity));
+            }
+            else
+            {
+                conflicts.Add(new(PlanningConflictCode.DriverAbsent, true,
+                    $"Chauffeur {driverName} is afwezig op {trip.TripDate:dd-MM-yyyy} ({absenceType}).",
+                    ConflictSeverity.Blocking));
+            }
+        }
+
+        // Manual shifts on the trip date: overlap severity is tenant-configurable.
+        var tripStart = trip.PlannedStart is { } ps ? TimeOnly.FromDateTime(ps) : (TimeOnly?)null;
+        var tripEnd = trip.PlannedEnd is { } pe ? TimeOnly.FromDateTime(pe) : (TimeOnly?)null;
+        var shifts = await _dbContext.Shifts.AsNoTracking()
+            .Where(s => s.TenantId == tenantId && s.EmployeeId == driver.EmployeeId && s.Date == trip.TripDate)
+            .Select(s => new { s.StartTime, s.EndTime, s.Type })
+            .ToListAsync(cancellationToken);
+        foreach (var shift in shifts)
+        {
+            if (!ScheduleConflictRules.WindowsOverlap(shift.StartTime, shift.EndTime, tripStart, tripEnd))
+            {
+                continue;
+            }
+
+            if (shift.Type == ShiftType.Training)
+            {
+                conflicts.Add(new(PlanningConflictCode.DriverTraining, trainingSeverity == ConflictSeverity.Blocking,
+                    $"Chauffeur {driverName} heeft een opleidingsshift op {trip.TripDate:dd-MM-yyyy} ({shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}).",
+                    trainingSeverity));
+            }
+            else
+            {
+                conflicts.Add(new(PlanningConflictCode.DriverShiftOverlap, shiftOverlapSeverity == ConflictSeverity.Blocking,
+                    $"Chauffeur {driverName} heeft al een shift op {trip.TripDate:dd-MM-yyyy} ({shift.StartTime:HH\\:mm}–{shift.EndTime:HH\\:mm}).",
+                    shiftOverlapSeverity));
+            }
         }
 
         // Qualification state: expired/suspended/rejected blocks, expiring soon warns.
-        var warningDays = await _dbContext.TenantSettings.AsNoTracking()
-            .Where(s => s.TenantId == tenantId)
-            .Select(s => (int?)s.QualificationExpiryWarningDays)
-            .FirstOrDefaultAsync(cancellationToken) ?? DefaultExpiryWarningDays;
+        var warningDays = settings?.QualificationExpiryWarningDays ?? DefaultExpiryWarningDays;
         var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
         var qualifications = await _dbContext.EmployeeQualifications.AsNoTracking()

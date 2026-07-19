@@ -238,6 +238,36 @@ export function SettingsPage() {
         </section>
 
         <section className="settings-card">
+          <h2>Planningsconflicten</h2>
+          <div className="settings-grid">
+            <FormField label="Opleiding vs. rit" htmlFor="set-training-severity" hint="Hoe zwaar telt een opleiding die met een rit botst?">
+              <select
+                id="set-training-severity"
+                value={form.trainingConflictSeverity}
+                onChange={(e) => setField('trainingConflictSeverity', e.target.value)}
+                disabled={!canManage || saving}
+              >
+                <option value="Information">Ter info</option>
+                <option value="Warning">Waarschuwing</option>
+                <option value="Blocking">Blokkerend</option>
+              </select>
+            </FormField>
+            <FormField label="Shift vs. rit" htmlFor="set-shift-severity" hint="Hoe zwaar telt een gewone shift die met een rit overlapt?">
+              <select
+                id="set-shift-severity"
+                value={form.shiftOverlapConflictSeverity}
+                onChange={(e) => setField('shiftOverlapConflictSeverity', e.target.value)}
+                disabled={!canManage || saving}
+              >
+                <option value="Information">Ter info</option>
+                <option value="Warning">Waarschuwing</option>
+                <option value="Blocking">Blokkerend</option>
+              </select>
+            </FormField>
+          </div>
+        </section>
+
+        <section className="settings-card">
           <h2>Nummering</h2>
           <div className="settings-grid settings-grid-numbering">
             {text('employeeNumberPrefix', 'Personeel prefix', { maxLength: 20 })}

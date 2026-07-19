@@ -33,9 +33,14 @@ describe('schedule state metadata', () => {
       workLocation: 'Antwerpen → Rotterdam',
       vehicleSummary: 'V-0001 · 1-ABC-123',
       statusLabel: 'Gepland',
+      conflictSeverity: null,
+      conflictNotes: null,
     }
     expect(chipDescription(entry)).toBe(
       'Rit RIT-0007 · Gepland · 08:00–16:00 · Antwerpen → Rotterdam · V-0001 · 1-ABC-123',
+    )
+    expect(chipDescription({ ...entry, conflictSeverity: 'Blocking', conflictNotes: ['Overlapt met rit RIT-0008'] })).toContain(
+      'Conflict (Blokkerend): Overlapt met rit RIT-0008',
     )
   })
 })

@@ -69,6 +69,10 @@ public class TenantSettings
     public int DefaultLoadingMinutes { get; set; } = 30;
     public int DefaultUnloadingMinutes { get; set; } = 30;
 
+    // Schedule-conflict severities (ConflictSeverity names; unknown values fall back to Warning)
+    public string TrainingConflictSeverity { get; set; } = "Warning";
+    public string ShiftOverlapConflictSeverity { get; set; } = "Warning";
+
     // Branding (reference only; upload/storage is out of scope for this milestone)
     public string? LogoReference { get; set; }
 

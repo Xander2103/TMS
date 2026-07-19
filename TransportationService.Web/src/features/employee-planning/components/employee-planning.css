@@ -66,6 +66,29 @@ button.schedule-chip {
 .schedule-chip-tripcancelled { background: #e5e7eb; border-color: #6b7280; }
 .schedule-chip-tripcancelled .schedule-chip-state { text-decoration: line-through; }
 
+/* yellow ring + marker = conflict/attention; the ⚠ and tooltip carry the meaning without colour */
+.schedule-chip-conflict { box-shadow: 0 0 0 2px #facc15; }
+.schedule-chip-conflict-marker {
+  font-size: 11px;
+  line-height: 1;
+  margin-left: 2px;
+}
+.schedule-chip-conflict-information { box-shadow: 0 0 0 2px #93c5fd; }
+
+.ep-conflict-panel {
+  margin-top: 12px;
+  border: 1px solid #facc15;
+  background: #fefce8;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+.ep-conflict-panel ul { margin: 6px 0; padding-left: 18px; }
+.ep-conflict-override { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+@media (prefers-color-scheme: dark) {
+  .ep-conflict-panel { background: #422006; border-color: #a16207; }
+}
+
 .schedule-legend summary {
   cursor: pointer;
   font-size: 14px;

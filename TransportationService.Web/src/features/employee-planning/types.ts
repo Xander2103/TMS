@@ -78,6 +78,13 @@ export const SHIFT_STATUS_LABELS: Record<ShiftStatus, string> = {
 }
 
 export type ScheduleSourceType = 'Shift' | 'Absence' | 'Trip'
+export type ConflictSeverity = 'Information' | 'Warning' | 'Blocking'
+
+export const CONFLICT_SEVERITY_LABELS: Record<ConflictSeverity, string> = {
+  Information: 'Ter info',
+  Warning: 'Waarschuwing',
+  Blocking: 'Blokkerend',
+}
 
 export interface ScheduleEntry {
   state: ScheduleEntryState
@@ -92,6 +99,8 @@ export interface ScheduleEntry {
   workLocation: string | null
   vehicleSummary: string | null
   statusLabel: string | null
+  conflictSeverity: ConflictSeverity | null
+  conflictNotes: string[] | null
 }
 
 export interface ScheduleDay {
@@ -140,6 +149,8 @@ export interface ShiftInput {
   workLocation: string | null
   roleLabel: string | null
   notes: string | null
+  /** Set after a 409: asks the server to override blocking conflicts (permission-gated). */
+  override?: boolean
 }
 
 function timeRangeOf(entry: ScheduleEntry): string | null {
@@ -147,14 +158,18 @@ function timeRangeOf(entry: ScheduleEntry): string | null {
   return `${entry.startTime.slice(0, 5)}–${entry.endTime.slice(0, 5)}`
 }
 
-/** Full accessible description: type, status, times, linked context — used for title and aria-label. */
+/** Full accessible description: type, status, times, linked context, conflicts — for title and aria-label. */
 export function chipDescription(entry: ScheduleEntry): string {
+  const conflict = entry.conflictSeverity
+    ? `Conflict (${CONFLICT_SEVERITY_LABELS[entry.conflictSeverity]}): ${(entry.conflictNotes ?? []).join('; ')}`
+    : null
   return [
     entry.sourceType === 'Trip' ? `Rit ${entry.label}` : SCHEDULE_STATE_LABELS[entry.state],
     entry.statusLabel,
     timeRangeOf(entry),
     entry.workLocation,
     entry.vehicleSummary,
+    conflict,
   ]
     .filter((part): part is string => Boolean(part))
     .join(' · ')

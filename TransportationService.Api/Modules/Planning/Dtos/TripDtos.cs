@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Planning.Entities;
 
@@ -11,6 +12,8 @@ public enum PlanningConflictCode
     DriverInactive,
     DriverNotReady,
     DriverDoubleBooked,
+    DriverShiftOverlap,
+    DriverTraining,
     VehicleNotOperational,
     VehicleInactive,
     VehicleDoubleBooked,
@@ -24,8 +27,18 @@ public enum PlanningConflictCode
     NoOrders,
 }
 
-/// <summary>Blocking conflicts stop planning (unless overridden); warnings never do.</summary>
-public record PlanningConflictDto(PlanningConflictCode Code, bool Blocking, string Description);
+/// <summary>
+/// Blocking conflicts stop planning (unless overridden); warnings never do; information is context.
+/// <see cref="Blocking"/> mirrors <see cref="Severity"/> for existing consumers.
+/// </summary>
+public record PlanningConflictDto(
+    PlanningConflictCode Code, bool Blocking, string Description, ConflictSeverity Severity)
+{
+    public PlanningConflictDto(PlanningConflictCode code, bool blocking, string description)
+        : this(code, blocking, description, blocking ? ConflictSeverity.Blocking : ConflictSeverity.Warning)
+    {
+    }
+}
 
 public record TripOrderSummaryDto(
     Guid TransportOrderId,

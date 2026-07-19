@@ -4,11 +4,14 @@ import { refresh as refreshTokens } from '../features/auth/authApi'
 
 export class ApiError extends Error {
   readonly status?: number
+  /** Parsed JSON error body, when the server sent one (e.g. 409 conflict payloads). */
+  readonly body?: unknown
 
-  constructor(message: string, status?: number) {
+  constructor(message: string, status?: number, body?: unknown) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.body = body
   }
 }
 
@@ -91,14 +94,20 @@ async function request<T>(method: Method, path: string, body?: unknown, options?
   if (!response.ok) {
     // Surface the backend's user-facing message (ProblemDetails `detail` or `{ message }`).
     let serverMessage: string | null = null
+    let errorBody: unknown
     try {
       const data = (await response.json()) as { detail?: unknown; message?: unknown }
+      errorBody = data
       if (typeof data.detail === 'string') serverMessage = data.detail
       else if (typeof data.message === 'string') serverMessage = data.message
     } catch {
       // Body was empty or not JSON — fall back to the generic message.
     }
-    throw new ApiError(serverMessage ?? `Request to ${path} failed with status ${response.status}`, response.status)
+    throw new ApiError(
+      serverMessage ?? `Request to ${path} failed with status ${response.status}`,
+      response.status,
+      errorBody,
+    )
   }
 
   if (response.status === 204) {

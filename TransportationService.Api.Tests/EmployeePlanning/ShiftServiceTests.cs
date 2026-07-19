@@ -87,7 +87,7 @@ public class ShiftServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
 
-        var result = await h.Sut.CreateAsync(Request(h.EmployeeId), CancellationToken.None);
+        var result = await h.Sut.CreateAsync(Request(h.EmployeeId), false, CancellationToken.None);
 
         Assert.Equal(ShiftOutcome.Success, result.Outcome);
         Assert.Equal(ShiftStatus.Draft, result.Shift!.Status);
@@ -103,23 +103,23 @@ public class ShiftServiceTests
         using var _ = h.Db;
 
         var endBeforeStart = await h.Sut.CreateAsync(
-            Request(h.EmployeeId, start: "16:00", end: "08:00"), CancellationToken.None);
+            Request(h.EmployeeId, start: "16:00", end: "08:00"), false, CancellationToken.None);
         Assert.Equal(ShiftOutcome.ValidationFailed, endBeforeStart.Outcome);
 
         var breakTooLong = await h.Sut.CreateAsync(
-            Request(h.EmployeeId, start: "08:00", end: "09:00", breakMinutes: 90), CancellationToken.None);
+            Request(h.EmployeeId, start: "08:00", end: "09:00", breakMinutes: 90), false, CancellationToken.None);
         Assert.Equal(ShiftOutcome.ValidationFailed, breakTooLong.Outcome);
 
-        await h.Sut.CreateAsync(Request(h.EmployeeId), CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.EmployeeId), false, CancellationToken.None);
         var overlapping = await h.Sut.CreateAsync(
-            Request(h.EmployeeId, start: "12:00", end: "20:00"), CancellationToken.None);
+            Request(h.EmployeeId, start: "12:00", end: "20:00"), false, CancellationToken.None);
         Assert.Equal(ShiftOutcome.Overlap, overlapping.Outcome);
 
         // A different employee on the same slot is fine.
-        var colleague = await h.Sut.CreateAsync(Request(h.OtherEmployeeId), CancellationToken.None);
+        var colleague = await h.Sut.CreateAsync(Request(h.OtherEmployeeId), false, CancellationToken.None);
         Assert.Equal(ShiftOutcome.Success, colleague.Outcome);
 
-        var unknownEmployee = await h.Sut.CreateAsync(Request(Guid.NewGuid()), CancellationToken.None);
+        var unknownEmployee = await h.Sut.CreateAsync(Request(Guid.NewGuid()), false, CancellationToken.None);
         Assert.Equal(ShiftOutcome.NotFound, unknownEmployee.Outcome);
     }
 
@@ -128,7 +128,7 @@ public class ShiftServiceTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var shift = (await h.Sut.CreateAsync(Request(h.EmployeeId), CancellationToken.None)).Shift!;
+        var shift = (await h.Sut.CreateAsync(Request(h.EmployeeId), false, CancellationToken.None)).Shift!;
 
         // Draft -> Confirmed directly is not allowed.
         var jump = await h.Sut.ChangeStatusAsync(shift.Id, ShiftStatus.Confirmed, CancellationToken.None);
@@ -150,10 +150,10 @@ public class ShiftServiceTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday), CancellationToken.None);
-        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday.AddDays(1)), CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday), false, CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday.AddDays(1)), false, CancellationToken.None);
         // Target week already has a shift on Tuesday: that day is skipped.
-        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday.AddDays(8), start: "10:00", end: "14:00", breakMinutes: 0), CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday.AddDays(8), start: "10:00", end: "14:00", breakMinutes: 0), false, CancellationToken.None);
 
         var result = await h.Sut.CopyWeekAsync(
             new CopyWeekRequest(Monday, Monday.AddDays(7), h.EmployeeId, null), CancellationToken.None);
@@ -172,9 +172,9 @@ public class ShiftServiceTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday), CancellationToken.None);
-        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday.AddDays(1), type: ShiftType.Training), CancellationToken.None);
-        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday.AddDays(2), type: ShiftType.Standby), CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday), false, CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday.AddDays(1), type: ShiftType.Training), false, CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.EmployeeId, Monday.AddDays(2), type: ShiftType.Standby), false, CancellationToken.None);
         h.Db.Context.Absences.AddRange(
             new Absence
             {
@@ -218,8 +218,8 @@ public class ShiftServiceTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        await h.Sut.CreateAsync(Request(h.EmployeeId), CancellationToken.None);
-        await h.Sut.CreateAsync(Request(h.OtherEmployeeId), CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.EmployeeId), false, CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.OtherEmployeeId), false, CancellationToken.None);
 
         var department = await h.Sut.GetScheduleAsync(Monday, Monday.AddDays(6), h.DepartmentId, null, CancellationToken.None);
         Assert.Single(department.Rows);
@@ -235,11 +235,11 @@ public class ShiftServiceTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var shift = (await h.Sut.CreateAsync(Request(h.EmployeeId), CancellationToken.None)).Shift!;
+        var shift = (await h.Sut.CreateAsync(Request(h.EmployeeId), false, CancellationToken.None)).Shift!;
 
         var updated = await h.Sut.UpdateAsync(shift.Id,
             new UpdateShiftRequest(Monday, new(9, 0), new(17, 0), 45, ShiftType.Work, "Magazijn Gent", "Heftruck", "Aangepast"),
-            CancellationToken.None);
+            false, CancellationToken.None);
         Assert.Equal(ShiftOutcome.Success, updated.Outcome);
         Assert.Equal(435, updated.Shift!.PlannedMinutes);
         Assert.Equal("Magazijn Gent", updated.Shift.WorkLocation);

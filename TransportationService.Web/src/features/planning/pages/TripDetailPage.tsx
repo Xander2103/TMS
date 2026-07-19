@@ -26,6 +26,7 @@ import { STOP_EXECUTION_ICONS, STOP_EXECUTION_LABELS, STOP_EXECUTION_TONE } from
 import { getPodForStop } from '../../pod/api/podApi'
 import { Modal } from '../../../components/ui/Modal'
 import {
+  CONFLICT_SEVERITY_META,
   TRIP_STATUS_LABELS,
   TRIP_STATUS_TONE,
   TRIP_TRANSITION_LABELS,
@@ -562,8 +563,8 @@ export function TripDetailPage() {
           <ul className="pl-conflicts">
             {trip.conflicts.map((conflict, index) => (
               <li key={`${conflict.code}-${index}`}>
-                <Badge tone={conflict.blocking ? 'danger' : 'warning'}>
-                  {conflict.blocking ? 'Blokkerend' : 'Waarschuwing'}
+                <Badge tone={CONFLICT_SEVERITY_META[conflict.severity]?.tone ?? (conflict.blocking ? 'danger' : 'warning')}>
+                  {CONFLICT_SEVERITY_META[conflict.severity]?.label ?? (conflict.blocking ? 'Blokkerend' : 'Waarschuwing')}
                 </Badge>{' '}
                 {conflict.description}
               </li>

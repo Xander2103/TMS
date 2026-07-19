@@ -22,6 +22,9 @@ function chipText(entry: ScheduleEntry): string {
 export function ScheduleChip({ entry, onClick }: { entry: ScheduleEntry; onClick?: () => void }) {
   const range = timeRange(entry)
   const description = chipDescription(entry)
+  const conflictClass = entry.conflictSeverity
+    ? ` schedule-chip-conflict schedule-chip-conflict-${entry.conflictSeverity.toLowerCase()}`
+    : ''
   const content = (
     <>
       <span className="schedule-chip-icon" aria-hidden="true">
@@ -31,13 +34,18 @@ export function ScheduleChip({ entry, onClick }: { entry: ScheduleEntry; onClick
         <span className="schedule-chip-state">{chipText(entry)}</span>
         {range && <span className="schedule-chip-time">{range}</span>}
       </span>
+      {entry.conflictSeverity && (
+        <span className="schedule-chip-conflict-marker" aria-hidden="true">
+          ⚠
+        </span>
+      )}
     </>
   )
 
   return onClick ? (
     <button
       type="button"
-      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}`}
+      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}`}
       onClick={onClick}
       title={description}
       aria-label={description}
@@ -45,13 +53,13 @@ export function ScheduleChip({ entry, onClick }: { entry: ScheduleEntry; onClick
       {content}
     </button>
   ) : (
-    <span className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}`} title={description}>
+    <span className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}`} title={description}>
       {content}
     </span>
   )
 }
 
-/** Accessible legend: every state with its colour swatch, icon and label. */
+/** Accessible legend: every state with its colour swatch, icon and label, plus the conflict marker. */
 export function ScheduleLegend() {
   return (
     <details className="schedule-legend">
@@ -69,6 +77,16 @@ export function ScheduleLegend() {
             </span>
           </li>
         ))}
+        <li>
+          <span className="schedule-chip schedule-chip-conflict schedule-chip-conflict-blocking">
+            <span className="schedule-chip-conflict-marker" aria-hidden="true">
+              ⚠
+            </span>
+            <span className="schedule-chip-text">
+              <span className="schedule-chip-state">Conflict / aandacht</span>
+            </span>
+          </span>
+        </li>
       </ul>
     </details>
   )

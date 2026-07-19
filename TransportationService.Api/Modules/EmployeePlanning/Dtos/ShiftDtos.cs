@@ -1,3 +1,4 @@
+using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Modules.EmployeePlanning.Entities;
 
 namespace TransportationService.Api.Modules.EmployeePlanning.Dtos;
@@ -11,7 +12,8 @@ public record CreateShiftRequest(
     ShiftType Type,
     string? WorkLocation,
     string? RoleLabel,
-    string? Notes);
+    string? Notes,
+    bool Override = false);
 
 public record UpdateShiftRequest(
     DateOnly Date,
@@ -21,7 +23,8 @@ public record UpdateShiftRequest(
     ShiftType Type,
     string? WorkLocation,
     string? RoleLabel,
-    string? Notes);
+    string? Notes,
+    bool Override = false);
 
 /// <summary>Copies a whole week of shifts (as Draft) to a target week; collisions are skipped, never overwritten.</summary>
 public record CopyWeekRequest(
@@ -77,7 +80,9 @@ public record ScheduleEntryDto(
     ShiftType? ShiftType,
     string? WorkLocation,
     string? VehicleSummary,
-    string? StatusLabel);
+    string? StatusLabel,
+    ConflictSeverity? ConflictSeverity = null,
+    IReadOnlyList<string>? ConflictNotes = null);
 
 public record ScheduleDayDto(DateOnly Date, IReadOnlyList<ScheduleEntryDto> Entries);
 
@@ -98,9 +103,12 @@ public enum ShiftOutcome
     InvalidState,
     ValidationFailed,
     Overlap,
+    Conflict,
 }
 
-public record ShiftOperationResult(ShiftOutcome Outcome, ShiftDto? Shift, string? Error = null, int CopiedCount = 0, int SkippedCount = 0)
+public record ShiftOperationResult(
+    ShiftOutcome Outcome, ShiftDto? Shift, string? Error = null, int CopiedCount = 0, int SkippedCount = 0,
+    IReadOnlyList<string>? Conflicts = null)
 {
     public static ShiftOperationResult Success(ShiftDto shift) => new(ShiftOutcome.Success, shift);
     public static ShiftOperationResult Copied(int copied, int skipped) => new(ShiftOutcome.Success, null, null, copied, skipped);
@@ -108,4 +116,6 @@ public record ShiftOperationResult(ShiftOutcome Outcome, ShiftDto? Shift, string
     public static ShiftOperationResult InvalidState(string error) => new(ShiftOutcome.InvalidState, null, error);
     public static ShiftOperationResult Invalid(string error) => new(ShiftOutcome.ValidationFailed, null, error);
     public static ShiftOperationResult OverlapError(string error) => new(ShiftOutcome.Overlap, null, error);
+    public static ShiftOperationResult ConflictBlocked(IReadOnlyList<string> conflicts) =>
+        new(ShiftOutcome.Conflict, null, "De shift botst met bestaande planning.", 0, 0, conflicts);
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Scheduling;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.EmployeePlanning.Dtos;
@@ -71,7 +72,8 @@ public class ShiftService : IShiftService
         return shift is null ? null : await MapAsync(shift, cancellationToken);
     }
 
-    public async Task<ShiftOperationResult> CreateAsync(CreateShiftRequest request, CancellationToken cancellationToken)
+    public async Task<ShiftOperationResult> CreateAsync(
+        CreateShiftRequest request, bool allowConflictOverride, CancellationToken cancellationToken)
     {
         if (ShiftValidationError(request.StartTime, request.EndTime, request.BreakMinutes) is { } error)
         {
@@ -88,6 +90,13 @@ public class ShiftService : IShiftService
         if (await HasOverlapAsync(request.EmployeeId, request.Date, request.StartTime, request.EndTime, excludeShiftId: null, cancellationToken))
         {
             return ShiftOperationResult.OverlapError("Deze medewerker heeft al een overlappende shift op die dag.");
+        }
+
+        var blocking = await BlockingShiftConflictsAsync(
+            request.EmployeeId, request.Date, request.StartTime, request.EndTime, request.Type, cancellationToken);
+        if (blocking.Count > 0 && !(request.Override && allowConflictOverride))
+        {
+            return ShiftOperationResult.ConflictBlocked(blocking);
         }
 
         var shift = new Shift
@@ -119,7 +128,8 @@ public class ShiftService : IShiftService
         return ShiftOperationResult.Success(await MapAsync(shift, cancellationToken));
     }
 
-    public async Task<ShiftOperationResult> UpdateAsync(Guid id, UpdateShiftRequest request, CancellationToken cancellationToken)
+    public async Task<ShiftOperationResult> UpdateAsync(
+        Guid id, UpdateShiftRequest request, bool allowConflictOverride, CancellationToken cancellationToken)
     {
         if (ShiftValidationError(request.StartTime, request.EndTime, request.BreakMinutes) is { } error)
         {
@@ -135,6 +145,13 @@ public class ShiftService : IShiftService
         if (await HasOverlapAsync(shift.EmployeeId, request.Date, request.StartTime, request.EndTime, id, cancellationToken))
         {
             return ShiftOperationResult.OverlapError("Deze medewerker heeft al een overlappende shift op die dag.");
+        }
+
+        var blocking = await BlockingShiftConflictsAsync(
+            shift.EmployeeId, request.Date, request.StartTime, request.EndTime, request.Type, cancellationToken);
+        if (blocking.Count > 0 && !(request.Override && allowConflictOverride))
+        {
+            return ShiftOperationResult.ConflictBlocked(blocking);
         }
 
         var before = new { shift.Date, shift.StartTime, shift.EndTime, shift.Type, shift.WorkLocation };
@@ -327,6 +344,13 @@ public class ShiftService : IShiftService
                         && t.Date >= from && t.Date <= to)
             .ToListAsync(cancellationToken);
 
+        var severitySettings = await _dbContext.TenantSettings.AsNoTracking()
+            .Where(s => s.TenantId == tenantId)
+            .Select(s => new { s.TrainingConflictSeverity, s.ShiftOverlapConflictSeverity })
+            .FirstOrDefaultAsync(cancellationToken);
+        var trainingSeverity = ScheduleConflictRules.Parse(severitySettings?.TrainingConflictSeverity);
+        var shiftOverlapSeverity = ScheduleConflictRules.Parse(severitySettings?.ShiftOverlapConflictSeverity);
+
         var rows = employees.Select(employee =>
         {
             var employeeShifts = shifts.Where(s => s.EmployeeId == employee.Id).ToList();
@@ -336,7 +360,8 @@ public class ShiftService : IShiftService
             var days = new List<ScheduleDayDto>();
             for (var date = from; date <= to; date = date.AddDays(1))
             {
-                days.Add(new ScheduleDayDto(date, BuildEntries(date, employeeShifts, employeeAbsences, employeeTrips)));
+                var entries = BuildEntries(date, employeeShifts, employeeAbsences, employeeTrips);
+                days.Add(new ScheduleDayDto(date, AnnotateConflicts(entries, trainingSeverity, shiftOverlapSeverity)));
             }
 
             var plannedMinutes = employeeShifts.Sum(s => PlannedMinutes(s.StartTime, s.EndTime, s.BreakMinutes));
@@ -456,6 +481,164 @@ public class ShiftService : IShiftService
         AbsenceType.Unpaid => "Onbetaald verlof",
         _ => "Onbeschikbaar",
     };
+
+    private enum EntryKind { Trip, Shift, ApprovedAbsence, Other }
+
+    private static EntryKind KindOf(ScheduleEntryDto entry) => entry.SourceType switch
+    {
+        "Trip" => entry.State == ScheduleEntryState.TripCancelled ? EntryKind.Other : EntryKind.Trip,
+        "Shift" => EntryKind.Shift,
+        _ => entry.State is ScheduleEntryState.LeaveApproved or ScheduleEntryState.Sick
+            or ScheduleEntryState.Unavailable or ScheduleEntryState.Training
+            ? EntryKind.ApprovedAbsence
+            : EntryKind.Other,
+    };
+
+    /// <summary>
+    /// Marks pairwise conflicts within one day (trip↔trip, trip↔shift, trip/shift↔approved
+    /// absence) on both entries with the highest applicable severity and an explanation.
+    /// </summary>
+    private static IReadOnlyList<ScheduleEntryDto> AnnotateConflicts(
+        IReadOnlyList<ScheduleEntryDto> entries, ConflictSeverity trainingSeverity, ConflictSeverity shiftOverlapSeverity)
+    {
+        if (entries.Count < 2)
+        {
+            return entries;
+        }
+
+        var severities = new ConflictSeverity?[entries.Count];
+        var notes = new List<string>[entries.Count];
+        for (var i = 0; i < notes.Length; i++)
+        {
+            notes[i] = [];
+        }
+
+        void Flag(int index, ConflictSeverity severity, string note)
+        {
+            severities[index] = severities[index] is { } current && current >= severity ? current : severity;
+            notes[index].Add(note);
+        }
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            for (var j = i + 1; j < entries.Count; j++)
+            {
+                var (a, b) = (entries[i], entries[j]);
+                var (kindA, kindB) = (KindOf(a), KindOf(b));
+                if (kindA == EntryKind.Other || kindB == EntryKind.Other)
+                {
+                    continue;
+                }
+
+                // Absences carry no times and count as all-day (WindowsOverlap treats null as open).
+                if (!ScheduleConflictRules.WindowsOverlap(a.StartTime, a.EndTime, b.StartTime, b.EndTime))
+                {
+                    continue;
+                }
+
+                if (kindA == EntryKind.Trip && kindB == EntryKind.Trip)
+                {
+                    Flag(i, ScheduleConflictRules.TripVsTrip, $"Overlapt met rit {b.Label}");
+                    Flag(j, ScheduleConflictRules.TripVsTrip, $"Overlapt met rit {a.Label}");
+                }
+                else if ((kindA, kindB) is (EntryKind.Trip, EntryKind.Shift) or (EntryKind.Shift, EntryKind.Trip))
+                {
+                    var (shiftIdx, tripIdx) = kindA == EntryKind.Shift ? (i, j) : (j, i);
+                    var shiftEntry = entries[shiftIdx];
+                    var severity = ScheduleConflictRules.TripVsShift(
+                        shiftEntry.ShiftType ?? ShiftType.Work, shiftOverlapSeverity, trainingSeverity);
+                    Flag(tripIdx, severity, $"Overlapt met shift ({shiftEntry.Label})");
+                    Flag(shiftIdx, severity, $"Overlapt met rit {entries[tripIdx].Label}");
+                }
+                else if (kindA == EntryKind.ApprovedAbsence || kindB == EntryKind.ApprovedAbsence)
+                {
+                    var (absenceIdx, otherIdx) = kindA == EntryKind.ApprovedAbsence ? (i, j) : (j, i);
+                    if (KindOf(entries[otherIdx]) == EntryKind.ApprovedAbsence)
+                    {
+                        continue; // two absences never conflict with each other
+                    }
+
+                    var absenceEntry = entries[absenceIdx];
+                    var severity = absenceEntry.State == ScheduleEntryState.Training
+                        ? trainingSeverity
+                        : ConflictSeverity.Blocking;
+                    var otherLabel = KindOf(entries[otherIdx]) == EntryKind.Trip
+                        ? $"rit {entries[otherIdx].Label}"
+                        : $"shift ({entries[otherIdx].Label})";
+                    Flag(otherIdx, severity, $"Gepland tijdens afwezigheid ({absenceEntry.Label})");
+                    Flag(absenceIdx, severity, $"Overlapt met {otherLabel}");
+                }
+            }
+        }
+
+        var result = new List<ScheduleEntryDto>(entries.Count);
+        for (var i = 0; i < entries.Count; i++)
+        {
+            result.Add(severities[i] is { } severity
+                ? entries[i] with { ConflictSeverity = severity, ConflictNotes = notes[i] }
+                : entries[i]);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Blocking-only conflict descriptions for the shift save gate (trips and approved absences
+    /// on that day). Warnings never block a save; they surface as grid markers instead.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> BlockingShiftConflictsAsync(
+        Guid employeeId, DateOnly date, TimeOnly start, TimeOnly end, ShiftType type, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var settings = await _dbContext.TenantSettings.AsNoTracking()
+            .Where(s => s.TenantId == tenantId)
+            .Select(s => new { s.TrainingConflictSeverity, s.ShiftOverlapConflictSeverity })
+            .FirstOrDefaultAsync(cancellationToken);
+        var trainingSeverity = ScheduleConflictRules.Parse(settings?.TrainingConflictSeverity);
+        var shiftOverlapSeverity = ScheduleConflictRules.Parse(settings?.ShiftOverlapConflictSeverity);
+
+        var blocking = new List<string>();
+
+        var trips = await _dbContext.TripPlanningEntries.AsNoTracking()
+            .Where(t => t.TenantId == tenantId && t.EmployeeId == employeeId && t.Date == date
+                        && t.Status != Planning.Entities.TripStatus.Cancelled)
+            .ToListAsync(cancellationToken);
+        foreach (var trip in trips)
+        {
+            var startDt = trip.ActualStart ?? trip.PlannedStart;
+            var endDt = trip.ActualEnd ?? trip.PlannedEnd;
+            var tripStart = startDt is { } sd ? TimeOnly.FromDateTime(sd) : (TimeOnly?)null;
+            var tripEnd = endDt is { } ed ? TimeOnly.FromDateTime(ed) : (TimeOnly?)null;
+            if (!ScheduleConflictRules.WindowsOverlap(start, end, tripStart, tripEnd))
+            {
+                continue;
+            }
+
+            if (ScheduleConflictRules.TripVsShift(type, shiftOverlapSeverity, trainingSeverity) == ConflictSeverity.Blocking)
+            {
+                blocking.Add(tripStart is { } ts && tripEnd is { } te
+                    ? $"Rit {trip.TripNumber} is al ingepland ({ts:HH\\:mm}–{te:HH\\:mm})."
+                    : $"Rit {trip.TripNumber} is al ingepland op deze dag.");
+            }
+        }
+
+        var absenceTypes = await _dbContext.Absences.AsNoTracking()
+            .Where(a => a.TenantId == tenantId && a.EmployeeId == employeeId
+                        && a.Status == AbsenceStatus.Approved
+                        && a.StartDate <= date && a.EndDate >= date)
+            .Select(a => a.Type)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        foreach (var absenceType in absenceTypes)
+        {
+            if (ScheduleConflictRules.TripVsAbsence(absenceType, trainingSeverity) == ConflictSeverity.Blocking)
+            {
+                blocking.Add($"Medewerker is afwezig op {date:dd-MM-yyyy} ({AbsenceLabel(absenceType)}).");
+            }
+        }
+
+        return blocking;
+    }
 
     private async Task<bool> HasOverlapAsync(
         Guid employeeId, DateOnly date, TimeOnly start, TimeOnly end, Guid? excludeShiftId, CancellationToken cancellationToken)

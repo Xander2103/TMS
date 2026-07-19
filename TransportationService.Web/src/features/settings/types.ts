@@ -30,6 +30,8 @@ export interface CompanySettings {
   defaultVatRatePercent: number
   defaultLoadingMinutes: number
   defaultUnloadingMinutes: number
+  trainingConflictSeverity: string
+  shiftOverlapConflictSeverity: string
   qualificationExpiryWarningDays: number
   employeeNumberPrefix: string | null
   employeeNumberNextValue: number

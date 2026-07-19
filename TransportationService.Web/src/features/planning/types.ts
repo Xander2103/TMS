@@ -34,6 +34,8 @@ export type PlanningConflictCode =
   | 'DriverInactive'
   | 'DriverNotReady'
   | 'DriverDoubleBooked'
+  | 'DriverShiftOverlap'
+  | 'DriverTraining'
   | 'VehicleNotOperational'
   | 'VehicleInactive'
   | 'VehicleDoubleBooked'
@@ -46,10 +48,22 @@ export type PlanningConflictCode =
   | 'MissingVehicle'
   | 'NoOrders'
 
+export type PlanningConflictSeverity = 'Information' | 'Warning' | 'Blocking'
+
+export const CONFLICT_SEVERITY_META: Record<
+  PlanningConflictSeverity,
+  { label: string; tone: 'danger' | 'warning' | 'info' }
+> = {
+  Blocking: { label: 'Blokkerend', tone: 'danger' },
+  Warning: { label: 'Waarschuwing', tone: 'warning' },
+  Information: { label: 'Ter info', tone: 'info' },
+}
+
 export interface PlanningConflict {
   code: PlanningConflictCode
   blocking: boolean
   description: string
+  severity: PlanningConflictSeverity
 }
 
 export interface TripOrderSummary {

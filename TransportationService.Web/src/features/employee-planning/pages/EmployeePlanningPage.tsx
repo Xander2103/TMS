@@ -77,6 +77,10 @@ export function EmployeePlanningPage() {
   const [dialogDate, setDialogDate] = useState('')
   const [busy, setBusy] = useState(false)
   const [confirmDeleteShift, setConfirmDeleteShift] = useState(false)
+  // 409 conflict flow: blocking conflicts from the server + the permission-gated override choice.
+  const [conflictInfo, setConflictInfo] = useState<string[] | null>(null)
+  const [overrideConflicts, setOverrideConflicts] = useState(false)
+  const canOverrideConflicts = hasPermission('employee_planning.conflict_override')
 
   const [copyOpen, setCopyOpen] = useState(false)
   const [copyTarget, setCopyTarget] = useState('')
@@ -121,6 +125,8 @@ export function EmployeePlanningPage() {
     setWorkLocation('')
     setRoleLabel('')
     setNotes('')
+    setConflictInfo(null)
+    setOverrideConflicts(false)
   }
 
   async function openEdit(shiftId: string, employeeName: string) {
@@ -135,6 +141,8 @@ export function EmployeePlanningPage() {
       setWorkLocation(shift.workLocation ?? '')
       setRoleLabel(shift.roleLabel ?? '')
       setNotes(shift.notes ?? '')
+      setConflictInfo(null)
+      setOverrideConflicts(false)
     } catch {
       showError('De shift kon niet worden geladen.')
     }
@@ -169,6 +177,7 @@ export function EmployeePlanningPage() {
         workLocation: workLocation.trim() || null,
         roleLabel: roleLabel.trim() || null,
         notes: notes.trim() || null,
+        override: overrideConflicts,
       }
       if (dialog.mode === 'create') {
         await createShift({ employeeId: dialog.employeeId, ...payload })
@@ -180,7 +189,13 @@ export function EmployeePlanningPage() {
       setDialog(null)
       setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De shift kon niet worden opgeslagen.')
+      const body = err instanceof ApiError ? (err.body as { conflicts?: unknown } | undefined) : undefined
+      if (err instanceof ApiError && err.status === 409 && Array.isArray(body?.conflicts)) {
+        // Blocking schedule conflicts: show them in the dialog; overriding stays an explicit choice.
+        setConflictInfo(body.conflicts.filter((c): c is string => typeof c === 'string'))
+      } else {
+        showError(err instanceof ApiError ? err.message : 'De shift kon niet worden opgeslagen.')
+      }
     } finally {
       setBusy(false)
     }
@@ -496,6 +511,29 @@ export function EmployeePlanningPage() {
             <FormField label="Notities" htmlFor="ep-notes">
               <textarea id="ep-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} maxLength={1000} />
             </FormField>
+            {conflictInfo && (
+              <div className="ep-conflict-panel" role="alert">
+                <strong>Blokkerende planningsconflicten</strong>
+                <ul>
+                  {conflictInfo.map((conflict, index) => (
+                    <li key={index}>{conflict}</li>
+                  ))}
+                </ul>
+                {canOverrideConflicts ? (
+                  <label className="ep-conflict-override">
+                    <input
+                      type="checkbox"
+                      checked={overrideConflicts}
+                      onChange={(e) => setOverrideConflicts(e.target.checked)}
+                      disabled={busy}
+                    />
+                    Toch plannen (conflicten overschrijven)
+                  </label>
+                ) : (
+                  <p>Je hebt geen recht om deze conflicten te overschrijven.</p>
+                )}
+              </div>
+            )}
           </form>
         </Modal>
       )}

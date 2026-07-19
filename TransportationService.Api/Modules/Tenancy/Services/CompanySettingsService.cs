@@ -102,6 +102,8 @@ public class CompanySettingsService : ICompanySettingsService
 
         settings.DefaultLoadingMinutes = Clamp(request.DefaultLoadingMinutes, 0, 1440);
         settings.DefaultUnloadingMinutes = Clamp(request.DefaultUnloadingMinutes, 0, 1440);
+        settings.TrainingConflictSeverity = NormalizeSeverity(request.TrainingConflictSeverity);
+        settings.ShiftOverlapConflictSeverity = NormalizeSeverity(request.ShiftOverlapConflictSeverity);
         settings.QualificationExpiryWarningDays = Clamp(request.QualificationExpiryWarningDays, 0, 365);
 
         settings.EmployeeNumberPrefix = Trim(request.EmployeeNumberPrefix);
@@ -158,6 +160,7 @@ public class CompanySettingsService : ICompanySettingsService
         s.DefaultLanguage, s.Timezone, s.DefaultCurrency, s.DateFormat, s.DecimalSeparator, s.DefaultWeightUnit, s.DefaultDistanceUnit,
         s.Iban, s.InvoiceEmail, s.PaymentTermDays, s.DefaultVatRatePercent,
         s.DefaultLoadingMinutes, s.DefaultUnloadingMinutes,
+        s.TrainingConflictSeverity, s.ShiftOverlapConflictSeverity,
         s.QualificationExpiryWarningDays,
         s.EmployeeNumberPrefix, s.EmployeeNumberNextValue,
         s.CustomerNumberPrefix, s.CustomerNumberNextValue,
@@ -175,4 +178,10 @@ public class CompanySettingsService : ICompanySettingsService
         string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant()[..Math.Min(value.Trim().Length, maxLength)];
     private static int Clamp(int value, int min, int max) => value < min ? min : value > max ? max : value;
     private static int AtLeast(int value, int min) => value < min ? min : value;
+
+    /// <summary>Stores conflict severities as canonical enum names; anything else becomes Warning.</summary>
+    private static string NormalizeSeverity(string? value) =>
+        Enum.TryParse<Common.Scheduling.ConflictSeverity>(value, true, out var parsed)
+            ? parsed.ToString()
+            : nameof(Common.Scheduling.ConflictSeverity.Warning);
 }
