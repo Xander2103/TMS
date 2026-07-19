@@ -1,0 +1,166 @@
+.kpi-filterbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.kpi-filterbar .kpi-presets {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.kpi-presets button {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  padding: 8px 14px;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.kpi-presets button.kpi-preset-active {
+  background: var(--accent-bg, rgba(170, 59, 255, 0.12));
+  color: var(--text-h);
+  font-weight: 600;
+}
+
+.kpi-filterbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.kpi-filterbar input[type='date'] {
+  padding: 7px 9px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.kpi-filterbar .kpi-filter-select {
+  min-width: 190px;
+}
+
+.kpi-section {
+  margin-bottom: 22px;
+}
+
+.kpi-section > h2 {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+/* Stat tile: label + semibold value in text ink; recessive chrome. */
+.kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--bg);
+  text-align: left;
+  min-height: 84px;
+}
+
+.kpi-card-link {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.kpi-card-link:hover,
+.kpi-card-link:focus-visible {
+  border-color: var(--accent);
+}
+
+.kpi-card-label {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.kpi-card-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.kpi-card-hint {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* Reserved status accents: border + label carry it together, never colour alone. */
+.kpi-card-warning {
+  border-color: var(--warning, #ca8a04);
+}
+
+.kpi-card-danger {
+  border-color: var(--danger, #dc2626);
+}
+
+.kpi-tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.kpi-table-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+
+.kpi-table-panel h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.kpi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.kpi-table th,
+.kpi-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.kpi-table .kpi-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.kpi-table tbody tr.kpi-row-link {
+  cursor: pointer;
+}
+
+.kpi-table tbody tr.kpi-row-link:hover {
+  background: var(--accent-bg, rgba(170, 59, 255, 0.06));
+}
+
+.kpi-totals-row td {
+  font-weight: 600;
+  border-top: 2px solid var(--border);
+}

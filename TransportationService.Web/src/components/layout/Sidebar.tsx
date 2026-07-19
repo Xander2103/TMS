@@ -15,6 +15,7 @@ interface NavItem {
 
 const operationsNavItems: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', permissions: ['dashboard.view'] },
+  { label: "KPI's", to: '/kpi', permissions: ['kpi.view'] },
   { label: 'Transportopdrachten', to: '/transport-orders', permissions: ['orders.view', 'orders.manage'] },
   { label: 'Planning', to: '/planning', permissions: ['planning.view'] },
   { label: 'Afwijkingen', to: '/exceptions', permissions: ['exceptions.view'] },
