@@ -89,4 +89,17 @@ export interface VehicleDetail {
   notes: string | null
 }
 
-export type VehicleInput = Omit<VehicleDetail, 'id' | 'internalNumber' | 'categoryName' | 'fixedDriverName' | 'currentDriverName'>
+/**
+ * Editable vehicle fields. Driver assignment is NOT part of this shape: it is managed through
+ * the dedicated assignment endpoints so both the driver and vehicle pages stay in sync.
+ */
+export type VehicleInput = Omit<
+  VehicleDetail,
+  'id' | 'internalNumber' | 'categoryName' | 'fixedDriverId' | 'fixedDriverName' | 'currentDriverId' | 'currentDriverName'
+>
+
+/** Create-only variant: initial driver assignment may be supplied when registering a vehicle. */
+export interface CreateVehicleInput extends VehicleInput {
+  fixedDriverId: string | null
+  currentDriverId: string | null
+}

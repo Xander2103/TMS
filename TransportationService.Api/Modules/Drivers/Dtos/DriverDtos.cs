@@ -23,6 +23,9 @@ public record DriverQualificationDto(
     string Status,
     DateOnly? ExpiryDate);
 
+/// <summary>Compact reference to an assigned vehicle/trailer for display and linking.</summary>
+public record AssignedAssetRef(Guid Id, string Label);
+
 public record DriverDetailDto(
     Guid Id,
     string DriverNumber,
@@ -35,10 +38,12 @@ public record DriverDetailDto(
     bool IsActive,
     bool IsBlocked,
     string? BlockReason,
-    bool FixedVehiclePreference,
-    Guid? DefaultVehicleId,
-    Guid? PreferredVehicleId,
-    Guid? DefaultTrailerId,
+    /// <summary>Resolved from Vehicle.FixedDriverId — the single source of truth.</summary>
+    AssignedAssetRef? FixedVehicle,
+    /// <summary>Resolved from Vehicle.CurrentDriverId — the single source of truth.</summary>
+    AssignedAssetRef? CurrentVehicle,
+    Guid? FixedTrailerId,
+    string? FixedTrailerLabel,
     string? Notes,
     DriverReadinessDto Readiness,
     IReadOnlyList<DriverQualificationDto> Qualifications);
@@ -46,22 +51,19 @@ public record DriverDetailDto(
 public record CreateDriverRequest(
     Guid EmployeeId,
     Guid? DriverCategoryId,
-    DriverAvailabilityStatus AvailabilityStatus,
-    bool FixedVehiclePreference,
-    Guid? DefaultVehicleId,
-    Guid? PreferredVehicleId,
-    Guid? DefaultTrailerId,
-    string? Notes);
+    DriverAvailabilityStatus AvailabilityStatus = DriverAvailabilityStatus.Available,
+    Guid? FixedTrailerId = null,
+    string? Notes = null);
 
 public record UpdateDriverRequest(
     Guid? DriverCategoryId,
     DriverAvailabilityStatus AvailabilityStatus,
     bool IsActive,
-    bool FixedVehiclePreference,
-    Guid? DefaultVehicleId,
-    Guid? PreferredVehicleId,
-    Guid? DefaultTrailerId,
-    string? Notes);
+    Guid? FixedTrailerId = null,
+    string? Notes = null);
+
+/// <summary>Body for the driver-side assignment endpoints; null VehicleId clears the slot.</summary>
+public record AssignDriverVehicleRequest(Guid? VehicleId, bool ReplaceExisting = false);
 
 public record SetDriverBlockedRequest(bool IsBlocked, string? Reason);
 

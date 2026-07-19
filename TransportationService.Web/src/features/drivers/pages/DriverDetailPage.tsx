@@ -9,7 +9,12 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { useAuth } from '../../auth/authContextValue'
-import { deleteDriver, getDriver, setDriverBlocked, updateDriver } from '../api/driversApi'
+import { AssignmentSlot } from '../../fleet-assignment/AssignmentSlot'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { getTrailerOptions } from '../../trailers/api/trailersApi'
+import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
+import type { TrailerOption } from '../../trailers/types'
+import { deleteDriver, getDriver, setDriverBlocked, setDriverVehicle, updateDriver } from '../api/driversApi'
 import { AVAILABILITY_LABELS, type DriverAvailabilityStatus, type DriverDetail } from '../types'
 import './driver-detail.css'
 
@@ -47,6 +52,7 @@ export function DriverDetailPage() {
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Partial<DriverDetail>>({})
   const [saving, setSaving] = useState(false)
+  const [trailerOptions, setTrailerOptions] = useState<TrailerOption[]>([])
 
   const [blocking, setBlocking] = useState(false)
   const [blockReason, setBlockReason] = useState('')
@@ -76,6 +82,18 @@ export function DriverDetailPage() {
     if (!driver) return
     setForm(driver)
     setEditing(true)
+    if (trailerOptions.length === 0) {
+      getTrailerOptions()
+        .then(setTrailerOptions)
+        .catch(() => {})
+    }
+  }
+
+  function reloadDriver() {
+    if (!id) return
+    getDriver(id)
+      .then(setDriver)
+      .catch(() => showError('Chauffeur kon niet opnieuw worden geladen.'))
   }
 
   async function saveEdit() {
@@ -86,10 +104,7 @@ export function DriverDetailPage() {
         driverCategoryId: form.categoryId ?? null,
         availabilityStatus: (form.availabilityStatus as DriverAvailabilityStatus) ?? driver.availabilityStatus,
         isActive: form.isActive ?? driver.isActive,
-        fixedVehiclePreference: form.fixedVehiclePreference ?? driver.fixedVehiclePreference,
-        defaultVehicleId: driver.defaultVehicleId,
-        preferredVehicleId: driver.preferredVehicleId,
-        defaultTrailerId: driver.defaultTrailerId,
+        fixedTrailerId: form.fixedTrailerId !== undefined ? form.fixedTrailerId : driver.fixedTrailerId,
         notes: form.notes ?? driver.notes ?? null,
       })
       setDriver(updated)
@@ -232,18 +247,20 @@ export function DriverDetailPage() {
           )}
         </FormField>
 
-        <FormField label="Vaste voertuigvoorkeur">
+        <FormField label="Vaste oplegger" hint="Langetermijnvoorkeur; geen operationele koppeling.">
           {editing ? (
-            <label className="driver-checkbox">
-              <input
-                type="checkbox"
-                checked={form.fixedVehiclePreference ?? driver.fixedVehiclePreference}
-                onChange={(e) => setForm((f) => ({ ...f, fixedVehiclePreference: e.target.checked }))}
-              />
-              <span>Altijd hetzelfde voertuig</span>
-            </label>
+            <SearchableSelect
+              value={form.fixedTrailerId ?? null}
+              onChange={(v) => setForm((f) => ({ ...f, fixedTrailerId: v }))}
+              options={trailerOptions.map((t) => ({
+                value: t.id,
+                label: `${t.internalNumber} · ${t.licensePlate}`,
+                keywords: t.licensePlate,
+              }))}
+              placeholder="— Geen —"
+            />
           ) : (
-            <span>{driver.fixedVehiclePreference ? 'Ja' : 'Nee'}</span>
+            <span>{driver.fixedTrailerLabel ?? '—'}</span>
           )}
         </FormField>
 
@@ -266,6 +283,55 @@ export function DriverDetailPage() {
           </Button>
         </div>
       )}
+
+      <section className="driver-vehicles">
+        <h2>Voertuigen</h2>
+        <p className="assignment-slots-note">
+          <strong>Vast voertuig</strong> is een langetermijnvoorkeur; <strong>actueel voertuig</strong> is de tijdelijke
+          operationele toewijzing. De rittoewijzing voor een specifieke dag gebeurt in de planning. Wijzigingen hier
+          worden ook op de voertuigpagina zichtbaar — het is dezelfde koppeling.
+        </p>
+        <div className="assignment-slots">
+          <AssignmentSlot
+            title="Vast voertuig"
+            description="Voorkeursvoertuig op lange termijn."
+            assigned={driver.fixedVehicle ? { label: driver.fixedVehicle.label, linkTo: `/vehicles/${driver.fixedVehicle.id}` } : null}
+            canEdit={canEdit}
+            pickerLabel="Voertuig"
+            loadOptions={async () =>
+              (await getVehicleOptions()).map((v) => ({
+                value: v.id,
+                label: `${v.internalNumber} · ${v.licensePlate}`,
+                description: [v.brand, v.model].filter(Boolean).join(' ') || undefined,
+                keywords: v.licensePlate,
+              }))
+            }
+            assign={async (vehicleId, replaceExisting) => {
+              await setDriverVehicle(driver.id, 'fixed-vehicle', vehicleId, replaceExisting)
+            }}
+            onChanged={reloadDriver}
+          />
+          <AssignmentSlot
+            title="Actueel voertuig"
+            description="Tijdelijke operationele toewijzing (bv. tijdens vervanging)."
+            assigned={driver.currentVehicle ? { label: driver.currentVehicle.label, linkTo: `/vehicles/${driver.currentVehicle.id}` } : null}
+            canEdit={canEdit}
+            pickerLabel="Voertuig"
+            loadOptions={async () =>
+              (await getVehicleOptions()).map((v) => ({
+                value: v.id,
+                label: `${v.internalNumber} · ${v.licensePlate}`,
+                description: [v.brand, v.model].filter(Boolean).join(' ') || undefined,
+                keywords: v.licensePlate,
+              }))
+            }
+            assign={async (vehicleId, replaceExisting) => {
+              await setDriverVehicle(driver.id, 'current-vehicle', vehicleId, replaceExisting)
+            }}
+            onChanged={reloadDriver}
+          />
+        </div>
+      </section>
 
       <section className="driver-qualifications">
         <h2>Kwalificaties</h2>

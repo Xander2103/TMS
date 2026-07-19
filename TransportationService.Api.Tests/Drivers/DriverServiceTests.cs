@@ -57,7 +57,7 @@ public class DriverServiceTests
     }
 
     private static CreateDriverRequest CreateRequest(Guid employeeId) =>
-        new(employeeId, null, DriverAvailabilityStatus.Available, false, null, null, null, null);
+        new(employeeId, null, DriverAvailabilityStatus.Available);
 
     [Fact]
     public async Task Create_GeneratesDriverNumber_AndLinksEmployee()

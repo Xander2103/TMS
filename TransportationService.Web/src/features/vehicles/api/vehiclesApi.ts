@@ -1,6 +1,6 @@
 import { apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
-import type { VehicleDetail, VehicleInput, VehicleListItem, VehicleOperationalStatus, VehicleOption } from '../types'
+import type { CreateVehicleInput, VehicleDetail, VehicleInput, VehicleListItem, VehicleOperationalStatus, VehicleOption } from '../types'
 
 export interface SearchVehiclesParams {
   search?: string
@@ -30,8 +30,8 @@ export function getVehicle(id: string): Promise<VehicleDetail> {
   return apiClient.getJson<VehicleDetail>(`/api/vehicles/${id}`)
 }
 
-export function createVehicle(input: VehicleInput): Promise<VehicleDetail> {
-  return apiClient.postJson<VehicleDetail, VehicleInput>('/api/vehicles', input)
+export function createVehicle(input: CreateVehicleInput): Promise<VehicleDetail> {
+  return apiClient.postJson<VehicleDetail, CreateVehicleInput>('/api/vehicles', input)
 }
 
 export function updateVehicle(id: string, input: VehicleInput): Promise<VehicleDetail> {
@@ -40,4 +40,17 @@ export function updateVehicle(id: string, input: VehicleInput): Promise<VehicleD
 
 export function deleteVehicle(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/vehicles/${id}`)
+}
+
+/** Assignment endpoints: the single write path for the driver↔vehicle relationship. */
+export function setVehicleDriver(
+  id: string,
+  slot: 'fixed-driver' | 'current-driver',
+  driverId: string | null,
+  replaceExisting: boolean,
+): Promise<VehicleDetail> {
+  return apiClient.putJson<VehicleDetail, { driverId: string | null; replaceExisting: boolean }>(
+    `/api/vehicles/${id}/assignments/${slot}`,
+    { driverId, replaceExisting },
+  )
 }

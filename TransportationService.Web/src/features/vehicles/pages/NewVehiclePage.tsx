@@ -14,14 +14,14 @@ import {
   EMISSION_CLASS_LABELS,
   FUEL_TYPE_LABELS,
   OWNERSHIP_TYPE_LABELS,
+  type CreateVehicleInput,
   type EmissionClass,
   type FuelType,
-  type VehicleInput,
   type VehicleOwnershipType,
 } from '../types'
 import './vehicle-form.css'
 
-const EMPTY: VehicleInput = {
+const EMPTY: CreateVehicleInput = {
   licensePlate: '',
   vin: null,
   categoryId: null,
@@ -55,7 +55,7 @@ export function NewVehiclePage() {
   const { showSuccess, showError } = useToast()
   const { options: categories } = useLookupOptions('/api/vehicle-categories')
   const [drivers, setDrivers] = useState<DriverListItem[]>([])
-  const [form, setForm] = useState<VehicleInput>(EMPTY)
+  const [form, setForm] = useState<CreateVehicleInput>(EMPTY)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -73,7 +73,7 @@ export function NewVehiclePage() {
     }
   }, [showError])
 
-  function set<K extends keyof VehicleInput>(key: K, value: VehicleInput[K]) {
+  function set<K extends keyof CreateVehicleInput>(key: K, value: CreateVehicleInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 

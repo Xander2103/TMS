@@ -13,10 +13,12 @@ namespace TransportationService.Api.Modules.Fleet.Controllers;
 public class VehiclesController : ControllerBase
 {
     private readonly IVehicleService _service;
+    private readonly IFleetAssignmentService _assignmentService;
 
-    public VehiclesController(IVehicleService service)
+    public VehiclesController(IVehicleService service, IFleetAssignmentService assignmentService)
     {
         _service = service;
+        _assignmentService = assignmentService;
     }
 
     [HttpGet]
@@ -80,6 +82,34 @@ public class VehiclesController : ControllerBase
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         return await _service.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
+    }
+
+    [HttpPut("{id:guid}/assignments/fixed-driver")]
+    [RequirePermission(PermissionCodes.VehiclesEdit)]
+    public Task<ActionResult<VehicleDetailDto>> SetFixedDriver(Guid id, AssignVehicleDriverRequest request, CancellationToken cancellationToken)
+        => SetDriverAsync(id, AssignmentKind.Fixed, request, cancellationToken);
+
+    [HttpPut("{id:guid}/assignments/current-driver")]
+    [RequirePermission(PermissionCodes.VehiclesEdit)]
+    public Task<ActionResult<VehicleDetailDto>> SetCurrentDriver(Guid id, AssignVehicleDriverRequest request, CancellationToken cancellationToken)
+        => SetDriverAsync(id, AssignmentKind.Current, request, cancellationToken);
+
+    private async Task<ActionResult<VehicleDetailDto>> SetDriverAsync(
+        Guid id, AssignmentKind kind, AssignVehicleDriverRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _assignmentService.SetVehicleDriverAsync(id, kind, request.DriverId, request.ReplaceExisting, cancellationToken);
+        return result.Outcome switch
+        {
+            AssignmentOutcome.Success => Ok(await _service.GetByIdAsync(id, cancellationToken)),
+            AssignmentOutcome.NotFound => NotFound(),
+            AssignmentOutcome.InvalidReference => BadRequest(new { message = "De gekozen chauffeur bestaat niet." }),
+            AssignmentOutcome.Conflict => Conflict(new
+            {
+                message = $"{result.Conflict!.DriverName} is al gekoppeld aan voertuig {result.Conflict.VehicleLabel}.",
+                conflict = result.Conflict,
+            }),
+            _ => Conflict(),
+        };
     }
 
     private ActionResult<VehicleDetailDto> Handle(VehicleOperationResult result, bool created) => result.Outcome switch

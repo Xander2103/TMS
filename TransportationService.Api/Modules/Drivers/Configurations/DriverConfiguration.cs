@@ -26,11 +26,8 @@ public class DriverConfiguration : IEntityTypeConfiguration<Driver>
 
         builder.HasQueryFilter(d => !d.IsDeleted);
 
-        // Forward references into Fleet, now that the Vehicle/Trailer tables exist. A vehicle or
-        // trailer being deleted merely clears the preference/default (SetNull) rather than
-        // blocking the delete or removing the driver.
-        builder.HasOne<Vehicle>().WithMany().HasForeignKey(d => d.DefaultVehicleId).OnDelete(DeleteBehavior.SetNull);
-        builder.HasOne<Vehicle>().WithMany().HasForeignKey(d => d.PreferredVehicleId).OnDelete(DeleteBehavior.SetNull);
-        builder.HasOne<Trailer>().WithMany().HasForeignKey(d => d.DefaultTrailerId).OnDelete(DeleteBehavior.SetNull);
+        // A trailer being deleted merely clears the preference (SetNull) rather than blocking
+        // the delete or removing the driver. Vehicle assignment lives on the Vehicle side only.
+        builder.HasOne<Trailer>().WithMany().HasForeignKey(d => d.FixedTrailerId).OnDelete(DeleteBehavior.SetNull);
     }
 }

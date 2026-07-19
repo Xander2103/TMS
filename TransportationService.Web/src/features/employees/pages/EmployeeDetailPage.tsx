@@ -168,10 +168,7 @@ export function EmployeeDetailPage() {
                 driverCategoryId: driver.categoryId,
                 availabilityStatus: driver.availabilityStatus,
                 isActive: false,
-                fixedVehiclePreference: driver.fixedVehiclePreference,
-                defaultVehicleId: driver.defaultVehicleId,
-                preferredVehicleId: driver.preferredVehicleId,
-                defaultTrailerId: driver.defaultTrailerId,
+                fixedTrailerId: driver.fixedTrailerId,
                 notes: driver.notes,
               })
               toast.showSuccess('Chauffeursprofiel gedeactiveerd.')

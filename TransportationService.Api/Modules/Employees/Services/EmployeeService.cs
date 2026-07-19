@@ -182,8 +182,7 @@ public class EmployeeService : IEmployeeService
         {
             var driverResult = await _driverService.CreateAsync(new CreateDriverRequest(
                 employee.Id, driverProfile.DriverCategoryId, DriverAvailabilityStatus.Available,
-                FixedVehiclePreference: false, DefaultVehicleId: null, PreferredVehicleId: null,
-                DefaultTrailerId: null, Notes: driverProfile.Notes), cancellationToken);
+                Notes: driverProfile.Notes), cancellationToken);
 
             if (driverResult.Outcome != DriverOperationOutcome.Success)
             {

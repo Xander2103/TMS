@@ -37,6 +37,15 @@ public class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         builder.HasIndex(v => new { v.TenantId, v.IsActive });
         builder.HasIndex(v => new { v.TenantId, v.OperationalStatus });
 
+        // A driver holds at most ONE vehicle per slot (fixed/current) per tenant. These filtered
+        // unique indexes are the database backstop for the assignment service's invariant.
+        builder.HasIndex(v => new { v.TenantId, v.FixedDriverId })
+            .IsUnique()
+            .HasFilter("\"FixedDriverId\" IS NOT NULL AND \"IsDeleted\" = false");
+        builder.HasIndex(v => new { v.TenantId, v.CurrentDriverId })
+            .IsUnique()
+            .HasFilter("\"CurrentDriverId\" IS NOT NULL AND \"IsDeleted\" = false");
+
         builder.HasQueryFilter(v => !v.IsDeleted);
 
         // A driver being deleted clears the assignment rather than blocking the delete.

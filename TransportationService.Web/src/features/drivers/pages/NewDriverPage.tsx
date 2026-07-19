@@ -23,7 +23,6 @@ export function NewDriverPage() {
   const [employeeId, setEmployeeId] = useState(searchParams.get('employeeId') ?? '')
   const [categoryId, setCategoryId] = useState<string | null>(null)
   const [availability, setAvailability] = useState<DriverAvailabilityStatus>('Available')
-  const [fixedVehicle, setFixedVehicle] = useState(false)
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -56,10 +55,6 @@ export function NewDriverPage() {
         employeeId,
         driverCategoryId: categoryId,
         availabilityStatus: availability,
-        fixedVehiclePreference: fixedVehicle,
-        defaultVehicleId: null,
-        preferredVehicleId: null,
-        defaultTrailerId: null,
         notes: notes.trim() || null,
       })
       showSuccess(`Chauffeur ${driver.driverNumber} aangemaakt.`)
@@ -132,13 +127,6 @@ export function NewDriverPage() {
               </option>
             ))}
           </select>
-        </FormField>
-
-        <FormField label="Vaste voertuigvoorkeur" htmlFor="driver-fixed">
-          <label className="driver-checkbox">
-            <input id="driver-fixed" type="checkbox" checked={fixedVehicle} onChange={(e) => setFixedVehicle(e.target.checked)} disabled={submitting} />
-            <span>Altijd hetzelfde voertuig toewijzen waar mogelijk</span>
-          </label>
         </FormField>
 
         <FormField label="Notities" htmlFor="driver-notes">

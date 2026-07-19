@@ -51,6 +51,19 @@ export function setDriverBlocked(id: string, isBlocked: boolean, reason: string 
   )
 }
 
+/** Assignment endpoints: the single write path for the driver↔vehicle relationship. */
+export function setDriverVehicle(
+  id: string,
+  slot: 'fixed-vehicle' | 'current-vehicle',
+  vehicleId: string | null,
+  replaceExisting: boolean,
+): Promise<DriverDetail> {
+  return apiClient.putJson<DriverDetail, { vehicleId: string | null; replaceExisting: boolean }>(
+    `/api/drivers/${id}/assignments/${slot}`,
+    { vehicleId, replaceExisting },
+  )
+}
+
 export function deleteDriver(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/drivers/${id}`)
 }

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Modules.Drivers.Dtos;
 using TransportationService.Api.Modules.Drivers.Services;
+using TransportationService.Api.Modules.Fleet.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
 
@@ -12,10 +13,40 @@ namespace TransportationService.Api.Modules.Drivers.Controllers;
 public class DriversController : ControllerBase
 {
     private readonly IDriverService _driverService;
+    private readonly IFleetAssignmentService _assignmentService;
 
-    public DriversController(IDriverService driverService)
+    public DriversController(IDriverService driverService, IFleetAssignmentService assignmentService)
     {
         _driverService = driverService;
+        _assignmentService = assignmentService;
+    }
+
+    [HttpPut("{id:guid}/assignments/fixed-vehicle")]
+    [RequirePermission(PermissionCodes.DriversEdit)]
+    public Task<ActionResult<DriverDetailDto>> SetFixedVehicle(Guid id, AssignDriverVehicleRequest request, CancellationToken cancellationToken)
+        => SetVehicleAsync(id, AssignmentKind.Fixed, request, cancellationToken);
+
+    [HttpPut("{id:guid}/assignments/current-vehicle")]
+    [RequirePermission(PermissionCodes.DriversEdit)]
+    public Task<ActionResult<DriverDetailDto>> SetCurrentVehicle(Guid id, AssignDriverVehicleRequest request, CancellationToken cancellationToken)
+        => SetVehicleAsync(id, AssignmentKind.Current, request, cancellationToken);
+
+    private async Task<ActionResult<DriverDetailDto>> SetVehicleAsync(
+        Guid id, AssignmentKind kind, AssignDriverVehicleRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _assignmentService.SetDriverVehicleAsync(id, kind, request.VehicleId, request.ReplaceExisting, cancellationToken);
+        return result.Outcome switch
+        {
+            AssignmentOutcome.Success => Ok(await _driverService.GetByIdAsync(id, cancellationToken)),
+            AssignmentOutcome.NotFound => NotFound(),
+            AssignmentOutcome.InvalidReference => BadRequest(new { message = "Het gekozen voertuig bestaat niet." }),
+            AssignmentOutcome.Conflict => Conflict(new
+            {
+                message = $"Voertuig {result.Conflict!.VehicleLabel} heeft al {result.Conflict.DriverName} als chauffeur in deze rol.",
+                conflict = result.Conflict,
+            }),
+            _ => Conflict(),
+        };
     }
 
     [HttpGet]

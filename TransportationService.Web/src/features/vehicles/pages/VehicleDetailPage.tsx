@@ -14,7 +14,9 @@ import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { DamagePanel } from '../../damage/components/DamagePanel'
 import { FuelPanel } from '../../fuel/components/FuelPanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
-import { deleteVehicle, getVehicle, updateVehicle } from '../api/vehiclesApi'
+import { AssignmentSlot } from '../../fleet-assignment/AssignmentSlot'
+import { searchDrivers } from '../../drivers/api/driversApi'
+import { deleteVehicle, getVehicle, setVehicleDriver, updateVehicle } from '../api/vehiclesApi'
 import {
   FUEL_TYPE_LABELS,
   OPERATIONAL_STATUS_LABELS,
@@ -91,11 +93,26 @@ export function VehicleDetailPage() {
       ownershipType: vehicle.ownershipType,
       operationalStatus: vehicle.operationalStatus,
       isActive: vehicle.isActive,
-      fixedDriverId: vehicle.fixedDriverId,
-      currentDriverId: vehicle.currentDriverId,
       notes: vehicle.notes,
     })
     setEditing(true)
+  }
+
+  function reloadVehicle() {
+    if (!id) return
+    getVehicle(id)
+      .then(setVehicle)
+      .catch(() => showError('Voertuig kon niet opnieuw worden geladen.'))
+  }
+
+  async function loadDriverOptions() {
+    const drivers = await searchDrivers({ isActive: true, page: 1, pageSize: 200 })
+    return drivers.items.map((d) => ({
+      value: d.id,
+      label: d.fullName,
+      description: d.driverNumber,
+      keywords: `${d.driverNumber} ${d.employeeNumber}`,
+    }))
   }
 
   function set<K extends keyof VehicleInput>(key: K, value: VehicleInput[K]) {
@@ -175,12 +192,6 @@ export function VehicleDetailPage() {
           <FormField label="Bouwjaar">
             <span>{vehicle.year ?? '—'}</span>
           </FormField>
-          <FormField label="Vaste chauffeur">
-            <span>{vehicle.fixedDriverName ?? '—'}</span>
-          </FormField>
-          <FormField label="Huidige chauffeur">
-            <span>{vehicle.currentDriverName ?? '—'}</span>
-          </FormField>
           <FormField label="Notities" className="vehicle-detail-full">
             <span>{vehicle.notes ?? '—'}</span>
           </FormField>
@@ -231,6 +242,43 @@ export function VehicleDetailPage() {
             </div>
           </form>
         )
+      )}
+
+      {!editing && (
+        <section className="vehicle-assignment">
+          <h2>Toewijzing</h2>
+          <p className="assignment-slots-note">
+            <strong>Vaste chauffeur</strong> is een langetermijnvoorkeur; <strong>actuele chauffeur</strong> is de
+            tijdelijke operationele toewijzing. Wijzigingen hier worden ook op de chauffeurspagina zichtbaar — het is
+            dezelfde koppeling.
+          </p>
+          <div className="assignment-slots">
+            <AssignmentSlot
+              title="Vaste chauffeur"
+              description="Rijdt standaard met dit voertuig."
+              assigned={vehicle.fixedDriverId && vehicle.fixedDriverName ? { label: vehicle.fixedDriverName, linkTo: `/drivers/${vehicle.fixedDriverId}` } : null}
+              canEdit={canEdit}
+              pickerLabel="Chauffeur"
+              loadOptions={loadDriverOptions}
+              assign={async (driverId, replaceExisting) => {
+                await setVehicleDriver(vehicle.id, 'fixed-driver', driverId, replaceExisting)
+              }}
+              onChanged={reloadVehicle}
+            />
+            <AssignmentSlot
+              title="Actuele chauffeur"
+              description="Tijdelijke operationele toewijzing."
+              assigned={vehicle.currentDriverId && vehicle.currentDriverName ? { label: vehicle.currentDriverName, linkTo: `/drivers/${vehicle.currentDriverId}` } : null}
+              canEdit={canEdit}
+              pickerLabel="Chauffeur"
+              loadOptions={loadDriverOptions}
+              assign={async (driverId, replaceExisting) => {
+                await setVehicleDriver(vehicle.id, 'current-driver', driverId, replaceExisting)
+              }}
+              onChanged={reloadVehicle}
+            />
+          </div>
+        </section>
       )}
 
       {!editing && id && <FleetDocumentsPanel ownerType="vehicle" ownerId={id} />}

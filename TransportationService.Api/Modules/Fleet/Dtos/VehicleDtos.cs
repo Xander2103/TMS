@@ -97,9 +97,10 @@ public record UpdateVehicleRequest(
     VehicleOwnershipType OwnershipType,
     VehicleOperationalStatus OperationalStatus,
     bool IsActive,
-    Guid? FixedDriverId,
-    Guid? CurrentDriverId,
     string? Notes);
+
+/// <summary>Body for the vehicle-side assignment endpoints; null DriverId clears the slot.</summary>
+public record AssignVehicleDriverRequest(Guid? DriverId, bool ReplaceExisting = false);
 
 public enum VehicleOperationOutcome
 {
@@ -107,6 +108,8 @@ public enum VehicleOperationOutcome
     NotFound,
     DuplicateLicensePlate,
     InvalidReference,
+    /// <summary>The requested driver already holds another vehicle in that slot.</summary>
+    DriverAlreadyAssigned,
 }
 
 public record VehicleOperationResult(VehicleOperationOutcome Outcome, VehicleDetailDto? Vehicle)
@@ -115,4 +118,5 @@ public record VehicleOperationResult(VehicleOperationOutcome Outcome, VehicleDet
     public static readonly VehicleOperationResult NotFound = new(VehicleOperationOutcome.NotFound, null);
     public static readonly VehicleOperationResult DuplicateLicensePlate = new(VehicleOperationOutcome.DuplicateLicensePlate, null);
     public static readonly VehicleOperationResult InvalidReference = new(VehicleOperationOutcome.InvalidReference, null);
+    public static readonly VehicleOperationResult DriverAlreadyAssigned = new(VehicleOperationOutcome.DriverAlreadyAssigned, null);
 }

@@ -73,22 +73,22 @@ public class TenantReferenceTests
     }
 
     [Fact]
-    public async Task DriverCreate_WithForeignVehicle_ReturnsInvalidReference()
+    public async Task DriverCreate_WithForeignTrailer_ReturnsInvalidReference()
     {
         var h = await SeedTwoTenantsAsync();
         using var _ = h.Db;
 
         var employeeId = Guid.NewGuid();
         h.Db.Context.Employees.Add(new Employee { Id = employeeId, TenantId = h.TenantId, EmployeeNumber = "MED-1", FirstName = "A", LastName = "B", CreatedAt = Now.UtcDateTime, UpdatedAt = Now.UtcDateTime });
-        var foreignVehicle = Guid.NewGuid();
-        h.Db.Context.Vehicles.Add(new Vehicle { Id = foreignVehicle, TenantId = h.ForeignTenantId, InternalNumber = "V-X", LicensePlate = "X-1", IsActive = true });
+        var foreignTrailer = Guid.NewGuid();
+        h.Db.Context.Trailers.Add(new Trailer { Id = foreignTrailer, TenantId = h.ForeignTenantId, InternalNumber = "OPL-X", LicensePlate = "X-1", IsActive = true });
         await h.Db.Context.SaveChangesAsync();
 
         var sut = new DriverService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId),
             new QualificationStatusCalculator(), new TestClock(Now));
         var result = await sut.CreateAsync(new CreateDriverRequest(
-            employeeId, null, DriverAvailabilityStatus.Available, false,
-            DefaultVehicleId: foreignVehicle, PreferredVehicleId: null, DefaultTrailerId: null, Notes: null), CancellationToken.None);
+            employeeId, null, DriverAvailabilityStatus.Available,
+            FixedTrailerId: foreignTrailer, Notes: null), CancellationToken.None);
 
         Assert.Equal(DriverOperationOutcome.InvalidReference, result.Outcome);
     }

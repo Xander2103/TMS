@@ -24,6 +24,11 @@ export interface DriverQualification {
   expiryDate: string | null
 }
 
+export interface AssignedAssetRef {
+  id: string
+  label: string
+}
+
 export interface DriverDetail {
   id: string
   driverNumber: string
@@ -36,10 +41,11 @@ export interface DriverDetail {
   isActive: boolean
   isBlocked: boolean
   blockReason: string | null
-  fixedVehiclePreference: boolean
-  defaultVehicleId: string | null
-  preferredVehicleId: string | null
-  defaultTrailerId: string | null
+  // Resolved from the vehicle side — the single source of truth for assignment.
+  fixedVehicle: AssignedAssetRef | null
+  currentVehicle: AssignedAssetRef | null
+  fixedTrailerId: string | null
+  fixedTrailerLabel: string | null
   notes: string | null
   readiness: DriverReadiness
   qualifications: DriverQualification[]
@@ -49,10 +55,7 @@ export interface CreateDriverInput {
   employeeId: string
   driverCategoryId: string | null
   availabilityStatus: DriverAvailabilityStatus
-  fixedVehiclePreference: boolean
-  defaultVehicleId: string | null
-  preferredVehicleId: string | null
-  defaultTrailerId: string | null
+  fixedTrailerId?: string | null
   notes: string | null
 }
 
@@ -60,10 +63,7 @@ export interface UpdateDriverInput {
   driverCategoryId: string | null
   availabilityStatus: DriverAvailabilityStatus
   isActive: boolean
-  fixedVehiclePreference: boolean
-  defaultVehicleId: string | null
-  preferredVehicleId: string | null
-  defaultTrailerId: string | null
+  fixedTrailerId: string | null
   notes: string | null
 }
 

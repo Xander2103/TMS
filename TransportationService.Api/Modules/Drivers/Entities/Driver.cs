@@ -35,14 +35,12 @@ public class Driver : AuditableTenantEntity
     public bool IsBlocked { get; set; }
     public string? BlockReason { get; set; }
 
-    /// <summary>Prefer to always assign the same vehicle where possible.</summary>
-    public bool FixedVehiclePreference { get; set; }
+    // The fixed/current VEHICLE relationship is stored on the Vehicle side only
+    // (Vehicle.FixedDriverId / Vehicle.CurrentDriverId, unique per driver per tenant) and is
+    // managed through IFleetAssignmentService — one source of truth, editable from both sides.
 
-    // References into Fleet. All three are FK-constrained (see DriverConfiguration), SetNull on
-    // delete so removing a vehicle/trailer never blocks the delete or removes the driver.
-    public Guid? DefaultVehicleId { get; set; }
-    public Guid? PreferredVehicleId { get; set; }
-    public Guid? DefaultTrailerId { get; set; }
+    /// <summary>Long-term trailer preference. FK-constrained, SetNull on trailer delete.</summary>
+    public Guid? FixedTrailerId { get; set; }
 
     public string? Notes { get; set; }
 }

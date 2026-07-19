@@ -119,7 +119,7 @@ public class VehicleServiceTests
         await h.Sut.UpdateAsync(created.Vehicle!.Id, new UpdateVehicleRequest(
             created.Vehicle.LicensePlate, null, null, null, null, null, null, FuelType.Diesel, null,
             null, null, null, null, null, null, 0, false, false, false, false,
-            VehicleOwnershipType.Owned, VehicleOperationalStatus.Active, IsActive: false, null, null, null), CancellationToken.None);
+            VehicleOwnershipType.Owned, VehicleOperationalStatus.Active, IsActive: false, null), CancellationToken.None);
 
         var options = await h.Sut.GetOptionsAsync(CancellationToken.None);
 

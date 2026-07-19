@@ -143,8 +143,7 @@ public class DriverService : IDriverService
             return DriverOperationResult.EmployeeAlreadyDriver;
         }
 
-        if (!await ReferencesInTenantAsync(request.DriverCategoryId, request.DefaultVehicleId,
-                request.PreferredVehicleId, request.DefaultTrailerId, cancellationToken))
+        if (!await ReferencesInTenantAsync(request.DriverCategoryId, request.FixedTrailerId, cancellationToken))
         {
             return DriverOperationResult.InvalidReference;
         }
@@ -159,10 +158,7 @@ public class DriverService : IDriverService
             EmployeeId = request.EmployeeId,
             DriverCategoryId = request.DriverCategoryId,
             AvailabilityStatus = request.AvailabilityStatus,
-            FixedVehiclePreference = request.FixedVehiclePreference,
-            DefaultVehicleId = request.DefaultVehicleId,
-            PreferredVehicleId = request.PreferredVehicleId,
-            DefaultTrailerId = request.DefaultTrailerId,
+            FixedTrailerId = request.FixedTrailerId,
             Notes = Trim(request.Notes),
             IsActive = true,
         };
@@ -195,8 +191,7 @@ public class DriverService : IDriverService
             return DriverOperationResult.NotFound;
         }
 
-        if (!await ReferencesInTenantAsync(request.DriverCategoryId, request.DefaultVehicleId,
-                request.PreferredVehicleId, request.DefaultTrailerId, cancellationToken))
+        if (!await ReferencesInTenantAsync(request.DriverCategoryId, request.FixedTrailerId, cancellationToken))
         {
             return DriverOperationResult.InvalidReference;
         }
@@ -206,10 +201,7 @@ public class DriverService : IDriverService
         driver.DriverCategoryId = request.DriverCategoryId;
         driver.AvailabilityStatus = request.AvailabilityStatus;
         driver.IsActive = request.IsActive;
-        driver.FixedVehiclePreference = request.FixedVehiclePreference;
-        driver.DefaultVehicleId = request.DefaultVehicleId;
-        driver.PreferredVehicleId = request.PreferredVehicleId;
-        driver.DefaultTrailerId = request.DefaultTrailerId;
+        driver.FixedTrailerId = request.FixedTrailerId;
         driver.Notes = Trim(request.Notes);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -259,8 +251,7 @@ public class DriverService : IDriverService
 
     /// <summary>All optional references on a driver must resolve within the current tenant.</summary>
     private async Task<bool> ReferencesInTenantAsync(
-        Guid? categoryId, Guid? defaultVehicleId, Guid? preferredVehicleId, Guid? defaultTrailerId,
-        CancellationToken cancellationToken)
+        Guid? categoryId, Guid? fixedTrailerId, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
 
@@ -270,16 +261,7 @@ public class DriverService : IDriverService
             return false;
         }
 
-        foreach (var vehicleId in new[] { defaultVehicleId, preferredVehicleId })
-        {
-            if (vehicleId is { } v && !await _dbContext.Vehicles
-                    .AnyAsync(x => x.Id == v && x.TenantId == tenantId, cancellationToken))
-            {
-                return false;
-            }
-        }
-
-        if (defaultTrailerId is { } t && !await _dbContext.Trailers
+        if (fixedTrailerId is { } t && !await _dbContext.Trailers
                 .AnyAsync(x => x.Id == t && x.TenantId == tenantId, cancellationToken))
         {
             return false;
@@ -303,6 +285,22 @@ public class DriverService : IDriverService
         var absenceToday = await CurrentAbsenceTypeAsync(driver.EmployeeId, cancellationToken);
         var readiness = BuildReadiness(driver, qualifications, absenceToday);
 
+        // Vehicle assignment is stored on the Vehicle side; resolve both slots from there.
+        var fixedVehicle = await _dbContext.Vehicles.AsNoTracking()
+            .Where(v => v.TenantId == _tenantContext.TenantId && v.FixedDriverId == driver.Id)
+            .Select(v => new AssignedAssetRef(v.Id, v.InternalNumber + " · " + v.LicensePlate))
+            .FirstOrDefaultAsync(cancellationToken);
+        var currentVehicle = await _dbContext.Vehicles.AsNoTracking()
+            .Where(v => v.TenantId == _tenantContext.TenantId && v.CurrentDriverId == driver.Id)
+            .Select(v => new AssignedAssetRef(v.Id, v.InternalNumber + " · " + v.LicensePlate))
+            .FirstOrDefaultAsync(cancellationToken);
+        var fixedTrailerLabel = driver.FixedTrailerId is { } trailerId
+            ? await _dbContext.Trailers.AsNoTracking()
+                .Where(t => t.Id == trailerId && t.TenantId == _tenantContext.TenantId)
+                .Select(t => t.InternalNumber + " · " + t.LicensePlate)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
         return new DriverDetailDto(
             driver.Id, driver.DriverNumber, driver.EmployeeId,
             employee is null ? string.Empty : $"{employee.FirstName} {employee.LastName}",
@@ -310,7 +308,8 @@ public class DriverService : IDriverService
             driver.DriverCategoryId, categoryName,
             absenceToday is not null ? DriverAvailabilityStatus.OnLeave : driver.AvailabilityStatus,
             driver.IsActive, driver.IsBlocked, driver.BlockReason,
-            driver.FixedVehiclePreference, driver.DefaultVehicleId, driver.PreferredVehicleId, driver.DefaultTrailerId,
+            fixedVehicle, currentVehicle,
+            driver.FixedTrailerId, fixedTrailerLabel,
             driver.Notes, readiness, qualifications);
     }
 

@@ -122,6 +122,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.I
 builder.Services.AddScoped<TransportationService.Api.Modules.Drivers.Services.IDriverService,
     TransportationService.Api.Modules.Drivers.Services.DriverService>();
 
+// Driver-vehicle assignment (single source of truth, editable from both sides)
+builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFleetAssignmentService,
+    TransportationService.Api.Modules.Fleet.Services.FleetAssignmentService>();
+
 // Company / tenant settings
 builder.Services.AddScoped<TransportationService.Api.Modules.Tenancy.Services.ICompanySettingsService,
     TransportationService.Api.Modules.Tenancy.Services.CompanySettingsService>();

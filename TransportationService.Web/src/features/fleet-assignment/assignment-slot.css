@@ -1,0 +1,66 @@
+.assignment-slot {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.assignment-slot-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  flex: 1;
+}
+
+.assignment-slot-title {
+  font-weight: 600;
+  color: var(--text-h);
+  font-size: 15px;
+}
+
+.assignment-slot-description {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.assignment-slot-value {
+  font-size: 15px;
+  color: var(--text-h);
+  min-width: 160px;
+}
+
+.assignment-slot-empty {
+  color: var(--text);
+  font-style: italic;
+}
+
+.assignment-slot-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.assignment-slot-link:hover {
+  text-decoration: underline;
+}
+
+.assignment-slot-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.assignment-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0 24px;
+}
+
+.assignment-slots-note {
+  font-size: 13.5px;
+  color: var(--text);
+  margin-bottom: 10px;
+}

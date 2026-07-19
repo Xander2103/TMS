@@ -92,6 +92,20 @@ public class VehicleService : IVehicleService
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
+        // Assignment slots on create route through the same one-holder-per-slot rule the
+        // assignment service enforces; conflicts are rejected before anything is written.
+        if (request.FixedDriverId is { } fixedDriver
+            && await TenantScoped().AnyAsync(v => v.FixedDriverId == fixedDriver, cancellationToken))
+        {
+            return VehicleOperationResult.DriverAlreadyAssigned;
+        }
+
+        if (request.CurrentDriverId is { } currentDriver
+            && await TenantScoped().AnyAsync(v => v.CurrentDriverId == currentDriver, cancellationToken))
+        {
+            return VehicleOperationResult.DriverAlreadyAssigned;
+        }
+
         var vehicle = new Vehicle
         {
             Id = Guid.NewGuid(),
@@ -99,12 +113,14 @@ public class VehicleService : IVehicleService
             LicensePlate = plate,
             IsActive = true,
             OperationalStatus = VehicleOperationalStatus.Active,
+            FixedDriverId = request.FixedDriverId,
+            CurrentDriverId = request.CurrentDriverId,
         };
         ApplyEditableFields(vehicle, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.FuelType, request.EmissionClass,
             request.GrossVehicleWeightKg, request.PayloadKg, request.LengthMeters, request.WidthMeters, request.HeightMeters, request.VolumeM3,
             request.OdometerKm, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
-            request.OwnershipType, request.FixedDriverId, request.CurrentDriverId, request.Notes);
+            request.OwnershipType, request.Notes);
 
         _dbContext.Add(vehicle);
         try
@@ -139,7 +155,7 @@ public class VehicleService : IVehicleService
             return VehicleOperationResult.DuplicateLicensePlate;
         }
 
-        if (!await ReferencesInTenantAsync(request.CategoryId, request.FixedDriverId, request.CurrentDriverId, cancellationToken))
+        if (!await ReferencesInTenantAsync(request.CategoryId, null, null, cancellationToken))
         {
             return VehicleOperationResult.InvalidReference;
         }
@@ -149,11 +165,13 @@ public class VehicleService : IVehicleService
         vehicle.LicensePlate = plate;
         vehicle.OperationalStatus = request.OperationalStatus;
         vehicle.IsActive = request.IsActive;
+        // Fixed/current driver deliberately untouched here: assignment changes go through
+        // IFleetAssignmentService so both sides stay in sync and every change is audited.
         ApplyEditableFields(vehicle, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.FuelType, request.EmissionClass,
             request.GrossVehicleWeightKg, request.PayloadKg, request.LengthMeters, request.WidthMeters, request.HeightMeters, request.VolumeM3,
             request.OdometerKm, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
-            request.OwnershipType, request.FixedDriverId, request.CurrentDriverId, request.Notes);
+            request.OwnershipType, request.Notes);
 
         try
         {
@@ -192,7 +210,7 @@ public class VehicleService : IVehicleService
         DateOnly? firstRegistration, FuelType fuelType, EmissionClass? emissionClass,
         decimal? grossWeight, decimal? payload, decimal? length, decimal? width, decimal? height, decimal? volume,
         int odometer, bool crane, bool refrigeration, bool tailLift, bool adr,
-        VehicleOwnershipType ownership, Guid? fixedDriverId, Guid? currentDriverId, string? notes)
+        VehicleOwnershipType ownership, string? notes)
     {
         v.Vin = Trim(vin);
         v.CategoryId = categoryId;
@@ -214,8 +232,6 @@ public class VehicleService : IVehicleService
         v.HasTailLift = tailLift;
         v.AdrSuitable = adr;
         v.OwnershipType = ownership;
-        v.FixedDriverId = fixedDriverId;
-        v.CurrentDriverId = currentDriverId;
         v.Notes = Trim(notes);
     }
 
