@@ -61,17 +61,23 @@ public enum ScheduleEntryState
     LeaveRejected,
     Sick,
     Unavailable,
+    Trip,
+    TripCancelled,
 }
 
 public record ScheduleEntryDto(
     ScheduleEntryState State,
     Guid? ShiftId,
     Guid? AbsenceId,
+    Guid? TripId,
+    string SourceType,
     string Label,
     TimeOnly? StartTime,
     TimeOnly? EndTime,
     ShiftType? ShiftType,
-    string? WorkLocation);
+    string? WorkLocation,
+    string? VehicleSummary,
+    string? StatusLabel);
 
 public record ScheduleDayDto(DateOnly Date, IReadOnlyList<ScheduleEntryDto> Entries);
 

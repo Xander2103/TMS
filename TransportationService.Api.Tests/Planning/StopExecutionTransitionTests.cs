@@ -1,5 +1,6 @@
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Drivers.Entities;
+using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
@@ -91,10 +92,12 @@ public class StopExecutionTransitionTests
         var tenant = new DevTenantContext(tenantId);
         var clock = new TestClock(Now);
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(userId));
+        var planningSync = new TripPlanningSyncService(db.Context, tenant);
         var tripService = new TripService(db.Context, tenant, audit,
             new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock),
-            new NotificationService(db.Context, tenant, new DevCurrentUserContext(userId), clock));
-        var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, clock);
+            new NotificationService(db.Context, tenant, new DevCurrentUserContext(userId), clock),
+            planningSync);
+        var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, planningSync, clock);
         return new Harness(db, sut, clock, tenantId, tripId, orderId, loadStopId, unloadStopId, userId, locationId);
     }
 
@@ -310,11 +313,13 @@ public class StopExecutionTransitionTests
         var otherTenant = new DevTenantContext(Guid.NewGuid());
         var audit = new AuditService(h.Db.Context, otherTenant, new DevCurrentUserContext(null));
         var clock = new TestClock(Now);
+        var foreignSync = new TripPlanningSyncService(h.Db.Context, otherTenant);
         var foreign = new TripExecutionService(h.Db.Context, otherTenant, new DevCurrentUserContext(null), audit,
             new TripService(h.Db.Context, otherTenant, audit,
                 new PlanningConflictService(h.Db.Context, otherTenant, new QualificationStatusCalculator(), clock),
-                new NotificationService(h.Db.Context, otherTenant, new DevCurrentUserContext(null), clock)),
-            clock);
+                new NotificationService(h.Db.Context, otherTenant, new DevCurrentUserContext(null), clock),
+                foreignSync),
+            foreignSync, clock);
 
         var history = await foreign.GetStopHistoryAsync(h.TripId, h.LoadStopId, false, CancellationToken.None);
         Assert.Equal(ExecutionOutcome.NotFound, history.Outcome);

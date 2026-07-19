@@ -2,6 +2,7 @@ import {
   SCHEDULE_STATES,
   SCHEDULE_STATE_ICONS,
   SCHEDULE_STATE_LABELS,
+  chipDescription,
   type ScheduleEntry,
   type ScheduleEntryState,
 } from '../types'
@@ -12,16 +13,22 @@ function timeRange(entry: ScheduleEntry): string | null {
   return `${entry.startTime.slice(0, 5)}–${entry.endTime.slice(0, 5)}`
 }
 
+/** Chip headline: trips show their trip number, everything else its state label. */
+function chipText(entry: ScheduleEntry): string {
+  return entry.sourceType === 'Trip' ? entry.label : SCHEDULE_STATE_LABELS[entry.state]
+}
+
 /** One schedule cell chip: colour + icon + label, never colour alone. */
 export function ScheduleChip({ entry, onClick }: { entry: ScheduleEntry; onClick?: () => void }) {
   const range = timeRange(entry)
+  const description = chipDescription(entry)
   const content = (
     <>
       <span className="schedule-chip-icon" aria-hidden="true">
         {SCHEDULE_STATE_ICONS[entry.state]}
       </span>
       <span className="schedule-chip-text">
-        <span className="schedule-chip-state">{SCHEDULE_STATE_LABELS[entry.state]}</span>
+        <span className="schedule-chip-state">{chipText(entry)}</span>
         {range && <span className="schedule-chip-time">{range}</span>}
       </span>
     </>
@@ -32,15 +39,13 @@ export function ScheduleChip({ entry, onClick }: { entry: ScheduleEntry; onClick
       type="button"
       className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}`}
       onClick={onClick}
-      title={`${SCHEDULE_STATE_LABELS[entry.state]}${range ? ` ${range}` : ''}${entry.workLocation ? ` · ${entry.workLocation}` : ''}`}
+      title={description}
+      aria-label={description}
     >
       {content}
     </button>
   ) : (
-    <span
-      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}`}
-      title={`${SCHEDULE_STATE_LABELS[entry.state]}${range ? ` ${range}` : ''}`}
-    >
+    <span className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}`} title={description}>
       {content}
     </span>
   )

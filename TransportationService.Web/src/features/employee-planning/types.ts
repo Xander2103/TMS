@@ -12,6 +12,8 @@ export type ScheduleEntryState =
   | 'LeaveRejected'
   | 'Sick'
   | 'Unavailable'
+  | 'Trip'
+  | 'TripCancelled'
 
 export const SCHEDULE_STATES: ScheduleEntryState[] = [
   'Draft',
@@ -24,6 +26,8 @@ export const SCHEDULE_STATES: ScheduleEntryState[] = [
   'LeaveRejected',
   'Sick',
   'Unavailable',
+  'Trip',
+  'TripCancelled',
 ]
 
 export const SCHEDULE_STATE_LABELS: Record<ScheduleEntryState, string> = {
@@ -37,6 +41,8 @@ export const SCHEDULE_STATE_LABELS: Record<ScheduleEntryState, string> = {
   LeaveRejected: 'Verlof afgewezen',
   Sick: 'Ziek',
   Unavailable: 'Onbeschikbaar',
+  Trip: 'Rit',
+  TripCancelled: 'Rit geannuleerd',
 }
 
 /**
@@ -55,6 +61,8 @@ export const SCHEDULE_STATE_ICONS: Record<ScheduleEntryState, string> = {
   LeaveRejected: '✕',
   Sick: '＋',
   Unavailable: '⊘',
+  Trip: '🚚',
+  TripCancelled: '🚫',
 }
 
 export const SHIFT_TYPE_LABELS: Record<ShiftType, string> = {
@@ -69,15 +77,21 @@ export const SHIFT_STATUS_LABELS: Record<ShiftStatus, string> = {
   Confirmed: 'Bevestigd',
 }
 
+export type ScheduleSourceType = 'Shift' | 'Absence' | 'Trip'
+
 export interface ScheduleEntry {
   state: ScheduleEntryState
   shiftId: string | null
   absenceId: string | null
+  tripId: string | null
+  sourceType: ScheduleSourceType
   label: string
   startTime: string | null
   endTime: string | null
   shiftType: ShiftType | null
   workLocation: string | null
+  vehicleSummary: string | null
+  statusLabel: string | null
 }
 
 export interface ScheduleDay {
@@ -126,6 +140,24 @@ export interface ShiftInput {
   workLocation: string | null
   roleLabel: string | null
   notes: string | null
+}
+
+function timeRangeOf(entry: ScheduleEntry): string | null {
+  if (!entry.startTime || !entry.endTime) return null
+  return `${entry.startTime.slice(0, 5)}–${entry.endTime.slice(0, 5)}`
+}
+
+/** Full accessible description: type, status, times, linked context — used for title and aria-label. */
+export function chipDescription(entry: ScheduleEntry): string {
+  return [
+    entry.sourceType === 'Trip' ? `Rit ${entry.label}` : SCHEDULE_STATE_LABELS[entry.state],
+    entry.statusLabel,
+    timeRangeOf(entry),
+    entry.workLocation,
+    entry.vehicleSummary,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(' · ')
 }
 
 export function formatMinutes(minutes: number): string {

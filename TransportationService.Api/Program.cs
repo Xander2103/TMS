@@ -189,6 +189,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Portal.Services.IPo
 // Employee planning (personnel shifts)
 builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Services.IShiftService,
     TransportationService.Api.Modules.EmployeePlanning.Services.ShiftService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Services.ITripPlanningSyncService,
+    TransportationService.Api.Modules.EmployeePlanning.Services.TripPlanningSyncService>();
 
 // Outlook/Exchange foundation: queued calendar sync behind a provider seam. The fake provider
 // stands in until Microsoft Graph credentials exist; swap ICalendarProvider then.

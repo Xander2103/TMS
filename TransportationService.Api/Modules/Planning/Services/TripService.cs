@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Planning.Dtos;
@@ -30,19 +31,22 @@ public class TripService : ITripService
     private readonly IAuditService _auditService;
     private readonly IPlanningConflictService _conflictService;
     private readonly INotificationService _notificationService;
+    private readonly ITripPlanningSyncService _planningSyncService;
 
     public TripService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
         IPlanningConflictService conflictService,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        ITripPlanningSyncService planningSyncService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _conflictService = conflictService;
         _notificationService = notificationService;
+        _planningSyncService = planningSyncService;
     }
 
     private IQueryable<Trip> TenantScoped() =>
@@ -124,13 +128,23 @@ public class TripService : ITripService
         };
 
         _dbContext.Add(trip);
+        // Stage the personnel-planning projection so trip + entry land in ONE save.
+        var sync = await _planningSyncService.ApplyAsync(trip, cancellationToken);
         await TenantNumbering.SaveWithClaimedNumberAsync(
             _dbContext, settings,
-            () => trip.TripNumber = GenerateTripNumber(settings),
+            () =>
+            {
+                trip.TripNumber = GenerateTripNumber(settings);
+                if (sync.Entry is { } entry)
+                {
+                    entry.TripNumber = trip.TripNumber;
+                }
+            },
             cancellationToken);
 
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "Created", null,
             new { trip.TripNumber, trip.TripDate, trip.DriverId, trip.VehicleId }, cancellationToken);
+        await AuditPlanningSyncAsync(sync, cancellationToken);
 
         return TripOperationResult.Success(await MapDetailAsync(trip, cancellationToken));
     }
@@ -182,10 +196,13 @@ public class TripService : ITripService
         // New links carry client-generated ids; navigation discovery would attach them as Modified.
         _dbContext.AddRange(trip.Orders);
 
+        // Same save as the trip edit: a driver change MOVES the linked planning entry atomically.
+        var sync = await _planningSyncService.ApplyAsync(trip, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "Updated", before,
             new { trip.TripDate, trip.DriverId, trip.VehicleId, trip.TrailerId, OrderCount = trip.Orders.Count }, cancellationToken);
+        await AuditPlanningSyncAsync(sync, cancellationToken);
 
         return TripOperationResult.Success(await MapDetailAsync(trip, cancellationToken));
     }
@@ -226,10 +243,17 @@ public class TripService : ITripService
         trip.Status = target;
 
         await PropagateOrderStatusAsync(trip, target, cancellationToken);
+        var sync = await _planningSyncService.ApplyAsync(trip, cancellationToken);
+        if (target == TripStatus.Completed)
+        {
+            await _planningSyncService.ApplyActualsAsync(trip.Id, cancellationToken);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "StatusChanged", before,
             new { trip.Status, Overridden = allowOverride }, cancellationToken);
+        await AuditPlanningSyncAsync(sync, cancellationToken);
 
         // Planning a trip tells the assigned driver's user account; a cancellation does too.
         if (target is TripStatus.Planned or TripStatus.Cancelled && trip.DriverId is { } assignedDriver)
@@ -273,10 +297,12 @@ public class TripService : ITripService
 
         _dbContext.RemoveRange(trip.Orders);
         _dbContext.Remove(trip); // soft delete via interceptor
+        var sync = await _planningSyncService.ApplyRemovalAsync(trip.Id, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "Deleted",
             new { trip.TripNumber, trip.Status }, null, cancellationToken);
+        await AuditPlanningSyncAsync(sync, cancellationToken);
 
         return TripOperationResult.Success(await MapDetailAsync(trip, cancellationToken));
     }
@@ -486,6 +512,21 @@ public class TripService : ITripService
             trip.TrailerId, trip.TrailerId is { } tr ? names.Trailers.GetValueOrDefault(tr) : null,
             trip.PlannedStart, trip.PlannedEnd, trip.Notes,
             orders, conflicts, Transitions[trip.Status]);
+    }
+
+    private async Task AuditPlanningSyncAsync(TripPlanningSyncResult sync, CancellationToken cancellationToken)
+    {
+        if (sync.Action == TripPlanningSyncAction.None || sync.EntryId is null)
+        {
+            return;
+        }
+
+        await _auditService.RecordAsync("TripPlanningEntry", sync.EntryId.Value.ToString(), sync.Action.ToString(),
+            sync.PreviousEmployeeId is { } previous ? new { EmployeeId = previous } : null,
+            sync.Entry is { } entry
+                ? new { entry.TripId, entry.TripNumber, entry.EmployeeId, entry.Date, entry.Status }
+                : null,
+            cancellationToken);
     }
 
     private static string GenerateTripNumber(TenantSettings? settings)

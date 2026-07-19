@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Planning.Dtos;
@@ -18,6 +19,7 @@ public class TripExecutionService : ITripExecutionService
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IAuditService _auditService;
     private readonly ITripService _tripService;
+    private readonly ITripPlanningSyncService _planningSyncService;
     private readonly TimeProvider _timeProvider;
 
     public TripExecutionService(
@@ -26,6 +28,7 @@ public class TripExecutionService : ITripExecutionService
         ICurrentUserContext currentUserContext,
         IAuditService auditService,
         ITripService tripService,
+        ITripPlanningSyncService planningSyncService,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
@@ -33,6 +36,7 @@ public class TripExecutionService : ITripExecutionService
         _currentUserContext = currentUserContext;
         _auditService = auditService;
         _tripService = tripService;
+        _planningSyncService = planningSyncService;
         _timeProvider = timeProvider;
     }
 
@@ -315,6 +319,13 @@ public class TripExecutionService : ITripExecutionService
         await _auditService.RecordAsync(EntityType, execution.Id.ToString(), target.ToString(),
             new { Status = from },
             new { execution.TripId, execution.TransportOrderStopId, execution.Status, Reason = reason }, cancellationToken);
+
+        // Keep the personnel-planning entry's actual times fresh while the trip runs.
+        var actualsSync = await _planningSyncService.ApplyActualsAsync(trip.Id, cancellationToken);
+        if (actualsSync.Action != TripPlanningSyncAction.None)
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         // Completing/skipping/failing the final open stop finishes the whole trip (orders follow).
         var stops = await LoadExecutionStopsAsync(trip, cancellationToken);

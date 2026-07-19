@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
@@ -26,6 +27,7 @@ import {
   formatMinutes,
   mondayOf,
   toIsoDate,
+  type ScheduleEntry,
   type ScheduleGrid,
   type Shift,
   type ShiftStatus,
@@ -47,7 +49,9 @@ interface DialogState {
 export function EmployeePlanningPage() {
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
+  const navigate = useNavigate()
   const canManage = hasPermission('employee_planning.manage')
+  const canViewTrips = hasPermission('planning.view')
 
   const [weekStart, setWeekStart] = useState(() => toIsoDate(mondayOf(new Date())))
   const [weeksCount, setWeeksCount] = useState(1)
@@ -134,6 +138,17 @@ export function EmployeePlanningPage() {
     } catch {
       showError('De shift kon niet worden geladen.')
     }
+  }
+
+  /** Click behaviour per source: trip chips deep-link to the trip, shift chips open the editor. */
+  function chipAction(entry: ScheduleEntry, employeeName: string): (() => void) | undefined {
+    if (entry.sourceType === 'Trip') {
+      return canViewTrips && entry.tripId ? () => navigate(`/planning/${entry.tripId}`) : undefined
+    }
+    if (canManage && entry.shiftId) {
+      return () => void openEdit(entry.shiftId!, employeeName)
+    }
+    return undefined
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -330,15 +345,7 @@ export function EmployeePlanningPage() {
                       <td key={day.date} className={`ep-day-cell ${dayIndex >= 5 ? 'ep-weekend' : ''}`}>
                         <div className="ep-day-cell-inner">
                           {day.entries.map((entry, index) => (
-                            <ScheduleChip
-                              key={index}
-                              entry={entry}
-                              onClick={
-                                canManage && entry.shiftId
-                                  ? () => void openEdit(entry.shiftId!, row.employeeName)
-                                  : undefined
-                              }
-                            />
+                            <ScheduleChip key={index} entry={entry} onClick={chipAction(entry, row.employeeName)} />
                           ))}
                           {canManage && (
                             <button
@@ -384,7 +391,7 @@ export function EmployeePlanningPage() {
                     <td>{row.employeeName}</td>
                     <td>{day.date}</td>
                     <td>
-                      <ScheduleChip entry={entry} />
+                      <ScheduleChip entry={entry} onClick={chipAction(entry, row.employeeName)} />
                     </td>
                     <td>
                       {entry.startTime && entry.endTime

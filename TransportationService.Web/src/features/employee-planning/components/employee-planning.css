@@ -60,6 +60,11 @@ button.schedule-chip {
 .schedule-chip-sick { background: #fef9c3; border-color: #ca8a04; }
 /* dark grey = unavailable */
 .schedule-chip-unavailable { background: #d1d5db; border-color: #4b5563; }
+/* strong blue = trip-generated planning (distinct from planned shifts) */
+.schedule-chip-trip { background: #bfdbfe; border-color: #1d4ed8; }
+/* muted = cancelled trip; the label keeps it distinguishable without colour */
+.schedule-chip-tripcancelled { background: #e5e7eb; border-color: #6b7280; }
+.schedule-chip-tripcancelled .schedule-chip-state { text-decoration: line-through; }
 
 .schedule-legend summary {
   cursor: pointer;

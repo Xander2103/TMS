@@ -1,5 +1,6 @@
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Drivers.Entities;
+using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
@@ -70,10 +71,12 @@ public class TripExecutionServiceTests
         var tenant = new DevTenantContext(tenantId);
         var clock = new TestClock(Now);
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(userId));
+        var planningSync = new TripPlanningSyncService(db.Context, tenant);
         var tripService = new TripService(db.Context, tenant, audit,
             new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock),
-            new NotificationService(db.Context, tenant, new DevCurrentUserContext(userId), clock));
-        var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, clock);
+            new NotificationService(db.Context, tenant, new DevCurrentUserContext(userId), clock),
+            planningSync);
+        var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, planningSync, clock);
         return new Harness(db, sut, tenantId, tripId, orderId, loadStopId, unloadStopId, userId);
     }
 

@@ -1,5 +1,6 @@
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Drivers.Entities;
+using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Hr.Entities;
@@ -72,7 +73,8 @@ public class TripServiceTests
         var conflicts = new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock);
         var sut = new TripService(db.Context, tenant,
             new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), conflicts,
-            new NotificationService(db.Context, tenant, new DevCurrentUserContext(null), clock));
+            new NotificationService(db.Context, tenant, new DevCurrentUserContext(null), clock),
+            new TripPlanningSyncService(db.Context, tenant));
         return new Harness(db, sut, tenantId, driverId, employeeId, vehicleId, trailerId, orderId);
     }
 

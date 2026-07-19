@@ -322,15 +322,21 @@ public class ShiftService : IShiftService
                             || a.Status == AbsenceStatus.Rejected))
             .ToListAsync(cancellationToken);
 
+        var tripEntries = await _dbContext.TripPlanningEntries.AsNoTracking()
+            .Where(t => t.TenantId == tenantId && employeeIds.Contains(t.EmployeeId)
+                        && t.Date >= from && t.Date <= to)
+            .ToListAsync(cancellationToken);
+
         var rows = employees.Select(employee =>
         {
             var employeeShifts = shifts.Where(s => s.EmployeeId == employee.Id).ToList();
             var employeeAbsences = absences.Where(a => a.EmployeeId == employee.Id).ToList();
+            var employeeTrips = tripEntries.Where(t => t.EmployeeId == employee.Id).ToList();
 
             var days = new List<ScheduleDayDto>();
             for (var date = from; date <= to; date = date.AddDays(1))
             {
-                days.Add(new ScheduleDayDto(date, BuildEntries(date, employeeShifts, employeeAbsences)));
+                days.Add(new ScheduleDayDto(date, BuildEntries(date, employeeShifts, employeeAbsences, employeeTrips)));
             }
 
             var plannedMinutes = employeeShifts.Sum(s => PlannedMinutes(s.StartTime, s.EndTime, s.BreakMinutes));
@@ -355,7 +361,8 @@ public class ShiftService : IShiftService
     }
 
     private static IReadOnlyList<ScheduleEntryDto> BuildEntries(
-        DateOnly date, IReadOnlyList<Shift> shifts, IReadOnlyList<Absence> absences)
+        DateOnly date, IReadOnlyList<Shift> shifts, IReadOnlyList<Absence> absences,
+        IReadOnlyList<TripPlanningEntry> tripEntries)
     {
         var entries = new List<ScheduleEntryDto>();
 
@@ -373,9 +380,26 @@ public class ShiftService : IShiftService
                 },
             };
             entries.Add(new ScheduleEntryDto(
-                state, shift.Id, null,
+                state, shift.Id, null, null, "Shift",
                 shift.WorkLocation ?? shift.RoleLabel ?? "Shift",
-                shift.StartTime, shift.EndTime, shift.Type, shift.WorkLocation));
+                shift.StartTime, shift.EndTime, shift.Type, shift.WorkLocation,
+                null, ShiftStatusLabel(shift.Status)));
+        }
+
+        foreach (var trip in tripEntries.Where(t => t.Date == date).OrderBy(t => t.PlannedStart ?? DateTime.MaxValue))
+        {
+            var start = trip.ActualStart ?? trip.PlannedStart;
+            var end = trip.ActualEnd ?? trip.PlannedEnd;
+            entries.Add(new ScheduleEntryDto(
+                trip.Status == Planning.Entities.TripStatus.Cancelled
+                    ? ScheduleEntryState.TripCancelled
+                    : ScheduleEntryState.Trip,
+                null, null, trip.TripId, "Trip",
+                trip.TripNumber,
+                start is { } s ? TimeOnly.FromDateTime(s) : null,
+                end is { } e ? TimeOnly.FromDateTime(e) : null,
+                null, trip.RouteSummary,
+                trip.VehicleSummary, TripStatusLabel(trip.Status)));
         }
 
         foreach (var absence in absences.Where(a => a.StartDate <= date && a.EndDate >= date))
@@ -392,11 +416,36 @@ public class ShiftService : IShiftService
                     _ => ScheduleEntryState.LeaveApproved,
                 },
             };
-            entries.Add(new ScheduleEntryDto(state, null, absence.Id, AbsenceLabel(absence.Type), null, null, null, null));
+            entries.Add(new ScheduleEntryDto(state, null, absence.Id, null, "Absence",
+                AbsenceLabel(absence.Type), null, null, null, null, null, AbsenceStatusLabel(absence.Status)));
         }
 
         return entries;
     }
+
+    private static string ShiftStatusLabel(ShiftStatus status) => status switch
+    {
+        ShiftStatus.Planned => "Gepland",
+        ShiftStatus.Confirmed => "Bevestigd",
+        _ => "Concept",
+    };
+
+    private static string TripStatusLabel(Planning.Entities.TripStatus status) => status switch
+    {
+        Planning.Entities.TripStatus.Planned => "Gepland",
+        Planning.Entities.TripStatus.InProgress => "Bezig",
+        Planning.Entities.TripStatus.Completed => "Afgerond",
+        Planning.Entities.TripStatus.Cancelled => "Geannuleerd",
+        _ => "Concept",
+    };
+
+    private static string AbsenceStatusLabel(AbsenceStatus status) => status switch
+    {
+        AbsenceStatus.Requested => "Aangevraagd",
+        AbsenceStatus.Rejected => "Afgewezen",
+        AbsenceStatus.UnderReview => "In behandeling",
+        _ => "Goedgekeurd",
+    };
 
     private static string AbsenceLabel(AbsenceType type) => type switch
     {
