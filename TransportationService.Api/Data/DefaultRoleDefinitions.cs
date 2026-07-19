@@ -10,7 +10,11 @@ namespace TransportationService.Api.Data;
 /// </summary>
 public static class DefaultRoleDefinitions
 {
-    public sealed record RoleTemplate(string Name, string Description, IReadOnlyList<string> PermissionCodes);
+    /// <summary>
+    /// <paramref name="Code"/> is the STABLE template identity stamped on seeded roles
+    /// (Role.TemplateCode); upgrades match on it, never on the display name.
+    /// </summary>
+    public sealed record RoleTemplate(string Code, string Name, string Description, IReadOnlyList<string> PermissionCodes);
 
     private static readonly string[] CommonViewPermissions =
     [
@@ -33,7 +37,7 @@ public static class DefaultRoleDefinitions
 
     public static IReadOnlyList<RoleTemplate> All { get; } =
     [
-        new("Planner",
+        new("planner", "Planner",
             "Plant transportopdrachten en ritten; beheert klanten en locaties.",
             [
                 .. CommonViewPermissions,
@@ -53,7 +57,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeDocumentsView,
             ]),
 
-        new("Dispatcher",
+        new("dispatcher", "Dispatcher",
             "Stuurt de dagelijkse uitvoering aan: ritten, statussen en chauffeursopvolging.",
             [
                 .. CommonViewPermissions,
@@ -67,7 +71,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeDocumentsView,
             ]),
 
-        new("Management",
+        new("management", "Management",
             "Leest alles, keurt afwezigheden goed en mag planningsbeperkingen overschrijven.",
             [
                 .. CommonViewPermissions,
@@ -95,7 +99,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.UsersView, PermissionCodes.RolesView,
             ]),
 
-        new("Boekhouding",
+        new("boekhouding", "Boekhouding",
             "Beheert facturen en factuurgegevens van klanten.",
             [
                 PermissionCodes.DashboardView,
@@ -110,7 +114,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.KpiView, PermissionCodes.KpiExport,
             ]),
 
-        new("HR",
+        new("hr", "HR",
             "Personeelszaken: medewerkers, personeelsplanning, afwezigheden en kwalificaties.",
             [
                 PermissionCodes.DashboardView,
@@ -124,7 +128,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.DepartmentsView, PermissionCodes.JobFunctionsView,
             ]),
 
-        new("Chauffeur",
+        new("chauffeur", "Chauffeur",
             "Voert eigen ritten uit en beheert eigen afwezigheden.",
             [
                 PermissionCodes.DriverWorkflowView, PermissionCodes.DriverWorkflowExecute,
@@ -134,7 +138,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate,
             ]),
 
-        new("Klantportaal",
+        new("klantportaal", "Klantportaal",
             "Leestoegang voor klantgebruikers (toekomstig klantportaal).",
             [
                 PermissionCodes.OrdersView,
