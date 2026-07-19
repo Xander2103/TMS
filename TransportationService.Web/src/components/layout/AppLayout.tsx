@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { OfflineBanner } from './OfflineBanner'
 import { Sidebar } from './Sidebar'
 import './AppLayout.css'
 
@@ -13,6 +14,7 @@ export function AppLayout() {
 
   return (
     <div className="app-shell">
+      <OfflineBanner />
       <header className="mobile-topbar">
         <button
           type="button"

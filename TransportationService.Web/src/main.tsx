@@ -8,3 +8,13 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// App-shell service worker (production builds only): installable portal, cached shell,
+// network-only API. No offline data sync — the UI shows an offline banner instead.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // Registration failure is non-fatal: the app simply runs without the shell cache.
+    })
+  })
+}

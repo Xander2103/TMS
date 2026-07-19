@@ -222,3 +222,54 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Module launcher: role-filtered tiles, one-hand friendly (>=56px targets). */
+.portal-modules-title {
+  font-size: 16px;
+  margin: 22px 0 10px;
+}
+
+.portal-modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.portal-module {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  background: var(--bg);
+}
+
+.portal-module:hover,
+.portal-module:focus-visible {
+  border-color: var(--accent);
+}
+
+.portal-module-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.portal-module-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.portal-module-label {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.portal-module-description {
+  font-size: 13px;
+  color: var(--text);
+}

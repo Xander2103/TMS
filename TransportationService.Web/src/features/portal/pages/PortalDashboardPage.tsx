@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { useAuth } from '../../auth/authContextValue'
 import { getMyDashboard } from '../api/portalApi'
+import { PORTAL_MODULES, visibleModules } from '../modules'
 import type { MyDashboard } from '../types'
 import './portal.css'
 
@@ -15,8 +17,9 @@ interface CardDef {
   attention?: boolean
 }
 
-/** Landing page of the employee portal: own numbers, big tap targets. */
+/** Landing page of the employee portal: own numbers, module launcher, big tap targets. */
 export function PortalDashboardPage() {
+  const { hasAnyPermission } = useAuth()
   const [dashboard, setDashboard] = useState<MyDashboard | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -100,6 +103,21 @@ export function PortalDashboardPage() {
           </Link>
         )}
       </div>
+
+      <h2 className="portal-modules-title">Modules</h2>
+      <nav className="portal-modules" aria-label="Modules">
+        {visibleModules(PORTAL_MODULES, hasAnyPermission).map((module) => (
+          <Link key={`${module.to}-${module.label}`} to={module.to} className="portal-module">
+            <span className="portal-module-icon" aria-hidden="true">
+              {module.icon}
+            </span>
+            <span className="portal-module-text">
+              <span className="portal-module-label">{module.label}</span>
+              <span className="portal-module-description">{module.description}</span>
+            </span>
+          </Link>
+        ))}
+      </nav>
     </div>
   )
 }

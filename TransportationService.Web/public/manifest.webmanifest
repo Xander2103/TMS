@@ -1,0 +1,15 @@
+{
+  "name": "Transport Portaal",
+  "short_name": "Portaal",
+  "description": "Ritten, planning, verlof en meldingen voor chauffeurs en medewerkers.",
+  "start_url": "/portal",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#1b1029",
+  "theme_color": "#6d28d9",
+  "lang": "nl",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
