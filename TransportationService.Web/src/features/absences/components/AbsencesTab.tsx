@@ -42,10 +42,12 @@ const EMPTY_FORM: AbsenceForm = {
 
 interface AbsencesTabProps {
   employeeId: string
+  /** Deep-link target: this absence row is highlighted and scrolled into view. */
+  highlightAbsenceId?: string | null
 }
 
 /** Absences for one employee: request, edit while requested, approve/reject, cancel, delete. */
-export function AbsencesTab({ employeeId }: AbsencesTabProps) {
+export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps) {
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
 
@@ -219,7 +221,16 @@ export function AbsencesTab({ employeeId }: AbsencesTabProps) {
           </thead>
           <tbody>
             {absences.map((absence) => (
-              <tr key={absence.id}>
+              <tr
+                key={absence.id}
+                id={`absence-${absence.id}`}
+                className={absence.id === highlightAbsenceId ? 'absence-row-highlight' : undefined}
+                ref={
+                  absence.id === highlightAbsenceId
+                    ? (row) => row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+                    : undefined
+                }
+              >
                 <td>{ABSENCE_TYPE_LABELS[absence.type]}</td>
                 <td>{absence.startDate}</td>
                 <td>{absence.endDate}</td>

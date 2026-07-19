@@ -199,3 +199,12 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Deep-link highlight: the row referenced by ?absenceId= */
+.absence-row-highlight > td {
+  background: #fef9c3;
+  transition: background 0.4s;
+}
+@media (prefers-color-scheme: dark) {
+  .absence-row-highlight > td { background: #422006; }
+}

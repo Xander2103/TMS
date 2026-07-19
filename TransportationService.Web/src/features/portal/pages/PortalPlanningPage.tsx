@@ -1,19 +1,34 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { apiClient } from '../../../api/apiClient'
+import { useAuth } from '../../auth/authContextValue'
 import { ScheduleChip, ScheduleLegend } from '../../employee-planning/components/ScheduleChip'
-import { mondayOf, toIsoDate, type ScheduleDay } from '../../employee-planning/types'
+import { mondayOf, toIsoDate, type ScheduleDay, type ScheduleEntry } from '../../employee-planning/types'
 import './portal.css'
 
 const DAY_NAMES = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag']
 
-/** Own schedule (shifts + leave merged), mobile-first list for the coming two weeks. */
+/** Own schedule (shifts, trips and leave merged), mobile-first list for the coming two weeks. */
 export function PortalPlanningPage() {
+  const navigate = useNavigate()
+  const { hasPermission } = useAuth()
   const [days, setDays] = useState<ScheduleDay[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [weekStart, setWeekStart] = useState(() => toIsoDate(mondayOf(new Date())))
+
+  /** Own trip chips open the driver execution view; absence chips open the leave page. */
+  function chipAction(entry: ScheduleEntry): (() => void) | undefined {
+    if (entry.sourceType === 'Trip' && entry.tripId && hasPermission('driver_workflow.view')) {
+      return () => navigate(`/my-trips/${entry.tripId}`)
+    }
+    if (entry.sourceType === 'Absence') {
+      return () => navigate('/portal/absences')
+    }
+    return undefined
+  }
 
   useEffect(() => {
     let mounted = true
@@ -49,7 +64,7 @@ export function PortalPlanningPage() {
     <div>
       <PageHeader
         title="Mijn planning"
-        subtitle="Je shifts, opleidingen en afwezigheden voor de komende twee weken."
+        subtitle="Je shifts, ritten, opleidingen en afwezigheden voor de komende twee weken."
       />
       <div className="portal-week-nav">
         <button type="button" onClick={() => shiftWeeks(-2)} aria-label="Twee weken terug">
@@ -72,7 +87,7 @@ export function PortalPlanningPage() {
               <div className="portal-planning-entries">
                 {day.entries.length === 0 && <span className="portal-planning-free">vrij</span>}
                 {day.entries.map((entry, index) => (
-                  <ScheduleChip key={index} entry={entry} />
+                  <ScheduleChip key={index} entry={entry} onClick={chipAction(entry)} />
                 ))}
               </div>
             </li>

@@ -14,13 +14,15 @@ import { AbsencesTab } from '../../absences/components/AbsencesTab'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { EmployeeForm } from '../components/EmployeeForm'
+import { EmployeePlanningTab } from '../components/EmployeePlanningTab'
+import { EmployeeTripsTab } from '../components/EmployeeTripsTab'
 import { QualificationsTab } from '../components/QualificationsTab'
 import { useEmployee } from '../hooks/useEmployee'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
 
-const TAB_IDS = ['profiel', 'kwalificaties', 'afwezigheden', 'historiek'] as const
+const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'afwezigheden', 'ritten', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 export function EmployeeDetailPage() {
@@ -42,6 +44,8 @@ export function EmployeeDetailPage() {
 
   const canEdit = hasPermission('employees.edit')
   const canDeactivate = hasPermission('employees.deactivate')
+  const canViewPlanning = hasPermission('employee_planning.view') || hasPermission('employee_planning.manage')
+  const canViewTrips = hasPermission('planning.view')
 
   if (isLoading) return <LoadingState message="Medewerker laden..." />
   if (error || !employee) return <ErrorState message={error ?? 'Medewerker niet gevonden.'} />
@@ -94,8 +98,10 @@ export function EmployeeDetailPage() {
       <Tabs
         tabs={[
           { id: 'profiel', label: 'Profiel' },
+          ...(canViewPlanning ? [{ id: 'planning', label: 'Planning' }] : []),
           { id: 'kwalificaties', label: 'Kwalificaties' },
           { id: 'afwezigheden', label: 'Afwezigheden' },
+          ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: 'Ritten' }] : []),
           { id: 'historiek', label: 'Historiek' },
         ]}
         activeId={tab}
@@ -135,6 +141,12 @@ export function EmployeeDetailPage() {
         </TabPanel>
       )}
 
+      {tab === 'planning' && canViewPlanning && (
+        <TabPanel tabId="planning">
+          <EmployeePlanningTab employeeId={employee.id} />
+        </TabPanel>
+      )}
+
       {tab === 'kwalificaties' && (
         <TabPanel tabId="kwalificaties">
           <QualificationsTab employeeId={employee.id} />
@@ -143,7 +155,13 @@ export function EmployeeDetailPage() {
 
       {tab === 'afwezigheden' && (
         <TabPanel tabId="afwezigheden">
-          <AbsencesTab employeeId={employee.id} />
+          <AbsencesTab employeeId={employee.id} highlightAbsenceId={searchParams.get('absenceId')} />
+        </TabPanel>
+      )}
+
+      {tab === 'ritten' && employee.driverId && canViewTrips && (
+        <TabPanel tabId="ritten">
+          <EmployeeTripsTab driverId={employee.driverId} />
         </TabPanel>
       )}
 

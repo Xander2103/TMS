@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
@@ -52,6 +52,7 @@ export function EmployeePlanningPage() {
   const navigate = useNavigate()
   const canManage = hasPermission('employee_planning.manage')
   const canViewTrips = hasPermission('planning.view')
+  const canViewEmployees = hasPermission('employees.view')
 
   const [weekStart, setWeekStart] = useState(() => toIsoDate(mondayOf(new Date())))
   const [weeksCount, setWeeksCount] = useState(1)
@@ -148,12 +149,20 @@ export function EmployeePlanningPage() {
     }
   }
 
-  /** Click behaviour per source: trip chips deep-link to the trip, shift chips open the editor. */
-  function chipAction(entry: ScheduleEntry, employeeName: string): (() => void) | undefined {
+  /**
+   * Click behaviour per source: trip chips deep-link to the trip, absence chips to the
+   * employee's absence tab, shift chips open the dialog (read-only without manage rights).
+   */
+  function chipAction(entry: ScheduleEntry, employeeName: string, employeeId: string): (() => void) | undefined {
     if (entry.sourceType === 'Trip') {
       return canViewTrips && entry.tripId ? () => navigate(`/planning/${entry.tripId}`) : undefined
     }
-    if (canManage && entry.shiftId) {
+    if (entry.sourceType === 'Absence') {
+      return canViewEmployees && entry.absenceId
+        ? () => navigate(`/employees/${employeeId}?tab=afwezigheden&absenceId=${entry.absenceId}`)
+        : undefined
+    }
+    if (entry.shiftId) {
       return () => void openEdit(entry.shiftId!, employeeName)
     }
     return undefined
@@ -349,7 +358,15 @@ export function EmployeePlanningPage() {
               {rows.map((row) => (
                 <tr key={row.employeeId}>
                   <td className="ep-employee-cell">
-                    <div className="ep-employee-name">{row.employeeName}</div>
+                    <div className="ep-employee-name">
+                      {canViewEmployees ? (
+                        <Link to={`/employees/${row.employeeId}`} className="ep-employee-link">
+                          {row.employeeName}
+                        </Link>
+                      ) : (
+                        row.employeeName
+                      )}
+                    </div>
                     <div className="ep-employee-meta">
                       {row.departmentName ?? '—'} · {formatMinutes(row.plannedMinutes)} gepland
                     </div>
@@ -360,7 +377,11 @@ export function EmployeePlanningPage() {
                       <td key={day.date} className={`ep-day-cell ${dayIndex >= 5 ? 'ep-weekend' : ''}`}>
                         <div className="ep-day-cell-inner">
                           {day.entries.map((entry, index) => (
-                            <ScheduleChip key={index} entry={entry} onClick={chipAction(entry, row.employeeName)} />
+                            <ScheduleChip
+                              key={index}
+                              entry={entry}
+                              onClick={chipAction(entry, row.employeeName, row.employeeId)}
+                            />
                           ))}
                           {canManage && (
                             <button
@@ -403,10 +424,18 @@ export function EmployeePlanningPage() {
               row.days.flatMap((day) =>
                 day.entries.map((entry, index) => (
                   <tr key={`${row.employeeId}-${day.date}-${index}`}>
-                    <td>{row.employeeName}</td>
+                    <td>
+                      {canViewEmployees ? (
+                        <Link to={`/employees/${row.employeeId}`} className="ep-employee-link">
+                          {row.employeeName}
+                        </Link>
+                      ) : (
+                        row.employeeName
+                      )}
+                    </td>
                     <td>{day.date}</td>
                     <td>
-                      <ScheduleChip entry={entry} onClick={chipAction(entry, row.employeeName)} />
+                      <ScheduleChip entry={entry} onClick={chipAction(entry, row.employeeName, row.employeeId)} />
                     </td>
                     <td>
                       {entry.startTime && entry.endTime
@@ -436,11 +465,13 @@ export function EmployeePlanningPage() {
           footer={
             <>
               <Button variant="secondary" onClick={() => setDialog(null)} disabled={busy}>
-                Annuleren
+                {canManage ? 'Annuleren' : 'Sluiten'}
               </Button>
-              <Button type="submit" form="ep-shift-form" disabled={busy}>
-                {busy ? 'Bezig…' : 'Opslaan'}
-              </Button>
+              {canManage && (
+                <Button type="submit" form="ep-shift-form" disabled={busy}>
+                  {busy ? 'Bezig…' : 'Opslaan'}
+                </Button>
+              )}
             </>
           }
         >
@@ -450,12 +481,12 @@ export function EmployeePlanningPage() {
                 <Badge tone={dialog.shift.status === 'Confirmed' ? 'success' : dialog.shift.status === 'Planned' ? 'info' : 'neutral'}>
                   {SHIFT_STATUS_LABELS[dialog.shift.status]}
                 </Badge>
-                {dialog.shift.status === 'Draft' && (
+                {canManage && dialog.shift.status === 'Draft' && (
                   <Button variant="secondary" onClick={() => void handleStatus('Planned')} disabled={busy}>
                     → Gepland
                   </Button>
                 )}
-                {dialog.shift.status === 'Planned' && (
+                {canManage && dialog.shift.status === 'Planned' && (
                   <>
                     <Button variant="secondary" onClick={() => void handleStatus('Confirmed')} disabled={busy}>
                       → Bevestigen
@@ -465,33 +496,35 @@ export function EmployeePlanningPage() {
                     </Button>
                   </>
                 )}
-                {dialog.shift.status === 'Confirmed' && (
+                {canManage && dialog.shift.status === 'Confirmed' && (
                   <Button variant="ghost" onClick={() => void handleStatus('Planned')} disabled={busy}>
                     → Terug naar gepland
                   </Button>
                 )}
-                <Button variant="danger" onClick={() => setConfirmDeleteShift(true)} disabled={busy}>
-                  Verwijderen
-                </Button>
+                {canManage && (
+                  <Button variant="danger" onClick={() => setConfirmDeleteShift(true)} disabled={busy}>
+                    Verwijderen
+                  </Button>
+                )}
               </div>
             )}
             <FormField label="Datum" htmlFor="ep-date" required>
-              <input id="ep-date" type="date" value={dialogDate} onChange={(e) => setDialogDate(e.target.value)} disabled={busy} />
+              <input id="ep-date" type="date" value={dialogDate} onChange={(e) => setDialogDate(e.target.value)} disabled={busy || !canManage} />
             </FormField>
             <div className="ep-form-row">
               <FormField label="Van" htmlFor="ep-start" required>
-                <input id="ep-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={busy} />
+                <input id="ep-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={busy || !canManage} />
               </FormField>
               <FormField label="Tot" htmlFor="ep-end" required>
-                <input id="ep-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} disabled={busy} />
+                <input id="ep-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} disabled={busy || !canManage} />
               </FormField>
             </div>
             <div className="ep-form-row">
               <FormField label="Pauze (minuten)" htmlFor="ep-break">
-                <input id="ep-break" type="number" min={0} value={breakMinutes} onChange={(e) => setBreakMinutes(e.target.value)} disabled={busy} />
+                <input id="ep-break" type="number" min={0} value={breakMinutes} onChange={(e) => setBreakMinutes(e.target.value)} disabled={busy || !canManage} />
               </FormField>
               <FormField label="Type" htmlFor="ep-type">
-                <select id="ep-type" value={shiftType} onChange={(e) => setShiftType(e.target.value as ShiftType)} disabled={busy}>
+                <select id="ep-type" value={shiftType} onChange={(e) => setShiftType(e.target.value as ShiftType)} disabled={busy || !canManage}>
                   {(Object.keys(SHIFT_TYPE_LABELS) as ShiftType[]).map((t) => (
                     <option key={t} value={t}>
                       {SHIFT_TYPE_LABELS[t]}
@@ -502,14 +535,14 @@ export function EmployeePlanningPage() {
             </div>
             <div className="ep-form-row">
               <FormField label="Werklocatie" htmlFor="ep-location">
-                <input id="ep-location" value={workLocation} onChange={(e) => setWorkLocation(e.target.value)} disabled={busy} maxLength={200} />
+                <input id="ep-location" value={workLocation} onChange={(e) => setWorkLocation(e.target.value)} disabled={busy || !canManage} maxLength={200} />
               </FormField>
               <FormField label="Functie/rol" htmlFor="ep-role">
-                <input id="ep-role" value={roleLabel} onChange={(e) => setRoleLabel(e.target.value)} disabled={busy} maxLength={100} />
+                <input id="ep-role" value={roleLabel} onChange={(e) => setRoleLabel(e.target.value)} disabled={busy || !canManage} maxLength={100} />
               </FormField>
             </div>
             <FormField label="Notities" htmlFor="ep-notes">
-              <textarea id="ep-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} maxLength={1000} />
+              <textarea id="ep-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy || !canManage} maxLength={1000} />
             </FormField>
             {conflictInfo && (
               <div className="ep-conflict-panel" role="alert">
