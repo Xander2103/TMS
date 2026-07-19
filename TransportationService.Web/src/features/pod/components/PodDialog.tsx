@@ -1,9 +1,16 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { ApiError } from '../../../api/apiClient'
+import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { getTripPackageChecklist } from '../../packages/api/packagesApi'
+import {
+  PACKAGE_STATUS_LABELS,
+  PACKAGE_STATUS_TONE,
+  type TripPackageChecklistItem,
+} from '../../packages/types'
 import { finalizePod, uploadPodPhoto } from '../api/podApi'
 import { SignaturePad } from './SignaturePad'
 import { POD_OUTCOME_ICONS, POD_OUTCOME_LABELS, type PodOutcome, type PodPhotoCategory } from '../types'
@@ -35,12 +42,33 @@ export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: P
   const [signature, setSignature] = useState<string | null>(null)
   const [deliveryFiles, setDeliveryFiles] = useState<File[]>([])
   const [documentFiles, setDocumentFiles] = useState<File[]>([])
+  const [packages, setPackages] = useState<TripPackageChecklistItem[]>([])
+  const [packagesAcknowledged, setPackagesAcknowledged] = useState(false)
   const [busy, setBusy] = useState(false)
+
+  // The recipient confirms the per-package outcome list as part of the proof.
+  useEffect(() => {
+    let mounted = true
+    getTripPackageChecklist(tripId, stopId)
+      .then((checklist) => {
+        if (mounted) setPackages((checklist.stops[0]?.packages ?? []).filter((p) => !p.isGroup))
+      })
+      .catch(() => {
+        // No package block; the scan summary still freezes server-side.
+      })
+    return () => {
+      mounted = false
+    }
+  }, [tripId, stopId])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!recipientName.trim()) {
       showError('De naam van de ontvanger is verplicht.')
+      return
+    }
+    if (packages.length > 0 && !packagesAcknowledged) {
+      showError('Bevestig de collilijst met de ontvanger voordat je de POD afrondt.')
       return
     }
     setBusy(true)
@@ -55,6 +83,7 @@ export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: P
         signatureBase64: signature,
         latitude: null,
         longitude: null,
+        packagesAcknowledged,
       })
 
       let photoFailures = 0
@@ -143,6 +172,30 @@ export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: P
         <FormField label="Opmerkingen" htmlFor="pod-notes">
           <textarea id="pod-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} maxLength={2000} />
         </FormField>
+
+        {packages.length > 0 && (
+          <div className="pod-packages">
+            <h3>Colli op deze stop</h3>
+            <ul>
+              {packages.map((item) => (
+                <li key={item.packageId}>
+                  <span className="pod-package-number">{item.packageNumber}</span>
+                  <span className="pod-package-desc">{item.description}</span>
+                  <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{PACKAGE_STATUS_LABELS[item.status]}</Badge>
+                </li>
+              ))}
+            </ul>
+            <label className="tof-checkbox">
+              <input
+                type="checkbox"
+                checked={packagesAcknowledged}
+                onChange={(e) => setPackagesAcknowledged(e.target.checked)}
+                disabled={busy}
+              />
+              De ontvanger heeft de collilijst en uitkomsten bevestigd
+            </label>
+          </div>
+        )}
 
         <FormField label="Handtekening ontvanger" htmlFor="pod-signature">
           <SignaturePad disabled={busy} onChange={setSignature} />

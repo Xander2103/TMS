@@ -34,6 +34,15 @@ public interface ITripPackageService
 
     Task<TripPackageOperationResult> ResolveIncidentAsync(
         Guid packageId, ResolvePackageIncidentRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Mandatory leaf packages expected at this unloading stop that still ride the vehicle (no delivery outcome yet).</summary>
+    Task<List<Package>> GetUnresolvedAtStopAsync(Guid tripId, Guid stopId, CancellationToken cancellationToken);
+
+    /// <summary>STAGES a CompletionOverride custody event per unresolved package (never saves).</summary>
+    void StageCompletionOverride(Guid tripId, Guid stopId, IEnumerable<Package> packages, string reason);
+
+    /// <summary>STAGES a PodFinalized custody event per leaf package expected at the stop (never saves).</summary>
+    Task<int> StagePodFinalizedAsync(Guid tripId, Guid stopId, int podVersion, CancellationToken cancellationToken);
 }
 
 public class TripPackageService : ITripPackageService
@@ -249,6 +258,8 @@ public class TripPackageService : ITripPackageService
             PackageIncidentAction.Return => PackageLifecycleStatus.ReturnPending,
             PackageIncidentAction.Quarantine => PackageLifecycleStatus.Quarantined,
             PackageIncidentAction.Cancel => PackageLifecycleStatus.Cancelled,
+            PackageIncidentAction.Redeliver => PackageLifecycleStatus.RedeliveryPlanned,
+            PackageIncidentAction.ReturnToSender => PackageLifecycleStatus.ReturnedToSender,
             _ => (PackageLifecycleStatus?)null,
         };
         if (target is null)
@@ -300,9 +311,14 @@ public class TripPackageService : ITripPackageService
             ? PackageExceptionState.Open
             : openExceptions.Count > 0 ? PackageExceptionState.Resolved : package.CurrentExceptionStatus;
 
-        var eventType = request.Action == PackageIncidentAction.Cancel ? PackageEventType.Cancelled
-            : request.Action == PackageIncidentAction.Quarantine ? PackageEventType.Quarantined
-            : PackageEventType.ExceptionResolved;
+        var eventType = request.Action switch
+        {
+            PackageIncidentAction.Cancel => PackageEventType.Cancelled,
+            PackageIncidentAction.Quarantine => PackageEventType.Quarantined,
+            PackageIncidentAction.Return or PackageIncidentAction.Redeliver => PackageEventType.DispositionSet,
+            PackageIncidentAction.ReturnToSender => PackageEventType.ReturnedToSender,
+            _ => PackageEventType.ExceptionResolved,
+        };
         _eventWriter.Stage(package, eventType, old, target.Value,
             new PackageEventContext(Result: request.Action.ToString(), Notes: request.Note.Trim(),
                 ExceptionId: toResolve.FirstOrDefault()?.Id));
@@ -314,6 +330,91 @@ public class TripPackageService : ITripPackageService
             cancellationToken);
 
         return TripPackageOperationResult.Success();
+    }
+
+    public async Task<List<Package>> GetUnresolvedAtStopAsync(Guid tripId, Guid stopId, CancellationToken cancellationToken)
+    {
+        // Only unloading stops gate on outcomes: at a loading stop 'Loaded' IS the success state.
+        var stopType = await _dbContext.TransportOrderStops.AsNoTracking()
+            .Where(s => s.Id == stopId && s.TenantId == _tenantContext.TenantId)
+            .Select(s => (StopType?)s.StopType)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (stopType != StopType.Unloading)
+        {
+            return [];
+        }
+
+        var expected = await ExpectedLeafPackagesAtStopAsync(tripId, stopId, cancellationToken);
+        return expected
+            .Where(p => p.IsMandatory && p.CurrentLifecycleStatus
+                is PackageLifecycleStatus.Loaded or PackageLifecycleStatus.InTransit or PackageLifecycleStatus.AtStop)
+            .ToList();
+    }
+
+    public void StageCompletionOverride(Guid tripId, Guid stopId, IEnumerable<Package> packages, string reason)
+    {
+        foreach (var package in packages)
+        {
+            _eventWriter.Stage(package, PackageEventType.CompletionOverride,
+                package.CurrentLifecycleStatus, package.CurrentLifecycleStatus,
+                new PackageEventContext(TripId: tripId, StopId: stopId, IsOverride: true, Notes: reason.Trim()));
+        }
+    }
+
+    public async Task<int> StagePodFinalizedAsync(Guid tripId, Guid stopId, int podVersion, CancellationToken cancellationToken)
+    {
+        var expected = await ExpectedLeafPackagesAtStopAsync(tripId, stopId, cancellationToken);
+        foreach (var package in expected)
+        {
+            _eventWriter.Stage(package, PackageEventType.PodFinalized,
+                package.CurrentLifecycleStatus, package.CurrentLifecycleStatus,
+                new PackageEventContext(TripId: tripId, StopId: stopId,
+                    Result: package.CurrentLifecycleStatus.ToString(), Notes: $"POD versie {podVersion}"));
+        }
+        return expected.Count;
+    }
+
+    /// <summary>Tracked leaf packages whose (pinned or default) stop for the stop's direction is this stop.</summary>
+    private async Task<List<Package>> ExpectedLeafPackagesAtStopAsync(
+        Guid tripId, Guid stopId, CancellationToken cancellationToken)
+    {
+        var trip = await _dbContext.Trips.AsNoTracking()
+            .Include(t => t.Orders)
+            .FirstOrDefaultAsync(t => t.Id == tripId && t.TenantId == _tenantContext.TenantId, cancellationToken);
+        if (trip is null)
+        {
+            return [];
+        }
+
+        var orderIds = trip.Orders.Where(o => !o.IsDeleted).Select(o => o.TransportOrderId).ToList();
+        var stops = await _dbContext.TransportOrderStops.AsNoTracking()
+            .Where(s => s.TenantId == _tenantContext.TenantId && orderIds.Contains(s.TransportOrderId))
+            .OrderBy(s => s.Sequence)
+            .ToListAsync(cancellationToken);
+        var stop = stops.FirstOrDefault(s => s.Id == stopId);
+        if (stop is null)
+        {
+            return [];
+        }
+
+        var isLoading = stop.StopType == StopType.Loading;
+        var defaultStopId = ResolveDefaultStop(stops, stop.TransportOrderId, isLoading);
+        var packages = await _dbContext.Packages
+            .Where(p => p.TenantId == _tenantContext.TenantId && p.TransportOrderId == stop.TransportOrderId)
+            .ToListAsync(cancellationToken);
+        var parentIds = packages.Where(p => p.ParentPackageId is not null)
+            .Select(p => p.ParentPackageId!.Value)
+            .ToHashSet();
+
+        return packages
+            .Where(p => !parentIds.Contains(p.Id) && p.CurrentLifecycleStatus != PackageLifecycleStatus.Cancelled)
+            .Where(p =>
+            {
+                var pinned = isLoading ? p.LoadingStopId : p.DeliveryStopId;
+                return pinned == stop.Id || (pinned is null && stop.Id == defaultStopId);
+            })
+            .OrderBy(p => p.PackageNumber)
+            .ToList();
     }
 
     private async Task<TripPackageChecklistDto> BuildChecklistAsync(Trip trip, CancellationToken cancellationToken)

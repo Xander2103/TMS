@@ -98,6 +98,7 @@ public class PodServiceTests
         return new PodService(
             db.Context, tenant, user, audit,
             Scanning.ScanServiceTests.CreateService(db, tenant, userId, clock),
+            TestSupport.TripPackageTestFactory.Create(db.Context, tenant, clock),
             new LocalFileStorageService(storageRoot),
             new TransportationService.Api.Modules.Notifications.Services.NotificationService(
                 db.Context, tenant, user, clock),

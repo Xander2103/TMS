@@ -175,16 +175,71 @@ public class PackageScanProcessor : IPackageScanProcessor
                 exceptionId, stageWrongScanEvent: true, input);
         }
 
-        if (package.TransportOrderId != stop.TransportOrderId)
+        // Return/depot scans are not stop-directional; only load/unload must match the stop's order.
+        if (request.ScanType is (ScanType.Load or ScanType.Unload) && package.TransportOrderId != stop.TransportOrderId)
         {
             return Blocked(package, PackageScanOutcome.WrongOrder, ScanResult.WrongItem,
                 $"{package.PackageNumber} hoort bij een andere opdracht op deze rit; scan bij de juiste stop.",
                 stageWrongScanEvent: true, input: input);
         }
 
-        return request.ScanType == ScanType.Load
-            ? await ProcessLoadAsync(input, package, cancellationToken)
-            : await ProcessUnloadAsync(input, package, cancellationToken);
+        return request.ScanType switch
+        {
+            ScanType.Load => await ProcessLoadAsync(input, package, cancellationToken),
+            ScanType.Unload => await ProcessUnloadAsync(input, package, cancellationToken),
+            ScanType.Return => ProcessReturn(input, package),
+            _ => ProcessDepot(input, package),
+        };
+    }
+
+    /// <summary>
+    /// Return scan: the driver takes a refused/failed/return-pending package back on the
+    /// vehicle. No stop-direction check — returns happen wherever the driver stands.
+    /// </summary>
+    private PackageScanProcessResult ProcessReturn(PackageScanInput input, Package package)
+    {
+        var old = package.CurrentLifecycleStatus;
+        if (old == PackageLifecycleStatus.ReturnLoaded)
+        {
+            return Blocked(package, PackageScanOutcome.AlreadyLoaded, ScanResult.DuplicateScan,
+                $"{package.PackageNumber} is al retour geladen; duplicaat geregistreerd.");
+        }
+
+        if (old is not (PackageLifecycleStatus.ReturnPending or PackageLifecycleStatus.Refused
+            or PackageLifecycleStatus.DeliveryFailed))
+        {
+            return Blocked(package, PackageScanOutcome.NotScannable, ScanResult.WrongItem,
+                $"{package.PackageNumber} kan in status '{old}' niet retour geladen worden.");
+        }
+
+        package.CurrentLifecycleStatus = PackageLifecycleStatus.ReturnLoaded;
+        _eventWriter.Stage(package, PackageEventType.ReturnLoaded, old, PackageLifecycleStatus.ReturnLoaded,
+            BuildContext(input, PackageScanOutcome.Success.ToString()));
+        return new PackageScanProcessResult(PackageScanOutcome.Success, ScanResult.Expected,
+            ScanFeedbackLevel.Success, $"{package.PackageNumber} retour geladen.", package, null, []);
+    }
+
+    /// <summary>Depot scan: a return-loaded package is checked back into the depot.</summary>
+    private PackageScanProcessResult ProcessDepot(PackageScanInput input, Package package)
+    {
+        var old = package.CurrentLifecycleStatus;
+        if (old == PackageLifecycleStatus.ReturnedToDepot)
+        {
+            return Blocked(package, PackageScanOutcome.AlreadyDelivered, ScanResult.DuplicateScan,
+                $"{package.PackageNumber} is al in het depot ontvangen; duplicaat geregistreerd.");
+        }
+
+        if (old != PackageLifecycleStatus.ReturnLoaded)
+        {
+            return Blocked(package, PackageScanOutcome.NotScannable, ScanResult.WrongItem,
+                $"{package.PackageNumber} kan in status '{old}' niet in het depot worden ontvangen.");
+        }
+
+        package.CurrentLifecycleStatus = PackageLifecycleStatus.ReturnedToDepot;
+        _eventWriter.Stage(package, PackageEventType.ReturnedToDepot, old, PackageLifecycleStatus.ReturnedToDepot,
+            BuildContext(input, PackageScanOutcome.Success.ToString()));
+        return new PackageScanProcessResult(PackageScanOutcome.Success, ScanResult.Expected,
+            ScanFeedbackLevel.Success, $"{package.PackageNumber} ontvangen in depot.", package, null, []);
     }
 
     private async Task<PackageScanProcessResult> ProcessLoadAsync(
@@ -231,6 +286,17 @@ public class PackageScanProcessor : IPackageScanProcessor
             case PackageLifecycleStatus.Refused:
                 return Blocked(package, PackageScanOutcome.AlreadyDelivered, ScanResult.DuplicateScan,
                     $"{package.PackageNumber} is al afgeleverd; laden is niet meer mogelijk.");
+        }
+
+        // A planned redelivery loads again through the normal load scan.
+        if (package.CurrentLifecycleStatus == PackageLifecycleStatus.RedeliveryPlanned)
+        {
+            var previous = package.CurrentLifecycleStatus;
+            package.CurrentLifecycleStatus = PackageLifecycleStatus.Loaded;
+            _eventWriter.Stage(package, PackageEventType.RedeliveryLoaded, previous, PackageLifecycleStatus.Loaded,
+                BuildContext(input, PackageScanOutcome.Success.ToString()));
+            return new PackageScanProcessResult(PackageScanOutcome.Success, ScanResult.Expected,
+                ScanFeedbackLevel.Success, $"{package.PackageNumber} geladen voor herlevering.", package, null, []);
         }
 
         if (!PackageLifecycleMachine.IsPreTransit(package.CurrentLifecycleStatus))

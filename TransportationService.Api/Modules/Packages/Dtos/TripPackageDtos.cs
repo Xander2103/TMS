@@ -68,6 +68,8 @@ public enum PackageIncidentAction
     Return,
     Quarantine,
     Cancel,
+    Redeliver,
+    ReturnToSender,
 }
 
 public record ResolvePackageIncidentRequest(PackageIncidentAction Action, string Note);

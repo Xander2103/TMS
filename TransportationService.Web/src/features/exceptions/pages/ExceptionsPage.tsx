@@ -112,6 +112,12 @@ export function ExceptionsPage() {
               <code>{r.orderNumber}</code>
             </>
           )}
+          {r.packageNumber && (
+            <>
+              {' · '}
+              <code>{r.packageNumber}</code>
+            </>
+          )}
           {r.stopLabel && ` · ${r.stopLabel}`}
         </span>
       ),

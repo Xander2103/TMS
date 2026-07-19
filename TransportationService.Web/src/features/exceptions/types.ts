@@ -118,6 +118,8 @@ export interface ExceptionListItem {
   reportedByName: string | null
   photoCount: number
   customerVisible: boolean
+  packageId: string | null
+  packageNumber: string | null
 }
 
 export interface ExceptionDetail {
@@ -135,6 +137,9 @@ export interface ExceptionDetail {
   stopLabel: string | null
   cargoItemId: string | null
   cargoDescription: string | null
+  packageId: string | null
+  packageNumber: string | null
+  packageStatus: string | null
   reportedByName: string | null
   driverName: string | null
   occurredAt: string

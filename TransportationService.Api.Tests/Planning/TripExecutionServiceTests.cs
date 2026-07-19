@@ -77,7 +77,8 @@ public class TripExecutionServiceTests
             new NotificationService(db.Context, tenant, new DevCurrentUserContext(userId), clock),
             planningSync, CostingTestFactory.Create(db.Context, tenant, clock),
             TripPackageTestFactory.Create(db.Context, tenant, clock));
-        var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, planningSync, clock);
+        var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, planningSync,
+            TripPackageTestFactory.Create(db.Context, tenant, clock), clock);
         return new Harness(db, sut, tenantId, tripId, orderId, loadStopId, unloadStopId, userId);
     }
 
@@ -117,7 +118,7 @@ public class TripExecutionServiceTests
 
         await h.Sut.ArriveAsync(h.TripId, h.LoadStopId, true, CancellationToken.None);
         var completed = await h.Sut.CompleteAsync(h.TripId, h.LoadStopId,
-            new CompleteStopRequest("Magazijnier P. Peeters", "Alles geladen"), true, CancellationToken.None);
+            new CompleteStopRequest("Magazijnier P. Peeters", "Alles geladen"), true, false, CancellationToken.None);
 
         var stop = completed.Execution!.Stops.Single(s => s.TransportOrderStopId == h.LoadStopId);
         Assert.Equal(StopExecutionStatus.Completed, stop.Status);
@@ -133,8 +134,8 @@ public class TripExecutionServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
 
-        await h.Sut.CompleteAsync(h.TripId, h.LoadStopId, new CompleteStopRequest(null, null), true, CancellationToken.None);
-        var final = await h.Sut.CompleteAsync(h.TripId, h.UnloadStopId, new CompleteStopRequest("Klant", null), true, CancellationToken.None);
+        await h.Sut.CompleteAsync(h.TripId, h.LoadStopId, new CompleteStopRequest(null, null), true, false, CancellationToken.None);
+        var final = await h.Sut.CompleteAsync(h.TripId, h.UnloadStopId, new CompleteStopRequest("Klant", null), true, false, CancellationToken.None);
 
         Assert.Equal(TripStatus.Completed, final.Execution!.TripStatus);
         Assert.Equal(TransportOrderStatus.Completed, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
@@ -150,7 +151,7 @@ public class TripExecutionServiceTests
         Assert.Equal(ExecutionOutcome.ValidationFailed, noReason.Outcome);
 
         await h.Sut.SkipAsync(h.TripId, h.LoadStopId, new SkipStopRequest("Locatie gesloten"), true, CancellationToken.None);
-        var final = await h.Sut.CompleteAsync(h.TripId, h.UnloadStopId, new CompleteStopRequest(null, null), true, CancellationToken.None);
+        var final = await h.Sut.CompleteAsync(h.TripId, h.UnloadStopId, new CompleteStopRequest(null, null), true, false, CancellationToken.None);
 
         Assert.Equal(TripStatus.Completed, final.Execution!.TripStatus);
     }

@@ -32,7 +32,9 @@ public record ExceptionListItemDto(
     string? StopLabel,
     string? ReportedByName,
     int PhotoCount,
-    bool CustomerVisible);
+    bool CustomerVisible,
+    Guid? PackageId = null,
+    string? PackageNumber = null);
 
 public record ExceptionDetailDto(
     Guid Id,
@@ -49,6 +51,9 @@ public record ExceptionDetailDto(
     string? StopLabel,
     Guid? CargoItemId,
     string? CargoDescription,
+    Guid? PackageId,
+    string? PackageNumber,
+    string? PackageStatus,
     string? ReportedByName,
     string? DriverName,
     DateTime OccurredAt,

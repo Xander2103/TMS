@@ -101,7 +101,10 @@ public class TripExecutionController : ControllerBase
         Guid tripId, Guid stopId, CompleteStopRequest request, CancellationToken cancellationToken)
     {
         var restrict = !await IsDispatcherAsync(cancellationToken);
-        return Handle(await _service.CompleteAsync(tripId, stopId, request, restrict, cancellationToken));
+        // Completing with unresolved packages is a separately guarded capability.
+        var allowPackageOverride = _currentUserContext.CurrentUserId is { } userId
+            && await _permissionService.UserHasPermissionAsync(userId, PermissionCodes.ScanningOverride, cancellationToken);
+        return Handle(await _service.CompleteAsync(tripId, stopId, request, restrict, allowPackageOverride, cancellationToken));
     }
 
     [HttpPost("api/trips/{tripId:guid}/stops/{stopId:guid}/skip")]

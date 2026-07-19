@@ -75,7 +75,10 @@ public record MyTripDto(
 /// </summary>
 public record TransitionStopRequest(StopExecutionStatus ToStatus, string? Reason = null, string? Notes = null);
 
-public record CompleteStopRequest(string? PodSignedBy, string? Remarks, string? Reason = null);
+public record CompleteStopRequest(
+    string? PodSignedBy, string? Remarks, string? Reason = null,
+    /// <summary>Reason for completing despite unresolved mandatory packages (requires scanning.override).</summary>
+    string? PackageOverrideReason = null);
 
 public record SkipStopRequest(string Remarks);
 

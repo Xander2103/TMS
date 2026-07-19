@@ -218,7 +218,14 @@ export interface TripPackageReadiness {
   outstandingPackages: TripPackageChecklistItem[]
 }
 
-export type PackageIncidentAction = 'Found' | 'ReleaseToLoad' | 'Return' | 'Quarantine' | 'Cancel'
+export type PackageIncidentAction =
+  | 'Found'
+  | 'ReleaseToLoad'
+  | 'Return'
+  | 'Quarantine'
+  | 'Cancel'
+  | 'Redeliver'
+  | 'ReturnToSender'
 
 export const PACKAGE_INCIDENT_ACTION_LABELS: Record<PackageIncidentAction, string> = {
   Found: 'Gevonden',
@@ -226,4 +233,6 @@ export const PACKAGE_INCIDENT_ACTION_LABELS: Record<PackageIncidentAction, strin
   Return: 'Retour',
   Quarantine: 'Quarantaine',
   Cancel: 'Annuleren',
+  Redeliver: 'Herlevering plannen',
+  ReturnToSender: 'Terug naar afzender',
 }

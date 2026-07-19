@@ -404,12 +404,14 @@ public class ExecutionExceptionService : IExecutionExceptionService
         return new ExceptionListItemDto(
             row.Id, row.OccurredAt, row.Type, row.Severity, row.Status, row.Description,
             context.TripNumber, context.OrderNumber, context.StopLabel, context.ReporterName,
-            photoCount, row.CustomerVisible);
+            photoCount, row.CustomerVisible,
+            row.PackageId, context.PackageNumber);
     }
 
     private sealed record ExceptionContext(
         string TripNumber, string? OrderNumber, string? StopLabel, string? CargoDescription,
-        string? ReporterName, string? DriverName, string? ResolvedByName);
+        string? ReporterName, string? DriverName, string? ResolvedByName,
+        string? PackageNumber, string? PackageStatus);
 
     private async Task<ExceptionContext> LoadContextAsync(ExecutionException row, CancellationToken cancellationToken)
     {
@@ -443,6 +445,18 @@ public class ExecutionExceptionService : IExecutionExceptionService
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
+        string? packageNumber = null;
+        string? packageStatus = null;
+        if (row.PackageId is { } packageId)
+        {
+            var package = await _dbContext.Packages.AsNoTracking().IgnoreQueryFilters()
+                .Where(p => p.Id == packageId && p.TenantId == tenantId)
+                .Select(p => new { p.PackageNumber, p.CurrentLifecycleStatus })
+                .FirstOrDefaultAsync(cancellationToken);
+            packageNumber = package?.PackageNumber;
+            packageStatus = package?.CurrentLifecycleStatus.ToString();
+        }
+
         var reporterName = await UserNameAsync(row.ReportedByUserId, cancellationToken);
         var resolvedByName = await UserNameAsync(row.ResolvedByUserId, cancellationToken);
 
@@ -456,7 +470,8 @@ public class ExecutionExceptionService : IExecutionExceptionService
                 .FirstOrDefaultAsync(cancellationToken);
         }
 
-        return new ExceptionContext(tripNumber, orderNumber, stopLabel, cargoDescription, reporterName, driverName, resolvedByName);
+        return new ExceptionContext(tripNumber, orderNumber, stopLabel, cargoDescription,
+            reporterName, driverName, resolvedByName, packageNumber, packageStatus);
     }
 
     private async Task<string?> UserNameAsync(Guid? userId, CancellationToken cancellationToken) =>
@@ -489,6 +504,7 @@ public class ExecutionExceptionService : IExecutionExceptionService
             row.TransportOrderId, context.OrderNumber,
             row.TransportOrderStopId, context.StopLabel,
             row.CargoItemId, context.CargoDescription,
+            row.PackageId, context.PackageNumber, context.PackageStatus,
             context.ReporterName, context.DriverName,
             row.OccurredAt, row.Latitude, row.Longitude,
             row.DispatcherNotes, row.CustomerVisible,

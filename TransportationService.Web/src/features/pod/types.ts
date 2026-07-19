@@ -43,6 +43,15 @@ export interface PodPhoto {
   createdAt: string
 }
 
+export interface PodPackageLine {
+  packageNumber: string
+  description: string
+  quantity: number
+  unitType: string
+  outcome: string
+  exceptionOpen: boolean
+}
+
 export interface PodVersion {
   id: string
   version: number
@@ -74,6 +83,8 @@ export interface PodDetail {
   longitude: number | null
   hasSignature: boolean
   scannedSummary: PodScanLine[]
+  packageSummary: PodPackageLine[]
+  packagesAcknowledged: boolean
   finalisedByName: string | null
   driverName: string | null
   correctionReason: string | null
@@ -93,6 +104,7 @@ export interface FinalizePodInput {
   signatureBase64: string | null
   latitude: number | null
   longitude: number | null
+  packagesAcknowledged?: boolean
 }
 
 export interface CorrectPodInput extends FinalizePodInput {

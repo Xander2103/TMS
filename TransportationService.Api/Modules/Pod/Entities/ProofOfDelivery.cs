@@ -49,6 +49,12 @@ public class ProofOfDelivery : AuditableTenantEntity
     /// <summary>Frozen scan summary (JSON array) captured at finalisation.</summary>
     public string ScannedSummaryJson { get; set; } = "[]";
 
+    /// <summary>Frozen per-package outcome list at finalisation; corrections copy it verbatim.</summary>
+    public string PackageSummaryJson { get; set; } = "[]";
+
+    /// <summary>Whether the recipient explicitly confirmed the package summary.</summary>
+    public bool PackagesAcknowledged { get; set; }
+
     public Guid? FinalisedByUserId { get; set; }
     public Guid? DriverId { get; set; }
 

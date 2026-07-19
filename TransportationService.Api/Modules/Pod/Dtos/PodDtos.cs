@@ -12,7 +12,9 @@ public record FinalizePodRequest(
     /// <summary>Signature as a data URL (data:image/png;base64,...), captured from a canvas.</summary>
     string? SignatureBase64,
     decimal? Latitude,
-    decimal? Longitude);
+    decimal? Longitude,
+    /// <summary>Recipient confirmed the per-package outcome list; required when packages exist.</summary>
+    bool PackagesAcknowledged = false);
 
 public record CorrectPodRequest(
     string RecipientName,
@@ -34,6 +36,15 @@ public record PodScanLineDto(
     decimal ScannedQuantity,
     decimal DamagedQuantity,
     string State);
+
+/// <summary>One tracked package frozen into the proof: its outcome at finalisation time.</summary>
+public record PodPackageLineDto(
+    string PackageNumber,
+    string Description,
+    decimal Quantity,
+    string UnitType,
+    string Outcome,
+    bool ExceptionOpen);
 
 public record PodPhotoDto(Guid Id, PodPhotoCategory Category, string FileName, string ContentType, DateTime CreatedAt);
 
@@ -61,6 +72,8 @@ public record PodDetailDto(
     decimal? Longitude,
     bool HasSignature,
     IReadOnlyList<PodScanLineDto> ScannedSummary,
+    IReadOnlyList<PodPackageLineDto> PackageSummary,
+    bool PackagesAcknowledged,
     string? FinalisedByName,
     string? DriverName,
     string? CorrectionReason,

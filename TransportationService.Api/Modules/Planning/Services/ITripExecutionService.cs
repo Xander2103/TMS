@@ -22,7 +22,9 @@ public interface ITripExecutionService
     Task<ExecutionResult> ArriveAsync(Guid tripId, Guid stopId, bool restrictToOwnDriver, CancellationToken cancellationToken);
 
     /// <summary>Completes a stop; completing the last open stop auto-completes the trip and its orders.</summary>
-    Task<ExecutionResult> CompleteAsync(Guid tripId, Guid stopId, CompleteStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken);
+    Task<ExecutionResult> CompleteAsync(
+        Guid tripId, Guid stopId, CompleteStopRequest request, bool restrictToOwnDriver, bool allowPackageOverride,
+        CancellationToken cancellationToken);
 
     Task<ExecutionResult> SkipAsync(Guid tripId, Guid stopId, SkipStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken);
 }

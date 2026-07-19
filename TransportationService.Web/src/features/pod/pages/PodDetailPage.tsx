@@ -278,6 +278,41 @@ export function PodDetailPage() {
         </section>
       )}
 
+      {pod.packageSummary.length > 0 && (
+        <section className="to-section">
+          <h2>Colli (bevroren bij afronding)</h2>
+          <p className="pod-ack-line">
+            {pod.packagesAcknowledged
+              ? '✓ De ontvanger heeft de collilijst bevestigd.'
+              : 'De collilijst is niet expliciet bevestigd.'}
+          </p>
+          <table className="to-stops-table">
+            <thead>
+              <tr>
+                <th>Collinummer</th>
+                <th>Omschrijving</th>
+                <th>Aantal</th>
+                <th>Uitkomst</th>
+                <th>Melding</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pod.packageSummary.map((line) => (
+                <tr key={line.packageNumber}>
+                  <td><code>{line.packageNumber}</code></td>
+                  <td>{line.description}</td>
+                  <td>
+                    {line.quantity} {line.unitType}
+                  </td>
+                  <td>{line.outcome}</td>
+                  <td>{line.exceptionOpen ? 'Open melding' : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
       {(signatureUrl || pod.hasSignature) && (
         <section className="to-section">
           <h2>Handtekening</h2>

@@ -73,22 +73,34 @@ public class ScanService : IScanService
             }
         }
 
-        var guard = await GuardAsync(tripId, stopId, restrictToOwnDriver, requireInProgress: true, cancellationToken);
+        // Return/depot scans record the return leg AFTER a stop closed (and possibly after the
+        // trip completed), so they skip the in-progress and terminal-stop guards.
+        var isReturnLeg = request.ScanType is ScanType.Return or ScanType.Depot;
+
+        var guard = await GuardAsync(tripId, stopId, restrictToOwnDriver, requireInProgress: !isReturnLeg, cancellationToken);
         if (guard.Error is not null)
         {
             return guard.Error;
         }
 
+        if (isReturnLeg && guard.Trip!.Status is not (TripStatus.InProgress or TripStatus.Completed))
+        {
+            return ScanOperationResult.InvalidState("Retour- en depotscans kunnen alleen tijdens of na de uitvoering van de rit.");
+        }
+
         var stop = guard.Stop!;
 
         // Scanning stays possible until the stop reaches a terminal status.
-        var stopStatus = await _dbContext.StopExecutions.AsNoTracking()
-            .Where(e => e.TripId == tripId && e.TransportOrderStopId == stopId && e.TenantId == _tenantContext.TenantId)
-            .Select(e => (StopExecutionStatus?)e.Status)
-            .FirstOrDefaultAsync(cancellationToken) ?? StopExecutionStatus.Planned;
-        if (StopStatusMachine.IsTerminal(stopStatus))
+        if (!isReturnLeg)
         {
-            return ScanOperationResult.InvalidState("Deze stop is al afgehandeld; scannen kan niet meer.");
+            var stopStatus = await _dbContext.StopExecutions.AsNoTracking()
+                .Where(e => e.TripId == tripId && e.TransportOrderStopId == stopId && e.TenantId == _tenantContext.TenantId)
+                .Select(e => (StopExecutionStatus?)e.Status)
+                .FirstOrDefaultAsync(cancellationToken) ?? StopExecutionStatus.Planned;
+            if (StopStatusMachine.IsTerminal(stopStatus))
+            {
+                return ScanOperationResult.InvalidState("Deze stop is al afgehandeld; scannen kan niet meer.");
+            }
         }
 
         var barcode = request.Barcode.Trim();
@@ -188,9 +200,9 @@ public class ScanService : IScanService
         Guid tripId, TransportOrderStop stop, GuardResult guard, BarcodeResolution resolution,
         SubmitScanRequest request, string barcode, CancellationToken cancellationToken)
     {
-        if (request.ScanType is not (ScanType.Load or ScanType.Unload))
+        if (request.ScanType == ScanType.Exception)
         {
-            return ScanOperationResult.Invalid("Voor colli-scans wordt alleen laden of lossen ondersteund.");
+            return ScanOperationResult.Invalid("Gebruik het uitzonderingenformulier om een probleem te melden.");
         }
 
         var scanEventId = Guid.NewGuid();

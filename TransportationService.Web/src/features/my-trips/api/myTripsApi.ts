@@ -41,10 +41,14 @@ export function completeStop(
   podSignedBy: string | null,
   remarks: string | null,
   reason: string | null = null,
+  packageOverrideReason: string | null = null,
 ): Promise<TripExecution> {
-  return apiClient.postJson<TripExecution, { podSignedBy: string | null; remarks: string | null; reason: string | null }>(
+  return apiClient.postJson<
+    TripExecution,
+    { podSignedBy: string | null; remarks: string | null; reason: string | null; packageOverrideReason: string | null }
+  >(
     `/api/trips/${tripId}/stops/${stopId}/complete`,
-    { podSignedBy, remarks, reason },
+    { podSignedBy, remarks, reason, packageOverrideReason },
   )
 }
 

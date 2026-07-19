@@ -4,6 +4,7 @@ using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Packages.Services;
 using TransportationService.Api.Modules.Planning.Dtos;
 using TransportationService.Api.Modules.Planning.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -20,6 +21,7 @@ public class TripExecutionService : ITripExecutionService
     private readonly IAuditService _auditService;
     private readonly ITripService _tripService;
     private readonly ITripPlanningSyncService _planningSyncService;
+    private readonly ITripPackageService _tripPackageService;
     private readonly TimeProvider _timeProvider;
 
     public TripExecutionService(
@@ -29,6 +31,7 @@ public class TripExecutionService : ITripExecutionService
         IAuditService auditService,
         ITripService tripService,
         ITripPlanningSyncService planningSyncService,
+        ITripPackageService tripPackageService,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
@@ -37,6 +40,7 @@ public class TripExecutionService : ITripExecutionService
         _auditService = auditService;
         _tripService = tripService;
         _planningSyncService = planningSyncService;
+        _tripPackageService = tripPackageService;
         _timeProvider = timeProvider;
     }
 
@@ -125,13 +129,33 @@ public class TripExecutionService : ITripExecutionService
         TransitionCoreAsync(tripId, stopId, new TransitionStopRequest(StopExecutionStatus.Arrived),
             restrictToOwnDriver, beforeSave: null, cancellationToken);
 
-    public Task<ExecutionResult> CompleteAsync(
-        Guid tripId, Guid stopId, CompleteStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken) =>
-        TransitionCoreAsync(tripId, stopId,
+    public async Task<ExecutionResult> CompleteAsync(
+        Guid tripId, Guid stopId, CompleteStopRequest request, bool restrictToOwnDriver, bool allowPackageOverride,
+        CancellationToken cancellationToken)
+    {
+        // Completion gate: an unloading stop cannot close while mandatory packages still ride
+        // the vehicle without a delivery outcome — unless an override holder gives a reason.
+        var unresolved = await _tripPackageService.GetUnresolvedAtStopAsync(tripId, stopId, cancellationToken);
+        if (unresolved.Count > 0)
+        {
+            var reason = Trim(request.PackageOverrideReason);
+            if (!allowPackageOverride || reason is null)
+            {
+                var numbers = string.Join(", ", unresolved.Select(p => p.PackageNumber).Take(5));
+                return ExecutionResult.Invalid(
+                    $"Er zijn nog {unresolved.Count} verplichte colli zonder uitkomst ({numbers}); "
+                    + "scan of registreer ze, of rond af met een vrijgave en reden.");
+            }
+            // The override custody trail commits atomically with the completion below.
+            _tripPackageService.StageCompletionOverride(tripId, stopId, unresolved, reason);
+        }
+
+        return await TransitionCoreAsync(tripId, stopId,
             new TransitionStopRequest(StopExecutionStatus.Completed, Reason: request.Reason, Notes: request.Remarks),
             restrictToOwnDriver,
             beforeSave: execution => execution.PodSignedBy = Trim(request.PodSignedBy),
             cancellationToken);
+    }
 
     public Task<ExecutionResult> SkipAsync(
         Guid tripId, Guid stopId, SkipStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken) =>

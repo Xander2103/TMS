@@ -81,6 +81,8 @@ export function TripExecutionPage() {
   const [podSignedBy, setPodSignedBy] = useState('')
   const [completeRemarks, setCompleteRemarks] = useState('')
   const [completeLateReason, setCompleteLateReason] = useState('')
+  const [packageGateMessage, setPackageGateMessage] = useState<string | null>(null)
+  const [packageOverrideReason, setPackageOverrideReason] = useState('')
 
   const [reasonTarget, setReasonTarget] = useState<ReasonTarget | null>(null)
   const [reason, setReason] = useState('')
@@ -197,10 +199,17 @@ export function TripExecutionPage() {
         podSignedBy.trim() || null,
         completeRemarks.trim() || null,
         completeLateReason.trim() || null,
+        packageOverrideReason.trim() || null,
       )
       afterUpdate(updated, 'Stop afgerond.')
       setCompleteTarget(null)
+      setPackageGateMessage(null)
+      setPackageOverrideReason('')
     } catch (err) {
+      // The package gate keeps the dialog open: override holders get a reason field.
+      if (err instanceof ApiError && err.status === 400 && (err.message.includes('colli zonder uitkomst') || err.message.includes('vrijgave'))) {
+        setPackageGateMessage(err.message)
+      }
       showError(err instanceof ApiError ? err.message : 'De stop kon niet worden afgerond.')
     } finally {
       setBusy(false)
@@ -467,6 +476,29 @@ export function TripExecutionPage() {
             <FormField label="Opmerkingen" htmlFor="mt-remarks">
               <textarea id="mt-remarks" rows={2} value={completeRemarks} onChange={(e) => setCompleteRemarks(e.target.value)} disabled={busy} maxLength={2000} />
             </FormField>
+            {packageGateMessage && (
+              <>
+                <p className="mt-package-gate" role="alert">
+                  {packageGateMessage}
+                </p>
+                {hasPermission('scanning.override') && (
+                  <FormField
+                    label="Vrijgavereden colli"
+                    htmlFor="mt-package-override"
+                    required
+                    hint="Afronden zonder uitkomst per colli vereist een reden (vrijgaverecht)."
+                  >
+                    <input
+                      id="mt-package-override"
+                      value={packageOverrideReason}
+                      onChange={(e) => setPackageOverrideReason(e.target.value)}
+                      disabled={busy}
+                      maxLength={500}
+                    />
+                  </FormField>
+                )}
+              </>
+            )}
             <p className="mt-pod-note">Foto's en gescande documenten koppelen volgt in een latere versie.</p>
           </form>
         </Modal>

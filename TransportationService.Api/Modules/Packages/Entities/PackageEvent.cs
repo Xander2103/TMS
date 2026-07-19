@@ -31,6 +31,7 @@ public enum PackageEventType
     RedeliveryLoaded,
     Quarantined,
     DepartureOverride,
+    CompletionOverride,
     PodFinalized,
 }
 

@@ -7,6 +7,9 @@ using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Messaging.Entities;
 using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Notifications.Services;
+using TransportationService.Api.Modules.Packages.Dtos;
+using TransportationService.Api.Modules.Packages.Entities;
+using TransportationService.Api.Modules.Packages.Services;
 using TransportationService.Api.Modules.Pod.Dtos;
 using TransportationService.Api.Modules.Pod.Entities;
 using TransportationService.Api.Modules.Qualifications.Services;
@@ -29,6 +32,7 @@ public class PodService : IPodService
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IAuditService _auditService;
     private readonly IScanService _scanService;
+    private readonly ITripPackageService _tripPackageService;
     private readonly IFileStorageService _fileStorageService;
     private readonly INotificationService _notificationService;
     private readonly IMessageOutboxService _messageOutbox;
@@ -40,6 +44,7 @@ public class PodService : IPodService
         ICurrentUserContext currentUserContext,
         IAuditService auditService,
         IScanService scanService,
+        ITripPackageService tripPackageService,
         IFileStorageService fileStorageService,
         INotificationService notificationService,
         IMessageOutboxService messageOutbox,
@@ -50,6 +55,7 @@ public class PodService : IPodService
         _currentUserContext = currentUserContext;
         _auditService = auditService;
         _scanService = scanService;
+        _tripPackageService = tripPackageService;
         _fileStorageService = fileStorageService;
         _notificationService = notificationService;
         _messageOutbox = messageOutbox;
@@ -108,6 +114,22 @@ public class PodService : IPodService
             .Select(i => new PodScanLineDto(i.Description, i.Barcode, i.ExpectedQuantity, i.ScannedQuantity, i.DamagedQuantity, i.State.ToString()))
             .ToList();
 
+        // Package gate: every mandatory package needs a delivery outcome before proof can be
+        // signed, and the recipient must confirm the package list when packages exist.
+        var unresolved = await _tripPackageService.GetUnresolvedAtStopAsync(tripId, stopId, cancellationToken);
+        if (unresolved.Count > 0)
+        {
+            var numbers = string.Join(", ", unresolved.Select(p => p.PackageNumber).Take(5));
+            return PodOperationResult.Invalid(
+                $"Er zijn nog {unresolved.Count} verplichte colli zonder uitkomst ({numbers}); scan of registreer ze eerst.");
+        }
+
+        var packageLines = await BuildPackageSnapshotAsync(tripId, stopId, cancellationToken);
+        if (packageLines.Count > 0 && !request.PackagesAcknowledged)
+        {
+            return PodOperationResult.Invalid("Bevestig de collilijst met de ontvanger voordat de POD wordt afgerond.");
+        }
+
         var pod = new ProofOfDelivery
         {
             Id = Guid.NewGuid(),
@@ -128,10 +150,14 @@ public class PodService : IPodService
             Longitude = request.Longitude,
             SignaturePath = signatureResult.StoragePath,
             ScannedSummaryJson = JsonSerializer.Serialize(snapshot, SnapshotJson),
+            PackageSummaryJson = JsonSerializer.Serialize(packageLines, SnapshotJson),
+            PackagesAcknowledged = packageLines.Count > 0 && request.PackagesAcknowledged,
             FinalisedByUserId = _currentUserContext.CurrentUserId,
             DriverId = driverId,
         };
         _dbContext.Add(pod);
+        // Every package at the stop gets a PodFinalized custody event in the same save.
+        await _tripPackageService.StagePodFinalizedAsync(tripId, stopId, pod.Version, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, pod.Id.ToString(), "Finalised", null,
@@ -163,6 +189,21 @@ public class PodService : IPodService
         }
 
         return PodOperationResult.Success((await MapDetailAsync(pod.Id, cancellationToken))!);
+    }
+
+    /// <summary>Leaf packages expected at the stop, mapped to frozen proof lines.</summary>
+    private async Task<List<PodPackageLineDto>> BuildPackageSnapshotAsync(
+        Guid tripId, Guid stopId, CancellationToken cancellationToken)
+    {
+        var result = await _tripPackageService.GetChecklistAsync(tripId, stopId, restrictToOwnDriver: false, cancellationToken);
+        var checklist = result.Payload as TripPackageChecklistDto;
+        var items = checklist?.Stops.FirstOrDefault()?.Packages ?? [];
+        return items
+            .Where(i => !i.IsGroup)
+            .Select(i => new PodPackageLineDto(
+                i.PackageNumber, i.Description, i.Quantity, i.UnitTypeLabel ?? i.UnitType,
+                i.Status.ToString(), i.ExceptionState == PackageExceptionState.Open))
+            .ToList();
     }
 
     public async Task<PodOperationResult> CorrectAsync(Guid podId, CorrectPodRequest request, CancellationToken cancellationToken)
@@ -217,6 +258,8 @@ public class PodService : IPodService
             Longitude = request.Longitude ?? original.Longitude,
             SignaturePath = signatureResult.StoragePath ?? original.SignaturePath,
             ScannedSummaryJson = original.ScannedSummaryJson,
+            PackageSummaryJson = original.PackageSummaryJson,
+            PackagesAcknowledged = original.PackagesAcknowledged,
             FinalisedByUserId = _currentUserContext.CurrentUserId,
             DriverId = original.DriverId,
             CorrectionReason = request.Reason.Trim(),
@@ -466,6 +509,16 @@ public class PodService : IPodService
             snapshot = [];
         }
 
+        List<PodPackageLineDto> packageSnapshot;
+        try
+        {
+            packageSnapshot = JsonSerializer.Deserialize<List<PodPackageLineDto>>(pod.PackageSummaryJson, SnapshotJson) ?? [];
+        }
+        catch (JsonException)
+        {
+            packageSnapshot = [];
+        }
+
         return new PodDetailDto(
             pod.Id, pod.Version, pod.IsCurrent,
             pod.TripId, tripNumber,
@@ -476,6 +529,8 @@ public class PodService : IPodService
             pod.DeliveredAt, pod.Latitude, pod.Longitude,
             pod.SignaturePath is not null,
             snapshot,
+            packageSnapshot,
+            pod.PackagesAcknowledged,
             finalisedByName, driverName,
             pod.CorrectionReason, pod.CorrectedFromPodId,
             pod.CustomerVisible,

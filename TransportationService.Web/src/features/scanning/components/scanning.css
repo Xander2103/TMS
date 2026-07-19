@@ -257,6 +257,31 @@
   margin-top: 0.5rem;
 }
 
+.scan-mode-toggle {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.scan-mode {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.scan-mode input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scan-mode-active {
+  background: var(--accent, #1d4ed8);
+  border-color: var(--accent, #1d4ed8);
+  color: #fff;
+}
+
 .scan-group-results {
   border: 1px solid var(--border);
   border-radius: 8px;

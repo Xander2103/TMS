@@ -12,6 +12,8 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
+import { resolvePackageIncident } from '../../packages/api/packagesApi'
+import { PACKAGE_INCIDENT_ACTION_LABELS, type PackageIncidentAction } from '../../packages/types'
 import {
   changeExceptionStatus,
   deleteExceptionPhoto,
@@ -38,6 +40,18 @@ function formatDateTime(value: string | null): string {
   return value ? value.slice(0, 16).replace('T', ' ') : '—'
 }
 
+/** Dispositions offered per current package status; the server re-validates via the lifecycle machine. */
+const PACKAGE_DISPOSITIONS: Record<string, PackageIncidentAction[]> = {
+  Missing: ['Found', 'Return', 'Cancel'],
+  Damaged: ['ReleaseToLoad', 'Return', 'Quarantine', 'Cancel'],
+  Refused: ['Return', 'Redeliver', 'Quarantine'],
+  DeliveryFailed: ['Return', 'Redeliver', 'Quarantine'],
+  PartiallyDelivered: ['Return', 'Redeliver', 'Quarantine'],
+  ReturnPending: ['Redeliver', 'Quarantine', 'Cancel'],
+  ReturnedToDepot: ['Redeliver', 'ReturnToSender', 'Quarantine', 'Cancel'],
+  Quarantined: ['Return', 'Redeliver', 'Cancel'],
+}
+
 export function ExceptionDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const { showSuccess, showError } = useToast()
@@ -56,7 +70,11 @@ export function ExceptionDetailPage() {
   const [dispatcherNotes, setDispatcherNotes] = useState('')
   const [customerVisible, setCustomerVisible] = useState(false)
 
+  const [dispositionAction, setDispositionAction] = useState<PackageIncidentAction | null>(null)
+  const [dispositionNote, setDispositionNote] = useState('')
+
   const canResolve = hasPermission('exceptions.resolve')
+  const canDisposition = hasPermission('package_exceptions.manage')
 
   useEffect(() => {
     let mounted = true
@@ -119,6 +137,22 @@ export function ExceptionDetailPage() {
     }
   }
 
+  async function submitDisposition() {
+    if (!detail?.packageId || !dispositionAction) return
+    setBusy(true)
+    try {
+      await resolvePackageIncident(detail.packageId, dispositionAction, dispositionNote.trim())
+      showSuccess(`Vervolgactie '${PACKAGE_INCIDENT_ACTION_LABELS[dispositionAction]}' uitgevoerd.`)
+      setDispositionAction(null)
+      setDispositionNote('')
+      setDetail(await getException(id))
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De vervolgactie kon niet worden uitgevoerd.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleEditSave() {
     setBusy(true)
     try {
@@ -170,6 +204,28 @@ export function ExceptionDetailPage() {
         }
       />
 
+      {canDisposition && detail.packageId && detail.packageStatus
+        && (PACKAGE_DISPOSITIONS[detail.packageStatus]?.length ?? 0) > 0 && (
+        <section className="to-section">
+          <h2>Vervolgactie colli {detail.packageNumber}</h2>
+          <div className="exc-actions">
+            {PACKAGE_DISPOSITIONS[detail.packageStatus].map((action) => (
+              <Button
+                key={action}
+                variant="secondary"
+                onClick={() => {
+                  setDispositionAction(action)
+                  setDispositionNote('')
+                }}
+                disabled={busy}
+              >
+                {PACKAGE_INCIDENT_ACTION_LABELS[action]}
+              </Button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {canResolve && detail.allowedTransitions.length > 0 && (
         <div className="exc-actions">
           {detail.allowedTransitions.map((target) => (
@@ -218,6 +274,19 @@ export function ExceptionDetailPage() {
           <div>
             <dt>Goederenlijn</dt>
             <dd>{detail.cargoDescription ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Colli</dt>
+            <dd>
+              {detail.packageNumber ? (
+                <>
+                  <code>{detail.packageNumber}</code>
+                  {detail.packageStatus && <> — {detail.packageStatus}</>}
+                </>
+              ) : (
+                '—'
+              )}
+            </dd>
           </div>
           <div>
             <dt>Aantal</dt>
@@ -335,6 +404,38 @@ export function ExceptionDetailPage() {
         <h2>Historiek</h2>
         <AuditHistoryPanel entityType="ExecutionException" entityId={detail.id} />
       </section>
+
+      {dispositionAction && (
+        <Modal
+          title={`Colli ${detail.packageNumber}: ${PACKAGE_INCIDENT_ACTION_LABELS[dispositionAction]}`}
+          onClose={() => setDispositionAction(null)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDispositionAction(null)} disabled={busy}>
+                Annuleren
+              </Button>
+              <Button
+                onClick={() => void submitDisposition()}
+                disabled={busy || !dispositionNote.trim()}
+              >
+                Bevestigen
+              </Button>
+            </>
+          }
+        >
+          <FormField label="Toelichting" htmlFor="disposition-note" required>
+            <input
+              id="disposition-note"
+              value={dispositionNote}
+              onChange={(e) => setDispositionNote(e.target.value)}
+              disabled={busy}
+              maxLength={500}
+              autoFocus
+            />
+          </FormField>
+        </Modal>
+      )}
 
       {statusTarget && (
         <Modal

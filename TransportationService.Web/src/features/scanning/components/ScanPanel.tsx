@@ -30,6 +30,7 @@ import {
 import './scanning.css'
 
 const PRE_TRANSIT: string[] = ['Created', 'Labelled', 'AwaitingLoading']
+const RETURN_PHASE: string[] = ['ReturnPending', 'Refused', 'DeliveryFailed', 'ReturnLoaded']
 
 function outcomeLabel(outcome: string): string {
   return PACKAGE_SCAN_OUTCOME_LABELS[outcome as PackageScanOutcome] ?? outcome
@@ -76,6 +77,9 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
 
   const [missingFor, setMissingFor] = useState<TripPackageChecklistItem | null>(null)
   const [missingNote, setMissingNote] = useState('')
+
+  // Return-phase packages unlock the retour/depot scan modes on top of the stop's own mode.
+  const [activeType, setActiveType] = useState<ScanType>(scanType)
 
   const barcodeRef = useRef<HTMLInputElement>(null)
 
@@ -125,15 +129,15 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
     setBusy(true)
     try {
       const result = await submitScan(tripId, stopId, {
-        scanType,
+        scanType: activeType,
         barcode: code,
         quantity: qty,
         damaged,
         damageNote: damaged ? damageNote.trim() || null : null,
         deviceInfo: 'web-portal',
         clientEventId: crypto.randomUUID(),
-        refused: scanType === 'Unload' ? refused : false,
-        partial: scanType === 'Unload' ? partial : false,
+        refused: activeType === 'Unload' ? refused : false,
+        partial: activeType === 'Unload' ? partial : false,
         note: refused || partial ? outcomeNote.trim() || null : null,
       })
       setFeedback(result)
@@ -148,7 +152,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
             transportOrderStopId: stopId,
             cargoItemId: result.cargoItemId,
             cargoDescription: result.cargoDescription,
-            scanType,
+            scanType: activeType,
             result: result.result,
             barcode: code,
             quantity: qty,
@@ -290,6 +294,27 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
           </section>
         )}
 
+        {executable && packages.some((p) => RETURN_PHASE.includes(p.status)) && (
+          <div className="scan-mode-toggle" role="radiogroup" aria-label="Scanmodus">
+            {([
+              [scanType, scanType === 'Load' ? 'Laden' : 'Lossen'],
+              ['Return', 'Retour'],
+              ['Depot', 'Depot'],
+            ] as Array<[ScanType, string]>).map(([mode, label]) => (
+              <label key={mode} className={`scan-mode ${activeType === mode ? 'scan-mode-active' : ''}`}>
+                <input
+                  type="radio"
+                  name="scan-mode"
+                  checked={activeType === mode}
+                  onChange={() => setActiveType(mode)}
+                  disabled={busy}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        )}
+
         {executable && (
           <form className="scan-form" onSubmit={handleSubmit} noValidate>
             <label className="scan-barcode-label" htmlFor="scan-barcode">
@@ -342,7 +367,7 @@ export function ScanPanel({ tripId, stopId, stopLabel, scanType, canCorrect, onC
                 />
               </FormField>
             )}
-            {scanType === 'Unload' && (
+            {activeType === 'Unload' && (
               <div className="scan-unload-outcomes" role="group" aria-label="Afleveruitkomst">
                 <label className="scan-damaged">
                   <input
