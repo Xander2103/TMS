@@ -31,6 +31,13 @@ public class Trip : AuditableTenantEntity
     public DateTime? PlannedStart { get; set; }
     public DateTime? PlannedEnd { get; set; }
 
+    // Costing inputs. Planned values are set while drafting; actuals after execution
+    // (odometer/manual). PlannedDistanceKm is the TOTAL incl. empty kilometres.
+    public decimal? PlannedDistanceKm { get; set; }
+    public decimal? PlannedEmptyKm { get; set; }
+    public decimal? ActualDistanceKm { get; set; }
+    public decimal? ActualEmptyKm { get; set; }
+
     public string? Notes { get; set; }
 
     /// <summary>Manual delay applied on top of the internal ETA raming (Wave 10); 0 = none.</summary>

@@ -35,7 +35,7 @@ public class VehicleServiceTests
         plate, Vin: "VF1ABC000000000", CategoryId: null, Brand: "Volvo", Model: "FH16", Year: 2022,
         FirstRegistrationDate: new DateOnly(2022, 1, 1), FuelType: FuelType.Diesel, EmissionClass: EmissionClass.Euro6,
         GrossVehicleWeightKg: 40000m, PayloadKg: 24000m, LengthMeters: 16.5m, WidthMeters: 2.55m, HeightMeters: 4m, VolumeM3: 90m,
-        OdometerKm: 100000, HasCrane: false, HasRefrigeration: false, HasTailLift: false, AdrSuitable: true,
+        OdometerKm: 100000, ConsumptionLPer100Km: null, HasCrane: false, HasRefrigeration: false, HasTailLift: false, AdrSuitable: true,
         OwnershipType: VehicleOwnershipType.Owned, FixedDriverId: null, CurrentDriverId: null, Notes: null);
 
     [Fact]
@@ -118,7 +118,7 @@ public class VehicleServiceTests
         var created = await h.Sut.CreateAsync(CreateRequest(), CancellationToken.None);
         await h.Sut.UpdateAsync(created.Vehicle!.Id, new UpdateVehicleRequest(
             created.Vehicle.LicensePlate, null, null, null, null, null, null, FuelType.Diesel, null,
-            null, null, null, null, null, null, 0, false, false, false, false,
+            null, null, null, null, null, null, 0, null, false, false, false, false,
             VehicleOwnershipType.Owned, VehicleOperationalStatus.Available, IsActive: false, null), CancellationToken.None);
 
         var options = await h.Sut.GetOptionsAsync(CancellationToken.None);

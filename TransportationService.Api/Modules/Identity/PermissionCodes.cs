@@ -173,6 +173,12 @@ public static class PermissionCodes
     public const string EmployeePlanningManage = "employee_planning.manage";
     public const string EmployeePlanningConflictOverride = "employee_planning.conflict_override";
 
+    // --- Trip costing & profitability (sensitive financial data) ---
+    public const string TripCostsView = "trip_costs.view";
+    public const string TripCostsManage = "trip_costs.manage";
+    public const string TripCostsOverride = "trip_costs.override";
+    public const string ProfitabilityView = "profitability.view";
+
     // --- Proof of delivery ---
     public const string PodView = "pod.view";
     public const string PodFinalize = "pod.finalize";
@@ -308,6 +314,10 @@ public static class PermissionCodes
         (EmployeePlanningView, "employee_planning", "view", "Personeelsplanning bekijken"),
         (EmployeePlanningManage, "employee_planning", "manage", "Personeelsplanning en shifts beheren"),
         (EmployeePlanningConflictOverride, "employee_planning", "conflict_override", "Blokkerende planningsconflicten overschrijven"),
+        (TripCostsView, "trip_costs", "view", "Ritkosten en tarieven bekijken"),
+        (TripCostsManage, "trip_costs", "manage", "Ritkosten berekenen, invoeren en afronden; tarieven beheren"),
+        (TripCostsOverride, "trip_costs", "override", "Kostenregels overschrijven en afgeronde kosten heropenen"),
+        (ProfitabilityView, "profitability", "view", "Rendement en marges van ritten bekijken"),
         (PodView, "pod", "view", "Afleverbewijzen bekijken"),
         (PodFinalize, "pod", "finalize", "Afleverbewijzen opnemen en afronden"),
         (PodCorrect, "pod", "correct", "Afleverbewijzen corrigeren (nieuwe versie)"),

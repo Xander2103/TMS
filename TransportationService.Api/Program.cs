@@ -192,6 +192,12 @@ builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Se
 builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Services.ITripPlanningSyncService,
     TransportationService.Api.Modules.EmployeePlanning.Services.TripPlanningSyncService>();
 
+// Trip costing: effective-dated rate cards + estimated/actual/final cost engine
+builder.Services.AddScoped<TransportationService.Api.Modules.TripCosting.Services.ICostRateService,
+    TransportationService.Api.Modules.TripCosting.Services.CostRateService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.TripCosting.Services.ITripCostingService,
+    TransportationService.Api.Modules.TripCosting.Services.TripCostingService>();
+
 // Outlook/Exchange foundation: queued calendar sync behind a provider seam. The fake provider
 // stands in until Microsoft Graph credentials exist; swap ICalendarProvider then.
 builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Services.QueueingCalendarSyncService>();

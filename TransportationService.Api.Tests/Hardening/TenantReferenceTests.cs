@@ -66,7 +66,7 @@ public class TenantReferenceTests
         var sut = new VehicleService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId));
         var result = await sut.CreateAsync(new CreateVehicleRequest(
             "1-AAA-1", null, null, null, null, null, null, FuelType.Diesel, null,
-            null, null, null, null, null, null, 0, false, false, false, false,
+            null, null, null, null, null, null, 0, null, false, false, false, false,
             VehicleOwnershipType.Owned, FixedDriverId: foreignDriver, CurrentDriverId: null, Notes: null), CancellationToken.None);
 
         Assert.Equal(VehicleOperationOutcome.InvalidReference, result.Outcome);
@@ -180,7 +180,7 @@ public class TenantReferenceTests
         var sut = new VehicleService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId));
         await sut.CreateAsync(new CreateVehicleRequest(
             "1-CCC-3", null, null, "Volvo", "FH16", null, null, FuelType.Diesel, null,
-            null, null, null, null, null, null, 0, false, false, false, false,
+            null, null, null, null, null, null, 0, null, false, false, false, false,
             VehicleOwnershipType.Owned, null, null, null), CancellationToken.None);
 
         var page = await sut.SearchAsync("volvo", null, null, null, PageRequest.Of(1, 25), CancellationToken.None);

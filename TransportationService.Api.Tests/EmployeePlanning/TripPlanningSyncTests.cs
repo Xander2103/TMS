@@ -38,7 +38,8 @@ public class TripPlanningSyncTests
                 new AuditService(Db.Context, tenant, new DevCurrentUserContext(null)),
                 new PlanningConflictService(Db.Context, tenant, new QualificationStatusCalculator(), clock),
                 new NotificationService(Db.Context, tenant, new DevCurrentUserContext(null), clock),
-                new TripPlanningSyncService(Db.Context, tenant));
+                new TripPlanningSyncService(Db.Context, tenant),
+                CostingTestFactory.Create(Db.Context, tenant, clock));
         }
 
         public IShiftService Shifts()
@@ -104,7 +105,8 @@ public class TripPlanningSyncTests
             new AuditService(db.Context, tenant, new DevCurrentUserContext(null)),
             new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock),
             new NotificationService(db.Context, tenant, new DevCurrentUserContext(null), clock),
-            new TripPlanningSyncService(db.Context, tenant));
+            new TripPlanningSyncService(db.Context, tenant),
+            CostingTestFactory.Create(db.Context, tenant, clock));
         return new Harness(db, trips, tenantId, driverId, employeeId, secondDriverId, secondEmployeeId, vehicleId, orderId);
     }
 

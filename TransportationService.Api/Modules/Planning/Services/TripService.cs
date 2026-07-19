@@ -9,6 +9,8 @@ using TransportationService.Api.Modules.Planning.Dtos;
 using TransportationService.Api.Modules.Planning.Entities;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
+using TransportationService.Api.Modules.TripCosting.Entities;
+using TransportationService.Api.Modules.TripCosting.Services;
 
 namespace TransportationService.Api.Modules.Planning.Services;
 
@@ -32,6 +34,7 @@ public class TripService : ITripService
     private readonly IPlanningConflictService _conflictService;
     private readonly INotificationService _notificationService;
     private readonly ITripPlanningSyncService _planningSyncService;
+    private readonly ITripCostingService _costingService;
 
     public TripService(
         TransportationDbContext dbContext,
@@ -39,7 +42,8 @@ public class TripService : ITripService
         IAuditService auditService,
         IPlanningConflictService conflictService,
         INotificationService notificationService,
-        ITripPlanningSyncService planningSyncService)
+        ITripPlanningSyncService planningSyncService,
+        ITripCostingService costingService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -47,6 +51,22 @@ public class TripService : ITripService
         _conflictService = conflictService;
         _notificationService = notificationService;
         _planningSyncService = planningSyncService;
+        _costingService = costingService;
+    }
+
+    private static string? ValidateDistances(decimal? total, decimal? empty)
+    {
+        if (total is < 0 || empty is < 0)
+        {
+            return "Afstanden kunnen niet negatief zijn.";
+        }
+
+        if (total is { } t && empty is { } e && e > t)
+        {
+            return "Lege kilometers kunnen niet groter zijn dan de totale afstand.";
+        }
+
+        return null;
     }
 
     private IQueryable<Trip> TenantScoped() =>
@@ -110,6 +130,11 @@ public class TripService : ITripService
             return TripOperationResult.Invalid(orderError);
         }
 
+        if (ValidateDistances(request.PlannedDistanceKm, request.PlannedEmptyKm) is { } distanceError)
+        {
+            return TripOperationResult.Invalid(distanceError);
+        }
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
@@ -123,6 +148,8 @@ public class TripService : ITripService
             TrailerId = request.TrailerId,
             PlannedStart = request.PlannedStart,
             PlannedEnd = request.PlannedEnd,
+            PlannedDistanceKm = request.PlannedDistanceKm,
+            PlannedEmptyKm = request.PlannedEmptyKm,
             Notes = Trim(request.Notes),
             Orders = BuildTripOrders(request.OrderIds),
         };
@@ -130,6 +157,8 @@ public class TripService : ITripService
         _dbContext.Add(trip);
         // Stage the personnel-planning projection so trip + entry land in ONE save.
         var sync = await _planningSyncService.ApplyAsync(trip, cancellationToken);
+        // First cost estimate rides in the same save (skips silently without a rate card).
+        await _costingService.StageRecalculationAsync(trip, TripCostPhase.Estimated, cancellationToken);
         await TenantNumbering.SaveWithClaimedNumberAsync(
             _dbContext, settings,
             () =>
@@ -176,6 +205,11 @@ public class TripService : ITripService
             return TripOperationResult.Invalid(orderError);
         }
 
+        if (ValidateDistances(request.PlannedDistanceKm, request.PlannedEmptyKm) is { } distanceError)
+        {
+            return TripOperationResult.Invalid(distanceError);
+        }
+
         var before = new { trip.TripDate, trip.DriverId, trip.VehicleId, trip.TrailerId, OrderCount = trip.Orders.Count };
 
         trip.TripDate = request.TripDate;
@@ -184,6 +218,8 @@ public class TripService : ITripService
         trip.TrailerId = request.TrailerId;
         trip.PlannedStart = request.PlannedStart;
         trip.PlannedEnd = request.PlannedEnd;
+        trip.PlannedDistanceKm = request.PlannedDistanceKm;
+        trip.PlannedEmptyKm = request.PlannedEmptyKm;
         trip.Notes = Trim(request.Notes);
 
         _dbContext.RemoveRange(trip.Orders);
@@ -198,6 +234,7 @@ public class TripService : ITripService
 
         // Same save as the trip edit: a driver change MOVES the linked planning entry atomically.
         var sync = await _planningSyncService.ApplyAsync(trip, cancellationToken);
+        await _costingService.StageRecalculationAsync(trip, TripCostPhase.Estimated, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "Updated", before,
@@ -247,6 +284,8 @@ public class TripService : ITripService
         if (target == TripStatus.Completed)
         {
             await _planningSyncService.ApplyActualsAsync(trip.Id, cancellationToken);
+            // Execution is done: compute the actual cost pass in the same save.
+            await _costingService.StageRecalculationAsync(trip, TripCostPhase.Actual, cancellationToken);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -510,7 +549,9 @@ public class TripService : ITripService
             trip.VehicleId, trip.VehicleId is { } v ? names.Vehicles.GetValueOrDefault(v).Number : null,
             trip.VehicleId is { } v2 ? names.Vehicles.GetValueOrDefault(v2).Plate : null,
             trip.TrailerId, trip.TrailerId is { } tr ? names.Trailers.GetValueOrDefault(tr) : null,
-            trip.PlannedStart, trip.PlannedEnd, trip.Notes,
+            trip.PlannedStart, trip.PlannedEnd,
+            trip.PlannedDistanceKm, trip.PlannedEmptyKm, trip.ActualDistanceKm, trip.ActualEmptyKm,
+            trip.Notes,
             orders, conflicts, Transitions[trip.Status]);
     }
 

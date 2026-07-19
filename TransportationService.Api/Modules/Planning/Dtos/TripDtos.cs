@@ -81,6 +81,10 @@ public record TripDetailDto(
     string? TrailerNumber,
     DateTime? PlannedStart,
     DateTime? PlannedEnd,
+    decimal? PlannedDistanceKm,
+    decimal? PlannedEmptyKm,
+    decimal? ActualDistanceKm,
+    decimal? ActualEmptyKm,
     string? Notes,
     IReadOnlyList<TripOrderSummaryDto> Orders,
     IReadOnlyList<PlanningConflictDto> Conflicts,
@@ -94,7 +98,9 @@ public record CreateTripRequest(
     DateTime? PlannedStart,
     DateTime? PlannedEnd,
     string? Notes,
-    IReadOnlyList<Guid> OrderIds);
+    IReadOnlyList<Guid> OrderIds,
+    decimal? PlannedDistanceKm = null,
+    decimal? PlannedEmptyKm = null);
 
 public record UpdateTripRequest(
     DateOnly TripDate,
@@ -104,7 +110,9 @@ public record UpdateTripRequest(
     DateTime? PlannedStart,
     DateTime? PlannedEnd,
     string? Notes,
-    IReadOnlyList<Guid> OrderIds);
+    IReadOnlyList<Guid> OrderIds,
+    decimal? PlannedDistanceKm = null,
+    decimal? PlannedEmptyKm = null);
 
 public record ChangeTripStatusRequest(TripStatus Status, bool Override = false);
 

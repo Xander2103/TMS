@@ -74,7 +74,8 @@ public class TripServiceTests
         var sut = new TripService(db.Context, tenant,
             new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), conflicts,
             new NotificationService(db.Context, tenant, new DevCurrentUserContext(null), clock),
-            new TripPlanningSyncService(db.Context, tenant));
+            new TripPlanningSyncService(db.Context, tenant),
+            CostingTestFactory.Create(db.Context, tenant, clock));
         return new Harness(db, sut, tenantId, driverId, employeeId, vehicleId, trailerId, orderId);
     }
 

@@ -73,6 +73,9 @@ public class Vehicle : AuditableTenantEntity
 
     public int OdometerKm { get; set; }
 
+    /// <summary>Configured norm consumption for cost estimates; measured averages win for actuals.</summary>
+    public decimal? ConsumptionLPer100Km { get; set; }
+
     public bool HasCrane { get; set; }
     public bool HasRefrigeration { get; set; }
     public bool HasTailLift { get; set; }

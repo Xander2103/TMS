@@ -27,6 +27,7 @@ public class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
 
         builder.Property(v => v.GrossVehicleWeightKg).HasPrecision(10, 2);
         builder.Property(v => v.PayloadKg).HasPrecision(10, 2);
+        builder.Property(v => v.ConsumptionLPer100Km).HasPrecision(6, 1);
         builder.Property(v => v.LengthMeters).HasPrecision(6, 2);
         builder.Property(v => v.WidthMeters).HasPrecision(6, 2);
         builder.Property(v => v.HeightMeters).HasPrecision(6, 2);

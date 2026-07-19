@@ -119,7 +119,7 @@ public class VehicleService : IVehicleService
         ApplyEditableFields(vehicle, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.FuelType, request.EmissionClass,
             request.GrossVehicleWeightKg, request.PayloadKg, request.LengthMeters, request.WidthMeters, request.HeightMeters, request.VolumeM3,
-            request.OdometerKm, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
+            request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
             request.OwnershipType, request.Notes);
 
         _dbContext.Add(vehicle);
@@ -174,7 +174,7 @@ public class VehicleService : IVehicleService
         ApplyEditableFields(vehicle, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.FuelType, request.EmissionClass,
             request.GrossVehicleWeightKg, request.PayloadKg, request.LengthMeters, request.WidthMeters, request.HeightMeters, request.VolumeM3,
-            request.OdometerKm, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
+            request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
             request.OwnershipType, request.Notes);
 
         try
@@ -213,7 +213,7 @@ public class VehicleService : IVehicleService
         Vehicle v, string? vin, Guid? categoryId, string? brand, string? model, int? year,
         DateOnly? firstRegistration, FuelType fuelType, EmissionClass? emissionClass,
         decimal? grossWeight, decimal? payload, decimal? length, decimal? width, decimal? height, decimal? volume,
-        int odometer, bool crane, bool refrigeration, bool tailLift, bool adr,
+        int odometer, decimal? consumptionLPer100Km, bool crane, bool refrigeration, bool tailLift, bool adr,
         VehicleOwnershipType ownership, string? notes)
     {
         v.Vin = Trim(vin);
@@ -231,6 +231,7 @@ public class VehicleService : IVehicleService
         v.HeightMeters = height;
         v.VolumeM3 = volume;
         v.OdometerKm = odometer < 0 ? 0 : odometer;
+        v.ConsumptionLPer100Km = consumptionLPer100Km is < 0 ? null : consumptionLPer100Km;
         v.HasCrane = crane;
         v.HasRefrigeration = refrigeration;
         v.HasTailLift = tailLift;
@@ -277,7 +278,7 @@ public class VehicleService : IVehicleService
         return new VehicleDetailDto(
             v.Id, v.InternalNumber, v.LicensePlate, v.Vin, v.CategoryId, categoryName, v.Brand, v.Model, v.Year, v.FirstRegistrationDate,
             v.FuelType, v.EmissionClass, v.GrossVehicleWeightKg, v.PayloadKg, v.LengthMeters, v.WidthMeters, v.HeightMeters, v.VolumeM3,
-            v.OdometerKm, v.HasCrane, v.HasRefrigeration, v.HasTailLift, v.AdrSuitable,
+            v.OdometerKm, v.ConsumptionLPer100Km, v.HasCrane, v.HasRefrigeration, v.HasTailLift, v.AdrSuitable,
             v.OwnershipType, v.OperationalStatus, v.StatusReason, v.IsActive,
             v.FixedDriverId, fixedDriverName, v.CurrentDriverId, currentDriverName, v.Notes);
     }

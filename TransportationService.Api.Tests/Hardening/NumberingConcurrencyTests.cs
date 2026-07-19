@@ -45,7 +45,7 @@ public class NumberingConcurrencyTests
 
     private static CreateVehicleRequest VehicleRequest(string plate) => new(
         plate, null, null, null, null, null, null, FuelType.Diesel, null,
-        null, null, null, null, null, null, 0, false, false, false, false,
+        null, null, null, null, null, null, 0, null, false, false, false, false,
         VehicleOwnershipType.Owned, null, null, null);
 
     [Fact]
