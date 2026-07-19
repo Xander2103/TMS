@@ -6,6 +6,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { euro } from '../../invoices/types'
 import { getKpiDashboard } from '../api/kpiApi'
 import { KpiCard } from '../components/KpiCard'
+import { KpiExportControl } from '../components/KpiExportControl'
 import { KpiFilterBar } from '../components/KpiFilterBar'
 import { num, pct, presetRange, type KpiDashboard, type KpiFilterState } from '../types'
 import '../components/kpi.css'
@@ -62,6 +63,7 @@ export function KpiDashboardPage() {
       <PageHeader
         title="KPI-dashboard"
         subtitle="Managementcijfers voor de gekozen periode. Klik op een kaart voor het detailrapport."
+        action={<KpiExportControl filter={filter} />}
       />
 
       <KpiFilterBar filter={filter} onChange={setFilter} />

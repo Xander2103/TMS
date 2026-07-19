@@ -14,10 +14,12 @@ public class KpiController : ControllerBase
     private const int MaxRangeDays = 366;
 
     private readonly IKpiQueryService _service;
+    private readonly IKpiExportService _exportService;
 
-    public KpiController(IKpiQueryService service)
+    public KpiController(IKpiQueryService service, IKpiExportService exportService)
     {
         _service = service;
+        _exportService = exportService;
     }
 
     private static string? ValidateRange(DateOnly from, DateOnly to) =>
@@ -55,5 +57,33 @@ public class KpiController : ControllerBase
 
         return Ok(await _service.GetTripProfitabilityAsync(
             new KpiFilter(from, to, customerId, driverId, vehicleId), cancellationToken));
+    }
+
+    [HttpGet("export")]
+    [RequirePermission(PermissionCodes.KpiExport)]
+    public async Task<IActionResult> Export(
+        [FromQuery] string report,
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to,
+        [FromQuery] Guid? customerId, [FromQuery] Guid? driverId, [FromQuery] Guid? vehicleId,
+        CancellationToken cancellationToken)
+    {
+        if (ValidateRange(from, to) is { } error)
+        {
+            return BadRequest(new { message = error });
+        }
+
+        var result = await _exportService.BuildAsync(
+            report, new KpiFilter(from, to, customerId, driverId, vehicleId), cancellationToken);
+        if (result is null)
+        {
+            return BadRequest(new
+            {
+                message = $"Onbekend rapport '{report}'. Beschikbaar: {string.Join(", ", _exportService.ReportKeys)}.",
+            });
+        }
+
+        return File(result.Value.Content,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            result.Value.FileName);
     }
 }

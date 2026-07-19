@@ -6,6 +6,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { euro } from '../../invoices/types'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE, type TripStatus } from '../../planning/types'
 import { getTripProfitability } from '../api/kpiApi'
+import { KpiExportControl } from '../components/KpiExportControl'
 import { KpiFilterBar } from '../components/KpiFilterBar'
 import { num, pct, presetRange, type KpiFilterState, type TripProfitabilityRow } from '../types'
 import '../components/kpi.css'
@@ -68,6 +69,7 @@ export function KpiTripsPage() {
       <PageHeader
         title="Ritrendement"
         subtitle="Omzet, kosten en marge per rit voor de gekozen periode."
+        action={<KpiExportControl filter={filter} />}
       />
 
       <KpiFilterBar filter={filter} onChange={setFilter} />

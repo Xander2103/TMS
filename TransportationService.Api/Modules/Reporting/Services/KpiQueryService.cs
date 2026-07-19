@@ -127,43 +127,9 @@ public class KpiQueryService : IKpiQueryService
             ? Round1(overrunEligible.Average(o => (o.Final - o.EstimatedCost) / o.EstimatedCost * 100m))
             : (decimal?)null;
 
-        // Verdiepingen.
-        var customerNames = await CustomerNamesAsync(
-            active.SelectMany(f => f.Orders).Select(o => o.CustomerId).Distinct().ToList(), cancellationToken);
-        var topCustomers = active
-            .SelectMany(f => f.Orders.Where(o => o.Matched).Select(o => new
-            {
-                o.CustomerId,
-                o.Revenue,
-                Cost = f.Revenue > 0
-                    ? f.Cost * (o.Revenue / f.Revenue)
-                    : f.Orders.Count > 0 ? f.Cost / f.Orders.Count : 0m,
-            }))
-            .GroupBy(x => x.CustomerId)
-            .Select(g =>
-            {
-                var revenue = Round2(g.Sum(x => x.Revenue));
-                var cost = Round2(g.Sum(x => x.Cost));
-                var profit = Round2(revenue - cost);
-                return new KpiCustomerRowDto(
-                    g.Key, customerNames.GetValueOrDefault(g.Key, "?"), revenue, cost, profit,
-                    revenue > 0 ? Round1(profit / revenue * 100m) : null);
-            })
-            .OrderByDescending(c => c.Revenue)
-            .Take(10)
-            .ToList();
-
-        var driverNames = await DriverNamesAsync(
-            active.Where(f => f.DriverId is not null).Select(f => f.DriverId!.Value).Distinct().ToList(), cancellationToken);
-        var kmPerDriver = active
-            .Where(f => f.DriverId is not null)
-            .GroupBy(f => f.DriverId!.Value)
-            .Select(g => new KpiDriverKmRowDto(
-                g.Key, driverNames.GetValueOrDefault(g.Key, "?"),
-                Round1(g.Sum(f => f.Km)), Round1(g.Sum(f => f.Hours ?? 0m))))
-            .OrderByDescending(d => d.Km)
-            .Take(10)
-            .ToList();
+        // Verdiepingen (dashboard shows the top 10 of the full aggregations).
+        var topCustomers = (await AggregateCustomersAsync(active, cancellationToken)).Take(10).ToList();
+        var kmPerDriver = (await AggregateDriversAsync(active, cancellationToken)).Take(10).ToList();
 
         return new KpiDashboardDto(
             revenueToday, revenuePeriod, profitToday, profitPeriod,
@@ -210,6 +176,97 @@ public class KpiQueryService : IKpiQueryService
                     profit, revenue > 0 ? Round1(profit / revenue * 100m) : null,
                     Round1(f.Km), Round1(f.EmptyKm), f.Status.ToString(), f.IsFinalized);
             })
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<KpiCustomerRowDto>> GetCustomerProfitabilityAsync(
+        KpiFilter filter, CancellationToken cancellationToken)
+    {
+        var facts = await LoadTripFactsAsync(filter, cancellationToken);
+        return await AggregateCustomersAsync(
+            facts.Where(f => f.Status != TripStatus.Cancelled).ToList(), cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<KpiDriverKmRowDto>> GetDriverEffortAsync(
+        KpiFilter filter, CancellationToken cancellationToken)
+    {
+        var facts = await LoadTripFactsAsync(filter, cancellationToken);
+        return await AggregateDriversAsync(
+            facts.Where(f => f.Status != TripStatus.Cancelled).ToList(), cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<KpiVehicleUtilisationRowDto>> GetVehicleUtilisationAsync(
+        KpiFilter filter, CancellationToken cancellationToken)
+    {
+        var facts = await LoadTripFactsAsync(filter, cancellationToken);
+        var active = facts.Where(f => f.Status != TripStatus.Cancelled && f.VehicleId is not null).ToList();
+        var vehicleIds = active.Select(f => f.VehicleId!.Value).Distinct().ToList();
+        var vehicles = vehicleIds.Count == 0
+            ? []
+            : await _dbContext.Vehicles.AsNoTracking()
+                .Where(v => v.TenantId == _tenantContext.TenantId && vehicleIds.Contains(v.Id))
+                .Select(v => new { v.Id, v.InternalNumber, v.LicensePlate })
+                .ToListAsync(cancellationToken);
+        var vehicleById = vehicles.ToDictionary(v => v.Id);
+        var availablePerVehicle = Workdays(filter.From, filter.To) * AvailableHoursPerVehiclePerWorkday;
+
+        return active
+            .GroupBy(f => f.VehicleId!.Value)
+            .Select(g =>
+            {
+                vehicleById.TryGetValue(g.Key, out var vehicle);
+                var hours = Round1(g.Sum(f => f.Hours ?? 0m));
+                return new KpiVehicleUtilisationRowDto(
+                    g.Key, vehicle?.InternalNumber ?? "?", vehicle?.LicensePlate ?? "?",
+                    g.Count(), hours, Round1(g.Sum(f => f.Km)),
+                    availablePerVehicle > 0 ? Round1(hours / availablePerVehicle * 100m) : null);
+            })
+            .OrderByDescending(v => v.Km)
+            .ToList();
+    }
+
+    // ---------------------------------------------------------- aggregation
+
+    private async Task<List<KpiCustomerRowDto>> AggregateCustomersAsync(
+        IReadOnlyList<TripFacts> active, CancellationToken cancellationToken)
+    {
+        var customerNames = await CustomerNamesAsync(
+            active.SelectMany(f => f.Orders).Select(o => o.CustomerId).Distinct().ToList(), cancellationToken);
+        return active
+            .SelectMany(f => f.Orders.Where(o => o.Matched).Select(o => new
+            {
+                o.CustomerId,
+                o.Revenue,
+                Cost = f.Revenue > 0
+                    ? f.Cost * (o.Revenue / f.Revenue)
+                    : f.Orders.Count > 0 ? f.Cost / f.Orders.Count : 0m,
+            }))
+            .GroupBy(x => x.CustomerId)
+            .Select(g =>
+            {
+                var revenue = Round2(g.Sum(x => x.Revenue));
+                var cost = Round2(g.Sum(x => x.Cost));
+                var profit = Round2(revenue - cost);
+                return new KpiCustomerRowDto(
+                    g.Key, customerNames.GetValueOrDefault(g.Key, "?"), revenue, cost, profit,
+                    revenue > 0 ? Round1(profit / revenue * 100m) : null);
+            })
+            .OrderByDescending(c => c.Revenue)
+            .ToList();
+    }
+
+    private async Task<List<KpiDriverKmRowDto>> AggregateDriversAsync(
+        IReadOnlyList<TripFacts> active, CancellationToken cancellationToken)
+    {
+        var driverNames = await DriverNamesAsync(
+            active.Where(f => f.DriverId is not null).Select(f => f.DriverId!.Value).Distinct().ToList(), cancellationToken);
+        return active
+            .Where(f => f.DriverId is not null)
+            .GroupBy(f => f.DriverId!.Value)
+            .Select(g => new KpiDriverKmRowDto(
+                g.Key, driverNames.GetValueOrDefault(g.Key, "?"),
+                Round1(g.Sum(f => f.Km)), Round1(g.Sum(f => f.Hours ?? 0m))))
+            .OrderByDescending(d => d.Km)
             .ToList();
     }
 
@@ -424,8 +481,13 @@ public class KpiQueryService : IKpiQueryService
             : await _dbContext.Vehicles.AsNoTracking()
                 .CountAsync(v => v.TenantId == tenantId && v.IsActive, cancellationToken);
 
+        return vehicleCount * Workdays(filter.From, filter.To) * AvailableHoursPerVehiclePerWorkday;
+    }
+
+    internal static int Workdays(DateOnly from, DateOnly to)
+    {
         var workdays = 0;
-        for (var date = filter.From; date <= filter.To; date = date.AddDays(1))
+        for (var date = from; date <= to; date = date.AddDays(1))
         {
             if (date.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
             {
@@ -433,7 +495,7 @@ public class KpiQueryService : IKpiQueryService
             }
         }
 
-        return vehicleCount * workdays * AvailableHoursPerVehiclePerWorkday;
+        return workdays;
     }
 
     private Task<Dictionary<Guid, string>> CustomerNamesAsync(

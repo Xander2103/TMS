@@ -52,6 +52,15 @@ public record KpiDashboardDto(
     IReadOnlyList<KpiCustomerRowDto> TopCustomers,
     IReadOnlyList<KpiDriverKmRowDto> KmPerDriver);
 
+public record KpiVehicleUtilisationRowDto(
+    Guid VehicleId,
+    string VehicleNumber,
+    string LicensePlate,
+    int TripCount,
+    decimal Hours,
+    decimal Km,
+    decimal? UtilisationPct);
+
 public record TripProfitabilityRowDto(
     Guid TripId,
     string TripNumber,
