@@ -64,7 +64,11 @@ public class NotificationServiceTests
         var clock = new TestClock(Now);
         var notifications = new NotificationService(db.Context, tenant, new DevCurrentUserContext(deciderId), clock);
         var absences = new AbsenceService(db.Context, tenant, new DevCurrentUserContext(deciderId),
-            new AuditService(db.Context, tenant, new DevCurrentUserContext(deciderId)), notifications, clock);
+            new AuditService(db.Context, tenant, new DevCurrentUserContext(deciderId)), notifications,
+            new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(
+                Path.Combine(Path.GetTempPath(), "ts-notif-tests", Guid.NewGuid().ToString("N"))),
+            new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(),
+            clock);
 
         var created = await absences.CreateForEmployeeAsync(employeeId,
             new CreateAbsenceRequest(AbsenceType.Vacation, new(2026, 8, 3), new(2026, 8, 14), null),

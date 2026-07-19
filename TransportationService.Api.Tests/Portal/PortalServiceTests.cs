@@ -110,7 +110,9 @@ public class PortalServiceTests
         var audit = new AuditService(db.Context, tenant, user);
         var clock = new TestClock(Now);
         var notifications = new NotificationService(db.Context, tenant, user, clock);
-        var absences = new AbsenceService(db.Context, tenant, user, audit, notifications, clock);
+        var absences = new AbsenceService(db.Context, tenant, user, audit, notifications,
+            new LocalFileStorageService(storageRoot),
+            new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(), clock);
         var qualifications = new QualificationService(
             db.Context, tenant, new QualificationStatusCalculator(), clock, audit,
             new TransportationService.Api.Common.Reference.CountryCodeValidator(db.Context),

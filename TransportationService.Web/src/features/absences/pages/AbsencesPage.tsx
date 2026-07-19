@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
+import { Button } from '../../../components/ui/Button'
+import { useAuth } from '../../auth/authContextValue'
 import { listAbsences } from '../api/absencesApi'
+import { ReviewAbsenceDialog } from '../components/ReviewAbsenceDialog'
 import {
   ABSENCE_STATUS_LABELS,
   ABSENCE_STATUS_TONE,
@@ -29,6 +32,9 @@ function plusDaysIso(days: number): string {
 /** Planning overview of absences across all employees within a date window. */
 export function AbsencesPage() {
   const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+  const canApprove = hasPermission('absences.approve')
+  const [reviewTarget, setReviewTarget] = useState<Absence | null>(null)
 
   const [from, setFrom] = useState(todayIso)
   const [to, setTo] = useState(() => plusDaysIso(60))
@@ -111,6 +117,7 @@ export function AbsencesPage() {
               <th>Tot en met</th>
               <th>Status</th>
               <th>Reden</th>
+              {canApprove && <th aria-label="Acties" />}
             </tr>
           </thead>
           <tbody>
@@ -121,7 +128,10 @@ export function AbsencesPage() {
                   <span className="absp-number">({absence.employeeNumber})</span>
                   {absence.isDriver && <Badge tone="info">Chauffeur</Badge>}
                 </td>
-                <td>{ABSENCE_TYPE_LABELS[absence.type]}</td>
+                <td>
+                  {ABSENCE_TYPE_LABELS[absence.type]}
+                  {absence.hasAttachment && ' 📎'}
+                </td>
                 <td>{absence.startDate}</td>
                 <td>{absence.endDate}</td>
                 <td>
@@ -130,10 +140,34 @@ export function AbsencesPage() {
                 <td className="absp-reason" title={absence.reason ?? undefined}>
                   {absence.reason ?? '—'}
                 </td>
+                {canApprove && (
+                  <td>
+                    <Button
+                      variant="ghost"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setReviewTarget(absence)
+                      }}
+                    >
+                      Beoordelen
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
+      )}
+
+      {reviewTarget && (
+        <ReviewAbsenceDialog
+          absence={reviewTarget}
+          onClose={() => setReviewTarget(null)}
+          onChanged={(updated) => {
+            setReviewTarget(updated)
+            setAbsences((current) => current?.map((a) => (a.id === updated.id ? updated : a)) ?? null)
+          }}
+        />
       )}
     </div>
   )

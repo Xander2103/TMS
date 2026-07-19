@@ -66,6 +66,57 @@ public class AbsencesController : ControllerBase
         return Handle(result, created: false);
     }
 
+    [HttpPost("api/absences/{id:guid}/review")]
+    [RequirePermission(PermissionCodes.AbsencesApprove)]
+    public async Task<ActionResult<AbsenceDto>> StartReview(Guid id, CancellationToken cancellationToken)
+    {
+        return Handle(await _service.StartReviewAsync(id, cancellationToken), created: false);
+    }
+
+    [HttpPost("api/absences/{id:guid}/request-changes")]
+    [RequirePermission(PermissionCodes.AbsencesApprove)]
+    public async Task<ActionResult<AbsenceDto>> RequestChanges(
+        Guid id, RequestAbsenceChangesRequest request, CancellationToken cancellationToken)
+    {
+        return Handle(await _service.RequestChangesAsync(id, request, cancellationToken), created: false);
+    }
+
+    [HttpPut("api/absences/{id:guid}/internal-note")]
+    [RequirePermission(PermissionCodes.AbsencesApprove)]
+    public async Task<ActionResult<AbsenceDto>> SetInternalNote(
+        Guid id, SetInternalNoteRequest request, CancellationToken cancellationToken)
+    {
+        return Handle(await _service.SetInternalNoteAsync(id, request.Note, cancellationToken), created: false);
+    }
+
+    [HttpGet("api/absences/{id:guid}/review-context")]
+    [RequirePermission(PermissionCodes.AbsencesApprove, PermissionCodes.AbsencesView)]
+    public async Task<ActionResult<AbsenceReviewContextDto>> ReviewContext(Guid id, CancellationToken cancellationToken)
+    {
+        var context = await _service.GetReviewContextAsync(id, cancellationToken);
+        return context is null ? NotFound() : Ok(context);
+    }
+
+    [HttpGet("api/absences/{id:guid}/attachment")]
+    [RequirePermission(PermissionCodes.AbsencesView, PermissionCodes.AbsencesApprove)]
+    public async Task<IActionResult> DownloadAttachment(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await _service.OpenDocumentAsync(id, cancellationToken);
+        if (document is null)
+        {
+            return NotFound();
+        }
+
+        var contentType = Path.GetExtension(document.Value.FileName).ToLowerInvariant() switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            _ => "application/octet-stream",
+        };
+        return File(document.Value.Content, contentType, document.Value.FileName);
+    }
+
     [HttpPost("api/absences/{id:guid}/cancel")]
     [RequirePermission(PermissionCodes.AbsencesEdit)]
     public async Task<ActionResult<AbsenceDto>> Cancel(Guid id, CancellationToken cancellationToken)

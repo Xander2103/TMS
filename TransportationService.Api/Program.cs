@@ -190,6 +190,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Portal.Services.IPo
 builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Services.IShiftService,
     TransportationService.Api.Modules.EmployeePlanning.Services.ShiftService>();
 
+// Integration seams (Wave 12 replaces the no-op with the real Outlook/Exchange sync queue)
+builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Services.ICalendarSyncService,
+    TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService>();
+
 // Invoicing
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();

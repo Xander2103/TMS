@@ -113,3 +113,89 @@
   font-size: 15px;
   color: var(--text);
 }
+
+.rev-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rev-summary {
+  margin: 0;
+  font-size: 14px;
+}
+
+.rev-attachment {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 2px 0;
+}
+
+.rev-context {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.rev-context h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.rev-context ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.rev-balance-note {
+  color: var(--text);
+  font-style: italic;
+}
+
+.rev-proposal {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+
+.rev-dialog textarea,
+.rev-dialog input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.rev-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rev-internal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 640px) {
+  .rev-proposal {
+    grid-template-columns: 1fr;
+  }
+}

@@ -36,7 +36,11 @@ public class AbsenceServiceTests
         var sut = new AbsenceService(
             db.Context, tenant, new DevCurrentUserContext(DeciderId),
             new AuditService(db.Context, tenant, new DevCurrentUserContext(DeciderId)),
-            new NotificationService(db.Context, tenant, new DevCurrentUserContext(DeciderId), new TestClock(Now)), new TestClock(Now));
+            new NotificationService(db.Context, tenant, new DevCurrentUserContext(DeciderId), new TestClock(Now)),
+            new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(
+                Path.Combine(Path.GetTempPath(), "ts-absence-tests", Guid.NewGuid().ToString("N"))),
+            new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(),
+            new TestClock(Now));
         return new Harness(db, sut, tenantId, employeeId);
     }
 

@@ -207,3 +207,18 @@
   font-size: 13px;
   color: var(--text);
 }
+
+.portal-absence-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.portal-attachment-label {
+  font-size: 14px;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

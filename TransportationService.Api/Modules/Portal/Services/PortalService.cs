@@ -7,6 +7,7 @@ using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Hr.Dtos;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Hr.Services;
+using AbsenceOperationOutcome = TransportationService.Api.Modules.Hr.Dtos.AbsenceOperationOutcome;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Planning.Entities;
@@ -174,7 +175,50 @@ public class PortalService : IPortalService
             return null;
         }
 
-        return await _absenceService.ListForEmployeeAsync(employeeId, cancellationToken);
+        var absences = await _absenceService.ListForEmployeeAsync(employeeId, cancellationToken);
+        // HR-internal notes never leave the back office.
+        return absences?.Select(a => a with { InternalNote = null }).ToList();
+    }
+
+    public async Task<PortalAbsenceResult> AttachMyAbsenceDocumentAsync(
+        Guid absenceId, string fileName, Stream content, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return PortalAbsenceResult.NoEmployeeLink;
+        }
+
+        var absence = await _dbContext.Absences.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.Id == absenceId && a.TenantId == _tenantContext.TenantId
+                                      && a.EmployeeId == employeeId, cancellationToken);
+        if (absence is null)
+        {
+            return PortalAbsenceResult.NotFound;
+        }
+
+        if (absence.Status is not (AbsenceStatus.Requested or AbsenceStatus.UnderReview))
+        {
+            return PortalAbsenceResult.InvalidState("Bijlagen kunnen alleen bij een openstaande aanvraag.");
+        }
+
+        var result = await _absenceService.AttachDocumentAsync(absenceId, fileName, content, cancellationToken);
+        return result.Outcome == AbsenceOperationOutcome.Success
+            ? PortalAbsenceResult.Success(result.Absence! with { InternalNote = null })
+            : Map(result);
+    }
+
+    public async Task<(Stream Content, string FileName)?> OpenMyAbsenceDocumentAsync(
+        Guid absenceId, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+
+        var belongsToMe = await _dbContext.Absences.AsNoTracking()
+            .AnyAsync(a => a.Id == absenceId && a.TenantId == _tenantContext.TenantId
+                           && a.EmployeeId == employeeId, cancellationToken);
+        return belongsToMe ? await _absenceService.OpenDocumentAsync(absenceId, cancellationToken) : null;
     }
 
     public async Task<PortalAbsenceResult> CreateMyAbsenceAsync(

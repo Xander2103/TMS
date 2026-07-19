@@ -1,11 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.EmployeePlanning.Entities;
 using TransportationService.Api.Modules.Hr.Dtos;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Integrations.Services;
 using TransportationService.Api.Modules.Notifications.Services;
+using TransportationService.Api.Modules.Planning.Entities;
+using TransportationService.Api.Modules.Qualifications.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Hr.Services;
@@ -17,11 +21,15 @@ public class AbsenceService : IAbsenceService
 
     private const string EntityType = "Absence";
 
+    private static readonly string[] AllowedAttachmentExtensions = [".pdf", ".jpg", ".jpeg", ".png"];
+
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IAuditService _auditService;
     private readonly INotificationService _notificationService;
+    private readonly IFileStorageService _fileStorageService;
+    private readonly ICalendarSyncService _calendarSyncService;
     private readonly TimeProvider _timeProvider;
 
     public AbsenceService(
@@ -30,6 +38,8 @@ public class AbsenceService : IAbsenceService
         ICurrentUserContext currentUserContext,
         IAuditService auditService,
         INotificationService notificationService,
+        IFileStorageService fileStorageService,
+        ICalendarSyncService calendarSyncService,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
@@ -37,8 +47,15 @@ public class AbsenceService : IAbsenceService
         _currentUserContext = currentUserContext;
         _auditService = auditService;
         _notificationService = notificationService;
+        _fileStorageService = fileStorageService;
+        _calendarSyncService = calendarSyncService;
         _timeProvider = timeProvider;
     }
+
+    private static string? PartDayError(CreateAbsenceRequest request) =>
+        request.PartDay != AbsencePartDay.FullDay && request.StartDate != request.EndDate
+            ? "Een halve dag kan alleen bij een aanvraag van één dag."
+            : null;
 
     private DateOnly Today => DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
@@ -104,6 +121,11 @@ public class AbsenceService : IAbsenceService
             return AbsenceOperationResult.Invalid("De einddatum moet op of na de begindatum liggen.");
         }
 
+        if (PartDayError(request) is { } partDayError)
+        {
+            return AbsenceOperationResult.Invalid(partDayError);
+        }
+
         if (!await _dbContext.Employees.AnyAsync(
                 e => e.Id == employeeId && e.TenantId == _tenantContext.TenantId, cancellationToken))
         {
@@ -123,6 +145,7 @@ public class AbsenceService : IAbsenceService
             Type = request.Type,
             StartDate = request.StartDate,
             EndDate = request.EndDate,
+            PartDay = request.PartDay,
             Status = AbsenceStatus.Requested,
             Reason = Trim(request.Reason),
         };
@@ -168,11 +191,17 @@ public class AbsenceService : IAbsenceService
             return AbsenceOperationResult.Overlap;
         }
 
+        if (request.PartDay != AbsencePartDay.FullDay && request.StartDate != request.EndDate)
+        {
+            return AbsenceOperationResult.Invalid("Een halve dag kan alleen bij een aanvraag van één dag.");
+        }
+
         var before = new { absence.Type, absence.StartDate, absence.EndDate };
 
         absence.Type = request.Type;
         absence.StartDate = request.StartDate;
         absence.EndDate = request.EndDate;
+        absence.PartDay = request.PartDay;
         absence.Reason = Trim(request.Reason);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -192,7 +221,7 @@ public class AbsenceService : IAbsenceService
             return AbsenceOperationResult.NotFound;
         }
 
-        if (absence.Status != AbsenceStatus.Requested)
+        if (absence.Status is not (AbsenceStatus.Requested or AbsenceStatus.UnderReview))
         {
             return AbsenceOperationResult.InvalidState("Alleen aangevraagde afwezigheden kunnen worden goedgekeurd of afgewezen.");
         }
@@ -218,10 +247,225 @@ public class AbsenceService : IAbsenceService
         await _notificationService.NotifyAsync(recipient, "absence_decided",
             request.Approve ? "Afwezigheid goedgekeurd" : "Afwezigheid afgewezen",
             $"Je {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy} is {(request.Approve ? "goedgekeurd" : "afgewezen")}.",
-            "/absences", cancellationToken);
+            "/portal/absences", cancellationToken);
+
+        // Approved leave flows towards the (future) external calendar through the sync seam.
+        if (request.Approve)
+        {
+            await _calendarSyncService.QueueAsync(new CalendarSyncEvent(
+                "leave_approved", absence.Id, absence.EmployeeId, absence.StartDate, absence.EndDate,
+                $"Afwezigheid: {absence.Type}"), cancellationToken);
+        }
 
         return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
     }
+
+    public async Task<AbsenceOperationResult> StartReviewAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var absence = await TenantScoped().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (absence is null)
+        {
+            return AbsenceOperationResult.NotFound;
+        }
+
+        if (absence.Status != AbsenceStatus.Requested)
+        {
+            return AbsenceOperationResult.InvalidState("Alleen een nieuwe aanvraag kan in behandeling worden genomen.");
+        }
+
+        var before = new { absence.Status };
+        absence.Status = AbsenceStatus.UnderReview;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, absence.Id.ToString(), "ReviewStarted", before,
+            new { absence.Status }, cancellationToken);
+
+        await _notificationService.NotifyAsync(await EmployeeUserIdAsync(absence.EmployeeId, cancellationToken),
+            "absence_decided", "Aanvraag in behandeling",
+            $"Je aanvraag van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy} wordt bekeken door HR.",
+            "/portal/absences", cancellationToken);
+
+        return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
+    }
+
+    public async Task<AbsenceOperationResult> RequestChangesAsync(
+        Guid id, RequestAbsenceChangesRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Note))
+        {
+            return AbsenceOperationResult.Invalid("Een toelichting voor de medewerker is verplicht.");
+        }
+
+        var absence = await TenantScoped().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (absence is null)
+        {
+            return AbsenceOperationResult.NotFound;
+        }
+
+        if (absence.Status is not (AbsenceStatus.Requested or AbsenceStatus.UnderReview))
+        {
+            return AbsenceOperationResult.InvalidState("Wijzigingen vragen kan alleen bij een openstaande aanvraag.");
+        }
+
+        var note = request.Note.Trim();
+        if (request.ProposedStartDate is { } proposedStart && request.ProposedEndDate is { } proposedEnd)
+        {
+            note = $"{note} Voorstel: {proposedStart:dd-MM-yyyy} t/m {proposedEnd:dd-MM-yyyy}.";
+        }
+
+        var before = new { absence.Status, absence.DecisionNote };
+        absence.Status = AbsenceStatus.Requested;
+        absence.DecisionNote = note;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, absence.Id.ToString(), "ChangesRequested", before,
+            new { absence.DecisionNote }, cancellationToken);
+
+        await _notificationService.NotifyAsync(await EmployeeUserIdAsync(absence.EmployeeId, cancellationToken),
+            "absence_changes_requested", "HR vraagt een aanpassing",
+            note, "/portal/absences", cancellationToken);
+
+        return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
+    }
+
+    public async Task<AbsenceOperationResult> SetInternalNoteAsync(Guid id, string? note, CancellationToken cancellationToken)
+    {
+        var absence = await TenantScoped().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (absence is null)
+        {
+            return AbsenceOperationResult.NotFound;
+        }
+
+        var before = new { absence.InternalNote };
+        absence.InternalNote = Trim(note);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, absence.Id.ToString(), "InternalNoteUpdated", before,
+            new { absence.InternalNote }, cancellationToken);
+
+        return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
+    }
+
+    public async Task<AbsenceReviewContextDto?> GetReviewContextAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var absence = await TenantScoped().AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (absence is null)
+        {
+            return null;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+
+        var shifts = await _dbContext.Shifts.AsNoTracking()
+            .Where(s => s.TenantId == tenantId && s.EmployeeId == absence.EmployeeId
+                        && s.Date >= absence.StartDate && s.Date <= absence.EndDate)
+            .OrderBy(s => s.Date)
+            .Select(s => new OverlappingShiftDto(s.Date, s.StartTime, s.EndTime, s.WorkLocation))
+            .ToListAsync(cancellationToken);
+
+        var trips = new List<OverlappingTripDto>();
+        var driverId = await _dbContext.Drivers.AsNoTracking()
+            .Where(d => d.TenantId == tenantId && d.EmployeeId == absence.EmployeeId)
+            .Select(d => (Guid?)d.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (driverId is { } drv)
+        {
+            trips = await _dbContext.Trips.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && t.DriverId == drv
+                            && t.TripDate >= absence.StartDate && t.TripDate <= absence.EndDate
+                            && t.Status != TripStatus.Cancelled)
+                .OrderBy(t => t.TripDate)
+                .Select(t => new OverlappingTripDto(t.Id, t.TripNumber, t.TripDate))
+                .ToListAsync(cancellationToken);
+        }
+
+        var departmentId = await _dbContext.Employees.AsNoTracking()
+            .Where(e => e.Id == absence.EmployeeId && e.TenantId == tenantId)
+            .Select(e => e.DepartmentId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var colleaguesQuery = TenantScoped().AsNoTracking()
+            .Where(a => a.Id != absence.Id && a.EmployeeId != absence.EmployeeId
+                        && (a.Status == AbsenceStatus.Requested || a.Status == AbsenceStatus.UnderReview
+                            || a.Status == AbsenceStatus.Approved)
+                        && a.StartDate <= absence.EndDate && a.EndDate >= absence.StartDate);
+        var colleagueRows = await (from a in colleaguesQuery
+                                   join e in _dbContext.Employees.AsNoTracking()
+                                           .Where(e => e.TenantId == tenantId
+                                                       && (departmentId == null || e.DepartmentId == departmentId))
+                                       on a.EmployeeId equals e.Id
+                                   select new OverlappingColleagueDto(
+                                       e.FirstName + " " + e.LastName, a.Type, a.StartDate, a.EndDate, a.Status))
+            .ToListAsync(cancellationToken);
+
+        // Balance architecture: used approved vacation days in the request's start year.
+        var yearStart = new DateOnly(absence.StartDate.Year, 1, 1);
+        var yearEnd = new DateOnly(absence.StartDate.Year, 12, 31);
+        var approvedVacations = await TenantScoped().AsNoTracking()
+            .Where(a => a.EmployeeId == absence.EmployeeId && a.Id != absence.Id
+                        && a.Type == AbsenceType.Vacation && a.Status == AbsenceStatus.Approved
+                        && a.StartDate <= yearEnd && a.EndDate >= yearStart)
+            .Select(a => new { a.StartDate, a.EndDate, a.PartDay })
+            .ToListAsync(cancellationToken);
+        var usedDays = approvedVacations.Sum(a =>
+        {
+            var start = a.StartDate < yearStart ? yearStart : a.StartDate;
+            var end = a.EndDate > yearEnd ? yearEnd : a.EndDate;
+            var days = end.DayNumber - start.DayNumber + 1;
+            return a.PartDay == AbsencePartDay.FullDay ? days : days - 0;
+        });
+
+        return new AbsenceReviewContextDto(shifts, trips, colleagueRows, usedDays, absence.AttachmentPath is not null);
+    }
+
+    public async Task<AbsenceOperationResult> AttachDocumentAsync(
+        Guid id, string fileName, Stream content, CancellationToken cancellationToken)
+    {
+        var absence = await TenantScoped().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (absence is null)
+        {
+            return AbsenceOperationResult.NotFound;
+        }
+
+        var extension = Path.GetExtension(fileName).ToLowerInvariant();
+        if (!AllowedAttachmentExtensions.Contains(extension))
+        {
+            return AbsenceOperationResult.Invalid("Alleen pdf-, jpg- of png-bestanden zijn toegestaan.");
+        }
+
+        if (absence.AttachmentPath is { } existing)
+        {
+            await _fileStorageService.DeleteAsync(existing, cancellationToken);
+        }
+
+        absence.AttachmentPath = await _fileStorageService.SaveAsync(
+            _tenantContext.TenantId, "absence-attachments", fileName, content, cancellationToken);
+        absence.AttachmentFileName = fileName;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, absence.Id.ToString(), "AttachmentAdded", null,
+            new { fileName }, cancellationToken);
+
+        return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
+    }
+
+    public async Task<(Stream Content, string FileName)?> OpenDocumentAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var absence = await TenantScoped().AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        if (absence?.AttachmentPath is not { } path)
+        {
+            return null;
+        }
+
+        var stream = await _fileStorageService.OpenReadAsync(path, cancellationToken);
+        return (stream, absence.AttachmentFileName ?? "bijlage");
+    }
+
+    private async Task<Guid?> EmployeeUserIdAsync(Guid employeeId, CancellationToken cancellationToken) =>
+        await _dbContext.Users.AsNoTracking()
+            .Where(u => u.TenantId == _tenantContext.TenantId && u.EmployeeId == employeeId)
+            .Select(u => (Guid?)u.Id)
+            .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<AbsenceOperationResult> CancelAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -289,7 +533,9 @@ public class AbsenceService : IAbsenceService
     private static AbsenceDto Map(JoinedAbsence r) => new(
         r.Absence.Id, r.Absence.EmployeeId, r.EmployeeName, r.EmployeeNumber, r.IsDriver,
         r.Absence.Type, r.Absence.StartDate, r.Absence.EndDate, r.Absence.Status,
-        r.Absence.Reason, r.Absence.DecisionNote, r.Absence.DecidedAt);
+        r.Absence.Reason, r.Absence.DecisionNote, r.Absence.DecidedAt,
+        r.Absence.PartDay, r.Absence.InternalNote,
+        r.Absence.AttachmentPath != null, r.Absence.AttachmentFileName);
 
     private async Task<AbsenceDto> RequireDtoAsync(Guid id, CancellationToken cancellationToken)
     {

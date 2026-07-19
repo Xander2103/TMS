@@ -14,21 +14,52 @@ public record AbsenceDto(
     AbsenceStatus Status,
     string? Reason,
     string? DecisionNote,
-    DateTime? DecidedAt);
+    DateTime? DecidedAt,
+    AbsencePartDay PartDay = AbsencePartDay.FullDay,
+    /// <summary>HR-only; the portal blanks this before it reaches the employee.</summary>
+    string? InternalNote = null,
+    bool HasAttachment = false,
+    string? AttachmentFileName = null);
 
 public record CreateAbsenceRequest(
     AbsenceType Type,
     DateOnly StartDate,
     DateOnly EndDate,
-    string? Reason);
+    string? Reason,
+    AbsencePartDay PartDay = AbsencePartDay.FullDay);
 
 public record UpdateAbsenceRequest(
     AbsenceType Type,
     DateOnly StartDate,
     DateOnly EndDate,
-    string? Reason);
+    string? Reason,
+    AbsencePartDay PartDay = AbsencePartDay.FullDay);
 
 public record DecideAbsenceRequest(bool Approve, string? Note);
+
+/// <summary>HR asks the employee to adjust the request; optionally proposing alternative dates.</summary>
+public record RequestAbsenceChangesRequest(string Note, DateOnly? ProposedStartDate, DateOnly? ProposedEndDate);
+
+public record SetInternalNoteRequest(string? Note);
+
+public record OverlappingShiftDto(DateOnly Date, TimeOnly StartTime, TimeOnly EndTime, string? WorkLocation);
+
+public record OverlappingTripDto(Guid TripId, string TripNumber, DateOnly TripDate);
+
+public record OverlappingColleagueDto(
+    string EmployeeName, AbsenceType Type, DateOnly StartDate, DateOnly EndDate, AbsenceStatus Status);
+
+/// <summary>
+/// Everything HR sees next to a request: planning conflicts, colleagues off in the same
+/// period (same department) and the balance architecture (used vacation days; entitlement
+/// administration is a future extension).
+/// </summary>
+public record AbsenceReviewContextDto(
+    IReadOnlyList<OverlappingShiftDto> OverlappingShifts,
+    IReadOnlyList<OverlappingTripDto> OverlappingTrips,
+    IReadOnlyList<OverlappingColleagueDto> OverlappingColleagues,
+    int UsedVacationDaysThisYear,
+    bool HasAttachment);
 
 public enum AbsenceOperationOutcome
 {

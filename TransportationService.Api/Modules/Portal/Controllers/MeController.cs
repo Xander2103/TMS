@@ -64,6 +64,41 @@ public class MeController : ControllerBase
         return HandleAbsence(await _service.CancelMyAbsenceAsync(id, cancellationToken));
     }
 
+    private const long MaxAttachmentBytes = 10 * 1024 * 1024;
+
+    [HttpPost("absences/{id:guid}/attachment")]
+    [RequestSizeLimit(MaxAttachmentBytes)]
+    public async Task<ActionResult<AbsenceDto>> AttachAbsenceDocument(
+        Guid id, IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0 || file.Length > MaxAttachmentBytes)
+        {
+            return BadRequest(new { message = "De bijlage moet tussen 1 byte en 10 MB groot zijn." });
+        }
+
+        await using var stream = file.OpenReadStream();
+        return HandleAbsence(await _service.AttachMyAbsenceDocumentAsync(id, file.FileName, stream, cancellationToken));
+    }
+
+    [HttpGet("absences/{id:guid}/attachment")]
+    public async Task<IActionResult> DownloadAbsenceDocument(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await _service.OpenMyAbsenceDocumentAsync(id, cancellationToken);
+        if (document is null)
+        {
+            return NotFound();
+        }
+
+        var contentType = Path.GetExtension(document.Value.FileName).ToLowerInvariant() switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            _ => "application/octet-stream",
+        };
+        return File(document.Value.Content, contentType, document.Value.FileName);
+    }
+
     [HttpGet("planning")]
     public async Task<IActionResult> Planning(
         [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)

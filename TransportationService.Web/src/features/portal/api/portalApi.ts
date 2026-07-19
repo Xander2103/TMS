@@ -39,6 +39,20 @@ export async function fetchMyQualificationDocumentUrl(id: string): Promise<strin
   return URL.createObjectURL(await response.blob())
 }
 
+export async function uploadMyAbsenceAttachment(absenceId: string, file: File): Promise<Absence> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await fetch(`${apiBaseUrl}/api/me/absences/${absenceId}/attachment`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+    body: form,
+  })
+  if (!response.ok) {
+    throw new ApiError('De bijlage kon niet worden geüpload.', response.status)
+  }
+  return (await response.json()) as Absence
+}
+
 export function changeMyPassword(currentPassword: string, newPassword: string): Promise<void> {
   return apiClient.postJson<void, { currentPassword: string; newPassword: string }>('/api/me/password', {
     currentPassword,

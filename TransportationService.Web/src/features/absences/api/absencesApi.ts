@@ -1,5 +1,5 @@
 import { apiClient } from '../../../api/apiClient'
-import type { Absence, AbsenceInput, AbsenceStatus, AbsenceType } from '../types'
+import type { Absence, AbsenceInput, AbsenceReviewContext, AbsenceStatus, AbsenceType } from '../types'
 
 export interface ListAbsencesParams {
   from?: string
@@ -35,6 +35,30 @@ export function decideAbsence(id: string, approve: boolean, note: string | null)
     approve,
     note,
   })
+}
+
+export function startAbsenceReview(id: string): Promise<Absence> {
+  return apiClient.postJson<Absence, Record<string, never>>(`/api/absences/${id}/review`, {})
+}
+
+export function requestAbsenceChanges(
+  id: string,
+  note: string,
+  proposedStartDate: string | null,
+  proposedEndDate: string | null,
+): Promise<Absence> {
+  return apiClient.postJson<Absence, { note: string; proposedStartDate: string | null; proposedEndDate: string | null }>(
+    `/api/absences/${id}/request-changes`,
+    { note, proposedStartDate, proposedEndDate },
+  )
+}
+
+export function setAbsenceInternalNote(id: string, note: string | null): Promise<Absence> {
+  return apiClient.putJson<Absence, { note: string | null }>(`/api/absences/${id}/internal-note`, { note })
+}
+
+export function getAbsenceReviewContext(id: string): Promise<AbsenceReviewContext> {
+  return apiClient.getJson<AbsenceReviewContext>(`/api/absences/${id}/review-context`)
 }
 
 export function cancelAbsence(id: string): Promise<Absence> {

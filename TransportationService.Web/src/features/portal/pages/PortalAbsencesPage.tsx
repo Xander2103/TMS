@@ -13,10 +13,12 @@ import {
   ABSENCE_STATUS_TONE,
   ABSENCE_TYPES,
   ABSENCE_TYPE_LABELS,
+  PART_DAY_LABELS,
   type Absence,
+  type AbsencePartDay,
   type AbsenceType,
 } from '../../absences/types'
-import { cancelMyAbsence, createMyAbsence, listMyAbsences } from '../api/portalApi'
+import { cancelMyAbsence, createMyAbsence, listMyAbsences, uploadMyAbsenceAttachment } from '../api/portalApi'
 import './portal.css'
 
 /** Own leave/absence requests: view status, request new, withdraw pending ones. */
@@ -31,6 +33,7 @@ export function PortalAbsencesPage() {
   const [type, setType] = useState<AbsenceType>('Vacation')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [partDay, setPartDay] = useState<AbsencePartDay>('FullDay')
   const [reason, setReason] = useState('')
 
   function reload() {
@@ -56,15 +59,35 @@ export function PortalAbsencesPage() {
     }
     setBusy(true)
     try {
-      await createMyAbsence({ type, startDate, endDate, reason: reason.trim() || null })
+      await createMyAbsence({
+        type,
+        startDate,
+        endDate,
+        reason: reason.trim() || null,
+        partDay: startDate === endDate ? partDay : 'FullDay',
+      })
       showSuccess('Aanvraag ingediend — HR bekijkt ze zo snel mogelijk.')
       setDialogOpen(false)
       setStartDate('')
       setEndDate('')
+      setPartDay('FullDay')
       setReason('')
       reload()
     } catch (err) {
       showError(err instanceof ApiError ? err.message : 'De aanvraag kon niet worden ingediend.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleAttachment(id: string, file: File) {
+    setBusy(true)
+    try {
+      await uploadMyAbsenceAttachment(id, file)
+      showSuccess('Bijlage toegevoegd.')
+      reload()
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De bijlage kon niet worden geüpload.')
     } finally {
       setBusy(false)
     }
@@ -105,13 +128,35 @@ export function PortalAbsencesPage() {
             </div>
             <div className="portal-absence-dates">
               {absence.startDate} t/m {absence.endDate}
+              {absence.partDay !== 'FullDay' && ` · ${PART_DAY_LABELS[absence.partDay]}`}
             </div>
             {absence.reason && <div className="portal-absence-reason">{absence.reason}</div>}
-            {absence.decisionNote && <div className="portal-absence-decision">Beslissing: {absence.decisionNote}</div>}
-            {absence.status === 'Requested' && (
-              <Button variant="ghost" onClick={() => void handleCancel(absence.id)} disabled={busy}>
-                Intrekken
-              </Button>
+            {absence.decisionNote && <div className="portal-absence-decision">Bericht van HR: {absence.decisionNote}</div>}
+            {absence.hasAttachment && (
+              <div className="portal-absence-reason">📎 {absence.attachmentFileName ?? 'Bijlage toegevoegd'}</div>
+            )}
+            {(absence.status === 'Requested' || absence.status === 'UnderReview') && (
+              <div className="portal-absence-actions">
+                {absence.status === 'Requested' && (
+                  <Button variant="ghost" onClick={() => void handleCancel(absence.id)} disabled={busy}>
+                    Intrekken
+                  </Button>
+                )}
+                <label className="portal-attachment-label">
+                  📎 {absence.hasAttachment ? 'Bijlage vervangen' : 'Bijlage toevoegen'}
+                  <input
+                    type="file"
+                    accept=".pdf,image/jpeg,image/png"
+                    hidden
+                    disabled={busy}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) void handleAttachment(absence.id, file)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              </div>
             )}
           </li>
         ))}
@@ -149,6 +194,17 @@ export function PortalAbsencesPage() {
             <FormField label="Tot en met" htmlFor="pa-end" required>
               <input id="pa-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} disabled={busy} />
             </FormField>
+            {startDate !== '' && startDate === endDate && (
+              <FormField label="Dagdeel" htmlFor="pa-partday">
+                <select id="pa-partday" value={partDay} onChange={(e) => setPartDay(e.target.value as AbsencePartDay)} disabled={busy}>
+                  {(Object.keys(PART_DAY_LABELS) as AbsencePartDay[]).map((p) => (
+                    <option key={p} value={p}>
+                      {PART_DAY_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+            )}
             <FormField label="Reden / toelichting" htmlFor="pa-reason">
               <textarea id="pa-reason" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy} maxLength={500} />
             </FormField>

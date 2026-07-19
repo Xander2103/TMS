@@ -16,8 +16,12 @@ public class AbsenceConfiguration : IEntityTypeConfiguration<Absence>
 
         builder.Property(a => a.Type).HasConversion<string>().HasMaxLength(30);
         builder.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(a => a.PartDay).HasConversion<string>().HasMaxLength(20);
         builder.Property(a => a.Reason).HasMaxLength(1000);
         builder.Property(a => a.DecisionNote).HasMaxLength(1000);
+        builder.Property(a => a.InternalNote).HasMaxLength(2000);
+        builder.Property(a => a.AttachmentPath).HasMaxLength(300);
+        builder.Property(a => a.AttachmentFileName).HasMaxLength(255);
 
         builder.HasIndex(a => new { a.TenantId, a.EmployeeId, a.StartDate });
         builder.HasIndex(a => new { a.TenantId, a.StartDate });

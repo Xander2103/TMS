@@ -31,4 +31,10 @@ public interface IPortalService
 
     /// <summary>Own schedule days (shifts + absences merged), for "Mijn planning".</summary>
     Task<IReadOnlyList<ScheduleDayDto>?> GetMyPlanningAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken);
+
+    /// <summary>Attach a supporting document to an own, still open absence request.</summary>
+    Task<PortalAbsenceResult> AttachMyAbsenceDocumentAsync(
+        Guid absenceId, string fileName, Stream content, CancellationToken cancellationToken);
+
+    Task<(Stream Content, string FileName)?> OpenMyAbsenceDocumentAsync(Guid absenceId, CancellationToken cancellationToken);
 }
