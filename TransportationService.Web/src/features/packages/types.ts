@@ -218,6 +218,45 @@ export interface TripPackageReadiness {
   outstandingPackages: TripPackageChecklistItem[]
 }
 
+export interface WarehouseTripStop {
+  stopId: string
+  locationName: string | null
+  city: string | null
+  expectedPackages: number
+}
+
+export interface WarehouseTrip {
+  tripId: string
+  tripNumber: string
+  tripDate: string
+  status: string
+  driverName: string | null
+  vehicleNumber: string | null
+  orderCount: number
+  totalPackages: number
+  mandatoryPackages: number
+  loadedCount: number
+  notLoadedCount: number
+  missingCount: number
+  damagedCount: number
+  openExceptionCount: number
+  isComplete: boolean
+  rule: PackageDepartureRule
+  loadingStops: WarehouseTripStop[]
+}
+
+export interface WarehousePackageRow {
+  packageId: string
+  packageNumber: string
+  description: string
+  status: PackageLifecycleStatus
+  exceptionState: PackageExceptionState
+  transportOrderId: string
+  orderNumber: string
+  tripId: string | null
+  tripNumber: string | null
+}
+
 export interface PackageTimelineEvent {
   id: string
   eventType: string

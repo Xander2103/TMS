@@ -73,19 +73,30 @@ public class ScanService : IScanService
             }
         }
 
-        // Return/depot scans record the return leg AFTER a stop closed (and possibly after the
-        // trip completed), so they skip the in-progress and terminal-stop guards.
+        // Trip-status window per scan type: the warehouse LOADS while the trip is still
+        // Planned; delivery happens InProgress; the return leg runs until after completion.
         var isReturnLeg = request.ScanType is ScanType.Return or ScanType.Depot;
 
-        var guard = await GuardAsync(tripId, stopId, restrictToOwnDriver, requireInProgress: !isReturnLeg, cancellationToken);
+        var guard = await GuardAsync(tripId, stopId, restrictToOwnDriver, requireInProgress: false, cancellationToken);
         if (guard.Error is not null)
         {
             return guard.Error;
         }
 
-        if (isReturnLeg && guard.Trip!.Status is not (TripStatus.InProgress or TripStatus.Completed))
+        var tripStatus = guard.Trip!.Status;
+        var statusError = request.ScanType switch
         {
-            return ScanOperationResult.InvalidState("Retour- en depotscans kunnen alleen tijdens of na de uitvoering van de rit.");
+            ScanType.Load when tripStatus is not (TripStatus.Planned or TripStatus.InProgress) =>
+                "Laadscans kunnen alleen op een geplande of lopende rit.",
+            ScanType.Unload when tripStatus != TripStatus.InProgress =>
+                "Losscans kunnen alleen terwijl de rit onderweg is.",
+            ScanType.Return or ScanType.Depot when tripStatus is not (TripStatus.InProgress or TripStatus.Completed) =>
+                "Retour- en depotscans kunnen alleen tijdens of na de uitvoering van de rit.",
+            _ => null,
+        };
+        if (statusError is not null)
+        {
+            return ScanOperationResult.InvalidState(statusError);
         }
 
         var stop = guard.Stop!;

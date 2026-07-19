@@ -120,6 +120,8 @@ export interface ExceptionListItem {
   customerVisible: boolean
   packageId: string | null
   packageNumber: string | null
+  assignedToUserId: string | null
+  assignedToName: string | null
 }
 
 export interface ExceptionDetail {
@@ -140,6 +142,8 @@ export interface ExceptionDetail {
   packageId: string | null
   packageNumber: string | null
   packageStatus: string | null
+  assignedToUserId: string | null
+  assignedToName: string | null
   reportedByName: string | null
   driverName: string | null
   occurredAt: string

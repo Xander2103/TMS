@@ -143,5 +143,18 @@ public static class DefaultRoleDefinitions
             [
                 PermissionCodes.OrdersView,
             ]),
+
+        // Warehouse: scans, packages, releases and incident reporting — deliberately no
+        // HR, cost or profitability permissions.
+        new("magazijn", "Magazijn",
+            "Laadt en scant colli, geeft ritten vrij en meldt afwijkingen in het magazijn.",
+            [
+                PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
+                PermissionCodes.PackagesView,
+                PermissionCodes.ScanningView, PermissionCodes.ScanningExecute,
+                PermissionCodes.PackageExceptionsCreate,
+                PermissionCodes.ExceptionsView, PermissionCodes.ExceptionsCreate,
+                PermissionCodes.PlanningView,
+            ]),
     ];
 }

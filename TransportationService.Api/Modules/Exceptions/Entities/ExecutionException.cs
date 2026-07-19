@@ -73,6 +73,9 @@ public class ExecutionException : AuditableTenantEntity
 
     public string? DispatcherNotes { get; set; }
 
+    /// <summary>Dispatcher currently owning the follow-up; null means unassigned.</summary>
+    public Guid? AssignedToUserId { get; set; }
+
     /// <summary>Whether this exception may surface in customer-facing views (portal/notifications later).</summary>
     public bool CustomerVisible { get; set; }
 

@@ -25,6 +25,7 @@ public class ExecutionExceptionConfiguration : IEntityTypeConfiguration<Executio
         builder.Property(e => e.ResolutionNote).HasMaxLength(2000);
 
         builder.HasIndex(e => new { e.TenantId, e.Status });
+        builder.HasIndex(e => new { e.TenantId, e.AssignedToUserId });
         builder.HasIndex(e => new { e.TenantId, e.OccurredAt });
         builder.HasIndex(e => new { e.TenantId, e.TripId });
 

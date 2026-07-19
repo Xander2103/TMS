@@ -249,17 +249,17 @@ public class ExceptionServiceTests
         await h.Sut.ReportAsync(h.TripId, Report(ExecutionExceptionType.Delay, "File", stopId: null), true, CancellationToken.None);
         await h.Sut.ReportAsync(h.TripId, Report(ExecutionExceptionType.DamagedPackage, "Schade aan pallet", stopId: h.StopId), true, CancellationToken.None);
 
-        var all = await h.Sut.SearchAsync(null, null, null, 1, 25, CancellationToken.None);
+        var all = await h.Sut.SearchAsync(null, null, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(2, all.TotalCount);
 
-        var damaged = await h.Sut.SearchAsync(null, ExecutionExceptionType.DamagedPackage, null, 1, 25, CancellationToken.None);
+        var damaged = await h.Sut.SearchAsync(null, ExecutionExceptionType.DamagedPackage, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(1, damaged.TotalCount);
 
-        var open = await h.Sut.SearchAsync(ExecutionExceptionStatus.Open, null, null, 1, 25, CancellationToken.None);
+        var open = await h.Sut.SearchAsync(ExecutionExceptionStatus.Open, null, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(2, open.TotalCount);
 
         var foreign = CreateSut(h.Db, Guid.NewGuid(), Guid.NewGuid(), h.StorageRoot);
-        var foreignList = await foreign.SearchAsync(null, null, null, 1, 25, CancellationToken.None);
+        var foreignList = await foreign.SearchAsync(null, null, null, null, null, null, 1, 25, CancellationToken.None);
         Assert.Equal(0, foreignList.TotalCount);
     }
 

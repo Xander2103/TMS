@@ -15,6 +15,7 @@ import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { resolvePackageIncident } from '../../packages/api/packagesApi'
 import { PACKAGE_INCIDENT_ACTION_LABELS, type PackageIncidentAction } from '../../packages/types'
 import {
+  assignException,
   changeExceptionStatus,
   deleteExceptionPhoto,
   fetchExceptionPhotoUrl,
@@ -55,7 +56,7 @@ const PACKAGE_DISPOSITIONS: Record<string, PackageIncidentAction[]> = {
 export function ExceptionDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const { showSuccess, showError } = useToast()
-  const { hasPermission } = useAuth()
+  const { hasPermission, user } = useAuth()
 
   const [detail, setDetail] = useState<ExceptionDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -132,6 +133,21 @@ export function ExceptionDetailPage() {
       showSuccess(`Status gewijzigd naar ${EXCEPTION_STATUS_LABELS[statusTarget]}.`)
     } catch (err) {
       showError(err instanceof ApiError ? err.message : 'De status kon niet worden gewijzigd.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggleAssignment() {
+    if (!detail) return
+    setBusy(true)
+    try {
+      const isMine = detail.assignedToUserId === user?.id
+      const updated = await assignException(id, isMine ? null : (user?.id ?? null))
+      setDetail(updated)
+      showSuccess(isMine ? 'Toewijzing opgeheven.' : 'Aan jou toegewezen.')
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De toewijzing kon niet worden gewijzigd.')
     } finally {
       setBusy(false)
     }
@@ -224,6 +240,17 @@ export function ExceptionDetailPage() {
             ))}
           </div>
         </section>
+      )}
+
+      {canResolve && (
+        <div className="exc-actions">
+          <Button variant="secondary" onClick={() => void toggleAssignment()} disabled={busy}>
+            {detail.assignedToUserId === user?.id ? 'Toewijzing opheffen' : 'Aan mij toewijzen'}
+          </Button>
+          {detail.assignedToName && detail.assignedToUserId !== user?.id && (
+            <span className="exc-assignee">Toegewezen aan {detail.assignedToName}</span>
+          )}
+        </div>
       )}
 
       {canResolve && detail.allowedTransitions.length > 0 && (

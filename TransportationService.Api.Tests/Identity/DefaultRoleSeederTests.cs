@@ -75,7 +75,7 @@ public class DefaultRoleSeederTests
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         Assert.Equal(
-            new[] { "Boekhouding", "Chauffeur", "Dispatcher", "HR", "Klantportaal", "Management", "Planner" },
+            new[] { "Boekhouding", "Chauffeur", "Dispatcher", "HR", "Klantportaal", "Magazijn", "Management", "Planner" },
             roles.Select(r => r.Name).OrderBy(n => n).ToArray());
         Assert.All(roles, r => Assert.False(r.IsSystemRole));
 
@@ -139,7 +139,7 @@ public class DefaultRoleSeederTests
         // …and the next startup must NOT re-grant it or duplicate roles.
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(7, await db.Context.Roles.CountAsync(r => r.TenantId == tenantId));
+        Assert.Equal(8, await db.Context.Roles.CountAsync(r => r.TenantId == tenantId));
         Assert.False(await db.Context.RolePermissions
             .AnyAsync(rp => rp.RoleId == planner.Id && rp.PermissionId == cancelPermission.Id));
     }

@@ -70,11 +70,24 @@ public class ExceptionsController : ControllerBase
         [FromQuery] ExecutionExceptionStatus? status,
         [FromQuery] ExecutionExceptionType? type,
         [FromQuery] ExceptionSeverity? severity,
+        [FromQuery] Guid? tripId,
+        [FromQuery] bool? packagesOnly,
+        [FromQuery] Guid? assignedToUserId,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
     {
-        return Ok(await _service.SearchAsync(status, type, severity, page, pageSize, cancellationToken));
+        return Ok(await _service.SearchAsync(
+            status, type, severity, tripId, packagesOnly, assignedToUserId, page, pageSize, cancellationToken));
+    }
+
+    /// <summary>Assign (or with null: unassign) the follow-up owner.</summary>
+    [HttpPost("api/exceptions/{id:guid}/assign")]
+    [RequirePermission(PermissionCodes.ExceptionsResolve)]
+    public async Task<ActionResult<ExceptionDetailDto>> Assign(
+        Guid id, AssignExceptionRequest request, CancellationToken cancellationToken)
+    {
+        return Handle(await _service.AssignAsync(id, request.UserId, cancellationToken));
     }
 
     [HttpGet("api/exceptions/{id:guid}")]

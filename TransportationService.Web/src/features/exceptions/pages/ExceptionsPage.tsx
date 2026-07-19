@@ -5,6 +5,7 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { Pagination } from '../../../components/ui/Pagination'
+import { useAuth } from '../../auth/authContextValue'
 import { searchExceptions } from '../api/exceptionsApi'
 import {
   EXCEPTION_SEVERITIES,
@@ -28,11 +29,14 @@ const PAGE_SIZE = 25
 
 export function ExceptionsPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<ExecutionExceptionStatus | ''>('Open')
   const [typeFilter, setTypeFilter] = useState<ExecutionExceptionType | ''>('')
   const [severityFilter, setSeverityFilter] = useState<ExceptionSeverity | ''>('')
+  const [packagesOnly, setPackagesOnly] = useState(false)
+  const [mineOnly, setMineOnly] = useState(false)
 
   // Same request-key idiom as usePagedQuery: state only mutates in async callbacks,
   // loading is derived from whether the loaded result matches the current request.
@@ -42,7 +46,7 @@ export function ExceptionsPage() {
     error: string | null
     loadedKey: string
   }>({ items: [], totalCount: 0, error: null, loadedKey: '' })
-  const requestKey = JSON.stringify({ statusFilter, typeFilter, severityFilter, page })
+  const requestKey = JSON.stringify({ statusFilter, typeFilter, severityFilter, packagesOnly, mineOnly, page })
 
   useEffect(() => {
     let mounted = true
@@ -50,6 +54,8 @@ export function ExceptionsPage() {
       status: statusFilter || undefined,
       type: typeFilter || undefined,
       severity: severityFilter || undefined,
+      packagesOnly: packagesOnly || undefined,
+      assignedToUserId: mineOnly ? (user?.id ?? undefined) : undefined,
       page,
       pageSize: PAGE_SIZE,
     })
@@ -128,6 +134,11 @@ export function ExceptionsPage() {
       render: (r) => <span className="exc-description-cell">{r.description}</span>,
     },
     {
+      key: 'assignee',
+      header: 'Toegewezen',
+      render: (r) => <span>{r.assignedToName ?? '—'}</span>,
+    },
+    {
       key: 'meta',
       header: 'Info',
       render: (r) => (
@@ -199,6 +210,28 @@ export function ExceptionsPage() {
               </option>
             ))}
           </select>
+        </label>
+        <label className="exc-filter-check">
+          <input
+            type="checkbox"
+            checked={packagesOnly}
+            onChange={(e) => {
+              setPackagesOnly(e.target.checked)
+              setPage(1)
+            }}
+          />
+          Alleen colli
+        </label>
+        <label className="exc-filter-check">
+          <input
+            type="checkbox"
+            checked={mineOnly}
+            onChange={(e) => {
+              setMineOnly(e.target.checked)
+              setPage(1)
+            }}
+          />
+          Aan mij toegewezen
         </label>
       </div>
 

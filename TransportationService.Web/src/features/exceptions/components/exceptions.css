@@ -157,3 +157,15 @@
     gap: 8px;
   }
 }
+
+.exc-filter-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.exc-assignee {
+  align-self: center;
+  color: var(--text);
+  font-size: 0.9rem;
+}

@@ -219,6 +219,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.I
     TransportationService.Api.Modules.Packages.Services.PackageScanProcessor>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.ITripPackageService,
     TransportationService.Api.Modules.Packages.Services.TripPackageService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.IWarehouseService,
+    TransportationService.Api.Modules.Packages.Services.WarehouseService>();
 
 // Outlook/Exchange foundation: queued calendar sync behind a provider seam. The fake provider
 // stands in until Microsoft Graph credentials exist; swap ICalendarProvider then.

@@ -43,6 +43,15 @@ export async function downloadLabelVersion(id: string, version: number): Promise
   URL.revokeObjectURL(url)
 }
 
+export function getWarehouseTrips(date?: string): Promise<import('../types').WarehouseTrip[]> {
+  const suffix = date ? `?date=${date}` : ''
+  return apiClient.getJson(`/api/warehouse/trips${suffix}`)
+}
+
+export function searchWarehousePackages(search: string): Promise<import('../types').WarehousePackageRow[]> {
+  return apiClient.getJson(`/api/warehouse/packages?search=${encodeURIComponent(search)}`)
+}
+
 export function getTripPackageChecklist(tripId: string, stopId?: string): Promise<TripPackageChecklist> {
   const suffix = stopId ? `?stopId=${stopId}` : ''
   return apiClient.getJson<TripPackageChecklist>(`/api/trips/${tripId}/packages${suffix}`)

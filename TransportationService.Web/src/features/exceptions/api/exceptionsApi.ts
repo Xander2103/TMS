@@ -23,6 +23,8 @@ export interface SearchExceptionsParams {
   status?: ExecutionExceptionStatus
   type?: ExecutionExceptionType
   severity?: ExceptionSeverity
+  packagesOnly?: boolean
+  assignedToUserId?: string
   page: number
   pageSize: number
 }
@@ -32,9 +34,15 @@ export function searchExceptions(params: SearchExceptionsParams): Promise<PagedR
   if (params.status) query.set('status', params.status)
   if (params.type) query.set('type', params.type)
   if (params.severity) query.set('severity', params.severity)
+  if (params.packagesOnly) query.set('packagesOnly', 'true')
+  if (params.assignedToUserId) query.set('assignedToUserId', params.assignedToUserId)
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<ExceptionListItem>>(`/api/exceptions?${query.toString()}`)
+}
+
+export function assignException(id: string, userId: string | null): Promise<ExceptionDetail> {
+  return apiClient.postJson<ExceptionDetail, { userId: string | null }>(`/api/exceptions/${id}/assign`, { userId })
 }
 
 export function getException(id: string): Promise<ExceptionDetail> {

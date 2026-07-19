@@ -151,6 +151,7 @@ public class ExecutionExceptionService : IExecutionExceptionService
 
     public async Task<PagedResult<ExceptionListItemDto>> SearchAsync(
         ExecutionExceptionStatus? status, ExecutionExceptionType? type, ExceptionSeverity? severity,
+        Guid? tripId, bool? packagesOnly, Guid? assignedToUserId,
         int? page, int? pageSize, CancellationToken cancellationToken)
     {
         var pageRequest = PageRequest.Of(page, pageSize);
@@ -160,6 +161,9 @@ public class ExecutionExceptionService : IExecutionExceptionService
         if (status is { } s) query = query.Where(e => e.Status == s);
         if (type is { } t) query = query.Where(e => e.Type == t);
         if (severity is { } sev) query = query.Where(e => e.Severity == sev);
+        if (tripId is { } trip) query = query.Where(e => e.TripId == trip);
+        if (packagesOnly == true) query = query.Where(e => e.PackageId != null);
+        if (assignedToUserId is { } assignee) query = query.Where(e => e.AssignedToUserId == assignee);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var rows = await query
@@ -179,6 +183,33 @@ public class ExecutionExceptionService : IExecutionExceptionService
 
     public Task<ExceptionDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         MapDetailAsync(id, cancellationToken);
+
+    public async Task<ExceptionOperationResult> AssignAsync(Guid id, Guid? userId, CancellationToken cancellationToken)
+    {
+        var exception = await Scoped().FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+        if (exception is null)
+        {
+            return ExceptionOperationResult.NotFound;
+        }
+
+        if (userId is { } assignee)
+        {
+            var exists = await _dbContext.Users.AsNoTracking()
+                .AnyAsync(u => u.Id == assignee && u.TenantId == _tenantContext.TenantId && u.IsActive, cancellationToken);
+            if (!exists)
+            {
+                return ExceptionOperationResult.Invalid("De gekozen gebruiker bestaat niet of is inactief.");
+            }
+        }
+
+        var before = exception.AssignedToUserId;
+        exception.AssignedToUserId = userId;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync(EntityType, exception.Id.ToString(), "Assigned",
+            new { AssignedToUserId = before }, new { exception.AssignedToUserId }, cancellationToken);
+
+        return ExceptionOperationResult.Success((await MapDetailAsync(exception.Id, cancellationToken))!);
+    }
 
     public async Task<ExceptionListResult> ListForTripAsync(
         Guid tripId, bool restrictToOwnDriver, CancellationToken cancellationToken)
@@ -405,13 +436,14 @@ public class ExecutionExceptionService : IExecutionExceptionService
             row.Id, row.OccurredAt, row.Type, row.Severity, row.Status, row.Description,
             context.TripNumber, context.OrderNumber, context.StopLabel, context.ReporterName,
             photoCount, row.CustomerVisible,
-            row.PackageId, context.PackageNumber);
+            row.PackageId, context.PackageNumber,
+            row.AssignedToUserId, context.AssignedToName);
     }
 
     private sealed record ExceptionContext(
         string TripNumber, string? OrderNumber, string? StopLabel, string? CargoDescription,
         string? ReporterName, string? DriverName, string? ResolvedByName,
-        string? PackageNumber, string? PackageStatus);
+        string? PackageNumber, string? PackageStatus, string? AssignedToName);
 
     private async Task<ExceptionContext> LoadContextAsync(ExecutionException row, CancellationToken cancellationToken)
     {
@@ -459,6 +491,7 @@ public class ExecutionExceptionService : IExecutionExceptionService
 
         var reporterName = await UserNameAsync(row.ReportedByUserId, cancellationToken);
         var resolvedByName = await UserNameAsync(row.ResolvedByUserId, cancellationToken);
+        var assignedToName = await UserNameAsync(row.AssignedToUserId, cancellationToken);
 
         string? driverName = null;
         if (row.DriverId is { } driverId)
@@ -471,7 +504,7 @@ public class ExecutionExceptionService : IExecutionExceptionService
         }
 
         return new ExceptionContext(tripNumber, orderNumber, stopLabel, cargoDescription,
-            reporterName, driverName, resolvedByName, packageNumber, packageStatus);
+            reporterName, driverName, resolvedByName, packageNumber, packageStatus, assignedToName);
     }
 
     private async Task<string?> UserNameAsync(Guid? userId, CancellationToken cancellationToken) =>
@@ -505,6 +538,7 @@ public class ExecutionExceptionService : IExecutionExceptionService
             row.TransportOrderStopId, context.StopLabel,
             row.CargoItemId, context.CargoDescription,
             row.PackageId, context.PackageNumber, context.PackageStatus,
+            row.AssignedToUserId, context.AssignedToName,
             context.ReporterName, context.DriverName,
             row.OccurredAt, row.Latitude, row.Longitude,
             row.DispatcherNotes, row.CustomerVisible,

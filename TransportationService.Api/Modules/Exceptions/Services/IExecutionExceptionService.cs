@@ -12,9 +12,13 @@ public interface IExecutionExceptionService
 
     Task<PagedResult<ExceptionListItemDto>> SearchAsync(
         ExecutionExceptionStatus? status, ExecutionExceptionType? type, ExceptionSeverity? severity,
+        Guid? tripId, bool? packagesOnly, Guid? assignedToUserId,
         int? page, int? pageSize, CancellationToken cancellationToken);
 
     Task<ExceptionDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Sets or clears the owning dispatcher for follow-up.</summary>
+    Task<ExceptionOperationResult> AssignAsync(Guid id, Guid? userId, CancellationToken cancellationToken);
 
     Task<ExceptionListResult> ListForTripAsync(Guid tripId, bool restrictToOwnDriver, CancellationToken cancellationToken);
 

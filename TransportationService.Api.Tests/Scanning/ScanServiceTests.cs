@@ -264,12 +264,21 @@ public class ScanServiceTests
             new SubmitScanRequest(ScanType.Load, "BC-A1", 1, false, null, null), true, CancellationToken.None);
         Assert.Equal(ScanOutcome.NotYourTrip, notYours.Outcome);
 
-        // Trip must be InProgress.
+        // Loading is allowed while the trip is still Planned (warehouse pre-loads), but a
+        // Draft trip is not loadable and unloading needs the trip underway.
         var trip = await h.Db.Context.Trips.FindAsync(h.TripId);
         trip!.Status = TripStatus.Planned;
         await h.Db.Context.SaveChangesAsync();
-        var wrongState = await Scan(h, h.LoadStopAId, "BC-A1");
-        Assert.Equal(ScanOutcome.InvalidState, wrongState.Outcome);
+        var plannedLoad = await Scan(h, h.LoadStopAId, "BC-A1");
+        Assert.Equal(ScanOutcome.Success, plannedLoad.Outcome);
+        var plannedUnload = await h.Sut.SubmitAsync(h.TripId, h.UnloadStopAId,
+            new SubmitScanRequest(ScanType.Unload, "BC-A1", 1, false, null, null), true, CancellationToken.None);
+        Assert.Equal(ScanOutcome.InvalidState, plannedUnload.Outcome);
+
+        trip.Status = TripStatus.Draft;
+        await h.Db.Context.SaveChangesAsync();
+        var draftLoad = await Scan(h, h.LoadStopAId, "BC-A1");
+        Assert.Equal(ScanOutcome.InvalidState, draftLoad.Outcome);
     }
 
     [Fact]

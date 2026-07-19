@@ -18,6 +18,8 @@ public record UpdateExceptionRequest(ExceptionSeverity Severity, string? Dispatc
 /// <summary>Terminal statuses (Resolved/Rejected) demand a note; it becomes the resolution note.</summary>
 public record ChangeExceptionStatusRequest(ExecutionExceptionStatus Status, string? Note);
 
+public record AssignExceptionRequest(Guid? UserId);
+
 public record ExceptionPhotoDto(Guid Id, string FileName, string ContentType, DateTime CreatedAt);
 
 public record ExceptionListItemDto(
@@ -34,7 +36,9 @@ public record ExceptionListItemDto(
     int PhotoCount,
     bool CustomerVisible,
     Guid? PackageId = null,
-    string? PackageNumber = null);
+    string? PackageNumber = null,
+    Guid? AssignedToUserId = null,
+    string? AssignedToName = null);
 
 public record ExceptionDetailDto(
     Guid Id,
@@ -54,6 +58,8 @@ public record ExceptionDetailDto(
     Guid? PackageId,
     string? PackageNumber,
     string? PackageStatus,
+    Guid? AssignedToUserId,
+    string? AssignedToName,
     string? ReportedByName,
     string? DriverName,
     DateTime OccurredAt,

@@ -19,6 +19,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Transportopdrachten', to: '/transport-orders', permissions: ['orders.view', 'orders.manage'] },
   { label: 'Planning', to: '/planning', permissions: ['planning.view'] },
   { label: 'Afwijkingen', to: '/exceptions', permissions: ['exceptions.view'] },
+  { label: 'Magazijn', to: '/warehouse', permissions: ['warehouse.view'] },
   { label: 'Mijn ritten', to: '/my-trips', permissions: ['driver_workflow.view'] },
   { label: 'Klanten', to: '/customers', permissions: ['customers.view'] },
   { label: 'Chauffeurs', to: '/drivers', permissions: ['drivers.view'] },

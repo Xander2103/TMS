@@ -205,3 +205,87 @@ strong.pk-danger {
 .pk-event-link {
   font-size: 0.85rem;
 }
+
+.wh-day-toggle {
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.wh-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.7rem 0.9rem;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.wh-results {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.wh-results li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  font-size: 0.9rem;
+}
+
+.wh-result-desc {
+  flex: 1;
+}
+
+.wh-result-meta {
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.wh-empty {
+  color: var(--text);
+}
+
+.wh-trip-header {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.wh-trip-header h2 {
+  margin: 0;
+}
+
+.wh-trip-meta {
+  margin: 0.3rem 0 0.6rem;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.wh-stops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.wh-stops li {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.wh-stop-label {
+  flex: 1;
+}
+
+.wh-stop-count {
+  color: var(--text);
+  font-size: 0.9rem;
+}
