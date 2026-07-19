@@ -18,37 +18,25 @@
 }
 
 .ui-badge-success {
-  background: rgba(22, 163, 74, 0.12);
-  color: #15803d;
-  border-color: rgba(22, 163, 74, 0.35);
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: var(--success-border);
 }
 
 .ui-badge-warning {
-  background: rgba(217, 119, 6, 0.12);
-  color: #b45309;
-  border-color: rgba(217, 119, 6, 0.35);
+  background: var(--warning-bg);
+  color: var(--warning);
+  border-color: var(--warning-border);
 }
 
 .ui-badge-danger {
-  background: rgba(220, 38, 38, 0.12);
-  color: #b91c1c;
-  border-color: rgba(220, 38, 38, 0.35);
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 
 .ui-badge-info {
   background: var(--accent-bg);
   color: var(--accent);
   border-color: var(--accent-border);
-}
-
-@media (prefers-color-scheme: dark) {
-  .ui-badge-success {
-    color: #4ade80;
-  }
-  .ui-badge-warning {
-    color: #fbbf24;
-  }
-  .ui-badge-danger {
-    color: #f87171;
-  }
 }

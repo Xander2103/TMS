@@ -1,0 +1,24 @@
+.ui-form-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 14px 0;
+  margin-top: 8px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+.ui-form-actions-dirty {
+  font-size: 13.5px;
+  color: #b45309;
+  font-style: italic;
+}
+
+.ui-form-actions-buttons {
+  display: flex;
+  gap: 12px;
+}

@@ -1,4 +1,11 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import {
+  createBrowserRouter,
+  createRoutesFromElements,
+  Navigate,
+  Outlet,
+  Route,
+  RouterProvider,
+} from 'react-router-dom'
 import { AuthProvider } from '../features/auth/AuthContext'
 import { LoginPage } from '../features/auth/LoginPage'
 import { RequireAuth } from '../features/auth/RequireAuth'
@@ -46,14 +53,22 @@ import { EmployeeDetailPage } from '../features/employees/pages/EmployeeDetailPa
 import { LookupPage } from '../features/master-data/pages/LookupPage'
 import { LOOKUP_RESOURCES } from '../features/master-data/lookupRegistry'
 
-export function AppRoutes() {
+/** Root layout route: providers that need to live inside the router render an Outlet. */
+function RootProviders() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route element={<RequireAuth />}>
-            <Route element={<AppLayout />}>
+    <AuthProvider>
+      <Outlet />
+    </AuthProvider>
+  )
+}
+
+// Data router (createBrowserRouter) is required for useBlocker-based unsaved-changes guards.
+const router = createBrowserRouter(
+  createRoutesFromElements(
+    <Route element={<RootProviders />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<RequireAuth />}>
+        <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/transport-orders" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/transport-orders" element={<TransportOrdersPage />} />
@@ -100,10 +115,12 @@ export function AppRoutes() {
           <Route path="/master-data/:resource" element={<LookupPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
-            </Route>
-          </Route>
-        </Routes>
-      </AuthProvider>
-    </BrowserRouter>
-  )
+        </Route>
+      </Route>
+    </Route>,
+  ),
+)
+
+export function AppRoutes() {
+  return <RouterProvider router={router} />
 }

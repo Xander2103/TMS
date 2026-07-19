@@ -1,0 +1,12 @@
+.ui-status-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ui-status-badges-reason {
+  font-size: 13.5px;
+  color: var(--text);
+  font-style: italic;
+}

@@ -1,0 +1,116 @@
+.ui-searchable-select {
+  position: relative;
+  width: 100%;
+}
+
+.ui-searchable-select-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ui-searchable-select-control input {
+  font: inherit;
+  font-size: 15px;
+  padding: 9px 56px 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ui-searchable-select-control input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.ui-searchable-select-control input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ui-searchable-select-clear {
+  position: absolute;
+  right: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.ui-searchable-select-clear:hover {
+  color: var(--text-h);
+  background: var(--code-bg);
+}
+
+.ui-searchable-select-caret {
+  position: absolute;
+  right: 12px;
+  color: var(--text);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.ui-searchable-select-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.ui-searchable-select-option {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.ui-searchable-select-option.is-highlighted {
+  background: var(--accent-bg);
+}
+
+.ui-searchable-select-option.is-selected .ui-searchable-select-option-label {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.ui-searchable-select-option-description {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ui-searchable-select-note {
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--text);
+  font-style: italic;
+}
+
+.ui-searchable-select-create {
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 6px 6px;
+  margin-top: 4px;
+  color: var(--accent);
+  font-weight: 600;
+}
