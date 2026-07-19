@@ -22,13 +22,22 @@ public class ScanEventConfiguration : IEntityTypeConfiguration<ScanEvent>
         builder.Property(e => e.CorrectionReason).HasMaxLength(500);
         builder.Property(e => e.DeviceInfo).HasMaxLength(200);
 
+        builder.Property(e => e.PackageOutcome).HasMaxLength(40);
+
         builder.HasIndex(e => new { e.TenantId, e.TripId, e.OccurredAt });
         builder.HasIndex(e => new { e.TenantId, e.TransportOrderStopId });
         builder.HasIndex(e => e.CargoItemId);
+        builder.HasIndex(e => e.PackageId);
+        // Idempotent replays: the same client key can never produce two ledger rows.
+        builder.HasIndex(e => new { e.TenantId, e.ClientEventId })
+            .IsUnique()
+            .HasFilter("\"ClientEventId\" IS NOT NULL AND \"IsDeleted\" = false");
 
         builder.HasOne<Trip>().WithMany().HasForeignKey(e => e.TripId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<TransportOrderStop>().WithMany().HasForeignKey(e => e.TransportOrderStopId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<CargoItem>().WithMany().HasForeignKey(e => e.CargoItemId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<TransportationService.Api.Modules.Packages.Entities.Package>()
+            .WithMany().HasForeignKey(e => e.PackageId).OnDelete(DeleteBehavior.SetNull);
 
         builder.HasQueryFilter(e => !e.IsDeleted);
     }

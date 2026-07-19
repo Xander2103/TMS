@@ -30,12 +30,21 @@ export function updateTrip(id: string, input: TripInput): Promise<TripDetail> {
   return apiClient.putJson<TripDetail, TripInput>(`/api/trips/${id}`, input)
 }
 
-/** 409 carries { message, conflicts } when blocking conflicts stop the transition. */
-export function changeTripStatus(id: string, status: TripStatus, override: boolean): Promise<TripDetail> {
-  return apiClient.postJson<TripDetail, { status: TripStatus; override: boolean }>(`/api/trips/${id}/status`, {
-    status,
-    override,
-  })
+/**
+ * 409 carries { message, conflicts } when blocking conflicts stop the transition, or
+ * { message, packageReadiness } when mandatory packages are not loaded at departure.
+ */
+export function changeTripStatus(
+  id: string,
+  status: TripStatus,
+  override: boolean,
+  releaseOverride = false,
+  overrideReason: string | null = null,
+): Promise<TripDetail> {
+  return apiClient.postJson<
+    TripDetail,
+    { status: TripStatus; override: boolean; releaseOverride: boolean; overrideReason: string | null }
+  >(`/api/trips/${id}/status`, { status, override, releaseOverride, overrideReason })
 }
 
 export function deleteTrip(id: string): Promise<void> {

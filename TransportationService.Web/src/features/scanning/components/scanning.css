@@ -251,6 +251,66 @@
   color: var(--text);
 }
 
+.scan-unload-outcomes {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.scan-group-results {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+}
+
+.scan-group-results h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.85rem;
+}
+
+.scan-group-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.scan-group-results li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+
+.scan-child-ok > span:first-child {
+  color: var(--success, #15803d);
+}
+
+.scan-child-failed > span:first-child {
+  color: var(--danger, #b91c1c);
+}
+
+.scan-child-failed .scan-child-message {
+  color: var(--danger, #b91c1c);
+}
+
+.scan-child-number {
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.scan-packages h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.scan-missing-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
 @media (max-width: 640px) {
   .scan-submit {
     width: 100%;

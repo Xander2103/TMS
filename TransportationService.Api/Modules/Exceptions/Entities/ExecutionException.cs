@@ -7,6 +7,13 @@ public enum ExecutionExceptionType
     MissingPackage,
     WrongPackage,
     DamagedPackage,
+    UnknownPackage,
+    WrongRoutePackage,
+    WrongStopPackage,
+    IncompleteQuantity,
+    UnreadableBarcode,
+    LabelMissing,
+    RejectedBeforeLoading,
     RejectedDelivery,
     PartialDelivery,
     AddressIssue,
@@ -46,6 +53,9 @@ public class ExecutionException : AuditableTenantEntity
     public Guid? TransportOrderId { get; set; }
     public Guid? TransportOrderStopId { get; set; }
     public Guid? CargoItemId { get; set; }
+
+    /// <summary>Resolved tracked package for package-level exceptions (missing/wrong/damaged/...).</summary>
+    public Guid? PackageId { get; set; }
 
     public ExecutionExceptionType Type { get; set; }
     public ExceptionSeverity Severity { get; set; } = ExceptionSeverity.Medium;

@@ -114,7 +114,8 @@ public record UpdateTripRequest(
     decimal? PlannedDistanceKm = null,
     decimal? PlannedEmptyKm = null);
 
-public record ChangeTripStatusRequest(TripStatus Status, bool Override = false);
+public record ChangeTripStatusRequest(
+    TripStatus Status, bool Override = false, bool ReleaseOverride = false, string? OverrideReason = null);
 
 public enum TripOperationOutcome
 {
@@ -124,13 +125,15 @@ public enum TripOperationOutcome
     InvalidState,
     ValidationFailed,
     ConflictsBlock,
+    PackagesBlock,
 }
 
 public record TripOperationResult(
     TripOperationOutcome Outcome,
     TripDetailDto? Trip,
     string? Error = null,
-    IReadOnlyList<PlanningConflictDto>? Conflicts = null)
+    IReadOnlyList<PlanningConflictDto>? Conflicts = null,
+    object? PackageReadiness = null)
 {
     public static TripOperationResult Success(TripDetailDto trip) => new(TripOperationOutcome.Success, trip);
     public static readonly TripOperationResult NotFound = new(TripOperationOutcome.NotFound, null);
@@ -139,4 +142,6 @@ public record TripOperationResult(
     public static TripOperationResult Invalid(string error) => new(TripOperationOutcome.ValidationFailed, null, error);
     public static TripOperationResult Blocked(IReadOnlyList<PlanningConflictDto> conflicts) =>
         new(TripOperationOutcome.ConflictsBlock, null, "De rit kan niet worden gepland door conflicten.", conflicts);
+    public static TripOperationResult PackagesBlocked(string error, object readiness) =>
+        new(TripOperationOutcome.PackagesBlock, null, error, null, readiness);
 }

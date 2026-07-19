@@ -97,7 +97,7 @@ public class PodServiceTests
         var clock = new TestClock(Now);
         return new PodService(
             db.Context, tenant, user, audit,
-            new ScanService(db.Context, tenant, user, audit, clock),
+            Scanning.ScanServiceTests.CreateService(db, tenant, userId, clock),
             new LocalFileStorageService(storageRoot),
             new TransportationService.Api.Modules.Notifications.Services.NotificationService(
                 db.Context, tenant, user, clock),
@@ -117,10 +117,8 @@ public class PodServiceTests
         using var _ = h.Db;
 
         // Two scanned units become part of the frozen proof.
-        var scanService = new ScanService(h.Db.Context, new DevTenantContext(h.TenantId),
-            new DevCurrentUserContext(h.DriverUserId),
-            new AuditService(h.Db.Context, new DevTenantContext(h.TenantId), new DevCurrentUserContext(h.DriverUserId)),
-            new TestClock(Now));
+        var scanService = Scanning.ScanServiceTests.CreateService(
+            h.Db, new DevTenantContext(h.TenantId), h.DriverUserId, new TestClock(Now));
         await scanService.SubmitAsync(h.TripId, h.StopId,
             new TransportationService.Api.Modules.Scanning.Dtos.SubmitScanRequest(ScanType.Unload, "BC-1", 2, false, null, null),
             false, CancellationToken.None);

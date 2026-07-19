@@ -75,7 +75,8 @@ public class TripExecutionServiceTests
         var tripService = new TripService(db.Context, tenant, audit,
             new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock),
             new NotificationService(db.Context, tenant, new DevCurrentUserContext(userId), clock),
-            planningSync, CostingTestFactory.Create(db.Context, tenant, clock));
+            planningSync, CostingTestFactory.Create(db.Context, tenant, clock),
+            TripPackageTestFactory.Create(db.Context, tenant, clock));
         var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, planningSync, clock);
         return new Harness(db, sut, tenantId, tripId, orderId, loadStopId, unloadStopId, userId);
     }

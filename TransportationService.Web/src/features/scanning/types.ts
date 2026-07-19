@@ -74,6 +74,64 @@ export interface StopScanSummary {
   totalScanCount: number
 }
 
+export type PackageScanOutcome =
+  | 'Success'
+  | 'Delivered'
+  | 'ReplacedBarcode'
+  | 'WrongTrip'
+  | 'WrongOrder'
+  | 'WrongLoadingStop'
+  | 'WrongDeliveryStop'
+  | 'AlreadyLoaded'
+  | 'AlreadyDelivered'
+  | 'NotLoaded'
+  | 'CancelledPackage'
+  | 'MissingPackage'
+  | 'DamagedPackage'
+  | 'Refused'
+  | 'PartialDelivery'
+  | 'NotScannable'
+  | 'GroupProcessed'
+
+export const PACKAGE_SCAN_OUTCOME_LABELS: Record<PackageScanOutcome, string> = {
+  Success: 'Geladen',
+  Delivered: 'Afgeleverd',
+  ReplacedBarcode: 'Vervangen barcode',
+  WrongTrip: 'Verkeerde rit',
+  WrongOrder: 'Andere opdracht',
+  WrongLoadingStop: 'Verkeerde laadstop',
+  WrongDeliveryStop: 'Verkeerde losstop',
+  AlreadyLoaded: 'Al geladen',
+  AlreadyDelivered: 'Al afgeleverd',
+  NotLoaded: 'Niet geladen',
+  CancelledPackage: 'Geannuleerd colli',
+  MissingPackage: 'Vermist colli',
+  DamagedPackage: 'Schade',
+  Refused: 'Geweigerd',
+  PartialDelivery: 'Gedeeltelijk geleverd',
+  NotScannable: 'Niet scanbaar',
+  GroupProcessed: 'Groep verwerkt',
+}
+
+export interface PackageChildScanResult {
+  packageId: string
+  packageNumber: string
+  description: string
+  outcome: string
+  succeeded: boolean
+  message: string
+}
+
+export interface PackageScanFeedback {
+  packageId: string
+  packageNumber: string
+  description: string
+  outcome: string
+  lifecycleStatus: string
+  exceptionId: string | null
+  children: PackageChildScanResult[]
+}
+
 export interface ScanFeedback {
   scanEventId: string
   result: ScanResult
@@ -84,6 +142,8 @@ export interface ScanFeedback {
   acceptedQuantity: number
   expectedQuantity: number
   summary: StopScanSummary
+  package: PackageScanFeedback | null
+  replayed: boolean
 }
 
 export interface ScanEventEntry {
@@ -101,4 +161,7 @@ export interface ScanEventEntry {
   deviceInfo: string | null
   userName: string | null
   occurredAt: string
+  packageId: string | null
+  packageNumber: string | null
+  packageOutcome: string | null
 }

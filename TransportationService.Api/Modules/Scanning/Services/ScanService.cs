@@ -3,6 +3,7 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Packages.Services;
 using TransportationService.Api.Modules.Planning.Entities;
 using TransportationService.Api.Modules.Planning.Services;
 using TransportationService.Api.Modules.Scanning.Dtos;
@@ -24,6 +25,8 @@ public class ScanService : IScanService
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IAuditService _auditService;
+    private readonly IPackageBarcodeService _packageBarcodeService;
+    private readonly IPackageScanProcessor _packageScanProcessor;
     private readonly TimeProvider _timeProvider;
 
     public ScanService(
@@ -31,12 +34,16 @@ public class ScanService : IScanService
         ITenantContext tenantContext,
         ICurrentUserContext currentUserContext,
         IAuditService auditService,
+        IPackageBarcodeService packageBarcodeService,
+        IPackageScanProcessor packageScanProcessor,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUserContext = currentUserContext;
         _auditService = auditService;
+        _packageBarcodeService = packageBarcodeService;
+        _packageScanProcessor = packageScanProcessor;
         _timeProvider = timeProvider;
     }
 
@@ -51,6 +58,19 @@ public class ScanService : IScanService
         if (request.Quantity <= 0)
         {
             return ScanOperationResult.Invalid("De hoeveelheid moet groter dan nul zijn.");
+        }
+
+        // Idempotent replay: the same client key returns the original outcome instead of a
+        // second ledger row — offline queues can retry safely without double custody moves.
+        if (request.ClientEventId is { } clientEventId)
+        {
+            var existing = await _dbContext.ScanEvents.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.TenantId == _tenantContext.TenantId && e.ClientEventId == clientEventId,
+                    cancellationToken);
+            if (existing is not null)
+            {
+                return await BuildReplayFeedbackAsync(existing, cancellationToken);
+            }
         }
 
         var guard = await GuardAsync(tripId, stopId, restrictToOwnDriver, requireInProgress: true, cancellationToken);
@@ -72,6 +92,15 @@ public class ScanService : IScanService
         }
 
         var barcode = request.Barcode.Trim();
+
+        // Package registry first: a registered package barcode always takes the package branch;
+        // everything else falls through to the untouched cargo-item ladder.
+        var resolution = await _packageBarcodeService.ResolveAsync(barcode, cancellationToken);
+        if (resolution is not null)
+        {
+            return await SubmitPackageScanAsync(tripId, stop, guard, resolution, request, barcode, cancellationToken);
+        }
+
         var barcodeLower = barcode.ToLowerInvariant();
 
         // Resolve within the trip: the stop's own order wins; other orders on the trip mean
@@ -134,6 +163,7 @@ public class ScanService : IScanService
             Damaged = request.Damaged,
             DamageNote = Trim(request.DamageNote),
             DeviceInfo = Trim(request.DeviceInfo),
+            ClientEventId = request.ClientEventId,
         };
         _dbContext.Add(scanEvent);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -148,6 +178,127 @@ public class ScanService : IScanService
             scanEvent.Id, result, FeedbackLevel(result), FeedbackMessage(result, item?.Description),
             item?.Id, item?.Description,
             accepted, item?.ExpectedQuantity ?? 0, summary));
+    }
+
+    /// <summary>
+    /// Package branch of the one scan pipeline: the processor classifies, moves lifecycle and
+    /// stages custody events/exceptions; this method owns the ledger row and the single save.
+    /// </summary>
+    private async Task<ScanOperationResult> SubmitPackageScanAsync(
+        Guid tripId, TransportOrderStop stop, GuardResult guard, BarcodeResolution resolution,
+        SubmitScanRequest request, string barcode, CancellationToken cancellationToken)
+    {
+        if (request.ScanType is not (ScanType.Load or ScanType.Unload))
+        {
+            return ScanOperationResult.Invalid("Voor colli-scans wordt alleen laden of lossen ondersteund.");
+        }
+
+        var scanEventId = Guid.NewGuid();
+        var processed = await _packageScanProcessor.ProcessAsync(
+            new PackageScanInput(resolution, tripId, stop, guard.OrderIds!, guard.DriverId, request, scanEventId),
+            cancellationToken);
+
+        var scanEvent = new ScanEvent
+        {
+            Id = scanEventId,
+            TenantId = _tenantContext.TenantId,
+            TripId = tripId,
+            TransportOrderId = stop.TransportOrderId,
+            TransportOrderStopId = stop.Id,
+            PackageId = processed.Package.Id,
+            PackageOutcome = processed.Outcome.ToString(),
+            UserId = _currentUserContext.CurrentUserId,
+            DriverId = guard.DriverId,
+            OccurredAt = _timeProvider.GetUtcNow().UtcDateTime,
+            ScanType = request.ScanType,
+            Result = processed.LedgerResult,
+            Barcode = barcode,
+            Quantity = 1,
+            Damaged = request.Damaged,
+            DamageNote = Trim(request.DamageNote),
+            DeviceInfo = Trim(request.DeviceInfo),
+            ClientEventId = request.ClientEventId,
+        };
+        _dbContext.Add(scanEvent);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException) when (request.ClientEventId is { } raceKey)
+        {
+            // Two replays raced past the pre-check; the unique index kept the ledger single.
+            _dbContext.ChangeTracker.Clear();
+            var winner = await _dbContext.ScanEvents.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.TenantId == _tenantContext.TenantId && e.ClientEventId == raceKey,
+                    cancellationToken);
+            if (winner is not null)
+            {
+                return await BuildReplayFeedbackAsync(winner, cancellationToken);
+            }
+            throw;
+        }
+
+        await _auditService.RecordAsync(EntityType, scanEvent.Id.ToString(), processed.Outcome.ToString(), null,
+            new { scanEvent.TripId, scanEvent.TransportOrderStopId, scanEvent.Barcode, scanEvent.PackageId, Outcome = processed.Outcome.ToString() },
+            cancellationToken);
+
+        var summary = await BuildSummaryAsync(tripId, stop, request.ScanType, cancellationToken);
+
+        return ScanOperationResult.Success(new ScanFeedbackDto(
+            scanEvent.Id, processed.LedgerResult, processed.Level, processed.Message,
+            null, null, 0, 0, summary,
+            BuildPackageFeedback(processed)));
+    }
+
+    private static PackageScanFeedbackDto BuildPackageFeedback(PackageScanProcessResult processed) => new(
+        processed.Package.Id, processed.Package.PackageNumber, processed.Package.Description,
+        processed.Outcome.ToString(), processed.Package.CurrentLifecycleStatus.ToString(),
+        processed.ExceptionId,
+        processed.Children
+            .Select(c => new PackageChildScanResultDto(c.PackageId, c.PackageNumber, c.Description,
+                c.Outcome.ToString(), c.Succeeded, c.Message))
+            .ToList());
+
+    /// <summary>Rebuilds feedback for an already-recorded scan so replays are byte-honest: same outcome, fresh tallies.</summary>
+    private async Task<ScanOperationResult> BuildReplayFeedbackAsync(ScanEvent existing, CancellationToken cancellationToken)
+    {
+        var stop = await _dbContext.TransportOrderStops.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == existing.TransportOrderStopId && s.TenantId == _tenantContext.TenantId,
+                cancellationToken);
+        if (stop is null)
+        {
+            return ScanOperationResult.NotFound;
+        }
+
+        var summary = await BuildSummaryAsync(existing.TripId, stop, existing.ScanType, cancellationToken);
+
+        PackageScanFeedbackDto? packageFeedback = null;
+        string message;
+        ScanFeedbackLevel level;
+        if (existing.PackageId is { } packageId)
+        {
+            var package = await _dbContext.Packages.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Id == packageId && p.TenantId == _tenantContext.TenantId, cancellationToken);
+            if (package is not null)
+            {
+                packageFeedback = new PackageScanFeedbackDto(
+                    package.Id, package.PackageNumber, package.Description,
+                    existing.PackageOutcome ?? existing.Result.ToString(),
+                    package.CurrentLifecycleStatus.ToString(), null, []);
+            }
+            message = $"Scan was al verwerkt ({package?.PackageNumber ?? "colli"}); resultaat opnieuw getoond.";
+            level = existing.Result is ScanResult.Expected ? ScanFeedbackLevel.Success : ScanFeedbackLevel.Warning;
+        }
+        else
+        {
+            message = "Scan was al verwerkt; resultaat opnieuw getoond.";
+            level = FeedbackLevel(existing.Result);
+        }
+
+        return ScanOperationResult.Success(new ScanFeedbackDto(
+            existing.Id, existing.Result, level, message,
+            existing.CargoItemId, null, 0, 0, summary, packageFeedback, Replayed: true));
     }
 
     public async Task<ScanOperationResult> CorrectAsync(
@@ -250,6 +401,10 @@ public class ScanService : IScanService
             .GroupJoin(_dbContext.CargoItems.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId),
                 x => x.Event.CargoItemId, c => c.Id, (x, items) => new { x.Event, x.UserName, Items = items })
             .SelectMany(x => x.Items.DefaultIfEmpty(), (x, c) => new { x.Event, x.UserName, Description = c == null ? null : c.Description })
+            .GroupJoin(_dbContext.Packages.AsNoTracking().Where(p => p.TenantId == _tenantContext.TenantId),
+                x => x.Event.PackageId, p => p.Id, (x, packages) => new { x.Event, x.UserName, x.Description, Packages = packages })
+            .SelectMany(x => x.Packages.DefaultIfEmpty(),
+                (x, p) => new { x.Event, x.UserName, x.Description, PackageNumber = p == null ? null : p.PackageNumber })
             .ToListAsync(cancellationToken);
 
         return ScanHistoryResult.Success(rows
@@ -257,7 +412,8 @@ public class ScanService : IScanService
                 x.Event.Id, x.Event.TransportOrderStopId, x.Event.CargoItemId, x.Description,
                 x.Event.ScanType, x.Event.Result, x.Event.Barcode, x.Event.Quantity,
                 x.Event.Damaged, x.Event.DamageNote, x.Event.CorrectionReason, x.Event.DeviceInfo,
-                x.UserName, x.Event.OccurredAt))
+                x.UserName, x.Event.OccurredAt,
+                x.Event.PackageId, x.PackageNumber, x.Event.PackageOutcome))
             .ToList());
     }
 

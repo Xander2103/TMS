@@ -57,6 +57,7 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(s => s.TrailerNumberNextValue).HasDefaultValue(1);
         builder.Property(s => s.PackageNumberPrefix).HasMaxLength(20).HasDefaultValue("PKG-");
         builder.Property(s => s.PackageNumberNextValue).HasDefaultValue(1);
+        builder.Property(s => s.PackageDepartureRule).HasMaxLength(30).HasDefaultValue("AllowWithWarning");
         builder.Property(s => s.LogoReference).HasMaxLength(300);
         builder.Property(s => s.EnabledModulesJson).IsRequired();
 

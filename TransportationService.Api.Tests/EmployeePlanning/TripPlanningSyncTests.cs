@@ -39,7 +39,8 @@ public class TripPlanningSyncTests
                 new PlanningConflictService(Db.Context, tenant, new QualificationStatusCalculator(), clock),
                 new NotificationService(Db.Context, tenant, new DevCurrentUserContext(null), clock),
                 new TripPlanningSyncService(Db.Context, tenant),
-                CostingTestFactory.Create(Db.Context, tenant, clock));
+                CostingTestFactory.Create(Db.Context, tenant, clock),
+                TripPackageTestFactory.Create(Db.Context, tenant, clock));
         }
 
         public IShiftService Shifts()
@@ -106,7 +107,8 @@ public class TripPlanningSyncTests
             new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock),
             new NotificationService(db.Context, tenant, new DevCurrentUserContext(null), clock),
             new TripPlanningSyncService(db.Context, tenant),
-            CostingTestFactory.Create(db.Context, tenant, clock));
+            CostingTestFactory.Create(db.Context, tenant, clock),
+            TripPackageTestFactory.Create(db.Context, tenant, clock));
         return new Harness(db, trips, tenantId, driverId, employeeId, secondDriverId, secondEmployeeId, vehicleId, orderId);
     }
 
@@ -238,7 +240,7 @@ public class TripPlanningSyncTests
         using var _ = h.Db;
         var created = await h.Trips.CreateAsync(Create(h, h.DriverId, h.OrderId), CancellationToken.None);
 
-        var result = await h.Trips.ChangeStatusAsync(created.Trip!.Id, TripStatus.Cancelled, false, CancellationToken.None);
+        var result = await h.Trips.ChangeStatusAsync(created.Trip!.Id, TripStatus.Cancelled, false, false, null, CancellationToken.None);
 
         Assert.Equal(TripOperationOutcome.Success, result.Outcome);
         var entry = Assert.Single(h.Db.Context.TripPlanningEntries.ToList());
@@ -269,8 +271,8 @@ public class TripPlanningSyncTests
         var created = await h.Trips.CreateAsync(Create(h, h.DriverId, h.OrderId), CancellationToken.None);
         var tripId = created.Trip!.Id;
 
-        await h.Trips.ChangeStatusAsync(tripId, TripStatus.Planned, true, CancellationToken.None);
-        await h.Trips.ChangeStatusAsync(tripId, TripStatus.InProgress, false, CancellationToken.None);
+        await h.Trips.ChangeStatusAsync(tripId, TripStatus.Planned, true, false, null, CancellationToken.None);
+        await h.Trips.ChangeStatusAsync(tripId, TripStatus.InProgress, false, false, null, CancellationToken.None);
 
         var stopIds = h.Db.Context.TransportOrderStops.Where(s => s.TransportOrderId == h.OrderId)
             .OrderBy(s => s.Sequence).Select(s => s.Id).ToList();
@@ -290,7 +292,7 @@ public class TripPlanningSyncTests
             });
         await h.Db.Context.SaveChangesAsync();
 
-        var result = await h.Trips.ChangeStatusAsync(tripId, TripStatus.Completed, false, CancellationToken.None);
+        var result = await h.Trips.ChangeStatusAsync(tripId, TripStatus.Completed, false, false, null, CancellationToken.None);
 
         Assert.Equal(TripOperationOutcome.Success, result.Outcome);
         var entry = Assert.Single(h.Db.Context.TripPlanningEntries.ToList());
@@ -375,7 +377,7 @@ public class TripPlanningSyncTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var created = await h.Trips.CreateAsync(Create(h, h.DriverId, h.OrderId), CancellationToken.None);
-        await h.Trips.ChangeStatusAsync(created.Trip!.Id, TripStatus.Cancelled, false, CancellationToken.None);
+        await h.Trips.ChangeStatusAsync(created.Trip!.Id, TripStatus.Cancelled, false, false, null, CancellationToken.None);
 
         var grid = await h.Shifts().GetScheduleAsync(TripDate, TripDate, null, null, CancellationToken.None);
 

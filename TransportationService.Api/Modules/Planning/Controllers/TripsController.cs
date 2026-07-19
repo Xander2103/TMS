@@ -123,7 +123,22 @@ public class TripsController : ControllerBase
             }
         }
 
-        var result = await _service.ChangeStatusAsync(id, request.Status, allowOverride, cancellationToken);
+        // Releasing a trip that departs without all mandatory packages is guarded separately again.
+        var releaseOverride = false;
+        if (request.ReleaseOverride)
+        {
+            releaseOverride = _currentUserContext.CurrentUserId is { } releaseUserId
+                && await _permissionService.UserHasPermissionAsync(
+                    releaseUserId, PermissionCodes.WarehouseReleaseTrip, cancellationToken);
+            if (!releaseOverride)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden,
+                    new { message = "Je hebt geen recht om een rit met ontbrekende colli vrij te geven." });
+            }
+        }
+
+        var result = await _service.ChangeStatusAsync(
+            id, request.Status, allowOverride, releaseOverride, request.OverrideReason, cancellationToken);
         return Handle(result, created: false);
     }
 
@@ -152,6 +167,8 @@ public class TripsController : ControllerBase
         TripOperationOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
         TripOperationOutcome.ConflictsBlock =>
             Conflict(new { message = result.Error, conflicts = result.Conflicts }),
+        TripOperationOutcome.PackagesBlock =>
+            Conflict(new { message = result.Error, packageReadiness = result.PackageReadiness }),
         _ => Conflict(),
     };
 }

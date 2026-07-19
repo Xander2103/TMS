@@ -331,7 +331,8 @@ public class TripExecutionService : ITripExecutionService
         var stops = await LoadExecutionStopsAsync(trip, cancellationToken);
         if (stops.Count > 0 && stops.All(s => StopStatusMachine.IsTerminal(s.Status)))
         {
-            await _tripService.ChangeStatusAsync(trip.Id, TripStatus.Completed, allowOverride: false, cancellationToken);
+            await _tripService.ChangeStatusAsync(trip.Id, TripStatus.Completed, allowOverride: false,
+                releaseOverride: false, overrideReason: null, cancellationToken);
         }
 
         return await GetExecutionAsync(tripId, restrictToOwnDriver: false, cancellationToken);

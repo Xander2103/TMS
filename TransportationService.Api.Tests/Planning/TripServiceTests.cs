@@ -75,7 +75,8 @@ public class TripServiceTests
             new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), conflicts,
             new NotificationService(db.Context, tenant, new DevCurrentUserContext(null), clock),
             new TripPlanningSyncService(db.Context, tenant),
-            CostingTestFactory.Create(db.Context, tenant, clock));
+            CostingTestFactory.Create(db.Context, tenant, clock),
+            TripPackageTestFactory.Create(db.Context, tenant, clock));
         return new Harness(db, sut, tenantId, driverId, employeeId, vehicleId, trailerId, orderId);
     }
 
@@ -120,11 +121,11 @@ public class TripServiceTests
         var trip = await h.Sut.CreateAsync(Request(h, h.OrderId), CancellationToken.None);
         var id = trip.Trip!.Id;
 
-        var planned = await h.Sut.ChangeStatusAsync(id, TripStatus.Planned, false, CancellationToken.None);
+        var planned = await h.Sut.ChangeStatusAsync(id, TripStatus.Planned, false, false, null, CancellationToken.None);
         Assert.Equal(TripStatus.Planned, planned.Trip!.Status);
         Assert.Equal(TransportOrderStatus.Planned, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
 
-        var reverted = await h.Sut.ChangeStatusAsync(id, TripStatus.Draft, false, CancellationToken.None);
+        var reverted = await h.Sut.ChangeStatusAsync(id, TripStatus.Draft, false, false, null, CancellationToken.None);
         Assert.Equal(TripStatus.Draft, reverted.Trip!.Status);
         Assert.Equal(TransportOrderStatus.Confirmed, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
     }
@@ -143,11 +144,11 @@ public class TripServiceTests
         await h.Db.Context.SaveChangesAsync();
         var trip = await h.Sut.CreateAsync(Request(h, h.OrderId), CancellationToken.None);
 
-        var blocked = await h.Sut.ChangeStatusAsync(trip.Trip!.Id, TripStatus.Planned, false, CancellationToken.None);
+        var blocked = await h.Sut.ChangeStatusAsync(trip.Trip!.Id, TripStatus.Planned, false, false, null, CancellationToken.None);
         Assert.Equal(TripOperationOutcome.ConflictsBlock, blocked.Outcome);
         Assert.Contains(blocked.Conflicts!, c => c.Code == PlanningConflictCode.DriverAbsent);
 
-        var overridden = await h.Sut.ChangeStatusAsync(trip.Trip.Id, TripStatus.Planned, true, CancellationToken.None);
+        var overridden = await h.Sut.ChangeStatusAsync(trip.Trip.Id, TripStatus.Planned, true, false, null, CancellationToken.None);
         Assert.Equal(TripOperationOutcome.Success, overridden.Outcome);
         Assert.Equal(TripStatus.Planned, overridden.Trip!.Status);
     }
@@ -158,7 +159,7 @@ public class TripServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var first = await h.Sut.CreateAsync(Request(h, h.OrderId), CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(first.Trip!.Id, TripStatus.Planned, false, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(first.Trip!.Id, TripStatus.Planned, false, false, null, CancellationToken.None);
 
         // Second confirmed order so the second trip is otherwise valid.
         var secondOrder = Guid.NewGuid();
@@ -173,7 +174,7 @@ public class TripServiceTests
 
         var second = await h.Sut.CreateAsync(
             new CreateTripRequest(TripDate, h.DriverId, null, null, null, null, null, [secondOrder]), CancellationToken.None);
-        var blocked = await h.Sut.ChangeStatusAsync(second.Trip!.Id, TripStatus.Planned, false, CancellationToken.None);
+        var blocked = await h.Sut.ChangeStatusAsync(second.Trip!.Id, TripStatus.Planned, false, false, null, CancellationToken.None);
 
         Assert.Equal(TripOperationOutcome.ConflictsBlock, blocked.Outcome);
         Assert.Contains(blocked.Conflicts!, c => c.Code == PlanningConflictCode.DriverDoubleBooked);
@@ -191,7 +192,7 @@ public class TripServiceTests
         await h.Db.Context.SaveChangesAsync();
 
         var trip = await h.Sut.CreateAsync(Request(h, h.OrderId), CancellationToken.None);
-        var blocked = await h.Sut.ChangeStatusAsync(trip.Trip!.Id, TripStatus.Planned, false, CancellationToken.None);
+        var blocked = await h.Sut.ChangeStatusAsync(trip.Trip!.Id, TripStatus.Planned, false, false, null, CancellationToken.None);
 
         Assert.Equal(TripOperationOutcome.ConflictsBlock, blocked.Outcome);
         Assert.Contains(blocked.Conflicts!, c => c.Code == PlanningConflictCode.OrderRequiresCrane);
@@ -220,9 +221,9 @@ public class TripServiceTests
         var trip = await h.Sut.CreateAsync(Request(h, h.OrderId), CancellationToken.None);
         var id = trip.Trip!.Id;
 
-        await h.Sut.ChangeStatusAsync(id, TripStatus.Planned, false, CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(id, TripStatus.InProgress, false, CancellationToken.None);
-        var completed = await h.Sut.ChangeStatusAsync(id, TripStatus.Completed, false, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(id, TripStatus.Planned, false, false, null, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(id, TripStatus.InProgress, false, false, null, CancellationToken.None);
+        var completed = await h.Sut.ChangeStatusAsync(id, TripStatus.Completed, false, false, null, CancellationToken.None);
 
         Assert.Equal(TripStatus.Completed, completed.Trip!.Status);
         Assert.Equal(TransportOrderStatus.Completed, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
@@ -235,9 +236,9 @@ public class TripServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var trip = await h.Sut.CreateAsync(Request(h, h.OrderId), CancellationToken.None);
-        await h.Sut.ChangeStatusAsync(trip.Trip!.Id, TripStatus.Planned, false, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(trip.Trip!.Id, TripStatus.Planned, false, false, null, CancellationToken.None);
 
-        await h.Sut.ChangeStatusAsync(trip.Trip.Id, TripStatus.Cancelled, false, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(trip.Trip.Id, TripStatus.Cancelled, false, false, null, CancellationToken.None);
         Assert.Equal(TransportOrderStatus.Confirmed, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
 
         var next = await h.Sut.CreateAsync(Request(h, h.OrderId), CancellationToken.None);
@@ -257,7 +258,7 @@ public class TripServiceTests
             CancellationToken.None);
         Assert.Equal(TripOperationOutcome.InvalidReference, foreignVehicle.Outcome);
 
-        await h.Sut.ChangeStatusAsync(id, TripStatus.Planned, false, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(id, TripStatus.Planned, false, false, null, CancellationToken.None);
         var locked = await h.Sut.UpdateAsync(id,
             new UpdateTripRequest(TripDate, h.DriverId, h.VehicleId, null, null, null, null, [h.OrderId]),
             CancellationToken.None);

@@ -44,7 +44,8 @@ public class DashboardServiceTests
             new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock),
             new NotificationService(db.Context, tenant, new DevCurrentUserContext(null), clock),
             new TripPlanningSyncService(db.Context, tenant),
-            CostingTestFactory.Create(db.Context, tenant, clock));
+            CostingTestFactory.Create(db.Context, tenant, clock),
+            TripPackageTestFactory.Create(db.Context, tenant, clock));
         var sut = new DashboardService(db.Context, tenant, fleet, trips, clock);
         return new Harness(db, sut, tenantId, customerId);
     }

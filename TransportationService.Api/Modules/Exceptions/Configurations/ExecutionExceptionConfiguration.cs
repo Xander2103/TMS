@@ -32,6 +32,9 @@ public class ExecutionExceptionConfiguration : IEntityTypeConfiguration<Executio
         builder.HasOne<TransportOrder>().WithMany().HasForeignKey(e => e.TransportOrderId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<TransportOrderStop>().WithMany().HasForeignKey(e => e.TransportOrderStopId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<CargoItem>().WithMany().HasForeignKey(e => e.CargoItemId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<TransportationService.Api.Modules.Packages.Entities.Package>()
+            .WithMany().HasForeignKey(e => e.PackageId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(e => e.PackageId);
 
         builder.HasMany(e => e.Photos)
             .WithOne()

@@ -77,6 +77,13 @@ public class TenantSettings
     public string? PackageNumberPrefix { get; set; } = "PKG-";
     public int PackageNumberNextValue { get; set; } = 1;
 
+    /// <summary>
+    /// What happens when a trip departs with mandatory packages not loaded:
+    /// AllowWithWarning (depart, warning shown), RequireOverride (release permission + reason),
+    /// Block (never departs incomplete).
+    /// </summary>
+    public string PackageDepartureRule { get; set; } = "AllowWithWarning";
+
     // Branding (reference only; upload/storage is out of scope for this milestone)
     public string? LogoReference { get; set; }
 

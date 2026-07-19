@@ -23,7 +23,9 @@ public interface ITripService
     /// Guarded transition. Draft→Planned runs the conflict engine (blocking conflicts stop it unless
     /// <paramref name="allowOverride"/>) and propagates order statuses on every transition.
     /// </summary>
-    Task<TripOperationResult> ChangeStatusAsync(Guid id, TripStatus target, bool allowOverride, CancellationToken cancellationToken);
+    Task<TripOperationResult> ChangeStatusAsync(
+        Guid id, TripStatus target, bool allowOverride, bool releaseOverride, string? overrideReason,
+        CancellationToken cancellationToken);
 
     Task<TripOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

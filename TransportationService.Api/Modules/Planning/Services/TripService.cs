@@ -5,6 +5,7 @@ using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Packages.Services;
 using TransportationService.Api.Modules.Planning.Dtos;
 using TransportationService.Api.Modules.Planning.Entities;
 using TransportationService.Api.Modules.Tenancy.Entities;
@@ -35,6 +36,7 @@ public class TripService : ITripService
     private readonly INotificationService _notificationService;
     private readonly ITripPlanningSyncService _planningSyncService;
     private readonly ITripCostingService _costingService;
+    private readonly ITripPackageService _tripPackageService;
 
     public TripService(
         TransportationDbContext dbContext,
@@ -43,7 +45,8 @@ public class TripService : ITripService
         IPlanningConflictService conflictService,
         INotificationService notificationService,
         ITripPlanningSyncService planningSyncService,
-        ITripCostingService costingService)
+        ITripCostingService costingService,
+        ITripPackageService tripPackageService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -52,6 +55,7 @@ public class TripService : ITripService
         _notificationService = notificationService;
         _planningSyncService = planningSyncService;
         _costingService = costingService;
+        _tripPackageService = tripPackageService;
     }
 
     /// <summary>
@@ -261,7 +265,8 @@ public class TripService : ITripService
     }
 
     public async Task<TripOperationResult> ChangeStatusAsync(
-        Guid id, TripStatus target, bool allowOverride, CancellationToken cancellationToken)
+        Guid id, TripStatus target, bool allowOverride, bool releaseOverride, string? overrideReason,
+        CancellationToken cancellationToken)
     {
         var trip = await TenantScoped().Include(t => t.Orders).FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
         if (trip is null)
@@ -281,6 +286,30 @@ public class TripService : ITripService
             if (blocking.Count > 0 && !allowOverride)
             {
                 return TripOperationResult.Blocked(blocking);
+            }
+        }
+
+        // Departure gate: mandatory packages must be on the vehicle, per the tenant's rule.
+        if (target == TripStatus.InProgress)
+        {
+            var readiness = await _tripPackageService.EvaluateReadinessAsync(trip, cancellationToken);
+            if (!readiness.IsComplete)
+            {
+                if (readiness.IsBlocked)
+                {
+                    return TripOperationResult.PackagesBlocked(
+                        "De rit kan niet vertrekken: niet alle verplichte colli zijn geladen.", readiness);
+                }
+                if (readiness.RequiresOverride && !releaseOverride)
+                {
+                    return TripOperationResult.PackagesBlocked(
+                        "Niet alle verplichte colli zijn geladen; vrijgave is vereist om te vertrekken.", readiness);
+                }
+                if (readiness.RequiresOverride)
+                {
+                    // The override trail commits atomically with the status change below.
+                    await _tripPackageService.StageDepartureOverrideAsync(trip, overrideReason, cancellationToken);
+                }
             }
         }
 

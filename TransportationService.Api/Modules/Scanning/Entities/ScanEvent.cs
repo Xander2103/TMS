@@ -40,6 +40,15 @@ public class ScanEvent : AuditableTenantEntity
     public Guid TransportOrderStopId { get; set; }
     public Guid? CargoItemId { get; set; }
 
+    /// <summary>Resolved tracked package, when the barcode belongs to the package registry.</summary>
+    public Guid? PackageId { get; set; }
+
+    /// <summary>Precise package outcome (PackageScanOutcome name) alongside the coarse Result.</summary>
+    public string? PackageOutcome { get; set; }
+
+    /// <summary>Client idempotency key: replaying the same key returns the original outcome.</summary>
+    public Guid? ClientEventId { get; set; }
+
     public Guid? UserId { get; set; }
     public Guid? DriverId { get; set; }
 

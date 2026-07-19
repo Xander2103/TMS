@@ -92,10 +92,25 @@ public class ScanServiceTests
 
         var tenant = new DevTenantContext(tenantId);
         var clock = new TestClock(Now);
-        var sut = new ScanService(db.Context, tenant, new DevCurrentUserContext(userId),
-            new AuditService(db.Context, tenant, new DevCurrentUserContext(userId)), clock);
+        var sut = CreateService(db, tenant, userId, clock);
         return new Harness(db, sut, clock, tenantId, tripId,
             orderAId, loadStopAId, unloadStopAId, itemA1Id, itemA2Id, orderBId, itemB1Id, userId);
+    }
+
+    /// <summary>Builds the full pipeline (package branch included) for any user context.</summary>
+    internal static ScanService CreateService(
+        SqliteTestDbContext db, DevTenantContext tenant, Guid? userId, TestClock clock)
+    {
+        var currentUser = new DevCurrentUserContext(userId);
+        var eventWriter = new TransportationService.Api.Modules.Packages.Services.PackageEventWriter(
+            db.Context, tenant, currentUser, clock);
+        return new ScanService(db.Context, tenant, currentUser,
+            new AuditService(db.Context, tenant, currentUser),
+            new TransportationService.Api.Modules.Packages.Services.PackageBarcodeService(
+                db.Context, tenant, currentUser, clock),
+            new TransportationService.Api.Modules.Packages.Services.PackageScanProcessor(
+                db.Context, tenant, currentUser, eventWriter, clock),
+            clock);
     }
 
     private static Task<ScanOperationResult> Scan(
@@ -229,8 +244,7 @@ public class ScanServiceTests
 
         // Foreign tenant sees nothing.
         var otherTenant = new DevTenantContext(Guid.NewGuid());
-        var foreign = new ScanService(h.Db.Context, otherTenant, new DevCurrentUserContext(null),
-            new AuditService(h.Db.Context, otherTenant, new DevCurrentUserContext(null)), new TestClock(Now));
+        var foreign = CreateService(h.Db, otherTenant, null, new TestClock(Now));
         var crossTenant = await foreign.SubmitAsync(h.TripId, h.LoadStopAId,
             new SubmitScanRequest(ScanType.Load, "BC-A1", 1, false, null, null), false, CancellationToken.None);
         Assert.Equal(ScanOutcome.NotFound, crossTenant.Outcome);
@@ -245,8 +259,7 @@ public class ScanServiceTests
         });
         await h.Db.Context.SaveChangesAsync();
         var tenant = new DevTenantContext(h.TenantId);
-        var otherDriverSut = new ScanService(h.Db.Context, tenant, new DevCurrentUserContext(otherUser),
-            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(otherUser)), new TestClock(Now));
+        var otherDriverSut = CreateService(h.Db, tenant, otherUser, new TestClock(Now));
         var notYours = await otherDriverSut.SubmitAsync(h.TripId, h.LoadStopAId,
             new SubmitScanRequest(ScanType.Load, "BC-A1", 1, false, null, null), true, CancellationToken.None);
         Assert.Equal(ScanOutcome.NotYourTrip, notYours.Outcome);

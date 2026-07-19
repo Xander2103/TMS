@@ -8,7 +8,11 @@ public record SubmitScanRequest(
     decimal Quantity = 1,
     bool Damaged = false,
     string? DamageNote = null,
-    string? DeviceInfo = null);
+    string? DeviceInfo = null,
+    Guid? ClientEventId = null,
+    bool Refused = false,
+    bool Partial = false,
+    string? Note = null);
 
 /// <summary>Sets the absolute scanned quantity for one item/action; the reason is mandatory and audited.</summary>
 public record ScanCorrectionRequest(Guid CargoItemId, ScanType ScanType, decimal Quantity, string Reason);
@@ -40,6 +44,25 @@ public record StopScanSummaryDto(
     int UnexpectedScanCount,
     int TotalScanCount);
 
+/// <summary>Per-child result of a group/pallet scan; failed children are itemized, never hidden.</summary>
+public record PackageChildScanResultDto(
+    Guid PackageId,
+    string PackageNumber,
+    string Description,
+    string Outcome,
+    bool Succeeded,
+    string Message);
+
+/// <summary>Package block on scan feedback, present when the barcode resolved to a tracked package.</summary>
+public record PackageScanFeedbackDto(
+    Guid PackageId,
+    string PackageNumber,
+    string Description,
+    string Outcome,
+    string LifecycleStatus,
+    Guid? ExceptionId,
+    IReadOnlyList<PackageChildScanResultDto> Children);
+
 /// <summary>Immediate feedback for the scanning UI: classification plus the updated tallies.</summary>
 public record ScanFeedbackDto(
     Guid ScanEventId,
@@ -50,7 +73,9 @@ public record ScanFeedbackDto(
     string? CargoDescription,
     decimal AcceptedQuantity,
     decimal ExpectedQuantity,
-    StopScanSummaryDto Summary);
+    StopScanSummaryDto Summary,
+    PackageScanFeedbackDto? Package = null,
+    bool Replayed = false);
 
 public enum ScanFeedbackLevel
 {
@@ -72,7 +97,10 @@ public record ScanEventDto(
     string? CorrectionReason,
     string? DeviceInfo,
     string? UserName,
-    DateTime OccurredAt);
+    DateTime OccurredAt,
+    Guid? PackageId = null,
+    string? PackageNumber = null,
+    string? PackageOutcome = null);
 
 public enum ScanOutcome
 {

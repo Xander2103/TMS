@@ -96,7 +96,8 @@ public class StopExecutionTransitionTests
         var tripService = new TripService(db.Context, tenant, audit,
             new PlanningConflictService(db.Context, tenant, new QualificationStatusCalculator(), clock),
             new NotificationService(db.Context, tenant, new DevCurrentUserContext(userId), clock),
-            planningSync, CostingTestFactory.Create(db.Context, tenant, clock));
+            planningSync, CostingTestFactory.Create(db.Context, tenant, clock),
+            TripPackageTestFactory.Create(db.Context, tenant, clock));
         var sut = new TripExecutionService(db.Context, tenant, new DevCurrentUserContext(userId), audit, tripService, planningSync, clock);
         return new Harness(db, sut, clock, tenantId, tripId, orderId, loadStopId, unloadStopId, userId, locationId);
     }
@@ -318,7 +319,8 @@ public class StopExecutionTransitionTests
             new TripService(h.Db.Context, otherTenant, audit,
                 new PlanningConflictService(h.Db.Context, otherTenant, new QualificationStatusCalculator(), clock),
                 new NotificationService(h.Db.Context, otherTenant, new DevCurrentUserContext(null), clock),
-                foreignSync, CostingTestFactory.Create(h.Db.Context, otherTenant, clock)),
+                foreignSync, CostingTestFactory.Create(h.Db.Context, otherTenant, clock),
+                TripPackageTestFactory.Create(h.Db.Context, otherTenant, clock)),
             foreignSync, clock);
 
         var history = await foreign.GetStopHistoryAsync(h.TripId, h.LoadStopId, false, CancellationToken.None);

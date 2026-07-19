@@ -24,6 +24,8 @@ import { getTripExecution } from '../../my-trips/api/myTripsApi'
 import type { TripExecution } from '../../my-trips/types'
 import { STOP_EXECUTION_ICONS, STOP_EXECUTION_LABELS, STOP_EXECUTION_TONE } from '../../my-trips/types'
 import { getPodForStop } from '../../pod/api/podApi'
+import { getTripPackageReadiness } from '../../packages/api/packagesApi'
+import { PACKAGE_STATUS_LABELS, PACKAGE_STATUS_TONE, type TripPackageReadiness } from '../../packages/types'
 import { TripCostingPanel } from '../../trip-costing/components/TripCostingPanel'
 import { Modal } from '../../../components/ui/Modal'
 import {
@@ -66,10 +68,15 @@ export function TripDetailPage() {
   const [cancelTarget, setCancelTarget] = useState<TripStatus | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [execution, setExecution] = useState<TripExecution | null>(null)
+  const [readiness, setReadiness] = useState<TripPackageReadiness | null>(null)
+  const [releaseTarget, setReleaseTarget] = useState<{ status: TripStatus; readiness: TripPackageReadiness } | null>(null)
+  const [releaseReason, setReleaseReason] = useState('')
 
   const canSeeExecution = hasPermission('driver_workflow.view')
   const canOpenPod = hasPermission('pod.view')
   const canEditPlanning = hasPermission('planning.edit')
+  const canSeePackages = hasPermission('packages.view')
+  const canReleaseTrip = hasPermission('warehouse.release_trip')
 
   interface StopEtaInfo {
     transportOrderStopId: string
@@ -132,6 +139,23 @@ export function TripDetailPage() {
       mounted = false
     }
   }, [id, canSeeExecution, trip])
+
+  // Load completeness for the departure gate; only relevant while the trip can still leave.
+  const readinessRelevant = trip != null && (trip.status === 'Planned' || trip.status === 'InProgress')
+  useEffect(() => {
+    if (!canSeePackages || !trip || !readinessRelevant) return
+    let mounted = true
+    getTripPackageReadiness(trip.id)
+      .then((data) => {
+        if (mounted) setReadiness(data.totalPackages > 0 ? data : null)
+      })
+      .catch(() => {
+        // The widget simply stays hidden.
+      })
+    return () => {
+      mounted = false
+    }
+  }, [canSeePackages, trip, readinessRelevant])
 
   // Live ETA raming next to the execution snapshot (recalculated server-side on read).
   useEffect(() => {
@@ -249,27 +273,37 @@ export function TripDetailPage() {
     }
   }
 
-  async function applyTransition(target: TripStatus, override: boolean) {
+  async function applyTransition(target: TripStatus, override: boolean, release = false) {
     if (!trip) return
     setBusy(true)
     try {
-      const updated = await changeTripStatus(trip.id, target, override)
+      const updated = await changeTripStatus(
+        trip.id, target, override, release, release ? releaseReason.trim() || null : null)
       applyTrip(updated)
       showSuccess(`Rit is nu: ${TRIP_STATUS_LABELS[target]}.`)
       setOverrideTarget(null)
+      setReleaseTarget(null)
+      setReleaseReason('')
     } catch (err) {
-      if (err instanceof ApiError && err.status === 409 && !override) {
+      const body = err instanceof ApiError ? (err.body as { packageReadiness?: TripPackageReadiness } | null) : null
+      if (err instanceof ApiError && err.status === 409 && body?.packageReadiness) {
+        // Departure gate: not all mandatory packages are on the vehicle.
+        setReleaseTarget({ status: target, readiness: body.packageReadiness })
+        setReadiness(body.packageReadiness)
+      } else if (err instanceof ApiError && err.status === 409 && !override) {
         // Blocking conflicts: offer the override path (guarded server-side by permission).
         setOverrideTarget({
           status: target,
           conflicts: trip.conflicts.filter((c) => c.blocking).map((c) => c.description),
         })
       } else if (err instanceof ApiError && err.status === 403) {
-        showError('Je hebt geen recht om planningsconflicten te overschrijven.')
+        showError(err.message || 'Je hebt hier geen recht voor.')
         setOverrideTarget(null)
+        setReleaseTarget(null)
       } else {
         showError('De status kon niet worden gewijzigd.')
         setOverrideTarget(null)
+        setReleaseTarget(null)
       }
     } finally {
       setBusy(false)
@@ -606,6 +640,40 @@ export function TripDetailPage() {
         )}
       </section>
 
+      {readiness && readinessRelevant && (
+        <section className="pl-section">
+          <h2>Laadgereedheid</h2>
+          <p className={readiness.isComplete ? 'pl-ok' : 'pl-readiness-warning'}>
+            {readiness.isComplete
+              ? `✓ Alle ${readiness.mandatoryPackages} verplichte colli zijn geladen.`
+              : `⚠ ${readiness.loadedCount} van ${readiness.mandatoryPackages} verplichte colli geladen — ${readiness.notLoadedCount} ontbreken` +
+                (readiness.missingCount > 0 ? `, waarvan ${readiness.missingCount} vermist` : '') +
+                (readiness.damagedCount > 0 ? `, ${readiness.damagedCount} beschadigd` : '') +
+                '.'}
+            {readiness.openExceptionCount > 0 && ` Er ${readiness.openExceptionCount === 1 ? 'staat 1 melding' : `staan ${readiness.openExceptionCount} meldingen`} open.`}
+          </p>
+          {!readiness.isComplete && (
+            <>
+              <p className="pl-readiness-rule">
+                {readiness.isBlocked
+                  ? 'Vertrekregel: vertrek is geblokkeerd tot alles geladen is.'
+                  : readiness.requiresOverride
+                    ? 'Vertrekregel: vertrek vereist vrijgave door het magazijn.'
+                    : 'Vertrekregel: vertrek is toegestaan met waarschuwing.'}
+              </p>
+              <ul className="pl-conflicts">
+                {readiness.outstandingPackages.map((item) => (
+                  <li key={item.packageId}>
+                    <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{PACKAGE_STATUS_LABELS[item.status]}</Badge>{' '}
+                    {item.packageNumber} — {item.description} ({item.orderNumber})
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
+
       {hasPermission('trip_costs.view') && <TripCostingPanel tripId={trip.id} tripStatus={trip.status} />}
 
       <div className="pl-detail-actions">
@@ -630,6 +698,57 @@ export function TripDetailPage() {
           onConfirm={() => void applyTransition(overrideTarget.status, true)}
           onCancel={() => setOverrideTarget(null)}
         />
+      )}
+
+      {releaseTarget && (
+        <Modal title="Niet alle colli geladen" onClose={() => setReleaseTarget(null)} busy={busy}>
+          <p>
+            {releaseTarget.readiness.loadedCount} van {releaseTarget.readiness.mandatoryPackages} verplichte colli zijn
+            geladen. {releaseTarget.readiness.isBlocked
+              ? 'De vertrekregel blokkeert vertrek tot alles geladen is.'
+              : 'Vertrek vereist een vrijgave met toelichting.'}
+          </p>
+          <ul className="pl-conflicts">
+            {releaseTarget.readiness.outstandingPackages.map((item) => (
+              <li key={item.packageId}>
+                <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{PACKAGE_STATUS_LABELS[item.status]}</Badge>{' '}
+                {item.packageNumber} — {item.description}
+              </li>
+            ))}
+          </ul>
+          {!releaseTarget.readiness.isBlocked && (
+            <>
+              {!canReleaseTrip && (
+                <p className="pl-readiness-warning">
+                  Je hebt het recht 'Rit vrijgeven' niet; vraag het magazijn of een beheerder om vrijgave.
+                </p>
+              )}
+              <FormField label="Toelichting vrijgave" htmlFor="release-reason" required>
+                <input
+                  id="release-reason"
+                  value={releaseReason}
+                  onChange={(e) => setReleaseReason(e.target.value)}
+                  disabled={busy || !canReleaseTrip}
+                  maxLength={500}
+                  placeholder="bv. nalevering volgt morgen"
+                />
+              </FormField>
+            </>
+          )}
+          <div className="pl-detail-actions">
+            <Button variant="secondary" onClick={() => setReleaseTarget(null)} disabled={busy}>
+              Sluiten
+            </Button>
+            {!releaseTarget.readiness.isBlocked && canReleaseTrip && (
+              <Button
+                onClick={() => void applyTransition(releaseTarget.status, false, true)}
+                disabled={busy || !releaseReason.trim()}
+              >
+                Vrijgeven en vertrekken
+              </Button>
+            )}
+          </div>
+        </Modal>
       )}
 
       {cancelTarget && (

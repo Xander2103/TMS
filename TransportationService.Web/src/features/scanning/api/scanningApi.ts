@@ -8,6 +8,11 @@ export interface SubmitScanInput {
   damaged: boolean
   damageNote: string | null
   deviceInfo: string | null
+  /** Idempotency key: retrying with the same id can never double-register the scan. */
+  clientEventId: string
+  refused?: boolean
+  partial?: boolean
+  note?: string | null
 }
 
 /**
