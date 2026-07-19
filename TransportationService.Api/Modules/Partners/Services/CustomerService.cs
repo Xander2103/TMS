@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
+using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Partners.Dtos;
@@ -18,12 +19,15 @@ public class CustomerService : ICustomerService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly ICountryCodeValidator _countryValidator;
 
-    public CustomerService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public CustomerService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        ICountryCodeValidator countryValidator)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _countryValidator = countryValidator;
     }
 
     private IQueryable<Customer> TenantScoped() =>
@@ -106,7 +110,7 @@ public class CustomerService : ICustomerService
             HouseNumber = Trim(request.HouseNumber),
             PostalCode = Trim(request.PostalCode),
             City = Trim(request.City),
-            CountryCode = Trim(request.CountryCode),
+            CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken),
             InvoiceEmail = Trim(request.InvoiceEmail),
             PaymentTermDays = request.PaymentTermDays < 0 ? 0 : request.PaymentTermDays,
             DefaultLanguageCode = Trim(request.DefaultLanguageCode),
@@ -150,7 +154,7 @@ public class CustomerService : ICustomerService
         customer.HouseNumber = Trim(request.HouseNumber);
         customer.PostalCode = Trim(request.PostalCode);
         customer.City = Trim(request.City);
-        customer.CountryCode = Trim(request.CountryCode);
+        customer.CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken);
         customer.InvoiceEmail = Trim(request.InvoiceEmail);
         customer.PaymentTermDays = request.PaymentTermDays < 0 ? 0 : request.PaymentTermDays;
         customer.DefaultLanguageCode = Trim(request.DefaultLanguageCode);

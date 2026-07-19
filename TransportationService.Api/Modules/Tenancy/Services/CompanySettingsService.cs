@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Tenancy.Dtos;
@@ -14,12 +15,15 @@ public class CompanySettingsService : ICompanySettingsService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly ICountryCodeValidator _countryValidator;
 
-    public CompanySettingsService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public CompanySettingsService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        ICountryCodeValidator countryValidator)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _countryValidator = countryValidator;
     }
 
     public async Task<CompanySettingsDto> GetAsync(CancellationToken cancellationToken)
@@ -30,6 +34,9 @@ public class CompanySettingsService : ICompanySettingsService
 
     public async Task<CompanySettingsDto> UpdateAsync(UpdateCompanySettingsRequest request, CancellationToken cancellationToken)
     {
+        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land (maatschappelijke zetel)", cancellationToken);
+        await _countryValidator.NormalizeAndValidateAsync(request.OperationalCountryCode, "land (operationeel adres)", cancellationToken);
+
         var settings = await GetOrCreateAsync(cancellationToken);
 
         var before = new { settings.CompanyLegalName, settings.VatNumber, settings.DefaultCurrency, settings.Timezone };

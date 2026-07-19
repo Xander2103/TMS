@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Reference;
+using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tenancy.Dtos;
@@ -15,7 +17,7 @@ public class CompanySettingsServiceTests
     private static CompanySettingsService Build(SqliteTestDbContext db, Guid tenantId)
     {
         var tenant = new DevTenantContext(tenantId);
-        return new CompanySettingsService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)));
+        return new CompanySettingsService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), new CountryCodeValidator(db.Context));
     }
 
     private static async Task<(SqliteTestDbContext Db, Guid TenantId)> SeedTenantAsync()
@@ -24,6 +26,7 @@ public class CompanySettingsServiceTests
         var tenantId = Guid.NewGuid();
         db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = Now.UtcDateTime });
         await db.Context.SaveChangesAsync();
+        await CountrySeeder.SyncAsync(db.Context);
         return (db, tenantId);
     }
 

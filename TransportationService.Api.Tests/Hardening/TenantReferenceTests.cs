@@ -1,5 +1,6 @@
 using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
+using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Drivers.Dtos;
 using TransportationService.Api.Modules.Drivers.Entities;
@@ -102,7 +103,7 @@ public class TenantReferenceTests
         h.Db.Context.Customers.Add(new Customer { Id = foreignCustomer, TenantId = h.ForeignTenantId, CustomerNumber = "KL-X", Name = "Foreign BV", IsActive = true });
         await h.Db.Context.SaveChangesAsync();
 
-        var sut = new LocationService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId));
+        var sut = new LocationService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId), new CountryCodeValidator(h.Db.Context));
         var result = await sut.CreateAsync(new CreateLocationRequest(
             "LOC-1", "Test", LocationType.CustomerLocation,
             null, null, null, null, null, null, null, null, null, null,
@@ -144,7 +145,7 @@ public class TenantReferenceTests
         h.Db.Context.CustomerCategories.Add(new CustomerCategory { Id = foreignCategory, TenantId = h.ForeignTenantId, Code = "X", Name = "Foreign", IsActive = true });
         await h.Db.Context.SaveChangesAsync();
 
-        var sut = new CustomerService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId));
+        var sut = new CustomerService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId), new CountryCodeValidator(h.Db.Context));
         var request = new CreateCustomerRequest(
             "Test BV", null, null, CategoryId: foreignCategory,
             null, null, null, null, null, null, null, null, null, 30, null, null);

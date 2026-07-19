@@ -16,7 +16,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Controllers + enums als tekst in JSON
 builder.Services
     .AddControllers(options =>
-        options.Filters.Add<TransportationService.Api.Common.InvalidTenantReferenceExceptionFilter>())
+    {
+        options.Filters.Add<TransportationService.Api.Common.InvalidTenantReferenceExceptionFilter>();
+        options.Filters.Add<TransportationService.Api.Common.DomainValidationExceptionFilter>();
+    })
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(
             new JsonStringEnumConverter()
@@ -103,6 +106,10 @@ builder.Services.AddScoped<
 // Audit
 builder.Services.AddScoped<IAuditService, AuditService>();
 
+// Global reference data (country code validation against the seeded ISO list)
+builder.Services.AddScoped<TransportationService.Api.Common.Reference.ICountryCodeValidator,
+    TransportationService.Api.Common.Reference.CountryCodeValidator>();
+
 // Generic tenant lookup CRUD (departments, functions, categories, reference data, ...)
 builder.Services.AddScoped(typeof(TransportationService.Api.Common.Lookups.ILookupService<>),
     typeof(TransportationService.Api.Common.Lookups.LookupService<>));
@@ -172,6 +179,14 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.
     TransportationService.Api.Modules.Reporting.Services.DashboardService>();
 
 var app = builder.Build();
+
+// Global reference data runs in every environment: the ISO country list must exist for
+// country validation and comboboxes regardless of how tenants are onboarded.
+using (var referenceScope = app.Services.CreateScope())
+{
+    var referenceDbContext = referenceScope.ServiceProvider.GetRequiredService<TransportationDbContext>();
+    await CountrySeeder.SyncAsync(referenceDbContext);
+}
 
 // Development-only setup
 if (app.Environment.IsDevelopment())

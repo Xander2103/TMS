@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
+using TransportationService.Api.Common.Reference;
+using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Partners.Dtos;
@@ -17,7 +20,7 @@ public class CustomerServiceTests
     {
         var tenantContext = new DevTenantContext(tenantId);
         var audit = new AuditService(db.Context, tenantContext, new DevCurrentUserContext(null));
-        return new CustomerService(db.Context, tenantContext, audit);
+        return new CustomerService(db.Context, tenantContext, audit, new CountryCodeValidator(db.Context));
     }
 
     private static async Task<Guid> SeedTenantAsync(SqliteTestDbContext db, string slug, string prefix)
@@ -31,6 +34,33 @@ public class CustomerServiceTests
 
     private static CreateCustomerRequest NewCustomer(string name) =>
         new(name, null, null, null, null, null, null, null, null, null, null, null, null, 30, null, null);
+
+    [Fact]
+    public async Task CreateAsync_WithUnknownCountryCode_ThrowsDomainValidation()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        await CountrySeeder.SyncAsync(db.Context);
+        var sut = CreateSut(db, tenantId);
+
+        var request = NewCustomer("Acme") with { CountryCode = "XX" };
+
+        await Assert.ThrowsAsync<DomainValidationException>(
+            () => sut.CreateAsync(request, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateAsync_NormalizesCountryCodeToUppercase()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        await CountrySeeder.SyncAsync(db.Context);
+        var sut = CreateSut(db, tenantId);
+
+        var created = await sut.CreateAsync(NewCustomer("Acme") with { CountryCode = "be" }, CancellationToken.None);
+
+        Assert.Equal("BE", created.CountryCode);
+    }
 
     [Fact]
     public async Task CreateAsync_GeneratesSequentialCustomerNumbers()

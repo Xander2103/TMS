@@ -1,4 +1,6 @@
 using TransportationService.Api.Common.Models;
+using TransportationService.Api.Common.Reference;
+using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Locations.Dtos;
@@ -23,9 +25,10 @@ public class LocationServiceTests
         var tenantId = Guid.NewGuid();
         db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = Now.UtcDateTime });
         await db.Context.SaveChangesAsync();
+        await CountrySeeder.SyncAsync(db.Context);
 
         var tenant = new DevTenantContext(tenantId);
-        var sut = new LocationService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)));
+        var sut = new LocationService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), new CountryCodeValidator(db.Context));
         return new Harness(db, sut, tenantId);
     }
 

@@ -52,10 +52,7 @@ public static class ReferenceDataSeeder
             [("KEY", "Key account"), ("STD", "Standaard"), ("SPOT", "Spot")],
             cancellationToken);
 
-        await SeedIfEmptyAsync<Country>(dbContext, tenantId,
-            [("BE", "België"), ("NL", "Nederland"), ("DE", "Duitsland"), ("FR", "Frankrijk"),
-             ("LU", "Luxemburg"), ("PL", "Polen")],
-            cancellationToken);
+        // Countries are global reference data seeded by CountrySeeder, not tenant lookups.
 
         await SeedIfEmptyAsync<Language>(dbContext, tenantId,
             [("nl", "Nederlands"), ("fr", "Frans"), ("en", "Engels"), ("de", "Duits")],

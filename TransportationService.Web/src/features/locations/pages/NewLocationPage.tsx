@@ -8,6 +8,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
+import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { createLocation } from '../api/locationsApi'
 import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationInput, type LocationType } from '../types'
 import './location-form.css'
@@ -145,8 +146,8 @@ export function NewLocationPage() {
             <FormField label="Plaats" htmlFor="loc-city">
               <input id="loc-city" value={form.city ?? ''} onChange={(e) => set('city', e.target.value || null)} disabled={submitting} />
             </FormField>
-            <FormField label="Land (ISO)" htmlFor="loc-country">
-              <input id="loc-country" value={form.countryCode ?? ''} onChange={(e) => set('countryCode', e.target.value || null)} disabled={submitting} maxLength={2} />
+            <FormField label="Land" htmlFor="loc-country">
+              <CountryCombobox id="loc-country" value={form.countryCode} onChange={(code) => set('countryCode', code)} disabled={submitting} />
             </FormField>
             <FormField label="Breedtegraad" htmlFor="loc-lat">
               <input

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
+using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Locations.Dtos;
@@ -17,12 +18,15 @@ public class LocationService : ILocationService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly ICountryCodeValidator _countryValidator;
 
-    public LocationService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public LocationService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        ICountryCodeValidator countryValidator)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _countryValidator = countryValidator;
     }
 
     private IQueryable<Location> TenantScoped() =>
@@ -103,6 +107,8 @@ public class LocationService : ILocationService
             return LocationOperationResult.DuplicateCode;
         }
 
+        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken);
+
         var location = new Location
         {
             Id = Guid.NewGuid(),
@@ -157,6 +163,8 @@ public class LocationService : ILocationService
         {
             return LocationOperationResult.DuplicateCode;
         }
+
+        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken);
 
         var before = new { location.Code, location.Name, location.Type, location.IsActive };
 

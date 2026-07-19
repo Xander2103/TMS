@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Fleet.Dtos;
 using TransportationService.Api.Modules.Fleet.Entities;
@@ -82,7 +83,7 @@ public class NumberingConcurrencyTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var tenant = new DevTenantContext(h.TenantId);
-        var sut = new CompanySettingsService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+        var sut = new CompanySettingsService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)), new CountryCodeValidator(h.Db.Context));
 
         // Load (and track) the settings, then bump a counter behind the tracker's back.
         await sut.GetAsync(CancellationToken.None);

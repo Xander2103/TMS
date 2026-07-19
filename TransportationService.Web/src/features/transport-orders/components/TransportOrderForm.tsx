@@ -5,6 +5,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
 import { LocationSelect } from '../../locations/components/LocationSelect'
+import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { STOP_TYPE_LABELS, type StopInput, type TransportOrderDetail, type TransportOrderInput } from '../types'
 import './transport-order-form.css'
 
@@ -329,7 +330,12 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
                 <input id={`st-city-${stop.key}`} value={stop.city} onChange={(e) => setStop(stop.key, { city: e.target.value })} disabled={saving} maxLength={100} />
               </FormField>
               <FormField label="Land" htmlFor={`st-cc-${stop.key}`}>
-                <input id={`st-cc-${stop.key}`} value={stop.countryCode} onChange={(e) => setStop(stop.key, { countryCode: e.target.value.toUpperCase() })} disabled={saving} maxLength={2} />
+                <CountryCombobox
+                  id={`st-cc-${stop.key}`}
+                  value={stop.countryCode || null}
+                  onChange={(code) => setStop(stop.key, { countryCode: code ?? '' })}
+                  disabled={saving}
+                />
               </FormField>
             </div>
           )}

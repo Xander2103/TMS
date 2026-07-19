@@ -1,17 +1,42 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TransportationService.Api.Common.Lookups;
-using TransportationService.Api.Modules.Identity;
-using TransportationService.Api.Modules.Identity.Services;
-using TransportationService.Api.Modules.Reference.Entities;
+using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Reference.Dtos;
 
 namespace TransportationService.Api.Modules.Reference.Controllers;
 
+/// <summary>
+/// Read-only global country reference. Countries are not tenant master data: every
+/// authenticated user may list them (country comboboxes appear on most forms), and no
+/// tenant-level CRUD exists — the list is synchronised from the ISO seed at startup.
+/// </summary>
+[ApiController]
 [Route("api/countries")]
-public class CountriesController : LookupControllerBase<Country>
+[Authorize]
+public class CountriesController : ControllerBase
 {
-    public CountriesController(ILookupService<Country> service, ICurrentUserContext currentUser, IPermissionAuthorizationService authorization)
-        : base(service, currentUser, authorization) { }
+    private readonly TransportationDbContext _dbContext;
 
-    protected override string ViewPermission => PermissionCodes.ReferenceDataView;
-    protected override string ManagePermission => PermissionCodes.ReferenceDataManage;
+    public CountriesController(TransportationDbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    [HttpGet("options")]
+    public async Task<ActionResult<IReadOnlyList<CountryOptionDto>>> GetOptions(CancellationToken cancellationToken)
+    {
+        var options = await _dbContext.Countries
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.SortOrder)
+            .ThenBy(c => c.Name)
+            .Select(c => new CountryOptionDto(c.Code, c.Alpha3, c.Name, c.IsEuMember))
+            .ToListAsync(cancellationToken);
+
+        return Ok(options);
+    }
+
+    [HttpGet]
+    public Task<ActionResult<IReadOnlyList<CountryOptionDto>>> GetAll(CancellationToken cancellationToken)
+        => GetOptions(cancellationToken);
 }

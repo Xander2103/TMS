@@ -9,6 +9,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
+import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { deleteLocation, getLocation, updateLocation } from '../api/locationsApi'
 import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationDetail, type LocationInput, type LocationType } from '../types'
 import './location-form.css'
@@ -221,7 +222,7 @@ export function LocationDetailPage() {
                   <input id="e-city" value={form.city ?? ''} onChange={(e) => set('city', e.target.value || null)} disabled={saving} />
                 </FormField>
                 <FormField label="Land" htmlFor="e-country">
-                  <input id="e-country" value={form.countryCode ?? ''} onChange={(e) => set('countryCode', e.target.value || null)} disabled={saving} maxLength={2} />
+                  <CountryCombobox id="e-country" value={form.countryCode} onChange={(code) => set('countryCode', code)} disabled={saving} />
                 </FormField>
               </div>
             </section>

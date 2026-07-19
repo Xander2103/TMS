@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { getCompanySettings, updateCompanySettings } from '../api/settingsApi'
 import type { CompanySettings } from '../types'
 import './settings.css'
@@ -165,7 +166,14 @@ export function SettingsPage() {
             {text('houseNumber', 'Nummer')}
             {text('postalCode', 'Postcode')}
             {text('city', 'Plaats')}
-            {text('countryCode', 'Land (ISO)', { maxLength: 2 })}
+            <FormField label="Land" htmlFor="s-country">
+              <CountryCombobox
+                id="s-country"
+                value={form.countryCode}
+                onChange={(code) => setField('countryCode', code)}
+                disabled={!canManage || saving}
+              />
+            </FormField>
           </div>
         </section>
 
@@ -176,7 +184,14 @@ export function SettingsPage() {
             {text('operationalHouseNumber', 'Nummer')}
             {text('operationalPostalCode', 'Postcode')}
             {text('operationalCity', 'Plaats')}
-            {text('operationalCountryCode', 'Land (ISO)', { maxLength: 2 })}
+            <FormField label="Land" htmlFor="s-op-country">
+              <CountryCombobox
+                id="s-op-country"
+                value={form.operationalCountryCode}
+                onChange={(code) => setField('operationalCountryCode', code)}
+                disabled={!canManage || saving}
+              />
+            </FormField>
           </div>
         </section>
 

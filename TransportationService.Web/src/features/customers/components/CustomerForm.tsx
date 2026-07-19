@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { FormField } from '../../../components/ui/FormField'
 import { Button } from '../../../components/ui/Button'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import type { CustomerDetail, CustomerInput, UpdateCustomerInput } from '../types'
 import './customers.css'
 
@@ -21,7 +22,6 @@ function nullable(value: string): string | null {
 
 export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmit, onCancel }: CustomerFormProps) {
   const categories = useLookupOptions('/api/customer-categories')
-  const countries = useLookupOptions('/api/countries')
   const languages = useLookupOptions('/api/languages')
 
   const [name, setName] = useState(initial?.name ?? '')
@@ -136,14 +136,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
             <input id="c-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} />
           </FormField>
           <FormField label="Land" htmlFor="c-country">
-            <select id="c-country" value={countryCode} onChange={(e) => setCountryCode(e.target.value)}>
-              <option value="">— Geen —</option>
-              {countries.options.map((option) => (
-                <option key={option.id} value={option.code}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
+            <CountryCombobox id="c-country" value={countryCode || null} onChange={(code) => setCountryCode(code ?? '')} />
           </FormField>
         </div>
       </fieldset>
