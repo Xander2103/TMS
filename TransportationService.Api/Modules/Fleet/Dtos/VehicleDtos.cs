@@ -40,6 +40,7 @@ public record VehicleDetailDto(
     bool AdrSuitable,
     VehicleOwnershipType OwnershipType,
     VehicleOperationalStatus OperationalStatus,
+    string? StatusReason,
     bool IsActive,
     Guid? FixedDriverId,
     string? FixedDriverName,
@@ -97,7 +98,8 @@ public record UpdateVehicleRequest(
     VehicleOwnershipType OwnershipType,
     VehicleOperationalStatus OperationalStatus,
     bool IsActive,
-    string? Notes);
+    string? Notes,
+    string? StatusReason = null);
 
 /// <summary>Body for the vehicle-side assignment endpoints; null DriverId clears the slot.</summary>
 public record AssignVehicleDriverRequest(Guid? DriverId, bool ReplaceExisting = false);

@@ -112,7 +112,7 @@ public class VehicleService : IVehicleService
             TenantId = _tenantContext.TenantId,
             LicensePlate = plate,
             IsActive = true,
-            OperationalStatus = VehicleOperationalStatus.Active,
+            OperationalStatus = VehicleOperationalStatus.Available,
             FixedDriverId = request.FixedDriverId,
             CurrentDriverId = request.CurrentDriverId,
         };
@@ -160,10 +160,14 @@ public class VehicleService : IVehicleService
             return VehicleOperationResult.InvalidReference;
         }
 
-        var before = new { vehicle.LicensePlate, vehicle.OperationalStatus, vehicle.IsActive };
+        var before = new { vehicle.LicensePlate, vehicle.OperationalStatus, vehicle.StatusReason, vehicle.IsActive };
 
         vehicle.LicensePlate = plate;
         vehicle.OperationalStatus = request.OperationalStatus;
+        // The reason only makes sense while the vehicle is not available.
+        vehicle.StatusReason = request.OperationalStatus == VehicleOperationalStatus.Available
+            ? null
+            : Trim(request.StatusReason);
         vehicle.IsActive = request.IsActive;
         // Fixed/current driver deliberately untouched here: assignment changes go through
         // IFleetAssignmentService so both sides stay in sync and every change is audited.
@@ -183,7 +187,7 @@ public class VehicleService : IVehicleService
         }
 
         await _auditService.RecordAsync(EntityType, vehicle.Id.ToString(), "Updated", before,
-            new { vehicle.LicensePlate, vehicle.OperationalStatus, vehicle.IsActive }, cancellationToken);
+            new { vehicle.LicensePlate, vehicle.OperationalStatus, vehicle.StatusReason, vehicle.IsActive }, cancellationToken);
 
         return VehicleOperationResult.Success(await MapToDetailAsync(vehicle, cancellationToken));
     }
@@ -274,7 +278,7 @@ public class VehicleService : IVehicleService
             v.Id, v.InternalNumber, v.LicensePlate, v.Vin, v.CategoryId, categoryName, v.Brand, v.Model, v.Year, v.FirstRegistrationDate,
             v.FuelType, v.EmissionClass, v.GrossVehicleWeightKg, v.PayloadKg, v.LengthMeters, v.WidthMeters, v.HeightMeters, v.VolumeM3,
             v.OdometerKm, v.HasCrane, v.HasRefrigeration, v.HasTailLift, v.AdrSuitable,
-            v.OwnershipType, v.OperationalStatus, v.IsActive,
+            v.OwnershipType, v.OperationalStatus, v.StatusReason, v.IsActive,
             v.FixedDriverId, fixedDriverName, v.CurrentDriverId, currentDriverName, v.Notes);
     }
 

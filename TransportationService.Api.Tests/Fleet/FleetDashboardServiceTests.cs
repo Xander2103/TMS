@@ -51,12 +51,12 @@ public class FleetDashboardServiceTests
         var dashboard = await h.Sut.GetAsync(CancellationToken.None);
 
         Assert.Equal(3, dashboard.Vehicles.Total);
-        Assert.Equal(1, dashboard.Vehicles.Active);
+        Assert.Equal(1, dashboard.Vehicles.Available);
         Assert.Equal(1, dashboard.Vehicles.InMaintenance);
         Assert.Equal(1, dashboard.Vehicles.OutOfService);
         Assert.Equal(1, dashboard.Vehicles.Inactive);
         Assert.Equal(1, dashboard.Trailers.Total);
-        Assert.Equal(1, dashboard.Trailers.Active);
+        Assert.Equal(1, dashboard.Trailers.Available);
     }
 
     [Fact]

@@ -102,7 +102,7 @@ public class DashboardService : IDashboardService
         var fleet = await _fleetDashboardService.GetAsync(cancellationToken);
         var vehiclesAvailable = await _dbContext.Vehicles.AsNoTracking()
             .CountAsync(v => v.TenantId == tenantId && v.IsActive
-                             && v.OperationalStatus == VehicleOperationalStatus.Active, cancellationToken);
+                             && v.OperationalStatus == VehicleOperationalStatus.Available, cancellationToken);
 
         // Qualification expiry alerts (30-day window; suspended/rejected excluded by expiry logic).
         var expiryLimit = today.AddDays(30);

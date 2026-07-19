@@ -2,12 +2,13 @@ using TransportationService.Api.Common.Abstractions;
 
 namespace TransportationService.Api.Modules.Fleet.Entities;
 
+/// <summary>Operational status, distinct from the administrative IsActive flag (see Vehicle).</summary>
 public enum TrailerOperationalStatus
 {
-    Active,
+    Available,
+    InUse,
     InMaintenance,
     OutOfService,
-    Decommissioned,
 }
 
 /// <summary>
@@ -37,7 +38,12 @@ public class Trailer : AuditableTenantEntity
     public bool AdrSuitable { get; set; }
 
     public VehicleOwnershipType OwnershipType { get; set; } = VehicleOwnershipType.Owned;
-    public TrailerOperationalStatus OperationalStatus { get; set; } = TrailerOperationalStatus.Active;
+    public TrailerOperationalStatus OperationalStatus { get; set; } = TrailerOperationalStatus.Available;
+
+    /// <summary>Why the trailer is not available (maintenance details, defect, ...).</summary>
+    public string? StatusReason { get; set; }
+
+    /// <summary>Administrative lifecycle: part of the fleet or archived. Separate from OperationalStatus.</summary>
     public bool IsActive { get; set; } = true;
 
     public string? Notes { get; set; }

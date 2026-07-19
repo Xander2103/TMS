@@ -6,10 +6,10 @@ import type { FuelWarning } from '../fuel/types'
 
 export interface FleetAssetCounts {
   total: number
-  active: number
+  available: number
+  inUse: number
   inMaintenance: number
   outOfService: number
-  decommissioned: number
   inactive: number
 }
 

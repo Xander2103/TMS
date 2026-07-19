@@ -99,8 +99,12 @@ export function FleetDashboardPage() {
               <div className="fd-count-total">{dashboard.vehicles.total}</div>
               <dl>
                 <div>
-                  <dt>Actief</dt>
-                  <dd>{dashboard.vehicles.active}</dd>
+                  <dt>Beschikbaar</dt>
+                  <dd>{dashboard.vehicles.available}</dd>
+                </div>
+                <div>
+                  <dt>In gebruik</dt>
+                  <dd>{dashboard.vehicles.inUse}</dd>
                 </div>
                 <div>
                   <dt>In onderhoud</dt>
@@ -121,8 +125,12 @@ export function FleetDashboardPage() {
               <div className="fd-count-total">{dashboard.trailers.total}</div>
               <dl>
                 <div>
-                  <dt>Actief</dt>
-                  <dd>{dashboard.trailers.active}</dd>
+                  <dt>Beschikbaar</dt>
+                  <dd>{dashboard.trailers.available}</dd>
+                </div>
+                <div>
+                  <dt>In gebruik</dt>
+                  <dd>{dashboard.trailers.inUse}</dd>
                 </div>
                 <div>
                   <dt>In onderhoud</dt>

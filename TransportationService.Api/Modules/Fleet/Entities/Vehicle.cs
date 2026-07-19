@@ -31,12 +31,17 @@ public enum VehicleOwnershipType
     Leased,
 }
 
+/// <summary>
+/// Operational status — deliberately distinct from the administrative IsActive flag, and
+/// with no member that could read as a second "Actief": Available (Beschikbaar), InUse
+/// (In gebruik), InMaintenance (In onderhoud), OutOfService (Buiten dienst).
+/// </summary>
 public enum VehicleOperationalStatus
 {
-    Active,
+    Available,
+    InUse,
     InMaintenance,
     OutOfService,
-    Decommissioned,
 }
 
 /// <summary>
@@ -74,7 +79,12 @@ public class Vehicle : AuditableTenantEntity
     public bool AdrSuitable { get; set; }
 
     public VehicleOwnershipType OwnershipType { get; set; } = VehicleOwnershipType.Owned;
-    public VehicleOperationalStatus OperationalStatus { get; set; } = VehicleOperationalStatus.Active;
+    public VehicleOperationalStatus OperationalStatus { get; set; } = VehicleOperationalStatus.Available;
+
+    /// <summary>Why the vehicle is not available (maintenance details, defect, ...).</summary>
+    public string? StatusReason { get; set; }
+
+    /// <summary>Administrative lifecycle: part of the fleet or archived. Separate from OperationalStatus.</summary>
     public bool IsActive { get; set; } = true;
 
     /// <summary>The driver this vehicle is permanently assigned to, if any.</summary>

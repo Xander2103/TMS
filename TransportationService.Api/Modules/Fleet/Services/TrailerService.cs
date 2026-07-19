@@ -98,7 +98,7 @@ public class TrailerService : ITrailerService
             TenantId = _tenantContext.TenantId,
             LicensePlate = plate,
             IsActive = true,
-            OperationalStatus = TrailerOperationalStatus.Active,
+            OperationalStatus = TrailerOperationalStatus.Available,
         };
         ApplyEditableFields(trailer, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.CapacityKg, request.LengthMeters, request.WidthMeters, request.HeightMeters,
@@ -142,10 +142,14 @@ public class TrailerService : ITrailerService
             return TrailerOperationResult.InvalidReference;
         }
 
-        var before = new { trailer.LicensePlate, trailer.OperationalStatus, trailer.IsActive };
+        var before = new { trailer.LicensePlate, trailer.OperationalStatus, trailer.StatusReason, trailer.IsActive };
 
         trailer.LicensePlate = plate;
         trailer.OperationalStatus = request.OperationalStatus;
+        // The reason only makes sense while the trailer is not available.
+        trailer.StatusReason = request.OperationalStatus == TrailerOperationalStatus.Available
+            ? null
+            : Trim(request.StatusReason);
         trailer.IsActive = request.IsActive;
         ApplyEditableFields(trailer, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.CapacityKg, request.LengthMeters, request.WidthMeters, request.HeightMeters,
@@ -161,7 +165,7 @@ public class TrailerService : ITrailerService
         }
 
         await _auditService.RecordAsync(EntityType, trailer.Id.ToString(), "Updated", before,
-            new { trailer.LicensePlate, trailer.OperationalStatus, trailer.IsActive }, cancellationToken);
+            new { trailer.LicensePlate, trailer.OperationalStatus, trailer.StatusReason, trailer.IsActive }, cancellationToken);
 
         return TrailerOperationResult.Success(await MapToDetailAsync(trailer, cancellationToken));
     }
@@ -221,7 +225,7 @@ public class TrailerService : ITrailerService
         return new TrailerDetailDto(
             t.Id, t.InternalNumber, t.LicensePlate, t.Vin, t.CategoryId, categoryName, t.Brand, t.Model, t.Year, t.FirstRegistrationDate,
             t.CapacityKg, t.LengthMeters, t.WidthMeters, t.HeightMeters, t.VolumeM3,
-            t.HasRefrigeration, t.AdrSuitable, t.OwnershipType, t.OperationalStatus, t.IsActive, t.Notes);
+            t.HasRefrigeration, t.AdrSuitable, t.OwnershipType, t.OperationalStatus, t.StatusReason, t.IsActive, t.Notes);
     }
 
     private static string GenerateInternalNumber(TenantSettings? settings)

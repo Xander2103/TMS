@@ -84,10 +84,10 @@ public class FleetDashboardService : IFleetDashboardService
 
         return new FleetAssetCountsDto(
             rows.Sum(r => r.Count),
-            rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.Active).Sum(r => r.Count),
+            rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.Available).Sum(r => r.Count),
+            rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.InUse).Sum(r => r.Count),
             rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.InMaintenance).Sum(r => r.Count),
             rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.OutOfService).Sum(r => r.Count),
-            rows.Where(r => r.OperationalStatus == VehicleOperationalStatus.Decommissioned).Sum(r => r.Count),
             rows.Where(r => !r.IsActive).Sum(r => r.Count));
     }
 
@@ -101,10 +101,10 @@ public class FleetDashboardService : IFleetDashboardService
 
         return new FleetAssetCountsDto(
             rows.Sum(r => r.Count),
-            rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.Active).Sum(r => r.Count),
+            rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.Available).Sum(r => r.Count),
+            rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.InUse).Sum(r => r.Count),
             rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.InMaintenance).Sum(r => r.Count),
             rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.OutOfService).Sum(r => r.Count),
-            rows.Where(r => r.OperationalStatus == TrailerOperationalStatus.Decommissioned).Sum(r => r.Count),
             rows.Where(r => !r.IsActive).Sum(r => r.Count));
     }
 }

@@ -1,7 +1,7 @@
 export type FuelType = 'Diesel' | 'Petrol' | 'Electric' | 'Hybrid' | 'Lng' | 'Cng' | 'Hydrogen' | 'Other'
 export type EmissionClass = 'Euro3' | 'Euro4' | 'Euro5' | 'Euro6' | 'Electric' | 'Other'
 export type VehicleOwnershipType = 'Owned' | 'Rented' | 'Leased'
-export type VehicleOperationalStatus = 'Active' | 'InMaintenance' | 'OutOfService' | 'Decommissioned'
+export type VehicleOperationalStatus = 'Available' | 'InUse' | 'InMaintenance' | 'OutOfService'
 
 export const FUEL_TYPE_LABELS: Record<FuelType, string> = {
   Diesel: 'Diesel',
@@ -29,11 +29,20 @@ export const OWNERSHIP_TYPE_LABELS: Record<VehicleOwnershipType, string> = {
   Leased: 'Lease',
 }
 
+// Deliberately no label "Actief" here: the administrative active flag owns that word,
+// so the two states can never render as duplicate badges.
 export const OPERATIONAL_STATUS_LABELS: Record<VehicleOperationalStatus, string> = {
-  Active: 'Actief',
+  Available: 'Beschikbaar',
+  InUse: 'In gebruik',
   InMaintenance: 'In onderhoud',
   OutOfService: 'Buiten dienst',
-  Decommissioned: 'Afgevoerd',
+}
+
+export const OPERATIONAL_STATUS_TONES: Record<VehicleOperationalStatus, 'success' | 'info' | 'warning' | 'danger'> = {
+  Available: 'success',
+  InUse: 'info',
+  InMaintenance: 'warning',
+  OutOfService: 'danger',
 }
 
 export interface VehicleListItem {
@@ -81,6 +90,7 @@ export interface VehicleDetail {
   adrSuitable: boolean
   ownershipType: VehicleOwnershipType
   operationalStatus: VehicleOperationalStatus
+  statusReason: string | null
   isActive: boolean
   fixedDriverId: string | null
   fixedDriverName: string | null

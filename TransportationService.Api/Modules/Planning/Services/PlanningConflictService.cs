@@ -73,10 +73,16 @@ public class PlanningConflictService : IPlanningConflictService
                 .FirstOrDefaultAsync(v => v.Id == vehicleId && v.TenantId == tenantId, cancellationToken);
             if (vehicle is not null)
             {
-                if (vehicle.OperationalStatus != VehicleOperationalStatus.Active)
+                if (vehicle.OperationalStatus is VehicleOperationalStatus.InMaintenance or VehicleOperationalStatus.OutOfService)
                 {
                     conflicts.Add(new(PlanningConflictCode.VehicleNotOperational, true,
                         $"Voertuig {vehicle.InternalNumber} is niet inzetbaar ({vehicle.OperationalStatus})."));
+                }
+                else if (vehicle.OperationalStatus == VehicleOperationalStatus.InUse)
+                {
+                    // Warning only: "in gebruik" may simply reflect this very trip's planning.
+                    conflicts.Add(new(PlanningConflictCode.VehicleNotOperational, false,
+                        $"Voertuig {vehicle.InternalNumber} staat gemarkeerd als in gebruik."));
                 }
 
                 if (!vehicle.IsActive)
@@ -114,10 +120,15 @@ public class PlanningConflictService : IPlanningConflictService
                 .FirstOrDefaultAsync(t => t.Id == trailerId && t.TenantId == tenantId, cancellationToken);
             if (trailer is not null)
             {
-                if (trailer.OperationalStatus != TrailerOperationalStatus.Active)
+                if (trailer.OperationalStatus is TrailerOperationalStatus.InMaintenance or TrailerOperationalStatus.OutOfService)
                 {
                     conflicts.Add(new(PlanningConflictCode.TrailerNotOperational, true,
                         $"Oplegger {trailer.InternalNumber} is niet inzetbaar ({trailer.OperationalStatus})."));
+                }
+                else if (trailer.OperationalStatus == TrailerOperationalStatus.InUse)
+                {
+                    conflicts.Add(new(PlanningConflictCode.TrailerNotOperational, false,
+                        $"Oplegger {trailer.InternalNumber} staat gemarkeerd als in gebruik."));
                 }
 
                 if (!trailer.IsActive)

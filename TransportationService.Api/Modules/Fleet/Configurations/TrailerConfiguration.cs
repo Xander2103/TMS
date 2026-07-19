@@ -17,6 +17,7 @@ public class TrailerConfiguration : IEntityTypeConfiguration<Trailer>
         builder.Property(t => t.Brand).HasMaxLength(100);
         builder.Property(t => t.Model).HasMaxLength(100);
         builder.Property(t => t.Notes).HasMaxLength(2000);
+        builder.Property(t => t.StatusReason).HasMaxLength(500);
 
         builder.Property(t => t.OwnershipType).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.OperationalStatus).HasConversion<string>().HasMaxLength(20);

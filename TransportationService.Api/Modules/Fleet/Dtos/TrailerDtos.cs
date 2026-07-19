@@ -34,6 +34,7 @@ public record TrailerDetailDto(
     bool AdrSuitable,
     VehicleOwnershipType OwnershipType,
     TrailerOperationalStatus OperationalStatus,
+    string? StatusReason,
     bool IsActive,
     string? Notes);
 
@@ -73,7 +74,8 @@ public record UpdateTrailerRequest(
     VehicleOwnershipType OwnershipType,
     TrailerOperationalStatus OperationalStatus,
     bool IsActive,
-    string? Notes);
+    string? Notes,
+    string? StatusReason = null);
 
 public enum TrailerOperationOutcome
 {

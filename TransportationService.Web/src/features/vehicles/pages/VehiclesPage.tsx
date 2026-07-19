@@ -10,14 +10,9 @@ import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useAuth } from '../../auth/authContextValue'
 import { searchVehicles } from '../api/vehiclesApi'
-import { OPERATIONAL_STATUS_LABELS, type VehicleListItem } from '../types'
+import { OPERATIONAL_STATUS_LABELS, OPERATIONAL_STATUS_TONES, type VehicleListItem } from '../types'
 
-const STATUS_TONE: Record<VehicleListItem['operationalStatus'], BadgeTone> = {
-  Active: 'success',
-  InMaintenance: 'warning',
-  OutOfService: 'danger',
-  Decommissioned: 'neutral',
-}
+const STATUS_TONE: Record<VehicleListItem['operationalStatus'], BadgeTone> = OPERATIONAL_STATUS_TONES
 
 export function VehiclesPage() {
   const navigate = useNavigate()

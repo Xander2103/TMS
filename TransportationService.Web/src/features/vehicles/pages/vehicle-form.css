@@ -106,3 +106,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+.vehicle-form-equipment {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}

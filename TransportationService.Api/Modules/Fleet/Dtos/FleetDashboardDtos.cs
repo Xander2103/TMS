@@ -3,10 +3,10 @@ namespace TransportationService.Api.Modules.Fleet.Dtos;
 /// <summary>Vehicle or trailer population broken down by operational status; Inactive is orthogonal (IsActive flag).</summary>
 public record FleetAssetCountsDto(
     int Total,
-    int Active,
+    int Available,
+    int InUse,
     int InMaintenance,
     int OutOfService,
-    int Decommissioned,
     int Inactive);
 
 /// <summary>

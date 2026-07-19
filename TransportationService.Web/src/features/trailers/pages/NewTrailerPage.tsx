@@ -31,7 +31,8 @@ const EMPTY: TrailerInput = {
   hasRefrigeration: false,
   adrSuitable: false,
   ownershipType: 'Owned',
-  operationalStatus: 'Active',
+  operationalStatus: 'Available',
+  statusReason: null,
   isActive: true,
   notes: null,
 }

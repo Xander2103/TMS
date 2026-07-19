@@ -10,14 +10,9 @@ import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useAuth } from '../../auth/authContextValue'
 import { searchTrailers } from '../api/trailersApi'
-import { TRAILER_STATUS_LABELS, type TrailerListItem } from '../types'
+import { TRAILER_STATUS_LABELS, TRAILER_STATUS_TONES, type TrailerListItem } from '../types'
 
-const STATUS_TONE: Record<TrailerListItem['operationalStatus'], BadgeTone> = {
-  Active: 'success',
-  InMaintenance: 'warning',
-  OutOfService: 'danger',
-  Decommissioned: 'neutral',
-}
+const STATUS_TONE: Record<TrailerListItem['operationalStatus'], BadgeTone> = TRAILER_STATUS_TONES
 
 export function TrailersPage() {
   const navigate = useNavigate()

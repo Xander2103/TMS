@@ -18,6 +18,7 @@ public class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         builder.Property(v => v.Brand).HasMaxLength(100);
         builder.Property(v => v.Model).HasMaxLength(100);
         builder.Property(v => v.Notes).HasMaxLength(2000);
+        builder.Property(v => v.StatusReason).HasMaxLength(500);
 
         builder.Property(v => v.FuelType).HasConversion<string>().HasMaxLength(20);
         builder.Property(v => v.EmissionClass).HasConversion<string>().HasMaxLength(20);

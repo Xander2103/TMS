@@ -1,5 +1,5 @@
 export type TrailerOwnershipType = 'Owned' | 'Rented' | 'Leased'
-export type TrailerOperationalStatus = 'Active' | 'InMaintenance' | 'OutOfService' | 'Decommissioned'
+export type TrailerOperationalStatus = 'Available' | 'InUse' | 'InMaintenance' | 'OutOfService'
 
 export const TRAILER_OWNERSHIP_LABELS: Record<TrailerOwnershipType, string> = {
   Owned: 'Eigendom',
@@ -7,11 +7,19 @@ export const TRAILER_OWNERSHIP_LABELS: Record<TrailerOwnershipType, string> = {
   Leased: 'Lease',
 }
 
+// Deliberately no label "Actief" here — see vehicles/types.ts.
 export const TRAILER_STATUS_LABELS: Record<TrailerOperationalStatus, string> = {
-  Active: 'Actief',
+  Available: 'Beschikbaar',
+  InUse: 'In gebruik',
   InMaintenance: 'In onderhoud',
   OutOfService: 'Buiten dienst',
-  Decommissioned: 'Afgevoerd',
+}
+
+export const TRAILER_STATUS_TONES: Record<TrailerOperationalStatus, 'success' | 'info' | 'warning' | 'danger'> = {
+  Available: 'success',
+  InUse: 'info',
+  InMaintenance: 'warning',
+  OutOfService: 'danger',
 }
 
 export interface TrailerListItem {
@@ -53,6 +61,7 @@ export interface TrailerDetail {
   adrSuitable: boolean
   ownershipType: TrailerOwnershipType
   operationalStatus: TrailerOperationalStatus
+  statusReason: string | null
   isActive: boolean
   notes: string | null
 }
