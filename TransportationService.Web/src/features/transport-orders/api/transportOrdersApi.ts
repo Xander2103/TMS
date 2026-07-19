@@ -1,6 +1,7 @@
 import { apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
 import type {
+  StopExecutionPlanInput,
   TransportOrderDetail,
   TransportOrderInput,
   TransportOrderListItem,
@@ -50,6 +51,17 @@ export function changeTransportOrderStatus(
   return apiClient.postJson<TransportOrderDetail, { status: TransportOrderStatus }>(
     `/api/transport-orders/${id}/status`,
     { status },
+  )
+}
+
+export function updateStopExecutionPlan(
+  orderId: string,
+  stopId: string,
+  input: StopExecutionPlanInput,
+): Promise<TransportOrderDetail> {
+  return apiClient.putJson<TransportOrderDetail, StopExecutionPlanInput>(
+    `/api/transport-orders/${orderId}/stops/${stopId}/execution-plan`,
+    input,
   )
 }
 

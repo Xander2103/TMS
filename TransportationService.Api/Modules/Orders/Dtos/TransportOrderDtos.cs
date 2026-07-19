@@ -31,7 +31,18 @@ public record TransportOrderStopDto(
     DateTime? PlannedFrom,
     DateTime? PlannedTo,
     string? Reference,
-    string? Instructions);
+    string? Instructions,
+    DateTime? RequestedFrom = null,
+    DateTime? RequestedTo = null,
+    DateTime? ConfirmedFrom = null,
+    DateTime? ConfirmedTo = null,
+    DateTime? EarliestAllowed = null,
+    DateTime? LatestAllowed = null,
+    bool AppointmentRequired = false,
+    string? AppointmentReference = null,
+    string? AccessInstructions = null,
+    string? LoadingInstructions = null,
+    string? UnloadingInstructions = null);
 
 public record TransportOrderDetailDto(
     Guid Id,
@@ -71,7 +82,34 @@ public record TransportOrderStopInput(
     DateTime? PlannedFrom,
     DateTime? PlannedTo,
     string? Reference,
-    string? Instructions);
+    string? Instructions,
+    DateTime? RequestedFrom = null,
+    DateTime? RequestedTo = null,
+    DateTime? ConfirmedFrom = null,
+    DateTime? ConfirmedTo = null,
+    DateTime? EarliestAllowed = null,
+    DateTime? LatestAllowed = null,
+    bool AppointmentRequired = false,
+    string? AppointmentReference = null,
+    string? AccessInstructions = null,
+    string? LoadingInstructions = null,
+    string? UnloadingInstructions = null);
+
+/// <summary>
+/// Dispatcher-side execution planning of one stop: the confirmed window, hard bounds,
+/// appointment and instructions. Editable while the order is not in a final status, so the
+/// window can still be confirmed after planning locked the rest of the order.
+/// </summary>
+public record UpdateStopExecutionPlanRequest(
+    DateTime? ConfirmedFrom,
+    DateTime? ConfirmedTo,
+    DateTime? EarliestAllowed,
+    DateTime? LatestAllowed,
+    bool AppointmentRequired,
+    string? AppointmentReference,
+    string? AccessInstructions,
+    string? LoadingInstructions,
+    string? UnloadingInstructions);
 
 public record CreateTransportOrderRequest(
     Guid CustomerId,

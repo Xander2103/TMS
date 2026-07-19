@@ -328,6 +328,72 @@ public class TransportOrderService : ITransportOrderService
         return page.Items;
     }
 
+    /// <summary>Final statuses in which the execution plan of a stop can no longer change.</summary>
+    private static readonly TransportOrderStatus[] ExecutionPlanLockedStatuses =
+        [TransportOrderStatus.Completed, TransportOrderStatus.Invoiced, TransportOrderStatus.Cancelled];
+
+    public async Task<TransportOrderOperationResult> UpdateStopExecutionPlanAsync(
+        Guid orderId, Guid stopId, UpdateStopExecutionPlanRequest request, CancellationToken cancellationToken)
+    {
+        var order = await TenantScoped()
+            .Include(o => o.Stops)
+            .FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        if (ExecutionPlanLockedStatuses.Contains(order.Status))
+        {
+            return TransportOrderOperationResult.InvalidState(
+                $"Bij een opdracht met status '{order.Status}' kan het uitvoeringsplan niet meer worden aangepast.");
+        }
+
+        var stop = order.Stops.FirstOrDefault(s => s.Id == stopId && !s.IsDeleted);
+        if (stop is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        if (WindowError(request.ConfirmedFrom, request.ConfirmedTo) is { } windowError)
+        {
+            return TransportOrderOperationResult.Invalid(windowError);
+        }
+
+        if (request.EarliestAllowed is { } earliest && request.LatestAllowed is { } latest && latest < earliest)
+        {
+            return TransportOrderOperationResult.Invalid(
+                "Het uiterste tijdstip moet na het vroegst toegelaten tijdstip liggen.");
+        }
+
+        var before = new
+        {
+            stop.ConfirmedFrom, stop.ConfirmedTo, stop.EarliestAllowed, stop.LatestAllowed,
+            stop.AppointmentRequired, stop.AppointmentReference,
+        };
+
+        stop.ConfirmedFrom = request.ConfirmedFrom;
+        stop.ConfirmedTo = request.ConfirmedTo;
+        stop.EarliestAllowed = request.EarliestAllowed;
+        stop.LatestAllowed = request.LatestAllowed;
+        stop.AppointmentRequired = request.AppointmentRequired;
+        stop.AppointmentReference = Trim(request.AppointmentReference);
+        stop.AccessInstructions = Trim(request.AccessInstructions);
+        stop.LoadingInstructions = Trim(request.LoadingInstructions);
+        stop.UnloadingInstructions = Trim(request.UnloadingInstructions);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, order.Id.ToString(), "StopExecutionPlanUpdated", before,
+            new
+            {
+                StopId = stop.Id, stop.ConfirmedFrom, stop.ConfirmedTo, stop.EarliestAllowed, stop.LatestAllowed,
+                stop.AppointmentRequired, stop.AppointmentReference,
+            }, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
     public async Task<TransportOrderOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var order = await TenantScoped()
@@ -394,10 +460,17 @@ public class TransportOrderService : ITransportOrderService
                     "Elke stop heeft een locatie of minstens een plaatsnaam nodig.");
             }
 
-            if (stop.PlannedFrom is { } from && stop.PlannedTo is { } to && to < from)
+            if ((WindowError(stop.PlannedFrom, stop.PlannedTo)
+                 ?? WindowError(stop.RequestedFrom, stop.RequestedTo)
+                 ?? WindowError(stop.ConfirmedFrom, stop.ConfirmedTo)) is { } windowError)
+            {
+                return TransportOrderOperationResult.Invalid(windowError);
+            }
+
+            if (stop.EarliestAllowed is { } earliest && stop.LatestAllowed is { } latest && latest < earliest)
             {
                 return TransportOrderOperationResult.Invalid(
-                    "Het einde van een tijdvenster moet na het begin liggen.");
+                    "Het uiterste tijdstip moet na het vroegst toegelaten tijdstip liggen.");
             }
         }
 
@@ -415,6 +488,11 @@ public class TransportOrderService : ITransportOrderService
 
         return null;
     }
+
+    private static string? WindowError(DateTime? from, DateTime? to) =>
+        from is { } f && to is { } t && t < f
+            ? "Het einde van een tijdvenster moet na het begin liggen."
+            : null;
 
     /// <summary>Rules an order must satisfy to be (or stay) confirmed. Returns null when satisfied.</summary>
     private static string? ConfirmationError(IReadOnlyList<TransportOrderStopInput> stops)
@@ -442,8 +520,19 @@ public class TransportOrderService : ITransportOrderService
             CountryCode = Trim(input.CountryCode)?.ToUpperInvariant(),
             PlannedFrom = input.PlannedFrom,
             PlannedTo = input.PlannedTo,
+            RequestedFrom = input.RequestedFrom,
+            RequestedTo = input.RequestedTo,
+            ConfirmedFrom = input.ConfirmedFrom,
+            ConfirmedTo = input.ConfirmedTo,
+            EarliestAllowed = input.EarliestAllowed,
+            LatestAllowed = input.LatestAllowed,
+            AppointmentRequired = input.AppointmentRequired,
+            AppointmentReference = Trim(input.AppointmentReference),
             Reference = Trim(input.Reference),
             Instructions = Trim(input.Instructions),
+            AccessInstructions = Trim(input.AccessInstructions),
+            LoadingInstructions = Trim(input.LoadingInstructions),
+            UnloadingInstructions = Trim(input.UnloadingInstructions),
         }).ToList();
 
     private async Task<TransportOrderDetailDto> MapDetailAsync(TransportOrder order, CancellationToken cancellationToken)
@@ -478,7 +567,11 @@ public class TransportOrderService : ITransportOrderService
                     s.PostalCode ?? location?.PostalCode,
                     s.City ?? location?.City,
                     s.CountryCode ?? location?.CountryCode,
-                    s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions);
+                    s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions,
+                    s.RequestedFrom, s.RequestedTo, s.ConfirmedFrom, s.ConfirmedTo,
+                    s.EarliestAllowed, s.LatestAllowed,
+                    s.AppointmentRequired, s.AppointmentReference,
+                    s.AccessInstructions, s.LoadingInstructions, s.UnloadingInstructions);
             })
             .ToList();
 

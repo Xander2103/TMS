@@ -101,7 +101,7 @@ public class TripExecutionServiceTests
 
         Assert.Equal(ExecutionOutcome.Success, result.Outcome);
         Assert.Equal(2, result.Execution!.TotalCount);
-        Assert.All(result.Execution.Stops, s => Assert.Equal(StopExecutionStatus.Pending, s.Status));
+        Assert.All(result.Execution.Stops, s => Assert.Equal(StopExecutionStatus.Planned, s.Status));
         Assert.Equal(StopType.Loading, result.Execution.Stops[0].StopType);
     }
 

@@ -35,6 +35,7 @@ public class TransportationDbContext : DbContext
     public DbSet<Trip> Trips => Set<Trip>();
     public DbSet<TripOrder> TripOrders => Set<TripOrder>();
     public DbSet<StopExecution> StopExecutions => Set<StopExecution>();
+    public DbSet<StopStatusHistory> StopStatusHistories => Set<StopStatusHistory>();
 
     // Invoicing (Phase 8)
     public DbSet<Invoice> Invoices => Set<Invoice>();

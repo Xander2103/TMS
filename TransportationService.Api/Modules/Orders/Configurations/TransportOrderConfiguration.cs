@@ -60,6 +60,10 @@ public class TransportOrderStopConfiguration : IEntityTypeConfiguration<Transpor
         builder.Property(s => s.CountryCode).HasMaxLength(2);
         builder.Property(s => s.Reference).HasMaxLength(100);
         builder.Property(s => s.Instructions).HasMaxLength(2000);
+        builder.Property(s => s.AppointmentReference).HasMaxLength(100);
+        builder.Property(s => s.AccessInstructions).HasMaxLength(2000);
+        builder.Property(s => s.LoadingInstructions).HasMaxLength(2000);
+        builder.Property(s => s.UnloadingInstructions).HasMaxLength(2000);
 
         builder.HasIndex(s => new { s.TransportOrderId, s.Sequence });
 

@@ -29,6 +29,14 @@ public interface ITransportOrderService
         string? search, TransportOrderStatus? status, Guid? customerId,
         DateOnly? fromDate, DateOnly? toDate, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Updates the execution plan (confirmed window, bounds, appointment, instructions) of one
+    /// stop. Unlike <see cref="UpdateAsync"/> this stays possible while the order is Planned or
+    /// InProgress; only final statuses refuse it.
+    /// </summary>
+    Task<TransportOrderOperationResult> UpdateStopExecutionPlanAsync(
+        Guid orderId, Guid stopId, UpdateStopExecutionPlanRequest request, CancellationToken cancellationToken);
+
     /// <summary>Only Draft and Cancelled orders can be deleted (soft).</summary>
     Task<TransportOrderOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

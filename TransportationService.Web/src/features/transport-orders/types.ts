@@ -68,8 +68,19 @@ export interface TransportOrderStop {
   countryCode: string | null
   plannedFrom: string | null
   plannedTo: string | null
+  requestedFrom: string | null
+  requestedTo: string | null
+  confirmedFrom: string | null
+  confirmedTo: string | null
+  earliestAllowed: string | null
+  latestAllowed: string | null
+  appointmentRequired: boolean
+  appointmentReference: string | null
   reference: string | null
   instructions: string | null
+  accessInstructions: string | null
+  loadingInstructions: string | null
+  unloadingInstructions: string | null
 }
 
 export interface TransportOrderDetail {
@@ -106,8 +117,32 @@ export interface StopInput {
   countryCode: string | null
   plannedFrom: string | null
   plannedTo: string | null
+  requestedFrom: string | null
+  requestedTo: string | null
+  confirmedFrom: string | null
+  confirmedTo: string | null
+  earliestAllowed: string | null
+  latestAllowed: string | null
+  appointmentRequired: boolean
+  appointmentReference: string | null
   reference: string | null
   instructions: string | null
+  accessInstructions: string | null
+  loadingInstructions: string | null
+  unloadingInstructions: string | null
+}
+
+/** Dispatcher-side execution planning of one stop (separate endpoint, editable after planning). */
+export interface StopExecutionPlanInput {
+  confirmedFrom: string | null
+  confirmedTo: string | null
+  earliestAllowed: string | null
+  latestAllowed: string | null
+  appointmentRequired: boolean
+  appointmentReference: string | null
+  accessInstructions: string | null
+  loadingInstructions: string | null
+  unloadingInstructions: string | null
 }
 
 export interface TransportOrderInput {

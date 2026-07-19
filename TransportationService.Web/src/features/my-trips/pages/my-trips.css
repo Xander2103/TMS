@@ -67,13 +67,19 @@
   gap: 4px;
 }
 
-.mt-stop-completed {
+.mt-stop-completed,
+.mt-stop-partiallycompleted,
+.mt-stop-failed {
   opacity: 0.75;
 }
 
 .mt-stop-skipped {
   opacity: 0.75;
   border-style: dashed;
+}
+
+.mt-stop-failed {
+  border-color: var(--danger-border, var(--border));
 }
 
 .mt-stop-head {
@@ -104,10 +110,88 @@
   padding: 6px 10px;
 }
 
+.mt-stop-windows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 4px 0;
+  font-size: 14px;
+}
+
+.mt-stop-windows > div {
+  display: flex;
+  gap: 6px;
+}
+
+.mt-stop-windows dt {
+  color: var(--text);
+}
+
+.mt-stop-windows dd {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.mt-window-confirmed dd {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .mt-stop-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
+}
+
+/* Large one-hand tap target for the next logical action (mobile-first). */
+.mt-primary-action {
+  min-height: 48px;
+  padding-inline: 22px;
+  font-size: 16px;
+}
+
+.mt-history-toggle {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.mt-history {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.mt-history-time {
+  font-family: var(--mono);
+  color: var(--text-h);
+}
+
+@media (max-width: 640px) {
+  .mt-stop-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mt-stop-actions button {
+    min-height: 48px;
+  }
 }
 
 .mt-form {

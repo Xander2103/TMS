@@ -371,4 +371,108 @@ public class TransportOrderServiceTests
         var draftOnly = await h.Sut.SearchAsync(null, TransportOrderStatus.Completed, null, null, null, PageRequest.Of(1, 25), CancellationToken.None);
         Assert.Equal(0, draftOnly.TotalCount);
     }
+
+    [Fact]
+    public async Task Create_PersistsWindowAppointmentAndInstructionFields()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var stop = new TransportOrderStopInput(
+            StopType.Loading, h.LocationId, null, null, null, null, null,
+            PlannedFrom: new DateTime(2026, 7, 21, 8, 0, 0, DateTimeKind.Utc),
+            PlannedTo: new DateTime(2026, 7, 21, 12, 0, 0, DateTimeKind.Utc),
+            Reference: "DOSSIER-1", Instructions: "Melden bij portier",
+            RequestedFrom: new DateTime(2026, 7, 21, 9, 0, 0, DateTimeKind.Utc),
+            RequestedTo: new DateTime(2026, 7, 21, 11, 0, 0, DateTimeKind.Utc),
+            EarliestAllowed: new DateTime(2026, 7, 21, 6, 0, 0, DateTimeKind.Utc),
+            LatestAllowed: new DateTime(2026, 7, 21, 14, 0, 0, DateTimeKind.Utc),
+            AppointmentRequired: true, AppointmentReference: "SLOT-9",
+            AccessInstructions: "Alfapass", LoadingInstructions: "Dok 3", UnloadingInstructions: null);
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId, stop, Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        var dto = result.Order!.Stops[0];
+        Assert.Equal(new DateTime(2026, 7, 21, 9, 0, 0, DateTimeKind.Utc), dto.RequestedFrom);
+        Assert.Equal(new DateTime(2026, 7, 21, 14, 0, 0, DateTimeKind.Utc), dto.LatestAllowed);
+        Assert.True(dto.AppointmentRequired);
+        Assert.Equal("SLOT-9", dto.AppointmentReference);
+        Assert.Equal("Alfapass", dto.AccessInstructions);
+        Assert.Equal("Dok 3", dto.LoadingInstructions);
+    }
+
+    [Fact]
+    public async Task Create_InvalidWindowPairs_FailValidation()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var requestedReversed = new TransportOrderStopInput(
+            StopType.Loading, h.LocationId, null, null, null, null, null, null, null, null, null,
+            RequestedFrom: new DateTime(2026, 7, 21, 12, 0, 0, DateTimeKind.Utc),
+            RequestedTo: new DateTime(2026, 7, 21, 8, 0, 0, DateTimeKind.Utc));
+        var earliestAfterLatest = new TransportOrderStopInput(
+            StopType.Loading, h.LocationId, null, null, null, null, null, null, null, null, null,
+            EarliestAllowed: new DateTime(2026, 7, 21, 16, 0, 0, DateTimeKind.Utc),
+            LatestAllowed: new DateTime(2026, 7, 21, 6, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed,
+            (await h.Sut.CreateAsync(Request(h.CustomerId, requestedReversed), CancellationToken.None)).Outcome);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed,
+            (await h.Sut.CreateAsync(Request(h.CustomerId, earliestAfterLatest), CancellationToken.None)).Outcome);
+    }
+
+    [Fact]
+    public async Task UpdateStopExecutionPlan_ConfirmsWindow_ValidatesAndAudits()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var orderId = order.Order!.Id;
+        var stopId = order.Order.Stops[0].Id;
+
+        // The confirmed window can be set even after the order left the editable statuses.
+        await h.Sut.ChangeStatusAsync(orderId, TransportOrderStatus.Confirmed, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(orderId, TransportOrderStatus.InProgress, CancellationToken.None);
+
+        var reversed = await h.Sut.UpdateStopExecutionPlanAsync(orderId, stopId, new UpdateStopExecutionPlanRequest(
+            new DateTime(2026, 7, 21, 12, 0, 0, DateTimeKind.Utc), new DateTime(2026, 7, 21, 8, 0, 0, DateTimeKind.Utc),
+            null, null, false, null, null, null, null), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, reversed.Outcome);
+
+        var result = await h.Sut.UpdateStopExecutionPlanAsync(orderId, stopId, new UpdateStopExecutionPlanRequest(
+            new DateTime(2026, 7, 21, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 7, 21, 10, 0, 0, DateTimeKind.Utc),
+            null, null, true, "SLOT-42", "Poort B", null, null), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        var dto = result.Order!.Stops.Single(s => s.Id == stopId);
+        Assert.Equal(new DateTime(2026, 7, 21, 8, 0, 0, DateTimeKind.Utc), dto.ConfirmedFrom);
+        Assert.Equal("SLOT-42", dto.AppointmentReference);
+        Assert.True(dto.AppointmentRequired);
+        Assert.Equal("Poort B", dto.AccessInstructions);
+
+        Assert.Contains(h.Db.Context.AuditLogs,
+            a => a.EntityType == "TransportOrder" && a.Action == "StopExecutionPlanUpdated");
+
+        var unknownStop = await h.Sut.UpdateStopExecutionPlanAsync(orderId, Guid.NewGuid(),
+            new UpdateStopExecutionPlanRequest(null, null, null, null, false, null, null, null, null), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.NotFound, unknownStop.Outcome);
+    }
+
+    [Fact]
+    public async Task UpdateStopExecutionPlan_OnCancelledOrder_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        await h.Sut.CancelAsync(order.Order!.Id, "Geannuleerd door klant", CancellationToken.None);
+
+        var result = await h.Sut.UpdateStopExecutionPlanAsync(order.Order.Id, order.Order.Stops[0].Id,
+            new UpdateStopExecutionPlanRequest(null, null, null, null, false, null, null, null, null), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
+    }
 }

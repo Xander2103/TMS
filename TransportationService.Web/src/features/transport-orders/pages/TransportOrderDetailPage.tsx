@@ -20,6 +20,7 @@ import {
   updateTransportOrder,
 } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
+import { StopExecutionPlanDialog } from '../components/StopExecutionPlanDialog'
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
@@ -27,6 +28,7 @@ import {
   STOP_TYPE_LABELS,
   type TransportOrderDetail,
   type TransportOrderStatus,
+  type TransportOrderStop,
 } from '../types'
 import './transport-orders.css'
 
@@ -51,6 +53,7 @@ export function TransportOrderDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+  const [planStop, setPlanStop] = useState<TransportOrderStop | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -118,6 +121,9 @@ export function TransportOrderDetailPage() {
     (order.status === 'Draft' || order.status === 'Confirmed') && hasPermission('orders.edit')
   const deletable =
     (order.status === 'Draft' || order.status === 'Cancelled') && hasPermission('orders.delete')
+  const planEditable =
+    !['Completed', 'Invoiced', 'Cancelled'].includes(order.status) &&
+    hasAnyPermission(['orders.edit', 'orders.manage'])
 
   return (
     <div>
@@ -215,8 +221,12 @@ export function TransportOrderDetailPage() {
                   <th>Type</th>
                   <th>Locatie</th>
                   <th>Adres</th>
-                  <th>Tijdvenster</th>
+                  <th>Gepland</th>
+                  <th>Gevraagd</th>
+                  <th>Bevestigd</th>
+                  <th>Afspraak</th>
                   <th>Referentie</th>
+                  {planEditable && <th aria-label="Acties" />}
                 </tr>
               </thead>
               <tbody>
@@ -232,7 +242,23 @@ export function TransportOrderDetailPage() {
                     </td>
                     <td>{[stop.address, [stop.postalCode, stop.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '—'}</td>
                     <td>{formatWindow(stop.plannedFrom, stop.plannedTo)}</td>
+                    <td>{formatWindow(stop.requestedFrom, stop.requestedTo)}</td>
+                    <td>{formatWindow(stop.confirmedFrom, stop.confirmedTo)}</td>
+                    <td>
+                      {stop.appointmentRequired ? (
+                        <Badge tone="warning">Afspraak{stop.appointmentReference ? ` · ${stop.appointmentReference}` : ''}</Badge>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>{stop.reference ?? '—'}</td>
+                    {planEditable && (
+                      <td>
+                        <Button variant="ghost" onClick={() => setPlanStop(stop)} disabled={busy || editing}>
+                          Venster
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -281,6 +307,18 @@ export function TransportOrderDetailPage() {
             />
           </FormField>
         </Modal>
+      )}
+
+      {planStop && (
+        <StopExecutionPlanDialog
+          orderId={order.id}
+          stop={planStop}
+          onClose={() => setPlanStop(null)}
+          onSaved={(updated) => {
+            setOrder(updated)
+            setPlanStop(null)
+          }}
+        />
       )}
 
       {confirmDelete && (

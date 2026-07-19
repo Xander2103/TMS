@@ -94,7 +94,7 @@ public class TripExecutionService : ITripExecutionService
                 vehicle?.InternalNumber, vehicle?.LicensePlate, trailerNumber,
                 trip.Orders.Count(o => !o.IsDeleted),
                 stops.Count,
-                stops.Count(s => s.Status is StopExecutionStatus.Completed or StopExecutionStatus.Skipped)));
+                stops.Count(s => StopStatusMachine.IsTerminal(s.Status))));
         }
 
         return result;
@@ -112,57 +112,75 @@ public class TripExecutionService : ITripExecutionService
         return ExecutionResult.Success(await MapExecutionAsync(trip!, cancellationToken));
     }
 
+    public Task<ExecutionResult> TransitionAsync(
+        Guid tripId, Guid stopId, TransitionStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken) =>
+        TransitionCoreAsync(tripId, stopId, request, restrictToOwnDriver, beforeSave: null, cancellationToken);
+
     public Task<ExecutionResult> ArriveAsync(
         Guid tripId, Guid stopId, bool restrictToOwnDriver, CancellationToken cancellationToken) =>
-        MutateAsync(tripId, stopId, restrictToOwnDriver, (execution, now) =>
-        {
-            if (execution.Status is StopExecutionStatus.Completed or StopExecutionStatus.Skipped)
-            {
-                return "Deze stop is al afgehandeld.";
-            }
-
-            execution.Status = StopExecutionStatus.Arrived;
-            execution.ArrivedAt ??= now;
-            return null;
-        }, "Arrived", cancellationToken);
+        TransitionCoreAsync(tripId, stopId, new TransitionStopRequest(StopExecutionStatus.Arrived),
+            restrictToOwnDriver, beforeSave: null, cancellationToken);
 
     public Task<ExecutionResult> CompleteAsync(
         Guid tripId, Guid stopId, CompleteStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken) =>
-        MutateAsync(tripId, stopId, restrictToOwnDriver, (execution, now) =>
-        {
-            if (execution.Status == StopExecutionStatus.Skipped)
-            {
-                return "Een overgeslagen stop kan niet meer worden afgerond.";
-            }
-
-            execution.Status = StopExecutionStatus.Completed;
-            execution.ArrivedAt ??= now;
-            execution.CompletedAt = now;
-            execution.PodSignedBy = Trim(request.PodSignedBy);
-            execution.Remarks = Trim(request.Remarks);
-            return null;
-        }, "Completed", cancellationToken);
+        TransitionCoreAsync(tripId, stopId,
+            new TransitionStopRequest(StopExecutionStatus.Completed, Reason: request.Reason, Notes: request.Remarks),
+            restrictToOwnDriver,
+            beforeSave: execution => execution.PodSignedBy = Trim(request.PodSignedBy),
+            cancellationToken);
 
     public Task<ExecutionResult> SkipAsync(
         Guid tripId, Guid stopId, SkipStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken) =>
-        string.IsNullOrWhiteSpace(request.Remarks)
-            ? Task.FromResult(ExecutionResult.Invalid("Een reden is verplicht bij het overslaan van een stop."))
-            : MutateAsync(tripId, stopId, restrictToOwnDriver, (execution, now) =>
+        TransitionCoreAsync(tripId, stopId,
+            new TransitionStopRequest(StopExecutionStatus.Skipped, Reason: request.Remarks),
+            restrictToOwnDriver, beforeSave: null, cancellationToken);
+
+    public async Task<StopHistoryResult> GetStopHistoryAsync(
+        Guid tripId, Guid stopId, bool restrictToOwnDriver, CancellationToken cancellationToken)
+    {
+        var (trip, guard) = await LoadGuardedAsync(tripId, restrictToOwnDriver, cancellationToken);
+        if (guard is not null)
+        {
+            return guard.Outcome == ExecutionOutcome.NotYourTrip ? StopHistoryResult.NotYourTrip : StopHistoryResult.NotFound;
+        }
+
+        if (!await StopBelongsToTripAsync(trip!, stopId, cancellationToken))
+        {
+            return StopHistoryResult.NotFound;
+        }
+
+        var executionId = await _dbContext.StopExecutions.AsNoTracking()
+            .Where(e => e.TripId == tripId && e.TransportOrderStopId == stopId && e.TenantId == _tenantContext.TenantId)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (executionId is null)
+        {
+            return StopHistoryResult.Success([]);
+        }
+
+        // ToStatus only ever moves forward along the machine, so it is a stable tiebreaker for
+        // the same-timestamp rows a bridged transition writes.
+        var rows = await _dbContext.StopStatusHistories.AsNoTracking()
+            .Where(x => x.StopExecutionId == executionId && x.TenantId == _tenantContext.TenantId)
+            .OrderBy(x => x.OccurredAt).ThenBy(x => x.ToStatus)
+            .GroupJoin(_dbContext.Users.AsNoTracking().Where(u => u.TenantId == _tenantContext.TenantId),
+                x => x.UserId, u => u.Id,
+                (x, users) => new { Row = x, Users = users })
+            .SelectMany(x => x.Users.DefaultIfEmpty(), (x, u) => new
             {
-                if (execution.Status == StopExecutionStatus.Completed)
-                {
-                    return "Een afgeronde stop kan niet meer worden overgeslagen.";
-                }
+                x.Row.FromStatus, x.Row.ToStatus, x.Row.OccurredAt, x.Row.Reason,
+                UserName = u == null ? null : u.FirstName + " " + u.LastName,
+            })
+            .ToListAsync(cancellationToken);
 
-                execution.Status = StopExecutionStatus.Skipped;
-                execution.CompletedAt = now;
-                execution.Remarks = request.Remarks.Trim();
-                return null;
-            }, "Skipped", cancellationToken);
+        return StopHistoryResult.Success(rows
+            .Select(x => new StopStatusHistoryDto(x.FromStatus, x.ToStatus, x.OccurredAt, x.UserName, x.Reason))
+            .ToList());
+    }
 
-    private async Task<ExecutionResult> MutateAsync(
-        Guid tripId, Guid stopId, bool restrictToOwnDriver,
-        Func<StopExecution, DateTime, string?> apply, string auditAction, CancellationToken cancellationToken)
+    private async Task<ExecutionResult> TransitionCoreAsync(
+        Guid tripId, Guid stopId, TransitionStopRequest request, bool restrictToOwnDriver,
+        Action<StopExecution>? beforeSave, CancellationToken cancellationToken)
     {
         var (trip, guard) = await LoadGuardedAsync(tripId, restrictToOwnDriver, cancellationToken);
         if (guard is not null)
@@ -175,12 +193,11 @@ public class TripExecutionService : ITripExecutionService
             return ExecutionResult.InvalidState("Stops kunnen alleen worden geregistreerd terwijl de rit onderweg is.");
         }
 
-        // The stop must belong to one of the orders on this trip.
         var orderIds = trip.Orders.Where(o => !o.IsDeleted).Select(o => o.TransportOrderId).ToList();
-        var stopBelongs = await _dbContext.TransportOrderStops.AsNoTracking()
-            .AnyAsync(s => s.Id == stopId && s.TenantId == _tenantContext.TenantId
-                           && orderIds.Contains(s.TransportOrderId), cancellationToken);
-        if (!stopBelongs)
+        var stop = await _dbContext.TransportOrderStops.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == stopId && s.TenantId == _tenantContext.TenantId
+                                      && orderIds.Contains(s.TransportOrderId), cancellationToken);
+        if (stop is null)
         {
             return ExecutionResult.NotFound;
         }
@@ -188,38 +205,133 @@ public class TripExecutionService : ITripExecutionService
         var execution = await _dbContext.StopExecutions
             .FirstOrDefaultAsync(e => e.TripId == tripId && e.TransportOrderStopId == stopId
                                       && e.TenantId == _tenantContext.TenantId, cancellationToken);
-        if (execution is null)
+        var isNewExecution = execution is null;
+        execution ??= new StopExecution
         {
-            execution = new StopExecution
+            Id = Guid.NewGuid(),
+            TenantId = _tenantContext.TenantId,
+            TripId = tripId,
+            TransportOrderStopId = stopId,
+        };
+
+        var from = execution.Status;
+        var target = request.ToStatus;
+
+        if (!StopStatusMachine.IsAllowed(from, target, stop.StopType, out var viaBridge))
+        {
+            var allowed = StopStatusMachine.AllowedTargets(from, stop.StopType);
+            var allowedText = allowed.Count == 0 ? "geen (eindstatus)" : string.Join(", ", allowed);
+            return ExecutionResult.InvalidState(
+                $"Een stop met status '{from}' kan niet naar '{target}'. Toegestaan: {allowedText}.");
+        }
+
+        var reason = Trim(request.Reason);
+
+        if (StopStatusMachine.RequiresReason(target) && reason is null)
+        {
+            var noun = target switch
             {
-                Id = Guid.NewGuid(),
-                TenantId = _tenantContext.TenantId,
-                TripId = tripId,
-                TransportOrderStopId = stopId,
+                StopExecutionStatus.Skipped => "het overslaan van een stop",
+                StopExecutionStatus.Failed => "een mislukte stop",
+                _ => "een gedeeltelijk afgewerkte stop",
             };
-            _dbContext.Add(execution);
+            return ExecutionResult.Invalid($"Een reden is verplicht bij {noun}.");
         }
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
-        var error = apply(execution, now);
-        if (error is not null)
+
+        // Arrival (explicit or bridged) past the latest bound must be explained.
+        if (StopStatusMachine.RecordsArrival(target, viaBridge) && execution.ArrivedAt is null)
         {
-            return ExecutionResult.InvalidState(error);
+            var latestBound = stop.LatestAllowed ?? stop.ConfirmedTo ?? stop.PlannedTo;
+            if (latestBound is { } bound && now > bound)
+            {
+                if (reason is null)
+                {
+                    return ExecutionResult.Invalid(
+                        "Je komt aan na het uiterste tijdstip van deze stop; een reden voor de late aankomst is verplicht.");
+                }
+
+                execution.LateArrivalReason = reason;
+            }
         }
+
+        // Attach only after every validation gate passed, so a rejected call leaves no
+        // phantom Added row behind for the next attempt.
+        if (isNewExecution)
+        {
+            _dbContext.Add(execution);
+        }
+
+        var userId = _currentUserContext.CurrentUserId;
+        var steps = viaBridge
+            ? new[] { (From: from, To: StopExecutionStatus.Arrived), (From: StopExecutionStatus.Arrived, To: target) }
+            : [(From: from, To: target)];
+
+        foreach (var step in steps)
+        {
+            if (step.To == StopExecutionStatus.Arrived)
+            {
+                execution.ArrivedAt ??= now;
+            }
+
+            _dbContext.StopStatusHistories.Add(new StopStatusHistory
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                StopExecutionId = execution.Id,
+                FromStatus = step.From,
+                ToStatus = step.To,
+                OccurredAt = now,
+                UserId = userId,
+                // The reason belongs to the requested step; the bridged arrival step only
+                // carries it when it explains a late arrival.
+                Reason = step.To == target ? reason : execution.LateArrivalReason,
+            });
+        }
+
+        execution.Status = target;
+
+        if (target is StopExecutionStatus.Completed or StopExecutionStatus.PartiallyCompleted or StopExecutionStatus.Failed)
+        {
+            execution.CompletedAt = now;
+            execution.DepartedAt ??= now;
+        }
+
+        if (StopStatusMachine.RequiresReason(target))
+        {
+            execution.StatusReason = reason;
+        }
+
+        if (Trim(request.Notes) is { } notes)
+        {
+            execution.Remarks = notes;
+        }
+
+        beforeSave?.Invoke(execution);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync(EntityType, execution.Id.ToString(), auditAction, null,
-            new { execution.TripId, execution.TransportOrderStopId, execution.Status }, cancellationToken);
+        await _auditService.RecordAsync(EntityType, execution.Id.ToString(), target.ToString(),
+            new { Status = from },
+            new { execution.TripId, execution.TransportOrderStopId, execution.Status, Reason = reason }, cancellationToken);
 
-        // Completing/skipping the final open stop finishes the whole trip (orders follow).
+        // Completing/skipping/failing the final open stop finishes the whole trip (orders follow).
         var stops = await LoadExecutionStopsAsync(trip, cancellationToken);
-        if (stops.Count > 0 && stops.All(s => s.Status is StopExecutionStatus.Completed or StopExecutionStatus.Skipped))
+        if (stops.Count > 0 && stops.All(s => StopStatusMachine.IsTerminal(s.Status)))
         {
             await _tripService.ChangeStatusAsync(trip.Id, TripStatus.Completed, allowOverride: false, cancellationToken);
         }
 
         return await GetExecutionAsync(tripId, restrictToOwnDriver: false, cancellationToken);
+    }
+
+    private async Task<bool> StopBelongsToTripAsync(Trip trip, Guid stopId, CancellationToken cancellationToken)
+    {
+        var orderIds = trip.Orders.Where(o => !o.IsDeleted).Select(o => o.TransportOrderId).ToList();
+        return await _dbContext.TransportOrderStops.AsNoTracking()
+            .AnyAsync(s => s.Id == stopId && s.TenantId == _tenantContext.TenantId
+                           && orderIds.Contains(s.TransportOrderId), cancellationToken);
     }
 
     private async Task<(Trip? Trip, ExecutionResult? Guard)> LoadGuardedAsync(
@@ -248,8 +360,12 @@ public class TripExecutionService : ITripExecutionService
     private sealed record ExecutionStopRow(
         Guid StopId, Guid OrderId, string OrderNumber, string CustomerName, int OrderSequence, int StopSequence,
         StopType StopType, string LocationName, string? Address, string? PostalCode, string? City,
-        DateTime? PlannedFrom, DateTime? PlannedTo, string? Instructions,
-        StopExecutionStatus Status, DateTime? ArrivedAt, DateTime? CompletedAt,
+        DateTime? PlannedFrom, DateTime? PlannedTo, DateTime? RequestedFrom, DateTime? RequestedTo,
+        DateTime? ConfirmedFrom, DateTime? ConfirmedTo, DateTime? EarliestAllowed, DateTime? LatestAllowed,
+        bool AppointmentRequired, string? AppointmentReference,
+        string? Instructions, string? AccessInstructions, string? LoadingInstructions, string? UnloadingInstructions,
+        StopExecutionStatus Status, DateTime? ArrivedAt, DateTime? DepartedAt, DateTime? CompletedAt,
+        int? WaitingMinutes, string? LateArrivalReason, string? StatusReason,
         bool HasPod, string? PodSignedBy, string? Remarks);
 
     private async Task<List<ExecutionStopRow>> LoadExecutionStopsAsync(Trip trip, CancellationToken cancellationToken)
@@ -281,6 +397,17 @@ public class TripExecutionService : ITripExecutionService
             .Where(e => e.TenantId == tenantId && e.TripId == trip.Id)
             .ToDictionaryAsync(e => e.TransportOrderStopId, cancellationToken);
 
+        // First handling-start per execution: turns arrival -> handling into a waiting time.
+        var executionIds = executions.Values.Select(e => e.Id).ToList();
+        var handlingStarts = executionIds.Count == 0
+            ? []
+            : await _dbContext.StopStatusHistories.AsNoTracking()
+                .Where(h => h.TenantId == tenantId && executionIds.Contains(h.StopExecutionId)
+                            && (h.ToStatus == StopExecutionStatus.Loading || h.ToStatus == StopExecutionStatus.Unloading))
+                .GroupBy(h => h.StopExecutionId)
+                .Select(g => new { StopExecutionId = g.Key, StartedAt = g.Min(h => h.OccurredAt) })
+                .ToDictionaryAsync(x => x.StopExecutionId, x => x.StartedAt, cancellationToken);
+
         var orderSequence = tripOrders
             .Select((o, index) => (o.TransportOrderId, Sequence: o.Sequence, Index: index))
             .ToDictionary(x => x.TransportOrderId, x => x.Sequence);
@@ -294,6 +421,21 @@ public class TripExecutionService : ITripExecutionService
                 var locationAddress = x.Location is null
                     ? null
                     : string.Join(" ", new[] { x.Location.Street, x.Location.HouseNumber }.Where(p => !string.IsNullOrWhiteSpace(p)));
+
+                int? waitingMinutes = null;
+                if (execution?.ArrivedAt is { } arrivedAt)
+                {
+                    var handlingEnd = handlingStarts.TryGetValue(execution.Id, out var started)
+                        ? started
+                        : execution.DepartedAt;
+                    if (handlingEnd is { } end && end >= arrivedAt)
+                    {
+                        waitingMinutes = (int)Math.Round((end - arrivedAt).TotalMinutes);
+                    }
+                }
+
+                var status = execution?.Status ?? StopExecutionStatus.Planned;
+
                 return new ExecutionStopRow(
                     x.Stop.Id, x.Stop.TransportOrderId, order.OrderNumber, order.CustomerName,
                     orderSequence[x.Stop.TransportOrderId], x.Stop.Sequence, x.Stop.StopType,
@@ -301,9 +443,17 @@ public class TripExecutionService : ITripExecutionService
                     x.Stop.Address ?? (string.IsNullOrWhiteSpace(locationAddress) ? null : locationAddress),
                     x.Stop.PostalCode ?? x.Location?.PostalCode,
                     x.Stop.City ?? x.Location?.City,
-                    x.Stop.PlannedFrom, x.Stop.PlannedTo, x.Stop.Instructions,
-                    execution?.Status ?? StopExecutionStatus.Pending,
-                    execution?.ArrivedAt, execution?.CompletedAt,
+                    x.Stop.PlannedFrom, x.Stop.PlannedTo, x.Stop.RequestedFrom, x.Stop.RequestedTo,
+                    x.Stop.ConfirmedFrom, x.Stop.ConfirmedTo, x.Stop.EarliestAllowed, x.Stop.LatestAllowed,
+                    x.Stop.AppointmentRequired || (x.Location?.AppointmentRequired ?? false),
+                    x.Stop.AppointmentReference,
+                    x.Stop.Instructions,
+                    x.Stop.AccessInstructions ?? x.Location?.AccessInstructions,
+                    x.Stop.LoadingInstructions ?? x.Location?.LoadingInstructions,
+                    x.Stop.UnloadingInstructions ?? x.Location?.UnloadingInstructions,
+                    status,
+                    execution?.ArrivedAt, execution?.DepartedAt, execution?.CompletedAt,
+                    waitingMinutes, execution?.LateArrivalReason, execution?.StatusReason,
                     execution?.PodPath is not null, execution?.PodSignedBy, execution?.Remarks);
             })
             .OrderBy(r => r.OrderSequence).ThenBy(r => r.StopSequence)
@@ -343,9 +493,15 @@ public class TripExecutionService : ITripExecutionService
             stops.Select(r => new ExecutionStopDto(
                 r.StopId, r.OrderId, r.OrderNumber, r.CustomerName, r.OrderSequence, r.StopSequence,
                 r.StopType, r.LocationName, r.Address, r.PostalCode, r.City,
-                r.PlannedFrom, r.PlannedTo, r.Instructions,
-                r.Status, r.ArrivedAt, r.CompletedAt, r.HasPod, r.PodSignedBy, r.Remarks)).ToList(),
-            stops.Count(s => s.Status is StopExecutionStatus.Completed or StopExecutionStatus.Skipped),
+                r.PlannedFrom, r.PlannedTo, r.RequestedFrom, r.RequestedTo,
+                r.ConfirmedFrom, r.ConfirmedTo, r.EarliestAllowed, r.LatestAllowed,
+                r.AppointmentRequired, r.AppointmentReference,
+                r.Instructions, r.AccessInstructions, r.LoadingInstructions, r.UnloadingInstructions,
+                r.Status, r.ArrivedAt, r.DepartedAt, r.CompletedAt,
+                r.WaitingMinutes, r.LateArrivalReason, r.StatusReason,
+                StopStatusMachine.AllowedTargets(r.Status, r.StopType),
+                r.HasPod, r.PodSignedBy, r.Remarks)).ToList(),
+            stops.Count(s => StopStatusMachine.IsTerminal(s.Status)),
             stops.Count);
     }
 

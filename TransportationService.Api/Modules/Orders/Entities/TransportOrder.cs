@@ -79,11 +79,27 @@ public class TransportOrderStop : AuditableTenantEntity
     public string? City { get; set; }
     public string? CountryCode { get; set; }
 
+    // Four distinct time concepts (Wave "stop execution"): what planning scheduled, what the
+    // customer asked for, what was confirmed back to the customer, and the hard outer bounds.
     public DateTime? PlannedFrom { get; set; }
     public DateTime? PlannedTo { get; set; }
+    public DateTime? RequestedFrom { get; set; }
+    public DateTime? RequestedTo { get; set; }
+    public DateTime? ConfirmedFrom { get; set; }
+    public DateTime? ConfirmedTo { get; set; }
+    public DateTime? EarliestAllowed { get; set; }
+    public DateTime? LatestAllowed { get; set; }
+
+    public bool AppointmentRequired { get; set; }
+    public string? AppointmentReference { get; set; }
 
     /// <summary>Stop-level reference (dossier, container number, booking slot, ...).</summary>
     public string? Reference { get; set; }
 
     public string? Instructions { get; set; }
+
+    // Stop-level overrides; when empty the master location's instructions apply.
+    public string? AccessInstructions { get; set; }
+    public string? LoadingInstructions { get; set; }
+    public string? UnloadingInstructions { get; set; }
 }

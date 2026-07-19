@@ -18,10 +18,27 @@ public record ExecutionStopDto(
     string? City,
     DateTime? PlannedFrom,
     DateTime? PlannedTo,
+    DateTime? RequestedFrom,
+    DateTime? RequestedTo,
+    DateTime? ConfirmedFrom,
+    DateTime? ConfirmedTo,
+    DateTime? EarliestAllowed,
+    DateTime? LatestAllowed,
+    bool AppointmentRequired,
+    string? AppointmentReference,
     string? Instructions,
+    string? AccessInstructions,
+    string? LoadingInstructions,
+    string? UnloadingInstructions,
     StopExecutionStatus Status,
     DateTime? ArrivedAt,
+    DateTime? DepartedAt,
     DateTime? CompletedAt,
+    /// <summary>Minutes between arrival and the start of handling (or departure when handling was never logged).</summary>
+    int? WaitingMinutes,
+    string? LateArrivalReason,
+    string? StatusReason,
+    IReadOnlyList<StopExecutionStatus> AllowedTransitions,
     bool HasPod,
     string? PodSignedBy,
     string? Remarks);
@@ -51,9 +68,23 @@ public record MyTripDto(
     int StopCount,
     int CompletedStopCount);
 
-public record CompleteStopRequest(string? PodSignedBy, string? Remarks);
+/// <summary>
+/// Generic controlled status transition. The reason is mandatory for Skipped, Failed and
+/// PartiallyCompleted, and for an arrival past the latest allowed bound. Notes update the
+/// free-form stop remarks.
+/// </summary>
+public record TransitionStopRequest(StopExecutionStatus ToStatus, string? Reason = null, string? Notes = null);
+
+public record CompleteStopRequest(string? PodSignedBy, string? Remarks, string? Reason = null);
 
 public record SkipStopRequest(string Remarks);
+
+public record StopStatusHistoryDto(
+    StopExecutionStatus FromStatus,
+    StopExecutionStatus ToStatus,
+    DateTime OccurredAt,
+    string? UserName,
+    string? Reason);
 
 public enum ExecutionOutcome
 {
@@ -72,4 +103,12 @@ public record ExecutionResult(ExecutionOutcome Outcome, TripExecutionDto? Execut
         "Deze rit is niet aan jou toegewezen.");
     public static ExecutionResult InvalidState(string error) => new(ExecutionOutcome.InvalidState, null, error);
     public static ExecutionResult Invalid(string error) => new(ExecutionOutcome.ValidationFailed, null, error);
+}
+
+public record StopHistoryResult(ExecutionOutcome Outcome, IReadOnlyList<StopStatusHistoryDto>? History, string? Error = null)
+{
+    public static StopHistoryResult Success(IReadOnlyList<StopStatusHistoryDto> history) => new(ExecutionOutcome.Success, history);
+    public static readonly StopHistoryResult NotFound = new(ExecutionOutcome.NotFound, null);
+    public static readonly StopHistoryResult NotYourTrip = new(ExecutionOutcome.NotYourTrip, null,
+        "Deze rit is niet aan jou toegewezen.");
 }

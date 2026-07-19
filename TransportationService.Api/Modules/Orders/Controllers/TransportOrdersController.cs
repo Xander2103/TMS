@@ -114,6 +114,19 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>
+    /// Confirms the time window / appointment / instructions of one stop. Deliberately separate
+    /// from the full update so dispatch can still confirm windows after planning locked the order.
+    /// </summary>
+    [HttpPut("{id:guid}/stops/{stopId:guid}/execution-plan")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> UpdateStopExecutionPlan(
+        Guid id, Guid stopId, UpdateStopExecutionPlanRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.UpdateStopExecutionPlanAsync(id, stopId, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     [HttpPost("{id:guid}/status")]
     [RequirePermission(PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersManage)]
     public async Task<ActionResult<TransportOrderDetailDto>> ChangeStatus(

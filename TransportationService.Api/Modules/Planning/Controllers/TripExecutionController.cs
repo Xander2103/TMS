@@ -48,6 +48,31 @@ public class TripExecutionController : ControllerBase
         return Handle(await _service.GetExecutionAsync(tripId, restrict, cancellationToken));
     }
 
+    /// <summary>Generic controlled transition through the stop-status machine.</summary>
+    [HttpPost("api/trips/{tripId:guid}/stops/{stopId:guid}/transition")]
+    [RequirePermission(PermissionCodes.DriverWorkflowExecute)]
+    public async Task<ActionResult<TripExecutionDto>> Transition(
+        Guid tripId, Guid stopId, TransitionStopRequest request, CancellationToken cancellationToken)
+    {
+        var restrict = !await IsDispatcherAsync(cancellationToken);
+        return Handle(await _service.TransitionAsync(tripId, stopId, request, restrict, cancellationToken));
+    }
+
+    [HttpGet("api/trips/{tripId:guid}/stops/{stopId:guid}/history")]
+    [RequirePermission(PermissionCodes.DriverWorkflowView)]
+    public async Task<ActionResult<IReadOnlyList<StopStatusHistoryDto>>> StopHistory(
+        Guid tripId, Guid stopId, CancellationToken cancellationToken)
+    {
+        var restrict = !await IsDispatcherAsync(cancellationToken);
+        var result = await _service.GetStopHistoryAsync(tripId, stopId, restrict, cancellationToken);
+        return result.Outcome switch
+        {
+            ExecutionOutcome.Success => Ok(result.History),
+            ExecutionOutcome.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
+            _ => NotFound(),
+        };
+    }
+
     [HttpPost("api/trips/{tripId:guid}/stops/{stopId:guid}/arrive")]
     [RequirePermission(PermissionCodes.DriverWorkflowExecute)]
     public async Task<ActionResult<TripExecutionDto>> Arrive(Guid tripId, Guid stopId, CancellationToken cancellationToken)

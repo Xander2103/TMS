@@ -20,8 +20,19 @@ interface StopFormRow {
   countryCode: string
   plannedFrom: string
   plannedTo: string
+  requestedFrom: string
+  requestedTo: string
+  confirmedFrom: string
+  confirmedTo: string
+  earliestAllowed: string
+  latestAllowed: string
+  appointmentRequired: boolean
+  appointmentReference: string
   reference: string
   instructions: string
+  accessInstructions: string
+  loadingInstructions: string
+  unloadingInstructions: string
 }
 
 let stopKeyCounter = 0
@@ -42,8 +53,19 @@ function emptyStop(stopType: StopInput['stopType']): StopFormRow {
     countryCode: 'BE',
     plannedFrom: '',
     plannedTo: '',
+    requestedFrom: '',
+    requestedTo: '',
+    confirmedFrom: '',
+    confirmedTo: '',
+    earliestAllowed: '',
+    latestAllowed: '',
+    appointmentRequired: false,
+    appointmentReference: '',
     reference: '',
     instructions: '',
+    accessInstructions: '',
+    loadingInstructions: '',
+    unloadingInstructions: '',
   }
 }
 
@@ -93,8 +115,19 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
           countryCode: s.countryCode ?? 'BE',
           plannedFrom: toLocalInput(s.plannedFrom),
           plannedTo: toLocalInput(s.plannedTo),
+          requestedFrom: toLocalInput(s.requestedFrom),
+          requestedTo: toLocalInput(s.requestedTo),
+          confirmedFrom: toLocalInput(s.confirmedFrom),
+          confirmedTo: toLocalInput(s.confirmedTo),
+          earliestAllowed: toLocalInput(s.earliestAllowed),
+          latestAllowed: toLocalInput(s.latestAllowed),
+          appointmentRequired: s.appointmentRequired,
+          appointmentReference: s.appointmentReference ?? '',
           reference: s.reference ?? '',
           instructions: s.instructions ?? '',
+          accessInstructions: s.accessInstructions ?? '',
+          loadingInstructions: s.loadingInstructions ?? '',
+          unloadingInstructions: s.unloadingInstructions ?? '',
         }))
       : [emptyStop('Loading'), emptyStop('Unloading')],
   )
@@ -169,8 +202,17 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         setFormError('Elke stop heeft een locatie of minstens een plaatsnaam nodig.')
         return
       }
-      if (stop.plannedFrom && stop.plannedTo && stop.plannedTo < stop.plannedFrom) {
+      const windowPairs: Array<[string, string]> = [
+        [stop.plannedFrom, stop.plannedTo],
+        [stop.requestedFrom, stop.requestedTo],
+        [stop.confirmedFrom, stop.confirmedTo],
+      ]
+      if (windowPairs.some(([from, to]) => from && to && to < from)) {
         setFormError('Het einde van een tijdvenster moet na het begin liggen.')
+        return
+      }
+      if (stop.earliestAllowed && stop.latestAllowed && stop.latestAllowed < stop.earliestAllowed) {
+        setFormError('Het uiterste tijdstip moet na het vroegst toegelaten tijdstip liggen.')
         return
       }
     }
@@ -199,8 +241,19 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         countryCode: stop.countryCode.trim() || null,
         plannedFrom: stop.plannedFrom ? `${stop.plannedFrom}:00Z` : null,
         plannedTo: stop.plannedTo ? `${stop.plannedTo}:00Z` : null,
+        requestedFrom: stop.requestedFrom ? `${stop.requestedFrom}:00Z` : null,
+        requestedTo: stop.requestedTo ? `${stop.requestedTo}:00Z` : null,
+        confirmedFrom: stop.confirmedFrom ? `${stop.confirmedFrom}:00Z` : null,
+        confirmedTo: stop.confirmedTo ? `${stop.confirmedTo}:00Z` : null,
+        earliestAllowed: stop.earliestAllowed ? `${stop.earliestAllowed}:00Z` : null,
+        latestAllowed: stop.latestAllowed ? `${stop.latestAllowed}:00Z` : null,
+        appointmentRequired: stop.appointmentRequired,
+        appointmentReference: stop.appointmentReference.trim() || null,
         reference: stop.reference.trim() || null,
         instructions: stop.instructions.trim() || null,
+        accessInstructions: stop.accessInstructions.trim() || null,
+        loadingInstructions: stop.loadingInstructions.trim() || null,
+        unloadingInstructions: stop.unloadingInstructions.trim() || null,
       })),
     }
 
@@ -390,6 +443,59 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
               <input id={`st-instr-${stop.key}`} value={stop.instructions} onChange={(e) => setStop(stop.key, { instructions: e.target.value })} disabled={saving} maxLength={2000} />
             </FormField>
           </div>
+          <details
+            className="tof-stop-extended"
+            open={Boolean(
+              stop.requestedFrom || stop.requestedTo || stop.confirmedFrom || stop.confirmedTo ||
+              stop.earliestAllowed || stop.latestAllowed || stop.appointmentRequired ||
+              stop.accessInstructions || stop.loadingInstructions || stop.unloadingInstructions,
+            )}
+          >
+            <summary>Tijdvensters, afspraak &amp; instructies</summary>
+            <div className="tof-row tof-row-4">
+              <FormField label="Gevraagd van" htmlFor={`st-reqfrom-${stop.key}`} hint="Venster gevraagd door de klant">
+                <input id={`st-reqfrom-${stop.key}`} type="datetime-local" value={stop.requestedFrom} onChange={(e) => setStop(stop.key, { requestedFrom: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField label="Gevraagd tot" htmlFor={`st-reqto-${stop.key}`}>
+                <input id={`st-reqto-${stop.key}`} type="datetime-local" value={stop.requestedTo} onChange={(e) => setStop(stop.key, { requestedTo: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField label="Bevestigd van" htmlFor={`st-conffrom-${stop.key}`} hint="Venster bevestigd aan de klant">
+                <input id={`st-conffrom-${stop.key}`} type="datetime-local" value={stop.confirmedFrom} onChange={(e) => setStop(stop.key, { confirmedFrom: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField label="Bevestigd tot" htmlFor={`st-confto-${stop.key}`}>
+                <input id={`st-confto-${stop.key}`} type="datetime-local" value={stop.confirmedTo} onChange={(e) => setStop(stop.key, { confirmedTo: e.target.value })} disabled={saving} />
+              </FormField>
+            </div>
+            <div className="tof-row tof-row-4">
+              <FormField label="Vroegst toegelaten" htmlFor={`st-earliest-${stop.key}`}>
+                <input id={`st-earliest-${stop.key}`} type="datetime-local" value={stop.earliestAllowed} onChange={(e) => setStop(stop.key, { earliestAllowed: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField label="Uiterste tijdstip" htmlFor={`st-latest-${stop.key}`} hint="Na dit tijdstip is een reden voor late aankomst verplicht">
+                <input id={`st-latest-${stop.key}`} type="datetime-local" value={stop.latestAllowed} onChange={(e) => setStop(stop.key, { latestAllowed: e.target.value })} disabled={saving} />
+              </FormField>
+              <label className="tof-checkbox">
+                <input type="checkbox" checked={stop.appointmentRequired} onChange={(e) => setStop(stop.key, { appointmentRequired: e.target.checked })} disabled={saving} />
+                Afspraak verplicht
+              </label>
+              <FormField label="Afspraakreferentie" htmlFor={`st-appref-${stop.key}`}>
+                <input id={`st-appref-${stop.key}`} value={stop.appointmentReference} onChange={(e) => setStop(stop.key, { appointmentReference: e.target.value })} disabled={saving} maxLength={100} placeholder="bv. slotnummer" />
+              </FormField>
+            </div>
+            <div className="tof-row">
+              <FormField label="Toegangsinstructies" htmlFor={`st-access-${stop.key}`}>
+                <input id={`st-access-${stop.key}`} value={stop.accessInstructions} onChange={(e) => setStop(stop.key, { accessInstructions: e.target.value })} disabled={saving} maxLength={2000} />
+              </FormField>
+              {stop.stopType === 'Loading' ? (
+                <FormField label="Laadinstructies" htmlFor={`st-loadinstr-${stop.key}`}>
+                  <input id={`st-loadinstr-${stop.key}`} value={stop.loadingInstructions} onChange={(e) => setStop(stop.key, { loadingInstructions: e.target.value })} disabled={saving} maxLength={2000} />
+                </FormField>
+              ) : (
+                <FormField label="Losinstructies" htmlFor={`st-unloadinstr-${stop.key}`}>
+                  <input id={`st-unloadinstr-${stop.key}`} value={stop.unloadingInstructions} onChange={(e) => setStop(stop.key, { unloadingInstructions: e.target.value })} disabled={saving} maxLength={2000} />
+                </FormField>
+              )}
+            </div>
+          </details>
         </fieldset>
       ))}
 

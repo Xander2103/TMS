@@ -10,6 +10,15 @@ public interface ITripExecutionService
     /// <summary>Execution view of a trip. <paramref name="restrictToOwnDriver"/> enforces trip ownership for drivers.</summary>
     Task<ExecutionResult> GetExecutionAsync(Guid tripId, bool restrictToOwnDriver, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Controlled status transition through the stop-status machine. Rejects invalid moves,
+    /// demands reasons where the model requires them and writes a StopStatusHistory row per step.
+    /// </summary>
+    Task<ExecutionResult> TransitionAsync(Guid tripId, Guid stopId, TransitionStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken);
+
+    /// <summary>Chronological status history of one stop within one trip.</summary>
+    Task<StopHistoryResult> GetStopHistoryAsync(Guid tripId, Guid stopId, bool restrictToOwnDriver, CancellationToken cancellationToken);
+
     Task<ExecutionResult> ArriveAsync(Guid tripId, Guid stopId, bool restrictToOwnDriver, CancellationToken cancellationToken);
 
     /// <summary>Completes a stop; completing the last open stop auto-completes the trip and its orders.</summary>
