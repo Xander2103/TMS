@@ -101,6 +101,7 @@ public class PodServiceTests
             new LocalFileStorageService(storageRoot),
             new TransportationService.Api.Modules.Notifications.Services.NotificationService(
                 db.Context, tenant, user, clock),
+            new TransportationService.Api.Modules.Messaging.Services.MessageOutboxService(db.Context, tenant, clock),
             clock);
     }
 

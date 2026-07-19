@@ -29,6 +29,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Tankkaarten', to: '/tank-cards', permissions: ['tank_cards.view'] },
   { label: 'Locaties', to: '/locations', permissions: ['locations.view'] },
   { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
+  { label: 'Berichten (e-mail/SMS)', to: '/messaging', permissions: ['messaging.manage'] },
 ]
 
 const administrationNavItems: NavItem[] = [

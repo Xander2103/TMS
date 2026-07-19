@@ -93,6 +93,8 @@ public class LeaveWorkflowTests
             new NotificationService(db.Context, tenant, user, new TestClock(Now)),
             new LocalFileStorageService(storageRoot),
             calendarSync,
+            new TransportationService.Api.Modules.Messaging.Services.MessageOutboxService(
+                db.Context, tenant, new TestClock(Now)),
             new TestClock(Now));
     }
 

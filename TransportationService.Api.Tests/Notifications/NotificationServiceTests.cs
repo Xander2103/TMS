@@ -68,6 +68,7 @@ public class NotificationServiceTests
             new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(
                 Path.Combine(Path.GetTempPath(), "ts-notif-tests", Guid.NewGuid().ToString("N"))),
             new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(),
+            new TransportationService.Api.Modules.Messaging.Services.MessageOutboxService(db.Context, tenant, clock),
             clock);
 
         var created = await absences.CreateForEmployeeAsync(employeeId,

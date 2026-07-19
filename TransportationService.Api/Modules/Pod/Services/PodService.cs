@@ -4,6 +4,8 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Messaging.Entities;
+using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Pod.Dtos;
 using TransportationService.Api.Modules.Pod.Entities;
@@ -29,6 +31,7 @@ public class PodService : IPodService
     private readonly IScanService _scanService;
     private readonly IFileStorageService _fileStorageService;
     private readonly INotificationService _notificationService;
+    private readonly IMessageOutboxService _messageOutbox;
     private readonly TimeProvider _timeProvider;
 
     public PodService(
@@ -39,6 +42,7 @@ public class PodService : IPodService
         IScanService scanService,
         IFileStorageService fileStorageService,
         INotificationService notificationService,
+        IMessageOutboxService messageOutbox,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
@@ -48,6 +52,7 @@ public class PodService : IPodService
         _scanService = scanService;
         _fileStorageService = fileStorageService;
         _notificationService = notificationService;
+        _messageOutbox = messageOutbox;
         _timeProvider = timeProvider;
     }
 
@@ -137,6 +142,25 @@ public class PodService : IPodService
             PermissionCodes.PlanningEdit, "pod_completed", "POD vastgelegd",
             $"{trip.TripNumber}: POD voor {stop.LocationName ?? stop.City} — {pod.Outcome}.",
             $"/pods/{pod.Id}", cancellationToken);
+
+        // The customer's "POD available" mail rides the provider-neutral outbox.
+        var orderInfo = await _dbContext.TransportOrders.AsNoTracking()
+            .Where(o => o.Id == pod.TransportOrderId && o.TenantId == _tenantContext.TenantId)
+            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId),
+                o => o.CustomerId, c => c.Id, (o, c) => new { o.OrderNumber, CustomerId = c.Id, CustomerName = c.Name })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (orderInfo is not null)
+        {
+            await _messageOutbox.QueueAsync(new MessageRequest(
+                MessageKinds.PodAvailable, MessageOwnerType.Customer, orderInfo.CustomerId,
+                new Dictionary<string, string>
+                {
+                    ["orderNumber"] = orderInfo.OrderNumber,
+                    ["customerName"] = orderInfo.CustomerName,
+                },
+                EntityType, pod.Id.ToString(),
+                $"pod_available:{pod.Id}"), cancellationToken);
+        }
 
         return PodOperationResult.Success((await MapDetailAsync(pod.Id, cancellationToken))!);
     }

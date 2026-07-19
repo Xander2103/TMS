@@ -112,7 +112,9 @@ public class PortalServiceTests
         var notifications = new NotificationService(db.Context, tenant, user, clock);
         var absences = new AbsenceService(db.Context, tenant, user, audit, notifications,
             new LocalFileStorageService(storageRoot),
-            new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(), clock);
+            new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(),
+            new TransportationService.Api.Modules.Messaging.Services.MessageOutboxService(db.Context, tenant, clock),
+            clock);
         var qualifications = new QualificationService(
             db.Context, tenant, new QualificationStatusCalculator(), clock, audit,
             new TransportationService.Api.Common.Reference.CountryCodeValidator(db.Context),

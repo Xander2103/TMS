@@ -160,6 +160,10 @@ public static class PermissionCodes
     public const string ScanningExecute = "scanning.execute";
     public const string ScanningCorrect = "scanning.correct";
 
+    // --- Messaging (email/SMS outbox + templates) ---
+    public const string MessagingManage = "messaging.manage";
+    public const string MessageTemplatesManage = "message_templates.manage";
+
     // --- Employee planning (personnel shifts) ---
     public const string EmployeePlanningView = "employee_planning.view";
     public const string EmployeePlanningManage = "employee_planning.manage";
@@ -292,6 +296,8 @@ public static class PermissionCodes
         (ScanningView, "scanning", "view", "Scanhistoriek en scanstatus bekijken"),
         (ScanningExecute, "scanning", "execute", "Colli scannen tijdens rituitvoering"),
         (ScanningCorrect, "scanning", "correct", "Scantellingen handmatig corrigeren"),
+        (MessagingManage, "messaging", "manage", "Berichtenoutbox bekijken en opnieuw verzenden"),
+        (MessageTemplatesManage, "message_templates", "manage", "Berichtsjablonen beheren"),
         (EmployeePlanningView, "employee_planning", "view", "Personeelsplanning bekijken"),
         (EmployeePlanningManage, "employee_planning", "manage", "Personeelsplanning en shifts beheren"),
         (PodView, "pod", "view", "Afleverbewijzen bekijken"),

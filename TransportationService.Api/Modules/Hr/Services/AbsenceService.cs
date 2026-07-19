@@ -7,6 +7,8 @@ using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Integrations.Services;
+using TransportationService.Api.Modules.Messaging.Entities;
+using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Notifications.Services;
 using TransportationService.Api.Modules.Planning.Entities;
 using TransportationService.Api.Modules.Qualifications.Services;
@@ -30,6 +32,7 @@ public class AbsenceService : IAbsenceService
     private readonly INotificationService _notificationService;
     private readonly IFileStorageService _fileStorageService;
     private readonly ICalendarSyncService _calendarSyncService;
+    private readonly IMessageOutboxService _messageOutbox;
     private readonly TimeProvider _timeProvider;
 
     public AbsenceService(
@@ -40,6 +43,7 @@ public class AbsenceService : IAbsenceService
         INotificationService notificationService,
         IFileStorageService fileStorageService,
         ICalendarSyncService calendarSyncService,
+        IMessageOutboxService messageOutbox,
         TimeProvider timeProvider)
     {
         _dbContext = dbContext;
@@ -49,6 +53,7 @@ public class AbsenceService : IAbsenceService
         _notificationService = notificationService;
         _fileStorageService = fileStorageService;
         _calendarSyncService = calendarSyncService;
+        _messageOutbox = messageOutbox;
         _timeProvider = timeProvider;
     }
 
@@ -256,6 +261,23 @@ public class AbsenceService : IAbsenceService
                 "leave_approved", absence.Id, absence.EmployeeId, absence.StartDate, absence.EndDate,
                 $"Afwezigheid: {absence.Type}"), cancellationToken);
         }
+
+        // The e-mail leaves through the provider-neutral outbox (profile decides channel/opt-out).
+        var employeeName = await _dbContext.Employees.AsNoTracking()
+            .Where(e => e.Id == absence.EmployeeId && e.TenantId == _tenantContext.TenantId)
+            .Select(e => e.FirstName + " " + e.LastName)
+            .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+        await _messageOutbox.QueueAsync(new MessageRequest(
+            request.Approve ? MessageKinds.LeaveApproved : MessageKinds.LeaveRejected,
+            MessageOwnerType.Employee, absence.EmployeeId,
+            new Dictionary<string, string>
+            {
+                ["employeeName"] = employeeName,
+                ["period"] = $"{absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}",
+                ["note"] = absence.DecisionNote ?? string.Empty,
+            },
+            EntityType, absence.Id.ToString(),
+            $"leave_decided:{absence.Id}"), cancellationToken);
 
         return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
     }

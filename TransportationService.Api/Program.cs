@@ -197,6 +197,23 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Servic
 // Periodic expiry sweep (qualifications + fleet documents -> notifications)
 builder.Services.AddHostedService<TransportationService.Api.Modules.Notifications.Services.ExpiryNotificationHostedService>();
 
+// Messaging (provider-neutral email/SMS): dev sink providers, outbox, dispatcher
+builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>(_ =>
+    new TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider(
+        Path.Combine(builder.Environment.ContentRootPath, "App_Data", "message-sink")));
+builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.IEmailProvider>(sp =>
+    sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>());
+builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.ISmsProvider>(sp =>
+    sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>());
+builder.Services.AddScoped<TransportationService.Api.Modules.Messaging.Services.IMessageOutboxService,
+    TransportationService.Api.Modules.Messaging.Services.MessageOutboxService>();
+builder.Services.AddScoped(sp => new TransportationService.Api.Modules.Messaging.Services.MessageDispatcher(
+    sp.GetRequiredService<TransportationService.Api.Data.TransportationDbContext>(),
+    sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.IEmailProvider>(),
+    sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.ISmsProvider>(),
+    sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddHostedService<TransportationService.Api.Modules.Messaging.Services.OutboxDispatcherHostedService>();
+
 // Invoicing
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();

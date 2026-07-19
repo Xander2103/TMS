@@ -25,6 +25,7 @@ import { PodDetailPage } from '../features/pod/pages/PodDetailPage'
 import { PortalDashboardPage } from '../features/portal/pages/PortalDashboardPage'
 import { PortalPlanningPage } from '../features/portal/pages/PortalPlanningPage'
 import { EmployeePlanningPage } from '../features/employee-planning/pages/EmployeePlanningPage'
+import { MessagingPage } from '../features/messaging/pages/MessagingPage'
 import { PortalAbsencesPage } from '../features/portal/pages/PortalAbsencesPage'
 import { PortalQualificationsPage } from '../features/portal/pages/PortalQualificationsPage'
 import { PortalProfilePage } from '../features/portal/pages/PortalProfilePage'
@@ -92,6 +93,7 @@ const router = createBrowserRouter(
           <Route path="/portal" element={<PortalDashboardPage />} />
           <Route path="/portal/planning" element={<PortalPlanningPage />} />
           <Route path="/employee-planning" element={<EmployeePlanningPage />} />
+          <Route path="/messaging" element={<MessagingPage />} />
           <Route path="/portal/absences" element={<PortalAbsencesPage />} />
           <Route path="/portal/qualifications" element={<PortalQualificationsPage />} />
           <Route path="/portal/profile" element={<PortalProfilePage />} />
