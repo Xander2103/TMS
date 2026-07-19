@@ -9,29 +9,31 @@ import './Sidebar.css'
 interface NavItem {
   label: string
   to: string
+  /** Any-of permissions required to see this entry; omitted = visible to every user. */
+  permissions?: string[]
 }
 
 const operationsNavItems: NavItem[] = [
-  { label: 'Dashboard', to: '/dashboard' },
-  { label: 'Transportopdrachten', to: '/transport-orders' },
-  { label: 'Planning', to: '/planning' },
-  { label: 'Mijn ritten', to: '/my-trips' },
-  { label: 'Klanten', to: '/customers' },
-  { label: 'Chauffeurs', to: '/drivers' },
-  { label: 'Afwezigheden', to: '/absences' },
-  { label: 'Vloot', to: '/fleet' },
-  { label: 'Voertuigen', to: '/vehicles' },
-  { label: 'Opleggers', to: '/trailers' },
-  { label: 'Tankkaarten', to: '/tank-cards' },
-  { label: 'Locaties', to: '/locations' },
-  { label: 'Facturen', to: '/invoices' },
+  { label: 'Dashboard', to: '/dashboard', permissions: ['dashboard.view'] },
+  { label: 'Transportopdrachten', to: '/transport-orders', permissions: ['orders.view', 'orders.manage'] },
+  { label: 'Planning', to: '/planning', permissions: ['planning.view'] },
+  { label: 'Mijn ritten', to: '/my-trips', permissions: ['driver_workflow.view'] },
+  { label: 'Klanten', to: '/customers', permissions: ['customers.view'] },
+  { label: 'Chauffeurs', to: '/drivers', permissions: ['drivers.view'] },
+  { label: 'Afwezigheden', to: '/absences', permissions: ['absences.view'] },
+  { label: 'Vloot', to: '/fleet', permissions: ['vehicles.view'] },
+  { label: 'Voertuigen', to: '/vehicles', permissions: ['vehicles.view'] },
+  { label: 'Opleggers', to: '/trailers', permissions: ['trailers.view'] },
+  { label: 'Tankkaarten', to: '/tank-cards', permissions: ['tank_cards.view'] },
+  { label: 'Locaties', to: '/locations', permissions: ['locations.view'] },
+  { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
 ]
 
 const administrationNavItems: NavItem[] = [
-  { label: 'Gebruikers', to: '/users' },
-  { label: 'Rollen en rechten', to: '/roles' },
-  { label: 'Personeel', to: '/employees' },
-  { label: 'Kwalificaties', to: '/qualifications' },
+  { label: 'Gebruikers', to: '/users', permissions: ['users.view'] },
+  { label: 'Rollen en rechten', to: '/roles', permissions: ['roles.view'] },
+  { label: 'Personeel', to: '/employees', permissions: ['employees.view'] },
+  { label: 'Kwalificaties', to: '/qualifications', permissions: ['employee_documents.view'] },
 ]
 
 const lookupGroupOrder: LookupGroup[] = ['organisatie', 'categorieen', 'referentie']
@@ -53,8 +55,24 @@ function initials(firstName: string, lastName: string): string {
 const UNREAD_POLL_MS = 60_000
 
 export function Sidebar() {
-  const { user, logout } = useAuth()
+  const { user, logout, hasAnyPermission } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
+
+  // The sidebar only shows what the user may actually open; the backend enforces the
+  // same permissions on every endpoint (UI filtering is UX, never security).
+  const visible = (items: NavItem[]) =>
+    items.filter((item) => !item.permissions || hasAnyPermission(item.permissions))
+
+  const visibleOperations = visible(operationsNavItems)
+  const visibleAdministration = visible(administrationNavItems)
+  const visibleLookupsByGroup = lookupGroupOrder
+    .map((group) => ({
+      group,
+      items: LOOKUP_RESOURCES.filter(
+        (resource) => resource.group === group && hasAnyPermission([resource.viewPermission, resource.managePermission]),
+      ),
+    }))
+    .filter(({ items }) => items.length > 0)
 
   // Light poll so the badge stays roughly current without a push channel.
   useEffect(() => {
@@ -79,7 +97,7 @@ export function Sidebar() {
       <h1 className="app-title">Transportation Service</h1>
       <nav>
         <ul>
-          {renderNavItems(operationsNavItems)}
+          {renderNavItems(visibleOperations)}
           <li>
             <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
               Meldingen
@@ -88,16 +106,20 @@ export function Sidebar() {
           </li>
         </ul>
 
-        <div className="nav-group-label">Beheer</div>
-        <ul>{renderNavItems(administrationNavItems)}</ul>
+        {visibleAdministration.length > 0 && (
+          <>
+            <div className="nav-group-label">Beheer</div>
+            <ul>{renderNavItems(visibleAdministration)}</ul>
+          </>
+        )}
 
-        <div className="nav-group-label">Stamgegevens</div>
-        {lookupGroupOrder.map((group) => (
+        {visibleLookupsByGroup.length > 0 && <div className="nav-group-label">Stamgegevens</div>}
+        {visibleLookupsByGroup.map(({ group, items }) => (
           <div key={group} className="nav-subgroup">
             <div className="nav-subgroup-label">{LOOKUP_GROUP_LABELS[group]}</div>
             <ul>
               {renderNavItems(
-                LOOKUP_RESOURCES.filter((resource) => resource.group === group).map((resource) => ({
+                items.map((resource) => ({
                   label: resource.title,
                   to: `/master-data/${resource.slug}`,
                 })),
@@ -106,13 +128,15 @@ export function Sidebar() {
           </div>
         ))}
 
-        <ul className="nav-footer">
-          <li>
-            <NavLink to="/settings" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              Instellingen
-            </NavLink>
-          </li>
-        </ul>
+        {hasAnyPermission(['company_settings.view', 'company_settings.manage']) && (
+          <ul className="nav-footer">
+            <li>
+              <NavLink to="/settings" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                Instellingen
+              </NavLink>
+            </li>
+          </ul>
+        )}
       </nav>
 
       {user && (

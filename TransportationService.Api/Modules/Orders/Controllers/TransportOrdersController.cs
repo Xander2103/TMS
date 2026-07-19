@@ -76,6 +76,13 @@ public class TransportOrdersController : ControllerBase
             return string.Empty;
         }
 
+        // Guard against CSV formula injection: user-entered text (customer names,
+        // references) must never execute as a formula when the export opens in Excel.
+        if ("=+-@\t\r".IndexOf(value[0]) >= 0)
+        {
+            value = "'" + value;
+        }
+
         return value.Contains(';') || value.Contains('"') || value.Contains('\n')
             ? $"\"{value.Replace("\"", "\"\"")}\""
             : value;

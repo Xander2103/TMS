@@ -2,6 +2,7 @@ import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { useAuth } from '../../auth/authContextValue'
 import { RolesTable } from '../components/RolesTable'
 import { useRoles } from '../hooks/useRoles'
 import { useRoleMutations } from '../hooks/useRoleMutations'
@@ -10,6 +11,7 @@ const NAME_MAX_LENGTH = 150
 
 export function RolesPage() {
   const { roles, isLoading, error, reload } = useRoles()
+  const { hasPermission } = useAuth()
   const [isCreating, setIsCreating] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -48,9 +50,11 @@ export function RolesPage() {
       <PageHeader
         title="Rollen en rechten"
         action={
-          <button type="button" className="primary-button" onClick={() => setIsCreating((value) => !value)}>
-            {isCreating ? 'Annuleren' : 'Nieuwe rol'}
-          </button>
+          hasPermission('roles.create') && (
+            <button type="button" className="primary-button" onClick={() => setIsCreating((value) => !value)}>
+              {isCreating ? 'Annuleren' : 'Nieuwe rol'}
+            </button>
+          )
         }
       />
 

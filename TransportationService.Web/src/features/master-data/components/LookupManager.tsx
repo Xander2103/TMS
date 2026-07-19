@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useAuth } from '../../auth/authContextValue'
 import { createLookupApi } from '../api/lookupApi'
 import { LookupFormDialog } from './LookupFormDialog'
 import type { LookupItem } from '../types'
@@ -22,6 +23,8 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; item: LookupItem } | nul
 export function LookupManager({ config }: { config: LookupResourceConfig }) {
   const api = useMemo(() => createLookupApi(config.basePath), [config.basePath])
   const toast = useToast()
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission(config.managePermission)
 
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
@@ -87,22 +90,26 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
       render: (row) =>
         row.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>,
     },
-    {
-      key: 'actions',
-      header: '',
-      align: 'right',
-      width: '160px',
-      render: (row) => (
-        <div className="lookup-row-actions" onClick={(event) => event.stopPropagation()}>
-          <Button variant="ghost" onClick={() => setDialog({ mode: 'edit', item: row })}>
-            Bewerken
-          </Button>
-          <Button variant="ghost" onClick={() => setDeleteTarget(row)}>
-            Verwijderen
-          </Button>
-        </div>
-      ),
-    },
+    ...(canManage
+      ? [
+          {
+            key: 'actions',
+            header: '',
+            align: 'right',
+            width: '160px',
+            render: (row) => (
+              <div className="lookup-row-actions" onClick={(event) => event.stopPropagation()}>
+                <Button variant="ghost" onClick={() => setDialog({ mode: 'edit', item: row })}>
+                  Bewerken
+                </Button>
+                <Button variant="ghost" onClick={() => setDeleteTarget(row)}>
+                  Verwijderen
+                </Button>
+              </div>
+            ),
+          } satisfies Column<LookupItem>,
+        ]
+      : []),
   ]
 
   return (
@@ -116,7 +123,7 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
       />
       <PageHeader
         title={config.title}
-        action={<Button onClick={() => setDialog({ mode: 'create' })}>Nieuwe {config.singular}</Button>}
+        action={canManage && <Button onClick={() => setDialog({ mode: 'create' })}>Nieuwe {config.singular}</Button>}
       />
 
       <FilterBar
