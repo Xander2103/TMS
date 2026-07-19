@@ -26,7 +26,7 @@ coverage.*
 # NuGet
 *.nupkg
 *.snupkg
-packages/
+/packages/
 .nuget/
 
 # Publish output
