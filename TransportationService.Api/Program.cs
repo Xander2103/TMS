@@ -170,6 +170,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.I
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.ITripExecutionService,
     TransportationService.Api.Modules.Planning.Services.TripExecutionService>();
 
+// Scanning
+builder.Services.AddScoped<TransportationService.Api.Modules.Scanning.Services.IScanService,
+    TransportationService.Api.Modules.Scanning.Services.ScanService>();
+
 // Invoicing
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();

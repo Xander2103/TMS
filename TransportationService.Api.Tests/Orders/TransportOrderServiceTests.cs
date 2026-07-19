@@ -462,6 +462,53 @@ public class TransportOrderServiceTests
     }
 
     [Fact]
+    public async Task Create_WithCargoItems_RoundTripsAndSequences()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var request = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput("Pallet bouwstenen", "BC-1", 10, "paletten", null),
+                new CargoItemInput("Pallet cement", null, 5, "paletten", "Breekbaar"),
+            ],
+        };
+
+        var result = await h.Sut.CreateAsync(request, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+        Assert.Equal(2, result.Order!.CargoItems.Count);
+        Assert.Equal(1, result.Order.CargoItems[0].Sequence);
+        Assert.Equal("BC-1", result.Order.CargoItems[0].Barcode);
+        Assert.Null(result.Order.CargoItems[1].Barcode);
+        Assert.Equal(5, result.Order.CargoItems[1].ExpectedQuantity);
+    }
+
+    [Fact]
+    public async Task Create_DuplicateBarcodeWithinOrder_FailsValidation()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var request = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput("Item 1", "BC-DUP", 1, null, null),
+                new CargoItemInput("Item 2", "bc-dup", 1, null, null),
+            ],
+        };
+
+        var result = await h.Sut.CreateAsync(request, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+    }
+
+    [Fact]
     public async Task UpdateStopExecutionPlan_OnCancelledOrder_IsRefused()
     {
         var h = await SeedAsync();

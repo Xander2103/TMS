@@ -1,0 +1,259 @@
+.scan-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.scan-error {
+  margin: 0;
+  color: var(--danger, #dc2626);
+  font-size: 14px;
+}
+
+/* Big always-visible feedback area; colour + icon + text (never colour alone). */
+.scan-feedback {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+}
+
+.scan-feedback-success {
+  background: var(--success-bg, rgba(34, 197, 94, 0.12));
+  border-color: var(--success-border, #22c55e);
+}
+
+.scan-feedback-warning {
+  background: var(--warning-bg, rgba(245, 158, 11, 0.12));
+  border-color: var(--warning-border, #f59e0b);
+}
+
+.scan-feedback-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.scan-feedback-count {
+  font-weight: 600;
+}
+
+.scan-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scan-barcode-label {
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* Large scan target: hardware scanners type here; thumbs hit it easily. */
+.scan-barcode-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  font: inherit;
+  font-size: 20px;
+  font-family: var(--mono);
+  color: var(--text-h);
+  background: var(--bg);
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+}
+
+.scan-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.scan-qty {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.scan-qty button {
+  width: 44px;
+  min-height: 44px;
+  font-size: 20px;
+  border: none;
+  background: var(--code-bg, rgba(0, 0, 0, 0.04));
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.scan-qty input {
+  width: 64px;
+  text-align: center;
+  font: inherit;
+  font-size: 16px;
+  border: none;
+  border-inline: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.scan-damaged {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.scan-submit {
+  min-height: 48px;
+  padding-inline: 24px;
+  font-size: 16px;
+  margin-left: auto;
+}
+
+.scan-summary h3,
+.scan-recent h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.scan-unexpected {
+  font-weight: 400;
+  color: var(--warning, #b45309);
+}
+
+.scan-empty {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.scan-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.scan-item-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.scan-item-desc {
+  flex: 1;
+  min-width: 140px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.scan-item-code {
+  margin-left: 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.scan-item-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.scan-item-damage {
+  font-size: 13px;
+  color: var(--warning, #b45309);
+  margin-top: 2px;
+}
+
+.scan-correct-link {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 4px;
+}
+
+.scan-correction {
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scan-correction input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.scan-correction-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.scan-recent ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.scan-recent li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scan-recent-icon {
+  width: 18px;
+  text-align: center;
+}
+
+.scan-recent-time {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.scan-recent-desc {
+  flex: 1;
+  color: var(--text-h);
+}
+
+.scan-recent-result {
+  color: var(--text);
+}
+
+@media (max-width: 640px) {
+  .scan-submit {
+    width: 100%;
+    margin-left: 0;
+  }
+}

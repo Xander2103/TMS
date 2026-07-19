@@ -83,6 +83,24 @@ export interface TransportOrderStop {
   unloadingInstructions: string | null
 }
 
+export interface CargoItem {
+  id: string
+  sequence: number
+  description: string
+  barcode: string | null
+  expectedQuantity: number
+  quantityUnit: string | null
+  notes: string | null
+}
+
+export interface CargoItemInput {
+  description: string
+  barcode: string | null
+  expectedQuantity: number
+  quantityUnit: string | null
+  notes: string | null
+}
+
 export interface TransportOrderDetail {
   id: string
   orderNumber: string
@@ -103,6 +121,7 @@ export interface TransportOrderDetail {
   notes: string | null
   cancellationReason: string | null
   stops: TransportOrderStop[]
+  cargoItems: CargoItem[]
   allowedTransitions: TransportOrderStatus[]
   canCancel: boolean
 }
@@ -160,4 +179,5 @@ export interface TransportOrderInput {
   agreedPrice: number | null
   notes: string | null
   stops: StopInput[]
+  cargoItems: CargoItemInput[]
 }

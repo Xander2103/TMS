@@ -64,12 +64,29 @@ public record TransportOrderDetailDto(
     string? Notes,
     string? CancellationReason,
     IReadOnlyList<TransportOrderStopDto> Stops,
+    IReadOnlyList<CargoItemDto> CargoItems,
     IReadOnlyList<TransportOrderStatus> AllowedTransitions,
     /// <summary>Whether the order can currently be cancelled (separate action, orders.cancel).</summary>
     bool CanCancel);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
+
+public record CargoItemDto(
+    Guid Id,
+    int Sequence,
+    string Description,
+    string? Barcode,
+    decimal ExpectedQuantity,
+    string? QuantityUnit,
+    string? Notes);
+
+public record CargoItemInput(
+    string Description,
+    string? Barcode,
+    decimal ExpectedQuantity,
+    string? QuantityUnit,
+    string? Notes);
 
 public record TransportOrderStopInput(
     StopType StopType,
@@ -125,7 +142,8 @@ public record CreateTransportOrderRequest(
     bool CraneRequired,
     decimal? AgreedPrice,
     string? Notes,
-    IReadOnlyList<TransportOrderStopInput> Stops);
+    IReadOnlyList<TransportOrderStopInput> Stops,
+    IReadOnlyList<CargoItemInput>? CargoItems = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -141,7 +159,8 @@ public record UpdateTransportOrderRequest(
     bool CraneRequired,
     decimal? AgreedPrice,
     string? Notes,
-    IReadOnlyList<TransportOrderStopInput> Stops);
+    IReadOnlyList<TransportOrderStopInput> Stops,
+    IReadOnlyList<CargoItemInput>? CargoItems = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

@@ -41,6 +41,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersCancel, PermissionCodes.OrdersAssign,
                 PermissionCodes.OrdersExport,
                 PermissionCodes.PlanningView, PermissionCodes.PlanningCreate, PermissionCodes.PlanningEdit,
+                PermissionCodes.ScanningView,
                 PermissionCodes.CustomersCreate, PermissionCodes.CustomersEdit,
                 PermissionCodes.LocationsCreate, PermissionCodes.LocationsEdit,
                 PermissionCodes.EmployeeDocumentsView,
@@ -53,6 +54,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OrdersView, PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersAssign,
                 PermissionCodes.PlanningView, PermissionCodes.PlanningCreate, PermissionCodes.PlanningEdit,
                 PermissionCodes.DriverWorkflowView,
+                PermissionCodes.ScanningView, PermissionCodes.ScanningCorrect,
                 PermissionCodes.EmployeeDocumentsView,
             ]),
 
@@ -62,6 +64,7 @@ public static class DefaultRoleDefinitions
                 .. CommonViewPermissions,
                 PermissionCodes.OrdersView, PermissionCodes.OrdersExport,
                 PermissionCodes.PlanningView, PermissionCodes.PlanningOverrideRestriction,
+                PermissionCodes.ScanningView,
                 PermissionCodes.InvoicesView,
                 PermissionCodes.AbsencesApprove,
                 PermissionCodes.AuditLogsView,
@@ -90,6 +93,7 @@ public static class DefaultRoleDefinitions
             "Voert eigen ritten uit en beheert eigen afwezigheden.",
             [
                 PermissionCodes.DriverWorkflowView, PermissionCodes.DriverWorkflowExecute,
+                PermissionCodes.ScanningView, PermissionCodes.ScanningExecute,
                 PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate,
             ]),
 

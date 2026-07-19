@@ -13,6 +13,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { STOP_TYPE_LABELS } from '../../transport-orders/types'
+import { ScanPanel } from '../../scanning/components/ScanPanel'
 import { completeStop, getStopHistory, getTripExecution, transitionStop } from '../api/myTripsApi'
 import {
   STOP_EXECUTION_ICONS,
@@ -84,6 +85,7 @@ export function TripExecutionPage() {
 
   const [historyStopId, setHistoryStopId] = useState<string | null>(null)
   const [history, setHistory] = useState<Record<string, StopStatusHistoryEntry[]>>({})
+  const [scanStop, setScanStop] = useState<ExecutionStop | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -102,6 +104,8 @@ export function TripExecutionPage() {
   }, [id])
 
   const canExecute = hasPermission('driver_workflow.execute')
+  const canScan = hasPermission('scanning.execute')
+  const canCorrectScans = hasPermission('scanning.correct')
 
   function afterUpdate(updated: TripExecution, message: string) {
     setExecution(updated)
@@ -324,6 +328,11 @@ export function TripExecutionPage() {
                       {STOP_TRANSITION_ACTION_LABELS[primary]}
                     </Button>
                   )}
+                  {canScan && (
+                    <Button variant="secondary" onClick={() => setScanStop(stop)} disabled={busy}>
+                      📷 Scannen
+                    </Button>
+                  )}
                   {stop.allowedTransitions
                     .filter((s) => STOP_PRIMARY_ACTION_ORDER.includes(s) && s !== primary)
                     .map((s) => (
@@ -360,6 +369,17 @@ export function TripExecutionPage() {
           )
         })}
       </ol>
+
+      {scanStop && (
+        <ScanPanel
+          tripId={id}
+          stopId={scanStop.transportOrderStopId}
+          stopLabel={scanStop.locationName}
+          scanType={scanStop.stopType === 'Loading' ? 'Load' : 'Unload'}
+          canCorrect={canCorrectScans}
+          onClose={() => setScanStop(null)}
+        />
+      )}
 
       {completeTarget && (
         <Modal

@@ -9,6 +9,15 @@ import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { STOP_TYPE_LABELS, type StopInput, type TransportOrderDetail, type TransportOrderInput } from '../types'
 import './transport-order-form.css'
 
+interface CargoFormRow {
+  key: string
+  description: string
+  barcode: string
+  expectedQuantity: string
+  quantityUnit: string
+  notes: string
+}
+
 interface StopFormRow {
   key: string
   stopType: StopInput['stopType']
@@ -132,6 +141,17 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
       : [emptyStop('Loading'), emptyStop('Unloading')],
   )
 
+  const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() =>
+    (order?.cargoItems ?? []).map((c) => ({
+      key: nextStopKey(),
+      description: c.description,
+      barcode: c.barcode ?? '',
+      expectedQuantity: String(c.expectedQuantity),
+      quantityUnit: c.quantityUnit ?? '',
+      notes: c.notes ?? '',
+    })),
+  )
+
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loadedCustomerDetail, setLoadedCustomerDetail] = useState<{ id: string; detail: CustomerDetail } | null>(null)
@@ -176,6 +196,10 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
     setStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
   }
 
+  function setCargo(key: string, patch: Partial<CargoFormRow>) {
+    setCargoItems((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+  }
+
   function moveStop(index: number, delta: number) {
     setStops((rows) => {
       const target = index + delta
@@ -216,6 +240,21 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         return
       }
     }
+    for (const cargo of cargoItems) {
+      if (!cargo.description.trim()) {
+        setFormError('Elke goederenlijn heeft een omschrijving nodig.')
+        return
+      }
+      if (cargo.expectedQuantity === '' || Number(cargo.expectedQuantity) <= 0) {
+        setFormError('De verwachte hoeveelheid van een goederenlijn moet groter dan nul zijn.')
+        return
+      }
+    }
+    const barcodes = cargoItems.map((c) => c.barcode.trim().toLowerCase()).filter(Boolean)
+    if (barcodes.length !== new Set(barcodes).size) {
+      setFormError('Een barcode mag maar één keer voorkomen binnen dezelfde opdracht.')
+      return
+    }
 
     const input: TransportOrderInput = {
       customerId,
@@ -254,6 +293,13 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         accessInstructions: stop.accessInstructions.trim() || null,
         loadingInstructions: stop.loadingInstructions.trim() || null,
         unloadingInstructions: stop.unloadingInstructions.trim() || null,
+      })),
+      cargoItems: cargoItems.map((cargo) => ({
+        description: cargo.description.trim(),
+        barcode: cargo.barcode.trim() || null,
+        expectedQuantity: Number(cargo.expectedQuantity),
+        quantityUnit: cargo.quantityUnit.trim() || null,
+        notes: cargo.notes.trim() || null,
       })),
     }
 
@@ -496,6 +542,58 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
               )}
             </div>
           </details>
+        </fieldset>
+      ))}
+
+      <div className="tof-stops-header">
+        <h3>Goederenlijnen (scanbaar)</h3>
+        <div className="tof-stops-actions">
+          <Button
+            variant="secondary"
+            onClick={() =>
+              setCargoItems((rows) => [
+                ...rows,
+                { key: nextStopKey(), description: '', barcode: '', expectedQuantity: '1', quantityUnit: '', notes: '' },
+              ])
+            }
+            disabled={saving}
+          >
+            + Goederenlijn
+          </Button>
+        </div>
+      </div>
+      {cargoItems.length === 0 && (
+        <p className="tof-cargo-hint">
+          Zonder goederenlijnen kan de chauffeur niet scannen; de opdracht blijft wel gewoon uitvoerbaar.
+        </p>
+      )}
+      {cargoItems.map((cargo, index) => (
+        <fieldset key={cargo.key} className="tof-stop">
+          <legend>Lijn {index + 1}</legend>
+          <div className="tof-row tof-row-4">
+            <FormField label="Omschrijving" htmlFor={`cg-desc-${cargo.key}`} required>
+              <input id={`cg-desc-${cargo.key}`} value={cargo.description} onChange={(e) => setCargo(cargo.key, { description: e.target.value })} disabled={saving} maxLength={300} />
+            </FormField>
+            <FormField label="Barcode" htmlFor={`cg-bc-${cargo.key}`}>
+              <input id={`cg-bc-${cargo.key}`} value={cargo.barcode} onChange={(e) => setCargo(cargo.key, { barcode: e.target.value })} disabled={saving} maxLength={100} />
+            </FormField>
+            <FormField label="Verwacht aantal" htmlFor={`cg-qty-${cargo.key}`} required>
+              <input id={`cg-qty-${cargo.key}`} type="number" min={0.01} step="0.01" value={cargo.expectedQuantity} onChange={(e) => setCargo(cargo.key, { expectedQuantity: e.target.value })} disabled={saving} />
+            </FormField>
+            <FormField label="Eenheid" htmlFor={`cg-unit-${cargo.key}`}>
+              <input id={`cg-unit-${cargo.key}`} value={cargo.quantityUnit} onChange={(e) => setCargo(cargo.key, { quantityUnit: e.target.value })} disabled={saving} maxLength={50} placeholder="bv. colli" />
+            </FormField>
+          </div>
+          <div className="tof-stop-toolbar">
+            <button
+              type="button"
+              className="tof-link tof-link-danger"
+              onClick={() => setCargoItems((rows) => rows.filter((row) => row.key !== cargo.key))}
+              disabled={saving}
+            >
+              Verwijderen
+            </button>
+          </div>
         </fieldset>
       ))}
 

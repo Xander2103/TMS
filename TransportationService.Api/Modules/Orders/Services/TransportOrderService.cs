@@ -142,6 +142,11 @@ public class TransportOrderService : ITransportOrderService
             return validation;
         }
 
+        if (CargoItemsError(request.CargoItems) is { } cargoError)
+        {
+            return TransportOrderOperationResult.Invalid(cargoError);
+        }
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
@@ -167,6 +172,7 @@ public class TransportOrderService : ITransportOrderService
         };
 
         _dbContext.Add(order);
+        _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems));
         await TenantNumbering.SaveWithClaimedNumberAsync(
             _dbContext, settings,
             () => order.OrderNumber = GenerateOrderNumber(settings),
@@ -210,6 +216,11 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(confirmError);
         }
 
+        if (CargoItemsError(request.CargoItems) is { } cargoError)
+        {
+            return TransportOrderOperationResult.Invalid(cargoError);
+        }
+
         var before = new { order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count };
 
         order.CustomerId = request.CustomerId;
@@ -237,6 +248,13 @@ public class TransportOrderService : ITransportOrderService
         // The new stops carry client-generated ids; navigation discovery would attach them as
         // Modified (phantom UPDATE). Mark them Added explicitly.
         _dbContext.AddRange(order.Stops);
+
+        // Cargo items follow the same wholesale-replacement model as stops (soft delete).
+        var existingCargo = await _dbContext.CargoItems
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
+            .ToListAsync(cancellationToken);
+        _dbContext.RemoveRange(existingCargo);
+        _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -489,6 +507,50 @@ public class TransportOrderService : ITransportOrderService
         return null;
     }
 
+    /// <summary>Validates the cargo list: description + positive quantity per item, barcode unambiguous within the order.</summary>
+    private static string? CargoItemsError(IReadOnlyList<CargoItemInput>? items)
+    {
+        if (items is null || items.Count == 0)
+        {
+            return null;
+        }
+
+        if (items.Any(i => string.IsNullOrWhiteSpace(i.Description)))
+        {
+            return "Elke goederenlijn heeft een omschrijving nodig.";
+        }
+
+        if (items.Any(i => i.ExpectedQuantity <= 0))
+        {
+            return "De verwachte hoeveelheid van een goederenlijn moet groter dan nul zijn.";
+        }
+
+        var barcodes = items
+            .Select(i => i.Barcode?.Trim().ToLowerInvariant())
+            .Where(b => !string.IsNullOrEmpty(b))
+            .ToList();
+        if (barcodes.Count != barcodes.Distinct().Count())
+        {
+            return "Een barcode mag maar één keer voorkomen binnen dezelfde opdracht.";
+        }
+
+        return null;
+    }
+
+    private List<CargoItem> BuildCargoItems(Guid orderId, IReadOnlyList<CargoItemInput>? inputs) =>
+        (inputs ?? []).Select((input, index) => new CargoItem
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenantContext.TenantId,
+            TransportOrderId = orderId,
+            Sequence = index + 1,
+            Description = input.Description.Trim(),
+            Barcode = Trim(input.Barcode),
+            ExpectedQuantity = input.ExpectedQuantity,
+            QuantityUnit = Trim(input.QuantityUnit),
+            Notes = Trim(input.Notes),
+        }).ToList();
+
     private static string? WindowError(DateTime? from, DateTime? to) =>
         from is { } f && to is { } t && t < f
             ? "Het einde van een tijdvenster moet na het begin liggen."
@@ -575,13 +637,19 @@ public class TransportOrderService : ITransportOrderService
             })
             .ToList();
 
+        var cargoItems = await _dbContext.CargoItems.AsNoTracking()
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
+            .OrderBy(c => c.Sequence)
+            .Select(c => new CargoItemDto(c.Id, c.Sequence, c.Description, c.Barcode, c.ExpectedQuantity, c.QuantityUnit, c.Notes))
+            .ToListAsync(cancellationToken);
+
         return new TransportOrderDetailDto(
             order.Id, order.OrderNumber, order.OrderDate, order.CustomerId, customerName,
             order.CustomerReference, order.Status, order.GoodsDescription,
             order.Quantity, order.QuantityUnit, order.WeightKg, order.VolumeM3, order.PalletCount,
             order.AdrRequired, order.CraneRequired, order.AgreedPrice, order.Notes,
             order.CancellationReason,
-            stops, Transitions[order.Status],
+            stops, cargoItems, Transitions[order.Status],
             CancellableStatuses.Contains(order.Status));
     }
 

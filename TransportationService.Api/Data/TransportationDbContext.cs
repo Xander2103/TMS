@@ -16,6 +16,7 @@ using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Planning.Entities;
 using TransportationService.Api.Modules.Qualifications.Entities;
 using TransportationService.Api.Modules.Reference.Entities;
+using TransportationService.Api.Modules.Scanning.Entities;
 using TransportationService.Api.Modules.Tenancy.Entities;
 
 namespace TransportationService.Api.Data;
@@ -36,6 +37,8 @@ public class TransportationDbContext : DbContext
     public DbSet<TripOrder> TripOrders => Set<TripOrder>();
     public DbSet<StopExecution> StopExecutions => Set<StopExecution>();
     public DbSet<StopStatusHistory> StopStatusHistories => Set<StopStatusHistory>();
+    public DbSet<CargoItem> CargoItems => Set<CargoItem>();
+    public DbSet<ScanEvent> ScanEvents => Set<ScanEvent>();
 
     // Invoicing (Phase 8)
     public DbSet<Invoice> Invoices => Set<Invoice>();

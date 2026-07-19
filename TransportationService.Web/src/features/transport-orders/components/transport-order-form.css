@@ -184,3 +184,9 @@
     grid-template-columns: 1fr;
   }
 }
+
+.tof-cargo-hint {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--text);
+}

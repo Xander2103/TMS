@@ -265,6 +265,36 @@ export function TransportOrderDetailPage() {
             </table>
           </section>
 
+          {order.cargoItems.length > 0 && (
+            <section className="to-section">
+              <h2>Goederenlijnen</h2>
+              <table className="to-stops-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Omschrijving</th>
+                    <th>Barcode</th>
+                    <th>Verwacht</th>
+                    <th>Notities</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {order.cargoItems.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.sequence}</td>
+                      <td>{item.description}</td>
+                      <td>{item.barcode ? <code>{item.barcode}</code> : '—'}</td>
+                      <td>
+                        {item.expectedQuantity} {item.quantityUnit ?? ''}
+                      </td>
+                      <td>{item.notes ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+
           <div className="to-detail-actions">
             {editable && (
               <Button variant="secondary" onClick={() => setEditing(true)} disabled={busy}>

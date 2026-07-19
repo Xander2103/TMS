@@ -155,6 +155,11 @@ public static class PermissionCodes
     public const string DriverWorkflowView = "driver_workflow.view";
     public const string DriverWorkflowExecute = "driver_workflow.execute";
 
+    // --- Scanning (cargo verification during execution) ---
+    public const string ScanningView = "scanning.view";
+    public const string ScanningExecute = "scanning.execute";
+    public const string ScanningCorrect = "scanning.correct";
+
     // --- Absences (HR availability) ---
     public const string AbsencesView = "absences.view";
     public const string AbsencesCreate = "absences.create";
@@ -270,6 +275,9 @@ public static class PermissionCodes
         (InvoicesChangeStatus, "invoices", "change_status", "Factuurstatus wijzigen"),
         (DriverWorkflowView, "driver_workflow", "view", "Eigen ritten en rituitvoering bekijken"),
         (DriverWorkflowExecute, "driver_workflow", "execute", "Stops registreren tijdens rituitvoering"),
+        (ScanningView, "scanning", "view", "Scanhistoriek en scanstatus bekijken"),
+        (ScanningExecute, "scanning", "execute", "Colli scannen tijdens rituitvoering"),
+        (ScanningCorrect, "scanning", "correct", "Scantellingen handmatig corrigeren"),
         (AbsencesView, "absences", "view", "Afwezigheden bekijken"),
         (AbsencesCreate, "absences", "create", "Afwezigheden aanvragen"),
         (AbsencesEdit, "absences", "edit", "Afwezigheden bewerken en annuleren"),
