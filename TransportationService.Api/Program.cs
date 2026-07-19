@@ -214,6 +214,10 @@ builder.Services.AddScoped(sp => new TransportationService.Api.Modules.Messaging
     sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddHostedService<TransportationService.Api.Modules.Messaging.Services.OutboxDispatcherHostedService>();
 
+// EDI foundation (generic-json-v1 profile; partner formats plug in as profiles later)
+builder.Services.AddScoped<TransportationService.Api.Modules.Edi.Services.IEdiService,
+    TransportationService.Api.Modules.Edi.Services.EdiService>();
+
 // ETA foundation (sequential raming; IRouteEstimationProvider is the future PTV seam)
 builder.Services.AddSingleton<TransportationService.Api.Modules.Eta.Services.IRouteEstimationProvider,
     TransportationService.Api.Modules.Eta.Services.NoRouteEstimationProvider>();

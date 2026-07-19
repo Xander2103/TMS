@@ -19,10 +19,14 @@ namespace TransportationService.Api.Modules.Orders.Controllers;
 public class TransportOrdersController : ControllerBase
 {
     private readonly ITransportOrderService _service;
+    private readonly TransportationService.Api.Modules.Edi.Services.IEdiService _ediService;
 
-    public TransportOrdersController(ITransportOrderService service)
+    public TransportOrdersController(
+        ITransportOrderService service,
+        TransportationService.Api.Modules.Edi.Services.IEdiService ediService)
     {
         _service = service;
+        _ediService = ediService;
     }
 
     [HttpGet]
@@ -133,6 +137,12 @@ public class TransportOrdersController : ControllerBase
         Guid id, ChangeTransportOrderStatusRequest request, CancellationToken cancellationToken)
     {
         var result = await _service.ChangeStatusAsync(id, request.Status, cancellationToken);
+        if (result.Outcome == TransportOrderOperationOutcome.Success)
+        {
+            // Orders that entered via EDI report their status back (no-op for the rest).
+            await _ediService.QueueOutboundStatusAsync(id, request.Status.ToString(), cancellationToken);
+        }
+
         return Handle(result, created: false);
     }
 

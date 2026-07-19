@@ -76,6 +76,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PodView,
                 PermissionCodes.EmployeePlanningView, PermissionCodes.EmployeePlanningManage,
                 PermissionCodes.MessagingManage, PermissionCodes.MessageTemplatesManage,
+                PermissionCodes.EdiManage, PermissionCodes.IntegrationsManage,
                 PermissionCodes.InvoicesView,
                 PermissionCodes.AbsencesApprove,
                 PermissionCodes.AuditLogsView,

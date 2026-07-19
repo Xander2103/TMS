@@ -160,6 +160,10 @@ public static class PermissionCodes
     public const string ScanningExecute = "scanning.execute";
     public const string ScanningCorrect = "scanning.correct";
 
+    // --- EDI & integrations ---
+    public const string EdiManage = "edi.manage";
+    public const string IntegrationsManage = "integrations.manage";
+
     // --- Messaging (email/SMS outbox + templates) ---
     public const string MessagingManage = "messaging.manage";
     public const string MessageTemplatesManage = "message_templates.manage";
@@ -296,6 +300,8 @@ public static class PermissionCodes
         (ScanningView, "scanning", "view", "Scanhistoriek en scanstatus bekijken"),
         (ScanningExecute, "scanning", "execute", "Colli scannen tijdens rituitvoering"),
         (ScanningCorrect, "scanning", "correct", "Scantellingen handmatig corrigeren"),
+        (EdiManage, "edi", "manage", "EDI-partners, berichten en mappings beheren"),
+        (IntegrationsManage, "integrations", "manage", "Integraties en synchronisatiewachtrijen beheren"),
         (MessagingManage, "messaging", "manage", "Berichtenoutbox bekijken en opnieuw verzenden"),
         (MessageTemplatesManage, "message_templates", "manage", "Berichtsjablonen beheren"),
         (EmployeePlanningView, "employee_planning", "view", "Personeelsplanning bekijken"),
