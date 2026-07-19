@@ -17,6 +17,18 @@ public class DefaultRoleSeederTests
         PermissionCodes.ProfitabilityView, PermissionCodes.KpiView, PermissionCodes.KpiExport,
     ];
 
+    private static readonly string[] Version3Codes =
+    [
+        PermissionCodes.PackagesView, PermissionCodes.PackagesCreate, PermissionCodes.PackagesManage,
+        PermissionCodes.PackagesCancel, PermissionCodes.PackagesRelabel, PermissionCodes.PackagesExport,
+        PermissionCodes.PackageExceptionsCreate, PermissionCodes.PackageExceptionsManage,
+        PermissionCodes.ScanningOverride,
+        PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
+        PermissionCodes.PackageReportsExport,
+    ];
+
+    private static string[] UpgradeCodes => [.. Version2Codes, .. Version3Codes];
+
     private static async Task<(SqliteTestDbContext Db, Guid TenantId)> SeedTenantWithCatalogAsync()
     {
         var db = new SqliteTestDbContext();
@@ -48,7 +60,7 @@ public class DefaultRoleSeederTests
             TemplateCode = null, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
         };
         db.Context.Roles.Add(role);
-        var oldCodes = template.PermissionCodes.Except(Version2Codes).Distinct().ToList();
+        var oldCodes = template.PermissionCodes.Except(UpgradeCodes).Distinct().ToList();
         var permissions = await db.Context.Permissions.Where(p => oldCodes.Contains(p.Code)).ToListAsync();
         foreach (var permission in permissions)
         {
@@ -180,7 +192,8 @@ public class DefaultRoleSeederTests
         var plannerAfter = (await CodesOfAsync(db, planner.Id)).ToHashSet();
         Assert.True(plannerBefore.IsSubsetOf(plannerAfter), "no permission may ever be removed");
         Assert.Equal(
-            new[] { PermissionCodes.EmployeePlanningConflictOverride, PermissionCodes.TripCostsView }.OrderBy(c => c),
+            new[] { PermissionCodes.EmployeePlanningConflictOverride, PermissionCodes.TripCostsView }
+                .Concat(Version3Codes).OrderBy(c => c),
             plannerAfter.Except(plannerBefore).OrderBy(c => c));
 
         var managementAfter = (await CodesOfAsync(db, management.Id)).ToHashSet();

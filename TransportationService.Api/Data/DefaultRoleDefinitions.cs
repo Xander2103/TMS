@@ -55,6 +55,12 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.CustomersCreate, PermissionCodes.CustomersEdit,
                 PermissionCodes.LocationsCreate, PermissionCodes.LocationsEdit,
                 PermissionCodes.EmployeeDocumentsView,
+                PermissionCodes.PackagesView, PermissionCodes.PackagesCreate, PermissionCodes.PackagesManage,
+                PermissionCodes.PackagesCancel, PermissionCodes.PackagesRelabel, PermissionCodes.PackagesExport,
+                PermissionCodes.PackageExceptionsCreate, PermissionCodes.PackageExceptionsManage,
+                PermissionCodes.ScanningOverride,
+                PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
+                PermissionCodes.PackageReportsExport,
             ]),
 
         new("dispatcher", "Dispatcher",
@@ -69,6 +75,10 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PodView, PermissionCodes.PodCorrect,
                 PermissionCodes.EmployeePlanningView,
                 PermissionCodes.EmployeeDocumentsView,
+                PermissionCodes.PackagesView,
+                PermissionCodes.PackageExceptionsCreate, PermissionCodes.PackageExceptionsManage,
+                PermissionCodes.ScanningOverride,
+                PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
             ]),
 
         new("management", "Management",
@@ -97,6 +107,9 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.TankCardsView, PermissionCodes.FuelView,
                 PermissionCodes.CompanySettingsView,
                 PermissionCodes.UsersView, PermissionCodes.RolesView,
+                PermissionCodes.PackagesView,
+                PermissionCodes.WarehouseView,
+                PermissionCodes.PackageReportsExport,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -112,6 +125,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.CompanySettingsView,
                 PermissionCodes.TripCostsView, PermissionCodes.ProfitabilityView,
                 PermissionCodes.KpiView, PermissionCodes.KpiExport,
+                PermissionCodes.PackageReportsExport,
             ]),
 
         new("hr", "HR",

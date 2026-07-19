@@ -29,9 +29,16 @@ public class ScanningController : ControllerBase
         _currentUserContext = currentUserContext;
     }
 
-    private async Task<bool> IsDispatcherAsync(CancellationToken cancellationToken) =>
-        _currentUserContext.CurrentUserId is { } userId
-        && await _permissionService.UserHasPermissionAsync(userId, PermissionCodes.PlanningEdit, cancellationToken);
+    /// <summary>Dispatch and warehouse staff scan any trip; everyone else only their own.</summary>
+    private async Task<bool> IsDispatcherAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUserContext.CurrentUserId is not { } userId)
+        {
+            return false;
+        }
+        return await _permissionService.UserHasPermissionAsync(userId, PermissionCodes.PlanningEdit, cancellationToken)
+               || await _permissionService.UserHasPermissionAsync(userId, PermissionCodes.WarehouseView, cancellationToken);
+    }
 
     [HttpPost("api/trips/{tripId:guid}/stops/{stopId:guid}/scans")]
     [RequirePermission(PermissionCodes.ScanningExecute)]

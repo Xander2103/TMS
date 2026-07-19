@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -52,6 +52,40 @@ public static class DefaultRoleUpgrades
                 ["hr"] =
                 [
                     PermissionCodes.EmployeePlanningConflictOverride,
+                ],
+            }),
+
+        new(3,
+            "Package milestone 2026-07: package management, scanning override, warehouse access, incident dispositions and package reports.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                // Planner acts as dispatch: full package administration, dispositions,
+                // completion overrides, warehouse visibility and trip release.
+                ["planner"] =
+                [
+                    PermissionCodes.PackagesView, PermissionCodes.PackagesCreate, PermissionCodes.PackagesManage,
+                    PermissionCodes.PackagesCancel, PermissionCodes.PackagesRelabel, PermissionCodes.PackagesExport,
+                    PermissionCodes.PackageExceptionsCreate, PermissionCodes.PackageExceptionsManage,
+                    PermissionCodes.ScanningOverride,
+                    PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
+                    PermissionCodes.PackageReportsExport,
+                ],
+                ["dispatcher"] =
+                [
+                    PermissionCodes.PackagesView,
+                    PermissionCodes.PackageExceptionsCreate, PermissionCodes.PackageExceptionsManage,
+                    PermissionCodes.ScanningOverride,
+                    PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.PackagesView,
+                    PermissionCodes.WarehouseView,
+                    PermissionCodes.PackageReportsExport,
+                ],
+                ["boekhouding"] =
+                [
+                    PermissionCodes.PackageReportsExport,
                 ],
             }),
     ];
