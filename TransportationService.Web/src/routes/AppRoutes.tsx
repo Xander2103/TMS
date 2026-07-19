@@ -22,6 +22,10 @@ import { TripExecutionPage } from '../features/my-trips/pages/TripExecutionPage'
 import { ExceptionsPage } from '../features/exceptions/pages/ExceptionsPage'
 import { ExceptionDetailPage } from '../features/exceptions/pages/ExceptionDetailPage'
 import { PodDetailPage } from '../features/pod/pages/PodDetailPage'
+import { PortalDashboardPage } from '../features/portal/pages/PortalDashboardPage'
+import { PortalAbsencesPage } from '../features/portal/pages/PortalAbsencesPage'
+import { PortalQualificationsPage } from '../features/portal/pages/PortalQualificationsPage'
+import { PortalProfilePage } from '../features/portal/pages/PortalProfilePage'
 import { InvoicesPage } from '../features/invoices/pages/InvoicesPage'
 import { NewInvoicePage } from '../features/invoices/pages/NewInvoicePage'
 import { InvoiceDetailPage } from '../features/invoices/pages/InvoiceDetailPage'
@@ -83,6 +87,10 @@ const router = createBrowserRouter(
           <Route path="/exceptions" element={<ExceptionsPage />} />
           <Route path="/exceptions/:id" element={<ExceptionDetailPage />} />
           <Route path="/pods/:id" element={<PodDetailPage />} />
+          <Route path="/portal" element={<PortalDashboardPage />} />
+          <Route path="/portal/absences" element={<PortalAbsencesPage />} />
+          <Route path="/portal/qualifications" element={<PortalQualificationsPage />} />
+          <Route path="/portal/profile" element={<PortalProfilePage />} />
           <Route path="/my-trips" element={<MyTripsPage />} />
           <Route path="/my-trips/:id" element={<TripExecutionPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />

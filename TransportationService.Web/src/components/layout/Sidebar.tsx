@@ -39,10 +39,14 @@ const administrationNavItems: NavItem[] = [
 
 const lookupGroupOrder: LookupGroup[] = ['organisatie', 'categorieen', 'referentie']
 
-function renderNavItems(items: NavItem[]) {
+function renderNavItems(items: NavItem[], onNavigate?: () => void) {
   return items.map((item) => (
     <li key={item.to}>
-      <NavLink to={item.to} className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+      <NavLink
+        to={item.to}
+        className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
+        onClick={onNavigate}
+      >
         {item.label}
       </NavLink>
     </li>
@@ -55,7 +59,14 @@ function initials(firstName: string, lastName: string): string {
 
 const UNREAD_POLL_MS = 60_000
 
-export function Sidebar() {
+const portalNavItems: NavItem[] = [
+  { label: 'Mijn dashboard', to: '/portal' },
+  { label: 'Mijn afwezigheden', to: '/portal/absences' },
+  { label: 'Mijn kwalificaties', to: '/portal/qualifications' },
+  { label: 'Mijn profiel', to: '/portal/profile' },
+]
+
+export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNavigate?: () => void }) {
   const { user, logout, hasAnyPermission } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
 
@@ -94,13 +105,26 @@ export function Sidebar() {
   }, [])
 
   return (
-    <aside className="sidebar">
+    <aside className={open ? 'sidebar sidebar-open' : 'sidebar'}>
       <h1 className="app-title">Transportation Service</h1>
       <nav>
+        {/* The self-service portal is available to every user with an employee link. */}
+        {user?.employeeId && (
+          <>
+            <div className="nav-group-label">Mijn portaal</div>
+            <ul>{renderNavItems(portalNavItems, onNavigate)}</ul>
+          </>
+        )}
+
+        {(visibleOperations.length > 0 || user?.employeeId) && <div className="nav-group-label">Operaties</div>}
         <ul>
-          {renderNavItems(visibleOperations)}
+          {renderNavItems(visibleOperations, onNavigate)}
           <li>
-            <NavLink to="/notifications" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+            <NavLink
+              to="/notifications"
+              className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
+              onClick={onNavigate}
+            >
               Meldingen
               {unreadCount > 0 && <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
             </NavLink>
@@ -110,7 +134,7 @@ export function Sidebar() {
         {visibleAdministration.length > 0 && (
           <>
             <div className="nav-group-label">Beheer</div>
-            <ul>{renderNavItems(visibleAdministration)}</ul>
+            <ul>{renderNavItems(visibleAdministration, onNavigate)}</ul>
           </>
         )}
 
@@ -124,6 +148,7 @@ export function Sidebar() {
                   label: resource.title,
                   to: `/master-data/${resource.slug}`,
                 })),
+                onNavigate,
               )}
             </ul>
           </div>

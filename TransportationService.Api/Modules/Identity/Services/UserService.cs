@@ -12,15 +12,46 @@ public class UserService : IUserService
 {
     private const string AdministratorRoleName = "Administrator";
 
+    private const int MinPasswordLength = 8;
+
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly Authentication.Services.IPasswordHasher _passwordHasher;
 
-    public UserService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public UserService(
+        TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        Authentication.Services.IPasswordHasher passwordHasher)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _passwordHasher = passwordHasher;
+    }
+
+    /// <summary>Administrative (re)set of a user's password; the change is audited, the hash never leaves the server.</summary>
+    public async Task<UserOperationResult> SetPasswordAsync(Guid id, string password, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(password) || password.Length < MinPasswordLength)
+        {
+            return new UserOperationResult(UserOperationOutcome.ValidationFailed, null,
+                $"Het wachtwoord moet minstens {MinPasswordLength} tekens lang zijn.");
+        }
+
+        var user = await _dbContext.Users
+            .FirstOrDefaultAsync(u => u.Id == id && u.TenantId == _tenantContext.TenantId, cancellationToken);
+        if (user is null)
+        {
+            return new UserOperationResult(UserOperationOutcome.NotFound, null);
+        }
+
+        user.PasswordHash = _passwordHasher.Hash(password);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("User", user.Id.ToString(), "PasswordSet", null,
+            new { ByAdministrator = true }, cancellationToken);
+
+        return new UserOperationResult(UserOperationOutcome.Success, await MapAsync(user, cancellationToken));
     }
 
     public async Task<IReadOnlyList<UserDto>> ListAsync(CancellationToken cancellationToken)

@@ -90,6 +90,22 @@ public class UsersController : ControllerBase
         return updated is null ? NotFound() : Ok(updated);
     }
 
+    public record SetPasswordRequest(string Password);
+
+    /// <summary>Administrative password (re)set so an employee/driver account can log in to the portal.</summary>
+    [HttpPut("{id:guid}/password")]
+    [RequirePermission(PermissionCodes.UsersEdit)]
+    public async Task<IActionResult> SetPassword(Guid id, SetPasswordRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _userService.SetPasswordAsync(id, request.Password, cancellationToken);
+        return result.Outcome switch
+        {
+            UserOperationOutcome.Success => NoContent(),
+            UserOperationOutcome.NotFound => NotFound(),
+            _ => BadRequest(new { message = result.Error }),
+        };
+    }
+
     public record SetActiveRequest(bool IsActive);
 
     [HttpPatch("{id:guid}/active")]

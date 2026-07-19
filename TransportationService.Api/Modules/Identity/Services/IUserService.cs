@@ -11,8 +11,11 @@ public interface IUserService
     Task<UserOperationResult> SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken);
     Task<UserOperationResult> SetBlockedAsync(Guid id, bool isBlocked, CancellationToken cancellationToken);
     Task<UserOperationResult> AssignRolesAsync(Guid id, AssignRolesRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Administrative password (re)set; enables portal logins for provisioned employees.</summary>
+    Task<UserOperationResult> SetPasswordAsync(Guid id, string password, CancellationToken cancellationToken);
 }
 
-public enum UserOperationOutcome { Success, NotFound, LastActiveAdministrator }
+public enum UserOperationOutcome { Success, NotFound, LastActiveAdministrator, ValidationFailed }
 
-public record UserOperationResult(UserOperationOutcome Outcome, UserDto? User);
+public record UserOperationResult(UserOperationOutcome Outcome, UserDto? User, string? Error = null);

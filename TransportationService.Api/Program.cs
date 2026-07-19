@@ -182,6 +182,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Exceptions.Services
 builder.Services.AddScoped<TransportationService.Api.Modules.Pod.Services.IPodService,
     TransportationService.Api.Modules.Pod.Services.PodService>();
 
+// Employee portal (self-scoped)
+builder.Services.AddScoped<TransportationService.Api.Modules.Portal.Services.IPortalService,
+    TransportationService.Api.Modules.Portal.Services.PortalService>();
+
 // Invoicing
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();
