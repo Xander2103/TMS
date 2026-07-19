@@ -149,3 +149,61 @@
   font-size: 13px;
   color: var(--text);
 }
+
+.portal-week-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.portal-week-nav button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  font: inherit;
+  cursor: pointer;
+}
+
+.portal-planning {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+}
+
+.portal-planning-day {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.portal-planning-today {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.portal-planning-date {
+  font-weight: 600;
+  color: var(--text-h);
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.portal-planning-entries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.portal-planning-free {
+  font-size: 13px;
+  color: var(--text);
+}

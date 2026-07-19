@@ -186,6 +186,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Pod.Services.IPodSe
 builder.Services.AddScoped<TransportationService.Api.Modules.Portal.Services.IPortalService,
     TransportationService.Api.Modules.Portal.Services.PortalService>();
 
+// Employee planning (personnel shifts)
+builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Services.IShiftService,
+    TransportationService.Api.Modules.EmployeePlanning.Services.ShiftService>();
+
 // Invoicing
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();

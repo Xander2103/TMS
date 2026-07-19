@@ -21,6 +21,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Mijn ritten', to: '/my-trips', permissions: ['driver_workflow.view'] },
   { label: 'Klanten', to: '/customers', permissions: ['customers.view'] },
   { label: 'Chauffeurs', to: '/drivers', permissions: ['drivers.view'] },
+  { label: 'Personeelsplanning', to: '/employee-planning', permissions: ['employee_planning.view', 'employee_planning.manage'] },
   { label: 'Afwezigheden', to: '/absences', permissions: ['absences.view'] },
   { label: 'Vloot', to: '/fleet', permissions: ['vehicles.view'] },
   { label: 'Voertuigen', to: '/vehicles', permissions: ['vehicles.view'] },
@@ -61,6 +62,7 @@ const UNREAD_POLL_MS = 60_000
 
 const portalNavItems: NavItem[] = [
   { label: 'Mijn dashboard', to: '/portal' },
+  { label: 'Mijn planning', to: '/portal/planning' },
   { label: 'Mijn afwezigheden', to: '/portal/absences' },
   { label: 'Mijn kwalificaties', to: '/portal/qualifications' },
   { label: 'Mijn profiel', to: '/portal/profile' },

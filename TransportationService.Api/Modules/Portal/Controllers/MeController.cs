@@ -64,6 +64,21 @@ public class MeController : ControllerBase
         return HandleAbsence(await _service.CancelMyAbsenceAsync(id, cancellationToken));
     }
 
+    [HttpGet("planning")]
+    public async Task<IActionResult> Planning(
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
+    {
+        if (to < from || to.DayNumber - from.DayNumber > 62)
+        {
+            return BadRequest(new { message = "Kies een geldige periode van maximaal 62 dagen." });
+        }
+
+        var days = await _service.GetMyPlanningAsync(from, to, cancellationToken);
+        return days is null
+            ? NotFound(new { message = "Er is geen personeelsdossier gekoppeld aan dit account." })
+            : Ok(days);
+    }
+
     [HttpGet("qualifications")]
     public async Task<ActionResult<IReadOnlyList<EmployeeQualificationDto>>> Qualifications(CancellationToken cancellationToken)
     {

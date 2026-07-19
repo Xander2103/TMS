@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.EmployeePlanning.Dtos;
 using TransportationService.Api.Modules.Hr.Dtos;
 using TransportationService.Api.Modules.Portal.Dtos;
 using TransportationService.Api.Modules.Qualifications.Dtos;
@@ -27,4 +28,7 @@ public interface IPortalService
     Task<(Stream Content, string FileName)?> OpenMyQualificationDocumentAsync(Guid qualificationId, CancellationToken cancellationToken);
 
     Task<PortalOperationResult> ChangeMyPasswordAsync(ChangeMyPasswordRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Own schedule days (shifts + absences merged), for "Mijn planning".</summary>
+    Task<IReadOnlyList<ScheduleDayDto>?> GetMyPlanningAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken);
 }

@@ -44,6 +44,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ScanningView,
                 PermissionCodes.ExceptionsView, PermissionCodes.ExceptionsResolve,
                 PermissionCodes.PodView,
+                PermissionCodes.EmployeePlanningView, PermissionCodes.EmployeePlanningManage,
                 PermissionCodes.CustomersCreate, PermissionCodes.CustomersEdit,
                 PermissionCodes.LocationsCreate, PermissionCodes.LocationsEdit,
                 PermissionCodes.EmployeeDocumentsView,
@@ -59,6 +60,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ScanningView, PermissionCodes.ScanningCorrect,
                 PermissionCodes.ExceptionsView, PermissionCodes.ExceptionsCreate, PermissionCodes.ExceptionsResolve,
                 PermissionCodes.PodView, PermissionCodes.PodCorrect,
+                PermissionCodes.EmployeePlanningView,
                 PermissionCodes.EmployeeDocumentsView,
             ]),
 
@@ -71,6 +73,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ScanningView,
                 PermissionCodes.ExceptionsView,
                 PermissionCodes.PodView,
+                PermissionCodes.EmployeePlanningView, PermissionCodes.EmployeePlanningManage,
                 PermissionCodes.InvoicesView,
                 PermissionCodes.AbsencesApprove,
                 PermissionCodes.AuditLogsView,

@@ -1,0 +1,243 @@
+/* State chips — colour convention from the spec, always paired with icon + label.
+   Text stays dark-on-light in both themes for AA contrast on the tinted backgrounds. */
+.schedule-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: left;
+  color: #1f2430;
+  max-width: 100%;
+}
+
+button.schedule-chip {
+  cursor: pointer;
+}
+
+.schedule-chip-icon {
+  flex-shrink: 0;
+}
+
+.schedule-chip-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.schedule-chip-state {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.schedule-chip-time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* grey = concept */
+.schedule-chip-draft { background: #e5e7eb; border-color: #9ca3af; }
+/* blue = scheduled */
+.schedule-chip-planned { background: #dbeafe; border-color: #3b82f6; }
+/* green = confirmed */
+.schedule-chip-confirmed { background: #dcfce7; border-color: #16a34a; }
+/* teal = standby/on-call */
+.schedule-chip-standby { background: #ccfbf1; border-color: #0d9488; }
+/* purple = training */
+.schedule-chip-training { background: #f3e8ff; border-color: #9333ea; }
+/* orange = requested/under review */
+.schedule-chip-leaverequested { background: #ffedd5; border-color: #ea580c; }
+/* green (with distinct icon) = approved leave */
+.schedule-chip-leaveapproved { background: #d1fae5; border-color: #059669; }
+/* red = rejected */
+.schedule-chip-leaverejected { background: #fee2e2; border-color: #dc2626; }
+/* yellow = sick/attention */
+.schedule-chip-sick { background: #fef9c3; border-color: #ca8a04; }
+/* dark grey = unavailable */
+.schedule-chip-unavailable { background: #d1d5db; border-color: #4b5563; }
+
+.schedule-legend summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--accent);
+  padding: 6px 0;
+}
+
+.schedule-legend ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Grid */
+.ep-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.ep-toolbar select,
+.ep-toolbar input {
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.ep-week-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ep-week-nav button {
+  min-width: 36px;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.ep-grid-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.ep-grid {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 860px;
+  font-size: 13px;
+}
+
+.ep-grid th,
+.ep-grid td {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 6px 8px;
+  vertical-align: top;
+  text-align: left;
+}
+
+.ep-grid th {
+  background: var(--code-bg, rgba(0, 0, 0, 0.03));
+  position: sticky;
+  top: 0;
+}
+
+.ep-grid .ep-employee-cell {
+  min-width: 170px;
+  position: sticky;
+  left: 0;
+  background: var(--bg);
+}
+
+.ep-employee-name {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.ep-employee-meta {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.ep-day-cell {
+  min-width: 120px;
+}
+
+.ep-day-cell-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 42px;
+}
+
+.ep-add-shift {
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  padding: 3px 6px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.ep-day-cell:hover .ep-add-shift,
+.ep-add-shift:focus-visible {
+  opacity: 1;
+}
+
+.ep-weekend {
+  background: var(--code-bg, rgba(0, 0, 0, 0.02));
+}
+
+.ep-today th,
+th.ep-today {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.ep-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ep-form input,
+.ep-form select,
+.ep-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.ep-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.ep-form-actions-extra {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ep-grid .ep-employee-cell,
+  .ep-grid th {
+    background: var(--bg);
+  }
+}
+
+@media (max-width: 640px) {
+  .ep-form-row {
+    grid-template-columns: 1fr;
+  }
+}

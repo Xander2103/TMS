@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Authentication.Services;
+using TransportationService.Api.Modules.EmployeePlanning.Dtos;
+using TransportationService.Api.Modules.EmployeePlanning.Services;
 using TransportationService.Api.Modules.Hr.Dtos;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Hr.Services;
@@ -29,6 +31,7 @@ public class PortalService : IPortalService
     private readonly IQualificationStatusCalculator _statusCalculator;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAuditService _auditService;
+    private readonly IShiftService _shiftService;
     private readonly TimeProvider _timeProvider;
 
     public PortalService(
@@ -41,8 +44,10 @@ public class PortalService : IPortalService
         IQualificationStatusCalculator statusCalculator,
         IPasswordHasher passwordHasher,
         IAuditService auditService,
+        IShiftService shiftService,
         TimeProvider timeProvider)
     {
+        _shiftService = shiftService;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUserContext = currentUserContext;
@@ -272,6 +277,17 @@ public class PortalService : IPortalService
             new { Self = true }, cancellationToken);
 
         return PortalOperationResult.Success;
+    }
+
+    public async Task<IReadOnlyList<ScheduleDayDto>?> GetMyPlanningAsync(
+        DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+
+        return await _shiftService.GetEmployeeScheduleAsync(employeeId, from, to, cancellationToken);
     }
 
     private static PortalAbsenceResult Map(AbsenceOperationResult result) => result.Outcome switch

@@ -160,6 +160,10 @@ public static class PermissionCodes
     public const string ScanningExecute = "scanning.execute";
     public const string ScanningCorrect = "scanning.correct";
 
+    // --- Employee planning (personnel shifts) ---
+    public const string EmployeePlanningView = "employee_planning.view";
+    public const string EmployeePlanningManage = "employee_planning.manage";
+
     // --- Proof of delivery ---
     public const string PodView = "pod.view";
     public const string PodFinalize = "pod.finalize";
@@ -288,6 +292,8 @@ public static class PermissionCodes
         (ScanningView, "scanning", "view", "Scanhistoriek en scanstatus bekijken"),
         (ScanningExecute, "scanning", "execute", "Colli scannen tijdens rituitvoering"),
         (ScanningCorrect, "scanning", "correct", "Scantellingen handmatig corrigeren"),
+        (EmployeePlanningView, "employee_planning", "view", "Personeelsplanning bekijken"),
+        (EmployeePlanningManage, "employee_planning", "manage", "Personeelsplanning en shifts beheren"),
         (PodView, "pod", "view", "Afleverbewijzen bekijken"),
         (PodFinalize, "pod", "finalize", "Afleverbewijzen opnemen en afronden"),
         (PodCorrect, "pod", "correct", "Afleverbewijzen corrigeren (nieuwe versie)"),

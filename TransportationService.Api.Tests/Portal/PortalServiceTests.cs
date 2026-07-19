@@ -117,7 +117,10 @@ public class PortalServiceTests
             new LocalFileStorageService(storageRoot));
         return new PortalService(
             db.Context, tenant, user, absences, qualifications, notifications,
-            new QualificationStatusCalculator(), new PasswordHasher(), audit, clock);
+            new QualificationStatusCalculator(), new PasswordHasher(), audit,
+            new TransportationService.Api.Modules.EmployeePlanning.Services.ShiftService(
+                db.Context, tenant, audit, notifications, clock),
+            clock);
     }
 
     [Fact]

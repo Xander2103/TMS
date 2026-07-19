@@ -43,6 +43,7 @@ public class TransportationDbContext : DbContext
     public DbSet<ScanEvent> ScanEvents => Set<ScanEvent>();
     public DbSet<TransportationService.Api.Modules.Pod.Entities.ProofOfDelivery> ProofsOfDelivery => Set<TransportationService.Api.Modules.Pod.Entities.ProofOfDelivery>();
     public DbSet<TransportationService.Api.Modules.Pod.Entities.PodPhoto> PodPhotos => Set<TransportationService.Api.Modules.Pod.Entities.PodPhoto>();
+    public DbSet<TransportationService.Api.Modules.EmployeePlanning.Entities.Shift> Shifts => Set<TransportationService.Api.Modules.EmployeePlanning.Entities.Shift>();
 
     // Invoicing (Phase 8)
     public DbSet<Invoice> Invoices => Set<Invoice>();
