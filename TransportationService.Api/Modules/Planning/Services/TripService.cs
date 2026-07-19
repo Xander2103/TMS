@@ -54,6 +54,14 @@ public class TripService : ITripService
         _costingService = costingService;
     }
 
+    /// <summary>
+    /// PostgreSQL timestamptz only accepts UTC kinds. API clients may send naive ISO times
+    /// (no offset); treat those as UTC instead of failing the save with a 500.
+    /// </summary>
+    private static DateTime? AsUtc(DateTime? value) => value is { } v
+        ? v.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(v, DateTimeKind.Utc) : v.ToUniversalTime()
+        : null;
+
     private static string? ValidateDistances(decimal? total, decimal? empty)
     {
         if (total is < 0 || empty is < 0)
@@ -146,8 +154,8 @@ public class TripService : ITripService
             DriverId = request.DriverId,
             VehicleId = request.VehicleId,
             TrailerId = request.TrailerId,
-            PlannedStart = request.PlannedStart,
-            PlannedEnd = request.PlannedEnd,
+            PlannedStart = AsUtc(request.PlannedStart),
+            PlannedEnd = AsUtc(request.PlannedEnd),
             PlannedDistanceKm = request.PlannedDistanceKm,
             PlannedEmptyKm = request.PlannedEmptyKm,
             Notes = Trim(request.Notes),
@@ -216,8 +224,8 @@ public class TripService : ITripService
         trip.DriverId = request.DriverId;
         trip.VehicleId = request.VehicleId;
         trip.TrailerId = request.TrailerId;
-        trip.PlannedStart = request.PlannedStart;
-        trip.PlannedEnd = request.PlannedEnd;
+        trip.PlannedStart = AsUtc(request.PlannedStart);
+        trip.PlannedEnd = AsUtc(request.PlannedEnd);
         trip.PlannedDistanceKm = request.PlannedDistanceKm;
         trip.PlannedEmptyKm = request.PlannedEmptyKm;
         trip.Notes = Trim(request.Notes);

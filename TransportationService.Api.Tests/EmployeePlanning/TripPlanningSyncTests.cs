@@ -300,6 +300,26 @@ public class TripPlanningSyncTests
     }
 
     [Fact]
+    public async Task NaiveTimestamps_AreNormalizedToUtc()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        // API clients may post ISO times without offset (Kind=Unspecified); PostgreSQL
+        // timestamptz would refuse them at save time, so the service must normalize.
+        var naive = new CreateTripRequest(TripDate, h.DriverId, h.VehicleId, null,
+            DateTime.SpecifyKind(new DateTime(2026, 7, 21, 8, 0, 0), DateTimeKind.Unspecified),
+            DateTime.SpecifyKind(new DateTime(2026, 7, 21, 16, 0, 0), DateTimeKind.Unspecified),
+            null, [h.OrderId]);
+        var result = await h.Trips.CreateAsync(naive, CancellationToken.None);
+
+        Assert.Equal(TripOperationOutcome.Success, result.Outcome);
+        var stored = h.Db.Context.Trips.Single(t => t.Id == result.Trip!.Id);
+        Assert.Equal(DateTimeKind.Utc, stored.PlannedStart!.Value.Kind);
+        Assert.Equal(DateTimeKind.Utc, stored.PlannedEnd!.Value.Kind);
+    }
+
+    [Fact]
     public async Task SyncTwice_NeverDuplicates()
     {
         var h = await SeedAsync();
