@@ -24,6 +24,7 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
         builder.Property(o => o.VolumeM3).HasPrecision(12, 2);
         builder.Property(o => o.AgreedPrice).HasPrecision(12, 2);
         builder.Property(o => o.Notes).HasMaxLength(4000);
+        builder.Property(o => o.CancellationReason).HasMaxLength(500);
 
         builder.HasIndex(o => new { o.TenantId, o.OrderNumber })
             .IsUnique()

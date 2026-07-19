@@ -8,7 +8,10 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { apiBaseUrl } from '../../../config/env'
+import { getAccessToken } from '../../auth/authStorage'
 import { searchTransportOrders } from '../api/transportOrdersApi'
 import {
   ORDER_STATUS_LABELS,
@@ -21,10 +24,36 @@ import './transport-orders.css'
 
 export function TransportOrdersPage() {
   const navigate = useNavigate()
-  const { hasPermission } = useAuth()
+  const toast = useToast()
+  const { hasAnyPermission } = useAuth()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<TransportOrderStatus | ''>('')
   const [page, setPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
+
+  async function handleExport() {
+    setExporting(true)
+    try {
+      const query = new URLSearchParams()
+      if (search) query.set('search', search)
+      if (statusFilter) query.set('status', statusFilter)
+      const response = await fetch(`${apiBaseUrl}/api/transport-orders/export?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+      })
+      if (!response.ok) throw new Error()
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = 'transportopdrachten.csv'
+      anchor.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.showError('Export is mislukt.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<TransportOrderListItem>(
     (args) => searchTransportOrders({ ...args, status: statusFilter || undefined }),
@@ -75,9 +104,16 @@ export function TransportOrdersPage() {
       <PageHeader
         title="Transportopdrachten"
         action={
-          hasPermission('orders.create') ? (
-            <Button onClick={() => navigate('/transport-orders/new')}>Nieuwe opdracht</Button>
-          ) : undefined
+          <span className="to-header-actions">
+            {hasAnyPermission(['orders.export', 'orders.manage']) && (
+              <Button variant="secondary" onClick={() => void handleExport()} disabled={exporting}>
+                {exporting ? 'Exporteren…' : 'Exporteren (CSV)'}
+              </Button>
+            )}
+            {hasAnyPermission(['orders.create', 'orders.manage']) && (
+              <Button onClick={() => navigate('/transport-orders/new')}>Nieuwe opdracht</Button>
+            )}
+          </span>
         }
       />
       <div className="to-filters">

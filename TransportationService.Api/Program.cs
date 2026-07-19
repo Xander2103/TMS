@@ -212,6 +212,7 @@ if (app.Environment.IsDevelopment())
     // Idempotent every startup: keep the permission catalog in sync and seed starter lookups.
     await PermissionCatalogSeeder.SyncAsync(dbContext);
     await ReferenceDataSeeder.SeedAsync(dbContext);
+    await DefaultRoleSeeder.SyncAsync(dbContext);
 
     // Ensure the development administrator has a usable password (only when unset, so a
     // deliberately-changed password is never reset). Reported to the console below.

@@ -46,10 +46,30 @@ public class TripsController : ControllerBase
         return trip is null ? NotFound() : Ok(trip);
     }
 
+    /// <summary>Attaching orders to a trip is separately permissioned (orders.assign).</summary>
+    private async Task<bool> MayAssignOrdersAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUserContext.CurrentUserId is not { } userId)
+        {
+            return false;
+        }
+
+        return await _permissionService.UserHasPermissionAsync(userId, PermissionCodes.OrdersAssign, cancellationToken)
+               || await _permissionService.UserHasPermissionAsync(userId, PermissionCodes.OrdersManage, cancellationToken);
+    }
+
+    private ObjectResult AssignForbidden() => StatusCode(StatusCodes.Status403Forbidden,
+        new { message = "Je hebt geen recht om opdrachten aan ritten te koppelen (orders.assign)." });
+
     [HttpPost]
     [RequirePermission(PermissionCodes.PlanningCreate)]
     public async Task<ActionResult<TripDetailDto>> Create(CreateTripRequest request, CancellationToken cancellationToken)
     {
+        if (request.OrderIds.Count > 0 && !await MayAssignOrdersAsync(cancellationToken))
+        {
+            return AssignForbidden();
+        }
+
         var result = await _service.CreateAsync(request, cancellationToken);
         return Handle(result, created: true);
     }
@@ -58,6 +78,19 @@ public class TripsController : ControllerBase
     [RequirePermission(PermissionCodes.PlanningEdit)]
     public async Task<ActionResult<TripDetailDto>> Update(Guid id, UpdateTripRequest request, CancellationToken cancellationToken)
     {
+        // Only require orders.assign when the set of attached orders actually changes,
+        // so a planner without it can still adjust driver/vehicle/times.
+        var current = await _service.GetByIdAsync(id, cancellationToken);
+        if (current is not null)
+        {
+            var currentOrderIds = current.Orders.Select(o => o.TransportOrderId).OrderBy(x => x).ToList();
+            var requestedOrderIds = request.OrderIds.Distinct().OrderBy(x => x).ToList();
+            if (!currentOrderIds.SequenceEqual(requestedOrderIds) && !await MayAssignOrdersAsync(cancellationToken))
+            {
+                return AssignForbidden();
+            }
+        }
+
         var result = await _service.UpdateAsync(id, request, cancellationToken);
         return Handle(result, created: false);
     }

@@ -14,17 +14,25 @@ public class TransportOrderService : ITransportOrderService
 {
     private const string EntityType = "TransportOrder";
 
-    /// <summary>Allowed workflow transitions. Planned is entered via the planning engine (Phase 6).</summary>
+    /// <summary>
+    /// Allowed workflow transitions. Planned is entered via the planning engine (Phase 6).
+    /// Cancelled is deliberately absent: cancelling is a separate action (CancelAsync) with
+    /// its own permission and a mandatory reason.
+    /// </summary>
     private static readonly IReadOnlyDictionary<TransportOrderStatus, TransportOrderStatus[]> Transitions =
         new Dictionary<TransportOrderStatus, TransportOrderStatus[]>
         {
-            [TransportOrderStatus.Draft] = [TransportOrderStatus.Confirmed, TransportOrderStatus.Cancelled],
-            [TransportOrderStatus.Confirmed] = [TransportOrderStatus.Draft, TransportOrderStatus.InProgress, TransportOrderStatus.Cancelled],
-            [TransportOrderStatus.Planned] = [TransportOrderStatus.InProgress, TransportOrderStatus.Cancelled],
-            [TransportOrderStatus.InProgress] = [TransportOrderStatus.Completed, TransportOrderStatus.Cancelled],
+            [TransportOrderStatus.Draft] = [TransportOrderStatus.Confirmed],
+            [TransportOrderStatus.Confirmed] = [TransportOrderStatus.Draft, TransportOrderStatus.InProgress],
+            [TransportOrderStatus.Planned] = [TransportOrderStatus.InProgress],
+            [TransportOrderStatus.InProgress] = [TransportOrderStatus.Completed],
             [TransportOrderStatus.Completed] = [],
             [TransportOrderStatus.Cancelled] = [],
         };
+
+    /// <summary>Statuses from which an order can still be cancelled.</summary>
+    private static readonly TransportOrderStatus[] CancellableStatuses =
+        [TransportOrderStatus.Draft, TransportOrderStatus.Confirmed, TransportOrderStatus.Planned, TransportOrderStatus.InProgress];
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
@@ -278,6 +286,48 @@ public class TransportOrderService : ITransportOrderService
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
 
+    public async Task<TransportOrderOperationResult> CancelAsync(Guid id, string reason, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return TransportOrderOperationResult.Invalid("Een reden is verplicht bij het annuleren van een opdracht.");
+        }
+
+        var order = await TenantScoped()
+            .Include(o => o.Stops)
+            .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        if (!CancellableStatuses.Contains(order.Status))
+        {
+            return TransportOrderOperationResult.InvalidState(
+                $"Een opdracht met status '{order.Status}' kan niet meer worden geannuleerd.");
+        }
+
+        var before = new { order.Status };
+        order.Status = TransportOrderStatus.Cancelled;
+        order.CancellationReason = reason.Trim();
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Cancelled", before,
+            new { order.Status, order.CancellationReason }, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    public async Task<IReadOnlyList<TransportOrderListItemDto>> ListForExportAsync(
+        string? search, TransportOrderStatus? status, Guid? customerId,
+        DateOnly? fromDate, DateOnly? toDate, CancellationToken cancellationToken)
+    {
+        // Bounded export: one page of up to 5000 rows through the normal search pipeline.
+        var page = await SearchAsync(search, status, customerId, fromDate, toDate,
+            new PageRequest(1, 5000), cancellationToken);
+        return page.Items;
+    }
+
     public async Task<TransportOrderOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         var order = await TenantScoped()
@@ -437,7 +487,9 @@ public class TransportOrderService : ITransportOrderService
             order.CustomerReference, order.Status, order.GoodsDescription,
             order.Quantity, order.QuantityUnit, order.WeightKg, order.VolumeM3, order.PalletCount,
             order.AdrRequired, order.CraneRequired, order.AgreedPrice, order.Notes,
-            stops, Transitions[order.Status]);
+            order.CancellationReason,
+            stops, Transitions[order.Status],
+            CancellableStatuses.Contains(order.Status));
     }
 
     private static string GenerateOrderNumber(TenantSettings? settings)

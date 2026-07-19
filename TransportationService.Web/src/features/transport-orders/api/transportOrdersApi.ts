@@ -53,6 +53,10 @@ export function changeTransportOrderStatus(
   )
 }
 
+export function cancelTransportOrder(id: string, reason: string): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, { reason: string }>(`/api/transport-orders/${id}/cancel`, { reason })
+}
+
 export function deleteTransportOrder(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/transport-orders/${id}`)
 }

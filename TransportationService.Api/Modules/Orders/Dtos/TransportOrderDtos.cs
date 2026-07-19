@@ -51,8 +51,14 @@ public record TransportOrderDetailDto(
     bool CraneRequired,
     decimal? AgreedPrice,
     string? Notes,
+    string? CancellationReason,
     IReadOnlyList<TransportOrderStopDto> Stops,
-    IReadOnlyList<TransportOrderStatus> AllowedTransitions);
+    IReadOnlyList<TransportOrderStatus> AllowedTransitions,
+    /// <summary>Whether the order can currently be cancelled (separate action, orders.cancel).</summary>
+    bool CanCancel);
+
+/// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
+public record CancelTransportOrderRequest(string Reason);
 
 public record TransportOrderStopInput(
     StopType StopType,

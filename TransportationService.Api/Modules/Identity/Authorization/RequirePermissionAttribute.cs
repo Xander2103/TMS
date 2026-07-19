@@ -4,14 +4,24 @@ using TransportationService.Api.Modules.Identity.Services;
 
 namespace TransportationService.Api.Modules.Identity.Authorization;
 
+/// <summary>
+/// Requires the current user to hold AT LEAST ONE of the given permission codes (any-of).
+/// Umbrella permissions (e.g. orders.manage) are expressed by listing them as an
+/// alternative next to the specific code: [RequirePermission(OrdersEdit, OrdersManage)].
+/// </summary>
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
 public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
 {
-    private readonly string _permissionCode;
+    private readonly string[] _permissionCodes;
 
-    public RequirePermissionAttribute(string permissionCode)
+    public RequirePermissionAttribute(params string[] permissionCodes)
     {
-        _permissionCode = permissionCode;
+        if (permissionCodes.Length == 0)
+        {
+            throw new ArgumentException("At least one permission code is required.", nameof(permissionCodes));
+        }
+
+        _permissionCodes = permissionCodes;
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -34,14 +44,22 @@ public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
         }
 
         var authorizationService = context.HttpContext.RequestServices.GetRequiredService<IPermissionAuthorizationService>();
-        var hasPermission = await authorizationService.UserHasPermissionAsync(userId, _permissionCode, context.HttpContext.RequestAborted);
+        var hasPermission = false;
+        foreach (var code in _permissionCodes)
+        {
+            if (await authorizationService.UserHasPermissionAsync(userId, code, context.HttpContext.RequestAborted))
+            {
+                hasPermission = true;
+                break;
+            }
+        }
 
         if (!hasPermission)
         {
             context.Result = new ObjectResult(new ProblemDetails
             {
                 Title = "Forbidden",
-                Detail = $"Missing permission: {_permissionCode}",
+                Detail = $"Missing permission: {string.Join(" or ", _permissionCodes)}",
                 Status = StatusCodes.Status403Forbidden,
             })
             {

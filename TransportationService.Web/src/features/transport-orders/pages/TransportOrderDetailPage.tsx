@@ -7,9 +7,13 @@ import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { FormField } from '../../../components/ui/FormField'
+import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { ApiError } from '../../../api/apiClient'
 import {
+  cancelTransportOrder,
   changeTransportOrderStatus,
   deleteTransportOrder,
   getTransportOrder,
@@ -38,14 +42,15 @@ export function TransportOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
-  const { hasPermission } = useAuth()
+  const { hasPermission, hasAnyPermission } = useAuth()
 
   const [order, setOrder] = useState<TransportOrderDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [confirmTransition, setConfirmTransition] = useState<TransportOrderStatus | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -73,7 +78,25 @@ export function TransportOrderDetailPage() {
       showError('De status kon niet worden gewijzigd.')
     } finally {
       setBusy(false)
-      setConfirmTransition(null)
+    }
+  }
+
+  async function handleCancel() {
+    if (!cancelReason.trim()) {
+      showError('Een reden is verplicht bij het annuleren.')
+      return
+    }
+    setBusy(true)
+    try {
+      const updated = await cancelTransportOrder(id, cancelReason.trim())
+      setOrder(updated)
+      setCancelDialogOpen(false)
+      setCancelReason('')
+      showSuccess('Opdracht geannuleerd.')
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De opdracht kon niet worden geannuleerd.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -105,20 +128,26 @@ export function TransportOrderDetailPage() {
         action={
           <span className="to-header-actions">
             <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
-            {hasPermission('orders.change_status') &&
+            {hasAnyPermission(['orders.change_status', 'orders.manage']) &&
               order.allowedTransitions.map((target) => (
-                <Button
-                  key={target}
-                  variant={target === 'Cancelled' ? 'secondary' : 'primary'}
-                  onClick={() => (target === 'Cancelled' ? setConfirmTransition(target) : void applyTransition(target))}
-                  disabled={busy || editing}
-                >
+                <Button key={target} onClick={() => void applyTransition(target)} disabled={busy || editing}>
                   {ORDER_TRANSITION_LABELS[target]}
                 </Button>
               ))}
+            {order.canCancel && hasAnyPermission(['orders.cancel', 'orders.manage']) && (
+              <Button variant="secondary" onClick={() => setCancelDialogOpen(true)} disabled={busy || editing}>
+                Annuleren
+              </Button>
+            )}
           </span>
         }
       />
+
+      {order.status === 'Cancelled' && order.cancellationReason && (
+        <p className="to-cancel-reason" role="note">
+          Geannuleerd: {order.cancellationReason}
+        </p>
+      )}
 
       {editing ? (
         <TransportOrderForm
@@ -225,15 +254,33 @@ export function TransportOrderDetailPage() {
         </>
       )}
 
-      {confirmTransition && (
-        <ConfirmDialog
-          title="Opdracht annuleren"
-          message={`Weet je zeker dat je opdracht ${order.orderNumber} wilt annuleren?`}
-          confirmLabel="Annuleren"
-          destructive
-          onConfirm={() => void applyTransition(confirmTransition)}
-          onCancel={() => setConfirmTransition(null)}
-        />
+      {cancelDialogOpen && (
+        <Modal
+          title={`Opdracht ${order.orderNumber} annuleren`}
+          onClose={() => setCancelDialogOpen(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setCancelDialogOpen(false)} disabled={busy}>
+                Terug
+              </Button>
+              <Button variant="danger" onClick={() => void handleCancel()} disabled={busy}>
+                {busy ? 'Annuleren…' : 'Opdracht annuleren'}
+              </Button>
+            </>
+          }
+        >
+          <FormField label="Reden" htmlFor="cancel-reason" required hint="De reden wordt vastgelegd in de historiek.">
+            <textarea
+              id="cancel-reason"
+              rows={3}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              maxLength={500}
+              autoFocus
+            />
+          </FormField>
+        </Modal>
       )}
 
       {confirmDelete && (

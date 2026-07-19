@@ -90,8 +90,10 @@ export interface TransportOrderDetail {
   craneRequired: boolean
   agreedPrice: number | null
   notes: string | null
+  cancellationReason: string | null
   stops: TransportOrderStop[]
   allowedTransitions: TransportOrderStatus[]
+  canCancel: boolean
 }
 
 export interface StopInput {

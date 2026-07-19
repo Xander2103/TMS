@@ -52,6 +52,9 @@ public class TransportOrder : AuditableTenantEntity
 
     public string? Notes { get; set; }
 
+    /// <summary>Mandatory when the order was cancelled; set only through the cancel action.</summary>
+    public string? CancellationReason { get; set; }
+
     public List<TransportOrderStop> Stops { get; set; } = [];
 }
 

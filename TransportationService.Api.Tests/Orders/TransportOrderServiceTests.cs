@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
@@ -89,6 +90,74 @@ public class TransportOrderServiceTests
         Assert.Equal("Antwerpen", stops[0].City);
         Assert.Equal("LOC-1", stops[0].LocationCode);
         Assert.Equal("Gent", stops[1].City);
+    }
+
+    [Fact]
+    public async Task Cancel_RequiresReason_StoresIt_AndAudits()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+
+        var withoutReason = await h.Sut.CancelAsync(created.Order!.Id, "  ", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, withoutReason.Outcome);
+
+        var cancelled = await h.Sut.CancelAsync(created.Order.Id, "Klant heeft afgezegd", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, cancelled.Outcome);
+        Assert.Equal(TransportOrderStatus.Cancelled, cancelled.Order!.Status);
+        Assert.Equal("Klant heeft afgezegd", cancelled.Order.CancellationReason);
+        Assert.False(cancelled.Order.CanCancel);
+
+        var auditEntries = await h.Db.Context.AuditLogs.ToListAsync(CancellationToken.None);
+        Assert.Contains(auditEntries, a => a.EntityType == "TransportOrder" && a.Action == "Cancelled");
+    }
+
+    [Fact]
+    public async Task Cancel_CompletedOrder_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var order = await h.Db.Context.TransportOrders.FindAsync(created.Order!.Id);
+        order!.Status = TransportOrderStatus.Completed;
+        await h.Db.Context.SaveChangesAsync();
+
+        var result = await h.Sut.CancelAsync(created.Order.Id, "te laat", CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
+    }
+
+    [Fact]
+    public async Task ChangeStatus_CanNoLongerReachCancelled()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+
+        var result = await h.Sut.ChangeStatusAsync(created.Order!.Id, TransportOrderStatus.Cancelled, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
+        Assert.DoesNotContain(TransportOrderStatus.Cancelled, created.Order.AllowedTransitions);
+    }
+
+    [Fact]
+    public async Task ListForExport_ReturnsFilteredRows()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, city: "Luik"), Stop(StopType.Unloading, city: "Brussel")), CancellationToken.None);
+
+        var all = await h.Sut.ListForExportAsync(null, null, null, null, null, CancellationToken.None);
+        var drafts = await h.Sut.ListForExportAsync(null, TransportOrderStatus.Draft, null, null, null, CancellationToken.None);
+
+        Assert.Equal(2, all.Count);
+        Assert.Equal(2, drafts.Count);
     }
 
     [Fact]
@@ -264,7 +333,8 @@ public class TransportOrderServiceTests
         Assert.Equal(TransportOrderOperationOutcome.InvalidState,
             (await h.Sut.DeleteAsync(id, CancellationToken.None)).Outcome);
 
-        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.Cancelled, CancellationToken.None);
+        // Cancelling is a dedicated action (no longer reachable through ChangeStatus).
+        await h.Sut.CancelAsync(id, "Test", CancellationToken.None);
         Assert.Equal(TransportOrderOperationOutcome.Success,
             (await h.Sut.DeleteAsync(id, CancellationToken.None)).Outcome);
         Assert.Null(await h.Sut.GetByIdAsync(id, CancellationToken.None));

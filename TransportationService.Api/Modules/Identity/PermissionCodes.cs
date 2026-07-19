@@ -135,6 +135,11 @@ public static class PermissionCodes
     public const string OrdersEdit = "orders.edit";
     public const string OrdersDelete = "orders.delete";
     public const string OrdersChangeStatus = "orders.change_status";
+    public const string OrdersCancel = "orders.cancel";
+    public const string OrdersAssign = "orders.assign";
+    public const string OrdersExport = "orders.export";
+    /// <summary>Umbrella: every order action (checked as an any-of alternative on order endpoints).</summary>
+    public const string OrdersManage = "orders.manage";
 
     // --- Dashboard (company overview) ---
     public const string DashboardView = "dashboard.view";
@@ -253,6 +258,10 @@ public static class PermissionCodes
         (OrdersEdit, "orders", "edit", "Transportopdrachten bewerken"),
         (OrdersDelete, "orders", "delete", "Transportopdrachten verwijderen"),
         (OrdersChangeStatus, "orders", "change_status", "Status van transportopdrachten wijzigen"),
+        (OrdersCancel, "orders", "cancel", "Transportopdrachten annuleren"),
+        (OrdersAssign, "orders", "assign", "Transportopdrachten aan ritten koppelen"),
+        (OrdersExport, "orders", "export", "Transportopdrachten exporteren"),
+        (OrdersManage, "orders", "manage", "Volledig beheer van transportopdrachten"),
         (DashboardView, "dashboard", "view", "Bedrijfsdashboard bekijken"),
         (InvoicesView, "invoices", "view", "Facturen bekijken"),
         (InvoicesCreate, "invoices", "create", "Facturen aanmaken"),
