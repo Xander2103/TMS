@@ -5,6 +5,9 @@ using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Drivers.Dtos;
+using TransportationService.Api.Modules.Drivers.Entities;
+using TransportationService.Api.Modules.Drivers.Services;
 using TransportationService.Api.Modules.Employees.Dtos;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -19,14 +22,16 @@ public class EmployeeService : IEmployeeService
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly ICountryCodeValidator _countryValidator;
+    private readonly IDriverService _driverService;
 
     public EmployeeService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
-        ICountryCodeValidator countryValidator)
+        ICountryCodeValidator countryValidator, IDriverService driverService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _countryValidator = countryValidator;
+        _driverService = driverService;
     }
 
     private IQueryable<Employee> TenantScoped() =>
@@ -34,13 +39,19 @@ public class EmployeeService : IEmployeeService
 
     public async Task<PagedResult<EmployeeListItemDto>> SearchAsync(
         string? searchText, bool? isActive, Guid? jobFunctionId, Guid? departmentId,
-        EmploymentStatus? employmentStatus, PageRequest page, CancellationToken cancellationToken)
+        EmploymentStatus? employmentStatus, bool excludeDrivers, PageRequest page, CancellationToken cancellationToken)
     {
+        var tenantId = _tenantContext.TenantId;
         var query = TenantScoped().AsNoTracking();
 
         if (isActive is { } activeFilter)
         {
             query = query.Where(e => e.IsActive == activeFilter);
+        }
+
+        if (excludeDrivers)
+        {
+            query = query.Where(e => !_dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId));
         }
 
         if (jobFunctionId is { } functionFilter)
@@ -72,7 +83,6 @@ public class EmployeeService : IEmployeeService
 
         var totalCount = await query.CountAsync(cancellationToken);
 
-        var tenantId = _tenantContext.TenantId;
         var items = await query
             .OrderBy(e => e.LastName).ThenBy(e => e.FirstName)
             .Skip(page.Skip)
@@ -155,6 +165,10 @@ public class EmployeeService : IEmployeeService
             employee.JobFunctions.Add(new EmployeeJobFunction { EmployeeId = employee.Id, JobFunctionId = functionId });
         }
 
+        // Atomic workflow: the employee and (optionally) its driver profile commit together,
+        // so a rejected driver reference never leaves a half-created person behind.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+
         _dbContext.Employees.Add(employee);
         await TenantNumbering.SaveWithClaimedNumberAsync(
             _dbContext, settings,
@@ -163,6 +177,22 @@ public class EmployeeService : IEmployeeService
 
         await _auditService.RecordAsync(EntityType, employee.Id.ToString(), "Created", null,
             new { employee.EmployeeNumber, employee.FirstName, employee.LastName, employee.EmploymentStatus, employee.IsActive }, cancellationToken);
+
+        if (request.DriverProfile is { } driverProfile)
+        {
+            var driverResult = await _driverService.CreateAsync(new CreateDriverRequest(
+                employee.Id, driverProfile.DriverCategoryId, DriverAvailabilityStatus.Available,
+                FixedVehiclePreference: false, DefaultVehicleId: null, PreferredVehicleId: null,
+                DefaultTrailerId: null, Notes: driverProfile.Notes), cancellationToken);
+
+            if (driverResult.Outcome != DriverOperationOutcome.Success)
+            {
+                // Disposing the transaction rolls back the employee as well.
+                throw new InvalidTenantReferenceException("chauffeurscategorie");
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken);
 
         // Reload so lookup navigations (job-function names) are populated in the response.
         return (await GetByIdAsync(employee.Id, canEditConfidential, cancellationToken))!;

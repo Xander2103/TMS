@@ -53,6 +53,12 @@ public record EmployeeDetailDto(
     string? Iban,
     string? Bic);
 
+/// <summary>
+/// Optional driver profile created atomically with the employee — one workflow, one
+/// transaction, no re-entering personal data on a separate screen.
+/// </summary>
+public record CreateEmployeeDriverProfile(Guid? DriverCategoryId, string? Notes);
+
 public record CreateEmployeeRequest(
     string FirstName,
     string LastName,
@@ -78,7 +84,8 @@ public record CreateEmployeeRequest(
     string? NationalRegisterNumber = null,
     string? Iban = null,
     string? Bic = null,
-    string? Notes = null);
+    string? Notes = null,
+    CreateEmployeeDriverProfile? DriverProfile = null);
 
 public record UpdateEmployeeRequest(
     string FirstName,

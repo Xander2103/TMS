@@ -12,6 +12,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { AbsencesTab } from '../../absences/components/AbsencesTab'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
+import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { EmployeeForm } from '../components/EmployeeForm'
 import { QualificationsTab } from '../components/QualificationsTab'
 import { useEmployee } from '../hooks/useEmployee'
@@ -31,6 +32,10 @@ export function EmployeeDetailPage() {
   const { employee, isLoading, error, reload } = useEmployee(id)
   const mutations = useEmployeeMutations()
   const [confirmLifecycle, setConfirmLifecycle] = useState<'deactivate' | 'reactivate' | null>(null)
+  // Codes of the functions currently chosen in the edit form (null until the user touches them).
+  const [editedFunctionCodes, setEditedFunctionCodes] = useState<string[] | null>(null)
+  const [offerDriverDeactivation, setOfferDriverDeactivation] = useState(false)
+  const [driverBusy, setDriverBusy] = useState(false)
 
   const requestedTab = searchParams.get('tab')
   const tab: TabId = TAB_IDS.includes(requestedTab as TabId) ? (requestedTab as TabId) : 'profiel'
@@ -72,10 +77,17 @@ export function EmployeeDetailPage() {
             tone: EMPLOYMENT_STATUS_TONES[employee.employmentStatus],
           }}
         />
-        {employee.driverId && (
+        {employee.driverId ? (
           <Link to={`/drivers/${employee.driverId}`} className="employee-driver-link">
             Chauffeursprofiel bekijken →
           </Link>
+        ) : (
+          hasPermission('drivers.create') &&
+          employee.isActive && (
+            <Link to={`/drivers/new?employeeId=${employee.id}`} className="employee-driver-link">
+              Chauffeursprofiel aanmaken →
+            </Link>
+          )
         )}
       </div>
 
@@ -99,10 +111,20 @@ export function EmployeeDetailPage() {
               isSubmitting={mutations.isSubmitting}
               submitError={mutations.error}
               onCancel={() => navigate('/employees')}
+              onFunctionsChanged={setEditedFunctionCodes}
               onSubmit={async (values) => {
                 const updated = await mutations.update(employee.id, values)
                 if (updated) {
                   toast.showSuccess('Medewerker bijgewerkt.')
+                  // Driver functions removed while a driver profile exists → offer (never force)
+                  // deactivating that profile. Historical driver data is always preserved.
+                  const removedDriverFunctions =
+                    employee.driverId !== null &&
+                    editedFunctionCodes !== null &&
+                    !editedFunctionCodes.some((code) => code.toUpperCase().startsWith('CHAUF'))
+                  if (removedDriverFunctions) {
+                    setOfferDriverDeactivation(true)
+                  }
                   reload()
                 }
               }}
@@ -129,6 +151,39 @@ export function EmployeeDetailPage() {
         <TabPanel tabId="historiek">
           <AuditHistoryPanel entityType="Employee" entityId={employee.id} />
         </TabPanel>
+      )}
+
+      {offerDriverDeactivation && employee.driverId && (
+        <ConfirmDialog
+          title="Chauffeursprofiel deactiveren?"
+          message="De chauffeursfuncties zijn verwijderd. Wil je het gekoppelde chauffeursprofiel deactiveren? De historiek en kwalificaties blijven bewaard."
+          confirmLabel="Profiel deactiveren"
+          cancelLabel="Profiel actief laten"
+          busy={driverBusy}
+          onConfirm={async () => {
+            setDriverBusy(true)
+            try {
+              const driver = await getDriver(employee.driverId!)
+              await updateDriver(employee.driverId!, {
+                driverCategoryId: driver.categoryId,
+                availabilityStatus: driver.availabilityStatus,
+                isActive: false,
+                fixedVehiclePreference: driver.fixedVehiclePreference,
+                defaultVehicleId: driver.defaultVehicleId,
+                preferredVehicleId: driver.preferredVehicleId,
+                defaultTrailerId: driver.defaultTrailerId,
+                notes: driver.notes,
+              })
+              toast.showSuccess('Chauffeursprofiel gedeactiveerd.')
+            } catch {
+              toast.showError('Chauffeursprofiel kon niet worden gedeactiveerd.')
+            } finally {
+              setDriverBusy(false)
+              setOfferDriverDeactivation(false)
+            }
+          }}
+          onCancel={() => setOfferDriverDeactivation(false)}
+        />
       )}
 
       {confirmLifecycle === 'deactivate' && (

@@ -42,9 +42,11 @@ public class EmployeeProfileTests
         await CountrySeeder.SyncAsync(db.Context);
 
         var tenant = new DevTenantContext(tenantId);
-        var sut = new EmployeeService(db.Context, tenant,
-            new AuditService(db.Context, tenant, new DevCurrentUserContext(userId)),
-            new CountryCodeValidator(db.Context));
+        var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(userId));
+        var driverService = new Modules.Drivers.Services.DriverService(db.Context, tenant, audit,
+            new Modules.Qualifications.Services.QualificationStatusCalculator(), TimeProvider.System);
+        var sut = new EmployeeService(db.Context, tenant, audit,
+            new CountryCodeValidator(db.Context), driverService);
         return new Harness(db, sut, tenantId, userId, departmentId, functionChauffeur, functionPlanner);
     }
 
@@ -197,8 +199,8 @@ public class EmployeeProfileTests
             canEditConfidential: true, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
 
-        var chauffeurs = await h.Sut.SearchAsync(null, null, h.FunctionChauffeur, null, null, PageRequest.Of(1, 25), CancellationToken.None);
-        var planningDept = await h.Sut.SearchAsync(null, null, null, h.DepartmentId, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var chauffeurs = await h.Sut.SearchAsync(null, null, h.FunctionChauffeur, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
+        var planningDept = await h.Sut.SearchAsync(null, null, null, h.DepartmentId, null, false, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Single(chauffeurs.Items);
         Assert.Equal("Janssen", chauffeurs.Items[0].LastName);
@@ -216,6 +218,78 @@ public class EmployeeProfileTests
         var stored = await h.Db.Context.Employees.AsNoTracking().SingleAsync(e => e.Id == created.Id);
         Assert.NotEqual(default, stored.CreatedAt);
         Assert.NotEqual(default, stored.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task Create_WithDriverProfile_CreatesBothAtomically()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var categoryId = Guid.NewGuid();
+        h.Db.Context.DriverCategories.Add(new Modules.Drivers.Entities.DriverCategory
+        {
+            Id = categoryId, TenantId = h.TenantId, Code = "NAT", Name = "Nationaal", IsActive = true,
+        });
+        var settings = await h.Db.Context.TenantSettings.SingleAsync(s => s.TenantId == h.TenantId);
+        settings.DriverNumberPrefix = "CH-";
+        settings.DriverNumberNextValue = 1;
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var request = FullRequest(h) with
+        {
+            DriverProfile = new CreateEmployeeDriverProfile(categoryId, "Vaste nachtritten"),
+        };
+
+        var created = await h.Sut.CreateAsync(request, canEditConfidential: true, CancellationToken.None);
+
+        Assert.NotNull(created.DriverId);
+        var driver = await h.Db.Context.Drivers.AsNoTracking().SingleAsync(d => d.Id == created.DriverId);
+        Assert.Equal(created.Id, driver.EmployeeId);
+        Assert.Equal("CH-0001", driver.DriverNumber);
+    }
+
+    [Fact]
+    public async Task Create_WithInvalidDriverCategory_RollsBackEmployee()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.ChangeTracker.Clear();
+
+        var request = FullRequest(h) with
+        {
+            DriverProfile = new CreateEmployeeDriverProfile(Guid.NewGuid(), null),
+        };
+
+        await Assert.ThrowsAsync<InvalidTenantReferenceException>(
+            () => h.Sut.CreateAsync(request, canEditConfidential: true, CancellationToken.None));
+
+        h.Db.Context.ChangeTracker.Clear();
+        Assert.Equal(0, await h.Db.Context.Employees.CountAsync(e => e.TenantId == h.TenantId));
+        Assert.Equal(0, await h.Db.Context.Drivers.CountAsync(d => d.TenantId == h.TenantId));
+    }
+
+    [Fact]
+    public async Task Search_ExcludeDrivers_HidesLinkedEmployees()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.ChangeTracker.Clear();
+        var withDriver = await h.Sut.CreateAsync(FullRequest(h) with
+        {
+            DriverProfile = new CreateEmployeeDriverProfile(null, null),
+        }, canEditConfidential: true, CancellationToken.None);
+        await h.Sut.CreateAsync(new CreateEmployeeRequest(
+            "Piet", "Peeters", new DateOnly(1985, 1, 1),
+            "Dorpstraat", "2", "2000", "Antwerpen",
+            "+323", "piet2@acme.example", new DateOnly(2021, 1, 1),
+            EmploymentStatus.Active), canEditConfidential: true, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var withoutDrivers = await h.Sut.SearchAsync(null, null, null, null, null, true, PageRequest.Of(1, 25), CancellationToken.None);
+
+        Assert.Single(withoutDrivers.Items);
+        Assert.DoesNotContain(withoutDrivers.Items, e => e.Id == withDriver.Id);
     }
 
     [Fact]

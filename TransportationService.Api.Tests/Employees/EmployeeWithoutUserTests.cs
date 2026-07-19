@@ -15,10 +15,14 @@ namespace TransportationService.Api.Tests.Employees;
 
 public class EmployeeWithoutUserTests
 {
-    private static EmployeeService CreateSut(SqliteTestDbContext db, Guid tenantId) =>
-        new(db.Context, new DevTenantContext(tenantId),
-            new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(Guid.NewGuid())),
-            new CountryCodeValidator(db.Context));
+    internal static EmployeeService CreateSut(SqliteTestDbContext db, Guid tenantId)
+    {
+        var tenant = new DevTenantContext(tenantId);
+        var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(Guid.NewGuid()));
+        var driverService = new TransportationService.Api.Modules.Drivers.Services.DriverService(db.Context, tenant, audit,
+            new TransportationService.Api.Modules.Qualifications.Services.QualificationStatusCalculator(), TimeProvider.System);
+        return new EmployeeService(db.Context, tenant, audit, new CountryCodeValidator(db.Context), driverService);
+    }
 
     internal static CreateEmployeeRequest NewEmployee(string firstName, string lastName, string email) => new(
         firstName, lastName, new DateOnly(1990, 1, 1),
@@ -64,7 +68,7 @@ public class EmployeeWithoutUserTests
 
         await sutA.CreateAsync(NewEmployee("Jan", "Janssen", "jan@a.com"), canEditConfidential: true, CancellationToken.None);
 
-        var resultForTenantB = await sutB.SearchAsync(null, null, null, null, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var resultForTenantB = await sutB.SearchAsync(null, null, null, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Empty(resultForTenantB.Items);
     }

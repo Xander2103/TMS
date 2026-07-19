@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { FormField } from '../../../components/ui/FormField'
 import { Button } from '../../../components/ui/Button'
+import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
-import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
+import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { searchEmployees } from '../../employees/api/employeesApi'
 import type { EmployeeListItem } from '../../employees/types/employee'
 import { createDriver } from '../api/driversApi'
@@ -15,12 +16,12 @@ import './driver-detail.css'
 
 export function NewDriverPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { showSuccess, showError } = useToast()
-  const { options: categories } = useLookupOptions('/api/driver-categories')
 
   const [employees, setEmployees] = useState<EmployeeListItem[]>([])
-  const [employeeId, setEmployeeId] = useState('')
-  const [categoryId, setCategoryId] = useState('')
+  const [employeeId, setEmployeeId] = useState(searchParams.get('employeeId') ?? '')
+  const [categoryId, setCategoryId] = useState<string | null>(null)
   const [availability, setAvailability] = useState<DriverAvailabilityStatus>('Available')
   const [fixedVehicle, setFixedVehicle] = useState(false)
   const [notes, setNotes] = useState('')
@@ -29,7 +30,8 @@ export function NewDriverPage() {
 
   useEffect(() => {
     let mounted = true
-    searchEmployees({ isActive: true, page: 1, pageSize: 200 })
+    // Only employees without an existing driver profile can be linked.
+    searchEmployees({ isActive: true, excludeDrivers: true, page: 1, pageSize: 200 })
       .then((result) => {
         if (mounted) setEmployees(result.items)
       })
@@ -52,7 +54,7 @@ export function NewDriverPage() {
     try {
       const driver = await createDriver({
         employeeId,
-        driverCategoryId: categoryId || null,
+        driverCategoryId: categoryId,
         availabilityStatus: availability,
         fixedVehiclePreference: fixedVehicle,
         defaultVehicleId: null,
@@ -83,26 +85,38 @@ export function NewDriverPage() {
           </div>
         )}
 
-        <FormField label="Medewerker" htmlFor="driver-employee" required>
-          <select id="driver-employee" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} disabled={submitting}>
-            <option value="">— Selecteer een medewerker —</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.firstName} {e.lastName} ({e.employeeNumber})
-              </option>
-            ))}
-          </select>
+        <FormField
+          label="Medewerker"
+          htmlFor="driver-employee"
+          required
+          hint="Alleen medewerkers zonder bestaand chauffeursprofiel; persoonsgegevens komen van het personeelsdossier."
+        >
+          <SearchableSelect
+            id="driver-employee"
+            value={employeeId || null}
+            onChange={(v) => setEmployeeId(v ?? '')}
+            options={employees.map((e) => ({
+              value: e.id,
+              label: `${e.firstName} ${e.lastName}`,
+              description: e.employeeNumber,
+              keywords: e.employeeNumber,
+            }))}
+            placeholder="— Selecteer een medewerker —"
+            disabled={submitting}
+          />
         </FormField>
 
         <FormField label="Chauffeurcategorie" htmlFor="driver-category">
-          <select id="driver-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} disabled={submitting}>
-            <option value="">— Geen —</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <LookupSelect
+            id="driver-category"
+            basePath="/api/driver-categories"
+            managePermission="driver_categories.manage"
+            singular="chauffeurcategorie"
+            value={categoryId}
+            onChange={setCategoryId}
+            placeholder="— Geen —"
+            disabled={submitting}
+          />
         </FormField>
 
         <FormField label="Beschikbaarheid" htmlFor="driver-availability">

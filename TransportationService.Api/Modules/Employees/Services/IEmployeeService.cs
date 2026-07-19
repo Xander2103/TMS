@@ -6,9 +6,10 @@ namespace TransportationService.Api.Modules.Employees.Services;
 
 public interface IEmployeeService
 {
+    /// <param name="excludeDrivers">Only employees WITHOUT a driver profile (link-driver picker).</param>
     Task<PagedResult<EmployeeListItemDto>> SearchAsync(
         string? searchText, bool? isActive, Guid? jobFunctionId, Guid? departmentId,
-        EmploymentStatus? employmentStatus, PageRequest page, CancellationToken cancellationToken);
+        EmploymentStatus? employmentStatus, bool excludeDrivers, PageRequest page, CancellationToken cancellationToken);
 
     /// <param name="includeConfidential">When false, confidential fields (NRN/IBAN/BIC) are nulled.</param>
     Task<EmployeeDetailDto?> GetByIdAsync(Guid id, bool includeConfidential, CancellationToken cancellationToken);

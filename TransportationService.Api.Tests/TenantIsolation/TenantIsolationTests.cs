@@ -14,9 +14,7 @@ namespace TransportationService.Api.Tests.TenantIsolation;
 public class TenantIsolationTests
 {
     private static EmployeeService CreateSut(SqliteTestDbContext db, Guid tenantId) =>
-        new(db.Context, new DevTenantContext(tenantId),
-            new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(Guid.NewGuid())),
-            new CountryCodeValidator(db.Context));
+        EmployeeWithoutUserTests.CreateSut(db, tenantId);
 
     [Fact]
     public async Task GetByIdAsync_ReturnsNull_ForEmployeeBelongingToAnotherTenant()
