@@ -1,0 +1,182 @@
+.pod-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pod-form input,
+.pod-form textarea,
+.pod-form select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* Big one-hand outcome choices; selection shown by border + icon, not colour alone. */
+.pod-outcomes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pod-outcome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.pod-outcome input {
+  width: auto;
+}
+
+.pod-outcome-active {
+  border-color: var(--accent);
+  background: var(--accent-bg, rgba(170, 59, 255, 0.08));
+  font-weight: 600;
+}
+
+.pod-outcome-icon {
+  font-size: 18px;
+}
+
+.pod-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.pod-signature {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.pod-signature-canvas {
+  display: block;
+  width: 100%;
+  height: 140px;
+  background: #fff;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.pod-signature-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text);
+  border-top: 1px dashed var(--border);
+}
+
+.pod-signature-bar button {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.pod-signature-bar button:disabled {
+  color: var(--text);
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pod-header-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pod-superseded {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--warning-border, #f59e0b);
+  background: var(--warning-bg, rgba(245, 158, 11, 0.1));
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.pod-correction-reason {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--text);
+  font-style: italic;
+}
+
+.pod-signature-image {
+  max-width: 420px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.pod-versions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.pod-versions li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pod-version-current-link {
+  font-weight: 700;
+}
+
+/* Print: the proof itself, without app chrome. */
+@media print {
+  .sidebar,
+  nav,
+  .pod-no-print,
+  button {
+    display: none !important;
+  }
+
+  .content {
+    padding: 0 !important;
+  }
+
+  .pod-detail {
+    font-size: 12pt;
+    color: #000;
+  }
+
+  .pod-detail a {
+    color: #000;
+    text-decoration: none;
+  }
+
+  .exc-photo img {
+    height: auto;
+    max-height: 200px;
+  }
+}

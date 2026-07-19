@@ -189,3 +189,29 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.pl-execution-stops {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.pl-execution-stops li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pl-execution-location {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+.pl-execution-late {
+  color: #b45309;
+}

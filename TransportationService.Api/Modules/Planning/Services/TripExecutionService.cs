@@ -397,6 +397,12 @@ public class TripExecutionService : ITripExecutionService
             .Where(e => e.TenantId == tenantId && e.TripId == trip.Id)
             .ToDictionaryAsync(e => e.TransportOrderStopId, cancellationToken);
 
+        // Stops with a finalised current POD (Wave 4) — the legacy PodPath keeps counting too.
+        var podStopIds = await _dbContext.ProofsOfDelivery.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && p.TripId == trip.Id && p.IsCurrent)
+            .Select(p => p.TransportOrderStopId)
+            .ToListAsync(cancellationToken);
+
         // First handling-start per execution: turns arrival -> handling into a waiting time.
         var executionIds = executions.Values.Select(e => e.Id).ToList();
         var handlingStarts = executionIds.Count == 0
@@ -454,7 +460,8 @@ public class TripExecutionService : ITripExecutionService
                     status,
                     execution?.ArrivedAt, execution?.DepartedAt, execution?.CompletedAt,
                     waitingMinutes, execution?.LateArrivalReason, execution?.StatusReason,
-                    execution?.PodPath is not null, execution?.PodSignedBy, execution?.Remarks);
+                    execution?.PodPath is not null || podStopIds.Contains(x.Stop.Id),
+                    execution?.PodSignedBy, execution?.Remarks);
             })
             .OrderBy(r => r.OrderSequence).ThenBy(r => r.StopSequence)
             .ToList();

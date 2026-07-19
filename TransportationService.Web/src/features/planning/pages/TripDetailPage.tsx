@@ -20,6 +20,10 @@ import type { TrailerOption } from '../../trailers/types'
 import { searchTransportOrders } from '../../transport-orders/api/transportOrdersApi'
 import type { TransportOrderListItem } from '../../transport-orders/types'
 import { changeTripStatus, deleteTrip, getTrip, updateTrip } from '../api/planningApi'
+import { getTripExecution } from '../../my-trips/api/myTripsApi'
+import type { TripExecution } from '../../my-trips/types'
+import { STOP_EXECUTION_ICONS, STOP_EXECUTION_LABELS, STOP_EXECUTION_TONE } from '../../my-trips/types'
+import { getPodForStop } from '../../pod/api/podApi'
 import {
   TRIP_STATUS_LABELS,
   TRIP_STATUS_TONE,
@@ -56,6 +60,10 @@ export function TripDetailPage() {
   const [overrideTarget, setOverrideTarget] = useState<{ status: TripStatus; conflicts: string[] } | null>(null)
   const [cancelTarget, setCancelTarget] = useState<TripStatus | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [execution, setExecution] = useState<TripExecution | null>(null)
+
+  const canSeeExecution = hasPermission('driver_workflow.view')
+  const canOpenPod = hasPermission('pod.view')
 
   const applyTrip = useCallback((data: TripDetail) => {
     setTrip(data)
@@ -83,6 +91,31 @@ export function TripDetailPage() {
       mounted = false
     }
   }, [id, applyTrip])
+
+  // Execution snapshot (stop statuses + POD flags) for trips that left Draft.
+  useEffect(() => {
+    if (!canSeeExecution || !trip || trip.status === 'Draft' || trip.status === 'Cancelled') return
+    let mounted = true
+    getTripExecution(id)
+      .then((data) => {
+        if (mounted) setExecution(data)
+      })
+      .catch(() => {
+        // The section simply stays hidden.
+      })
+    return () => {
+      mounted = false
+    }
+  }, [id, canSeeExecution, trip])
+
+  async function openPod(stopId: string) {
+    try {
+      const pod = await getPodForStop(id, stopId)
+      navigate(`/pods/${pod.id}`)
+    } catch {
+      showError('De POD kon niet worden geopend.')
+    }
+  }
 
   useEffect(() => {
     let mounted = true
@@ -385,6 +418,36 @@ export function TripDetailPage() {
           </div>
         )}
       </section>
+
+      {execution && execution.stops.length > 0 && (
+        <section className="pl-section">
+          <h2>
+            Uitvoering ({execution.completedCount}/{execution.totalCount} stops afgehandeld)
+          </h2>
+          <ol className="pl-execution-stops">
+            {execution.stops.map((stop) => (
+              <li key={stop.transportOrderStopId}>
+                <Badge tone={stop.stopType === 'Loading' ? 'info' : 'success'}>
+                  {stop.stopType === 'Loading' ? 'Laden' : 'Lossen'}
+                </Badge>{' '}
+                <span className="pl-execution-location">
+                  {stop.locationName}
+                  {stop.city && stop.locationName !== stop.city ? ` — ${stop.city}` : ''}
+                </span>{' '}
+                <Badge tone={STOP_EXECUTION_TONE[stop.status]}>
+                  {STOP_EXECUTION_ICONS[stop.status]} {STOP_EXECUTION_LABELS[stop.status]}
+                </Badge>
+                {stop.lateArrivalReason && <span className="pl-execution-late"> · te laat: {stop.lateArrivalReason}</span>}
+                {stop.hasPod && canOpenPod && (
+                  <button type="button" className="pl-link" onClick={() => void openPod(stop.transportOrderStopId)}>
+                    ✍ POD bekijken
+                  </button>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       <section className="pl-section">
         <h2>Conflicten</h2>

@@ -160,6 +160,11 @@ public static class PermissionCodes
     public const string ScanningExecute = "scanning.execute";
     public const string ScanningCorrect = "scanning.correct";
 
+    // --- Proof of delivery ---
+    public const string PodView = "pod.view";
+    public const string PodFinalize = "pod.finalize";
+    public const string PodCorrect = "pod.correct";
+
     // --- Execution exceptions (afwijkingen) ---
     public const string ExceptionsView = "exceptions.view";
     public const string ExceptionsCreate = "exceptions.create";
@@ -283,6 +288,9 @@ public static class PermissionCodes
         (ScanningView, "scanning", "view", "Scanhistoriek en scanstatus bekijken"),
         (ScanningExecute, "scanning", "execute", "Colli scannen tijdens rituitvoering"),
         (ScanningCorrect, "scanning", "correct", "Scantellingen handmatig corrigeren"),
+        (PodView, "pod", "view", "Afleverbewijzen bekijken"),
+        (PodFinalize, "pod", "finalize", "Afleverbewijzen opnemen en afronden"),
+        (PodCorrect, "pod", "correct", "Afleverbewijzen corrigeren (nieuwe versie)"),
         (ExceptionsView, "exceptions", "view", "Uitvoeringsafwijkingen bekijken"),
         (ExceptionsCreate, "exceptions", "create", "Afwijkingen melden tijdens uitvoering"),
         (ExceptionsResolve, "exceptions", "resolve", "Afwijkingen onderzoeken en afhandelen"),

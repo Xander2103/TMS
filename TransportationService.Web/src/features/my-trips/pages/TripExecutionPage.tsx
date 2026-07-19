@@ -15,6 +15,7 @@ import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { STOP_TYPE_LABELS } from '../../transport-orders/types'
 import { ScanPanel } from '../../scanning/components/ScanPanel'
 import { ReportExceptionDialog } from '../../exceptions/components/ReportExceptionDialog'
+import { PodDialog } from '../../pod/components/PodDialog'
 import { completeStop, getStopHistory, getTripExecution, transitionStop } from '../api/myTripsApi'
 import {
   STOP_EXECUTION_ICONS,
@@ -88,6 +89,7 @@ export function TripExecutionPage() {
   const [history, setHistory] = useState<Record<string, StopStatusHistoryEntry[]>>({})
   const [scanStop, setScanStop] = useState<ExecutionStop | null>(null)
   const [exceptionTarget, setExceptionTarget] = useState<{ stop: ExecutionStop | null } | null>(null)
+  const [podStop, setPodStop] = useState<ExecutionStop | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -109,6 +111,15 @@ export function TripExecutionPage() {
   const canScan = hasPermission('scanning.execute')
   const canCorrectScans = hasPermission('scanning.correct')
   const canReportException = hasPermission('exceptions.create')
+  const canFinalizePod = hasPermission('pod.finalize')
+
+  async function refreshExecution() {
+    try {
+      setExecution(await getTripExecution(id))
+    } catch {
+      // The next action re-fetches anyway.
+    }
+  }
 
   function afterUpdate(updated: TripExecution, message: string) {
     setExecution(updated)
@@ -363,6 +374,14 @@ export function TripExecutionPage() {
                   )}
                 </div>
               )}
+              {executable && canFinalizePod && !stop.hasPod && (stop.arrivedAt || isTerminal) && (
+                <div className="mt-stop-actions">
+                  <Button variant="secondary" onClick={() => setPodStop(stop)} disabled={busy}>
+                    ✍ POD opnemen
+                  </Button>
+                </div>
+              )}
+              {stop.hasPod && <div className="mt-stop-times">✍ POD opgenomen</div>}
 
               <button type="button" className="mt-history-toggle" onClick={() => void toggleHistory(stop)}>
                 {historyStopId === stop.transportOrderStopId ? 'Historiek verbergen' : 'Historiek tonen'}
@@ -385,6 +404,19 @@ export function TripExecutionPage() {
           )
         })}
       </ol>
+
+      {podStop && (
+        <PodDialog
+          tripId={id}
+          stopId={podStop.transportOrderStopId}
+          stopLabel={podStop.locationName}
+          onClose={() => setPodStop(null)}
+          onFinalized={() => {
+            setPodStop(null)
+            void refreshExecution()
+          }}
+        />
+      )}
 
       {exceptionTarget && (
         <ReportExceptionDialog

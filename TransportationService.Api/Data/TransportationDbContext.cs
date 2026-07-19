@@ -41,6 +41,8 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException> ExecutionExceptions => Set<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException>();
     public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExceptionPhoto> ExceptionPhotos => Set<TransportationService.Api.Modules.Exceptions.Entities.ExceptionPhoto>();
     public DbSet<ScanEvent> ScanEvents => Set<ScanEvent>();
+    public DbSet<TransportationService.Api.Modules.Pod.Entities.ProofOfDelivery> ProofsOfDelivery => Set<TransportationService.Api.Modules.Pod.Entities.ProofOfDelivery>();
+    public DbSet<TransportationService.Api.Modules.Pod.Entities.PodPhoto> PodPhotos => Set<TransportationService.Api.Modules.Pod.Entities.PodPhoto>();
 
     // Invoicing (Phase 8)
     public DbSet<Invoice> Invoices => Set<Invoice>();
