@@ -179,6 +179,10 @@ public static class PermissionCodes
     public const string TripCostsOverride = "trip_costs.override";
     public const string ProfitabilityView = "profitability.view";
 
+    // --- Management KPI dashboard & reports ---
+    public const string KpiView = "kpi.view";
+    public const string KpiExport = "kpi.export";
+
     // --- Proof of delivery ---
     public const string PodView = "pod.view";
     public const string PodFinalize = "pod.finalize";
@@ -318,6 +322,8 @@ public static class PermissionCodes
         (TripCostsManage, "trip_costs", "manage", "Ritkosten berekenen, invoeren en afronden; tarieven beheren"),
         (TripCostsOverride, "trip_costs", "override", "Kostenregels overschrijven en afgeronde kosten heropenen"),
         (ProfitabilityView, "profitability", "view", "Rendement en marges van ritten bekijken"),
+        (KpiView, "kpi", "view", "Management-KPI-dashboard bekijken"),
+        (KpiExport, "kpi", "export", "KPI-rapporten exporteren naar Excel"),
         (PodView, "pod", "view", "Afleverbewijzen bekijken"),
         (PodFinalize, "pod", "finalize", "Afleverbewijzen opnemen en afronden"),
         (PodCorrect, "pod", "correct", "Afleverbewijzen corrigeren (nieuwe versie)"),
