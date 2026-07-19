@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { createEmployee, deactivateEmployee, updateEmployee } from '../api/employeesApi'
+import { ApiError } from '../../../api/apiClient'
+import { createEmployee, deactivateEmployee, reactivateEmployee, updateEmployee } from '../api/employeesApi'
 import type { CreateEmployeeInput, EmployeeDetail, UpdateEmployeeInput } from '../types/employee'
 
 const SUBMIT_ERROR_MESSAGE = 'De actie kon niet worden uitgevoerd. Probeer het opnieuw.'
@@ -10,6 +11,7 @@ interface UseEmployeeMutationsResult {
   create: (input: CreateEmployeeInput) => Promise<EmployeeDetail | null>
   update: (id: string, input: UpdateEmployeeInput) => Promise<EmployeeDetail | null>
   deactivate: (id: string) => Promise<boolean>
+  reactivate: (id: string) => Promise<boolean>
 }
 
 export function useEmployeeMutations(): UseEmployeeMutationsResult {
@@ -34,9 +36,10 @@ export function useEmployeeMutations(): UseEmployeeMutationsResult {
         setIsSubmitting(false)
       }
       return result
-    } catch {
+    } catch (err) {
       if (isMountedRef.current) {
-        setError(SUBMIT_ERROR_MESSAGE)
+        // Backend validation messages (400) are user-facing Dutch text; show them directly.
+        setError(err instanceof ApiError && err.status === 400 ? err.message : SUBMIT_ERROR_MESSAGE)
         setIsSubmitting(false)
       }
       return fallback
@@ -49,5 +52,6 @@ export function useEmployeeMutations(): UseEmployeeMutationsResult {
     create: (input) => run(() => createEmployee(input), null),
     update: (id, input) => run(() => updateEmployee(id, input), null),
     deactivate: (id) => run(async () => { await deactivateEmployee(id); return true }, false),
+    reactivate: (id) => run(async () => { await reactivateEmployee(id); return true }, false),
   }
 }

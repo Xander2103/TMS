@@ -37,10 +37,10 @@ public class EligibilityOverrideServiceTests
         db.Context.Employees.Add(new Employee
         {
             Id = employeeId, TenantId = tenantId, EmployeeNumber = "EMP-0001", FirstName = "Jan", LastName = "Janssen",
-            Street = "Kerkstraat", HouseNumber = "1", PostalCode = "1000", City = "Brussel", Country = "BE",
+            Street = "Kerkstraat", HouseNumber = "1", PostalCode = "1000", City = "Brussel", CountryCode = "BE",
             PhoneNumber = "+32", Email = "jan@example.com", DateOfBirth = new DateOnly(1990, 1, 1),
             EmploymentStartDate = new DateOnly(2020, 1, 1), EmploymentStatus = EmploymentStatus.Active,
-            PrimaryFunction = EmployeeFunction.DriverC, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+            IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
         });
         await db.Context.SaveChangesAsync();
 

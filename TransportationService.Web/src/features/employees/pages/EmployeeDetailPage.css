@@ -1,26 +1,17 @@
-.employee-tabs {
+.employee-detail-status {
   display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 16px;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
-.employee-tab {
-  font: inherit;
-  padding: 8px 16px;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
+.employee-driver-link {
+  font-size: 14.5px;
+  color: var(--accent);
+  text-decoration: none;
 }
 
-.employee-tab.active {
-  color: var(--text-h);
-  font-weight: 500;
-  border-bottom-color: var(--text-h);
-}
-
-.employee-detail-section {
-  margin-top: 16px;
+.employee-driver-link:hover {
+  text-decoration: underline;
 }

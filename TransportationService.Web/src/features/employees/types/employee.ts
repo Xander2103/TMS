@@ -1,35 +1,17 @@
 export type EmploymentStatus = 'Active' | 'OnLeave' | 'Suspended' | 'Terminated'
 
-export type EmployeeFunction =
-  | 'DriverB'
-  | 'DriverC'
-  | 'DriverCE'
-  | 'CraneOperator'
-  | 'WarehouseWorker'
-  | 'Planner'
-  | 'Dispatcher'
-  | 'OfficeWorker'
-  | 'Mechanic'
-  | 'Other'
-
 export const EMPLOYMENT_STATUS_LABELS: Record<EmploymentStatus, string> = {
-  Active: 'Actief',
+  Active: 'In dienst',
   OnLeave: 'Met verlof',
   Suspended: 'Geschorst',
   Terminated: 'Uit dienst',
 }
 
-export const EMPLOYEE_FUNCTION_LABELS: Record<EmployeeFunction, string> = {
-  DriverB: 'Chauffeur (rijbewijs B)',
-  DriverC: 'Chauffeur (rijbewijs C)',
-  DriverCE: 'Chauffeur (rijbewijs CE)',
-  CraneOperator: 'Kraanmachinist',
-  WarehouseWorker: 'Magazijnmedewerker',
-  Planner: 'Planner',
-  Dispatcher: 'Dispatcher',
-  OfficeWorker: 'Kantoormedewerker',
-  Mechanic: 'Monteur',
-  Other: 'Overig',
+export const EMPLOYMENT_STATUS_TONES: Record<EmploymentStatus, 'success' | 'warning' | 'danger' | 'neutral' | 'info'> = {
+  Active: 'success',
+  OnLeave: 'info',
+  Suspended: 'warning',
+  Terminated: 'neutral',
 }
 
 export interface EmployeeListItem {
@@ -37,9 +19,11 @@ export interface EmployeeListItem {
   employeeNumber: string
   firstName: string
   lastName: string
-  primaryFunction: EmployeeFunction
+  functionNames: string[]
+  departmentName: string | null
   employmentStatus: EmploymentStatus
   isActive: boolean
+  isDriver: boolean
 }
 
 export interface EmployeeDetail {
@@ -47,61 +31,72 @@ export interface EmployeeDetail {
   employeeNumber: string
   firstName: string
   lastName: string
+  dateOfBirth: string
+  placeOfBirth: string | null
+  nationalityCode: string | null
+  preferredLanguageCode: string | null
+  email: string
+  phoneNumber: string
+  mobilePhone: string | null
   street: string
   houseNumber: string
   postalCode: string
   city: string
-  country: string
-  phoneNumber: string
-  email: string
-  dateOfBirth: string
+  countryCode: string | null
+  emergencyContactName: string | null
+  emergencyContactPhone: string | null
   employmentStartDate: string
   employmentEndDate: string | null
   employmentStatus: EmploymentStatus
-  primaryFunction: EmployeeFunction
+  departmentId: string | null
+  departmentName: string | null
+  contractTypeId: string | null
+  contractTypeName: string | null
+  jobFunctionIds: string[]
+  functionNames: string[]
   isActive: boolean
-  emergencyContactName: string | null
-  emergencyContactPhone: string | null
   notes: string | null
+  driverId: string | null
+  // Confidential — null when the user lacks employees.view_confidential.
+  nationalRegisterNumber: string | null
+  iban: string | null
+  bic: string | null
 }
 
-export interface CreateEmployeeInput {
+export interface EmployeeInput {
   firstName: string
   lastName: string
+  dateOfBirth: string
   street: string
   houseNumber: string
   postalCode: string
   city: string
-  country: string
   phoneNumber: string
   email: string
-  dateOfBirth: string
   employmentStartDate: string
   employmentStatus: EmploymentStatus
-  primaryFunction: EmployeeFunction
+  employmentEndDate?: string | null
+  countryCode: string | null
+  placeOfBirth: string | null
+  nationalityCode: string | null
+  preferredLanguageCode: string | null
+  mobilePhone: string | null
+  departmentId: string | null
+  contractTypeId: string | null
+  jobFunctionIds: string[]
   emergencyContactName: string | null
   emergencyContactPhone: string | null
+  nationalRegisterNumber: string | null
+  iban: string | null
+  bic: string | null
   notes: string | null
 }
 
-export interface UpdateEmployeeInput {
-  firstName: string
-  lastName: string
-  street: string
-  houseNumber: string
-  postalCode: string
-  city: string
-  country: string
-  phoneNumber: string
-  email: string
-  dateOfBirth: string
-  employmentEndDate: string | null
-  employmentStatus: EmploymentStatus
-  primaryFunction: EmployeeFunction
-  emergencyContactName: string | null
-  emergencyContactPhone: string | null
-  notes: string | null
+export interface CreateEmployeeInput extends EmployeeInput {
+  driverProfile?: { driverCategoryId: string | null; notes: string | null } | null
 }
+
+export type UpdateEmployeeInput = EmployeeInput
 
 export interface EmployeePagedResult {
   items: EmployeeListItem[]

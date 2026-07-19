@@ -1,0 +1,11 @@
+.audit-history-values {
+  font-size: 13.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  word-break: break-word;
+}
+
+.audit-history-old {
+  color: var(--text);
+}

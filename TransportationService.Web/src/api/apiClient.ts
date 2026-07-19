@@ -89,7 +89,16 @@ async function request<T>(method: Method, path: string, body?: unknown, options?
   }
 
   if (!response.ok) {
-    throw new ApiError(`Request to ${path} failed with status ${response.status}`, response.status)
+    // Surface the backend's user-facing message (ProblemDetails `detail` or `{ message }`).
+    let serverMessage: string | null = null
+    try {
+      const data = (await response.json()) as { detail?: unknown; message?: unknown }
+      if (typeof data.detail === 'string') serverMessage = data.detail
+      else if (typeof data.message === 'string') serverMessage = data.message
+    } catch {
+      // Body was empty or not JSON — fall back to the generic message.
+    }
+    throw new ApiError(serverMessage ?? `Request to ${path} failed with status ${response.status}`, response.status)
   }
 
   if (response.status === 204) {

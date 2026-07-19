@@ -1,9 +1,13 @@
 import { apiClient } from '../../../api/apiClient'
-import type { CreateEmployeeInput, EmployeeDetail, EmployeePagedResult, UpdateEmployeeInput } from '../types/employee'
+import type { CreateEmployeeInput, EmployeeDetail, EmployeePagedResult, EmploymentStatus, UpdateEmployeeInput } from '../types/employee'
 
 export interface SearchEmployeesParams {
   search?: string
   isActive?: boolean
+  jobFunctionId?: string
+  departmentId?: string
+  employmentStatus?: EmploymentStatus
+  excludeDrivers?: boolean
   page: number
   pageSize: number
 }
@@ -12,6 +16,10 @@ export function searchEmployees(params: SearchEmployeesParams): Promise<Employee
   const query = new URLSearchParams()
   if (params.search) query.set('search', params.search)
   if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
+  if (params.jobFunctionId) query.set('jobFunctionId', params.jobFunctionId)
+  if (params.departmentId) query.set('departmentId', params.departmentId)
+  if (params.employmentStatus) query.set('employmentStatus', params.employmentStatus)
+  if (params.excludeDrivers) query.set('excludeDrivers', 'true')
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
 
@@ -32,4 +40,8 @@ export function updateEmployee(id: string, input: UpdateEmployeeInput): Promise<
 
 export function deactivateEmployee(id: string): Promise<void> {
   return apiClient.postJson<void, Record<string, never>>(`/api/employees/${id}/deactivate`, {})
+}
+
+export function reactivateEmployee(id: string): Promise<void> {
+  return apiClient.postJson<void, Record<string, never>>(`/api/employees/${id}/reactivate`, {})
 }

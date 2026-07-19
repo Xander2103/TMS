@@ -1,3 +1,6 @@
+using TransportationService.Api.Common.Models;
+using TransportationService.Api.Common.Reference;
+using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Dtos;
 using TransportationService.Api.Modules.Employees.Entities;
@@ -12,6 +15,17 @@ namespace TransportationService.Api.Tests.Employees;
 
 public class EmployeeWithoutUserTests
 {
+    private static EmployeeService CreateSut(SqliteTestDbContext db, Guid tenantId) =>
+        new(db.Context, new DevTenantContext(tenantId),
+            new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(Guid.NewGuid())),
+            new CountryCodeValidator(db.Context));
+
+    internal static CreateEmployeeRequest NewEmployee(string firstName, string lastName, string email) => new(
+        firstName, lastName, new DateOnly(1990, 1, 1),
+        "Kerkstraat", "1", "1000", "Brussel",
+        "+32000000000", email, new DateOnly(2020, 1, 1),
+        EmploymentStatus.Active, CountryCode: "BE");
+
     [Fact]
     public async Task CreateAsync_CreatesEmployee_WithNoLinkedUser()
     {
@@ -20,13 +34,12 @@ public class EmployeeWithoutUserTests
         db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Tenant", Slug = "tenant", CreatedAt = DateTime.UtcNow });
         db.Context.TenantSettings.Add(new TenantSettings { Id = Guid.NewGuid(), TenantId = tenantId, EmployeeNumberPrefix = "EMP-", EmployeeNumberNextValue = 1 });
         await db.Context.SaveChangesAsync();
+        await CountrySeeder.SyncAsync(db.Context);
 
-        var sut = new EmployeeService(db.Context, new DevTenantContext(tenantId), new AuditService(db.Context, new DevTenantContext(tenantId), new DevCurrentUserContext(Guid.NewGuid())));
+        var sut = CreateSut(db, tenantId);
 
-        var created = await sut.CreateAsync(new CreateEmployeeRequest(
-            "Jan", "Janssen", "Kerkstraat", "1", "1000", "Brussel", "BE",
-            "+32000000000", "jan@example.com", new DateOnly(1990, 1, 1), new DateOnly(2020, 1, 1),
-            EmploymentStatus.Active, EmployeeFunction.DriverC, null, null, null), CancellationToken.None);
+        var created = await sut.CreateAsync(NewEmployee("Jan", "Janssen", "jan@example.com"),
+            canEditConfidential: true, CancellationToken.None);
 
         Assert.Equal("EMP-0001", created.EmployeeNumber);
         var usersLinkedToEmployee = db.Context.Users.Count(u => u.EmployeeId == created.Id);
@@ -44,13 +57,14 @@ public class EmployeeWithoutUserTests
         db.Context.TenantSettings.Add(new TenantSettings { Id = Guid.NewGuid(), TenantId = tenantA, EmployeeNumberPrefix = "A-", EmployeeNumberNextValue = 1 });
         db.Context.TenantSettings.Add(new TenantSettings { Id = Guid.NewGuid(), TenantId = tenantB, EmployeeNumberPrefix = "B-", EmployeeNumberNextValue = 1 });
         await db.Context.SaveChangesAsync();
+        await CountrySeeder.SyncAsync(db.Context);
 
-        var sutA = new EmployeeService(db.Context, new DevTenantContext(tenantA), new AuditService(db.Context, new DevTenantContext(tenantA), new DevCurrentUserContext(Guid.NewGuid())));
-        var sutB = new EmployeeService(db.Context, new DevTenantContext(tenantB), new AuditService(db.Context, new DevTenantContext(tenantB), new DevCurrentUserContext(Guid.NewGuid())));
+        var sutA = CreateSut(db, tenantA);
+        var sutB = CreateSut(db, tenantB);
 
-        await sutA.CreateAsync(new CreateEmployeeRequest("Jan", "Janssen", "Kerkstraat", "1", "1000", "Brussel", "BE", "+32", "jan@a.com", new DateOnly(1990, 1, 1), new DateOnly(2020, 1, 1), EmploymentStatus.Active, EmployeeFunction.DriverB, null, null, null), CancellationToken.None);
+        await sutA.CreateAsync(NewEmployee("Jan", "Janssen", "jan@a.com"), canEditConfidential: true, CancellationToken.None);
 
-        var resultForTenantB = await sutB.SearchAsync(null, null, 1, 25, CancellationToken.None);
+        var resultForTenantB = await sutB.SearchAsync(null, null, null, null, null, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Empty(resultForTenantB.Items);
     }

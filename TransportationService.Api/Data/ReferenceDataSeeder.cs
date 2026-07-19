@@ -31,8 +31,11 @@ public static class ReferenceDataSeeder
             cancellationToken);
 
         await SeedIfEmptyAsync<JobFunction>(dbContext, tenantId,
-            [("CHAUF", "Chauffeur"), ("PLAN", "Planner"), ("DISP", "Dispatcher"), ("MAGM", "Magazijnmedewerker"),
-             ("MONT", "Monteur"), ("ADMM", "Administratief medewerker"), ("KRAAN", "Kraanmachinist")],
+            [("CHAUF", "Chauffeur"), ("CHAUF-B", "Chauffeur B"), ("CHAUF-C", "Chauffeur C"), ("CHAUF-CE", "Chauffeur CE"),
+             ("PLAN", "Planner"), ("DISP", "Dispatcher"), ("MAGM", "Magazijnmedewerker"),
+             ("MONT", "Monteur"), ("ADMM", "Administratief medewerker"), ("KRAAN", "Kraanmachinist"),
+             ("FLEET", "Fleetmanager"), ("HR", "HR-medewerker"), ("BOEK", "Boekhouder"), ("DIR", "Directie"),
+             ("PREV", "Preventieadviseur")],
             cancellationToken);
 
         await SeedIfEmptyAsync<VehicleCategory>(dbContext, tenantId,
