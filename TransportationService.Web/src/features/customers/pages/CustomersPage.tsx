@@ -8,12 +8,14 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useAuth } from '../../auth/authContextValue'
 import { searchCustomers } from '../api/customersApi'
 import type { CustomerListItem } from '../types'
 import '../components/customers.css'
 
 export function CustomersPage() {
   const navigate = useNavigate()
+  const { hasPermission } = useAuth()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [page, setPage] = useState(1)
@@ -46,7 +48,9 @@ export function CustomersPage() {
       <Breadcrumbs items={[{ label: 'Klanten' }]} />
       <PageHeader
         title="Klanten"
-        action={<Button onClick={() => navigate('/customers/new')}>Nieuwe klant</Button>}
+        action={
+          hasPermission('customers.create') && <Button onClick={() => navigate('/customers/new')}>Nieuwe klant</Button>
+        }
       />
       <FilterBar
         search={search}

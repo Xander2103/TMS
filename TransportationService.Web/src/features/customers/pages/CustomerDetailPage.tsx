@@ -5,23 +5,28 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Button } from '../../../components/ui/Button'
-import { Badge } from '../../../components/ui/Badge'
 import { Modal } from '../../../components/ui/Modal'
 import { FormField } from '../../../components/ui/FormField'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { StatusBadges } from '../../../components/ui/StatusBadges'
 import { useToast } from '../../../components/ui/toastContext'
+import { useAuth } from '../../auth/authContextValue'
 import { CustomerForm } from '../components/CustomerForm'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
+import { VAT_TREATMENT_LABELS } from '../types'
 import './../components/customers.css'
 
 export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const toast = useToast()
+  const { hasPermission } = useAuth()
   const { customer, isLoading, error, reload } = useCustomer(id)
   const mutations = useCustomerMutations()
+  const canEdit = hasPermission('customers.edit')
+  const canDelete = hasPermission('customers.delete')
 
   const [isEditing, setIsEditing] = useState(false)
   const [showBlockDialog, setShowBlockDialog] = useState(false)
@@ -52,21 +57,26 @@ export function CustomerDetailPage() {
         action={
           !isEditing && (
             <div className="customer-detail-toolbar">
-              <Button variant="secondary" onClick={() => setIsEditing(true)}>
-                Bewerken
-              </Button>
-              {customer.isBlocked ? (
-                <Button variant="secondary" onClick={() => setShowUnblockConfirm(true)}>
-                  Deblokkeren
-                </Button>
-              ) : (
-                <Button variant="secondary" onClick={() => setShowBlockDialog(true)}>
-                  Blokkeren
+              {canEdit && (
+                <Button variant="secondary" onClick={() => setIsEditing(true)}>
+                  Bewerken
                 </Button>
               )}
-              <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
-                Verwijderen
-              </Button>
+              {canEdit &&
+                (customer.isBlocked ? (
+                  <Button variant="secondary" onClick={() => setShowUnblockConfirm(true)}>
+                    Deblokkeren
+                  </Button>
+                ) : (
+                  <Button variant="secondary" onClick={() => setShowBlockDialog(true)}>
+                    Blokkeren
+                  </Button>
+                ))}
+              {canDelete && (
+                <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
+                  Verwijderen
+                </Button>
+              )}
             </div>
           )
         }
@@ -99,26 +109,16 @@ export function CustomerDetailPage() {
                   <code>{customer.customerNumber}</code>
                 </dd>
                 <dt>Status</dt>
-                <dd className="customer-status-badges">
-                  {customer.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>}
-                  {customer.isBlocked && <Badge tone="danger">Geblokkeerd</Badge>}
+                <dd>
+                  <StatusBadges
+                    active={customer.isActive}
+                    blocked={{ isBlocked: customer.isBlocked, reason: customer.blockReason }}
+                  />
                 </dd>
-                {customer.blockReason && (
-                  <>
-                    <dt>Blokkeerreden</dt>
-                    <dd>{customer.blockReason}</dd>
-                  </>
-                )}
                 {customer.categoryName && (
                   <>
                     <dt>Categorie</dt>
                     <dd>{customer.categoryName}</dd>
-                  </>
-                )}
-                {customer.vatNumber && (
-                  <>
-                    <dt>BTW-nummer</dt>
-                    <dd>{customer.vatNumber}</dd>
                   </>
                 )}
                 <dt>Adres</dt>
@@ -145,6 +145,52 @@ export function CustomerDetailPage() {
                   <>
                     <dt>Notities</dt>
                     <dd>{customer.notes}</dd>
+                  </>
+                )}
+              </dl>
+            </div>
+
+            <div className="customer-summary customer-vat-summary">
+              <h3>BTW & Peppol</h3>
+              <dl>
+                <dt>BTW-nummer</dt>
+                <dd>{customer.vatNumber ?? '—'}</dd>
+                <dt>BTW-behandeling</dt>
+                <dd>{VAT_TREATMENT_LABELS[customer.vatTreatment]}</dd>
+                <dt>Standaard tarief</dt>
+                <dd>{customer.defaultVatRatePercent !== null ? `${customer.defaultVatRatePercent}%` : 'Bedrijfsstandaard'}</dd>
+                {customer.vatCountryCode && (
+                  <>
+                    <dt>BTW-land</dt>
+                    <dd>{customer.vatCountryCode}</dd>
+                  </>
+                )}
+                <dt>Peppol</dt>
+                <dd>{customer.peppolId ? `${customer.peppolScheme ?? '?'}:${customer.peppolId}` : 'Niet geconfigureerd'}</dd>
+                {customer.invoiceEmail && (
+                  <>
+                    <dt>Facturatie-e-mail</dt>
+                    <dd>{customer.invoiceEmail}</dd>
+                  </>
+                )}
+                {(customer.customerReferenceRequired || customer.purchaseOrderRequired || customer.signedDeliveryNoteRequired) && (
+                  <>
+                    <dt>Vereisten</dt>
+                    <dd>
+                      {[
+                        customer.customerReferenceRequired ? 'Klantreferentie verplicht' : null,
+                        customer.purchaseOrderRequired ? 'Bestelbon vereist' : null,
+                        customer.signedDeliveryNoteRequired ? 'Getekende leverbon vereist' : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </dd>
+                  </>
+                )}
+                {customer.vatNotes && (
+                  <>
+                    <dt>BTW-notities</dt>
+                    <dd>{customer.vatNotes}</dd>
                   </>
                 )}
               </dl>

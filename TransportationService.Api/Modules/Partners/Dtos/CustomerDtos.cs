@@ -1,3 +1,5 @@
+using TransportationService.Api.Modules.Partners.Entities;
+
 namespace TransportationService.Api.Modules.Partners.Dtos;
 
 public record CustomerListItemDto(
@@ -43,6 +45,16 @@ public record CustomerDetailDto(
     bool IsActive,
     bool IsBlocked,
     string? BlockReason,
+    VatTreatment VatTreatment,
+    decimal? DefaultVatRatePercent,
+    string? VatCountryCode,
+    string? VatNotes,
+    string? PeppolId,
+    string? PeppolScheme,
+    string? InvoiceLanguageCode,
+    bool PurchaseOrderRequired,
+    bool SignedDeliveryNoteRequired,
+    bool CustomerReferenceRequired,
     IReadOnlyList<CustomerContactDto> Contacts);
 
 public record CreateCustomerRequest(
@@ -61,7 +73,17 @@ public record CreateCustomerRequest(
     string? InvoiceEmail,
     int PaymentTermDays,
     string? DefaultLanguageCode,
-    string? Notes);
+    string? Notes,
+    VatTreatment VatTreatment = VatTreatment.DomesticVat,
+    decimal? DefaultVatRatePercent = null,
+    string? VatCountryCode = null,
+    string? VatNotes = null,
+    string? PeppolId = null,
+    string? PeppolScheme = null,
+    string? InvoiceLanguageCode = null,
+    bool PurchaseOrderRequired = false,
+    bool SignedDeliveryNoteRequired = false,
+    bool CustomerReferenceRequired = false);
 
 public record UpdateCustomerRequest(
     string Name,
@@ -80,7 +102,17 @@ public record UpdateCustomerRequest(
     int PaymentTermDays,
     string? DefaultLanguageCode,
     string? Notes,
-    bool IsActive);
+    bool IsActive,
+    VatTreatment VatTreatment = VatTreatment.DomesticVat,
+    decimal? DefaultVatRatePercent = null,
+    string? VatCountryCode = null,
+    string? VatNotes = null,
+    string? PeppolId = null,
+    string? PeppolScheme = null,
+    string? InvoiceLanguageCode = null,
+    bool PurchaseOrderRequired = false,
+    bool SignedDeliveryNoteRequired = false,
+    bool CustomerReferenceRequired = false);
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
 

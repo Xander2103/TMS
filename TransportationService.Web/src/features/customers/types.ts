@@ -20,7 +20,37 @@ export interface CustomerContact {
   notes: string | null
 }
 
-export interface CustomerDetail {
+export type VatTreatment =
+  | 'DomesticVat'
+  | 'ReverseCharge'
+  | 'IntraCommunitySupply'
+  | 'ExportOutsideEu'
+  | 'VatExempt'
+  | 'Other'
+
+export const VAT_TREATMENT_LABELS: Record<VatTreatment, string> = {
+  DomesticVat: 'Binnenlandse BTW',
+  ReverseCharge: 'BTW verlegd',
+  IntraCommunitySupply: 'Intracommunautaire levering',
+  ExportOutsideEu: 'Uitvoer buiten de EU',
+  VatExempt: 'Vrijgesteld van BTW',
+  Other: 'Afwijkende regeling',
+}
+
+export interface CustomerVatProfile {
+  vatTreatment: VatTreatment
+  defaultVatRatePercent: number | null
+  vatCountryCode: string | null
+  vatNotes: string | null
+  peppolId: string | null
+  peppolScheme: string | null
+  invoiceLanguageCode: string | null
+  purchaseOrderRequired: boolean
+  signedDeliveryNoteRequired: boolean
+  customerReferenceRequired: boolean
+}
+
+export interface CustomerDetail extends CustomerVatProfile {
   id: string
   customerNumber: string
   name: string
@@ -46,7 +76,7 @@ export interface CustomerDetail {
   contacts: CustomerContact[]
 }
 
-export interface CustomerInput {
+export interface CustomerInput extends CustomerVatProfile {
   name: string
   legalName: string | null
   vatNumber: string | null

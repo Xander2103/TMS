@@ -63,6 +63,69 @@ public class CustomerServiceTests
     }
 
     [Fact]
+    public async Task CreateAsync_WithVatAndPeppolProfile_PersistsAndValidates()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        await CountrySeeder.SyncAsync(db.Context);
+        var sut = CreateSut(db, tenantId);
+
+        var created = await sut.CreateAsync(NewCustomer("Acme") with
+        {
+            VatNumber = "BE 0123.456.749",
+            VatTreatment = Modules.Partners.Entities.VatTreatment.IntraCommunitySupply,
+            DefaultVatRatePercent = 0m,
+            VatCountryCode = "nl",
+            PeppolId = "0123456749",
+            PeppolScheme = "0208",
+            PurchaseOrderRequired = true,
+            CustomerReferenceRequired = true,
+        }, CancellationToken.None);
+
+        Assert.Equal("BE0123456749", created.VatNumber);
+        Assert.Equal(Modules.Partners.Entities.VatTreatment.IntraCommunitySupply, created.VatTreatment);
+        Assert.Equal(0m, created.DefaultVatRatePercent);
+        Assert.Equal("NL", created.VatCountryCode);
+        Assert.Equal("0123456749", created.PeppolId);
+        Assert.Equal("0208", created.PeppolScheme);
+        Assert.True(created.PurchaseOrderRequired);
+        Assert.True(created.CustomerReferenceRequired);
+    }
+
+    [Fact]
+    public async Task CreateAsync_InvalidBelgianVat_Throws()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        var sut = CreateSut(db, tenantId);
+
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            sut.CreateAsync(NewCustomer("Acme") with { VatNumber = "BE0123456750" }, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateAsync_PeppolSchemeWithoutId_Throws()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        var sut = CreateSut(db, tenantId);
+
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            sut.CreateAsync(NewCustomer("Acme") with { PeppolScheme = "0208" }, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CreateAsync_PeppolIdWithEmbeddedScheme_Throws()
+    {
+        using var db = new SqliteTestDbContext();
+        var tenantId = await SeedTenantAsync(db, "t", "KL-");
+        var sut = CreateSut(db, tenantId);
+
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            sut.CreateAsync(NewCustomer("Acme") with { PeppolId = "0208:0123456749" }, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task CreateAsync_GeneratesSequentialCustomerNumbers()
     {
         using var db = new SqliteTestDbContext();

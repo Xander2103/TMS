@@ -28,6 +28,14 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.Notes).HasMaxLength(2000);
         builder.Property(c => c.BlockReason).HasMaxLength(500);
 
+        builder.Property(c => c.VatTreatment).HasConversion<string>().HasMaxLength(30);
+        builder.Property(c => c.DefaultVatRatePercent).HasPrecision(5, 2);
+        builder.Property(c => c.VatCountryCode).HasMaxLength(2);
+        builder.Property(c => c.VatNotes).HasMaxLength(1000);
+        builder.Property(c => c.PeppolId).HasMaxLength(64);
+        builder.Property(c => c.PeppolScheme).HasMaxLength(10);
+        builder.Property(c => c.InvoiceLanguageCode).HasMaxLength(10);
+
         builder.HasIndex(c => new { c.TenantId, c.CustomerNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(c => c.TenantId);
         builder.HasIndex(c => new { c.TenantId, c.IsActive });

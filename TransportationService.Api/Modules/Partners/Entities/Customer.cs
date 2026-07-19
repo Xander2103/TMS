@@ -32,6 +32,28 @@ public class Customer : AuditableTenantEntity
     public int PaymentTermDays { get; set; } = 30;
     public string? DefaultLanguageCode { get; set; }
 
+    // VAT profile. Treatment (how VAT is applied) is deliberately separate from the default
+    // rate (which percentage), and the rate is nullable: null = use the tenant default.
+    public VatTreatment VatTreatment { get; set; } = VatTreatment.DomesticVat;
+    public decimal? DefaultVatRatePercent { get; set; }
+    /// <summary>Country whose VAT regime applies; may differ from the visiting address.</summary>
+    public string? VatCountryCode { get; set; }
+    public string? VatNotes { get; set; }
+
+    // Peppol e-invoicing identity (no external integration yet — data only).
+    /// <summary>Peppol participant identifier without scheme prefix (e.g. "0123456789").</summary>
+    public string? PeppolId { get; set; }
+    /// <summary>Peppol scheme code (e.g. "0208" = Belgian enterprise number).</summary>
+    public string? PeppolScheme { get; set; }
+
+    /// <summary>Invoice language override; null = DefaultLanguageCode.</summary>
+    public string? InvoiceLanguageCode { get; set; }
+
+    // Order-intake requirements for this customer.
+    public bool PurchaseOrderRequired { get; set; }
+    public bool SignedDeliveryNoteRequired { get; set; }
+    public bool CustomerReferenceRequired { get; set; }
+
     public string? Notes { get; set; }
     public bool IsActive { get; set; } = true;
 

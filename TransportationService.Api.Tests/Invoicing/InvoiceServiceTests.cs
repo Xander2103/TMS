@@ -82,6 +82,39 @@ public class InvoiceServiceTests
     }
 
     [Fact]
+    public async Task Create_UsesCustomerDefaultVatRate_WhenSet()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customer = await h.Db.Context.Customers.FindAsync(h.CustomerId);
+        customer!.DefaultVatRatePercent = 6m;
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var result = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+
+        Assert.Equal(6m, Assert.Single(result.Invoice!.Lines).VatRatePercent);
+    }
+
+    [Fact]
+    public async Task Create_NonDomesticVatTreatment_DefaultsToZeroPercent()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customer = await h.Db.Context.Customers.FindAsync(h.CustomerId);
+        customer!.VatTreatment = VatTreatment.IntraCommunitySupply;
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var result = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+
+        Assert.Equal(0m, Assert.Single(result.Invoice!.Lines).VatRatePercent);
+        Assert.Equal(0m, result.Invoice!.VatAmount);
+    }
+
+    [Fact]
     public async Task Create_ManualLinesOnly_UsesDefaultVat()
     {
         var h = await SeedAsync();

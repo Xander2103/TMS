@@ -51,6 +51,35 @@
   gap: 12px;
 }
 
+.customer-form-rate {
+  display: flex;
+  gap: 8px;
+}
+
+.customer-form-rate select {
+  flex: 1;
+}
+
+.customer-form-rate input {
+  width: 110px;
+}
+
+.customer-form-requirements {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.customer-vat-summary {
+  margin-top: 20px;
+}
+
+.customer-vat-summary h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: var(--text-h);
+}
+
 .customer-detail-layout {
   display: grid;
   grid-template-columns: 2fr 1fr;

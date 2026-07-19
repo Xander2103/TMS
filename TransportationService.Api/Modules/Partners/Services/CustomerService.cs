@@ -101,7 +101,7 @@ public class CustomerService : ICustomerService
             TenantId = _tenantContext.TenantId,
             Name = request.Name.Trim(),
             LegalName = Trim(request.LegalName),
-            VatNumber = Trim(request.VatNumber),
+            VatNumber = VatNumberValidator.NormalizeAndValidate(request.VatNumber),
             CategoryId = request.CategoryId,
             Email = Trim(request.Email),
             PhoneNumber = Trim(request.PhoneNumber),
@@ -117,6 +117,11 @@ public class CustomerService : ICustomerService
             Notes = Trim(request.Notes),
             IsActive = true,
         };
+        await ApplyVatAndPeppolProfileAsync(customer,
+            request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
+            request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
+            request.PurchaseOrderRequired, request.SignedDeliveryNoteRequired, request.CustomerReferenceRequired,
+            cancellationToken);
 
         _dbContext.Customers.Add(customer);
         await TenantNumbering.SaveWithClaimedNumberAsync(
@@ -141,11 +146,11 @@ public class CustomerService : ICustomerService
 
         await EnsureCategoryInTenantAsync(request.CategoryId, cancellationToken);
 
-        var oldValues = new { customer.Name, customer.IsActive, customer.CategoryId };
+        var oldValues = new { customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber };
 
         customer.Name = request.Name.Trim();
         customer.LegalName = Trim(request.LegalName);
-        customer.VatNumber = Trim(request.VatNumber);
+        customer.VatNumber = VatNumberValidator.NormalizeAndValidate(request.VatNumber);
         customer.CategoryId = request.CategoryId;
         customer.Email = Trim(request.Email);
         customer.PhoneNumber = Trim(request.PhoneNumber);
@@ -160,11 +165,16 @@ public class CustomerService : ICustomerService
         customer.DefaultLanguageCode = Trim(request.DefaultLanguageCode);
         customer.Notes = Trim(request.Notes);
         customer.IsActive = request.IsActive;
+        await ApplyVatAndPeppolProfileAsync(customer,
+            request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
+            request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
+            request.PurchaseOrderRequired, request.SignedDeliveryNoteRequired, request.CustomerReferenceRequired,
+            cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "Updated", oldValues,
-            new { customer.Name, customer.IsActive, customer.CategoryId }, cancellationToken);
+            new { customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber }, cancellationToken);
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
         return MapToDetail(customer, categoryName);
@@ -302,6 +312,49 @@ public class CustomerService : ICustomerService
         }
     }
 
+    private async Task ApplyVatAndPeppolProfileAsync(Customer customer,
+        VatTreatment vatTreatment, decimal? defaultVatRatePercent, string? vatCountryCode, string? vatNotes,
+        string? peppolId, string? peppolScheme, string? invoiceLanguageCode,
+        bool purchaseOrderRequired, bool signedDeliveryNoteRequired, bool customerReferenceRequired,
+        CancellationToken cancellationToken)
+    {
+        if (defaultVatRatePercent is { } rate && rate is < 0 or > 100)
+        {
+            throw new DomainValidationException("Standaard BTW-tarief moet tussen 0 en 100 liggen.");
+        }
+
+        var trimmedPeppolId = Trim(peppolId);
+        var trimmedPeppolScheme = Trim(peppolScheme);
+        if (trimmedPeppolId is not null && trimmedPeppolId.Contains(':'))
+        {
+            throw new DomainValidationException("Peppol-ID mag geen schema bevatten; vul het schema apart in.");
+        }
+
+        if (trimmedPeppolScheme is not null)
+        {
+            if (trimmedPeppolScheme.Length != 4 || !trimmedPeppolScheme.All(char.IsAsciiDigit))
+            {
+                throw new DomainValidationException("Peppol-schema moet uit 4 cijfers bestaan (bv. 0208).");
+            }
+
+            if (trimmedPeppolId is null)
+            {
+                throw new DomainValidationException("Peppol-schema vereist ook een Peppol-ID.");
+            }
+        }
+
+        customer.VatTreatment = vatTreatment;
+        customer.DefaultVatRatePercent = defaultVatRatePercent;
+        customer.VatCountryCode = await _countryValidator.NormalizeAndValidateAsync(vatCountryCode, "BTW-land", cancellationToken);
+        customer.VatNotes = Trim(vatNotes);
+        customer.PeppolId = trimmedPeppolId;
+        customer.PeppolScheme = trimmedPeppolScheme;
+        customer.InvoiceLanguageCode = Trim(invoiceLanguageCode);
+        customer.PurchaseOrderRequired = purchaseOrderRequired;
+        customer.SignedDeliveryNoteRequired = signedDeliveryNoteRequired;
+        customer.CustomerReferenceRequired = customerReferenceRequired;
+    }
+
     private async Task EnsureCategoryInTenantAsync(Guid? categoryId, CancellationToken cancellationToken)
     {
         if (categoryId is { } id
@@ -348,5 +401,8 @@ public class CustomerService : ICustomerService
         c.Street, c.HouseNumber, c.PostalCode, c.City, c.CountryCode,
         c.InvoiceEmail, c.PaymentTermDays, c.DefaultLanguageCode, c.Notes,
         c.IsActive, c.IsBlocked, c.BlockReason,
+        c.VatTreatment, c.DefaultVatRatePercent, c.VatCountryCode, c.VatNotes,
+        c.PeppolId, c.PeppolScheme, c.InvoiceLanguageCode,
+        c.PurchaseOrderRequired, c.SignedDeliveryNoteRequired, c.CustomerReferenceRequired,
         c.Contacts.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.LastName).Select(MapContact).ToList());
 }

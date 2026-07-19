@@ -92,6 +92,44 @@ public class TransportOrderServiceTests
     }
 
     [Fact]
+    public async Task Create_CustomerRequiringReference_RejectsMissingReference()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customer = await h.Db.Context.Customers.FindAsync(h.CustomerId);
+        customer!.CustomerReferenceRequired = true;
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var withoutReference = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent"))
+            with { CustomerReference = "  " };
+        var rejected = await h.Sut.CreateAsync(withoutReference, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, rejected.Outcome);
+
+        var accepted = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, accepted.Outcome);
+    }
+
+    [Fact]
+    public async Task Create_BlockedCustomer_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customer = await h.Db.Context.Customers.FindAsync(h.CustomerId);
+        customer!.IsBlocked = true;
+        customer.BlockReason = "Openstaande facturen";
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+    }
+
+    [Fact]
     public async Task Create_ForeignCustomer_IsRejected()
     {
         var h = await SeedAsync();

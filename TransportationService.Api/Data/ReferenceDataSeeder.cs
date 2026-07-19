@@ -48,8 +48,12 @@ public static class ReferenceDataSeeder
             [("NAT", "Nationaal"), ("INT", "Internationaal"), ("DISTR", "Distributie"), ("ADR", "ADR"), ("KRAAN", "Kraan")],
             cancellationToken);
 
+        // Business classifications; no "Blocked" category — blocking is a separate customer
+        // flag (IsBlocked), keeping one source of truth for that state.
         await SeedIfEmptyAsync<CustomerCategory>(dbContext, tenantId,
-            [("KEY", "Key account"), ("STD", "Standaard"), ("SPOT", "Spot")],
+            [("STD", "Standaard klant"), ("KEY", "Key account"), ("PROS", "Prospect"),
+             ("EENM", "Eenmalige klant"), ("PART", "Partner"), ("OA", "Onderaannemer"),
+             ("LEV", "Leverancier"), ("INT", "Interne firma")],
             cancellationToken);
 
         // Countries are global reference data seeded by CountrySeeder, not tenant lookups.

@@ -2,8 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
-import { searchCustomers } from '../../customers/api/customersApi'
-import type { CustomerListItem } from '../../customers/types'
+import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
+import type { CustomerDetail, CustomerListItem } from '../../customers/types'
 import { LocationSelect } from '../../locations/components/LocationSelect'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { STOP_TYPE_LABELS, type StopInput, type TransportOrderDetail, type TransportOrderInput } from '../types'
@@ -101,6 +101,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
 
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [loadedCustomerDetail, setLoadedCustomerDetail] = useState<{ id: string; detail: CustomerDetail } | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -113,6 +114,30 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
       mounted = false
     }
   }, [])
+
+  // Surface the selected customer's intake requirements (reference/PO/signed CMR) as hints.
+  useEffect(() => {
+    if (!customerId) return
+    let mounted = true
+    getCustomer(customerId)
+      .then((detail) => {
+        if (mounted) setLoadedCustomerDetail({ id: customerId, detail })
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [customerId])
+
+  // Derive so a stale detail (from a previously selected customer) is never shown.
+  const customerRequirements = loadedCustomerDetail?.id === customerId ? loadedCustomerDetail.detail : null
+  const requirementHints = customerRequirements
+    ? [
+        customerRequirements.customerReferenceRequired ? 'een klantreferentie is verplicht' : null,
+        customerRequirements.purchaseOrderRequired ? 'een bestelbon (PO) is vereist' : null,
+        customerRequirements.signedDeliveryNoteRequired ? 'een getekende leverbon (CMR) is vereist' : null,
+      ].filter((hint): hint is string => hint !== null)
+    : []
 
   function setStop(key: string, patch: Partial<StopFormRow>) {
     setStops((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
@@ -219,6 +244,18 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
           <input id="to-date" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} disabled={saving} />
         </FormField>
       </div>
+
+      {requirementHints.length > 0 && (
+        <p className="tof-customer-requirements" role="note">
+          Let op voor deze klant: {requirementHints.join(', ')}.
+        </p>
+      )}
+      {customerRequirements?.isBlocked && (
+        <p className="tof-error" role="alert">
+          Deze klant is geblokkeerd{customerRequirements.blockReason ? ` (${customerRequirements.blockReason})` : ''}; er
+          kunnen geen nieuwe opdrachten voor worden aangemaakt.
+        </p>
+      )}
 
       <FormField label="Omschrijving goederen" htmlFor="to-goods" required>
         <textarea id="to-goods" rows={2} value={goodsDescription} onChange={(e) => setGoodsDescription(e.target.value)} disabled={saving} maxLength={1000} />

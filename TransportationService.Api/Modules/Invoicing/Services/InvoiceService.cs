@@ -6,6 +6,7 @@ using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Invoicing.Dtos;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 
@@ -150,8 +151,11 @@ public class InvoiceService : IInvoiceService
     {
         var tenantId = _tenantContext.TenantId;
 
-        if (!await _dbContext.Customers.AnyAsync(
-                c => c.Id == request.CustomerId && c.TenantId == tenantId, cancellationToken))
+        var customerVat = await _dbContext.Customers
+            .Where(c => c.Id == request.CustomerId && c.TenantId == tenantId)
+            .Select(c => new { c.VatTreatment, c.DefaultVatRatePercent })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (customerVat is null)
         {
             return InvoiceOperationResult.InvalidReference("De gekoppelde klant bestaat niet.");
         }
@@ -194,7 +198,12 @@ public class InvoiceService : IInvoiceService
 
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
-        var vatRate = settings?.DefaultVatRatePercent ?? 21m;
+        // Default line VAT: the customer's own rate wins; without one, non-domestic VAT
+        // treatments (reverse charge, intra-community, export, exempt) default to 0%.
+        var vatRate = customerVat.DefaultVatRatePercent
+            ?? (customerVat.VatTreatment == VatTreatment.DomesticVat
+                ? settings?.DefaultVatRatePercent ?? 21m
+                : 0m);
         var invoiceDate = request.InvoiceDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
         var invoice = new Invoice
