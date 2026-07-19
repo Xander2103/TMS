@@ -73,6 +73,10 @@ public class TenantSettings
     public string TrainingConflictSeverity { get; set; } = "Warning";
     public string ShiftOverlapConflictSeverity { get; set; } = "Warning";
 
+    // Package (colli) numbering
+    public string? PackageNumberPrefix { get; set; } = "PKG-";
+    public int PackageNumberNextValue { get; set; } = 1;
+
     // Branding (reference only; upload/storage is out of scope for this milestone)
     public string? LogoReference { get; set; }
 

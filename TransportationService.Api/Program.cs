@@ -202,6 +202,14 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.
 builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.IKpiExportService,
     TransportationService.Api.Modules.Reporting.Services.KpiExportService>();
 
+// Packages: tracked cargo units, barcode registry and immutable chain of custody
+builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.IPackageService,
+    TransportationService.Api.Modules.Packages.Services.PackageService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.IPackageBarcodeService,
+    TransportationService.Api.Modules.Packages.Services.PackageBarcodeService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.IPackageEventWriter,
+    TransportationService.Api.Modules.Packages.Services.PackageEventWriter>();
+
 // Outlook/Exchange foundation: queued calendar sync behind a provider seam. The fake provider
 // stands in until Microsoft Graph credentials exist; swap ICalendarProvider then.
 builder.Services.AddScoped<TransportationService.Api.Modules.Integrations.Services.QueueingCalendarSyncService>();

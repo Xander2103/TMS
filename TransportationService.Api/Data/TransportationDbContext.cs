@@ -55,6 +55,9 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Edi.Entities.EdiMessage> EdiMessages => Set<TransportationService.Api.Modules.Edi.Entities.EdiMessage>();
     public DbSet<TransportationService.Api.Modules.Integrations.Entities.CalendarSyncItem> CalendarSyncItems => Set<TransportationService.Api.Modules.Integrations.Entities.CalendarSyncItem>();
     public DbSet<TransportationService.Api.Modules.Identity.Entities.RoleTemplateState> RoleTemplateStates => Set<TransportationService.Api.Modules.Identity.Entities.RoleTemplateState>();
+    public DbSet<TransportationService.Api.Modules.Packages.Entities.Package> Packages => Set<TransportationService.Api.Modules.Packages.Entities.Package>();
+    public DbSet<TransportationService.Api.Modules.Packages.Entities.PackageBarcode> PackageBarcodes => Set<TransportationService.Api.Modules.Packages.Entities.PackageBarcode>();
+    public DbSet<TransportationService.Api.Modules.Packages.Entities.PackageEvent> PackageEvents => Set<TransportationService.Api.Modules.Packages.Entities.PackageEvent>();
     public DbSet<TransportationService.Api.Modules.TripCosting.Entities.CostRateSet> CostRateSets => Set<TransportationService.Api.Modules.TripCosting.Entities.CostRateSet>();
     public DbSet<TransportationService.Api.Modules.TripCosting.Entities.TripCostLine> TripCostLines => Set<TransportationService.Api.Modules.TripCosting.Entities.TripCostLine>();
     public DbSet<TransportationService.Api.Modules.TripCosting.Entities.TripCostSummary> TripCostSummaries => Set<TransportationService.Api.Modules.TripCosting.Entities.TripCostSummary>();

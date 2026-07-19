@@ -55,6 +55,8 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(s => s.InvoiceNumberNextValue).HasDefaultValue(1);
         builder.Property(s => s.VehicleNumberNextValue).HasDefaultValue(1);
         builder.Property(s => s.TrailerNumberNextValue).HasDefaultValue(1);
+        builder.Property(s => s.PackageNumberPrefix).HasMaxLength(20).HasDefaultValue("PKG-");
+        builder.Property(s => s.PackageNumberNextValue).HasDefaultValue(1);
         builder.Property(s => s.LogoReference).HasMaxLength(300);
         builder.Property(s => s.EnabledModulesJson).IsRequired();
 
@@ -68,6 +70,7 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(s => s.TrailerNumberNextValue).IsConcurrencyToken();
         builder.Property(s => s.OrderNumberNextValue).IsConcurrencyToken();
         builder.Property(s => s.TripNumberNextValue).IsConcurrencyToken();
+        builder.Property(s => s.PackageNumberNextValue).IsConcurrencyToken();
         builder.Property(s => s.InvoiceNumberNextValue).IsConcurrencyToken();
         builder.HasIndex(s => s.TenantId).IsUnique();
         builder.HasOne<Tenant>().WithOne().HasForeignKey<TenantSettings>(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);

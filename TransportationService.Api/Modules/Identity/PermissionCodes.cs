@@ -183,6 +183,20 @@ public static class PermissionCodes
     public const string KpiView = "kpi.view";
     public const string KpiExport = "kpi.export";
 
+    // --- Packages (colli) & chain of custody ---
+    public const string PackagesView = "packages.view";
+    public const string PackagesCreate = "packages.create";
+    public const string PackagesManage = "packages.manage";
+    public const string PackagesCancel = "packages.cancel";
+    public const string PackagesRelabel = "packages.relabel";
+    public const string PackagesExport = "packages.export";
+    public const string ScanningOverride = "scanning.override";
+    public const string PackageExceptionsCreate = "package_exceptions.create";
+    public const string PackageExceptionsManage = "package_exceptions.manage";
+    public const string WarehouseView = "warehouse.view";
+    public const string WarehouseReleaseTrip = "warehouse.release_trip";
+    public const string PackageReportsExport = "package_reports.export";
+
     // --- Proof of delivery ---
     public const string PodView = "pod.view";
     public const string PodFinalize = "pod.finalize";
@@ -324,6 +338,18 @@ public static class PermissionCodes
         (ProfitabilityView, "profitability", "view", "Rendement en marges van ritten bekijken"),
         (KpiView, "kpi", "view", "Management-KPI-dashboard bekijken"),
         (KpiExport, "kpi", "export", "KPI-rapporten exporteren naar Excel"),
+        (PackagesView, "packages", "view", "Colli en pakketstatussen bekijken"),
+        (PackagesCreate, "packages", "create", "Colli aanmaken (handmatig, bulk of import)"),
+        (PackagesManage, "packages", "manage", "Colli beheren (gegevens, groepen, disposities)"),
+        (PackagesCancel, "packages", "cancel", "Colli annuleren"),
+        (PackagesRelabel, "packages", "relabel", "Colli heretiketteren en etiketten herafdrukken"),
+        (PackagesExport, "packages", "export", "Collilijsten exporteren"),
+        (ScanningOverride, "scanning", "override", "Scanblokkades en stopafronding overrulen"),
+        (PackageExceptionsCreate, "package_exceptions", "create", "Pakketafwijkingen melden (ontbrekend/verkeerd/beschadigd)"),
+        (PackageExceptionsManage, "package_exceptions", "manage", "Pakketafwijkingen toewijzen en afhandelen"),
+        (WarehouseView, "warehouse", "view", "Magazijnmodule: laadlijsten en laadvoortgang bekijken"),
+        (WarehouseReleaseTrip, "warehouse", "release_trip", "Ritten vrijgeven voor vertrek (incl. override met reden)"),
+        (PackageReportsExport, "package_reports", "export", "Pakketrapporten exporteren naar Excel"),
         (PodView, "pod", "view", "Afleverbewijzen bekijken"),
         (PodFinalize, "pod", "finalize", "Afleverbewijzen opnemen en afronden"),
         (PodCorrect, "pod", "correct", "Afleverbewijzen corrigeren (nieuwe versie)"),
