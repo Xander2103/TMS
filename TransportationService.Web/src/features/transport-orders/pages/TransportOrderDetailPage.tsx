@@ -21,6 +21,7 @@ import {
 } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
 import { StopExecutionPlanDialog } from '../components/StopExecutionPlanDialog'
+import { OrderPackagesPanel } from '../../packages/components/OrderPackagesPanel'
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
@@ -264,6 +265,15 @@ export function TransportOrderDetailPage() {
               </tbody>
             </table>
           </section>
+
+          {hasPermission('packages.view') && (
+            <OrderPackagesPanel
+              orderId={order.id}
+              unloadingStops={order.stops
+                .filter((stop) => stop.stopType === 'Unloading')
+                .map((stop) => ({ id: stop.id, label: `${stop.sequence}. ${stop.city ?? stop.locationName ?? 'Losstop'}` }))}
+            />
+          )}
 
           {order.cargoItems.length > 0 && (
             <section className="to-section">
