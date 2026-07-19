@@ -19,6 +19,8 @@ import { PlanningPage } from '../features/planning/pages/PlanningPage'
 import { TripDetailPage } from '../features/planning/pages/TripDetailPage'
 import { MyTripsPage } from '../features/my-trips/pages/MyTripsPage'
 import { TripExecutionPage } from '../features/my-trips/pages/TripExecutionPage'
+import { ExceptionsPage } from '../features/exceptions/pages/ExceptionsPage'
+import { ExceptionDetailPage } from '../features/exceptions/pages/ExceptionDetailPage'
 import { InvoicesPage } from '../features/invoices/pages/InvoicesPage'
 import { NewInvoicePage } from '../features/invoices/pages/NewInvoicePage'
 import { InvoiceDetailPage } from '../features/invoices/pages/InvoiceDetailPage'
@@ -77,6 +79,8 @@ const router = createBrowserRouter(
           <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
           <Route path="/planning" element={<PlanningPage />} />
           <Route path="/planning/:id" element={<TripDetailPage />} />
+          <Route path="/exceptions" element={<ExceptionsPage />} />
+          <Route path="/exceptions/:id" element={<ExceptionDetailPage />} />
           <Route path="/my-trips" element={<MyTripsPage />} />
           <Route path="/my-trips/:id" element={<TripExecutionPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />

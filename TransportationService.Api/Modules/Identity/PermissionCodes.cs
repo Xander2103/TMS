@@ -160,6 +160,11 @@ public static class PermissionCodes
     public const string ScanningExecute = "scanning.execute";
     public const string ScanningCorrect = "scanning.correct";
 
+    // --- Execution exceptions (afwijkingen) ---
+    public const string ExceptionsView = "exceptions.view";
+    public const string ExceptionsCreate = "exceptions.create";
+    public const string ExceptionsResolve = "exceptions.resolve";
+
     // --- Absences (HR availability) ---
     public const string AbsencesView = "absences.view";
     public const string AbsencesCreate = "absences.create";
@@ -278,6 +283,9 @@ public static class PermissionCodes
         (ScanningView, "scanning", "view", "Scanhistoriek en scanstatus bekijken"),
         (ScanningExecute, "scanning", "execute", "Colli scannen tijdens rituitvoering"),
         (ScanningCorrect, "scanning", "correct", "Scantellingen handmatig corrigeren"),
+        (ExceptionsView, "exceptions", "view", "Uitvoeringsafwijkingen bekijken"),
+        (ExceptionsCreate, "exceptions", "create", "Afwijkingen melden tijdens uitvoering"),
+        (ExceptionsResolve, "exceptions", "resolve", "Afwijkingen onderzoeken en afhandelen"),
         (AbsencesView, "absences", "view", "Afwezigheden bekijken"),
         (AbsencesCreate, "absences", "create", "Afwezigheden aanvragen"),
         (AbsencesEdit, "absences", "edit", "Afwezigheden bewerken en annuleren"),

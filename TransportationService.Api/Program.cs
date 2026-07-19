@@ -174,6 +174,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.I
 builder.Services.AddScoped<TransportationService.Api.Modules.Scanning.Services.IScanService,
     TransportationService.Api.Modules.Scanning.Services.ScanService>();
 
+// Execution exceptions
+builder.Services.AddScoped<TransportationService.Api.Modules.Exceptions.Services.IExecutionExceptionService,
+    TransportationService.Api.Modules.Exceptions.Services.ExecutionExceptionService>();
+
 // Invoicing
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();

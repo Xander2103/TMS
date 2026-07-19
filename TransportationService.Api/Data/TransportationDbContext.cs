@@ -38,6 +38,8 @@ public class TransportationDbContext : DbContext
     public DbSet<StopExecution> StopExecutions => Set<StopExecution>();
     public DbSet<StopStatusHistory> StopStatusHistories => Set<StopStatusHistory>();
     public DbSet<CargoItem> CargoItems => Set<CargoItem>();
+    public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException> ExecutionExceptions => Set<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException>();
+    public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExceptionPhoto> ExceptionPhotos => Set<TransportationService.Api.Modules.Exceptions.Entities.ExceptionPhoto>();
     public DbSet<ScanEvent> ScanEvents => Set<ScanEvent>();
 
     // Invoicing (Phase 8)

@@ -14,6 +14,7 @@ import { ApiError } from '../../../api/apiClient'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { STOP_TYPE_LABELS } from '../../transport-orders/types'
 import { ScanPanel } from '../../scanning/components/ScanPanel'
+import { ReportExceptionDialog } from '../../exceptions/components/ReportExceptionDialog'
 import { completeStop, getStopHistory, getTripExecution, transitionStop } from '../api/myTripsApi'
 import {
   STOP_EXECUTION_ICONS,
@@ -86,6 +87,7 @@ export function TripExecutionPage() {
   const [historyStopId, setHistoryStopId] = useState<string | null>(null)
   const [history, setHistory] = useState<Record<string, StopStatusHistoryEntry[]>>({})
   const [scanStop, setScanStop] = useState<ExecutionStop | null>(null)
+  const [exceptionTarget, setExceptionTarget] = useState<{ stop: ExecutionStop | null } | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -106,6 +108,7 @@ export function TripExecutionPage() {
   const canExecute = hasPermission('driver_workflow.execute')
   const canScan = hasPermission('scanning.execute')
   const canCorrectScans = hasPermission('scanning.correct')
+  const canReportException = hasPermission('exceptions.create')
 
   function afterUpdate(updated: TripExecution, message: string) {
     setExecution(updated)
@@ -229,6 +232,14 @@ export function TripExecutionPage() {
         <p className="mt-hint">De rit is nog niet gestart. De planner start de rit, daarna kun je stops registreren.</p>
       )}
 
+      {canReportException && execution.tripStatus === 'InProgress' && (
+        <div className="mt-trip-actions">
+          <Button variant="ghost" onClick={() => setExceptionTarget({ stop: null })} disabled={busy}>
+            ⚠ Probleem met rit/voertuig melden
+          </Button>
+        </div>
+      )}
+
       <ol className="mt-stops">
         {execution.stops.map((stop) => {
           const primary = STOP_PRIMARY_ACTION_ORDER.find((s) => stop.allowedTransitions.includes(s))
@@ -345,6 +356,11 @@ export function TripExecutionPage() {
                       {STOP_TRANSITION_ACTION_LABELS[s]}
                     </Button>
                   ))}
+                  {canReportException && (
+                    <Button variant="ghost" onClick={() => setExceptionTarget({ stop })} disabled={busy}>
+                      ⚠ Probleem melden
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -369,6 +385,16 @@ export function TripExecutionPage() {
           )
         })}
       </ol>
+
+      {exceptionTarget && (
+        <ReportExceptionDialog
+          tripId={id}
+          stopId={exceptionTarget.stop?.transportOrderStopId ?? null}
+          stopLabel={exceptionTarget.stop?.locationName ?? null}
+          onClose={() => setExceptionTarget(null)}
+          onReported={() => setExceptionTarget(null)}
+        />
+      )}
 
       {scanStop && (
         <ScanPanel

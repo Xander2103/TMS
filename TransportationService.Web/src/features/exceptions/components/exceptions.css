@@ -1,0 +1,159 @@
+.exc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.exc-form input,
+.exc-form textarea,
+.exc-form select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.exc-photo-count {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.exc-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.exc-filters select {
+  padding: 6px 8px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.exc-description-cell {
+  display: inline-block;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exc-meta-cell {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.exc-header-badges {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.exc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.exc-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+}
+
+.exc-edit select,
+.exc-edit textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.exc-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.exc-multiline {
+  white-space: pre-wrap;
+}
+
+.exc-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.exc-photo {
+  margin: 0;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.exc-photo img {
+  width: 100%;
+  height: 130px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.exc-photo-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 130px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text);
+  padding: 4px;
+  text-align: center;
+}
+
+.exc-photo figcaption {
+  font-size: 12px;
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  align-items: center;
+}
+
+.exc-photo-delete {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: #dc2626;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .exc-filters {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

@@ -42,6 +42,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OrdersExport,
                 PermissionCodes.PlanningView, PermissionCodes.PlanningCreate, PermissionCodes.PlanningEdit,
                 PermissionCodes.ScanningView,
+                PermissionCodes.ExceptionsView, PermissionCodes.ExceptionsResolve,
                 PermissionCodes.CustomersCreate, PermissionCodes.CustomersEdit,
                 PermissionCodes.LocationsCreate, PermissionCodes.LocationsEdit,
                 PermissionCodes.EmployeeDocumentsView,
@@ -55,6 +56,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PlanningView, PermissionCodes.PlanningCreate, PermissionCodes.PlanningEdit,
                 PermissionCodes.DriverWorkflowView,
                 PermissionCodes.ScanningView, PermissionCodes.ScanningCorrect,
+                PermissionCodes.ExceptionsView, PermissionCodes.ExceptionsCreate, PermissionCodes.ExceptionsResolve,
                 PermissionCodes.EmployeeDocumentsView,
             ]),
 
@@ -65,6 +67,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OrdersView, PermissionCodes.OrdersExport,
                 PermissionCodes.PlanningView, PermissionCodes.PlanningOverrideRestriction,
                 PermissionCodes.ScanningView,
+                PermissionCodes.ExceptionsView,
                 PermissionCodes.InvoicesView,
                 PermissionCodes.AbsencesApprove,
                 PermissionCodes.AuditLogsView,
@@ -94,6 +97,7 @@ public static class DefaultRoleDefinitions
             [
                 PermissionCodes.DriverWorkflowView, PermissionCodes.DriverWorkflowExecute,
                 PermissionCodes.ScanningView, PermissionCodes.ScanningExecute,
+                PermissionCodes.ExceptionsCreate,
                 PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate,
             ]),
 
