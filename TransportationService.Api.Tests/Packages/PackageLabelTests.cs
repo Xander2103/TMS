@@ -167,6 +167,28 @@ public class PackageLabelTests
     }
 
     [Fact]
+    public async Task Snapshot_CarriesSequenceLabel_WithinTheOrder_AndDutchUnitType()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var first = (await h.Packages.CreateAsync(h.OrderId,
+            new CreatePackageRequest("Pallet A") { UnitType = PackageUnitType.EuroPallet }, CancellationToken.None)).Package!;
+        var second = (await h.Packages.CreateAsync(h.OrderId,
+            new CreatePackageRequest("Pallet B") { UnitType = PackageUnitType.EuroPallet }, CancellationToken.None)).Package!;
+
+        await h.Sut.PrintAsync([first.Id, second.Id], LabelFormat.Thermal100x150, null, CancellationToken.None);
+
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var snapshots = h.Db.Context.PackageLabels.ToList()
+            .Select(l => (l.PackageId, Snapshot: JsonSerializer.Deserialize<LabelSnapshot>(l.SnapshotJson, options)!))
+            .ToDictionary(x => x.PackageId, x => x.Snapshot);
+
+        Assert.Equal("Collo 1 van 2", snapshots[first.Id].SequenceLabel);
+        Assert.Equal("Collo 2 van 2", snapshots[second.Id].SequenceLabel);
+        Assert.Equal("Europallet", snapshots[first.Id].UnitTypeLabel);
+    }
+
+    [Fact]
     public async Task CancelledPackages_GetNoLabel()
     {
         var h = await SeedAsync();

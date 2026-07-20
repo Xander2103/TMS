@@ -13,6 +13,7 @@ import {
   createPackage,
   downloadErrorWorkbook,
   downloadImportTemplate,
+  generatePackages,
   listOrderPackages,
   previewImport,
   printLabels,
@@ -216,6 +217,31 @@ export function OrderPackagesPanel({ orderId, unloadingStops }: OrderPackagesPan
             </Button>
             <Button variant="secondary" onClick={() => setBulkOpen(true)}>
               Bulk
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true)
+                void generatePackages(orderId)
+                  .then((result) => {
+                    const parts = [
+                      result.created > 0 ? `${result.created} aangemaakt` : null,
+                      result.cancelled > 0 ? `${result.cancelled} geannuleerd` : null,
+                      result.created === 0 && result.cancelled === 0 ? 'alles was al in orde' : null,
+                    ].filter(Boolean)
+                    if (result.message && result.requiresAttention > 0) {
+                      showError(result.message)
+                    } else {
+                      showSuccess(`Colli gegenereerd uit goederenlijnen: ${parts.join(', ')}.`)
+                    }
+                    reload()
+                  })
+                  .catch((err) => showError(err instanceof Error ? err.message : 'Genereren mislukt.'))
+                  .finally(() => setBusy(false))
+              }}
+            >
+              Genereer uit goederenlijnen
             </Button>
             <Button onClick={() => setCreateOpen(true)}>Nieuw collo</Button>
           </span>

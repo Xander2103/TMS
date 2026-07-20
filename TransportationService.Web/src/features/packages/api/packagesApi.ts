@@ -91,6 +91,23 @@ export function bulkCreatePackages(
   )
 }
 
+export interface PackageGenerationResult {
+  created: number
+  cancelled: number
+  unchanged: number
+  requiresAttention: number
+  createdPackages: Package[]
+  message: string | null
+}
+
+/** Idempotent cargo-driven generation (also runs automatically when the order is confirmed). */
+export function generatePackages(orderId: string): Promise<PackageGenerationResult> {
+  return apiClient.postJson<PackageGenerationResult, Record<string, never>>(
+    `/api/transport-orders/${orderId}/packages/generate`,
+    {},
+  )
+}
+
 export function cancelPackage(id: string, reason: string): Promise<Package> {
   return apiClient.postJson<Package, { reason: string }>(`/api/packages/${id}/cancel`, { reason })
 }

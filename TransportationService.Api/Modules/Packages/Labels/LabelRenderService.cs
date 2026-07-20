@@ -23,7 +23,9 @@ public sealed record LabelSnapshot(
     bool IsFragile,
     bool AdrRequired,
     bool RequiresTemperatureControl,
-    bool RequiresSignature);
+    bool RequiresSignature,
+    /// <summary>"Collo n van m" within the cargo line (or order). Optional so historical snapshots keep deserializing.</summary>
+    string? SequenceLabel = null);
 
 public interface ILabelRenderService
 {
@@ -92,52 +94,55 @@ public class LabelRenderService : ILabelRenderService
         return stream.ToArray();
     }
 
+    /// <summary>
+    /// Fixed zones so nothing can ever overlap or clip:
+    /// 1. header band — company name (left) + order number (right);
+    /// 2. identity block LEFT of a RESERVED QR column — package number, sequence, type;
+    /// 3. info lines (customer, addresses, reference, weight, instructions), narrowed while
+    ///    beside the QR, full-width below it, truncated with an ellipsis when too long and
+    ///    hard-capped above the barcode band;
+    /// 4. indicator band (BREEKBAAR/ADR/…);
+    /// 5. bottom band — full-width Code 128 with the human-readable value beneath it.
+    /// </summary>
     private static void DrawLabel(XGraphics gfx, LabelSnapshot label, XRect area, bool compact)
     {
         var x = area.X + 10;
         var width = area.Width - 20;
         var y = area.Y + 8;
+        var lineHeight = compact ? 10.0 : 13.0;
 
-        gfx.DrawString(label.TenantName, Title, XBrushes.Black, new XPoint(x, y + 10));
-        y += 18;
-        gfx.DrawString($"{label.PackageNumber} · {label.UnitTypeLabel}", Big, XBrushes.Black, new XPoint(x, y + 14));
-        y += 24;
-
-        // Code 128 barcode (bars only; value printed beneath).
-        var modules = Code128Encoder.ModuleWidths(label.BarcodeValue);
-        if (modules is not null)
+        string Fit(string text, double maxWidth, XFont font)
         {
-            var totalModules = modules.Sum();
-            var moduleWidth = Math.Min(width / totalModules, 1.6);
-            var barHeight = compact ? 34.0 : 52.0;
-            var barX = x;
-            var isBar = true;
-            foreach (var module in modules)
+            if (gfx.MeasureString(text, font).Width <= maxWidth)
             {
-                var barWidth = module * moduleWidth;
-                if (isBar)
-                {
-                    gfx.DrawRectangle(XBrushes.Black, barX, y, barWidth, barHeight);
-                }
-
-                barX += barWidth;
-                isBar = !isBar;
+                return text;
             }
 
-            y += barHeight + 4;
-            gfx.DrawString(label.BarcodeValue, Mono, XBrushes.Black, new XPoint(x, y + 7));
-            y += 14;
+            while (text.Length > 1 && gfx.MeasureString(text + "…", font).Width > maxWidth)
+            {
+                text = text[..^1];
+            }
+
+            return text + "…";
         }
 
-        // QR (same payload) top-right, when enabled.
+        // 1. Header band.
+        gfx.DrawString(Fit(label.TenantName, width * 0.55, Title), Title, XBrushes.Black, new XPoint(x, y + 9));
+        gfx.DrawString($"Opdracht {label.OrderNumber}", Body, XBrushes.Black,
+            new XRect(x, y, width, 12), XStringFormats.TopRight);
+        y += compact ? 15 : 18;
+        gfx.DrawLine(new XPen(XColors.Black, 0.8), x, y, x + width, y);
+        y += compact ? 4 : 6;
+
+        // 2. Reserved QR column: text in this vertical band NEVER extends into it.
+        var qrSize = label.IncludeQr ? (compact ? 46.0 : 66.0) : 0.0;
+        var qrTop = y;
         if (label.IncludeQr)
         {
             using var generator = new QRCodeGenerator();
             var qr = generator.CreateQrCode(label.BarcodeValue, QRCodeGenerator.ECCLevel.M);
-            var size = compact ? 44.0 : 62.0;
-            var moduleSize = size / qr.ModuleMatrix.Count;
-            var originX = area.Right - size - 10;
-            var originY = area.Y + 8;
+            var moduleSize = qrSize / qr.ModuleMatrix.Count;
+            var originX = area.Right - 10 - qrSize;
             for (var row = 0; row < qr.ModuleMatrix.Count; row += 1)
             {
                 for (var column = 0; column < qr.ModuleMatrix.Count; column += 1)
@@ -145,20 +150,52 @@ public class LabelRenderService : ILabelRenderService
                     if (qr.ModuleMatrix[row][column])
                     {
                         gfx.DrawRectangle(XBrushes.Black,
-                            originX + column * moduleSize, originY + row * moduleSize, moduleSize, moduleSize);
+                            originX + column * moduleSize, qrTop + row * moduleSize, moduleSize, moduleSize);
                     }
                 }
             }
         }
 
-        void Line(string text, XFont? font = null)
+        var textWidthBesideQr = qrSize > 0 ? width - qrSize - 12 : width;
+
+        // Identity block: package number, sequence, packaging type.
+        gfx.DrawString(Fit(label.PackageNumber, textWidthBesideQr, Big), Big, XBrushes.Black, new XPoint(x, y + 13));
+        y += compact ? 17 : 20;
+        if (label.SequenceLabel is { Length: > 0 } sequenceLabel)
         {
-            gfx.DrawString(text, font ?? Body, XBrushes.Black,
-                new XRect(x, y, width, 12), XStringFormats.TopLeft);
-            y += compact ? 10 : 12;
+            gfx.DrawString(Fit(sequenceLabel, textWidthBesideQr, Title), Title, XBrushes.Black, new XPoint(x, y + 9));
+            y += compact ? 12 : 14;
         }
 
-        Line($"Opdracht: {label.OrderNumber} — {label.CustomerName}");
+        gfx.DrawString(Fit(label.UnitTypeLabel, textWidthBesideQr, Body), Body, XBrushes.Black, new XPoint(x, y + 8));
+        y += lineHeight;
+
+        // 5. Bottom band is reserved first so the info lines know where to stop.
+        var barHeight = compact ? 30.0 : 48.0;
+        var indicators = new List<string>();
+        if (label.IsFragile) indicators.Add("BREEKBAAR");
+        if (label.AdrRequired) indicators.Add("ADR");
+        if (label.RequiresTemperatureControl) indicators.Add("TEMPERATUUR");
+        if (label.RequiresSignature) indicators.Add("HANDTEKENING");
+        var indicatorHeight = indicators.Count > 0 ? (compact ? 12.0 : 16.0) : 0.0;
+        var bottomBandTop = area.Bottom - 8 - 12 - barHeight - indicatorHeight;
+
+        // 3. Info lines.
+        void Line(string text, XFont? font = null)
+        {
+            var lineFont = font ?? Body;
+            if (y + lineHeight > bottomBandTop)
+            {
+                return; // hard cap: never run into the indicator/barcode band
+            }
+
+            var maxWidth = y < qrTop + qrSize ? textWidthBesideQr : width;
+            gfx.DrawString(Fit(text, maxWidth, lineFont), lineFont, XBrushes.Black,
+                new XRect(x, y, maxWidth, 12), XStringFormats.TopLeft);
+            y += lineHeight;
+        }
+
+        Line($"Klant: {label.CustomerName}");
         if (label.LoadingLocation is not null)
         {
             Line($"Laden: {label.LoadingLocation}");
@@ -178,18 +215,40 @@ public class LabelRenderService : ILabelRenderService
 
         if (label.HandlingInstructions is { Length: > 0 } instructions)
         {
-            Line($"Instructies: {(instructions.Length > 90 ? instructions[..90] + "…" : instructions)}", Small);
+            Line($"Instructies: {instructions}", Small);
         }
 
-        var indicators = new List<string>();
-        if (label.IsFragile) indicators.Add("BREEKBAAR");
-        if (label.AdrRequired) indicators.Add("ADR");
-        if (label.RequiresTemperatureControl) indicators.Add("TEMPERATUUR");
-        if (label.RequiresSignature) indicators.Add("HANDTEKENING");
+        // 4. Indicator band.
         if (indicators.Count > 0)
         {
             gfx.DrawString(string.Join("  ·  ", indicators), Title, XBrushes.Black,
-                new XRect(x, area.Bottom - 20, width, 14), XStringFormats.TopLeft);
+                new XRect(x, bottomBandTop, width, indicatorHeight), XStringFormats.TopLeft);
+        }
+
+        // 5. Full-width Code 128 + human-readable value.
+        var modules = Code128Encoder.ModuleWidths(label.BarcodeValue);
+        if (modules is not null)
+        {
+            var totalModules = modules.Sum();
+            var moduleWidth = Math.Min(width / totalModules, 1.6);
+            var barsWidth = totalModules * moduleWidth;
+            var barX = x + (width - barsWidth) / 2; // centred, quiet zones on both sides
+            var barY = bottomBandTop + indicatorHeight;
+            var isBar = true;
+            foreach (var module in modules)
+            {
+                var barWidth = module * moduleWidth;
+                if (isBar)
+                {
+                    gfx.DrawRectangle(XBrushes.Black, barX, barY, barWidth, barHeight);
+                }
+
+                barX += barWidth;
+                isBar = !isBar;
+            }
+
+            gfx.DrawString(label.BarcodeValue, Mono, XBrushes.Black,
+                new XRect(x, barY + barHeight + 2, width, 10), XStringFormats.TopCenter);
         }
     }
 }

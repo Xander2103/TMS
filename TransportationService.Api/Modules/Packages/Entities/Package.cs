@@ -61,6 +61,9 @@ public class Package : AuditableTenantEntity
 {
     public Guid TransportOrderId { get; set; }
 
+    /// <summary>The cargo line this package was generated from (null for manually created packages).</summary>
+    public Guid? CargoItemId { get; set; }
+
     /// <summary>Best-effort pins; stops are wholesale-replaced on order edits (FK SetNull),
     /// so a null pin falls back to the order's loading/unloading stops at scan time.</summary>
     public Guid? LoadingStopId { get; set; }

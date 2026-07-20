@@ -21,15 +21,18 @@ public class TransportOrdersController : ControllerBase
     private readonly ITransportOrderService _service;
     private readonly TransportationService.Api.Modules.Edi.Services.IEdiService _ediService;
     private readonly ITransportOrderTimelineService _timelineService;
+    private readonly TransportationService.Api.Modules.Packages.Services.IPackageGenerationService _packageGeneration;
 
     public TransportOrdersController(
         ITransportOrderService service,
         TransportationService.Api.Modules.Edi.Services.IEdiService ediService,
-        ITransportOrderTimelineService timelineService)
+        ITransportOrderTimelineService timelineService,
+        TransportationService.Api.Modules.Packages.Services.IPackageGenerationService packageGeneration)
     {
         _service = service;
         _ediService = ediService;
         _timelineService = timelineService;
+        _packageGeneration = packageGeneration;
     }
 
     [HttpGet]
@@ -144,6 +147,13 @@ public class TransportOrdersController : ControllerBase
         {
             // Orders that entered via EDI report their status back (no-op for the rest).
             await _ediService.QueueOutboundStatusAsync(id, request.Status.ToString(), cancellationToken);
+
+            if (request.Status == Entities.TransportOrderStatus.Confirmed)
+            {
+                // Confirmation generates the packages the cargo lines call for (idempotent —
+                // re-confirming after a Draft correction never duplicates).
+                await _packageGeneration.GenerateForOrderAsync(id, cancellationToken);
+            }
         }
 
         return Handle(result, created: false);

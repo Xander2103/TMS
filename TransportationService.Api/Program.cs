@@ -218,6 +218,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.I
     TransportationService.Api.Modules.Packages.Services.PackageEventWriter>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.IPackageImportService,
     TransportationService.Api.Modules.Packages.Services.PackageImportService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.IPackageGenerationService,
+    TransportationService.Api.Modules.Packages.Services.PackageGenerationService>();
 builder.Services.AddSingleton<TransportationService.Api.Modules.Packages.Labels.ILabelRenderService,
     TransportationService.Api.Modules.Packages.Labels.LabelRenderService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Labels.IPackageLabelService,

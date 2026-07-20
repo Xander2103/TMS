@@ -173,6 +173,14 @@ public class PackageLabelService : IPackageLabelService
             .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId))
             .ToListAsync(cancellationToken);
 
+        // Sequence "Collo n van m": within the cargo line for generated packages, within the
+        // order for manually created ones. Ordered by package number (stable, immutable).
+        var siblings = await _dbContext.Packages.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && orderIds.Contains(p.TransportOrderId)
+                && p.CurrentLifecycleStatus != PackageLifecycleStatus.Cancelled)
+            .Select(p => new { p.Id, p.TransportOrderId, p.CargoItemId, p.PackageNumber })
+            .ToListAsync(cancellationToken);
+
         var result = new Dictionary<Guid, LabelSnapshot>(packages.Count);
         foreach (var package in packages)
         {
@@ -184,6 +192,13 @@ public class PackageLabelService : IPackageLabelService
             var delivery = package.DeliveryStopId is { } deliveryId
                 ? orderStops.FirstOrDefault(s => s.Id == deliveryId)
                 : orderStops.Where(s => s.StopType == StopType.Unloading).OrderBy(s => s.Sequence).LastOrDefault();
+
+            var group = siblings
+                .Where(s => s.TransportOrderId == package.TransportOrderId
+                    && (package.CargoItemId is null || s.CargoItemId == package.CargoItemId))
+                .OrderBy(s => s.PackageNumber, StringComparer.Ordinal)
+                .ToList();
+            var position = group.FindIndex(s => s.Id == package.Id) + 1;
 
             result[package.Id] = new LabelSnapshot(
                 tenantName,
@@ -197,14 +212,13 @@ public class PackageLabelService : IPackageLabelService
                 delivery?.Sequence,
                 package.CustomerReference ?? package.ExternalPackageReference,
                 package.WeightKg,
-                package.UnitType == PackageUnitType.Other
-                    ? package.UnitTypeLabel ?? "Anders"
-                    : package.UnitType.ToString(),
+                UnitTypeDutch(package.UnitType, package.UnitTypeLabel),
                 delivery?.UnloadingInstructions ?? delivery?.Instructions,
                 package.IsFragile,
                 order?.AdrRequired ?? false,
                 package.RequiresTemperatureControl,
-                package.RequiresSignature);
+                package.RequiresSignature,
+                position > 0 ? $"Collo {position} van {group.Count}" : null);
         }
 
         return result;
@@ -212,4 +226,22 @@ public class PackageLabelService : IPackageLabelService
 
     private static string? LocationLabel(TransportOrderStop? stop) =>
         stop is null ? null : string.Join(", ", new[] { stop.LocationName, stop.City }.Where(v => !string.IsNullOrWhiteSpace(v)));
+
+    private static string UnitTypeDutch(PackageUnitType type, string? customLabel) => type switch
+    {
+        PackageUnitType.Other => customLabel ?? "Anders",
+        PackageUnitType.Package => "Pakket",
+        PackageUnitType.Parcel => "Pakje",
+        PackageUnitType.Colli => "Colli",
+        PackageUnitType.Pallet => "Pallet",
+        PackageUnitType.EuroPallet => "Europallet",
+        PackageUnitType.BlockPallet => "Blokpallet",
+        PackageUnitType.Box => "Doos",
+        PackageUnitType.Crate => "Krat",
+        PackageUnitType.RollContainer => "Rolcontainer",
+        PackageUnitType.Drum => "Vat",
+        PackageUnitType.Container => "Container",
+        PackageUnitType.Document => "Document",
+        _ => type.ToString(),
+    };
 }

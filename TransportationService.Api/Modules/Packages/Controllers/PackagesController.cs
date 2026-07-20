@@ -21,6 +21,7 @@ public class PackagesController : ControllerBase
     private readonly IPackageService _service;
     private readonly IPackageImportService _importService;
     private readonly IPackageLabelService _labelService;
+    private readonly IPackageGenerationService _generationService;
     private readonly IPermissionAuthorizationService _permissionService;
     private readonly ICurrentUserContext _currentUserContext;
 
@@ -28,12 +29,14 @@ public class PackagesController : ControllerBase
         IPackageService service,
         IPackageImportService importService,
         IPackageLabelService labelService,
+        IPackageGenerationService generationService,
         IPermissionAuthorizationService permissionService,
         ICurrentUserContext currentUserContext)
     {
         _service = service;
         _importService = importService;
         _labelService = labelService;
+        _generationService = generationService;
         _permissionService = permissionService;
         _currentUserContext = currentUserContext;
     }
@@ -48,6 +51,14 @@ public class PackagesController : ControllerBase
     public async Task<ActionResult<PackageDto>> Create(
         Guid orderId, CreatePackageRequest request, CancellationToken cancellationToken) =>
         Handle(await _service.CreateAsync(orderId, request, cancellationToken));
+
+    [HttpPost("api/transport-orders/{orderId:guid}/packages/generate")]
+    [RequirePermission(PermissionCodes.PackagesCreate, PermissionCodes.PackagesManage)]
+    public async Task<ActionResult<PackageGenerationResultDto>> Generate(Guid orderId, CancellationToken cancellationToken)
+    {
+        var result = await _generationService.GenerateForOrderAsync(orderId, cancellationToken);
+        return result is null ? NotFound() : Ok(result);
+    }
 
     [HttpGet("api/packages/{id:guid}")]
     [RequirePermission(PermissionCodes.PackagesView, PermissionCodes.PackagesManage)]
