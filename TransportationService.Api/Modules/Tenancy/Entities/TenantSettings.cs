@@ -73,6 +73,9 @@ public class TenantSettings
     public string TrainingConflictSeverity { get; set; } = "Warning";
     public string ShiftOverlapConflictSeverity { get; set; } = "Warning";
 
+    /// <summary>How exceeding vehicle/trailer capacity behaves in planning: Warning or Blocking.</summary>
+    public string CapacityConflictSeverity { get; set; } = "Warning";
+
     // Package (colli) numbering
     public string? PackageNumberPrefix { get; set; } = "PKG-";
     public int PackageNumberNextValue { get; set; } = 1;

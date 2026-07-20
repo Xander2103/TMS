@@ -47,6 +47,8 @@ export type PlanningConflictCode =
   | 'MissingDriver'
   | 'MissingVehicle'
   | 'NoOrders'
+  | 'CapacityExceeded'
+  | 'CapacityCheckIncomplete'
 
 export type PlanningConflictSeverity = 'Information' | 'Warning' | 'Blocking'
 

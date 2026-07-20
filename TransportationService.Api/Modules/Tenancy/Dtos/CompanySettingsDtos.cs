@@ -42,6 +42,7 @@ public record CompanySettingsDto(
     // Schedule-conflict severities (Information | Warning | Blocking)
     string TrainingConflictSeverity,
     string ShiftOverlapConflictSeverity,
+    string CapacityConflictSeverity,
     // Qualifications
     int QualificationExpiryWarningDays,
     // Numbering
@@ -101,4 +102,6 @@ public record UpdateCompanySettingsRequest(
     string? VehicleNumberPrefix, int VehicleNumberNextValue,
     string? TrailerNumberPrefix, int TrailerNumberNextValue,
     int DefaultPageSize,
-    string? LogoReference);
+    string? LogoReference,
+    // Trailing default: existing positional callers keep compiling; the JSON binder maps by name.
+    string CapacityConflictSeverity = "Warning");

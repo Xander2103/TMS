@@ -45,6 +45,7 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(s => s.DefaultLoadingMinutes).HasDefaultValue(30);
         builder.Property(s => s.DefaultUnloadingMinutes).HasDefaultValue(30);
         builder.Property(s => s.TrainingConflictSeverity).IsRequired().HasMaxLength(16).HasDefaultValue("Warning");
+        builder.Property(s => s.CapacityConflictSeverity).IsRequired().HasMaxLength(16).HasDefaultValue("Warning");
         builder.Property(s => s.ShiftOverlapConflictSeverity).IsRequired().HasMaxLength(16).HasDefaultValue("Warning");
         builder.Property(s => s.DateFormat).IsRequired().HasMaxLength(20).HasDefaultValue("dd-MM-yyyy");
         builder.Property(s => s.DecimalSeparator).IsRequired().HasMaxLength(1).HasDefaultValue(",");

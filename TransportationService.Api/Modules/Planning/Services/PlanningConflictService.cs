@@ -156,7 +156,143 @@ public class PlanningConflictService : IPlanningConflictService
             }
         }
 
+        if (orderIds.Count > 0)
+        {
+            await EvaluateCapacityAsync(conflicts, trip, orderIds, cancellationToken);
+        }
+
         return conflicts;
+    }
+
+    /// <summary>
+    /// Compares the trip's cargo totals with the assigned asset's capacity. The load rides
+    /// the trailer when one is assigned, otherwise the vehicle. Measures without a configured
+    /// capacity are skipped; orders without data never get invented values — they make the
+    /// check explicitly incomplete. Exceeding blocks or warns per the tenant setting.
+    /// </summary>
+    private async Task EvaluateCapacityAsync(
+        List<PlanningConflictDto> conflicts, Trip trip, List<Guid> orderIds, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        // Capacity source: trailer when assigned, else vehicle.
+        string? assetLabel = null;
+        decimal? weightCapacity = null;
+        decimal? volumeCapacity = null;
+        if (trip.TrailerId is { } trailerId)
+        {
+            var trailer = await _dbContext.Trailers.AsNoTracking()
+                .Where(t => t.Id == trailerId && t.TenantId == tenantId)
+                .Select(t => new { t.InternalNumber, t.CapacityKg, t.VolumeM3 })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (trailer is not null)
+            {
+                assetLabel = $"oplegger {trailer.InternalNumber}";
+                weightCapacity = trailer.CapacityKg;
+                volumeCapacity = trailer.VolumeM3;
+            }
+        }
+        else if (trip.VehicleId is { } vehicleId)
+        {
+            var vehicle = await _dbContext.Vehicles.AsNoTracking()
+                .Where(v => v.Id == vehicleId && v.TenantId == tenantId)
+                .Select(v => new { v.InternalNumber, v.PayloadKg, v.VolumeM3 })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (vehicle is not null)
+            {
+                assetLabel = $"voertuig {vehicle.InternalNumber}";
+                weightCapacity = vehicle.PayloadKg;
+                volumeCapacity = vehicle.VolumeM3;
+            }
+        }
+
+        if (assetLabel is null || (weightCapacity is null && volumeCapacity is null))
+        {
+            return; // no configured capacity → the measure is skipped entirely
+        }
+
+        var orderTotals = await _dbContext.TransportOrders.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
+            .Select(o => new { o.Id, o.WeightKg, o.VolumeM3 })
+            .ToListAsync(cancellationToken);
+        var cargoLines = await _dbContext.CargoItems.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && orderIds.Contains(c.TransportOrderId))
+            .Select(c => new { c.TransportOrderId, c.TotalWeightKg, c.WeightPerUnitKg, c.ExpectedQuantity, c.VolumeM3 })
+            .ToListAsync(cancellationToken);
+        var cargoByOrder = cargoLines.ToLookup(c => c.TransportOrderId);
+
+        decimal totalWeight = 0;
+        decimal totalVolume = 0;
+        var ordersWithoutWeight = 0;
+        var ordersWithoutVolume = 0;
+        foreach (var order in orderTotals)
+        {
+            // Structured cargo lines win over the order-level totals; nothing is invented.
+            var lines = cargoByOrder[order.Id].ToList();
+            var lineWeights = lines
+                .Select(l => l.TotalWeightKg ?? l.WeightPerUnitKg * l.ExpectedQuantity)
+                .Where(w => w is not null)
+                .Sum(w => w!.Value);
+            var orderWeight = lineWeights > 0 ? lineWeights : order.WeightKg;
+            if (orderWeight is { } weight)
+            {
+                totalWeight += weight;
+            }
+            else
+            {
+                ordersWithoutWeight += 1;
+            }
+
+            var lineVolumes = lines
+                .Select(l => l.VolumeM3 * l.ExpectedQuantity)
+                .Where(v => v is not null)
+                .Sum(v => v!.Value);
+            var orderVolume = lineVolumes > 0 ? lineVolumes : order.VolumeM3;
+            if (orderVolume is { } volume)
+            {
+                totalVolume += volume;
+            }
+            else
+            {
+                ordersWithoutVolume += 1;
+            }
+        }
+
+        var severitySetting = await _dbContext.TenantSettings.AsNoTracking()
+            .Where(s => s.TenantId == tenantId)
+            .Select(s => s.CapacityConflictSeverity)
+            .FirstOrDefaultAsync(cancellationToken);
+        var blocking = string.Equals(severitySetting, "Blocking", StringComparison.OrdinalIgnoreCase);
+
+        if (weightCapacity is { } maxWeight && totalWeight > maxWeight)
+        {
+            conflicts.Add(new(PlanningConflictCode.CapacityExceeded, blocking,
+                $"Totaalgewicht {totalWeight:0.##} kg overschrijdt het laadvermogen van {maxWeight:0.##} kg van {assetLabel}."));
+        }
+
+        if (volumeCapacity is { } maxVolume && totalVolume > maxVolume)
+        {
+            conflicts.Add(new(PlanningConflictCode.CapacityExceeded, blocking,
+                $"Totaalvolume {totalVolume:0.###} m³ overschrijdt het volume van {maxVolume:0.###} m³ van {assetLabel}."));
+        }
+
+        var missing = new List<string>();
+        if (weightCapacity is not null && ordersWithoutWeight > 0)
+        {
+            missing.Add($"{ordersWithoutWeight} opdracht(en) zonder gewicht");
+        }
+
+        if (volumeCapacity is not null && ordersWithoutVolume > 0)
+        {
+            missing.Add($"{ordersWithoutVolume} opdracht(en) zonder volume");
+        }
+
+        if (missing.Count > 0)
+        {
+            conflicts.Add(new(PlanningConflictCode.CapacityCheckIncomplete, false,
+                $"Capaciteitscontrole onvolledig: {string.Join(" en ", missing)}.",
+                ConflictSeverity.Information));
+        }
     }
 
     private async Task EvaluateDriverAsync(

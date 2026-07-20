@@ -31,6 +31,7 @@ export interface CompanySettings {
   defaultLoadingMinutes: number
   defaultUnloadingMinutes: number
   trainingConflictSeverity: string
+  capacityConflictSeverity: string
   shiftOverlapConflictSeverity: string
   qualificationExpiryWarningDays: number
   employeeNumberPrefix: string | null

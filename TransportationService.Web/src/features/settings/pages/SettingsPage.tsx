@@ -257,6 +257,21 @@ export function SettingsPage() {
                 <option value="Blocking">Blokkerend</option>
               </select>
             </FormField>
+            <FormField
+              label="Capaciteit overschreden"
+              htmlFor="set-capacity-severity"
+              hint="Wat gebeurt er als de lading het laadvermogen of volume van voertuig/oplegger overschrijdt?"
+            >
+              <select
+                id="set-capacity-severity"
+                value={form.capacityConflictSeverity}
+                onChange={(e) => setField('capacityConflictSeverity', e.target.value)}
+                disabled={!canManage || saving}
+              >
+                <option value="Warning">Waarschuwing</option>
+                <option value="Blocking">Blokkerend</option>
+              </select>
+            </FormField>
             <FormField label="Shift vs. rit" htmlFor="set-shift-severity" hint="Hoe zwaar telt een gewone shift die met een rit overlapt?">
               <select
                 id="set-shift-severity"

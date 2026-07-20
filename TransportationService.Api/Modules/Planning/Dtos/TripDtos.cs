@@ -25,6 +25,10 @@ public enum PlanningConflictCode
     MissingDriver,
     MissingVehicle,
     NoOrders,
+    /// <summary>Cargo totals exceed the assigned vehicle/trailer capacity (severity via tenant setting).</summary>
+    CapacityExceeded,
+    /// <summary>The capacity calculation is incomplete: orders without weight/volume data.</summary>
+    CapacityCheckIncomplete,
 }
 
 /// <summary>
