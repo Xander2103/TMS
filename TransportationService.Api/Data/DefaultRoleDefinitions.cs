@@ -65,6 +65,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
                 PermissionCodes.TariffsView,
                 PermissionCodes.ReportsView,
+                PermissionCodes.OperationsView, PermissionCodes.OperationsManageAlerts,
+                PermissionCodes.WarehouseSchedule, PermissionCodes.WarehouseConflictOverride,
             ]),
 
         new("dispatcher", "Dispatcher",
@@ -86,6 +88,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.DossiersView,
                 PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
                 PermissionCodes.ReportsView,
+                PermissionCodes.OperationsView, PermissionCodes.OperationsManageAlerts,
+                PermissionCodes.WarehouseSchedule,
             ]),
 
         new("management", "Management",
@@ -123,6 +127,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
                 PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
                 PermissionCodes.ReportsView,
+                PermissionCodes.OperationsView,
+                PermissionCodes.ProfitabilityExport,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -142,6 +148,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.DossiersView, PermissionCodes.IncidentsView,
                 PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
                 PermissionCodes.ReportsView,
+                PermissionCodes.ProfitabilityExport,
             ]),
 
         new("hr", "HR",
@@ -190,6 +197,9 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PackageExceptionsCreate,
                 PermissionCodes.ExceptionsView, PermissionCodes.ExceptionsCreate,
                 PermissionCodes.PlanningView,
+                PermissionCodes.OperationsView,
+                PermissionCodes.WarehouseManage, PermissionCodes.WarehouseSchedule,
+                PermissionCodes.WarehouseConflictOverride,
             ]),
     ];
 }

@@ -23,6 +23,15 @@ public enum StopType
     Unloading,
 }
 
+/// <summary>Operational urgency for planning and dock queues. Stored as string — appending is safe.</summary>
+public enum OrderPriority
+{
+    Low,
+    Normal,
+    High,
+    Urgent,
+}
+
 /// <summary>
 /// A customer transport order: what has to be moved, for whom, via which stops. Planning
 /// (trip assignment, Phase 6) and pricing/invoicing (Phase 8) build on top of this entity.
@@ -40,6 +49,8 @@ public class TransportOrder : AuditableTenantEntity
     public DateOnly OrderDate { get; set; }
 
     public TransportOrderStatus Status { get; set; } = TransportOrderStatus.Draft;
+
+    public OrderPriority Priority { get; set; } = OrderPriority.Normal;
 
     /// <summary>
     /// Transient context for the status-history interceptor: reason and correction marker of

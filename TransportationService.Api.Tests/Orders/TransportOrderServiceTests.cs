@@ -57,6 +57,26 @@ public class TransportOrderServiceTests
         20, "paletten", 12500, null, 20, false, false, 1450m, null, stops);
 
     [Fact]
+    public async Task Priority_DefaultsToNormal_InlineChangeIsAuditedAndGuarded()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        Assert.Equal(OrderPriority.Normal, created.Order!.Priority);
+
+        var changed = await h.Sut.ChangePriorityAsync(created.Order.Id, OrderPriority.Urgent, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, changed.Outcome);
+        Assert.Equal(OrderPriority.Urgent, changed.Order!.Priority);
+        Assert.Contains(h.Db.Context.AuditLogs, a => a.Action == "PriorityChanged" && a.EntityId == created.Order.Id.ToString());
+
+        // Final statuses refuse a priority change.
+        await h.Sut.CancelAsync(created.Order.Id, "Klant heeft geannuleerd.", CancellationToken.None);
+        var refused = await h.Sut.ChangePriorityAsync(created.Order.Id, OrderPriority.Low, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, refused.Outcome);
+    }
+
+    [Fact]
     public async Task Create_ClaimsSequentialNumber_AndStartsDraft()
     {
         var h = await SeedAsync();

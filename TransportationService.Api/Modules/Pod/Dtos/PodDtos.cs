@@ -14,7 +14,9 @@ public record FinalizePodRequest(
     decimal? Latitude,
     decimal? Longitude,
     /// <summary>Recipient confirmed the per-package outcome list; required when packages exist.</summary>
-    bool PackagesAcknowledged = false);
+    bool PackagesAcknowledged = false,
+    /// <summary>Offline-replay idempotency key; a repeated key returns the already-created POD.</summary>
+    Guid? ClientRequestId = null);
 
 public record CorrectPodRequest(
     string RecipientName,

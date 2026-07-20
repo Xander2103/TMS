@@ -44,6 +44,24 @@ export const STOP_TYPE_LABELS: Record<StopType, string> = {
   Unloading: 'Lossen',
 }
 
+export type OrderPriority = 'Low' | 'Normal' | 'High' | 'Urgent'
+
+export const ORDER_PRIORITIES: OrderPriority[] = ['Low', 'Normal', 'High', 'Urgent']
+
+export const ORDER_PRIORITY_LABELS: Record<OrderPriority, string> = {
+  Low: 'Laag',
+  Normal: 'Normaal',
+  High: 'Hoog',
+  Urgent: 'Dringend',
+}
+
+export const ORDER_PRIORITY_TONE: Record<OrderPriority, 'neutral' | 'info' | 'warning' | 'danger'> = {
+  Low: 'neutral',
+  Normal: 'neutral',
+  High: 'warning',
+  Urgent: 'danger',
+}
+
 export interface TransportOrderListItem {
   id: string
   orderNumber: string
@@ -58,6 +76,7 @@ export interface TransportOrderListItem {
   stopCount: number
   adrRequired: boolean
   craneRequired: boolean
+  priority: OrderPriority
 }
 
 export interface TransportOrderStop {
@@ -161,6 +180,7 @@ export interface TransportOrderDetail {
   allowedTransitions: TransportOrderStatus[]
   allowedCorrections: TransportOrderStatus[]
   canCancel: boolean
+  priority: OrderPriority
 }
 
 export interface StopInput {
@@ -217,4 +237,6 @@ export interface TransportOrderInput {
   notes: string | null
   stops: StopInput[]
   cargoItems: CargoItemInput[]
+  /** Omitted = Normal on create, unchanged on update. */
+  priority?: OrderPriority
 }

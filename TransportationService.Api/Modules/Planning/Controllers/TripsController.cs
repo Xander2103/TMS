@@ -138,7 +138,7 @@ public class TripsController : ControllerBase
         }
 
         var result = await _service.ChangeStatusAsync(
-            id, request.Status, allowOverride, releaseOverride, request.OverrideReason, cancellationToken);
+            id, request.Status, allowOverride, releaseOverride, request.OverrideReason, request.Version, cancellationToken);
         return Handle(result, created: false);
     }
 
@@ -169,6 +169,9 @@ public class TripsController : ControllerBase
             Conflict(new { message = result.Error, conflicts = result.Conflicts }),
         TripOperationOutcome.PackagesBlock =>
             Conflict(new { message = result.Error, packageReadiness = result.PackageReadiness }),
+        // 409 with the CURRENT server state so the client can rebase its edit.
+        TripOperationOutcome.StaleVersion =>
+            Conflict(new { message = result.Error, staleVersion = true, current = result.Trip }),
         _ => Conflict(),
     };
 }

@@ -27,5 +27,10 @@ public interface ITripService
         Guid id, TripStatus target, bool allowOverride, bool releaseOverride, string? overrideReason,
         CancellationToken cancellationToken);
 
+    /// <summary>As above, with an optimistic-concurrency check when <paramref name="version"/> is supplied.</summary>
+    Task<TripOperationResult> ChangeStatusAsync(
+        Guid id, TripStatus target, bool allowOverride, bool releaseOverride, string? overrideReason, Guid? version,
+        CancellationToken cancellationToken);
+
     Task<TripOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

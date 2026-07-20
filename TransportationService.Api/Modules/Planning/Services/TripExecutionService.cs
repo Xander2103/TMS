@@ -157,7 +157,8 @@ public class TripExecutionService : ITripExecutionService
         }
 
         var result = await TransitionCoreAsync(tripId, stopId,
-            new TransitionStopRequest(StopExecutionStatus.Completed, Reason: request.Reason, Notes: request.Remarks),
+            new TransitionStopRequest(StopExecutionStatus.Completed, Reason: request.Reason, Notes: request.Remarks,
+                ClientRequestId: request.ClientRequestId),
             restrictToOwnDriver,
             beforeSave: execution => execution.PodSignedBy = Trim(request.PodSignedBy),
             cancellationToken);
@@ -177,7 +178,8 @@ public class TripExecutionService : ITripExecutionService
     public Task<ExecutionResult> SkipAsync(
         Guid tripId, Guid stopId, SkipStopRequest request, bool restrictToOwnDriver, CancellationToken cancellationToken) =>
         TransitionCoreAsync(tripId, stopId,
-            new TransitionStopRequest(StopExecutionStatus.Skipped, Reason: request.Remarks),
+            new TransitionStopRequest(StopExecutionStatus.Skipped, Reason: request.Remarks,
+                ClientRequestId: request.ClientRequestId),
             restrictToOwnDriver, beforeSave: null, cancellationToken);
 
     public async Task<StopHistoryResult> GetStopHistoryAsync(
@@ -231,6 +233,15 @@ public class TripExecutionService : ITripExecutionService
         if (guard is not null)
         {
             return guard;
+        }
+
+        // Offline replay: a transition we already recorded under this key returns the current
+        // state as success instead of re-running (and re-failing) the transition.
+        if (request.ClientRequestId is { } clientRequestId
+            && await _dbContext.StopStatusHistories.AsNoTracking().AnyAsync(
+                h => h.TenantId == _tenantContext.TenantId && h.ClientRequestId == clientRequestId, cancellationToken))
+        {
+            return await GetExecutionAsync(tripId, restrictToOwnDriver: false, cancellationToken);
         }
 
         if (trip!.Status != TripStatus.InProgress)
@@ -330,8 +341,10 @@ public class TripExecutionService : ITripExecutionService
                 OccurredAt = now,
                 UserId = userId,
                 // The reason belongs to the requested step; the bridged arrival step only
-                // carries it when it explains a late arrival.
+                // carries it when it explains a late arrival. The idempotency key marks the
+                // requested step only, so a bridged pair can never double-claim it.
                 Reason = step.To == target ? reason : execution.LateArrivalReason,
+                ClientRequestId = step.To == target ? request.ClientRequestId : null,
             });
         }
 

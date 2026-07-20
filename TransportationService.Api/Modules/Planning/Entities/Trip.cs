@@ -44,6 +44,12 @@ public class Trip : AuditableTenantEntity
     public int ManualDelayMinutes { get; set; }
     public string? DelayReason { get; set; }
 
+    /// <summary>
+    /// Optimistic-concurrency token: bumped by every planning mutation. Clients echo the version
+    /// they loaded; a mismatch means another planner changed the trip meanwhile (409).
+    /// </summary>
+    public Guid Version { get; set; } = Guid.NewGuid();
+
     public List<TripOrder> Orders { get; set; } = [];
 }
 

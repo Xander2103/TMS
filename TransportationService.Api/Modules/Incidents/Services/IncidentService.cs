@@ -131,12 +131,27 @@ public class IncidentService : IIncidentService
     public async Task<IncidentDetailDto> CreateAsync(SaveIncidentRequest request, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
+
+        // Offline replay (driver app): the same client key returns the stored incident.
+        if (request.ClientRequestId is { } clientRequestId)
+        {
+            var replayed = await _dbContext.Incidents.AsNoTracking()
+                .Where(i => i.TenantId == tenantId && i.ClientRequestId == clientRequestId)
+                .Select(i => (Guid?)i.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (replayed is { } existingId)
+            {
+                return (await GetAsync(existingId, cancellationToken))!;
+            }
+        }
+
         var (incidentType, severityValue) = await ValidateAsync(request, tenantId, cancellationToken);
 
         var incident = new Incident
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
+            ClientRequestId = request.ClientRequestId,
         };
         Apply(incident, request, incidentType, severityValue);
         _dbContext.Add(incident);

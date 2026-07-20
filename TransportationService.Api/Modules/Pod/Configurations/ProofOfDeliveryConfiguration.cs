@@ -28,6 +28,10 @@ public class ProofOfDeliveryConfiguration : IEntityTypeConfiguration<ProofOfDeli
             .IsUnique()
             .HasFilter("\"IsCurrent\" = true AND \"IsDeleted\" = false");
         builder.HasIndex(p => new { p.TenantId, p.TransportOrderId });
+        // Offline-replay idempotency: one finalisation per client key per tenant.
+        builder.HasIndex(p => new { p.TenantId, p.ClientRequestId })
+            .IsUnique()
+            .HasFilter("\"ClientRequestId\" IS NOT NULL AND \"IsDeleted\" = false");
 
         builder.HasOne<Trip>().WithMany().HasForeignKey(p => p.TripId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<TransportOrderStop>().WithMany().HasForeignKey(p => p.TransportOrderStopId).OnDelete(DeleteBehavior.Cascade);

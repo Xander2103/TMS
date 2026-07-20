@@ -70,6 +70,8 @@ public record SaveIncidentRequest(
     Guid? TransportOrderId = null,
     Guid? TripId = null,
     Guid? DossierId = null,
-    DateOnly? DueDate = null);
+    DateOnly? DueDate = null,
+    /// <summary>Offline-replay idempotency key (driver app); a repeated key returns the stored incident.</summary>
+    Guid? ClientRequestId = null);
 
 public record ChangeIncidentStatusRequest(string Status, string? Resolution = null);

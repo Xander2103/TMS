@@ -17,6 +17,7 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
         builder.Property(o => o.OrderNumber).IsRequired().HasMaxLength(30);
         builder.Property(o => o.CustomerReference).HasMaxLength(100);
         builder.Property(o => o.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(o => o.Priority).HasConversion<string>().HasMaxLength(10);
         builder.Property(o => o.GoodsDescription).HasMaxLength(1000);
         builder.Property(o => o.Quantity).HasPrecision(12, 2);
         builder.Property(o => o.QuantityUnit).HasMaxLength(50);

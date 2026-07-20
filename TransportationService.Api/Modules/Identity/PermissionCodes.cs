@@ -233,6 +233,18 @@ public static class PermissionCodes
     public const string ExceptionsCreate = "exceptions.create";
     public const string ExceptionsResolve = "exceptions.resolve";
 
+    // --- Operation control center ---
+    public const string OperationsView = "operations.view";
+    public const string OperationsManageAlerts = "operations.manage_alerts";
+
+    // --- Warehouse & dock planning ---
+    public const string WarehouseManage = "warehouse.manage";
+    public const string WarehouseSchedule = "warehouse.schedule";
+    public const string WarehouseConflictOverride = "warehouse.conflict_override";
+
+    // --- Profitability exports ---
+    public const string ProfitabilityExport = "profitability.export";
+
     // --- Absences (HR availability) ---
     public const string AbsencesView = "absences.view";
     public const string AbsencesCreate = "absences.create";
@@ -397,6 +409,12 @@ public static class PermissionCodes
         (ExceptionsView, "exceptions", "view", "Uitvoeringsafwijkingen bekijken"),
         (ExceptionsCreate, "exceptions", "create", "Afwijkingen melden tijdens uitvoering"),
         (ExceptionsResolve, "exceptions", "resolve", "Afwijkingen onderzoeken en afhandelen"),
+        (OperationsView, "operations", "view", "Operationeel controlecentrum bekijken"),
+        (OperationsManageAlerts, "operations", "manage_alerts", "Operationele meldingen bevestigen, toewijzen en afhandelen"),
+        (WarehouseManage, "warehouse", "manage", "Magazijnen en docks beheren"),
+        (WarehouseSchedule, "warehouse", "schedule", "Dockafspraken plannen en verplaatsen"),
+        (WarehouseConflictOverride, "warehouse", "conflict_override", "Blokkerende dockconflicten overschrijven met reden"),
+        (ProfitabilityExport, "profitability", "export", "Rendementsrapporten exporteren naar Excel"),
         (AbsencesView, "absences", "view", "Afwezigheden bekijken"),
         (AbsencesCreate, "absences", "create", "Afwezigheden aanvragen"),
         (AbsencesEdit, "absences", "edit", "Afwezigheden bewerken en annuleren"),

@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 7;
+    public const int CurrentVersion = 8;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -181,6 +181,41 @@ public static class DefaultRoleUpgrades
                 ["management"] = [PermissionCodes.ReportsView],
                 ["boekhouding"] = [PermissionCodes.ReportsView],
                 ["hr"] = [PermissionCodes.ReportsView],
+            }),
+
+        new(8,
+            "Operational wave 2026-07-20: control center, dock planning and profitability export.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                // Planner and dispatcher run the live operation: control center + alert
+                // handling + dock scheduling. Dock conflict override stays planner-side.
+                ["planner"] =
+                [
+                    PermissionCodes.OperationsView, PermissionCodes.OperationsManageAlerts,
+                    PermissionCodes.WarehouseSchedule, PermissionCodes.WarehouseConflictOverride,
+                ],
+                ["dispatcher"] =
+                [
+                    PermissionCodes.OperationsView, PermissionCodes.OperationsManageAlerts,
+                    PermissionCodes.WarehouseSchedule,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.OperationsView,
+                    PermissionCodes.ProfitabilityExport,
+                ],
+                ["boekhouding"] =
+                [
+                    PermissionCodes.ProfitabilityExport,
+                ],
+                // Warehouse staff own master data and the dock board, and see the control
+                // center for arrivals context.
+                ["magazijn"] =
+                [
+                    PermissionCodes.OperationsView,
+                    PermissionCodes.WarehouseManage, PermissionCodes.WarehouseSchedule,
+                    PermissionCodes.WarehouseConflictOverride,
+                ],
             }),
     ];
 }

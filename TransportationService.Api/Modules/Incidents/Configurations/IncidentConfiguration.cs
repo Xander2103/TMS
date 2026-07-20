@@ -30,6 +30,10 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
         builder.HasIndex(i => new { i.TenantId, i.DossierId });
         builder.HasIndex(i => new { i.TenantId, i.CustomerId });
         builder.HasIndex(i => new { i.TenantId, i.TransportOrderId });
+        // Offline-replay idempotency: one incident per client key per tenant.
+        builder.HasIndex(i => new { i.TenantId, i.ClientRequestId })
+            .IsUnique()
+            .HasFilter("\"ClientRequestId\" IS NOT NULL AND \"IsDeleted\" = false");
 
         builder.HasQueryFilter(i => !i.IsDeleted);
     }

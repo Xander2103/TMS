@@ -137,6 +137,16 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>Inline priority edit; lighter permission than a full order edit on purpose.</summary>
+    [HttpPost("{id:guid}/priority")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ChangePriority(
+        Guid id, ChangeOrderPriorityRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ChangePriorityAsync(id, request.Priority, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     [HttpPost("{id:guid}/status")]
     [RequirePermission(PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersManage)]
     public async Task<ActionResult<TransportOrderDetailDto>> ChangeStatus(

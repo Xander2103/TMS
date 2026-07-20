@@ -61,11 +61,48 @@ export const CONFLICT_SEVERITY_META: Record<
   Information: { label: 'Ter info', tone: 'info' },
 }
 
+export type ConflictCategory =
+  | 'Resource'
+  | 'Availability'
+  | 'Qualification'
+  | 'Capacity'
+  | 'Timing'
+  | 'Equipment'
+  | 'Document'
+  | 'Data'
+
+export const CONFLICT_CATEGORY_LABELS: Record<ConflictCategory, string> = {
+  Resource: 'Middel',
+  Availability: 'Beschikbaarheid',
+  Qualification: 'Kwalificatie',
+  Capacity: 'Capaciteit',
+  Timing: 'Timing',
+  Equipment: 'Uitrusting',
+  Document: 'Document',
+  Data: 'Ontbrekende gegevens',
+}
+
 export interface PlanningConflict {
   code: PlanningConflictCode
   blocking: boolean
   description: string
   severity: PlanningConflictSeverity
+  category: ConflictCategory
+  relatedEntityType: string | null
+  relatedEntityId: string | null
+  /** Only blocking conflicts can be overridden, with the named permission and a reason. */
+  overrideAllowed: boolean
+  requiredPermission: string | null
+  suggestedAction: string | null
+}
+
+export interface ConflictOverrideEntry {
+  id: string
+  conflictCodes: string
+  reason: string
+  actorUserId: string | null
+  actorName: string | null
+  occurredAt: string
 }
 
 export interface TripOrderSummary {
@@ -119,6 +156,9 @@ export interface TripDetail {
   orders: TripOrderSummary[]
   conflicts: PlanningConflict[]
   allowedTransitions: TripStatus[]
+  /** Optimistic-concurrency token; echo it on mutations so parallel edits surface as 409. */
+  version: string
+  overrides: ConflictOverrideEntry[]
 }
 
 export interface TripInput {
@@ -132,4 +172,6 @@ export interface TripInput {
   orderIds: string[]
   plannedDistanceKm: number | null
   plannedEmptyKm: number | null
+  /** Version loaded with the trip; omit only when creating. */
+  version?: string
 }

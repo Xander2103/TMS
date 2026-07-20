@@ -41,4 +41,8 @@ public interface ITransportOrderService
 
     /// <summary>Only Draft and Cancelled orders can be deleted (soft).</summary>
     Task<TransportOrderOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Inline priority change; allowed in every non-final status, audited.</summary>
+    Task<TransportOrderOperationResult> ChangePriorityAsync(
+        Guid id, OrderPriority priority, CancellationToken cancellationToken);
 }

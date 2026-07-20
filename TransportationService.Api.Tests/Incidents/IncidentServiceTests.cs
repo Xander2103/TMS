@@ -101,6 +101,26 @@ public class IncidentServiceTests
     }
 
     [Fact]
+    public async Task Create_ReplayWithSameClientRequestId_ReturnsStoredIncident()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.Sut();
+        var key = Guid.NewGuid();
+
+        var first = await sut.CreateAsync(ValidRequest() with { ClientRequestId = key }, CancellationToken.None);
+        var replay = await sut.CreateAsync(ValidRequest() with { ClientRequestId = key }, CancellationToken.None);
+
+        Assert.Equal(first.Id, replay.Id);
+        Assert.Equal(1, h.Db.Context.Incidents.Count());
+
+        // A different key still creates a second incident.
+        var other = await sut.CreateAsync(ValidRequest() with { ClientRequestId = Guid.NewGuid() }, CancellationToken.None);
+        Assert.NotEqual(first.Id, other.Id);
+        Assert.Equal(2, h.Db.Context.Incidents.Count());
+    }
+
+    [Fact]
     public async Task Create_NotifiesTheResponsibleUser()
     {
         var h = await SeedAsync();

@@ -112,6 +112,31 @@ public class StopExecutionTransitionTests
         result.Execution!.Stops.Single(s => s.TransportOrderStopId == stopId);
 
     [Fact]
+    public async Task Transition_ReplayWithSameClientRequestId_DoesNotDoubleTransition()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var key = Guid.NewGuid();
+
+        var first = await h.Sut.TransitionAsync(h.TripId, h.LoadStopId,
+            new TransitionStopRequest(StopExecutionStatus.EnRoute, ClientRequestId: key), true, CancellationToken.None);
+        Assert.Equal(ExecutionOutcome.Success, first.Outcome);
+
+        // Offline replay: same key → success with current state, no second history row,
+        // and no invalid-transition error even though EnRoute → EnRoute is not allowed.
+        var replay = await h.Sut.TransitionAsync(h.TripId, h.LoadStopId,
+            new TransitionStopRequest(StopExecutionStatus.EnRoute, ClientRequestId: key), true, CancellationToken.None);
+        Assert.Equal(ExecutionOutcome.Success, replay.Outcome);
+        Assert.Equal(StopExecutionStatus.EnRoute, StopOf(replay, h.LoadStopId).Status);
+        Assert.Equal(1, h.Db.Context.StopStatusHistories.Count());
+
+        // A NEW key continues the flow normally.
+        var next = await h.Sut.TransitionAsync(h.TripId, h.LoadStopId,
+            new TransitionStopRequest(StopExecutionStatus.Arrived, ClientRequestId: Guid.NewGuid()), true, CancellationToken.None);
+        Assert.Equal(StopExecutionStatus.Arrived, StopOf(next, h.LoadStopId).Status);
+    }
+
+    [Fact]
     public async Task HappyPath_LoadingStop_StampsActualsAndWritesHistory()
     {
         var h = await SeedAsync();

@@ -161,7 +161,67 @@ public class PlanningConflictService : IPlanningConflictService
             await EvaluateCapacityAsync(conflicts, trip, orderIds, cancellationToken);
         }
 
-        return conflicts;
+        return conflicts.Select(c => Enrich(c, trip)).ToList();
+    }
+
+    /// <summary>
+    /// Fills the structured fields (category, related entity, override metadata) from one central
+    /// table so the rule sites above stay code + description only. Every blocking planning conflict
+    /// is overrideable with <c>planning.override_restriction</c> plus a mandatory reason.
+    /// </summary>
+    internal static PlanningConflictDto Enrich(PlanningConflictDto conflict, Trip trip)
+    {
+        var (category, suggestedAction) = conflict.Code switch
+        {
+            PlanningConflictCode.MissingDriver => (ConflictCategory.Data, "Wijs een chauffeur toe."),
+            PlanningConflictCode.MissingVehicle => (ConflictCategory.Data, "Wijs een voertuig toe."),
+            PlanningConflictCode.NoOrders => (ConflictCategory.Data, "Koppel minstens één opdracht."),
+            PlanningConflictCode.CapacityCheckIncomplete => (ConflictCategory.Data, "Vul gewicht/volume aan op de opdrachten."),
+            PlanningConflictCode.DriverAbsent => (ConflictCategory.Availability, "Kies een andere chauffeur of datum."),
+            PlanningConflictCode.DriverTraining => (ConflictCategory.Availability, "Controleer de opleiding of kies een andere chauffeur."),
+            PlanningConflictCode.DriverShiftOverlap => (ConflictCategory.Timing, "Pas de shift of de rittijden aan."),
+            PlanningConflictCode.DriverDoubleBooked => (ConflictCategory.Availability, "Kies een andere chauffeur of verplaats één van de ritten."),
+            PlanningConflictCode.VehicleDoubleBooked => (ConflictCategory.Availability, "Kies een ander voertuig of verplaats één van de ritten."),
+            PlanningConflictCode.TrailerDoubleBooked => (ConflictCategory.Availability, "Kies een andere oplegger of verplaats één van de ritten."),
+            PlanningConflictCode.DriverBlocked => (ConflictCategory.Resource, "Deblokkeer de chauffeur of kies een andere."),
+            PlanningConflictCode.DriverInactive => (ConflictCategory.Resource, "Activeer de chauffeur of kies een andere."),
+            PlanningConflictCode.VehicleInactive => (ConflictCategory.Resource, "Activeer het voertuig of kies een ander."),
+            PlanningConflictCode.TrailerInactive => (ConflictCategory.Resource, "Activeer de oplegger of kies een andere."),
+            PlanningConflictCode.VehicleNotOperational => (ConflictCategory.Resource, "Plan het onderhoud of kies een ander voertuig."),
+            PlanningConflictCode.TrailerNotOperational => (ConflictCategory.Resource, "Plan het onderhoud of kies een andere oplegger."),
+            PlanningConflictCode.DriverNotReady => (ConflictCategory.Qualification, "Werk de kwalificatie bij of kies een andere chauffeur."),
+            PlanningConflictCode.OrderRequiresCrane => (ConflictCategory.Equipment, "Kies een voertuig met kraan of verplaats de opdracht."),
+            PlanningConflictCode.OrderRequiresAdr => (ConflictCategory.Equipment, "Kies ADR-geschikt materieel of verplaats de opdracht."),
+            PlanningConflictCode.CapacityExceeded => (ConflictCategory.Capacity, "Verdeel de opdrachten over meerdere ritten of kies groter materieel."),
+            _ => (ConflictCategory.Resource, (string?)null),
+        };
+
+        var (relatedType, relatedId) = conflict.Code switch
+        {
+            PlanningConflictCode.DriverAbsent or PlanningConflictCode.DriverBlocked or PlanningConflictCode.DriverInactive
+                or PlanningConflictCode.DriverNotReady or PlanningConflictCode.DriverDoubleBooked
+                or PlanningConflictCode.DriverShiftOverlap or PlanningConflictCode.DriverTraining
+                => ("Driver", trip.DriverId),
+            PlanningConflictCode.VehicleNotOperational or PlanningConflictCode.VehicleInactive
+                or PlanningConflictCode.VehicleDoubleBooked
+                => ("Vehicle", trip.VehicleId),
+            PlanningConflictCode.TrailerNotOperational or PlanningConflictCode.TrailerInactive
+                or PlanningConflictCode.TrailerDoubleBooked
+                => ("Trailer", trip.TrailerId),
+            _ => ((string?)null, (Guid?)null),
+        };
+
+        return conflict with
+        {
+            Category = category,
+            SuggestedAction = suggestedAction,
+            RelatedEntityType = relatedId is null ? null : relatedType,
+            RelatedEntityId = relatedId,
+            OverrideAllowed = conflict.Severity == ConflictSeverity.Blocking,
+            RequiredPermission = conflict.Severity == ConflictSeverity.Blocking
+                ? Identity.PermissionCodes.PlanningOverrideRestriction
+                : null,
+        };
     }
 
     /// <summary>

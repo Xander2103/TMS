@@ -73,4 +73,7 @@ public class Incident : AuditableTenantEntity
 
     public string? Resolution { get; set; }
     public DateTime? ResolvedAt { get; set; }
+
+    /// <summary>Client idempotency key of the create request (driver-app offline replay).</summary>
+    public Guid? ClientRequestId { get; set; }
 }

@@ -108,6 +108,7 @@ public class TransportOrderService : ITransportOrderService
             {
                 x.o.Id, x.o.OrderNumber, x.o.OrderDate, x.o.CustomerId, x.CustomerName,
                 x.o.CustomerReference, x.o.Status, x.o.GoodsDescription, x.o.AdrRequired, x.o.CraneRequired,
+                x.o.Priority,
             })
             .ToListAsync(cancellationToken);
 
@@ -136,7 +137,7 @@ public class TransportOrderService : ITransportOrderService
                 orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
                 orderStops.LastOrDefault(s => s.StopType == StopType.Unloading)?.City,
                 orderStops.Count,
-                r.AdrRequired, r.CraneRequired);
+                r.AdrRequired, r.CraneRequired, r.Priority);
         }).ToList();
 
         return new PagedResult<TransportOrderListItemDto>(items, totalCount, page.Page, page.PageSize);
@@ -184,6 +185,7 @@ public class TransportOrderService : ITransportOrderService
             PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null,
             AdrRequired = request.AdrRequired,
             CraneRequired = request.CraneRequired,
+            Priority = request.Priority ?? OrderPriority.Normal,
             AgreedPrice = NonNegative(request.AgreedPrice),
             Notes = Trim(request.Notes),
             Stops = BuildStops(request.Stops),
@@ -252,6 +254,8 @@ public class TransportOrderService : ITransportOrderService
         order.PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null;
         order.AdrRequired = request.AdrRequired;
         order.CraneRequired = request.CraneRequired;
+        // Null = unchanged, so older clients that don't send a priority never reset it.
+        order.Priority = request.Priority ?? order.Priority;
         order.AgreedPrice = NonNegative(request.AgreedPrice);
         order.Notes = Trim(request.Notes);
 
@@ -503,6 +507,33 @@ public class TransportOrderService : ITransportOrderService
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Deleted",
             new { order.OrderNumber, order.Status }, null, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    public async Task<TransportOrderOperationResult> ChangePriorityAsync(
+        Guid id, OrderPriority priority, CancellationToken cancellationToken)
+    {
+        var order = await TenantScoped().FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        if (order.Status is TransportOrderStatus.Completed or TransportOrderStatus.Invoiced or TransportOrderStatus.Cancelled)
+        {
+            return TransportOrderOperationResult.InvalidState(
+                "De prioriteit van een afgeronde of geannuleerde opdracht kan niet meer wijzigen.");
+        }
+
+        if (order.Priority != priority)
+        {
+            var before = new { order.Priority };
+            order.Priority = priority;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _auditService.RecordAsync(EntityType, order.Id.ToString(), "PriorityChanged",
+                before, new { order.Priority }, cancellationToken);
+        }
 
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
@@ -788,7 +819,8 @@ public class TransportOrderService : ITransportOrderService
             order.CancellationReason,
             stops, cargoItems, Transitions[order.Status],
             CancellableStatuses.Contains(order.Status),
-            CorrectiveTransitions.TryGetValue(order.Status, out var corrections) ? corrections : []);
+            CorrectiveTransitions.TryGetValue(order.Status, out var corrections) ? corrections : [],
+            order.Priority);
     }
 
     private static string GenerateOrderNumber(TenantSettings? settings)

@@ -33,7 +33,9 @@ public enum PlanningConflictCode
 
 /// <summary>
 /// Blocking conflicts stop planning (unless overridden); warnings never do; information is context.
-/// <see cref="Blocking"/> mirrors <see cref="Severity"/> for existing consumers.
+/// <see cref="Blocking"/> mirrors <see cref="Severity"/> for existing consumers. The structured
+/// fields (category, related entity, override metadata) are filled centrally by
+/// <c>PlanningConflictService.Enrich</c> so rule sites stay code+description only.
 /// </summary>
 public record PlanningConflictDto(
     PlanningConflictCode Code, bool Blocking, string Description, ConflictSeverity Severity)
@@ -42,7 +44,24 @@ public record PlanningConflictDto(
         : this(code, blocking, description, blocking ? ConflictSeverity.Blocking : ConflictSeverity.Warning)
     {
     }
+
+    public ConflictCategory Category { get; init; }
+    public string? RelatedEntityType { get; init; }
+    public Guid? RelatedEntityId { get; init; }
+
+    /// <summary>Only blocking conflicts can be overridden, with the named permission and a reason.</summary>
+    public bool OverrideAllowed { get; init; }
+    public string? RequiredPermission { get; init; }
+    public string? SuggestedAction { get; init; }
 }
+
+public record ConflictOverrideDto(
+    Guid Id,
+    string ConflictCodes,
+    string Reason,
+    Guid? ActorUserId,
+    string? ActorName,
+    DateTime OccurredAt);
 
 public record TripOrderSummaryDto(
     Guid TransportOrderId,
@@ -92,7 +111,9 @@ public record TripDetailDto(
     string? Notes,
     IReadOnlyList<TripOrderSummaryDto> Orders,
     IReadOnlyList<PlanningConflictDto> Conflicts,
-    IReadOnlyList<TripStatus> AllowedTransitions);
+    IReadOnlyList<TripStatus> AllowedTransitions,
+    Guid Version,
+    IReadOnlyList<ConflictOverrideDto> Overrides);
 
 public record CreateTripRequest(
     DateOnly TripDate,
@@ -116,10 +137,12 @@ public record UpdateTripRequest(
     string? Notes,
     IReadOnlyList<Guid> OrderIds,
     decimal? PlannedDistanceKm = null,
-    decimal? PlannedEmptyKm = null);
+    decimal? PlannedEmptyKm = null,
+    Guid? Version = null);
 
 public record ChangeTripStatusRequest(
-    TripStatus Status, bool Override = false, bool ReleaseOverride = false, string? OverrideReason = null);
+    TripStatus Status, bool Override = false, bool ReleaseOverride = false, string? OverrideReason = null,
+    Guid? Version = null);
 
 public enum TripOperationOutcome
 {
@@ -130,6 +153,8 @@ public enum TripOperationOutcome
     ValidationFailed,
     ConflictsBlock,
     PackagesBlock,
+    /// <summary>The client's Version no longer matches: someone else changed the trip meanwhile.</summary>
+    StaleVersion,
 }
 
 public record TripOperationResult(
@@ -148,4 +173,8 @@ public record TripOperationResult(
         new(TripOperationOutcome.ConflictsBlock, null, "De rit kan niet worden gepland door conflicten.", conflicts);
     public static TripOperationResult PackagesBlocked(string error, object readiness) =>
         new(TripOperationOutcome.PackagesBlock, null, error, null, readiness);
+    /// <summary>Carries the CURRENT server state so the client can rebase instead of guessing.</summary>
+    public static TripOperationResult Stale(TripDetailDto current) =>
+        new(TripOperationOutcome.StaleVersion, current,
+            "De rit is intussen door iemand anders gewijzigd. Controleer de actuele gegevens en probeer opnieuw.");
 }

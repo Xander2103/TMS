@@ -204,6 +204,11 @@ public class TripService : ITripService
                 "Alleen concept-ritten kunnen worden bewerkt. Zet een geplande rit eerst terug naar concept.");
         }
 
+        if (request.Version is { } expectedVersion && expectedVersion != trip.Version)
+        {
+            return TripOperationResult.Stale(await MapDetailAsync(trip, cancellationToken));
+        }
+
         var referenceError = await ValidateReferencesAsync(
             request.DriverId, request.VehicleId, request.TrailerId, cancellationToken);
         if (referenceError is not null)
@@ -247,7 +252,15 @@ public class TripService : ITripService
         // Same save as the trip edit: a driver change MOVES the linked planning entry atomically.
         var sync = await _planningSyncService.ApplyAsync(trip, cancellationToken);
         await _costingService.StageRecalculationAsync(trip, TripCostPhase.Estimated, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        trip.Version = Guid.NewGuid();
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await StaleFromStoreAsync(trip.Id, cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "Updated", before,
             new { trip.TripDate, trip.DriverId, trip.VehicleId, trip.TrailerId, OrderCount = trip.Orders.Count }, cancellationToken);
@@ -268,6 +281,13 @@ public class TripService : ITripService
         Guid id, TripStatus target, bool allowOverride, bool releaseOverride, string? overrideReason,
         CancellationToken cancellationToken)
     {
+        return await ChangeStatusAsync(id, target, allowOverride, releaseOverride, overrideReason, version: null, cancellationToken);
+    }
+
+    public async Task<TripOperationResult> ChangeStatusAsync(
+        Guid id, TripStatus target, bool allowOverride, bool releaseOverride, string? overrideReason, Guid? version,
+        CancellationToken cancellationToken)
+    {
         var trip = await TenantScoped().Include(t => t.Orders).FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
         if (trip is null)
         {
@@ -279,6 +299,11 @@ public class TripService : ITripService
             return TripOperationResult.InvalidState($"Een rit met status '{trip.Status}' kan niet naar '{target}'.");
         }
 
+        if (version is { } expectedVersion && expectedVersion != trip.Version)
+        {
+            return TripOperationResult.Stale(await MapDetailAsync(trip, cancellationToken));
+        }
+
         if (target == TripStatus.Planned)
         {
             var conflicts = await _conflictService.EvaluateAsync(trip, cancellationToken);
@@ -286,6 +311,27 @@ public class TripService : ITripService
             if (blocking.Count > 0 && !allowOverride)
             {
                 return TripOperationResult.Blocked(blocking);
+            }
+
+            if (blocking.Count > 0)
+            {
+                // Overriding blocking conflicts leaves a permanent, reasoned trail (same save).
+                if (string.IsNullOrWhiteSpace(overrideReason))
+                {
+                    return TripOperationResult.Invalid(
+                        "Bij het overschrijven van blokkerende conflicten is een reden verplicht.");
+                }
+
+                _dbContext.Add(new ConflictOverride
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = _tenantContext.TenantId,
+                    EntityType = EntityType,
+                    EntityId = trip.Id,
+                    ConflictCodes = string.Join(",", blocking.Select(c => c.Code.ToString()).Distinct()),
+                    Reason = overrideReason.Trim(),
+                    OccurredAt = DateTime.UtcNow,
+                });
             }
         }
 
@@ -318,6 +364,7 @@ public class TripService : ITripService
 
         var before = new { trip.Status };
         trip.Status = target;
+        trip.Version = Guid.NewGuid();
 
         await PropagateOrderStatusAsync(trip, target, cancellationToken);
         var sync = await _planningSyncService.ApplyAsync(trip, cancellationToken);
@@ -328,10 +375,17 @@ public class TripService : ITripService
             await _costingService.StageRecalculationAsync(trip, TripCostPhase.Actual, cancellationToken);
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await StaleFromStoreAsync(trip.Id, cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, trip.Id.ToString(), "StatusChanged", before,
-            new { trip.Status, Overridden = allowOverride }, cancellationToken);
+            new { trip.Status, Overridden = allowOverride, OverrideReason = allowOverride ? overrideReason : null }, cancellationToken);
         await AuditPlanningSyncAsync(sync, cancellationToken);
 
         if (departureOverrideApplied)
@@ -542,6 +596,18 @@ public class TripService : ITripService
         return new ResourceNames(drivers, vehicles, trailers);
     }
 
+    /// <summary>Concurrency-race fallback: detach our stale copy and report the store's current state.</summary>
+    private async Task<TripOperationResult> StaleFromStoreAsync(Guid tripId, CancellationToken cancellationToken)
+    {
+        _dbContext.ChangeTracker.Clear();
+        var current = await TenantScoped().AsNoTracking()
+            .Include(t => t.Orders)
+            .FirstOrDefaultAsync(t => t.Id == tripId, cancellationToken);
+        return current is null
+            ? TripOperationResult.NotFound
+            : TripOperationResult.Stale(await MapDetailAsync(current, cancellationToken));
+    }
+
     private async Task<TripDetailDto> MapDetailAsync(Trip trip, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
@@ -592,6 +658,21 @@ public class TripService : ITripService
 
         var conflicts = await _conflictService.EvaluateAsync(trip, cancellationToken);
 
+        // Override trail: newest first, actor resolved to a display name for the timeline.
+        var overrides = await _dbContext.ConflictOverrides.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && o.EntityType == EntityType && o.EntityId == trip.Id)
+            .OrderByDescending(o => o.OccurredAt)
+            .Take(10)
+            .GroupJoin(_dbContext.Users.AsNoTracking().Where(u => u.TenantId == tenantId),
+                o => o.CreatedByUserId, u => u.Id,
+                (o, users) => new { Override = o, Users = users })
+            .SelectMany(x => x.Users.DefaultIfEmpty(), (x, u) => new ConflictOverrideDto(
+                x.Override.Id, x.Override.ConflictCodes, x.Override.Reason,
+                x.Override.CreatedByUserId,
+                u != null ? u.FirstName + " " + u.LastName : null,
+                x.Override.OccurredAt))
+            .ToListAsync(cancellationToken);
+
         return new TripDetailDto(
             trip.Id, trip.TripNumber, trip.TripDate, trip.Status,
             trip.DriverId, trip.DriverId is { } d ? names.Drivers.GetValueOrDefault(d) : null,
@@ -601,7 +682,8 @@ public class TripService : ITripService
             trip.PlannedStart, trip.PlannedEnd,
             trip.PlannedDistanceKm, trip.PlannedEmptyKm, trip.ActualDistanceKm, trip.ActualEmptyKm,
             trip.Notes,
-            orders, conflicts, Transitions[trip.Status]);
+            orders, conflicts, Transitions[trip.Status],
+            trip.Version, overrides);
     }
 
     private async Task AuditPlanningSyncAsync(TripPlanningSyncResult sync, CancellationToken cancellationToken)

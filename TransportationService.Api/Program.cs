@@ -171,6 +171,16 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.
 builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IRateCardService,
     TransportationService.Api.Modules.Tarification.Services.RateCardService>();
 
+// Operation control center (alerts projection + lifecycle)
+builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IAlertService,
+    TransportationService.Api.Modules.Operations.Services.AlertService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IAlertSyncService,
+    TransportationService.Api.Modules.Operations.Services.AlertSyncService>();
+
+// Favorites / recent items / pinned resources (self-scoped)
+builder.Services.AddScoped<TransportationService.Api.Modules.Portal.Services.IResourceLinkService,
+    TransportationService.Api.Modules.Portal.Services.ResourceLinkService>();
+
 // Global (Ctrl+K) search
 builder.Services.AddScoped<TransportationService.Api.Modules.Search.Services.IGlobalSearchService,
     TransportationService.Api.Modules.Search.Services.GlobalSearchService>();

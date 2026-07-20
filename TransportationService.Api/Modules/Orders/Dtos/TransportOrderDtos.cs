@@ -15,7 +15,8 @@ public record TransportOrderListItemDto(
     string? LastUnloadingCity,
     int StopCount,
     bool AdrRequired,
-    bool CraneRequired);
+    bool CraneRequired,
+    OrderPriority Priority = OrderPriority.Normal);
 
 public record TransportOrderStopDto(
     Guid Id,
@@ -69,7 +70,8 @@ public record TransportOrderDetailDto(
     /// <summary>Whether the order can currently be cancelled (separate action, orders.cancel).</summary>
     bool CanCancel,
     /// <summary>Backward corrections available via the controlled correction flow (orders.correct_status).</summary>
-    IReadOnlyList<TransportOrderStatus> AllowedCorrections);
+    IReadOnlyList<TransportOrderStatus> AllowedCorrections,
+    OrderPriority Priority = OrderPriority.Normal);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
@@ -191,7 +193,8 @@ public record CreateTransportOrderRequest(
     decimal? AgreedPrice,
     string? Notes,
     IReadOnlyList<TransportOrderStopInput> Stops,
-    IReadOnlyList<CargoItemInput>? CargoItems = null);
+    IReadOnlyList<CargoItemInput>? CargoItems = null,
+    OrderPriority? Priority = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -208,9 +211,13 @@ public record UpdateTransportOrderRequest(
     decimal? AgreedPrice,
     string? Notes,
     IReadOnlyList<TransportOrderStopInput> Stops,
-    IReadOnlyList<CargoItemInput>? CargoItems = null);
+    IReadOnlyList<CargoItemInput>? CargoItems = null,
+    OrderPriority? Priority = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
+
+/// <summary>Inline edit of the operational priority; validated and audited server-side.</summary>
+public record ChangeOrderPriorityRequest(OrderPriority Priority);
 
 public enum TransportOrderOperationOutcome
 {

@@ -94,10 +94,19 @@ public class PodService : IPodService
         }
 
         var existing = await _dbContext.ProofsOfDelivery.AsNoTracking()
-            .AnyAsync(p => p.TripId == tripId && p.TransportOrderStopId == stopId
-                           && p.IsCurrent && p.TenantId == _tenantContext.TenantId, cancellationToken);
-        if (existing)
+            .Where(p => p.TripId == tripId && p.TransportOrderStopId == stopId
+                        && p.IsCurrent && p.TenantId == _tenantContext.TenantId)
+            .Select(p => new { p.Id, p.ClientRequestId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (existing is not null)
         {
+            // Offline replay of the exact same finalisation returns the stored proof as
+            // success; a genuinely different attempt still gets the correction hint.
+            if (request.ClientRequestId is { } key && existing.ClientRequestId == key)
+            {
+                return PodOperationResult.Success((await MapDetailAsync(existing.Id, cancellationToken))!);
+            }
+
             return PodOperationResult.InvalidState(
                 "Voor deze stop bestaat al een afgeronde POD; gebruik een correctie om iets recht te zetten.");
         }
@@ -154,6 +163,7 @@ public class PodService : IPodService
             PackagesAcknowledged = packageLines.Count > 0 && request.PackagesAcknowledged,
             FinalisedByUserId = _currentUserContext.CurrentUserId,
             DriverId = driverId,
+            ClientRequestId = request.ClientRequestId,
         };
         _dbContext.Add(pod);
         // Every package at the stop gets a PodFinalized custody event in the same save.

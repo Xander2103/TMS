@@ -44,6 +44,10 @@ public class StopStatusHistoryConfiguration : IEntityTypeConfiguration<StopStatu
         builder.Property(e => e.Reason).HasMaxLength(500);
 
         builder.HasIndex(e => new { e.StopExecutionId, e.OccurredAt });
+        // Offline-replay idempotency: one transition per client key per tenant.
+        builder.HasIndex(e => new { e.TenantId, e.ClientRequestId })
+            .IsUnique()
+            .HasFilter("\"ClientRequestId\" IS NOT NULL AND \"IsDeleted\" = false");
 
         builder.HasOne<StopExecution>().WithMany().HasForeignKey(e => e.StopExecutionId).OnDelete(DeleteBehavior.Cascade);
 

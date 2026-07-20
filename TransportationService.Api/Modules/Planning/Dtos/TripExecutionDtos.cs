@@ -73,14 +73,18 @@ public record MyTripDto(
 /// PartiallyCompleted, and for an arrival past the latest allowed bound. Notes update the
 /// free-form stop remarks.
 /// </summary>
-public record TransitionStopRequest(StopExecutionStatus ToStatus, string? Reason = null, string? Notes = null);
+public record TransitionStopRequest(
+    StopExecutionStatus ToStatus, string? Reason = null, string? Notes = null,
+    /// <summary>Offline-replay idempotency key; a repeated key returns the current state instead of re-transitioning.</summary>
+    Guid? ClientRequestId = null);
 
 public record CompleteStopRequest(
     string? PodSignedBy, string? Remarks, string? Reason = null,
     /// <summary>Reason for completing despite unresolved mandatory packages (requires scanning.override).</summary>
-    string? PackageOverrideReason = null);
+    string? PackageOverrideReason = null,
+    Guid? ClientRequestId = null);
 
-public record SkipStopRequest(string Remarks);
+public record SkipStopRequest(string Remarks, Guid? ClientRequestId = null);
 
 public record StopStatusHistoryDto(
     StopExecutionStatus FromStatus,

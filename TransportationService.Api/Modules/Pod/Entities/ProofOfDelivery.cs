@@ -65,6 +65,9 @@ public class ProofOfDelivery : AuditableTenantEntity
     /// <summary>Whether this proof may surface in customer-facing views.</summary>
     public bool CustomerVisible { get; set; } = true;
 
+    /// <summary>Client idempotency key of the finalisation request (offline replay protection).</summary>
+    public Guid? ClientRequestId { get; set; }
+
     public List<PodPhoto> Photos { get; set; } = [];
 }
 

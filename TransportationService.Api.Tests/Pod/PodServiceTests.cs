@@ -146,6 +146,29 @@ public class PodServiceTests
     }
 
     [Fact]
+    public async Task Finalize_ReplayWithSameClientRequestId_ReturnsStoredPod()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var key = Guid.NewGuid();
+        var request = Finalize() with { ClientRequestId = key };
+
+        var first = await h.Sut.FinalizeAsync(h.TripId, h.StopId, request, true, CancellationToken.None);
+        Assert.Equal(PodOutcomeResult.Success, first.Outcome);
+
+        // Offline replay of the exact same finalisation: success with the SAME pod, no duplicate.
+        var replay = await h.Sut.FinalizeAsync(h.TripId, h.StopId, request, true, CancellationToken.None);
+        Assert.Equal(PodOutcomeResult.Success, replay.Outcome);
+        Assert.Equal(first.Pod!.Id, replay.Pod!.Id);
+        Assert.Equal(1, h.Db.Context.ProofsOfDelivery.Count(p => p.TransportOrderStopId == h.StopId));
+
+        // A DIFFERENT attempt (new key) still gets the correction hint.
+        var different = await h.Sut.FinalizeAsync(h.TripId, h.StopId,
+            Finalize() with { ClientRequestId = Guid.NewGuid() }, true, CancellationToken.None);
+        Assert.Equal(PodOutcomeResult.InvalidState, different.Outcome);
+    }
+
+    [Fact]
     public async Task Finalize_Validation_AndGuards()
     {
         var h = await SeedAsync();
