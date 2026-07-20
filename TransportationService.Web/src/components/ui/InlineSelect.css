@@ -1,0 +1,21 @@
+.ui-inline-select {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  border-radius: 6px;
+  padding: 0.1rem 0.25rem;
+  cursor: pointer;
+}
+
+.ui-inline-select:hover,
+.ui-inline-select:focus-visible {
+  border-color: var(--border);
+  background: var(--bg);
+}
+
+.ui-inline-select:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

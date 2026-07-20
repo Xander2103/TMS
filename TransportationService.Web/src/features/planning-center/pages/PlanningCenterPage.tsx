@@ -8,6 +8,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { getTrip } from '../../planning/api/planningApi'
+import { changeOrderPriority } from '../../transport-orders/api/transportOrdersApi'
 import type { PlanningConflict, TripDetail } from '../../planning/types'
 import {
   assignDriver, assignOrders, assignTrailer, assignVehicle, changeTripStatusVersioned,
@@ -376,6 +377,15 @@ export function PlanningCenterPage() {
           onPageChange={setUnplannedPage}
           onSelect={(order) => setSelectedOrderId(order.id)}
           onPlanRequest={(order) => setPlanPickerOrder(order)}
+          onPriorityChange={async (order, priority) => {
+            try {
+              await changeOrderPriority(order.id, priority)
+              reloadUnplanned()
+            } catch (error) {
+              showError(describeApiError(error, 'Prioriteit wijzigen mislukt.').message)
+              throw error
+            }
+          }}
         />
 
         <BoardTimeline

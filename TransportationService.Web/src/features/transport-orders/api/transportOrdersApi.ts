@@ -1,6 +1,7 @@
 import { apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
 import type {
+  OrderPriority,
   StopExecutionPlanInput,
   TransportOrderDetail,
   TransportOrderInput,
@@ -61,6 +62,12 @@ export function createTransportOrder(input: TransportOrderInput): Promise<Transp
 
 export function updateTransportOrder(id: string, input: TransportOrderInput): Promise<TransportOrderDetail> {
   return apiClient.putJson<TransportOrderDetail, TransportOrderInput>(`/api/transport-orders/${id}`, input)
+}
+
+/** Inline priority edit; backend validates status and audits the change. */
+export function changeOrderPriority(id: string, priority: OrderPriority): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, { priority: OrderPriority }>(
+    `/api/transport-orders/${id}/priority`, { priority })
 }
 
 export function changeTransportOrderStatus(

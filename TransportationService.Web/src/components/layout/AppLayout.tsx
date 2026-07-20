@@ -1,7 +1,9 @@
 import { Suspense, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { useActionQueueSync } from '../../hooks/useActionQueueSync'
+import { useShortcutRegistry } from '../../hooks/useShortcutRegistry'
 import { LoadingState } from '../feedback/LoadingState'
+import { Modal } from '../ui/Modal'
 import { CommandPalette } from './CommandPalette'
 import { OfflineBanner } from './OfflineBanner'
 import { Sidebar } from './Sidebar'
@@ -16,6 +18,8 @@ export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false)
   // Offline queues (scans + driver actions) replay automatically when the connection returns.
   const queues = useActionQueueSync()
+  // Central keyboard shortcuts: mod+K/'/' palette, 'g x' navigation chords, '?' help.
+  const shortcuts = useShortcutRegistry()
 
   return (
     <div className="app-shell">
@@ -34,7 +38,19 @@ export function AppLayout() {
       </header>
       {navOpen && <div className="mobile-nav-overlay" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <Sidebar open={navOpen} onNavigate={() => setNavOpen(false)} />
-      <CommandPalette />
+      <CommandPalette open={shortcuts.paletteOpen} onClose={() => shortcuts.setPaletteOpen(false)} />
+      {shortcuts.helpOpen && (
+        <Modal title="Sneltoetsen" onClose={() => shortcuts.setHelpOpen(false)}>
+          <ul className="shortcut-help-list">
+            {shortcuts.availableShortcuts.map((shortcut) => (
+              <li key={shortcut.keys}>
+                <kbd>{shortcut.keys.replace('mod', navigator.platform.includes('Mac') ? '⌘' : 'Ctrl')}</kbd>
+                <span>{shortcut.label}</span>
+              </li>
+            ))}
+          </ul>
+        </Modal>
+      )}
       <main className="content">
         {/* Pages are code-split per route; the shell stays visible while a chunk loads. */}
         <Suspense fallback={<LoadingState message="Pagina laden..." />}>

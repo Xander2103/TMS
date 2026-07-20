@@ -1,8 +1,8 @@
 import { Badge } from '../../../components/ui/Badge'
+import { InlineSelect } from '../../../components/ui/InlineSelect'
 import {
   ORDER_PRIORITIES,
   ORDER_PRIORITY_LABELS,
-  ORDER_PRIORITY_TONE,
   ORDER_STATUS_LABELS,
   type OrderPriority,
   type TransportOrderStatus,
@@ -31,12 +31,14 @@ interface UnplannedPanelProps {
   onSelect: (order: UnplannedOrder) => void
   /** Accessible alternative for drag-and-drop: plan the selected order via a picker. */
   onPlanRequest: (order: UnplannedOrder) => void
+  /** Safe inline priority edit; backend-validated and audited. */
+  onPriorityChange: (order: UnplannedOrder, priority: OrderPriority) => Promise<void>
 }
 
 /** Left zone: the unplanned work pool. Rows are draggable onto the board. */
 export function UnplannedPanel({
   orders, totalCount, page, pageSize, isLoading, filters, selectedOrderId,
-  onFiltersChange, onPageChange, onSelect, onPlanRequest,
+  onFiltersChange, onPageChange, onSelect, onPlanRequest, onPriorityChange,
 }: UnplannedPanelProps) {
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
 
@@ -125,9 +127,13 @@ export function UnplannedPanel({
           >
             <div className="pc-order-head">
               <strong>{order.orderNumber}</strong>
-              {order.priority !== 'Normal' && (
-                <Badge tone={ORDER_PRIORITY_TONE[order.priority]}>{ORDER_PRIORITY_LABELS[order.priority]}</Badge>
-              )}
+              <InlineSelect
+                value={order.priority}
+                options={ORDER_PRIORITIES}
+                labels={ORDER_PRIORITY_LABELS}
+                ariaLabel={`Prioriteit van ${order.orderNumber}`}
+                onChange={(priority) => onPriorityChange(order, priority)}
+              />
             </div>
             <p className="pc-order-customer">{order.customerName}</p>
             <p className="pc-order-route">
