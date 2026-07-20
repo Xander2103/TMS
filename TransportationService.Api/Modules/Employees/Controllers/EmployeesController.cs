@@ -64,6 +64,15 @@ public class EmployeesController : ControllerBase
     [RequirePermission(PermissionCodes.EmployeesCreate)]
     public async Task<ActionResult<EmployeeDetailDto>> Create(CreateEmployeeRequest request, CancellationToken cancellationToken)
     {
+        // Inline qualifications ride the same permission as the qualifications tab.
+        if (request.Qualifications is { Count: > 0 }
+            && (_currentUser.CurrentUserId is not { } userId
+                || !await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeeDocumentsCreate, cancellationToken)))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden,
+                new { message = "Je hebt geen rechten om kwalificaties toe te voegen." });
+        }
+
         try
         {
             var created = await _employeeService.CreateAsync(request, await HasConfidentialAccessAsync(cancellationToken), cancellationToken);

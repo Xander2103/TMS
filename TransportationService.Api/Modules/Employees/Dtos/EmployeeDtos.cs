@@ -1,4 +1,5 @@
 using TransportationService.Api.Modules.Employees.Entities;
+using TransportationService.Api.Modules.Qualifications.Dtos;
 
 namespace TransportationService.Api.Modules.Employees.Dtos;
 
@@ -85,7 +86,8 @@ public record CreateEmployeeRequest(
     string? Iban = null,
     string? Bic = null,
     string? Notes = null,
-    CreateEmployeeDriverProfile? DriverProfile = null);
+    CreateEmployeeDriverProfile? DriverProfile = null,
+    IReadOnlyList<CreateEmployeeQualificationRequest>? Qualifications = null);
 
 public record UpdateEmployeeRequest(
     string FirstName,

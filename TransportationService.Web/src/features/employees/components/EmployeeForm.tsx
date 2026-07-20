@@ -6,10 +6,13 @@ import { FormField } from '../../../components/ui/FormField'
 import { FormSection } from '../../../components/ui/FormSection'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
+import { ValidationSummary } from '../../../components/ui/ValidationSummary'
+import { getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
+import { formatIban, formatNrn, validateIban, validateNrn } from '../utils/personFormats'
 import { EMPLOYMENT_STATUS_LABELS, type EmployeeDetail, type EmployeeInput, type EmploymentStatus } from '../types/employee'
 import './EmployeeForm.css'
 
@@ -18,6 +21,8 @@ interface EmployeeFormProps {
   initial?: EmployeeDetail
   isSubmitting: boolean
   submitError: string | null
+  /** Per-field backend validation messages, shown next to the fields + in the summary. */
+  serverFieldErrors?: FieldErrors
   onSubmit: (values: EmployeeInput) => void
   onCancel: () => void
   /** Extra section rendered before the actions (used for the driver-profile workflow). */
@@ -26,12 +31,21 @@ interface EmployeeFormProps {
   onFunctionsChanged?: (functionCodes: string[]) => void
 }
 
+/** User-facing labels for backend field paths, for the validation summary. */
+const FIELD_LABELS: Record<string, string> = {
+  nationalRegisterNumber: 'Rijksregisternummer',
+  iban: 'IBAN',
+  bic: 'BIC',
+  countryCode: 'Land',
+  qualifications: 'Kwalificaties',
+}
+
 function nullable(value: string): string | null {
   const trimmed = value.trim()
   return trimmed ? trimmed : null
 }
 
-export function EmployeeForm({ mode, initial, isSubmitting, submitError, onSubmit, onCancel, extraSections, onFunctionsChanged }: EmployeeFormProps) {
+export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, extraSections, onFunctionsChanged }: EmployeeFormProps) {
   const { hasPermission } = useAuth()
   const canSeeConfidential = hasPermission('employees.view_confidential')
 
@@ -113,6 +127,12 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, onSubmi
     if (!houseNumber.trim()) errors.houseNumber = 'Nummer is verplicht.'
     if (!postalCode.trim()) errors.postalCode = 'Postcode is verplicht.'
     if (!city.trim()) errors.city = 'Plaats is verplicht.'
+    if (canSeeConfidential) {
+      const nrnError = validateNrn(nationalRegisterNumber)
+      if (nrnError) errors.nationalRegisterNumber = nrnError
+      const ibanError = validateIban(iban)
+      if (ibanError) errors.iban = ibanError
+    }
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -156,11 +176,16 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, onSubmi
   return (
     <form onSubmit={handleSubmit} className="employee-form" onChange={touch}>
       <UnsavedChangesGuard when={dirty && !isSubmitting} />
-      {submitError && (
-        <p className="ui-form-field-error" role="alert">
-          {submitError}
-        </p>
-      )}
+      <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={FIELD_LABELS} />
+
+      <FormActions position="top" dirty={dirty}>
+        <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+          Annuleren
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Opslaan…' : 'Opslaan'}
+        </Button>
+      </FormActions>
 
       <FormSection title="Persoonlijk" columns={3}>
         <FormField label="Voornaam" htmlFor="e-firstname" error={fieldErrors.firstName} required>
@@ -222,7 +247,7 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, onSubmi
         <FormField label="Plaats" htmlFor="e-city" error={fieldErrors.city} required>
           <input id="e-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} aria-invalid={fieldErrors.city ? 'true' : undefined} />
         </FormField>
-        <FormField label="Land" htmlFor="e-country">
+        <FormField label="Land" htmlFor="e-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
           <CountryCombobox
             id="e-country"
             value={countryCode}
@@ -332,13 +357,41 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, onSubmi
           columns={3}
           description="Vertrouwelijke gegevens — alleen zichtbaar voor gebruikers met de juiste rechten."
         >
-          <FormField label="Rijksregisternummer" htmlFor="e-nrn" hint="11 cijfers, bv. 90.05.01-123.26.">
-            <input id="e-nrn" value={nationalRegisterNumber} onChange={(e) => setNationalRegisterNumber(e.target.value)} maxLength={15} />
+          <FormField
+            label="Rijksregisternummer"
+            htmlFor="e-nrn"
+            hint="Met of zonder leestekens, bv. 90.05.01-123.26."
+            error={fieldErrors.nationalRegisterNumber ?? getFieldError(serverFieldErrors, 'nationalRegisterNumber')}
+          >
+            <input
+              id="e-nrn"
+              value={nationalRegisterNumber}
+              onChange={(e) => setNationalRegisterNumber(e.target.value)}
+              onBlur={() => {
+                const message = validateNrn(nationalRegisterNumber)
+                setFieldErrors((current) => ({ ...current, nationalRegisterNumber: message ?? undefined }) as Record<string, string>)
+                if (!message) setNationalRegisterNumber((value) => formatNrn(value))
+              }}
+              aria-invalid={fieldErrors.nationalRegisterNumber ? 'true' : undefined}
+              maxLength={15}
+            />
           </FormField>
-          <FormField label="IBAN" htmlFor="e-iban">
-            <input id="e-iban" value={iban} onChange={(e) => setIban(e.target.value)} maxLength={42} placeholder="BE68 5390 0754 7034" />
+          <FormField label="IBAN" htmlFor="e-iban" error={fieldErrors.iban ?? getFieldError(serverFieldErrors, 'iban')}>
+            <input
+              id="e-iban"
+              value={iban}
+              onChange={(e) => setIban(e.target.value)}
+              onBlur={() => {
+                const message = validateIban(iban)
+                setFieldErrors((current) => ({ ...current, iban: message ?? undefined }) as Record<string, string>)
+                if (!message) setIban((value) => formatIban(value))
+              }}
+              aria-invalid={fieldErrors.iban ? 'true' : undefined}
+              maxLength={42}
+              placeholder="BE68 5390 0754 7034"
+            />
           </FormField>
-          <FormField label="BIC" htmlFor="e-bic">
+          <FormField label="BIC" htmlFor="e-bic" error={getFieldError(serverFieldErrors, 'bic')}>
             <input id="e-bic" value={bic} onChange={(e) => setBic(e.target.value)} maxLength={11} placeholder="KREDBEBB" />
           </FormField>
         </FormSection>

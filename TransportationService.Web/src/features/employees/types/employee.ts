@@ -92,8 +92,18 @@ export interface EmployeeInput {
   notes: string | null
 }
 
+export interface CreateEmployeeQualificationInput {
+  qualificationTypeId: string
+  documentNumber: string | null
+  obtainedDate: string
+  expiryDate: string | null
+  notes: string | null
+}
+
 export interface CreateEmployeeInput extends EmployeeInput {
   driverProfile?: { driverCategoryId: string | null; notes: string | null } | null
+  /** Optional qualifications created atomically with the employee. */
+  qualifications?: CreateEmployeeQualificationInput[] | null
 }
 
 export type UpdateEmployeeInput = EmployeeInput

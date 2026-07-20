@@ -45,8 +45,13 @@ public class EmployeeProfileTests
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(userId));
         var driverService = new Modules.Drivers.Services.DriverService(db.Context, tenant, audit,
             new Modules.Qualifications.Services.QualificationStatusCalculator(), TimeProvider.System);
+        var qualificationService = new Modules.Qualifications.Services.QualificationService(
+            db.Context, tenant, new Modules.Qualifications.Services.QualificationStatusCalculator(),
+            TimeProvider.System, audit, new CountryCodeValidator(db.Context),
+            new Modules.Qualifications.Services.LocalFileStorageService(
+                Path.Combine(Path.GetTempPath(), "ts-tests", Guid.NewGuid().ToString("N"))));
         var sut = new EmployeeService(db.Context, tenant, audit,
-            new CountryCodeValidator(db.Context), driverService);
+            new CountryCodeValidator(db.Context), driverService, qualificationService);
         return new Harness(db, sut, tenantId, userId, departmentId, functionChauffeur, functionPlanner);
     }
 
@@ -312,5 +317,52 @@ public class EmployeeProfileTests
         Assert.True(afterReactivate!.IsActive);
         Assert.Equal(EmploymentStatus.Active, afterReactivate.EmploymentStatus);
         Assert.Null(afterReactivate.EmploymentEndDate);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithQualifications_PersistsThemInTheSameTransaction()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var typeId = Guid.NewGuid();
+        h.Db.Context.QualificationTypes.Add(new Modules.Qualifications.Entities.QualificationType
+        {
+            Id = typeId, Code = "adr", Name = "ADR", Category = "Certificaat", RequiresExpiryDate = true, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var created = await h.Sut.CreateAsync(FullRequest(h) with
+        {
+            Qualifications =
+            [
+                new Modules.Qualifications.Dtos.CreateEmployeeQualificationRequest(
+                    typeId, "DOC-1", new DateOnly(2024, 1, 1), new DateOnly(2029, 1, 1), null),
+            ],
+        }, canEditConfidential: true, CancellationToken.None);
+
+        var stored = Assert.Single(h.Db.Context.EmployeeQualifications.Where(q => q.EmployeeId == created.Id));
+        Assert.Equal(typeId, stored.QualificationTypeId);
+        Assert.Equal("DOC-1", stored.DocumentNumber);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithUnknownQualificationType_FailsWithFieldError_AndCreatesNoEmployee()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var ex = await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(
+            () => h.Sut.CreateAsync(FullRequest(h) with
+            {
+                Qualifications =
+                [
+                    new Modules.Qualifications.Dtos.CreateEmployeeQualificationRequest(
+                        Guid.NewGuid(), null, new DateOnly(2024, 1, 1), null, null),
+                ],
+            }, canEditConfidential: true, CancellationToken.None));
+
+        Assert.Contains("qualifications", ex.FieldErrors!.Keys);
+        Assert.Empty(h.Db.Context.Employees.ToList());
+        Assert.Empty(h.Db.Context.EmployeeQualifications.ToList());
     }
 }

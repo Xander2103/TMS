@@ -116,6 +116,7 @@ export function EmployeeDetailPage() {
               initial={employee}
               isSubmitting={mutations.isSubmitting}
               submitError={mutations.error}
+              serverFieldErrors={mutations.fieldErrors}
               onCancel={() => navigate('/employees')}
               onFunctionsChanged={setEditedFunctionCodes}
               onSubmit={async (values) => {

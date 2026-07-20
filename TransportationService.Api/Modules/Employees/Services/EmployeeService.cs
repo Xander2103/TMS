@@ -10,6 +10,8 @@ using TransportationService.Api.Modules.Drivers.Entities;
 using TransportationService.Api.Modules.Drivers.Services;
 using TransportationService.Api.Modules.Employees.Dtos;
 using TransportationService.Api.Modules.Employees.Entities;
+using TransportationService.Api.Modules.Qualifications.Dtos;
+using TransportationService.Api.Modules.Qualifications.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Employees.Services;
@@ -23,15 +25,17 @@ public class EmployeeService : IEmployeeService
     private readonly IAuditService _auditService;
     private readonly ICountryCodeValidator _countryValidator;
     private readonly IDriverService _driverService;
+    private readonly IQualificationService _qualificationService;
 
     public EmployeeService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
-        ICountryCodeValidator countryValidator, IDriverService driverService)
+        ICountryCodeValidator countryValidator, IDriverService driverService, IQualificationService qualificationService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _countryValidator = countryValidator;
         _driverService = driverService;
+        _qualificationService = qualificationService;
     }
 
     private IQueryable<Employee> TenantScoped() =>
@@ -121,6 +125,7 @@ public class EmployeeService : IEmployeeService
         ValidateRequired(request.FirstName, request.LastName, request.Email);
         await ValidateLookupCodesAsync(request.NationalityCode, request.PreferredLanguageCode, cancellationToken);
         await EnsureReferencesInTenantAsync(request.DepartmentId, request.ContractTypeId, request.JobFunctionIds, cancellationToken);
+        await EnsureQualificationTypesExistAsync(request.Qualifications, cancellationToken);
 
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
@@ -189,6 +194,13 @@ public class EmployeeService : IEmployeeService
                 // Disposing the transaction rolls back the employee as well.
                 throw new InvalidTenantReferenceException("chauffeurscategorie");
             }
+        }
+
+        // Optional qualifications reuse the qualification module's own create use case; they
+        // commit (or roll back) together with the employee.
+        foreach (var qualificationRequest in request.Qualifications ?? [])
+        {
+            await _qualificationService.CreateAsync(employee.Id, qualificationRequest, cancellationToken);
         }
 
         await transaction.CommitAsync(cancellationToken);
@@ -347,6 +359,30 @@ public class EmployeeService : IEmployeeService
             {
                 throw new DomainValidationException($"Onbekende taal '{language}'.");
             }
+        }
+    }
+
+    /// <summary>
+    /// Qualification types are a global catalog; validating up front turns an unknown id into
+    /// a field-level validation error instead of a database FK failure mid-transaction.
+    /// </summary>
+    private async Task EnsureQualificationTypesExistAsync(
+        IReadOnlyList<CreateEmployeeQualificationRequest>? qualifications, CancellationToken cancellationToken)
+    {
+        var typeIds = (qualifications ?? []).Select(q => q.QualificationTypeId).Distinct().ToList();
+        if (typeIds.Count == 0)
+        {
+            return;
+        }
+
+        var known = await _dbContext.QualificationTypes
+            .Where(t => typeIds.Contains(t.Id))
+            .Select(t => t.Id)
+            .ToListAsync(cancellationToken);
+        if (known.Count != typeIds.Count)
+        {
+            throw new DomainValidationException("qualifications",
+                "Eén of meer gekozen kwalificatietypes bestaan niet.");
         }
     }
 

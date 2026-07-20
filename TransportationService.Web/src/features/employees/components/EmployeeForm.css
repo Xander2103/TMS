@@ -27,3 +27,19 @@
   color: var(--text);
   font-style: italic;
 }
+
+.ne-qualification-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr auto;
+  gap: 12px 16px;
+  align-items: end;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+@media (max-width: 900px) {
+  .ne-qualification-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
