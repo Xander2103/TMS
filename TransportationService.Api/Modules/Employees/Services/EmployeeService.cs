@@ -142,7 +142,7 @@ public class EmployeeService : IEmployeeService
             HouseNumber = request.HouseNumber.Trim(),
             PostalCode = request.PostalCode.Trim(),
             City = request.City.Trim(),
-            CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken),
+            CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken, "countryCode"),
             EmergencyContactName = Trim(request.EmergencyContactName),
             EmergencyContactPhone = Trim(request.EmergencyContactPhone),
             EmploymentStartDate = request.EmploymentStartDate,
@@ -226,7 +226,7 @@ public class EmployeeService : IEmployeeService
         employee.HouseNumber = request.HouseNumber.Trim();
         employee.PostalCode = request.PostalCode.Trim();
         employee.City = request.City.Trim();
-        employee.CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken);
+        employee.CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken, "countryCode");
         employee.EmergencyContactName = Trim(request.EmergencyContactName);
         employee.EmergencyContactPhone = Trim(request.EmergencyContactPhone);
         employee.EmploymentStartDate = request.EmploymentStartDate;

@@ -48,6 +48,20 @@ public class VatNumberValidatorTests
     }
 
     [Fact]
+    public void InvalidNumber_CarriesFieldError_ForFieldLevelDisplay()
+    {
+        var ex = Assert.Throws<DomainValidationException>(() => VatNumberValidator.NormalizeAndValidate("BE0123456750"));
+        Assert.NotNull(ex.FieldErrors);
+        var (field, messages) = Assert.Single(ex.FieldErrors!);
+        Assert.Equal("vatNumber", field);
+        Assert.Equal(ex.Message, Assert.Single(messages));
+
+        var custom = Assert.Throws<DomainValidationException>(
+            () => VatNumberValidator.NormalizeAndValidate("BE0123456750", "billing.vatNumber"));
+        Assert.Equal("billing.vatNumber", Assert.Single(custom.FieldErrors!).Key);
+    }
+
+    [Fact]
     public void Garbage_IsRejected()
     {
         Assert.Throws<DomainValidationException>(() => VatNumberValidator.NormalizeAndValidate("!!"));

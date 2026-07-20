@@ -12,7 +12,7 @@ public sealed class CountryCodeValidator : ICountryCodeValidator
         _dbContext = dbContext;
     }
 
-    public async Task<string?> NormalizeAndValidateAsync(string? code, string fieldLabel, CancellationToken cancellationToken)
+    public async Task<string?> NormalizeAndValidateAsync(string? code, string fieldLabel, CancellationToken cancellationToken, string? field = null)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
@@ -23,7 +23,10 @@ public sealed class CountryCodeValidator : ICountryCodeValidator
         var exists = await _dbContext.Countries.AnyAsync(c => c.Code == normalized, cancellationToken);
         if (!exists)
         {
-            throw new Common.DomainValidationException($"Onbekende landcode '{normalized}' voor {fieldLabel}.");
+            var message = $"Onbekende landcode '{normalized}' voor {fieldLabel}.";
+            throw field is null
+                ? new Common.DomainValidationException(message)
+                : new Common.DomainValidationException(field, message);
         }
 
         return normalized;

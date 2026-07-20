@@ -5,11 +5,12 @@ namespace TransportationService.Api.Modules.Employees.Services;
 /// <summary>
 /// Normalisation + validation for person-level fields (IBAN, BIC, Belgian national
 /// register number). Throws <see cref="DomainValidationException"/> with a Dutch message
-/// on invalid input; empty input always normalises to null.
+/// on invalid input; empty input always normalises to null. The optional field path binds
+/// the error to the caller's request field for field-level display.
 /// </summary>
 public static class EmployeePersonValidators
 {
-    public static string? NormalizeIban(string? input)
+    public static string? NormalizeIban(string? input, string field = "iban")
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -22,7 +23,7 @@ public static class EmployeePersonValidators
             || !char.IsAsciiDigit(normalized[2]) || !char.IsAsciiDigit(normalized[3])
             || !normalized.All(char.IsAsciiLetterOrDigit))
         {
-            throw new DomainValidationException("IBAN heeft een ongeldig formaat.");
+            throw new DomainValidationException(field, "IBAN heeft een ongeldig formaat.");
         }
 
         // Standard IBAN mod-97 check: move the first 4 chars to the end, letters → numbers.
@@ -38,13 +39,13 @@ public static class EmployeePersonValidators
 
         if (remainder != 1)
         {
-            throw new DomainValidationException("IBAN heeft een ongeldig controlegetal.");
+            throw new DomainValidationException(field, "IBAN heeft een ongeldig controlegetal.");
         }
 
         return normalized;
     }
 
-    public static string? NormalizeBic(string? input)
+    public static string? NormalizeBic(string? input, string field = "bic")
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -57,13 +58,13 @@ public static class EmployeePersonValidators
             && normalized[6..].All(char.IsAsciiLetterOrDigit);
         if (!valid)
         {
-            throw new DomainValidationException("BIC moet uit 8 of 11 tekens bestaan (bv. KREDBEBB).");
+            throw new DomainValidationException(field, "BIC moet uit 8 of 11 tekens bestaan (bv. KREDBEBB).");
         }
 
         return normalized;
     }
 
-    public static string? NormalizeNationalRegisterNumber(string? input)
+    public static string? NormalizeNationalRegisterNumber(string? input, string field = "nationalRegisterNumber")
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -73,7 +74,7 @@ public static class EmployeePersonValidators
         var digits = new string(input.Where(char.IsAsciiDigit).ToArray());
         if (digits.Length != 11)
         {
-            throw new DomainValidationException("Rijksregisternummer moet uit 11 cijfers bestaan.");
+            throw new DomainValidationException(field, "Rijksregisternummer moet uit 11 cijfers bestaan.");
         }
 
         // Belgian checksum: 97 - (first 9 digits % 97); people born in/after 2000 prefix a 2.
@@ -83,7 +84,7 @@ public static class EmployeePersonValidators
         var validPost2000 = check == 97 - (int)((2000000000L + body) % 97);
         if (!validPre2000 && !validPost2000)
         {
-            throw new DomainValidationException("Rijksregisternummer heeft een ongeldig controlegetal.");
+            throw new DomainValidationException(field, "Rijksregisternummer heeft een ongeldig controlegetal.");
         }
 
         return digits;

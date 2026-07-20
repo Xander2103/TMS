@@ -1,17 +1,21 @@
 import { apiBaseUrl } from '../config/env'
 import { getAccessToken, getRefreshToken, storeTokens, clearTokens } from '../features/auth/authStorage'
 import { refresh as refreshTokens } from '../features/auth/authApi'
+import { extractFieldErrors, type FieldErrors } from './problemDetails'
 
 export class ApiError extends Error {
   readonly status?: number
   /** Parsed JSON error body, when the server sent one (e.g. 409 conflict payloads). */
   readonly body?: unknown
+  /** Per-field validation messages (normalised paths), from the ProblemDetails "errors" dictionary. */
+  readonly fieldErrors: FieldErrors
 
   constructor(message: string, status?: number, body?: unknown) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.body = body
+    this.fieldErrors = extractFieldErrors(body)
   }
 }
 

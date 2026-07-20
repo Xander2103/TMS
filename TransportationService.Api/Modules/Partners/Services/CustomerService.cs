@@ -110,7 +110,7 @@ public class CustomerService : ICustomerService
             HouseNumber = Trim(request.HouseNumber),
             PostalCode = Trim(request.PostalCode),
             City = Trim(request.City),
-            CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken),
+            CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken, "countryCode"),
             InvoiceEmail = Trim(request.InvoiceEmail),
             PaymentTermDays = request.PaymentTermDays < 0 ? 0 : request.PaymentTermDays,
             DefaultLanguageCode = Trim(request.DefaultLanguageCode),
@@ -159,7 +159,7 @@ public class CustomerService : ICustomerService
         customer.HouseNumber = Trim(request.HouseNumber);
         customer.PostalCode = Trim(request.PostalCode);
         customer.City = Trim(request.City);
-        customer.CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken);
+        customer.CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken, "countryCode");
         customer.InvoiceEmail = Trim(request.InvoiceEmail);
         customer.PaymentTermDays = request.PaymentTermDays < 0 ? 0 : request.PaymentTermDays;
         customer.DefaultLanguageCode = Trim(request.DefaultLanguageCode);
@@ -345,7 +345,7 @@ public class CustomerService : ICustomerService
 
         customer.VatTreatment = vatTreatment;
         customer.DefaultVatRatePercent = defaultVatRatePercent;
-        customer.VatCountryCode = await _countryValidator.NormalizeAndValidateAsync(vatCountryCode, "BTW-land", cancellationToken);
+        customer.VatCountryCode = await _countryValidator.NormalizeAndValidateAsync(vatCountryCode, "BTW-land", cancellationToken, "vatCountryCode");
         customer.VatNotes = Trim(vatNotes);
         customer.PeppolId = trimmedPeppolId;
         customer.PeppolScheme = trimmedPeppolScheme;

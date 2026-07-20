@@ -68,7 +68,7 @@ public class QualificationService : IQualificationService
             DocumentNumber = request.DocumentNumber,
             ObtainedDate = request.ObtainedDate,
             ExpiryDate = request.ExpiryDate,
-            IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken),
+            IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken, "issuingCountryCode"),
             Status = QualificationStatus.Pending,
             Notes = request.Notes,
             CreatedAt = DateTime.UtcNow,
@@ -92,7 +92,7 @@ public class QualificationService : IQualificationService
         qualification.DocumentNumber = request.DocumentNumber;
         qualification.ObtainedDate = request.ObtainedDate;
         qualification.ExpiryDate = request.ExpiryDate;
-        qualification.IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken);
+        qualification.IssuingCountryCode = await _countryValidator.NormalizeAndValidateAsync(request.IssuingCountryCode, "uitgifteland", cancellationToken, "issuingCountryCode");
         qualification.Notes = request.Notes;
         qualification.UpdatedAt = DateTime.UtcNow;
 

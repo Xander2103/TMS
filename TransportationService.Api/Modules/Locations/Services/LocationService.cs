@@ -107,7 +107,7 @@ public class LocationService : ILocationService
             return LocationOperationResult.DuplicateCode;
         }
 
-        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken);
+        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken, "countryCode");
 
         var location = new Location
         {
@@ -164,7 +164,7 @@ public class LocationService : ILocationService
             return LocationOperationResult.DuplicateCode;
         }
 
-        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken);
+        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken, "countryCode");
 
         var before = new { location.Code, location.Name, location.Type, location.IsActive };
 

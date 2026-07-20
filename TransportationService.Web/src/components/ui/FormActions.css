@@ -12,6 +12,15 @@
   border-top: 1px solid var(--border);
 }
 
+.ui-form-actions-top {
+  position: static;
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding: 0 0 14px;
+}
+
 .ui-form-actions-dirty {
   font-size: 13.5px;
   color: #b45309;

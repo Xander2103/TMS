@@ -34,8 +34,8 @@ public class CompanySettingsService : ICompanySettingsService
 
     public async Task<CompanySettingsDto> UpdateAsync(UpdateCompanySettingsRequest request, CancellationToken cancellationToken)
     {
-        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land (maatschappelijke zetel)", cancellationToken);
-        await _countryValidator.NormalizeAndValidateAsync(request.OperationalCountryCode, "land (operationeel adres)", cancellationToken);
+        await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land (maatschappelijke zetel)", cancellationToken, "countryCode");
+        await _countryValidator.NormalizeAndValidateAsync(request.OperationalCountryCode, "land (operationeel adres)", cancellationToken, "operationalCountryCode");
 
         var settings = await GetOrCreateAsync(cancellationToken);
 
