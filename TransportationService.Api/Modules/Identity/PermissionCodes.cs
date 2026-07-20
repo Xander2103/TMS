@@ -148,6 +148,8 @@ public static class PermissionCodes
     // --- Dashboard (company overview) ---
     public const string DashboardView = "dashboard.view";
 
+    public const string MessagesSend = "messages.send";
+
     // --- Customer portal (all data scoped to the authenticated user's linked customer) ---
     public const string CustomerPortalView = "customer_portal.view";
     public const string CustomerPortalSubmitOrders = "customer_portal.submit_orders";
@@ -328,6 +330,7 @@ public static class PermissionCodes
         (OrdersExport, "orders", "export", "Transportopdrachten exporteren"),
         (OrdersManage, "orders", "manage", "Volledig beheer van transportopdrachten"),
         (DashboardView, "dashboard", "view", "Bedrijfsdashboard bekijken"),
+        (MessagesSend, "messages", "send", "Interne berichten versturen"),
         (CustomerPortalView, "customer_portal", "view", "Klantportaal: eigen opdrachten bekijken"),
         (CustomerPortalSubmitOrders, "customer_portal", "submit_orders", "Klantportaal: opdrachten indienen"),
         (CustomerPortalManageLocations, "customer_portal", "manage_locations", "Klantportaal: eigen locaties beheren"),

@@ -100,6 +100,11 @@ public static class DefaultRoleUpgrades
                 [
                     PermissionCodes.CustomersDeactivate,
                     PermissionCodes.OrdersCorrectStatus,
+                    PermissionCodes.MessagesSend,
+                ],
+                ["hr"] =
+                [
+                    PermissionCodes.MessagesSend,
                 ],
                 ["management"] =
                 [
@@ -107,6 +112,7 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.MaintenancePoliciesView,
                     PermissionCodes.MaintenancePoliciesManage,
                     PermissionCodes.OrdersCorrectStatus,
+                    PermissionCodes.MessagesSend,
                 ],
                 // Existing tenants' klantportaal roles gain the portal permissions; the old
                 // orders.view grant is deliberately left in place (upgrades never remove) —

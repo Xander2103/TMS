@@ -287,6 +287,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.
 // Notifications (in-app)
 builder.Services.AddScoped<TransportationService.Api.Modules.Notifications.Services.INotificationService,
     TransportationService.Api.Modules.Notifications.Services.NotificationService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Notifications.Services.IInternalMessageService,
+    TransportationService.Api.Modules.Notifications.Services.InternalMessageService>();
 
 // Reporting (company dashboard)
 builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.IDashboardService,

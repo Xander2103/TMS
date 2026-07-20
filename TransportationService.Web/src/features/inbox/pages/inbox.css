@@ -1,0 +1,49 @@
+.inbox-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inbox-item {
+  font: inherit;
+  width: 100%;
+  text-align: left;
+  background: var(--bg);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 8px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-h);
+}
+
+.inbox-item:hover {
+  background: var(--accent-bg);
+}
+
+.inbox-unread .inbox-subject {
+  font-weight: 700;
+}
+
+.inbox-meta {
+  color: var(--text);
+  font-size: 13.5px;
+  white-space: nowrap;
+}
+
+.inbox-body {
+  white-space: pre-wrap;
+}
+
+.inbox-recipients {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

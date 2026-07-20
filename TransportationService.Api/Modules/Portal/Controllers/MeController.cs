@@ -114,6 +114,26 @@ public class MeController : ControllerBase
             : Ok(days);
     }
 
+    /// <summary>Own planning as iCalendar — import/subscribe from any calendar client.</summary>
+    [HttpGet("planning/ics")]
+    public async Task<IActionResult> PlanningIcs(
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
+    {
+        if (to < from || to.DayNumber - from.DayNumber > 62)
+        {
+            return BadRequest(new { message = "Kies een geldige periode van maximaal 62 dagen." });
+        }
+
+        var days = await _service.GetMyPlanningAsync(from, to, cancellationToken);
+        if (days is null)
+        {
+            return NotFound(new { message = "Er is geen personeelsdossier gekoppeld aan dit account." });
+        }
+
+        var ics = Services.PlanningIcsBuilder.Build(days);
+        return File(System.Text.Encoding.UTF8.GetBytes(ics), "text/calendar", "planning.ics");
+    }
+
     [HttpGet("qualifications")]
     public async Task<ActionResult<IReadOnlyList<EmployeeQualificationDto>>> Qualifications(CancellationToken cancellationToken)
     {

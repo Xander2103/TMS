@@ -140,6 +140,15 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
               {unreadCount > 0 && <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}
             </NavLink>
           </li>
+          <li>
+            <NavLink
+              to="/inbox"
+              className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
+              onClick={onNavigate}
+            >
+              Berichten
+            </NavLink>
+          </li>
         </ul>
 
         {visibleAdministration.length > 0 && (
