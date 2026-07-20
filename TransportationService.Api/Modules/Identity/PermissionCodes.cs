@@ -104,6 +104,8 @@ public static class PermissionCodes
     public const string MaintenanceCreate = "maintenance.create";
     public const string MaintenanceEdit = "maintenance.edit";
     public const string MaintenanceDelete = "maintenance.delete";
+    public const string MaintenancePoliciesView = "maintenance_policies.view";
+    public const string MaintenancePoliciesManage = "maintenance_policies.manage";
 
     // --- Inspections (vehicle/trailer/crane) ---
     public const string InspectionsView = "inspections.view";
@@ -290,6 +292,8 @@ public static class PermissionCodes
         (MaintenanceCreate, "maintenance", "create", "Onderhoud plannen"),
         (MaintenanceEdit, "maintenance", "edit", "Onderhoud bewerken en afronden"),
         (MaintenanceDelete, "maintenance", "delete", "Onderhoud verwijderen"),
+        (MaintenancePoliciesView, "maintenance_policies", "view", "Onderhoudsbeleid bekijken"),
+        (MaintenancePoliciesManage, "maintenance_policies", "manage", "Onderhoudsbeleid beheren"),
         (InspectionsView, "inspections", "view", "Keuringen bekijken"),
         (InspectionsCreate, "inspections", "create", "Keuringen plannen"),
         (InspectionsEdit, "inspections", "edit", "Keuringen bewerken en registreren"),

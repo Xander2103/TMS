@@ -14,11 +14,14 @@ public class VehiclesController : ControllerBase
 {
     private readonly IVehicleService _service;
     private readonly IFleetAssignmentService _assignmentService;
+    private readonly IMaintenancePolicyService _maintenancePolicies;
 
-    public VehiclesController(IVehicleService service, IFleetAssignmentService assignmentService)
+    public VehiclesController(IVehicleService service, IFleetAssignmentService assignmentService,
+        IMaintenancePolicyService maintenancePolicies)
     {
         _service = service;
         _assignmentService = assignmentService;
+        _maintenancePolicies = maintenancePolicies;
     }
 
     [HttpGet]
@@ -61,6 +64,13 @@ public class VehiclesController : ControllerBase
         }
 
         var result = await _service.CreateAsync(request, cancellationToken);
+        if (result.Outcome == VehicleOperationOutcome.Success)
+        {
+            // Plan the initial maintenance/inspection from the applicable policy (idempotent).
+            await _maintenancePolicies.ApplyDefaultsAsync(
+                FleetAssetKind.Vehicle, result.Vehicle!.Id, result.Vehicle.CategoryId, result.Vehicle.OdometerKm, cancellationToken);
+        }
+
         return Handle(result, created: true);
     }
 

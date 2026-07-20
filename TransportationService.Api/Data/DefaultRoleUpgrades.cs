@@ -103,6 +103,8 @@ public static class DefaultRoleUpgrades
                 ["management"] =
                 [
                     PermissionCodes.CustomersDeactivate,
+                    PermissionCodes.MaintenancePoliciesView,
+                    PermissionCodes.MaintenancePoliciesManage,
                 ],
             }),
     ];

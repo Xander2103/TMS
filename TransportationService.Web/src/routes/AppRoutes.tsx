@@ -52,6 +52,7 @@ import { TrailerDetailPage } from '../features/trailers/pages/TrailerDetailPage'
 import { AbsencesPage } from '../features/absences/pages/AbsencesPage'
 import { FleetDashboardPage } from '../features/fleet-dashboard/pages/FleetDashboardPage'
 import { TankCardsPage } from '../features/tank-cards/pages/TankCardsPage'
+import { MaintenancePoliciesPage } from '../features/maintenance-policies/pages/MaintenancePoliciesPage'
 import { CostRatesPage } from '../features/trip-costing/pages/CostRatesPage'
 import { KpiDashboardPage } from '../features/kpi/pages/KpiDashboardPage'
 import { KpiTripsPage } from '../features/kpi/pages/KpiTripsPage'
@@ -128,6 +129,7 @@ const router = createBrowserRouter(
           <Route path="/trailers/new" element={<NewTrailerPage />} />
           <Route path="/trailers/:id" element={<TrailerDetailPage />} />
           <Route path="/tank-cards" element={<TankCardsPage />} />
+          <Route path="/maintenance-policies" element={<MaintenancePoliciesPage />} />
           <Route path="/cost-rates" element={<CostRatesPage />} />
           <Route path="/kpi" element={<KpiDashboardPage />} />
           <Route path="/kpi/trips" element={<KpiTripsPage />} />

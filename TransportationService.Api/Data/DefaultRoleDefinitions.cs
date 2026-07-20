@@ -103,6 +103,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeDocumentsView,
                 PermissionCodes.EmployeesViewConfidential,
                 PermissionCodes.FleetDocumentsView, PermissionCodes.MaintenanceView,
+                PermissionCodes.MaintenancePoliciesView, PermissionCodes.MaintenancePoliciesManage,
                 PermissionCodes.InspectionsView, PermissionCodes.DamageReportsView,
                 PermissionCodes.TankCardsView, PermissionCodes.FuelView,
                 PermissionCodes.CompanySettingsView,

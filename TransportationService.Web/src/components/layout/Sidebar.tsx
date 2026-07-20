@@ -29,6 +29,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Voertuigen', to: '/vehicles', permissions: ['vehicles.view'] },
   { label: 'Opleggers', to: '/trailers', permissions: ['trailers.view'] },
   { label: 'Tankkaarten', to: '/tank-cards', permissions: ['tank_cards.view'] },
+  { label: 'Onderhoudsbeleid', to: '/maintenance-policies', permissions: ['maintenance_policies.view', 'maintenance_policies.manage'] },
   { label: 'Locaties', to: '/locations', permissions: ['locations.view'] },
   { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
   { label: 'Kostentarieven', to: '/cost-rates', permissions: ['trip_costs.view', 'trip_costs.manage'] },

@@ -143,6 +143,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFle
     TransportationService.Api.Modules.Fleet.Services.FleetDocumentService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IMaintenanceService,
     TransportationService.Api.Modules.Fleet.Services.MaintenanceService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IMaintenancePolicyService,
+    TransportationService.Api.Modules.Fleet.Services.MaintenancePolicyService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IInspectionService,
     TransportationService.Api.Modules.Fleet.Services.InspectionService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IDamageReportService,

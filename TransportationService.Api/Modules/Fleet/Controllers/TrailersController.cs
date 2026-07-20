@@ -13,10 +13,12 @@ namespace TransportationService.Api.Modules.Fleet.Controllers;
 public class TrailersController : ControllerBase
 {
     private readonly ITrailerService _service;
+    private readonly IMaintenancePolicyService _maintenancePolicies;
 
-    public TrailersController(ITrailerService service)
+    public TrailersController(ITrailerService service, IMaintenancePolicyService maintenancePolicies)
     {
         _service = service;
+        _maintenancePolicies = maintenancePolicies;
     }
 
     [HttpGet]
@@ -59,6 +61,13 @@ public class TrailersController : ControllerBase
         }
 
         var result = await _service.CreateAsync(request, cancellationToken);
+        if (result.Outcome == TrailerOperationOutcome.Success)
+        {
+            // Plan the initial maintenance/inspection from the applicable policy (idempotent).
+            await _maintenancePolicies.ApplyDefaultsAsync(
+                FleetAssetKind.Trailer, result.Trailer!.Id, result.Trailer.CategoryId, currentOdometerKm: 0, cancellationToken);
+        }
+
         return Handle(result, created: true);
     }
 
