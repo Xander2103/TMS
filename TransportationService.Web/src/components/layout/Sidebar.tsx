@@ -23,6 +23,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Planning', to: '/planning', permissions: ['planning.view'] },
   { label: 'Planbord', to: '/planning-center', permissions: ['planning.view'] },
   { label: 'Operationeel centrum', to: '/operations', permissions: ['operations.view'] },
+  { label: 'Chauffeursapp', to: '/driver', permissions: ['driver_workflow.view'] },
   { label: 'Afwijkingen', to: '/exceptions', permissions: ['exceptions.view'] },
   { label: 'Magazijn', to: '/warehouse', permissions: ['warehouse.view'] },
   { label: 'Mijn ritten', to: '/my-trips', permissions: ['driver_workflow.view'] },

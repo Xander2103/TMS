@@ -1,0 +1,197 @@
+.drv-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.drv-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  background: var(--accent);
+  color: #fff;
+}
+
+.drv-title {
+  font-weight: 700;
+}
+
+.drv-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+.drv-status-offline {
+  font-weight: 700;
+}
+
+.drv-sync-badge {
+  background: #fff;
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 0 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.drv-content {
+  flex: 1;
+  padding: 0.9rem 1rem 5.5rem;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.drv-tabs {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  z-index: 5;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.drv-tabs a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.5rem 0.25rem;
+  font-size: 0.72rem;
+  color: var(--text);
+  text-decoration: none;
+  opacity: 0.75;
+}
+
+.drv-tabs a span {
+  font-size: 1.15rem;
+}
+
+.drv-tabs .drv-tab-active {
+  color: var(--accent);
+  opacity: 1;
+  font-weight: 700;
+}
+
+/* --- Shared driver page styling --- */
+
+.drv-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  background: var(--bg);
+  margin-bottom: 0.75rem;
+}
+
+.drv-card h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.drv-big-link {
+  display: block;
+  text-align: center;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 12px;
+  padding: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+  margin-top: 0.5rem;
+}
+
+.drv-muted {
+  opacity: 0.65;
+  font-size: 0.85rem;
+}
+
+.drv-fact-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  font-size: 0.92rem;
+}
+
+.drv-badges {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+
+.drv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.drv-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.drv-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.drv-form input,
+.drv-form select,
+.drv-form textarea {
+  font-size: 1rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.drv-submit {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 0.8rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.drv-submit:disabled {
+  opacity: 0.6;
+}
+
+.drv-page-title {
+  font-size: 1.1rem;
+  margin: 0.25rem 0 0.6rem;
+}
+
+.drv-download {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  border-radius: 8px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}

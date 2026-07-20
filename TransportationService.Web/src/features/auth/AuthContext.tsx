@@ -71,6 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await authApi.logout(accessToken, refreshToken)
     }
     clearTokens()
+    // Secure cleanup: queued offline actions and cached driver snapshots never
+    // survive for the next account on this device.
+    const { clearDriverOfflineState } = await import('../driver/offlineActions')
+    clearDriverOfflineState()
     setUser(null)
     setStatus('unauthenticated')
   }, [])

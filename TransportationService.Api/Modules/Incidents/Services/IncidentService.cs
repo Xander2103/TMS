@@ -22,6 +22,9 @@ public interface IIncidentService
     Task<IncidentDetailDto?> UpdateAsync(Guid id, SaveIncidentRequest request, CancellationToken cancellationToken);
 
     Task<IncidentDetailDto?> ChangeStatusAsync(Guid id, ChangeIncidentStatusRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Incidents stamped with this driver (driver-app "my incidents" list).</summary>
+    Task<IReadOnlyList<IncidentListItemDto>> ListForDriverAsync(Guid driverId, CancellationToken cancellationToken);
 }
 
 public class IncidentService : IIncidentService
@@ -122,6 +125,32 @@ public class IncidentService : IIncidentService
                 r.Id, r.Title, r.IncidentType.ToString(), r.CustomTypeName,
                 r.Status.ToString(), r.Severity.ToString(),
                 r.CustomerName, r.ResponsibleName, r.DossierNumber, r.DueDate,
+                IsOverdue: r.DueDate < today
+                           && (r.Status == IncidentStatus.New || r.Status == IncidentStatus.InProgress),
+                r.CreatedAt))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<IncidentListItemDto>> ListForDriverAsync(
+        Guid driverId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var rows = await _dbContext.Incidents.AsNoTracking()
+            .Where(i => i.TenantId == tenantId && i.DriverId == driverId)
+            .OrderByDescending(i => i.CreatedAt)
+            .Take(100)
+            .Select(i => new
+            {
+                i.Id, i.Title, i.IncidentType, i.CustomTypeName, i.Status, i.Severity, i.DueDate, i.CreatedAt,
+            })
+            .ToListAsync(cancellationToken);
+
+        var today = Today;
+        return rows
+            .Select(r => new IncidentListItemDto(
+                r.Id, r.Title, r.IncidentType.ToString(), r.CustomTypeName,
+                r.Status.ToString(), r.Severity.ToString(),
+                null, null, null, r.DueDate,
                 IsOverdue: r.DueDate < today
                            && (r.Status == IncidentStatus.New || r.Status == IncidentStatus.InProgress),
                 r.CreatedAt))

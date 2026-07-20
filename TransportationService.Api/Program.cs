@@ -183,6 +183,12 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services
 builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IOperationsOverviewService,
     TransportationService.Api.Modules.Operations.Services.OperationsOverviewService>();
 
+// Driver app (self-scoped dashboard, documents and incident reporting)
+builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IDriverAppService,
+    TransportationService.Api.Modules.Planning.Services.DriverAppService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IDriverIncidentService,
+    TransportationService.Api.Modules.Incidents.Services.DriverIncidentService>();
+
 // Favorites / recent items / pinned resources (self-scoped)
 builder.Services.AddScoped<TransportationService.Api.Modules.Portal.Services.IResourceLinkService,
     TransportationService.Api.Modules.Portal.Services.ResourceLinkService>();

@@ -1,5 +1,6 @@
 import { Suspense, useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { useActionQueueSync } from '../../hooks/useActionQueueSync'
 import { LoadingState } from '../feedback/LoadingState'
 import { CommandPalette } from './CommandPalette'
 import { OfflineBanner } from './OfflineBanner'
@@ -13,10 +14,12 @@ import './AppLayout.css'
  */
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false)
+  // Offline queues (scans + driver actions) replay automatically when the connection returns.
+  const queues = useActionQueueSync()
 
   return (
     <div className="app-shell">
-      <OfflineBanner />
+      <OfflineBanner unsyncedCount={queues.unsyncedCount} />
       <header className="mobile-topbar">
         <button
           type="button"

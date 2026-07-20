@@ -34,6 +34,10 @@ const TransportOrderDetailPage = lazyPage(() => import('../features/transport-or
 const PlanningPage = lazyPage(() => import('../features/planning/pages/PlanningPage'), 'PlanningPage')
 const PlanningCenterPage = lazyPage(() => import('../features/planning-center/pages/PlanningCenterPage'), 'PlanningCenterPage')
 const OperationsPage = lazyPage(() => import('../features/operations/pages/OperationsPage'), 'OperationsPage')
+const DriverLayout = lazyPage(() => import('../features/driver/components/DriverLayout'), 'DriverLayout')
+const DriverHomePage = lazyPage(() => import('../features/driver/pages/DriverHomePage'), 'DriverHomePage')
+const DriverDocumentsPage = lazyPage(() => import('../features/driver/pages/DriverDocumentsPage'), 'DriverDocumentsPage')
+const DriverIncidentsPage = lazyPage(() => import('../features/driver/pages/DriverIncidentsPage'), 'DriverIncidentsPage')
 const TripDetailPage = lazyPage(() => import('../features/planning/pages/TripDetailPage'), 'TripDetailPage')
 const MyTripsPage = lazyPage(() => import('../features/my-trips/pages/MyTripsPage'), 'MyTripsPage')
 const TripExecutionPage = lazyPage(() => import('../features/my-trips/pages/TripExecutionPage'), 'TripExecutionPage')
@@ -125,6 +129,12 @@ const router = createBrowserRouter(
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<RequireAuth />}>
         <Route path="/change-password" element={<ChangePasswordPage />} />
+        {/* Mobile-first driver shell (bottom tabs); execution pages stay shared under /my-trips. */}
+        <Route element={<DriverLayout />}>
+          <Route path="/driver" element={<DriverHomePage />} />
+          <Route path="/driver/documents" element={<DriverDocumentsPage />} />
+          <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
+        </Route>
         <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/transport-orders" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
