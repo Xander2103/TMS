@@ -77,6 +77,14 @@ public record CancelTransportOrderRequest(string Reason);
 /// <summary>Body for the controlled status-correction action; the reason is mandatory and audited.</summary>
 public record CorrectTransportOrderStatusRequest(TransportOrderStatus TargetStatus, string Reason);
 
+/// <summary>One entry of the chronological order timeline (audit + status + packages + stops + invoicing).</summary>
+public record OrderTimelineEventDto(
+    DateTime Timestamp,
+    string Category,
+    string Title,
+    string? Detail,
+    string? UserName);
+
 public record CargoItemDto(
     Guid Id,
     int Sequence,

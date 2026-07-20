@@ -20,13 +20,16 @@ public class TransportOrdersController : ControllerBase
 {
     private readonly ITransportOrderService _service;
     private readonly TransportationService.Api.Modules.Edi.Services.IEdiService _ediService;
+    private readonly ITransportOrderTimelineService _timelineService;
 
     public TransportOrdersController(
         ITransportOrderService service,
-        TransportationService.Api.Modules.Edi.Services.IEdiService ediService)
+        TransportationService.Api.Modules.Edi.Services.IEdiService ediService,
+        ITransportOrderTimelineService timelineService)
     {
         _service = service;
         _ediService = ediService;
+        _timelineService = timelineService;
     }
 
     [HttpGet]
@@ -153,6 +156,14 @@ public class TransportOrdersController : ControllerBase
     {
         var result = await _service.CancelAsync(id, request.Reason, cancellationToken);
         return Handle(result, created: false);
+    }
+
+    [HttpGet("{id:guid}/timeline")]
+    [RequirePermission(PermissionCodes.OrdersView, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<IReadOnlyList<OrderTimelineEventDto>>> Timeline(Guid id, CancellationToken cancellationToken)
+    {
+        var timeline = await _timelineService.GetTimelineAsync(id, cancellationToken);
+        return timeline is null ? NotFound() : Ok(timeline);
     }
 
     [HttpPost("{id:guid}/correct-status")]

@@ -22,6 +22,7 @@ import {
   updateTransportOrder,
 } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
+import { OrderTimelinePanel } from '../components/OrderTimelinePanel'
 import { StopExecutionPlanDialog } from '../components/StopExecutionPlanDialog'
 import { OrderPackagesPanel } from '../../packages/components/OrderPackagesPanel'
 import { CustomerPackagesSummary } from '../../packages/components/CustomerPackagesSummary'
@@ -342,6 +343,11 @@ export function TransportOrderDetailPage() {
               </table>
             </section>
           )}
+
+          <section className="to-section">
+            <h2>Historiek</h2>
+            <OrderTimelinePanel orderId={order.id} />
+          </section>
 
           <div className="to-detail-actions">
             {editable && (

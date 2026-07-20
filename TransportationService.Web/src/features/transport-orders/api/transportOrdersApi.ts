@@ -83,3 +83,15 @@ export function correctTransportOrderStatus(
 export function deleteTransportOrder(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/transport-orders/${id}`)
 }
+
+export interface OrderTimelineEvent {
+  timestamp: string
+  category: 'order' | 'status' | 'package' | 'stop' | 'invoice' | string
+  title: string
+  detail: string | null
+  userName: string | null
+}
+
+export function getTransportOrderTimeline(id: string): Promise<OrderTimelineEvent[]> {
+  return apiClient.getJson<OrderTimelineEvent[]>(`/api/transport-orders/${id}/timeline`)
+}

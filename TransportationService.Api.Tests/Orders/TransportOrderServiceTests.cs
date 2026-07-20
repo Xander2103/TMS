@@ -633,6 +633,31 @@ public class TransportOrderServiceTests
     }
 
     [Fact]
+    public async Task Timeline_MergesAuditAndStatusHistory_Chronologically()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var id = order.Order!.Id;
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.Confirmed, CancellationToken.None);
+        await h.Sut.CancelAsync(id, "Klant heeft afgezegd", CancellationToken.None);
+
+        var timeline = new TransportOrderTimelineService(h.Db.Context, new DevTenantContext(h.TenantId));
+        var events = await timeline.GetTimelineAsync(id, CancellationToken.None);
+
+        Assert.NotNull(events);
+        Assert.Contains(events!, e => e.Category == "order" && e.Title == "Opdracht aangemaakt");
+        Assert.Contains(events!, e => e.Category == "status" && e.Title.Contains("Concept → Bevestigd"));
+        Assert.Contains(events!, e => e.Category == "status" && e.Title.Contains("Geannuleerd") && e.Detail == "Klant heeft afgezegd");
+        // Chronological (ascending) and free of the duplicate raw StatusChanged audit rows.
+        Assert.True(events!.Zip(events.Skip(1)).All(pair => pair.First.Timestamp <= pair.Second.Timestamp));
+        Assert.DoesNotContain(events, e => e.Title == "StatusChanged");
+
+        Assert.Null(await timeline.GetTimelineAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task CorrectStatus_OnInvoicedOrder_IsRefused()
     {
         var h = await SeedAsync();
