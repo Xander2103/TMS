@@ -1,0 +1,171 @@
+using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Reference;
+using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.CustomerPortal.Dtos;
+using TransportationService.Api.Modules.CustomerPortal.Services;
+using TransportationService.Api.Modules.Identity.Entities;
+using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Locations.Entities;
+using TransportationService.Api.Modules.Locations.Services;
+using TransportationService.Api.Modules.Orders.Dtos;
+using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Orders.Services;
+using TransportationService.Api.Modules.Partners.Entities;
+using TransportationService.Api.Modules.Tenancy.Entities;
+using TransportationService.Api.Modules.Tenancy.Services;
+using TransportationService.Api.Tests.TestSupport;
+
+namespace TransportationService.Api.Tests.CustomerPortal;
+
+public class CustomerPortalServiceTests
+{
+    private static readonly DateTimeOffset Now = new(2026, 07, 20, 12, 0, 0, TimeSpan.Zero);
+
+    private sealed record Harness(
+        SqliteTestDbContext Db, Guid TenantId, Guid CustomerId, Guid OtherCustomerId,
+        Guid PortalUserId, Guid UnlinkedUserId, Guid OwnLocationId, Guid ForeignLocationId,
+        TransportOrderService Orders)
+    {
+        public CustomerPortalService For(Guid userId)
+        {
+            var tenant = new DevTenantContext(TenantId);
+            var user = new DevCurrentUserContext(userId);
+            var audit = new AuditService(Db.Context, tenant, user);
+            var locations = new LocationService(Db.Context, tenant, audit, new CountryCodeValidator(Db.Context));
+            return new CustomerPortalService(Db.Context, tenant, user, Orders, locations, audit);
+        }
+    }
+
+    private static async Task<Harness> SeedAsync()
+    {
+        var db = new SqliteTestDbContext();
+        var tenantId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var otherCustomerId = Guid.NewGuid();
+        var portalUserId = Guid.NewGuid();
+        var unlinkedUserId = Guid.NewGuid();
+        var ownLocationId = Guid.NewGuid();
+        var foreignLocationId = Guid.NewGuid();
+
+        db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = Now.UtcDateTime });
+        db.Context.TenantSettings.Add(new TenantSettings
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, OrderNumberPrefix = "ORD-", OrderNumberNextValue = 1,
+        });
+        db.Context.Customers.AddRange(
+            new Customer { Id = customerId, TenantId = tenantId, CustomerNumber = "KL-1", Name = "Haven BV", IsActive = true },
+            new Customer { Id = otherCustomerId, TenantId = tenantId, CustomerNumber = "KL-2", Name = "Andere BV", IsActive = true });
+        db.Context.Users.AddRange(
+            new User { Id = portalUserId, TenantId = tenantId, Email = "klant@haven.be", FirstName = "Kaat", LastName = "Klant", CustomerId = customerId, IsActive = true },
+            new User { Id = unlinkedUserId, TenantId = tenantId, Email = "los@acme.be", FirstName = "Los", LastName = "Zonder", IsActive = true });
+        db.Context.Locations.AddRange(
+            new Location { Id = ownLocationId, TenantId = tenantId, Code = "EIGEN-1", Name = "Magazijn Haven", Type = LocationType.CustomerLocation, City = "Antwerpen", CustomerId = customerId, IsActive = true },
+            new Location { Id = foreignLocationId, TenantId = tenantId, Code = "VREEMD-1", Name = "Andermans site", Type = LocationType.CustomerLocation, City = "Gent", CustomerId = otherCustomerId, IsActive = true });
+        await db.Context.SaveChangesAsync();
+        await CountrySeeder.SyncAsync(db.Context);
+
+        var tenant = new DevTenantContext(tenantId);
+        var orders = new TransportOrderService(db.Context, tenant,
+            new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), new TestClock(Now));
+        return new Harness(db, tenantId, customerId, otherCustomerId, portalUserId, unlinkedUserId, ownLocationId, foreignLocationId, orders);
+    }
+
+    private static PortalCreateOrderRequest Request(Harness h, Guid? loadingLocationId = null) => new(
+        CustomerReference: "PO-KLANT-1",
+        OrderDate: new DateOnly(2026, 7, 21),
+        GoodsDescription: "12 europalletten dranken",
+        Remarks: "Graag laden vóór 10u",
+        Stops:
+        [
+            new PortalStopInput(StopType.Loading, loadingLocationId ?? h.OwnLocationId, null, null, null, null, null,
+                new DateTime(2026, 7, 21, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 7, 21, 10, 0, 0, DateTimeKind.Utc), null, null),
+            new PortalStopInput(StopType.Unloading, null, "Klant eindbestemming", "Dorpsstraat 1", "9000", "Gent", "BE",
+                null, null, null, null),
+        ],
+        CargoItems: [new PortalCargoInput("Europalletten dranken", 12, "paletten", TransportationService.Api.Modules.Packages.Entities.PackageUnitType.EuroPallet, TotalWeightKg: 7200)]);
+
+    [Fact]
+    public async Task Submit_ForcesOwnCustomer_EntersSubmitted_AndNeverCarriesAPrice()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.For(h.PortalUserId).SubmitOrderAsync(Request(h), CancellationToken.None);
+
+        Assert.Equal(PortalOutcomeKind.Success, result.Outcome);
+        Assert.Equal(TransportOrderStatus.Submitted, result.Value!.Status);
+
+        var stored = h.Db.Context.TransportOrders.Single();
+        Assert.Equal(h.CustomerId, stored.CustomerId);
+        Assert.Null(stored.AgreedPrice);
+        Assert.Equal("ORD-0001", stored.OrderNumber);
+
+        // The immutable status trail records the portal submission with its marker.
+        var history = h.Db.Context.TransportOrderStatusHistories.Single();
+        Assert.Equal(TransportOrderStatus.Draft, history.FromStatus);
+        Assert.Equal(TransportOrderStatus.Submitted, history.ToStatus);
+        Assert.Equal("Ingediend via het klantportaal", history.Reason);
+
+        // The planner can accept the submission through the normal transition map.
+        var confirmed = await h.Orders.ChangeStatusAsync(stored.Id, TransportOrderStatus.Confirmed, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, confirmed.Outcome);
+    }
+
+    [Fact]
+    public async Task Submit_WithAnotherCustomersLocation_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.For(h.PortalUserId).SubmitOrderAsync(Request(h, loadingLocationId: h.ForeignLocationId), CancellationToken.None);
+
+        Assert.Equal(PortalOutcomeKind.ValidationFailed, result.Outcome);
+        Assert.Empty(h.Db.Context.TransportOrders.ToList());
+    }
+
+    [Fact]
+    public async Task OtherCustomersOrders_AreInvisible_AndUnlinkedUsersAreRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var submitted = await h.For(h.PortalUserId).SubmitOrderAsync(Request(h), CancellationToken.None);
+
+        // A second portal user linked to the OTHER customer sees nothing of it.
+        var otherUserId = Guid.NewGuid();
+        h.Db.Context.Users.Add(new User
+        {
+            Id = otherUserId, TenantId = h.TenantId, Email = "x@andere.be", FirstName = "An", LastName = "Dere",
+            CustomerId = h.OtherCustomerId, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var foreignView = await h.For(otherUserId).GetMyOrderAsync(submitted.Value!.Id, CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.NotFound, foreignView.Outcome);
+        var foreignList = await h.For(otherUserId).ListMyOrdersAsync(CancellationToken.None);
+        Assert.Empty(foreignList.Value!);
+
+        var unlinked = await h.For(h.UnlinkedUserId).ListMyOrdersAsync(CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink, unlinked.Outcome);
+    }
+
+    [Fact]
+    public async Task Locations_AreScopedToOwnCustomer_AndPortalCreationLinksThem()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.For(h.PortalUserId);
+
+        var list = await sut.ListMyLocationsAsync(CancellationToken.None);
+        var visible = Assert.Single(list.Value!);
+        Assert.Equal("Magazijn Haven", visible.Name);
+
+        var created = await sut.CreateMyLocationAsync(
+            new PortalCreateLocationRequest("Nieuw filiaal", "Kade 12", null, "2000", "Antwerpen", "BE"), CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.Success, created.Outcome);
+
+        var stored = h.Db.Context.Locations.Single(l => l.Name == "Nieuw filiaal");
+        Assert.Equal(h.CustomerId, stored.CustomerId);
+        Assert.Equal(LocationType.CustomerLocation, stored.Type);
+    }
+}

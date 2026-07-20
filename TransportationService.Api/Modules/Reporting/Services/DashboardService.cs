@@ -125,7 +125,7 @@ public class DashboardService : IDashboardService
             .ToListAsync(cancellationToken);
 
         return new DashboardDto(
-            CountOf(TransportOrderStatus.Draft, TransportOrderStatus.Confirmed),
+            CountOf(TransportOrderStatus.Draft, TransportOrderStatus.Submitted, TransportOrderStatus.Confirmed),
             CountOf(TransportOrderStatus.Planned, TransportOrderStatus.InProgress),
             completedThisMonth,
             tripsToday.Count,

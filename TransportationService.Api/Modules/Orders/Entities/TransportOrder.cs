@@ -13,6 +13,8 @@ public enum TransportOrderStatus
     /// <summary>Set by the invoicing module (Phase 8); not reachable via the manual transition map.</summary>
     Invoiced,
     Cancelled,
+    /// <summary>Submitted through the customer portal; awaiting planner review. Stored as string — appending is safe.</summary>
+    Submitted,
 }
 
 public enum StopType

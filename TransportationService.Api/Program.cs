@@ -168,6 +168,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITr
     TransportationService.Api.Modules.Orders.Services.TransportOrderService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderTimelineService,
     TransportationService.Api.Modules.Orders.Services.TransportOrderTimelineService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.ICustomerPortalService,
+    TransportationService.Api.Modules.CustomerPortal.Services.CustomerPortalService>();
 
 // Planning (trips + conflict engine)
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IPlanningConflictService,

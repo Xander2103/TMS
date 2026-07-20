@@ -108,6 +108,15 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.MaintenancePoliciesManage,
                     PermissionCodes.OrdersCorrectStatus,
                 ],
+                // Existing tenants' klantportaal roles gain the portal permissions; the old
+                // orders.view grant is deliberately left in place (upgrades never remove) —
+                // tenants revoke it manually if they want the stricter portal-only surface.
+                ["klantportaal"] =
+                [
+                    PermissionCodes.CustomerPortalView,
+                    PermissionCodes.CustomerPortalSubmitOrders,
+                    PermissionCodes.CustomerPortalManageLocations,
+                ],
             }),
     ];
 }

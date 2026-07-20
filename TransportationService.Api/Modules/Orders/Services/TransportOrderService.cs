@@ -23,6 +23,8 @@ public class TransportOrderService : ITransportOrderService
         new Dictionary<TransportOrderStatus, TransportOrderStatus[]>
         {
             [TransportOrderStatus.Draft] = [TransportOrderStatus.Confirmed],
+            // Portal submissions: the planner accepts (Confirmed) or takes over for corrections (Draft).
+            [TransportOrderStatus.Submitted] = [TransportOrderStatus.Confirmed, TransportOrderStatus.Draft],
             [TransportOrderStatus.Confirmed] = [TransportOrderStatus.Draft, TransportOrderStatus.InProgress],
             [TransportOrderStatus.Planned] = [TransportOrderStatus.InProgress],
             [TransportOrderStatus.InProgress] = [TransportOrderStatus.Completed],
@@ -32,7 +34,7 @@ public class TransportOrderService : ITransportOrderService
 
     /// <summary>Statuses from which an order can still be cancelled.</summary>
     private static readonly TransportOrderStatus[] CancellableStatuses =
-        [TransportOrderStatus.Draft, TransportOrderStatus.Confirmed, TransportOrderStatus.Planned, TransportOrderStatus.InProgress];
+        [TransportOrderStatus.Draft, TransportOrderStatus.Submitted, TransportOrderStatus.Confirmed, TransportOrderStatus.Planned, TransportOrderStatus.InProgress];
 
     /// <summary>
     /// Controlled CORRECTIVE (backward) transitions for fixing an accidentally selected status.
@@ -211,10 +213,10 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.NotFound;
         }
 
-        if (order.Status is not (TransportOrderStatus.Draft or TransportOrderStatus.Confirmed))
+        if (order.Status is not (TransportOrderStatus.Draft or TransportOrderStatus.Submitted or TransportOrderStatus.Confirmed))
         {
             return TransportOrderOperationResult.InvalidState(
-                "Alleen concept- en bevestigde opdrachten kunnen worden bewerkt.");
+                "Alleen concept-, ingediende en bevestigde opdrachten kunnen worden bewerkt.");
         }
 
         // Switching an order TO a blocked customer is refused; editing an existing order whose

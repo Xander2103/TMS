@@ -154,10 +154,14 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate,
             ]),
 
+        // Deliberately NO internal orders.view: portal users reach only the customer-portal
+        // endpoints, which scope every query to their linked customer.
         new("klantportaal", "Klantportaal",
-            "Leestoegang voor klantgebruikers (toekomstig klantportaal).",
+            "Klantgebruikers: eigen opdrachten bekijken en indienen via het klantportaal.",
             [
-                PermissionCodes.OrdersView,
+                PermissionCodes.CustomerPortalView,
+                PermissionCodes.CustomerPortalSubmitOrders,
+                PermissionCodes.CustomerPortalManageLocations,
             ]),
 
         // Warehouse: scans, packages, releases and incident reporting — deliberately no

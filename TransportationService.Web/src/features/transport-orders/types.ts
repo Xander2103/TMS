@@ -1,10 +1,11 @@
 import type { PackageUnitType } from '../packages/types'
 
-export type TransportOrderStatus = 'Draft' | 'Confirmed' | 'Planned' | 'InProgress' | 'Completed' | 'Invoiced' | 'Cancelled'
+export type TransportOrderStatus = 'Draft' | 'Submitted' | 'Confirmed' | 'Planned' | 'InProgress' | 'Completed' | 'Invoiced' | 'Cancelled'
 export type StopType = 'Loading' | 'Unloading'
 
 export const ORDER_STATUS_LABELS: Record<TransportOrderStatus, string> = {
   Draft: 'Concept',
+  Submitted: 'Ingediend',
   Confirmed: 'Bevestigd',
   Planned: 'Gepland',
   InProgress: 'In uitvoering',
@@ -13,10 +14,11 @@ export const ORDER_STATUS_LABELS: Record<TransportOrderStatus, string> = {
   Cancelled: 'Geannuleerd',
 }
 
-export const ORDER_STATUSES: TransportOrderStatus[] = ['Draft', 'Confirmed', 'Planned', 'InProgress', 'Completed', 'Invoiced', 'Cancelled']
+export const ORDER_STATUSES: TransportOrderStatus[] = ['Draft', 'Submitted', 'Confirmed', 'Planned', 'InProgress', 'Completed', 'Invoiced', 'Cancelled']
 
 export const ORDER_STATUS_TONE: Record<TransportOrderStatus, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
   Draft: 'neutral',
+  Submitted: 'warning',
   Confirmed: 'info',
   Planned: 'info',
   InProgress: 'warning',
@@ -28,6 +30,7 @@ export const ORDER_STATUS_TONE: Record<TransportOrderStatus, 'neutral' | 'succes
 /** Action labels for the guarded transitions offered by the backend. */
 export const ORDER_TRANSITION_LABELS: Record<TransportOrderStatus, string> = {
   Draft: 'Terug naar concept',
+  Submitted: 'Indienen',
   Confirmed: 'Bevestigen',
   Planned: 'Plannen',
   Invoiced: 'Factureren',

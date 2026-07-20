@@ -53,6 +53,9 @@ import { AbsencesPage } from '../features/absences/pages/AbsencesPage'
 import { FleetDashboardPage } from '../features/fleet-dashboard/pages/FleetDashboardPage'
 import { TankCardsPage } from '../features/tank-cards/pages/TankCardsPage'
 import { MaintenancePoliciesPage } from '../features/maintenance-policies/pages/MaintenancePoliciesPage'
+import { CustomerPortalOrdersPage } from '../features/customer-portal/pages/CustomerPortalOrdersPage'
+import { CustomerPortalNewOrderPage } from '../features/customer-portal/pages/CustomerPortalNewOrderPage'
+import { CustomerPortalOrderDetailPage } from '../features/customer-portal/pages/CustomerPortalOrderDetailPage'
 import { CostRatesPage } from '../features/trip-costing/pages/CostRatesPage'
 import { KpiDashboardPage } from '../features/kpi/pages/KpiDashboardPage'
 import { KpiTripsPage } from '../features/kpi/pages/KpiTripsPage'
@@ -130,6 +133,9 @@ const router = createBrowserRouter(
           <Route path="/trailers/:id" element={<TrailerDetailPage />} />
           <Route path="/tank-cards" element={<TankCardsPage />} />
           <Route path="/maintenance-policies" element={<MaintenancePoliciesPage />} />
+          <Route path="/customer-portal" element={<CustomerPortalOrdersPage />} />
+          <Route path="/customer-portal/new" element={<CustomerPortalNewOrderPage />} />
+          <Route path="/customer-portal/orders/:id" element={<CustomerPortalOrderDetailPage />} />
           <Route path="/cost-rates" element={<CostRatesPage />} />
           <Route path="/kpi" element={<KpiDashboardPage />} />
           <Route path="/kpi/trips" element={<KpiTripsPage />} />
