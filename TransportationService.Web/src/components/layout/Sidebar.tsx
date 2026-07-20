@@ -27,6 +27,8 @@ const operationsNavItems: NavItem[] = [
   { label: 'Chauffeursapp', to: '/driver', permissions: ['driver_workflow.view'] },
   { label: 'Afwijkingen', to: '/exceptions', permissions: ['exceptions.view'] },
   { label: 'Magazijn', to: '/warehouse', permissions: ['warehouse.view'] },
+  { label: 'Magazijnen', to: '/warehouses', permissions: ['warehouse.view', 'warehouse.manage'] },
+  { label: 'Dockplanning', to: '/dock-planning', permissions: ['warehouse.view', 'warehouse.schedule'] },
   { label: 'Mijn ritten', to: '/my-trips', permissions: ['driver_workflow.view'] },
   { label: 'Klanten', to: '/customers', permissions: ['customers.view'] },
   { label: 'Klantportaal', to: '/customer-portal', permissions: ['customer_portal.view'] },

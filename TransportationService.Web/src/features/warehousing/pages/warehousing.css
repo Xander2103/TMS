@@ -1,0 +1,332 @@
+/* --- Shared warehouse pages --- */
+
+.wh-page,
+.dp-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.wh-header,
+.dp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.wh-header h1,
+.dp-header h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.wh-muted,
+.dp-muted {
+  opacity: 0.65;
+  font-size: 0.85rem;
+}
+
+.wh-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  background: var(--bg);
+}
+
+.wh-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.wh-card-head h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1.1rem;
+}
+
+.wh-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.wh-docks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.wh-dock {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+}
+
+.wh-dock-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.wh-dock-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+}
+
+.wh-dock-actions {
+  margin-top: 0.4rem;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.wh-link {
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0;
+}
+
+.wh-link-danger {
+  color: var(--danger);
+}
+
+.wh-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.wh-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.wh-form-row {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.wh-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.4rem !important;
+  font-weight: 500 !important;
+}
+
+.wh-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+/* --- Dock planning board --- */
+
+.dp-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dp-kpis {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.9rem;
+}
+
+.dp-alert {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.dp-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.dp-board {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  overflow-x: auto;
+}
+
+.dp-board-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  opacity: 0.6;
+  padding-left: 90px;
+  margin-bottom: 0.35rem;
+}
+
+.dp-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  min-height: 54px;
+  border-top: 1px solid var(--border);
+  padding: 0.3rem 0;
+}
+
+.dp-row-inactive {
+  opacity: 0.5;
+}
+
+.dp-row-label {
+  width: 84px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.dp-row-track {
+  position: relative;
+  flex: 1;
+  min-width: 480px;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent,
+    transparent calc(100% / 14 - 1px),
+    var(--border) calc(100% / 14 - 1px),
+    var(--border) calc(100% / 14)
+  );
+}
+
+.dp-block {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.72rem;
+  text-align: left;
+  padding: 0.2rem 0.4rem;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.dp-block-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.dp-block-inprogress {
+  border-left-color: var(--warning);
+}
+
+.dp-block-completed {
+  border-left-color: var(--success);
+  opacity: 0.7;
+}
+
+.dp-block-cancelled,
+.dp-block-noshow {
+  border-left-color: var(--danger);
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.dp-queue {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 160px;
+}
+
+.dp-queue h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dp-queue-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  cursor: grab;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.dp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.dp-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.dp-conflicts {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.dp-conflicts li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.dp-override-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 950px) {
+  .dp-layout {
+    grid-template-columns: 1fr;
+  }
+}

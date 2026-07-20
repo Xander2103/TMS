@@ -183,6 +183,12 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services
 builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IOperationsOverviewService,
     TransportationService.Api.Modules.Operations.Services.OperationsOverviewService>();
 
+// Warehouse & dock planning
+builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Services.IWarehouseAdminService,
+    TransportationService.Api.Modules.Warehousing.Services.WarehouseAdminService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Services.IDockPlanningService,
+    TransportationService.Api.Modules.Warehousing.Services.DockPlanningService>();
+
 // Profitability read models + export
 builder.Services.AddScoped<TransportationService.Api.Modules.Profitability.Services.IProfitabilityQueryService,
     TransportationService.Api.Modules.Profitability.Services.ProfitabilityQueryService>();

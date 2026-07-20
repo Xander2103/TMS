@@ -52,6 +52,9 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Planning.Entities.ConflictOverride> ConflictOverrides => Set<TransportationService.Api.Modules.Planning.Entities.ConflictOverride>();
     public DbSet<TransportationService.Api.Modules.Operations.Entities.OperationalAlert> OperationalAlerts => Set<TransportationService.Api.Modules.Operations.Entities.OperationalAlert>();
     public DbSet<TransportationService.Api.Modules.Portal.Entities.UserResourceLink> UserResourceLinks => Set<TransportationService.Api.Modules.Portal.Entities.UserResourceLink>();
+    public DbSet<TransportationService.Api.Modules.Warehousing.Entities.Warehouse> Warehouses => Set<TransportationService.Api.Modules.Warehousing.Entities.Warehouse>();
+    public DbSet<TransportationService.Api.Modules.Warehousing.Entities.Dock> Docks => Set<TransportationService.Api.Modules.Warehousing.Entities.Dock>();
+    public DbSet<TransportationService.Api.Modules.Warehousing.Entities.DockAppointment> DockAppointments => Set<TransportationService.Api.Modules.Warehousing.Entities.DockAppointment>();
     public DbSet<TransportationService.Api.Modules.Eta.Entities.StopEta> StopEtas => Set<TransportationService.Api.Modules.Eta.Entities.StopEta>();
     public DbSet<TransportationService.Api.Modules.Eta.Entities.StopEtaHistory> StopEtaHistories => Set<TransportationService.Api.Modules.Eta.Entities.StopEtaHistory>();
     public DbSet<TransportationService.Api.Modules.Edi.Entities.TradingPartner> TradingPartners => Set<TransportationService.Api.Modules.Edi.Entities.TradingPartner>();
