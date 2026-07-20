@@ -180,6 +180,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services
     TransportationService.Api.Modules.Operations.Services.AlertService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IAlertSyncService,
     TransportationService.Api.Modules.Operations.Services.AlertSyncService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IOperationsOverviewService,
+    TransportationService.Api.Modules.Operations.Services.OperationsOverviewService>();
 
 // Favorites / recent items / pinned resources (self-scoped)
 builder.Services.AddScoped<TransportationService.Api.Modules.Portal.Services.IResourceLinkService,
