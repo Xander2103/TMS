@@ -75,6 +75,10 @@ import { EmployeesPage } from '../features/employees/pages/EmployeesPage'
 import { QualificationsOverviewPage } from '../features/qualifications/pages/QualificationsOverviewPage'
 import { NewEmployeePage } from '../features/employees/pages/NewEmployeePage'
 import { EmployeeDetailPage } from '../features/employees/pages/EmployeeDetailPage'
+import { DossiersPage } from '../features/dossiers/pages/DossiersPage'
+import { DossierDetailPage } from '../features/dossiers/pages/DossierDetailPage'
+import { IncidentsPage } from '../features/incidents/pages/IncidentsPage'
+import { IncidentDetailPage } from '../features/incidents/pages/IncidentDetailPage'
 import { LookupPage } from '../features/master-data/pages/LookupPage'
 import { LOOKUP_RESOURCES } from '../features/master-data/lookupRegistry'
 
@@ -139,6 +143,11 @@ const router = createBrowserRouter(
           <Route path="/trailers/:id" element={<TrailerDetailPage />} />
           <Route path="/tank-cards" element={<TankCardsPage />} />
           <Route path="/maintenance-policies" element={<MaintenancePoliciesPage />} />
+          <Route path="/dossiers" element={<DossiersPage />} />
+          <Route path="/dossiers/:id" element={<DossierDetailPage />} />
+          <Route path="/incidents" element={<IncidentsPage />} />
+          <Route path="/incidents/new" element={<IncidentDetailPage />} />
+          <Route path="/incidents/:id" element={<IncidentDetailPage />} />
           <Route path="/customer-portal" element={<CustomerPortalOrdersPage />} />
           <Route path="/customer-portal/new" element={<CustomerPortalNewOrderPage />} />
           <Route path="/customer-portal/orders/:id" element={<CustomerPortalOrderDetailPage />} />

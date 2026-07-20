@@ -28,6 +28,10 @@ export interface Dashboard {
   openDamageCount: number
   qualificationsExpiring30d: number
   qualificationsExpired: number
+  openIncidentCount: number
+  missingPodCount: number
+  failedScanCount: number
+  overdueMaintenanceCount: number
   recentOrders: RecentOrder[]
   tripsToday: TripListItem[]
 }

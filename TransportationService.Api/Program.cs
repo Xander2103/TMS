@@ -161,6 +161,12 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFue
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFleetDashboardService,
     TransportationService.Api.Modules.Fleet.Services.FleetDashboardService>();
 
+// Dossiers & incidents
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierService,
+    TransportationService.Api.Modules.Dossiers.Services.DossierService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IIncidentService,
+    TransportationService.Api.Modules.Incidents.Services.IncidentService>();
+
 // HR availability
 builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IAbsenceService,
     TransportationService.Api.Modules.Hr.Services.AbsenceService>();

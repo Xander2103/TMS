@@ -64,6 +64,12 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.TripCosting.Entities.TripCostLine> TripCostLines => Set<TransportationService.Api.Modules.TripCosting.Entities.TripCostLine>();
     public DbSet<TransportationService.Api.Modules.TripCosting.Entities.TripCostSummary> TripCostSummaries => Set<TransportationService.Api.Modules.TripCosting.Entities.TripCostSummary>();
 
+    // Dossiers & incidents
+    public DbSet<TransportationService.Api.Modules.Dossiers.Entities.TransportDossier> TransportDossiers => Set<TransportationService.Api.Modules.Dossiers.Entities.TransportDossier>();
+    public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierOrder> DossierOrders => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierOrder>();
+    public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierRelation> DossierRelations => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierRelation>();
+    public DbSet<TransportationService.Api.Modules.Incidents.Entities.Incident> Incidents => Set<TransportationService.Api.Modules.Incidents.Entities.Incident>();
+
     // Invoicing (Phase 8)
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();

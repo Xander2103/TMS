@@ -73,6 +73,7 @@ public class TenantSettingsConfiguration : IEntityTypeConfiguration<TenantSettin
         builder.Property(s => s.OrderNumberNextValue).IsConcurrencyToken();
         builder.Property(s => s.TripNumberNextValue).IsConcurrencyToken();
         builder.Property(s => s.PackageNumberNextValue).IsConcurrencyToken();
+        builder.Property(s => s.DossierNumberNextValue).IsConcurrencyToken();
         builder.Property(s => s.InvoiceNumberNextValue).IsConcurrencyToken();
         builder.HasIndex(s => s.TenantId).IsUnique();
         builder.HasOne<Tenant>().WithOne().HasForeignKey<TenantSettings>(s => s.TenantId).OnDelete(DeleteBehavior.Restrict);

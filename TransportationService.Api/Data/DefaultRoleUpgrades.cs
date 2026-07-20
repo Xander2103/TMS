@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -122,6 +122,35 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.CustomerPortalView,
                     PermissionCodes.CustomerPortalSubmitOrders,
                     PermissionCodes.CustomerPortalManageLocations,
+                ],
+            }),
+
+        // A separate step (not merged into 4) because tenants may already be stamped at
+        // version 4 by an earlier deployment of this same wave.
+        new(5,
+            "Improvement wave 2026-07-20: transport dossiers and incident registration.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] =
+                [
+                    PermissionCodes.DossiersView, PermissionCodes.DossiersManage,
+                    PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
+                ],
+                // Dispatch registers and works incidents during execution; dossier
+                // administration stays with planner/management.
+                ["dispatcher"] =
+                [
+                    PermissionCodes.DossiersView,
+                    PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.DossiersView, PermissionCodes.DossiersManage,
+                    PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
+                ],
+                ["boekhouding"] =
+                [
+                    PermissionCodes.DossiersView, PermissionCodes.IncidentsView,
                 ],
             }),
     ];

@@ -61,6 +61,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ScanningOverride,
                 PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
                 PermissionCodes.PackageReportsExport,
+                PermissionCodes.DossiersView, PermissionCodes.DossiersManage,
+                PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
             ]),
 
         new("dispatcher", "Dispatcher",
@@ -79,6 +81,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PackageExceptionsCreate, PermissionCodes.PackageExceptionsManage,
                 PermissionCodes.ScanningOverride,
                 PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
+                PermissionCodes.DossiersView,
+                PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
             ]),
 
         new("management", "Management",
@@ -112,6 +116,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PackagesView,
                 PermissionCodes.WarehouseView,
                 PermissionCodes.PackageReportsExport,
+                PermissionCodes.DossiersView, PermissionCodes.DossiersManage,
+                PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -128,6 +134,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.TripCostsView, PermissionCodes.ProfitabilityView,
                 PermissionCodes.KpiView, PermissionCodes.KpiExport,
                 PermissionCodes.PackageReportsExport,
+                PermissionCodes.DossiersView, PermissionCodes.IncidentsView,
             ]),
 
         new("hr", "HR",

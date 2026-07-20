@@ -17,6 +17,8 @@ const operationsNavItems: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', permissions: ['dashboard.view'] },
   { label: "KPI's", to: '/kpi', permissions: ['kpi.view'] },
   { label: 'Transportopdrachten', to: '/transport-orders', permissions: ['orders.view', 'orders.manage'] },
+  { label: 'Dossiers', to: '/dossiers', permissions: ['dossiers.view', 'dossiers.manage'] },
+  { label: 'Incidenten', to: '/incidents', permissions: ['incidents.view', 'incidents.manage'] },
   { label: 'Planning', to: '/planning', permissions: ['planning.view'] },
   { label: 'Afwijkingen', to: '/exceptions', permissions: ['exceptions.view'] },
   { label: 'Magazijn', to: '/warehouse', permissions: ['warehouse.view'] },

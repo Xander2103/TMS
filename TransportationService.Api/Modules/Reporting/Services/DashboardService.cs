@@ -3,8 +3,10 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Fleet.Services;
 using TransportationService.Api.Modules.Hr.Entities;
+using TransportationService.Api.Modules.Incidents.Entities;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Scanning.Entities;
 using TransportationService.Api.Modules.Planning.Services;
 using TransportationService.Api.Modules.Reporting.Dtos;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -112,6 +114,40 @@ public class DashboardService : IDashboardService
         var qualificationsExpired = await _dbContext.EmployeeQualifications.AsNoTracking()
             .CountAsync(q => q.TenantId == tenantId && q.ExpiryDate != null && q.ExpiryDate < today, cancellationToken);
 
+        // Alert cards: incidents, missing PODs, failed scans and overdue maintenance.
+        var openIncidentCount = await _dbContext.Incidents.AsNoTracking()
+            .CountAsync(i => i.TenantId == tenantId
+                             && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress),
+                cancellationToken);
+
+        // Completed (not yet invoiced) orders without a current proof of delivery need
+        // follow-up before they can be billed.
+        var missingPodCount = await _dbContext.TransportOrders.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && o.Status == TransportOrderStatus.Completed)
+            .CountAsync(o => !_dbContext.ProofsOfDelivery
+                .Any(p => p.TenantId == tenantId && p.TransportOrderId == o.Id && p.IsCurrent), cancellationToken);
+
+        var weekAgo = _timeProvider.GetUtcNow().UtcDateTime.AddDays(-7);
+        var failedScanCount = await _dbContext.ScanEvents.AsNoTracking()
+            .CountAsync(s => s.TenantId == tenantId && s.OccurredAt >= weekAgo
+                             && (s.Result == ScanResult.UnexpectedItem
+                                 || s.Result == ScanResult.WrongItem
+                                 || s.Result == ScanResult.DamagedItem), cancellationToken);
+
+        // Overdue = strictly past its date/odometer trigger (the fleet card counts due-soon
+        // as well); the shared MaintenanceService rule decides, so no logic is duplicated.
+        var openMaintenanceJobs = await (
+                from m in _dbContext.MaintenanceRecords.AsNoTracking()
+                where m.TenantId == tenantId
+                      && (m.Status == MaintenanceStatus.Planned || m.Status == MaintenanceStatus.InProgress)
+                      && (m.ScheduledDate != null || m.OdometerTriggerKm != null)
+                join v in _dbContext.Vehicles.AsNoTracking() on m.VehicleId equals v.Id into vehicleGroup
+                from v in vehicleGroup.DefaultIfEmpty()
+                select new { m.ScheduledDate, m.OdometerTriggerKm, CurrentOdometer = v != null ? (int?)v.OdometerKm : null })
+            .ToListAsync(cancellationToken);
+        var overdueMaintenanceCount = openMaintenanceJobs.Count(j =>
+            MaintenanceService.IsOverdue(j.ScheduledDate, j.OdometerTriggerKm, j.CurrentOdometer, today));
+
         // Today's planning board (conflicts computed live by the trip service).
         var tripsToday = await _tripService.ListAsync(today, today, null, null, cancellationToken);
 
@@ -142,6 +178,10 @@ public class DashboardService : IDashboardService
             fleet.OpenDamageCount,
             qualificationsExpiring,
             qualificationsExpired,
+            openIncidentCount,
+            missingPodCount,
+            failedScanCount,
+            overdueMaintenanceCount,
             recentOrders,
             tripsToday);
     }

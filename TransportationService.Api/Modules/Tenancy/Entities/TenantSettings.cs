@@ -80,6 +80,10 @@ public class TenantSettings
     public string? PackageNumberPrefix { get; set; } = "PKG-";
     public int PackageNumberNextValue { get; set; } = 1;
 
+    // Transport dossier numbering
+    public string? DossierNumberPrefix { get; set; } = "DOS-";
+    public int DossierNumberNextValue { get; set; } = 1;
+
     /// <summary>
     /// What happens when a trip departs with mandatory packages not loaded:
     /// AllowWithWarning (depart, warning shown), RequireOverride (release permission + reason),

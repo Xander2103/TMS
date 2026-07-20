@@ -30,5 +30,9 @@ public record DashboardDto(
     int OpenDamageCount,
     int QualificationsExpiring30d,
     int QualificationsExpired,
+    int OpenIncidentCount,
+    int MissingPodCount,
+    int FailedScanCount,
+    int OverdueMaintenanceCount,
     IReadOnlyList<RecentOrderDto> RecentOrders,
     IReadOnlyList<TripListItemDto> TripsToday);

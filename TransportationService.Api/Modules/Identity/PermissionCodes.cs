@@ -150,6 +150,14 @@ public static class PermissionCodes
 
     public const string MessagesSend = "messages.send";
 
+    // --- Transport dossiers ---
+    public const string DossiersView = "dossiers.view";
+    public const string DossiersManage = "dossiers.manage";
+
+    // --- Incidents ---
+    public const string IncidentsView = "incidents.view";
+    public const string IncidentsManage = "incidents.manage";
+
     // --- Customer portal (all data scoped to the authenticated user's linked customer) ---
     public const string CustomerPortalView = "customer_portal.view";
     public const string CustomerPortalSubmitOrders = "customer_portal.submit_orders";
@@ -331,6 +339,10 @@ public static class PermissionCodes
         (OrdersManage, "orders", "manage", "Volledig beheer van transportopdrachten"),
         (DashboardView, "dashboard", "view", "Bedrijfsdashboard bekijken"),
         (MessagesSend, "messages", "send", "Interne berichten versturen"),
+        (DossiersView, "dossiers", "view", "Transportdossiers bekijken"),
+        (DossiersManage, "dossiers", "manage", "Transportdossiers beheren (aanmaken, koppelen, sluiten)"),
+        (IncidentsView, "incidents", "view", "Incidenten bekijken"),
+        (IncidentsManage, "incidents", "manage", "Incidenten registreren en afhandelen"),
         (CustomerPortalView, "customer_portal", "view", "Klantportaal: eigen opdrachten bekijken"),
         (CustomerPortalSubmitOrders, "customer_portal", "submit_orders", "Klantportaal: opdrachten indienen"),
         (CustomerPortalManageLocations, "customer_portal", "manage_locations", "Klantportaal: eigen locaties beheren"),

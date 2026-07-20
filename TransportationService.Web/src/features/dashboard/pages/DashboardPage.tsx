@@ -105,6 +105,34 @@ export function DashboardPage() {
       to: '/qualifications',
       alert: dashboard.qualificationsExpiring30d + dashboard.qualificationsExpired > 0,
     },
+    {
+      label: 'Open incidenten',
+      value: String(dashboard.openIncidentCount),
+      hint: 'nieuw of in behandeling',
+      to: '/incidents',
+      alert: dashboard.openIncidentCount > 0,
+    },
+    {
+      label: 'POD ontbreekt',
+      value: String(dashboard.missingPodCount),
+      hint: 'afgeronde opdrachten zonder afleverbewijs',
+      to: '/transport-orders',
+      alert: dashboard.missingPodCount > 0,
+    },
+    {
+      label: 'Mislukte scans',
+      value: String(dashboard.failedScanCount),
+      hint: 'laatste 7 dagen',
+      to: '/exceptions',
+      alert: dashboard.failedScanCount > 0,
+    },
+    {
+      label: 'Onderhoud te laat',
+      value: String(dashboard.overdueMaintenanceCount),
+      hint: 'geplande onderhoudsbeurten over datum',
+      to: '/fleet',
+      alert: dashboard.overdueMaintenanceCount > 0,
+    },
   ]
 
   return (
