@@ -33,4 +33,26 @@ public interface ITripService
         CancellationToken cancellationToken);
 
     Task<TripOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    // Targeted planning-center commands: allowed on Draft AND Planned trips; a Planned trip is
+    // re-validated by the conflict engine and blocking conflicts need an override with reason.
+
+    /// <summary>Appends orders to the trip (incremental; existing orders stay untouched).</summary>
+    Task<TripOperationResult> AssignOrdersAsync(Guid id, AssignOrdersRequest request, CancellationToken cancellationToken);
+
+    Task<TripOperationResult> RemoveOrderAsync(Guid id, Guid orderId, Guid? version, CancellationToken cancellationToken);
+
+    /// <summary>Resequences the trip's orders; the list must contain exactly the current set.</summary>
+    Task<TripOperationResult> ReorderOrdersAsync(Guid id, ReorderTripOrdersRequest request, CancellationToken cancellationToken);
+
+    Task<TripOperationResult> AssignDriverAsync(Guid id, AssignResourceRequest request, CancellationToken cancellationToken);
+
+    Task<TripOperationResult> AssignVehicleAsync(Guid id, AssignResourceRequest request, CancellationToken cancellationToken);
+
+    Task<TripOperationResult> AssignTrailerAsync(Guid id, AssignResourceRequest request, CancellationToken cancellationToken);
+
+    Task<TripOperationResult> RescheduleAsync(Guid id, RescheduleTripRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Dry-run: conflicts a hypothetical assignment WOULD create. Never mutates.</summary>
+    Task<TripOperationResult> ValidateAssignmentAsync(Guid id, ValidateAssignmentRequest request, CancellationToken cancellationToken);
 }

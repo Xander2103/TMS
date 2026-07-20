@@ -277,6 +277,431 @@ public class TripService : ITripService
         return trip is null ? TripOperationResult.NotFound : TripOperationResult.Success(await MapDetailAsync(trip, cancellationToken));
     }
 
+    // -----------------------------------------------------------------------
+    // Targeted planning-center commands (drag-and-drop mutations).
+    // Allowed on Draft AND Planned trips; a Planned trip is re-validated by the
+    // conflict engine and blocking conflicts require an override with a reason.
+    // -----------------------------------------------------------------------
+
+    public async Task<TripOperationResult> AssignOrdersAsync(
+        Guid id, AssignOrdersRequest request, CancellationToken cancellationToken)
+    {
+        return await ApplyTargetedAsync(id, request.Version, allowOverride: false, overrideReason: null,
+            "OrdersAssigned",
+            trip =>
+            {
+                var toAdd = request.OrderIds.Distinct()
+                    .Where(orderId => trip.Orders.All(o => o.IsDeleted || o.TransportOrderId != orderId))
+                    .ToList();
+                if (toAdd.Count == 0)
+                {
+                    return Task.FromResult<TripOperationResult?>(
+                        TripOperationResult.Invalid("Deze opdracht(en) staan al op de rit."));
+                }
+
+                return AddOrdersToTripAsync(trip, toAdd, cancellationToken);
+            },
+            cancellationToken);
+    }
+
+    public async Task<TripOperationResult> RemoveOrderAsync(
+        Guid id, Guid orderId, Guid? version, CancellationToken cancellationToken)
+    {
+        return await ApplyTargetedAsync(id, version, allowOverride: false, overrideReason: null,
+            "OrderRemoved",
+            async trip =>
+            {
+                var link = trip.Orders.FirstOrDefault(o => !o.IsDeleted && o.TransportOrderId == orderId);
+                if (link is null)
+                {
+                    return TripOperationResult.Invalid("Deze opdracht staat niet op de rit.");
+                }
+
+                _dbContext.Remove(link); // soft delete via interceptor
+                trip.Orders.Remove(link);
+
+                // Release the order back to the unplanned pool when the trip already claimed it.
+                if (trip.Status == TripStatus.Planned)
+                {
+                    var order = await _dbContext.TransportOrders
+                        .FirstOrDefaultAsync(o => o.Id == orderId && o.TenantId == _tenantContext.TenantId, cancellationToken);
+                    if (order is not null && order.Status == TransportOrderStatus.Planned)
+                    {
+                        order.Status = TransportOrderStatus.Confirmed;
+                    }
+                }
+
+                return null;
+            },
+            cancellationToken);
+    }
+
+    public async Task<TripOperationResult> ReorderOrdersAsync(
+        Guid id, ReorderTripOrdersRequest request, CancellationToken cancellationToken)
+    {
+        return await ApplyTargetedAsync(id, request.Version, allowOverride: false, overrideReason: null,
+            "OrdersReordered",
+            trip =>
+            {
+                var live = trip.Orders.Where(o => !o.IsDeleted).ToList();
+                var currentIds = live.Select(o => o.TransportOrderId).OrderBy(x => x).ToList();
+                var requestedIds = request.OrderIds.Distinct().OrderBy(x => x).ToList();
+                if (!currentIds.SequenceEqual(requestedIds))
+                {
+                    return Task.FromResult<TripOperationResult?>(TripOperationResult.Invalid(
+                        "De volgorde moet exact de opdrachten van de rit bevatten."));
+                }
+
+                var position = request.OrderIds.Select((orderId, index) => (orderId, index))
+                    .ToDictionary(x => x.orderId, x => x.index);
+                foreach (var link in live)
+                {
+                    link.Sequence = position[link.TransportOrderId] + 1;
+                }
+
+                return Task.FromResult<TripOperationResult?>(null);
+            },
+            cancellationToken);
+    }
+
+    public async Task<TripOperationResult> AssignDriverAsync(
+        Guid id, AssignResourceRequest request, CancellationToken cancellationToken)
+    {
+        Guid? previousDriverId = null;
+        var result = await ApplyTargetedAsync(id, request.Version, request.Override, request.OverrideReason,
+            "DriverChanged",
+            async trip =>
+            {
+                if (request.ResourceId is { } driverId && !await _dbContext.Drivers.AnyAsync(
+                        d => d.Id == driverId && d.TenantId == _tenantContext.TenantId, cancellationToken))
+                {
+                    return TripOperationResult.InvalidReference("De gekoppelde chauffeur bestaat niet.");
+                }
+
+                previousDriverId = trip.DriverId;
+                trip.DriverId = request.ResourceId;
+                return null;
+            },
+            cancellationToken);
+
+        if (result.Outcome == TripOperationOutcome.Success && previousDriverId != request.ResourceId)
+        {
+            await NotifyDriverChangeAsync(result.Trip!, previousDriverId, request.ResourceId, cancellationToken);
+        }
+
+        return result;
+    }
+
+    public async Task<TripOperationResult> AssignVehicleAsync(
+        Guid id, AssignResourceRequest request, CancellationToken cancellationToken)
+    {
+        var changed = false;
+        var result = await ApplyTargetedAsync(id, request.Version, request.Override, request.OverrideReason,
+            "VehicleChanged",
+            async trip =>
+            {
+                if (request.ResourceId is { } vehicleId && !await _dbContext.Vehicles.AnyAsync(
+                        v => v.Id == vehicleId && v.TenantId == _tenantContext.TenantId, cancellationToken))
+                {
+                    return TripOperationResult.InvalidReference("Het gekoppelde voertuig bestaat niet.");
+                }
+
+                changed = trip.VehicleId != request.ResourceId;
+                trip.VehicleId = request.ResourceId;
+                return null;
+            },
+            cancellationToken);
+
+        if (result.Outcome == TripOperationOutcome.Success && changed)
+        {
+            await NotifyAssignedDriverAsync(result.Trip!,
+                $"Rit {result.Trip!.TripNumber}: het voertuig is gewijzigd naar {result.Trip.VehicleNumber ?? "geen"}.",
+                cancellationToken);
+        }
+
+        return result;
+    }
+
+    public async Task<TripOperationResult> AssignTrailerAsync(
+        Guid id, AssignResourceRequest request, CancellationToken cancellationToken)
+    {
+        var changed = false;
+        var result = await ApplyTargetedAsync(id, request.Version, request.Override, request.OverrideReason,
+            "TrailerChanged",
+            async trip =>
+            {
+                if (request.ResourceId is { } trailerId && !await _dbContext.Trailers.AnyAsync(
+                        t => t.Id == trailerId && t.TenantId == _tenantContext.TenantId, cancellationToken))
+                {
+                    return TripOperationResult.InvalidReference("De gekoppelde oplegger bestaat niet.");
+                }
+
+                changed = trip.TrailerId != request.ResourceId;
+                trip.TrailerId = request.ResourceId;
+                return null;
+            },
+            cancellationToken);
+
+        if (result.Outcome == TripOperationOutcome.Success && changed)
+        {
+            await NotifyAssignedDriverAsync(result.Trip!,
+                $"Rit {result.Trip!.TripNumber}: de oplegger is gewijzigd naar {result.Trip.TrailerNumber ?? "geen"}.",
+                cancellationToken);
+        }
+
+        return result;
+    }
+
+    public async Task<TripOperationResult> RescheduleAsync(
+        Guid id, RescheduleTripRequest request, CancellationToken cancellationToken)
+    {
+        var timingChanged = false;
+        var result = await ApplyTargetedAsync(id, request.Version, request.Override, request.OverrideReason,
+            "Rescheduled",
+            trip =>
+            {
+                var newStart = AsUtc(request.PlannedStart);
+                var newEnd = AsUtc(request.PlannedEnd);
+                if (newStart is { } s && newEnd is { } e && e < s)
+                {
+                    return Task.FromResult<TripOperationResult?>(
+                        TripOperationResult.Invalid("Het geplande einde kan niet vóór de geplande start liggen."));
+                }
+
+                timingChanged = trip.TripDate != request.TripDate
+                    || trip.PlannedStart != newStart || trip.PlannedEnd != newEnd;
+                trip.TripDate = request.TripDate;
+                trip.PlannedStart = newStart;
+                trip.PlannedEnd = newEnd;
+                return Task.FromResult<TripOperationResult?>(null);
+            },
+            cancellationToken);
+
+        if (result.Outcome == TripOperationOutcome.Success && timingChanged)
+        {
+            await NotifyAssignedDriverAsync(result.Trip!,
+                $"Rit {result.Trip!.TripNumber} is verplaatst naar {result.Trip.TripDate:dd-MM-yyyy}.",
+                cancellationToken);
+        }
+
+        return result;
+    }
+
+    /// <summary>Dry-run: conflicts a hypothetical assignment WOULD create. Never mutates.</summary>
+    public async Task<TripOperationResult> ValidateAssignmentAsync(
+        Guid id, ValidateAssignmentRequest request, CancellationToken cancellationToken)
+    {
+        var trip = await TenantScoped().AsNoTracking()
+            .Include(t => t.Orders)
+            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        if (trip is null)
+        {
+            return TripOperationResult.NotFound;
+        }
+
+        // Apply the hypothesis to the detached copy only.
+        if (request.DriverId is { } driverId) trip.DriverId = driverId;
+        if (request.VehicleId is { } vehicleId) trip.VehicleId = vehicleId;
+        if (request.TrailerId is { } trailerId) trip.TrailerId = trailerId;
+        if (request.TripDate is { } tripDate) trip.TripDate = tripDate;
+        if (request.PlannedStart is { } start) trip.PlannedStart = AsUtc(start);
+        if (request.PlannedEnd is { } end) trip.PlannedEnd = AsUtc(end);
+        foreach (var extraOrderId in (request.AdditionalOrderIds ?? []).Distinct()
+                     .Where(orderId => trip.Orders.All(o => o.TransportOrderId != orderId)))
+        {
+            trip.Orders.Add(new TripOrder
+            {
+                Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId,
+                TripId = trip.Id, TransportOrderId = extraOrderId, Sequence = trip.Orders.Count + 1,
+            });
+        }
+
+        var conflicts = await _conflictService.EvaluateAsync(trip, cancellationToken);
+        return new TripOperationResult(TripOperationOutcome.Success, null, null, conflicts);
+    }
+
+    /// <summary>
+    /// Shared core of the targeted commands: state guard, version check, mutation, conflict
+    /// re-validation for Planned trips (with reasoned override trail), planning-entry sync,
+    /// costing restage, version bump and audit — all in one save.
+    /// </summary>
+    private async Task<TripOperationResult> ApplyTargetedAsync(
+        Guid id, Guid? version, bool allowOverride, string? overrideReason, string auditAction,
+        Func<Trip, Task<TripOperationResult?>> mutateAsync, CancellationToken cancellationToken)
+    {
+        var trip = await TenantScoped().Include(t => t.Orders).FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        if (trip is null)
+        {
+            return TripOperationResult.NotFound;
+        }
+
+        if (trip.Status is not (TripStatus.Draft or TripStatus.Planned))
+        {
+            return TripOperationResult.InvalidState(
+                "Alleen concept- of geplande ritten kunnen via het planbord worden aangepast.");
+        }
+
+        if (version is { } expectedVersion && expectedVersion != trip.Version)
+        {
+            return TripOperationResult.Stale(await MapDetailAsync(trip, cancellationToken));
+        }
+
+        var before = new
+        {
+            trip.TripDate, trip.PlannedStart, trip.PlannedEnd,
+            trip.DriverId, trip.VehicleId, trip.TrailerId,
+            OrderCount = trip.Orders.Count(o => !o.IsDeleted),
+        };
+
+        if (await mutateAsync(trip) is { } failure)
+        {
+            _dbContext.ChangeTracker.Clear();
+            return failure;
+        }
+
+        // A Planned trip stays subject to the full conflict engine after every change.
+        if (trip.Status == TripStatus.Planned)
+        {
+            var conflicts = await _conflictService.EvaluateAsync(trip, cancellationToken);
+            var blocking = conflicts.Where(c => c.Severity == Common.Scheduling.ConflictSeverity.Blocking).ToList();
+            if (blocking.Count > 0)
+            {
+                if (!allowOverride)
+                {
+                    _dbContext.ChangeTracker.Clear();
+                    return TripOperationResult.Blocked(blocking);
+                }
+
+                if (string.IsNullOrWhiteSpace(overrideReason))
+                {
+                    _dbContext.ChangeTracker.Clear();
+                    return TripOperationResult.Invalid(
+                        "Bij het overschrijven van blokkerende conflicten is een reden verplicht.");
+                }
+
+                _dbContext.Add(new ConflictOverride
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = _tenantContext.TenantId,
+                    EntityType = EntityType,
+                    EntityId = trip.Id,
+                    ConflictCodes = string.Join(",", blocking.Select(c => c.Code.ToString()).Distinct()),
+                    Reason = overrideReason.Trim(),
+                    OccurredAt = DateTime.UtcNow,
+                });
+            }
+        }
+
+        var sync = await _planningSyncService.ApplyAsync(trip, cancellationToken);
+        await _costingService.StageRecalculationAsync(trip, TripCostPhase.Estimated, cancellationToken);
+        trip.Version = Guid.NewGuid();
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await StaleFromStoreAsync(trip.Id, cancellationToken);
+        }
+
+        await _auditService.RecordAsync(EntityType, trip.Id.ToString(), auditAction, before,
+            new
+            {
+                trip.TripDate, trip.PlannedStart, trip.PlannedEnd,
+                trip.DriverId, trip.VehicleId, trip.TrailerId,
+                OrderCount = trip.Orders.Count(o => !o.IsDeleted),
+                Overridden = allowOverride ? overrideReason : null,
+            }, cancellationToken);
+        await AuditPlanningSyncAsync(sync, cancellationToken);
+
+        return TripOperationResult.Success(await MapDetailAsync(trip, cancellationToken));
+    }
+
+    private async Task<Guid?> DriverUserIdAsync(Guid driverId, CancellationToken cancellationToken) =>
+        await _dbContext.Drivers.AsNoTracking()
+            .Where(d => d.Id == driverId && d.TenantId == _tenantContext.TenantId)
+            .Join(_dbContext.Users.AsNoTracking().Where(u => u.TenantId == _tenantContext.TenantId),
+                d => d.EmployeeId, u => u.EmployeeId, (d, u) => (Guid?)u.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>Only Planned trips notify — a draft is not a commitment yet.</summary>
+    private async Task NotifyAssignedDriverAsync(TripDetailDto trip, string message, CancellationToken cancellationToken)
+    {
+        if (trip.Status != TripStatus.Planned || trip.DriverId is not { } driverId)
+        {
+            return;
+        }
+
+        await _notificationService.NotifyAsync(await DriverUserIdAsync(driverId, cancellationToken),
+            "trip_changed", "Rit gewijzigd", message, $"/my-trips/{trip.Id}", cancellationToken);
+    }
+
+    /// <summary>Old driver hears the trip moved away; new driver hears it arrived. Never twice.</summary>
+    private async Task NotifyDriverChangeAsync(
+        TripDetailDto trip, Guid? previousDriverId, Guid? newDriverId, CancellationToken cancellationToken)
+    {
+        if (trip.Status != TripStatus.Planned)
+        {
+            return;
+        }
+
+        if (previousDriverId is { } oldDriver && oldDriver != newDriverId)
+        {
+            await _notificationService.NotifyAsync(await DriverUserIdAsync(oldDriver, cancellationToken),
+                "trip_changed", "Rit niet meer toegewezen",
+                $"Rit {trip.TripNumber} op {trip.TripDate:dd-MM-yyyy} is niet langer aan jou toegewezen.",
+                "/my-trips", cancellationToken);
+        }
+
+        if (newDriverId is { } assigned && assigned != previousDriverId)
+        {
+            await _notificationService.NotifyAsync(await DriverUserIdAsync(assigned, cancellationToken),
+                "trip_assigned", "Rit toegewezen",
+                $"Rit {trip.TripNumber} op {trip.TripDate:dd-MM-yyyy} is aan jou toegewezen.",
+                $"/my-trips/{trip.Id}", cancellationToken);
+        }
+    }
+
+    /// <summary>Validates and appends orders to a trip; Planned trips claim them immediately.</summary>
+    private async Task<TripOperationResult?> AddOrdersToTripAsync(
+        Trip trip, IReadOnlyList<Guid> orderIds, CancellationToken cancellationToken)
+    {
+        if (await ValidateOrdersAsync(orderIds, excludeTripId: trip.Id, cancellationToken) is { } orderError)
+        {
+            return TripOperationResult.Invalid(orderError);
+        }
+
+        var nextSequence = trip.Orders.Where(o => !o.IsDeleted)
+            .Select(o => o.Sequence).DefaultIfEmpty(0).Max() + 1;
+        foreach (var orderId in orderIds)
+        {
+            var link = new TripOrder
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                TripId = trip.Id,
+                TransportOrderId = orderId,
+                Sequence = nextSequence++,
+            };
+            trip.Orders.Add(link);
+            _dbContext.Add(link);
+        }
+
+        // A Planned trip claims its orders immediately (same rule as the status cascade).
+        if (trip.Status == TripStatus.Planned)
+        {
+            var orders = await _dbContext.TransportOrders
+                .Where(o => o.TenantId == _tenantContext.TenantId && orderIds.Contains(o.Id))
+                .ToListAsync(cancellationToken);
+            foreach (var order in orders.Where(o => o.Status == TransportOrderStatus.Confirmed))
+            {
+                order.Status = TransportOrderStatus.Planned;
+            }
+        }
+
+        return null;
+    }
+
     public async Task<TripOperationResult> ChangeStatusAsync(
         Guid id, TripStatus target, bool allowOverride, bool releaseOverride, string? overrideReason,
         CancellationToken cancellationToken)

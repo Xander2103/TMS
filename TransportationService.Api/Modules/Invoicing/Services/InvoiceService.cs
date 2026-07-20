@@ -140,7 +140,7 @@ public class InvoiceService : IInvoiceService
         {
             var orderStops = stopsByOrder[o.Id].OrderBy(s => s.Sequence).ToList();
             return new UninvoicedOrderDto(
-                o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription,
+                o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription ?? string.Empty,
                 orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
                 orderStops.LastOrDefault(s => s.StopType == StopType.Unloading)?.City,
                 o.AgreedPrice);

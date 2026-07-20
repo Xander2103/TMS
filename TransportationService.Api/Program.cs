@@ -171,6 +171,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.
 builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IRateCardService,
     TransportationService.Api.Modules.Tarification.Services.RateCardService>();
 
+// Planning center read models
+builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IPlanningBoardService,
+    TransportationService.Api.Modules.Planning.Services.PlanningBoardService>();
+
 // Operation control center (alerts projection + lifecycle)
 builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IAlertService,
     TransportationService.Api.Modules.Operations.Services.AlertService>();

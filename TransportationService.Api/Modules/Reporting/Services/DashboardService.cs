@@ -156,7 +156,7 @@ public class DashboardService : IDashboardService
                                   join c in _dbContext.Customers.AsNoTracking().Where(c => c.TenantId == tenantId)
                                       on o.CustomerId equals c.Id
                                   orderby o.OrderDate descending, o.OrderNumber descending
-                                  select new RecentOrderDto(o.Id, o.OrderNumber, o.OrderDate, c.Name, o.Status, o.GoodsDescription))
+                                  select new RecentOrderDto(o.Id, o.OrderNumber, o.OrderDate, c.Name, o.Status, o.GoodsDescription ?? string.Empty))
             .Take(RecentOrderCount)
             .ToListAsync(cancellationToken);
 
