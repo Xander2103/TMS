@@ -64,6 +64,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.DossiersView, PermissionCodes.DossiersManage,
                 PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
                 PermissionCodes.TariffsView,
+                PermissionCodes.ReportsView,
             ]),
 
         new("dispatcher", "Dispatcher",
@@ -84,6 +85,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,
                 PermissionCodes.DossiersView,
                 PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
+                PermissionCodes.ReportsView,
             ]),
 
         new("management", "Management",
@@ -120,6 +122,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.DossiersView, PermissionCodes.DossiersManage,
                 PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
                 PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
+                PermissionCodes.ReportsView,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -138,6 +141,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PackageReportsExport,
                 PermissionCodes.DossiersView, PermissionCodes.IncidentsView,
                 PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
+                PermissionCodes.ReportsView,
             ]),
 
         new("hr", "HR",
@@ -152,6 +156,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeDocumentsView, PermissionCodes.MessagesSend,
                 PermissionCodes.QualificationTypesView,
                 PermissionCodes.DepartmentsView, PermissionCodes.JobFunctionsView,
+                PermissionCodes.ReportsView,
             ]),
 
         new("chauffeur", "Chauffeur",

@@ -162,6 +162,9 @@ public static class PermissionCodes
     public const string TariffsView = "tariffs.view";
     public const string TariffsManage = "tariffs.manage";
 
+    // --- Reporting centre (catalog access; each report keeps its own permission) ---
+    public const string ReportsView = "reports.view";
+
     // --- Customer portal (all data scoped to the authenticated user's linked customer) ---
     public const string CustomerPortalView = "customer_portal.view";
     public const string CustomerPortalSubmitOrders = "customer_portal.submit_orders";
@@ -349,6 +352,7 @@ public static class PermissionCodes
         (IncidentsManage, "incidents", "manage", "Incidenten registreren en afhandelen"),
         (TariffsView, "tariffs", "view", "Tarievenkaarten bekijken en prijzen berekenen"),
         (TariffsManage, "tariffs", "manage", "Tarievenkaarten beheren"),
+        (ReportsView, "reports", "view", "Rapportcentrum openen"),
         (CustomerPortalView, "customer_portal", "view", "Klantportaal: eigen opdrachten bekijken"),
         (CustomerPortalSubmitOrders, "customer_portal", "submit_orders", "Klantportaal: opdrachten indienen"),
         (CustomerPortalManageLocations, "customer_portal", "manage_locations", "Klantportaal: eigen locaties beheren"),

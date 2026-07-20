@@ -174,6 +174,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Servic
 // Global (Ctrl+K) search
 builder.Services.AddScoped<TransportationService.Api.Modules.Search.Services.IGlobalSearchService,
     TransportationService.Api.Modules.Search.Services.GlobalSearchService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Identity.Services.IPermissionSetService,
+    TransportationService.Api.Modules.Identity.Services.PermissionSetService>();
 
 // HR availability
 builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IAbsenceService,

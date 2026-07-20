@@ -26,15 +26,18 @@ public class GlobalSearchService : IGlobalSearchService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUserContext _currentUserContext;
+    private readonly IPermissionSetService _permissionSetService;
 
     public GlobalSearchService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
-        ICurrentUserContext currentUserContext)
+        ICurrentUserContext currentUserContext,
+        IPermissionSetService permissionSetService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUserContext = currentUserContext;
+        _permissionSetService = permissionSetService;
     }
 
     public async Task<IReadOnlyList<SearchHitDto>> SearchAsync(string query, CancellationToken cancellationToken)
@@ -48,17 +51,7 @@ public class GlobalSearchService : IGlobalSearchService
         var tenantId = _tenantContext.TenantId;
 
         // One roundtrip for the user's whole permission set instead of a query per category.
-        var permissions = (await (
-                from ur in _dbContext.UserRoles.AsNoTracking()
-                join u in _dbContext.Users.AsNoTracking() on ur.UserId equals u.Id
-                join r in _dbContext.Roles.AsNoTracking() on ur.RoleId equals r.Id
-                join rp in _dbContext.RolePermissions.AsNoTracking() on r.Id equals rp.RoleId
-                join p in _dbContext.Permissions.AsNoTracking() on rp.PermissionId equals p.Id
-                where ur.UserId == userId && r.IsActive && r.TenantId == u.TenantId
-                select p.Code)
-            .Distinct()
-            .ToListAsync(cancellationToken))
-            .ToHashSet();
+        var permissions = await _permissionSetService.GetPermissionCodesAsync(userId, cancellationToken);
         bool Can(params string[] anyOf) => anyOf.Any(permissions.Contains);
 
         var hits = new List<SearchHitDto>();

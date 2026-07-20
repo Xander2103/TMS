@@ -95,6 +95,8 @@ const QualificationsOverviewPage = lazyPage(() => import('../features/qualificat
 const NewEmployeePage = lazyPage(() => import('../features/employees/pages/NewEmployeePage'), 'NewEmployeePage')
 const EmployeeDetailPage = lazyPage(() => import('../features/employees/pages/EmployeeDetailPage'), 'EmployeeDetailPage')
 const LookupPage = lazyPage(() => import('../features/master-data/pages/LookupPage'), 'LookupPage')
+const ReportsPage = lazyPage(() => import('../features/reports/pages/ReportsPage'), 'ReportsPage')
+const ReportViewerPage = lazyPage(() => import('../features/reports/pages/ReportViewerPage'), 'ReportViewerPage')
 const DossiersPage = lazyPage(() => import('../features/dossiers/pages/DossiersPage'), 'DossiersPage')
 const DossierDetailPage = lazyPage(() => import('../features/dossiers/pages/DossierDetailPage'), 'DossierDetailPage')
 const IncidentsPage = lazyPage(() => import('../features/incidents/pages/IncidentsPage'), 'IncidentsPage')
@@ -176,6 +178,8 @@ const router = createBrowserRouter(
           <Route path="/rate-cards" element={<RateCardsPage />} />
           <Route path="/kpi" element={<KpiDashboardPage />} />
           <Route path="/kpi/trips" element={<KpiTripsPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/reports/:reportId" element={<ReportViewerPage />} />
           <Route path="/locations" element={<LocationsPage />} />
           <Route path="/locations/new" element={<NewLocationPage />} />
           <Route path="/locations/:id" element={<LocationDetailPage />} />

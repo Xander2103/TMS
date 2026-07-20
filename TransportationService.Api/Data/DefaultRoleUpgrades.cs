@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 6;
+    public const int CurrentVersion = 7;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -170,6 +170,17 @@ public static class DefaultRoleUpgrades
                 [
                     PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
                 ],
+            }),
+
+        new(7,
+            "Improvement 2026-07-20: report centre catalog access.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.ReportsView],
+                ["dispatcher"] = [PermissionCodes.ReportsView],
+                ["management"] = [PermissionCodes.ReportsView],
+                ["boekhouding"] = [PermissionCodes.ReportsView],
+                ["hr"] = [PermissionCodes.ReportsView],
             }),
     ];
 }

@@ -16,7 +16,8 @@ public class GlobalSearchServiceTests
     private sealed record Harness(SqliteTestDbContext Db, Guid TenantId, Guid UserId)
     {
         public GlobalSearchService Sut() => new(
-            Db.Context, new DevTenantContext(TenantId), new DevCurrentUserContext(UserId));
+            Db.Context, new DevTenantContext(TenantId), new DevCurrentUserContext(UserId),
+            new PermissionSetService(Db.Context));
     }
 
     /// <summary>User with ONLY orders.view; an ACME order and an ACME customer both match "acme".</summary>
@@ -84,7 +85,8 @@ public class GlobalSearchServiceTests
 
         // Same user id, different tenant context → that tenant has no data (and the user's
         // permission join still resolves via the user's own roles, but hits are tenant-bound).
-        var sut = new GlobalSearchService(h.Db.Context, new DevTenantContext(Guid.NewGuid()), new DevCurrentUserContext(h.UserId));
+        var sut = new GlobalSearchService(h.Db.Context, new DevTenantContext(Guid.NewGuid()), new DevCurrentUserContext(h.UserId),
+            new PermissionSetService(h.Db.Context));
         Assert.Empty(await sut.SearchAsync("acme", CancellationToken.None));
     }
 }

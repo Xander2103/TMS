@@ -2,7 +2,7 @@
 
 Status: vastgelegd contract (fase 12 van de verbeteringsgolf 2026-07-20). De bestaande
 acht XLSX-rapporten en de labelrendering volgen dit al; nieuwe rapporten en documenten
-moeten het volgen.
+moeten het volgen. Het rapportcentrum (zie onderaan) is inmiddels geïmplementeerd.
 
 ## Rapporten (lees-only exports)
 
@@ -37,9 +37,42 @@ Documenten (labels, vrachtbrieven, POD-PDF's, facturen) volgen het snapshotpatro
    plaats van te overschrijven (patroon: `ProofOfDelivery.Version` + `IsCurrent`).
 4. **Opslag**: bestanden via `IFileStorageService`-storage-keys, nooit paden in de DB.
 
-## Toekomstig rapportcentrum
+## Rapportcentrum (geïmplementeerd)
 
-Wanneer een overkoepelend "rapportcentrum" gebouwd wordt, is dat een dunne catalogus
-(`code`, titel, omschrijving, permissie, endpoint) over de bestaande module-endpoints —
-géén herimplementatie van queries. De catalogus toont alleen rapporten waarvoor de
-gebruiker de permissie heeft; de endpoints blijven zelf de permissie afdwingen.
+Het rapportcentrum is de dunne catalogus over bestaande module-endpoints — géén
+herimplementatie van queries.
+
+### Architectuur
+
+- **`Modules/Reporting/ReportCatalog.cs`** — het register: statische
+  `ReportDefinition`-records (`Id`, `Category`, `Title`, `Description`, any-of
+  `Permissions`, `Kind`, `Endpoint`/`Route`, `Filters`, `FileType`). Drie soorten:
+  - `Export`: verwijst naar een bestaand downloadendpoint (colli-XLSX'en, KPI-exports,
+    orders-CSV);
+  - `Page`: verwijst naar een bestaand scherm dat als rapport fungeert (KPI-dashboard,
+    vlootdashboard, incidentenregister);
+  - `ComingSoon`: aangekondigd, niet uitvoerbaar, geen nep-data.
+- **`GET /api/reports/catalog`** (`ReportCatalogController`, permissie `reports.view`) —
+  levert uitsluitend metadata en filtert op de volledige permissieset van de gebruiker
+  (één query via `IPermissionSetService`, gedeeld met het globale zoeken). Verborgen ≠
+  beveiligd: elk gerefereerd endpoint dwingt zijn eigen permissie zelf af.
+- **FE `features/reports/`** — `/reports` toont categoriekaarten + rapportlijst
+  (alleen metadata, lazy geladen); `/reports/{id}` is een generieke runner die uitsluitend
+  de gedeclareerde filters rendert (`dateRange`, `search`, `orderStatus`) en downloadt
+  via het bestaande endpoint van het rapport. `Page`-rapporten redirecten naar hun route.
+
+### Permissies
+
+`reports.view` opent de catalogus (planner, dispatcher, management, boekhouding en hr via
+sjablonen + upgradestap 7). Per rapport gelden daarbovenop de bestaande permissies van het
+onderliggende endpoint of scherm; rapporten zonder die permissie worden verborgen, niet
+uitgegrijsd.
+
+### Nieuw rapport toevoegen
+
+1. Bouw (of hergebruik) het endpoint in de module die de data bezit, conform de regels
+   bovenaan dit document.
+2. Voeg één `ReportDefinition` toe in `ReportCatalog.All` met de juiste permissies en
+   gedeclareerde filters.
+3. Klaar — de FE-pagina's renderen catalogusmetadata en hoeven niet aangepast te worden.
+   Nieuwe filtertypes vergen één uitbreiding in `ReportViewerPage`.
