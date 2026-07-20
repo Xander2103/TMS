@@ -199,6 +199,34 @@ public class TransportOrderServiceTests
     }
 
     [Fact]
+    public async Task Create_DeactivatedCustomer_IsRejected_ButExistingOrderStaysEditable()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var existing = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, existing.Outcome);
+
+        var customer = await h.Db.Context.Customers.FindAsync(h.CustomerId);
+        customer!.IsActive = false;
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var rejected = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, rejected.Outcome);
+        Assert.Contains("gedeactiveerd", rejected.Error);
+
+        // Updating an existing order for the SAME (now inactive) customer stays possible.
+        h.Db.Context.ChangeTracker.Clear();
+        var updated = await h.Sut.UpdateAsync(existing.Order!.Id, new UpdateTransportOrderRequest(
+            h.CustomerId, "PO-777", new DateOnly(2026, 7, 20), "20 paletten bouwmateriaal",
+            20, "paletten", 12500, null, 20, false, false, 1450m, null,
+            [Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Brugge")]), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+    }
+
+    [Fact]
     public async Task Create_ForeignCustomer_IsRejected()
     {
         var h = await SeedAsync();

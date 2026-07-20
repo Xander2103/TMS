@@ -77,6 +77,8 @@ export interface CustomerDetail extends CustomerVatProfile {
 }
 
 export interface CustomerInput extends CustomerVatProfile {
+  /** Optional first contact created together with the customer (create flow only). */
+  initialContact?: CustomerContactInput | null
   name: string
   legalName: string | null
   vatNumber: string | null

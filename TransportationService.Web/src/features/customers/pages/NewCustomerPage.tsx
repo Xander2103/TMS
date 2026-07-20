@@ -8,7 +8,7 @@ import { useCustomerMutations } from '../hooks/useCustomerMutations'
 export function NewCustomerPage() {
   const navigate = useNavigate()
   const toast = useToast()
-  const { create, isSubmitting, error } = useCustomerMutations()
+  const { create, isSubmitting, error, fieldErrors } = useCustomerMutations()
 
   return (
     <div>
@@ -18,6 +18,7 @@ export function NewCustomerPage() {
         mode="create"
         isSubmitting={isSubmitting}
         submitError={error}
+        serverFieldErrors={fieldErrors}
         onCancel={() => navigate('/customers')}
         onSubmit={async (values) => {
           const created = await create(values)

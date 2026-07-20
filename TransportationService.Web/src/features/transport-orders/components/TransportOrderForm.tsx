@@ -5,6 +5,9 @@ import { FormField } from '../../../components/ui/FormField'
 import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerDetail, CustomerListItem } from '../../customers/types'
 import { LocationSelect } from '../../locations/components/LocationSelect'
+import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
+import type { LocationOption } from '../../locations/types'
+import { useAuth } from '../../auth/authContextValue'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { STOP_TYPE_LABELS, type StopInput, type TransportOrderDetail, type TransportOrderInput } from '../types'
 import './transport-order-form.css'
@@ -92,7 +95,15 @@ interface TransportOrderFormProps {
 
 /** Shared create/edit form: order header, cargo fields and the multi-stop editor. */
 export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: TransportOrderFormProps) {
+  const { hasPermission } = useAuth()
+  const canCreateLocations = hasPermission('locations.create')
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
+  // Inline location creation from a stop's location picker: the promise resolves when the
+  // dialog closes, so the SearchableSelect can auto-select the new location.
+  const [quickCreate, setQuickCreate] = useState<{
+    name: string
+    resolve: (created: LocationOption | null) => void
+  } | null>(null)
 
   const [customerId, setCustomerId] = useState(order?.customerId ?? '')
   const [customerReference, setCustomerReference] = useState(order?.customerReference ?? '')
@@ -329,6 +340,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         <FormField label="Klant" htmlFor="to-customer" required>
           <select id="to-customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)} disabled={saving}>
             <option value="">Selecteer een klant…</option>
+            {/* The list offers only active customers; an existing order keeps its (possibly
+                deactivated) customer selectable so editing never silently switches customers. */}
+            {order && !customers.some((customer) => customer.id === order.customerId) && (
+              <option value={order.customerId}>{order.customerName} (gedeactiveerd)</option>
+            )}
             {customers.map((customer) => (
               <option key={customer.id} value={customer.id}>
                 {customer.name} ({customer.customerNumber})
@@ -440,8 +456,14 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
                 id={`st-loc-${stop.key}`}
                 value={stop.locationId}
                 onChange={(locationId) => setStop(stop.key, { locationId })}
+                customerId={customerId || undefined}
                 disabled={saving}
                 placeholder="Geen — adres hieronder"
+                onCreateNew={
+                  customerId && canCreateLocations
+                    ? (name) => new Promise<LocationOption | null>((resolve) => setQuickCreate({ name, resolve }))
+                    : undefined
+                }
               />
             </FormField>
             <FormField label="Naam (vrij adres)" htmlFor={`st-name-${stop.key}`}>
@@ -611,6 +633,17 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
           {saving ? 'Opslaan…' : submitLabel}
         </Button>
       </div>
+
+      {quickCreate && customerId && (
+        <LocationQuickCreateDialog
+          customerId={customerId}
+          initialName={quickCreate.name}
+          onClose={(created) => {
+            quickCreate.resolve(created)
+            setQuickCreate(null)
+          }}
+        />
+      )}
     </form>
   )
 }

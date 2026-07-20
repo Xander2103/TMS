@@ -75,6 +75,9 @@ export function LocationDetailPage() {
       isActive: location.isActive,
       customerId: location.customerId,
       notes: location.notes,
+      // Carried through so saving an edit never silently clears the customer defaults.
+      isDefaultLoadingLocation: location.isDefaultLoadingLocation,
+      isDefaultUnloadingLocation: location.isDefaultUnloadingLocation,
     })
     setEditing(true)
   }

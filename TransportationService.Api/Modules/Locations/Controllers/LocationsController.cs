@@ -39,9 +39,9 @@ public class LocationsController : ControllerBase
     [HttpGet("options")]
     [RequirePermission(PermissionCodes.LocationsView)]
     public async Task<ActionResult<IReadOnlyList<LocationOptionDto>>> Options(
-        [FromQuery] LocationType? type, CancellationToken cancellationToken)
+        [FromQuery] LocationType? type, [FromQuery] Guid? customerId, CancellationToken cancellationToken)
     {
-        return Ok(await _service.GetOptionsAsync(type, cancellationToken));
+        return Ok(await _service.GetOptionsAsync(type, customerId, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
@@ -75,6 +75,22 @@ public class LocationsController : ControllerBase
         }
 
         var result = await _service.UpdateAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    [HttpPost("{id:guid}/active")]
+    [RequirePermission(PermissionCodes.LocationsEdit)]
+    public async Task<IActionResult> SetActive(Guid id, SetLocationActiveRequest request, CancellationToken cancellationToken)
+    {
+        return await _service.SetActiveAsync(id, request, cancellationToken) ? NoContent() : NotFound();
+    }
+
+    [HttpPut("{id:guid}/defaults")]
+    [RequirePermission(PermissionCodes.LocationsEdit)]
+    public async Task<ActionResult<LocationDetailDto>> SetDefaults(
+        Guid id, SetLocationDefaultsRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.SetDefaultsAsync(id, request, cancellationToken);
         return Handle(result, created: false);
     }
 

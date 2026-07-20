@@ -43,6 +43,17 @@ public class LocationConfiguration : IEntityTypeConfiguration<Location>
         builder.HasIndex(l => new { l.TenantId, l.IsActive });
         builder.HasIndex(l => new { l.TenantId, l.CustomerId });
 
+        // Business rule: at most one default loading and one default unloading location per
+        // customer (soft-deleted rows excluded, matching the Code index filter style). The
+        // string names give each index its own model identity — without them EF would treat
+        // these as reconfigurations of the unnamed index above.
+        builder.HasIndex(l => new { l.TenantId, l.CustomerId }, "IX_locations_default_loading_per_customer")
+            .IsUnique()
+            .HasFilter("\"IsDefaultLoadingLocation\" = true AND \"CustomerId\" IS NOT NULL AND \"IsDeleted\" = false");
+        builder.HasIndex(l => new { l.TenantId, l.CustomerId }, "IX_locations_default_unloading_per_customer")
+            .IsUnique()
+            .HasFilter("\"IsDefaultUnloadingLocation\" = true AND \"CustomerId\" IS NOT NULL AND \"IsDeleted\" = false");
+
         builder.HasQueryFilter(l => !l.IsDeleted);
     }
 }

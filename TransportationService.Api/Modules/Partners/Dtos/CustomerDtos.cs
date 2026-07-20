@@ -83,7 +83,8 @@ public record CreateCustomerRequest(
     string? InvoiceLanguageCode = null,
     bool PurchaseOrderRequired = false,
     bool SignedDeliveryNoteRequired = false,
-    bool CustomerReferenceRequired = false);
+    bool CustomerReferenceRequired = false,
+    CreateCustomerContactRequest? InitialContact = null);
 
 public record UpdateCustomerRequest(
     string Name,
@@ -115,6 +116,8 @@ public record UpdateCustomerRequest(
     bool CustomerReferenceRequired = false);
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
+
+public record SetCustomerActiveRequest(bool IsActive);
 
 public record CreateCustomerContactRequest(
     string FirstName,

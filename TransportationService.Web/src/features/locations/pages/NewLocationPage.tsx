@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { FormField } from '../../../components/ui/FormField'
@@ -39,12 +39,19 @@ const EMPTY: LocationInput = {
   isActive: true,
   customerId: null,
   notes: null,
+  isDefaultLoadingLocation: false,
+  isDefaultUnloadingLocation: false,
 }
 
 export function NewLocationPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { showSuccess, showError } = useToast()
-  const [form, setForm] = useState<LocationInput>(EMPTY)
+  // Arriving from a customer's Locations tab prefills the link and returns there afterwards.
+  const prefilledCustomerId = searchParams.get('customerId')
+  const [form, setForm] = useState<LocationInput>(
+    prefilledCustomerId ? { ...EMPTY, customerId: prefilledCustomerId, type: 'CustomerLocation' } : EMPTY,
+  )
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -78,7 +85,7 @@ export function NewLocationPage() {
     try {
       const location = await createLocation(form)
       showSuccess(`Locatie ${location.code} aangemaakt.`)
-      navigate(`/locations/${location.id}`)
+      navigate(prefilledCustomerId ? `/customers/${prefilledCustomerId}` : `/locations/${location.id}`)
     } catch (err) {
       const message =
         err instanceof ApiError && err.status === 409

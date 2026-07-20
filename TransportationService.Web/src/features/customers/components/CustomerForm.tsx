@@ -3,10 +3,13 @@ import { FormField } from '../../../components/ui/FormField'
 import { Button } from '../../../components/ui/Button'
 import { FormSection } from '../../../components/ui/FormSection'
 import { FormActions } from '../../../components/ui/FormActions'
+import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
+import { getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
+import { validateVatNumber } from '../utils/vatNumber'
 import { VAT_TREATMENT_LABELS, type CustomerDetail, type CustomerInput, type UpdateCustomerInput, type VatTreatment } from '../types'
 import './customers.css'
 
@@ -15,8 +18,21 @@ interface CustomerFormProps {
   initial?: CustomerDetail
   isSubmitting: boolean
   submitError: string | null
+  /** Per-field backend validation messages, shown next to the fields + in the summary. */
+  serverFieldErrors?: FieldErrors
   onSubmit: (values: UpdateCustomerInput) => void
   onCancel: () => void
+}
+
+/** User-facing labels for backend field paths, for the validation summary. */
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Naam',
+  vatNumber: 'BTW-nummer',
+  countryCode: 'Land',
+  vatCountryCode: 'BTW-land',
+  defaultVatRatePercent: 'Standaard BTW-tarief',
+  'initialContact.firstName': 'Contactpersoon — voornaam',
+  'initialContact.lastName': 'Contactpersoon — achternaam',
 }
 
 const STANDARD_VAT_RATES = ['0', '6', '12', '21'] as const
@@ -34,7 +50,7 @@ function initialRateChoice(rate: number | null | undefined): { choice: string; c
     : { choice: 'custom', custom: asString }
 }
 
-export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmit, onCancel }: CustomerFormProps) {
+export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel }: CustomerFormProps) {
   const languages = useLookupOptions('/api/languages')
 
   const [name, setName] = useState(initial?.name ?? '')
@@ -68,10 +84,19 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
   const [customerReferenceRequired, setCustomerReferenceRequired] = useState(initial?.customerReferenceRequired ?? false)
 
   const [notes, setNotes] = useState(initial?.notes ?? '')
-  const [isActive, setIsActive] = useState(initial?.isActive ?? true)
+
+  // Optional initial contact (create flow only) — same model as the contacts panel.
+  const [contactFirstName, setContactFirstName] = useState('')
+  const [contactLastName, setContactLastName] = useState('')
+  const [contactRole, setContactRole] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [contactPhone, setContactPhone] = useState('')
+  const [contactIsPrimary, setContactIsPrimary] = useState(true)
 
   const [nameError, setNameError] = useState<string | undefined>(undefined)
+  const [vatError, setVatError] = useState<string | undefined>(undefined)
   const [vatRateError, setVatRateError] = useState<string | undefined>(undefined)
+  const [contactErrors, setContactErrors] = useState<{ firstName?: string; lastName?: string }>({})
   const [dirty, setDirty] = useState(false)
 
   function touch() {
@@ -86,6 +111,10 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
     return { ok: true, value: parsed }
   }
 
+  const contactHasInput =
+    mode === 'create' &&
+    [contactFirstName, contactLastName, contactRole, contactEmail, contactPhone].some((value) => value.trim() !== '')
+
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     let valid = true
@@ -96,6 +125,10 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
       setNameError(undefined)
     }
 
+    const vatMessage = validateVatNumber(vatNumber) ?? undefined
+    setVatError(vatMessage)
+    if (vatMessage) valid = false
+
     const rate = resolveVatRate()
     if (!rate.ok) {
       setVatRateError('Geef een tarief tussen 0 en 100 op.')
@@ -103,6 +136,15 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
     } else {
       setVatRateError(undefined)
     }
+
+    // The contact is optional, but once any contact field is filled the name is required.
+    const nextContactErrors: { firstName?: string; lastName?: string } = {}
+    if (contactHasInput) {
+      if (!contactFirstName.trim()) nextContactErrors.firstName = 'Voornaam van de contactpersoon is verplicht.'
+      if (!contactLastName.trim()) nextContactErrors.lastName = 'Achternaam van de contactpersoon is verplicht.'
+    }
+    setContactErrors(nextContactErrors)
+    if (nextContactErrors.firstName || nextContactErrors.lastName) valid = false
 
     if (!valid) return
 
@@ -133,23 +175,40 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
       purchaseOrderRequired,
       signedDeliveryNoteRequired,
       customerReferenceRequired,
+      initialContact: contactHasInput
+        ? {
+            firstName: contactFirstName.trim(),
+            lastName: contactLastName.trim(),
+            role: nullable(contactRole),
+            email: nullable(contactEmail),
+            phoneNumber: nullable(contactPhone),
+            isPrimary: contactIsPrimary,
+            notes: null,
+          }
+        : null,
     }
-    // Clear the guard before the parent saves + navigates away.
+    // Clear the guard before the parent saves + navigates away. Activation is a dedicated
+    // detail-page action; the form only preserves the current state.
     setDirty(false)
-    onSubmit({ ...base, isActive })
+    onSubmit({ ...base, isActive: initial?.isActive ?? true })
   }
 
   return (
     <form onSubmit={handleSubmit} className="customer-form" onChange={touch}>
       <UnsavedChangesGuard when={dirty && !isSubmitting} />
-      {submitError && (
-        <p className="ui-form-field-error" role="alert">
-          {submitError}
-        </p>
-      )}
+      <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={FIELD_LABELS} />
+
+      <FormActions position="top" dirty={dirty}>
+        <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+          Annuleren
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Opslaan...' : 'Opslaan'}
+        </Button>
+      </FormActions>
 
       <FormSection title="Algemeen" columns={2}>
-        <FormField label="Naam" htmlFor="c-name" error={nameError} required>
+        <FormField label="Naam" htmlFor="c-name" error={nameError ?? getFieldError(serverFieldErrors, 'name')} required>
           <input id="c-name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={nameError ? 'true' : undefined} maxLength={200} />
         </FormField>
         <FormField label="Juridische naam" htmlFor="c-legal">
@@ -169,18 +228,6 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
             placeholder="— Geen categorie —"
           />
         </FormField>
-        {mode === 'edit' && (
-          <FormField
-            label="Status"
-            htmlFor="c-active"
-            hint="Inactieve klanten verschijnen niet meer in keuzelijsten voor nieuwe opdrachten."
-          >
-            <label className="customer-form-checkbox">
-              <input id="c-active" type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-              Actief
-            </label>
-          </FormField>
-        )}
       </FormSection>
 
       <FormSection title="Contact" columns={3}>
@@ -218,7 +265,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
         <FormField label="Plaats" htmlFor="c-city">
           <input id="c-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} />
         </FormField>
-        <FormField label="Land" htmlFor="c-country">
+        <FormField label="Land" htmlFor="c-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
           <CountryCombobox
             id="c-country"
             value={countryCode}
@@ -235,8 +282,20 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
         columns={3}
         description="BTW-regime en e-facturatiegegevens. De BTW-behandeling bepaalt hóe gefactureerd wordt; het tarief bepaalt het percentage."
       >
-        <FormField label="BTW-nummer" htmlFor="c-vat" hint="Belgische nummers worden gecontroleerd (BE + 10 cijfers).">
-          <input id="c-vat" value={vatNumber} onChange={(e) => setVatNumber(e.target.value)} maxLength={30} />
+        <FormField
+          label="BTW-nummer"
+          htmlFor="c-vat"
+          hint="Belgische nummers worden gecontroleerd (BE + 10 cijfers)."
+          error={vatError ?? getFieldError(serverFieldErrors, 'vatNumber')}
+        >
+          <input
+            id="c-vat"
+            value={vatNumber}
+            onChange={(e) => setVatNumber(e.target.value)}
+            onBlur={() => setVatError(validateVatNumber(vatNumber) ?? undefined)}
+            aria-invalid={vatError || getFieldError(serverFieldErrors, 'vatNumber') ? 'true' : undefined}
+            maxLength={30}
+          />
         </FormField>
         <FormField label="BTW-behandeling" htmlFor="c-vat-treatment">
           <select id="c-vat-treatment" value={vatTreatment} onChange={(e) => setVatTreatment(e.target.value as VatTreatment)}>
@@ -269,7 +328,12 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
             )}
           </div>
         </FormField>
-        <FormField label="BTW-land" htmlFor="c-vat-country" hint="Alleen invullen als dit afwijkt van het adresland.">
+        <FormField
+          label="BTW-land"
+          htmlFor="c-vat-country"
+          hint="Alleen invullen als dit afwijkt van het adresland."
+          error={getFieldError(serverFieldErrors, 'vatCountryCode')}
+        >
           <CountryCombobox
             id="c-vat-country"
             value={vatCountryCode}
@@ -330,6 +394,58 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, onSubmi
           </label>
         </div>
       </FormSection>
+
+      {mode === 'create' && (
+        <FormSection
+          title="Eerste contactpersoon (optioneel)"
+          columns={3}
+          collapsible
+          defaultOpen={contactHasInput}
+          description="Voeg meteen een contactpersoon toe; dit kan ook later op de klantpagina."
+        >
+          <FormField
+            label="Voornaam"
+            htmlFor="c-contact-first"
+            error={contactErrors.firstName ?? getFieldError(serverFieldErrors, 'initialContact.firstName')}
+          >
+            <input
+              id="c-contact-first"
+              value={contactFirstName}
+              onChange={(e) => setContactFirstName(e.target.value)}
+              aria-invalid={contactErrors.firstName ? 'true' : undefined}
+              maxLength={100}
+            />
+          </FormField>
+          <FormField
+            label="Achternaam"
+            htmlFor="c-contact-last"
+            error={contactErrors.lastName ?? getFieldError(serverFieldErrors, 'initialContact.lastName')}
+          >
+            <input
+              id="c-contact-last"
+              value={contactLastName}
+              onChange={(e) => setContactLastName(e.target.value)}
+              aria-invalid={contactErrors.lastName ? 'true' : undefined}
+              maxLength={100}
+            />
+          </FormField>
+          <FormField label="Functie" htmlFor="c-contact-role">
+            <input id="c-contact-role" value={contactRole} onChange={(e) => setContactRole(e.target.value)} maxLength={100} />
+          </FormField>
+          <FormField label="E-mail" htmlFor="c-contact-email">
+            <input id="c-contact-email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={250} />
+          </FormField>
+          <FormField label="Telefoon" htmlFor="c-contact-phone">
+            <input id="c-contact-phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} maxLength={30} />
+          </FormField>
+          <div className="customer-form-requirements">
+            <label className="customer-form-checkbox">
+              <input type="checkbox" checked={contactIsPrimary} onChange={(e) => setContactIsPrimary(e.target.checked)} />
+              Primaire contactpersoon
+            </label>
+          </div>
+        </FormSection>
+      )}
 
       <FormSection title="Notities" columns={1}>
         <FormField label="Interne notities" htmlFor="c-notes" className="form-span-all">

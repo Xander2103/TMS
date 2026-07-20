@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -86,6 +86,23 @@ public static class DefaultRoleUpgrades
                 ["boekhouding"] =
                 [
                     PermissionCodes.PackageReportsExport,
+                ],
+            }),
+
+        new(4,
+            "Improvement wave 2026-07-20: explicit customer activate/deactivate permission.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                // Customer lifecycle (deactivate/reactivate) sits with planner (customer
+                // administration) and management (supervision); boekhouding keeps only the
+                // credit block via customers.edit.
+                ["planner"] =
+                [
+                    PermissionCodes.CustomersDeactivate,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.CustomersDeactivate,
                 ],
             }),
     ];

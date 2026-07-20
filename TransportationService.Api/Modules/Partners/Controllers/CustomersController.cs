@@ -80,6 +80,13 @@ public class CustomersController : ControllerBase
         return await _customerService.SetBlockedAsync(id, request, cancellationToken) ? NoContent() : NotFound();
     }
 
+    [HttpPost("{id:guid}/active")]
+    [RequirePermission(PermissionCodes.CustomersDeactivate)]
+    public async Task<IActionResult> SetActive(Guid id, SetCustomerActiveRequest request, CancellationToken cancellationToken)
+    {
+        return await _customerService.SetActiveAsync(id, request, cancellationToken) ? NoContent() : NotFound();
+    }
+
     [HttpPost("{id:guid}/contacts")]
     [RequirePermission(PermissionCodes.CustomersEdit)]
     public async Task<ActionResult<CustomerContactDto>> AddContact(Guid id, CreateCustomerContactRequest request, CancellationToken cancellationToken)

@@ -2,8 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
+import { FormActions } from '../../../components/ui/FormActions'
 import { FormField } from '../../../components/ui/FormField'
+import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { useToast } from '../../../components/ui/toastContext'
+import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { getCompanySettings, updateCompanySettings } from '../api/settingsApi'
@@ -117,8 +120,9 @@ export function SettingsPage() {
       setLoaded(updated)
       setForm(updated)
       showSuccess('Bedrijfsinstellingen opgeslagen.')
-    } catch {
-      showError('Instellingen konden niet worden opgeslagen.')
+    } catch (err) {
+      // Preserve the backend's specific validation message (e.g. an unknown country code).
+      showError(describeApiError(err, 'Instellingen konden niet worden opgeslagen.').message)
     } finally {
       setSaving(false)
     }
@@ -126,6 +130,7 @@ export function SettingsPage() {
 
   return (
     <div>
+      <UnsavedChangesGuard when={dirty && !saving} />
       <Breadcrumbs items={[{ label: 'Instellingen' }]} />
       <PageHeader
         title="Bedrijfsinstellingen"
@@ -299,6 +304,17 @@ export function SettingsPage() {
           </p>
         </section>
       </div>
+
+      {canManage && (
+        <FormActions dirty={dirty}>
+          <Button variant="secondary" onClick={() => setForm(loaded)} disabled={!dirty || saving}>
+            Herstellen
+          </Button>
+          <Button onClick={handleSave} disabled={!dirty || saving}>
+            {saving ? 'Opslaan…' : 'Opslaan'}
+          </Button>
+        </FormActions>
+      )}
     </div>
   )
 }

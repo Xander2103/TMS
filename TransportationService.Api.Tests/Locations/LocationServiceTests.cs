@@ -110,7 +110,7 @@ public class LocationServiceTests
             null, null, null, null, null, null, null, false, false,
             IsActive: false, CustomerId: null, Notes: null), CancellationToken.None);
 
-        var options = await h.Sut.GetOptionsAsync(null, CancellationToken.None);
+        var options = await h.Sut.GetOptionsAsync(null, null, CancellationToken.None);
 
         Assert.Empty(options);
     }
@@ -140,5 +140,95 @@ public class LocationServiceTests
         var result = await h.Sut.CreateAsync(CreateRequest() with { CustomerId = customerId, Type = LocationType.CustomerLocation }, CancellationToken.None);
 
         Assert.Equal("Klant BV", result.Location!.CustomerName);
+    }
+
+    private static async Task<Guid> SeedCustomerAsync(Harness h, string number = "KL-0001", string name = "Klant BV")
+    {
+        var customerId = Guid.NewGuid();
+        h.Db.Context.Customers.Add(new Customer { Id = customerId, TenantId = h.TenantId, CustomerNumber = number, Name = name, IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+        return customerId;
+    }
+
+    [Fact]
+    public async Task SetDefaults_WithoutLinkedCustomer_IsRejectedWithFieldError()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(CreateRequest(), CancellationToken.None);
+
+        var ex = await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(
+            () => h.Sut.SetDefaultsAsync(created.Location!.Id, new SetLocationDefaultsRequest(true, false), CancellationToken.None));
+
+        Assert.NotNull(ex.FieldErrors);
+        Assert.Contains("isDefaultLoadingLocation", ex.FieldErrors!.Keys);
+    }
+
+    [Fact]
+    public async Task SetDefaults_DemotesThePreviousDefaultOfTheSameCustomer()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerId = await SeedCustomerAsync(h);
+        var first = await h.Sut.CreateAsync(
+            CreateRequest("LOC-A", "Site A") with { CustomerId = customerId, Type = LocationType.CustomerLocation }, CancellationToken.None);
+        var second = await h.Sut.CreateAsync(
+            CreateRequest("LOC-B", "Site B") with { CustomerId = customerId, Type = LocationType.CustomerLocation }, CancellationToken.None);
+
+        await h.Sut.SetDefaultsAsync(first.Location!.Id, new SetLocationDefaultsRequest(true, true), CancellationToken.None);
+        var promoted = await h.Sut.SetDefaultsAsync(second.Location!.Id, new SetLocationDefaultsRequest(true, false), CancellationToken.None);
+
+        Assert.True(promoted.Location!.IsDefaultLoadingLocation);
+        var demoted = await h.Sut.GetByIdAsync(first.Location.Id, CancellationToken.None);
+        Assert.False(demoted!.IsDefaultLoadingLocation);
+        // The unloading default was not contested and stays with the first location.
+        Assert.True(demoted.IsDefaultUnloadingLocation);
+    }
+
+    [Fact]
+    public async Task SetActive_Deactivates_AndOptionsExcludeInactive()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(CreateRequest(), CancellationToken.None);
+
+        var ok = await h.Sut.SetActiveAsync(created.Location!.Id, new SetLocationActiveRequest(false), CancellationToken.None);
+
+        Assert.True(ok);
+        Assert.False((await h.Sut.GetByIdAsync(created.Location.Id, CancellationToken.None))!.IsActive);
+        Assert.Empty(await h.Sut.GetOptionsAsync(null, null, CancellationToken.None));
+
+        await h.Sut.SetActiveAsync(created.Location.Id, new SetLocationActiveRequest(true), CancellationToken.None);
+        Assert.Single(await h.Sut.GetOptionsAsync(null, null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Options_CustomerScope_IncludesOwnAndCompanyLocations_NeverOtherCustomers()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerId = await SeedCustomerAsync(h);
+        var otherCustomerId = await SeedCustomerAsync(h, "KL-0002", "Andere Klant BV");
+        await h.Sut.CreateAsync(CreateRequest("DEP-001", "Eigen depot"), CancellationToken.None);
+        var site = await h.Sut.CreateAsync(
+            CreateRequest("LOC-A", "Klantsite") with
+            {
+                CustomerId = customerId,
+                Type = LocationType.CustomerLocation,
+                IsDefaultLoadingLocation = true,
+            }, CancellationToken.None);
+        await h.Sut.CreateAsync(
+            CreateRequest("LOC-B", "Site van andere klant") with { CustomerId = otherCustomerId, Type = LocationType.CustomerLocation },
+            CancellationToken.None);
+
+        var options = await h.Sut.GetOptionsAsync(null, customerId, CancellationToken.None);
+
+        Assert.Equal(2, options.Count);
+        Assert.DoesNotContain(options, o => o.Name == "Site van andere klant");
+        // Defaults sort first and carry their flags + city for display.
+        Assert.Equal(site.Location!.Id, options[0].Id);
+        Assert.True(options[0].IsDefaultLoadingLocation);
+        Assert.False(options[0].IsDefaultUnloadingLocation);
+        Assert.Equal("Antwerpen", options[0].City);
     }
 }

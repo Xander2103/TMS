@@ -123,6 +123,38 @@ public class CustomerService : ICustomerService
             request.PurchaseOrderRequired, request.SignedDeliveryNoteRequired, request.CustomerReferenceRequired,
             cancellationToken);
 
+        // Optional initial contact: same entity + rules as the detail-page contacts, created
+        // in the same SaveChanges so customer + contact commit (or fail) together.
+        CustomerContact? initialContact = null;
+        if (request.InitialContact is { } contactRequest)
+        {
+            if (string.IsNullOrWhiteSpace(contactRequest.FirstName))
+            {
+                throw new DomainValidationException("initialContact.firstName", "Voornaam van de contactpersoon is verplicht.");
+            }
+
+            if (string.IsNullOrWhiteSpace(contactRequest.LastName))
+            {
+                throw new DomainValidationException("initialContact.lastName", "Achternaam van de contactpersoon is verplicht.");
+            }
+
+            initialContact = new CustomerContact
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                CustomerId = customer.Id,
+                FirstName = contactRequest.FirstName.Trim(),
+                LastName = contactRequest.LastName.Trim(),
+                Role = Trim(contactRequest.Role),
+                Email = Trim(contactRequest.Email),
+                PhoneNumber = Trim(contactRequest.PhoneNumber),
+                IsPrimary = contactRequest.IsPrimary,
+                Notes = Trim(contactRequest.Notes),
+            };
+            _dbContext.CustomerContacts.Add(initialContact);
+            customer.Contacts.Add(initialContact);
+        }
+
         _dbContext.Customers.Add(customer);
         await TenantNumbering.SaveWithClaimedNumberAsync(
             _dbContext, settings,
@@ -131,6 +163,11 @@ public class CustomerService : ICustomerService
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "Created", null,
             new { customer.CustomerNumber, customer.Name }, cancellationToken);
+        if (initialContact is not null)
+        {
+            await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "ContactAdded", null,
+                new { initialContact.Id, initialContact.FirstName, initialContact.LastName }, cancellationToken);
+        }
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
         return MapToDetail(customer, categoryName);
@@ -213,6 +250,27 @@ public class CustomerService : ICustomerService
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(),
             request.IsBlocked ? "Blocked" : "Unblocked", null,
             new { customer.IsBlocked, customer.BlockReason }, cancellationToken);
+
+        return true;
+    }
+
+    public async Task<bool> SetActiveAsync(Guid id, SetCustomerActiveRequest request, CancellationToken cancellationToken)
+    {
+        var customer = await TenantScoped().FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (customer is null)
+        {
+            return false;
+        }
+
+        if (customer.IsActive != request.IsActive)
+        {
+            customer.IsActive = request.IsActive;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await _auditService.RecordAsync(EntityType, customer.Id.ToString(),
+                request.IsActive ? "Activated" : "Deactivated", null,
+                new { customer.IsActive }, cancellationToken);
+        }
 
         return true;
     }

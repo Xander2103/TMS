@@ -26,9 +26,12 @@ export function searchLocations(params: SearchLocationsParams): Promise<PagedRes
   return apiClient.getJson<PagedResult<LocationListItem>>(`/api/locations?${query.toString()}`)
 }
 
-export function getLocationOptions(type?: LocationType): Promise<LocationOption[]> {
-  const query = type ? `?type=${type}` : ''
-  return apiClient.getJson<LocationOption[]>(`/api/locations/options${query}`)
+export function getLocationOptions(type?: LocationType, customerId?: string): Promise<LocationOption[]> {
+  const query = new URLSearchParams()
+  if (type) query.set('type', type)
+  if (customerId) query.set('customerId', customerId)
+  const qs = query.toString()
+  return apiClient.getJson<LocationOption[]>(`/api/locations/options${qs ? `?${qs}` : ''}`)
 }
 
 export function getLocation(id: string): Promise<LocationDetail> {
@@ -41,6 +44,17 @@ export function createLocation(input: LocationInput): Promise<LocationDetail> {
 
 export function updateLocation(id: string, input: LocationInput): Promise<LocationDetail> {
   return apiClient.putJson<LocationDetail, LocationInput>(`/api/locations/${id}`, input)
+}
+
+export function setLocationActive(id: string, isActive: boolean): Promise<void> {
+  return apiClient.postJson<void, { isActive: boolean }>(`/api/locations/${id}/active`, { isActive })
+}
+
+export function setLocationDefaults(
+  id: string,
+  defaults: { isDefaultLoadingLocation: boolean; isDefaultUnloadingLocation: boolean },
+): Promise<LocationDetail> {
+  return apiClient.putJson<LocationDetail, typeof defaults>(`/api/locations/${id}/defaults`, defaults)
 }
 
 export function deleteLocation(id: string): Promise<void> {

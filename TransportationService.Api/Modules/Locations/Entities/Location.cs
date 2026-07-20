@@ -64,5 +64,15 @@ public class Location : AuditableTenantEntity
     /// <summary>Optional link to the customer this location belongs to (customer sites).</summary>
     public Guid? CustomerId { get; set; }
 
+    /// <summary>
+    /// Default loading/unloading site for the linked customer. At most ONE default per kind
+    /// per customer (enforced by the service + filtered unique indexes); only meaningful when
+    /// <see cref="CustomerId"/> is set.
+    /// </summary>
+    public bool IsDefaultLoadingLocation { get; set; }
+
+    /// <inheritdoc cref="IsDefaultLoadingLocation"/>
+    public bool IsDefaultUnloadingLocation { get; set; }
+
     public string? Notes { get; set; }
 }

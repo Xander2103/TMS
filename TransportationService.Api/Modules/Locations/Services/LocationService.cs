@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Common.Reference;
@@ -67,19 +68,27 @@ public class LocationService : ILocationService
                         from c in custs.DefaultIfEmpty()
                         select new LocationListItemDto(
                             l.Id, l.Code, l.Name, l.Type, l.City, l.CountryCode,
-                            c != null ? c.Name : null, l.IsActive);
+                            c != null ? c.Name : null, l.IsActive,
+                            l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation);
 
         return await projected.ToPagedResultAsync(page, dto => dto, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<LocationOptionDto>> GetOptionsAsync(LocationType? type, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<LocationOptionDto>> GetOptionsAsync(
+        LocationType? type, Guid? customerId, CancellationToken cancellationToken)
     {
         var query = TenantScoped().AsNoTracking().Where(l => l.IsActive);
         if (type is { } t) query = query.Where(l => l.Type == t);
+        // Customer scope = the customer's own sites plus company-wide (unlinked) locations;
+        // other customers' sites are never offered.
+        if (customerId is { } cust) query = query.Where(l => l.CustomerId == cust || l.CustomerId == null);
 
         return await query
-            .OrderBy(l => l.Name)
-            .Select(l => new LocationOptionDto(l.Id, l.Code, l.Name, l.Type))
+            .OrderByDescending(l => l.IsDefaultLoadingLocation || l.IsDefaultUnloadingLocation)
+            .ThenBy(l => l.Name)
+            .Select(l => new LocationOptionDto(
+                l.Id, l.Code, l.Name, l.Type, l.City,
+                l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation))
             .ToListAsync(cancellationToken);
     }
 
@@ -124,6 +133,11 @@ public class LocationService : ILocationService
             request.AccessRestrictions, request.VehicleRestrictions, request.TrailerRestrictions,
             request.AlfapassRequired, request.AppointmentRequired, request.CustomerId, request.Notes);
 
+        // Transaction: default-demotion runs as an immediate UPDATE and must roll back when the
+        // insert itself fails.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, cancellationToken);
+
         _dbContext.Add(location);
         try
         {
@@ -136,6 +150,7 @@ public class LocationService : ILocationService
 
         await _auditService.RecordAsync(EntityType, location.Id.ToString(), "Created", null,
             new { location.Code, location.Name, location.Type }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return LocationOperationResult.Success(await MapToDetailAsync(location, cancellationToken));
     }
@@ -178,6 +193,9 @@ public class LocationService : ILocationService
             request.AccessRestrictions, request.VehicleRestrictions, request.TrailerRestrictions,
             request.AlfapassRequired, request.AppointmentRequired, request.CustomerId, request.Notes);
 
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, cancellationToken);
+
         try
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -189,8 +207,83 @@ public class LocationService : ILocationService
 
         await _auditService.RecordAsync(EntityType, location.Id.ToString(), "Updated", before,
             new { location.Code, location.Name, location.Type, location.IsActive }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return LocationOperationResult.Success(await MapToDetailAsync(location, cancellationToken));
+    }
+
+    public async Task<bool> SetActiveAsync(Guid id, SetLocationActiveRequest request, CancellationToken cancellationToken)
+    {
+        var location = await TenantScoped().FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
+        if (location is null)
+        {
+            return false;
+        }
+
+        if (location.IsActive != request.IsActive)
+        {
+            location.IsActive = request.IsActive;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await _auditService.RecordAsync(EntityType, location.Id.ToString(),
+                request.IsActive ? "Activated" : "Deactivated", null,
+                new { location.IsActive }, cancellationToken);
+        }
+
+        return true;
+    }
+
+    public async Task<LocationOperationResult> SetDefaultsAsync(
+        Guid id, SetLocationDefaultsRequest request, CancellationToken cancellationToken)
+    {
+        var location = await TenantScoped().FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
+        if (location is null)
+        {
+            return LocationOperationResult.NotFound;
+        }
+
+        var before = new { location.IsDefaultLoadingLocation, location.IsDefaultUnloadingLocation };
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, location.Id.ToString(), "DefaultsChanged", before,
+            new { location.IsDefaultLoadingLocation, location.IsDefaultUnloadingLocation }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return LocationOperationResult.Success(await MapToDetailAsync(location, cancellationToken));
+    }
+
+    /// <summary>
+    /// Applies the default-loading/unloading flags. Defaults require a linked customer, and at
+    /// most one location per customer may hold each flag. Demotion of the previous holder runs
+    /// as an immediate UPDATE — the caller wraps promote + demote in one transaction, because a
+    /// single SaveChanges batch can order the promote before the demote and trip the partial
+    /// unique index.
+    /// </summary>
+    private async Task ApplyDefaultFlagsAsync(
+        Location location, bool isDefaultLoading, bool isDefaultUnloading, CancellationToken cancellationToken)
+    {
+        if ((isDefaultLoading || isDefaultUnloading) && location.CustomerId is null)
+        {
+            throw new DomainValidationException("isDefaultLoadingLocation",
+                "Alleen locaties die aan een klant gekoppeld zijn, kunnen als standaard laad- of loslocatie dienen.");
+        }
+
+        if (location.CustomerId is { } customerId && (isDefaultLoading || isDefaultUnloading))
+        {
+            await TenantScoped()
+                .Where(l => l.CustomerId == customerId && l.Id != location.Id
+                    && ((isDefaultLoading && l.IsDefaultLoadingLocation)
+                        || (isDefaultUnloading && l.IsDefaultUnloadingLocation)))
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(l => l.IsDefaultLoadingLocation, l => !isDefaultLoading && l.IsDefaultLoadingLocation)
+                    .SetProperty(l => l.IsDefaultUnloadingLocation, l => !isDefaultUnloading && l.IsDefaultUnloadingLocation),
+                    cancellationToken);
+        }
+
+        location.IsDefaultLoadingLocation = isDefaultLoading;
+        location.IsDefaultUnloadingLocation = isDefaultUnloading;
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
@@ -267,7 +360,8 @@ public class LocationService : ILocationService
             l.ContactName, l.ContactPhone, l.ContactEmail,
             l.OpeningHours, l.LoadingInstructions, l.UnloadingInstructions, l.AccessInstructions,
             l.AccessRestrictions, l.VehicleRestrictions, l.TrailerRestrictions,
-            l.AlfapassRequired, l.AppointmentRequired, l.IsActive, l.CustomerId, customerName, l.Notes);
+            l.AlfapassRequired, l.AppointmentRequired, l.IsActive, l.CustomerId, customerName, l.Notes,
+            l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation);
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

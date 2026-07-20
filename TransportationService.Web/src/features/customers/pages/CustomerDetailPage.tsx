@@ -4,15 +4,18 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { BackButton } from '../../../components/ui/BackButton'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { FormField } from '../../../components/ui/FormField'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadges } from '../../../components/ui/StatusBadges'
+import { Tabs, TabPanel } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { CustomerForm } from '../components/CustomerForm'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
+import { CustomerLocationsPanel } from '../components/CustomerLocationsPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
 import { VAT_TREATMENT_LABELS } from '../types'
@@ -27,12 +30,16 @@ export function CustomerDetailPage() {
   const mutations = useCustomerMutations()
   const canEdit = hasPermission('customers.edit')
   const canDelete = hasPermission('customers.delete')
+  const canDeactivate = hasPermission('customers.deactivate')
+  const canViewLocations = hasPermission('locations.view')
 
+  const [activeTab, setActiveTab] = useState('general')
   const [isEditing, setIsEditing] = useState(false)
   const [showBlockDialog, setShowBlockDialog] = useState(false)
   const [blockReason, setBlockReason] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showUnblockConfirm, setShowUnblockConfirm] = useState(false)
+  const [showActiveConfirm, setShowActiveConfirm] = useState<null | 'activate' | 'deactivate'>(null)
 
   if (isLoading) return <LoadingState message="Klant laden..." />
   if (error || !customer) return <ErrorState message={error ?? 'Klant niet gevonden.'} />
@@ -52,6 +59,7 @@ export function CustomerDetailPage() {
   return (
     <div>
       <Breadcrumbs items={[{ label: 'Klanten', to: '/customers' }, { label: customer.name }]} />
+      <BackButton to="/customers" label="Terug naar klanten" />
       <PageHeader
         title={customer.name}
         action={
@@ -72,6 +80,16 @@ export function CustomerDetailPage() {
                     Blokkeren
                   </Button>
                 ))}
+              {canDeactivate &&
+                (customer.isActive ? (
+                  <Button variant="secondary" onClick={() => setShowActiveConfirm('deactivate')}>
+                    Deactiveren
+                  </Button>
+                ) : (
+                  <Button variant="secondary" onClick={() => setShowActiveConfirm('activate')}>
+                    Heractiveren
+                  </Button>
+                ))}
               {canDelete && (
                 <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
                   Verwijderen
@@ -88,6 +106,7 @@ export function CustomerDetailPage() {
           initial={customer}
           isSubmitting={mutations.isSubmitting}
           submitError={mutations.error}
+          serverFieldErrors={mutations.fieldErrors}
           onCancel={() => setIsEditing(false)}
           onSubmit={async (values) => {
             if (!id) return
@@ -100,8 +119,22 @@ export function CustomerDetailPage() {
           }}
         />
       ) : (
-        <div className="customer-detail-layout">
-          <div>
+        <>
+          <div className="customer-detail-tabs">
+            <Tabs
+              tabs={[
+                { id: 'general', label: 'Algemeen' },
+                { id: 'contacts', label: 'Contactpersonen', badge: customer.contacts.length || undefined },
+                ...(canViewLocations ? [{ id: 'locations', label: 'Locaties' }] : []),
+              ]}
+              activeId={activeTab}
+              onChange={setActiveTab}
+            />
+          </div>
+
+          {activeTab === 'general' && (
+            <TabPanel tabId="general">
+              <div className="customer-detail-layout">
             <div className="customer-summary">
               <dl>
                 <dt>Klantnummer</dt>
@@ -195,10 +228,14 @@ export function CustomerDetailPage() {
                 )}
               </dl>
             </div>
-          </div>
+              </div>
+            </TabPanel>
+          )}
 
-          <CustomerContactsPanel
-            contacts={customer.contacts}
+          {activeTab === 'contacts' && (
+            <TabPanel tabId="contacts">
+              <CustomerContactsPanel
+                contacts={customer.contacts}
             isSubmitting={mutations.isSubmitting}
             onAdd={async (input) => {
               if (!id) return false
@@ -227,8 +264,16 @@ export function CustomerDetailPage() {
               }
               return ok
             }}
-          />
-        </div>
+              />
+            </TabPanel>
+          )}
+
+          {activeTab === 'locations' && canViewLocations && id && (
+            <TabPanel tabId="locations">
+              <CustomerLocationsPanel customerId={id} />
+            </TabPanel>
+          )}
+        </>
       )}
 
       {showBlockDialog && (
@@ -271,6 +316,30 @@ export function CustomerDetailPage() {
             }
           }}
           onCancel={() => setShowUnblockConfirm(false)}
+        />
+      )}
+
+      {showActiveConfirm && (
+        <ConfirmDialog
+          title={showActiveConfirm === 'deactivate' ? 'Klant deactiveren' : 'Klant heractiveren'}
+          message={
+            showActiveConfirm === 'deactivate'
+              ? `'${customer.name}' deactiveren? Bestaande opdrachten, facturen en historiek blijven behouden, maar er kunnen geen nieuwe opdrachten voor deze klant worden aangemaakt.`
+              : `'${customer.name}' heractiveren? De klant is daarna weer kiesbaar voor nieuwe opdrachten.`
+          }
+          confirmLabel={showActiveConfirm === 'deactivate' ? 'Deactiveren' : 'Heractiveren'}
+          busy={mutations.isSubmitting}
+          onConfirm={async () => {
+            if (!id) return
+            const activate = showActiveConfirm === 'activate'
+            const ok = await mutations.setActive(id, activate)
+            if (ok) {
+              toast.showSuccess(activate ? 'Klant geheractiveerd.' : 'Klant gedeactiveerd.')
+              setShowActiveConfirm(null)
+              reload()
+            }
+          }}
+          onCancel={() => setShowActiveConfirm(null)}
         />
       )}
 

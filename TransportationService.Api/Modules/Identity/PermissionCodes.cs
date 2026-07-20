@@ -58,6 +58,7 @@ public static class PermissionCodes
     public const string CustomersCreate = "customers.create";
     public const string CustomersEdit = "customers.edit";
     public const string CustomersDelete = "customers.delete";
+    public const string CustomersDeactivate = "customers.deactivate";
 
     // --- Locations (sites/addresses) ---
     public const string LocationsView = "locations.view";
@@ -259,6 +260,7 @@ public static class PermissionCodes
         (CustomersCreate, "customers", "create", "Klanten aanmaken"),
         (CustomersEdit, "customers", "edit", "Klanten bewerken"),
         (CustomersDelete, "customers", "delete", "Klanten verwijderen"),
+        (CustomersDeactivate, "customers", "deactivate", "Klanten activeren/deactiveren"),
         (LocationsView, "locations", "view", "Locaties bekijken"),
         (LocationsCreate, "locations", "create", "Locaties aanmaken"),
         (LocationsEdit, "locations", "edit", "Locaties bewerken"),

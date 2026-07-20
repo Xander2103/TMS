@@ -32,6 +32,8 @@ export interface LocationListItem {
   countryCode: string | null
   customerName: string | null
   isActive: boolean
+  isDefaultLoadingLocation: boolean
+  isDefaultUnloadingLocation: boolean
 }
 
 export interface LocationOption {
@@ -39,6 +41,9 @@ export interface LocationOption {
   code: string
   name: string
   type: LocationType
+  city: string | null
+  isDefaultLoadingLocation: boolean
+  isDefaultUnloadingLocation: boolean
 }
 
 export interface LocationDetail {
@@ -69,6 +74,8 @@ export interface LocationDetail {
   customerId: string | null
   customerName: string | null
   notes: string | null
+  isDefaultLoadingLocation: boolean
+  isDefaultUnloadingLocation: boolean
 }
 
 export type LocationInput = Omit<LocationDetail, 'id' | 'customerName'>

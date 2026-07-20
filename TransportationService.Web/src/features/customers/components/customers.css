@@ -152,3 +152,46 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+
+.customer-locations-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0 0 16px;
+  flex-wrap: wrap;
+}
+
+.customer-locations-toolbar input[type='search'] {
+  font: inherit;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  min-width: 260px;
+}
+
+.customer-locations-new {
+  margin-left: auto;
+}
+
+.customer-locations-code {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.customer-locations-badges {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.customer-locations-actions {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.customer-detail-tabs {
+  margin: 0 0 20px;
+}

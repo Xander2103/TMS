@@ -10,13 +10,17 @@ public interface ILocationService
         string? search, LocationType? type, bool? isActive, Guid? customerId,
         string? sort, string? dir, PageRequest page, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<LocationOptionDto>> GetOptionsAsync(LocationType? type, CancellationToken cancellationToken);
+    Task<IReadOnlyList<LocationOptionDto>> GetOptionsAsync(LocationType? type, Guid? customerId, CancellationToken cancellationToken);
 
     Task<LocationDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
     Task<LocationOperationResult> CreateAsync(CreateLocationRequest request, CancellationToken cancellationToken);
 
     Task<LocationOperationResult> UpdateAsync(Guid id, UpdateLocationRequest request, CancellationToken cancellationToken);
+
+    Task<bool> SetActiveAsync(Guid id, SetLocationActiveRequest request, CancellationToken cancellationToken);
+
+    Task<LocationOperationResult> SetDefaultsAsync(Guid id, SetLocationDefaultsRequest request, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

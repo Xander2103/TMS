@@ -136,7 +136,7 @@ public class TransportOrderService : ITransportOrderService
         CreateTransportOrderRequest request, CancellationToken cancellationToken)
     {
         var validation = await ValidateAsync(request.CustomerId, request.CustomerReference, request.GoodsDescription,
-            request.Stops, rejectBlockedCustomer: true, cancellationToken);
+            request.Stops, enforceCustomerIntake: true, cancellationToken);
         if (validation is not null)
         {
             return validation;
@@ -204,7 +204,7 @@ public class TransportOrderService : ITransportOrderService
         // Switching an order TO a blocked customer is refused; editing an existing order whose
         // customer became blocked afterwards stays possible (dispatch still needs to manage it).
         var validation = await ValidateAsync(request.CustomerId, request.CustomerReference, request.GoodsDescription,
-            request.Stops, rejectBlockedCustomer: request.CustomerId != order.CustomerId, cancellationToken);
+            request.Stops, enforceCustomerIntake: request.CustomerId != order.CustomerId, cancellationToken);
         if (validation is not null)
         {
             return validation;
@@ -441,7 +441,7 @@ public class TransportOrderService : ITransportOrderService
     /// <summary>Shared shape validation for create/update. Returns null when valid.</summary>
     private async Task<TransportOrderOperationResult?> ValidateAsync(
         Guid customerId, string? customerReference, string goodsDescription,
-        IReadOnlyList<TransportOrderStopInput> stops, bool rejectBlockedCustomer,
+        IReadOnlyList<TransportOrderStopInput> stops, bool enforceCustomerIntake,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(goodsDescription))
@@ -451,17 +451,26 @@ public class TransportOrderService : ITransportOrderService
 
         var customer = await _dbContext.Customers
             .Where(c => c.Id == customerId && c.TenantId == _tenantContext.TenantId)
-            .Select(c => new { c.IsBlocked, c.CustomerReferenceRequired })
+            .Select(c => new { c.IsBlocked, c.IsActive, c.CustomerReferenceRequired })
             .FirstOrDefaultAsync(cancellationToken);
         if (customer is null)
         {
             return TransportOrderOperationResult.InvalidReference("De gekoppelde klant bestaat niet.");
         }
 
-        if (rejectBlockedCustomer && customer.IsBlocked)
+        // Intake gate for NEW work for this customer (create, or switching an order to another
+        // customer): blocked and deactivated customers refuse new orders; existing orders for
+        // the same customer stay editable.
+        if (enforceCustomerIntake && customer.IsBlocked)
         {
             return TransportOrderOperationResult.Invalid(
                 "Deze klant is geblokkeerd; er kunnen geen opdrachten voor worden aangemaakt.");
+        }
+
+        if (enforceCustomerIntake && !customer.IsActive)
+        {
+            return TransportOrderOperationResult.Invalid(
+                "Deze klant is gedeactiveerd; heractiveer de klant om nieuwe opdrachten aan te maken.");
         }
 
         if (customer.CustomerReferenceRequired && string.IsNullOrWhiteSpace(customerReference))

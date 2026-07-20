@@ -10,9 +10,18 @@ public record LocationListItemDto(
     string? City,
     string? CountryCode,
     string? CustomerName,
-    bool IsActive);
+    bool IsActive,
+    bool IsDefaultLoadingLocation,
+    bool IsDefaultUnloadingLocation);
 
-public record LocationOptionDto(Guid Id, string Code, string Name, LocationType Type);
+public record LocationOptionDto(
+    Guid Id,
+    string Code,
+    string Name,
+    LocationType Type,
+    string? City = null,
+    bool IsDefaultLoadingLocation = false,
+    bool IsDefaultUnloadingLocation = false);
 
 public record LocationDetailDto(
     Guid Id,
@@ -41,7 +50,9 @@ public record LocationDetailDto(
     bool IsActive,
     Guid? CustomerId,
     string? CustomerName,
-    string? Notes);
+    string? Notes,
+    bool IsDefaultLoadingLocation,
+    bool IsDefaultUnloadingLocation);
 
 public record CreateLocationRequest(
     string Code,
@@ -67,7 +78,9 @@ public record CreateLocationRequest(
     bool AlfapassRequired,
     bool AppointmentRequired,
     Guid? CustomerId,
-    string? Notes);
+    string? Notes,
+    bool IsDefaultLoadingLocation = false,
+    bool IsDefaultUnloadingLocation = false);
 
 public record UpdateLocationRequest(
     string Code,
@@ -94,7 +107,13 @@ public record UpdateLocationRequest(
     bool AppointmentRequired,
     bool IsActive,
     Guid? CustomerId,
-    string? Notes);
+    string? Notes,
+    bool IsDefaultLoadingLocation = false,
+    bool IsDefaultUnloadingLocation = false);
+
+public record SetLocationActiveRequest(bool IsActive);
+
+public record SetLocationDefaultsRequest(bool IsDefaultLoadingLocation, bool IsDefaultUnloadingLocation);
 
 public enum LocationOperationOutcome
 {

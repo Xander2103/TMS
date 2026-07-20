@@ -43,6 +43,10 @@ export function deleteCustomer(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/customers/${id}`)
 }
 
+export function setCustomerActive(id: string, isActive: boolean): Promise<void> {
+  return apiClient.postJson<void, { isActive: boolean }>(`/api/customers/${id}/active`, { isActive })
+}
+
 export function setCustomerBlocked(id: string, isBlocked: boolean, reason: string | null): Promise<void> {
   return apiClient.postJson<void, { isBlocked: boolean; reason: string | null }>(
     `/api/customers/${id}/blocked`,
