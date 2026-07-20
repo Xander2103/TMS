@@ -32,6 +32,7 @@ const TransportOrdersPage = lazyPage(() => import('../features/transport-orders/
 const NewTransportOrderPage = lazyPage(() => import('../features/transport-orders/pages/NewTransportOrderPage'), 'NewTransportOrderPage')
 const TransportOrderDetailPage = lazyPage(() => import('../features/transport-orders/pages/TransportOrderDetailPage'), 'TransportOrderDetailPage')
 const PlanningPage = lazyPage(() => import('../features/planning/pages/PlanningPage'), 'PlanningPage')
+const PlanningCenterPage = lazyPage(() => import('../features/planning-center/pages/PlanningCenterPage'), 'PlanningCenterPage')
 const TripDetailPage = lazyPage(() => import('../features/planning/pages/TripDetailPage'), 'TripDetailPage')
 const MyTripsPage = lazyPage(() => import('../features/my-trips/pages/MyTripsPage'), 'MyTripsPage')
 const TripExecutionPage = lazyPage(() => import('../features/my-trips/pages/TripExecutionPage'), 'TripExecutionPage')
@@ -130,6 +131,7 @@ const router = createBrowserRouter(
           <Route path="/transport-orders/new" element={<NewTransportOrderPage />} />
           <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
           <Route path="/planning" element={<PlanningPage />} />
+          <Route path="/planning-center" element={<PlanningCenterPage />} />
           <Route path="/planning/:id" element={<TripDetailPage />} />
           <Route path="/exceptions" element={<ExceptionsPage />} />
           <Route path="/exceptions/:id" element={<ExceptionDetailPage />} />
