@@ -25,6 +25,7 @@ import { TransportOrderForm } from '../components/TransportOrderForm'
 import { OrderTimelinePanel } from '../components/OrderTimelinePanel'
 import { StopExecutionPlanDialog } from '../components/StopExecutionPlanDialog'
 import { OrderPackagesPanel } from '../../packages/components/OrderPackagesPanel'
+import { UNIT_TYPE_LABELS } from '../../packages/types'
 import { CustomerPackagesSummary } from '../../packages/components/CustomerPackagesSummary'
 import {
   ORDER_STATUS_LABELS,
@@ -322,8 +323,12 @@ export function TransportOrderDetailPage() {
                   <tr>
                     <th>#</th>
                     <th>Omschrijving</th>
+                    <th>Type</th>
                     <th>Barcode</th>
                     <th>Verwacht</th>
+                    <th>Gewicht</th>
+                    <th>Volume/stuk</th>
+                    <th>Kenmerken</th>
                     <th>Notities</th>
                   </tr>
                 </thead>
@@ -332,9 +337,16 @@ export function TransportOrderDetailPage() {
                     <tr key={item.id}>
                       <td>{item.sequence}</td>
                       <td>{item.description}</td>
+                      <td>{item.unitType ? (item.unitTypeLabel ?? UNIT_TYPE_LABELS[item.unitType]) : '—'}</td>
                       <td>{item.barcode ? <code>{item.barcode}</code> : '—'}</td>
                       <td>
                         {item.expectedQuantity} {item.quantityUnit ?? ''}
+                      </td>
+                      <td>{item.totalWeightKg !== null ? `${item.totalWeightKg.toLocaleString('nl-BE')} kg` : '—'}</td>
+                      <td>{item.volumeM3 !== null ? `${item.volumeM3.toLocaleString('nl-BE')} m³` : '—'}</td>
+                      <td>
+                        {item.adrRequired && <Badge tone="danger">ADR</Badge>}{' '}
+                        {!item.stackable && <Badge tone="warning">Niet stapelbaar</Badge>}
                       </td>
                       <td>{item.notes ?? '—'}</td>
                     </tr>

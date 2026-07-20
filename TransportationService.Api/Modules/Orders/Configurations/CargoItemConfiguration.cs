@@ -18,6 +18,20 @@ public class CargoItemConfiguration : IEntityTypeConfiguration<CargoItem>
         builder.Property(c => c.QuantityUnit).HasMaxLength(50);
         builder.Property(c => c.Notes).HasMaxLength(500);
 
+        builder.Property(c => c.UnitType).HasConversion<string>().HasMaxLength(20);
+        builder.Property(c => c.UnitTypeLabel).HasMaxLength(50);
+        builder.Property(c => c.TotalWeightKg).HasPrecision(12, 2);
+        builder.Property(c => c.WeightPerUnitKg).HasPrecision(12, 3);
+        builder.Property(c => c.LengthMeters).HasPrecision(8, 3);
+        builder.Property(c => c.WidthMeters).HasPrecision(8, 3);
+        builder.Property(c => c.HeightMeters).HasPrecision(8, 3);
+        builder.Property(c => c.VolumeM3).HasPrecision(12, 3);
+        builder.Property(c => c.AdrDetails).HasMaxLength(500);
+        builder.Property(c => c.Reference).HasMaxLength(100);
+
+        builder.HasOne<TransportOrderStop>().WithMany().HasForeignKey(c => c.LoadingStopId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<TransportOrderStop>().WithMany().HasForeignKey(c => c.UnloadingStopId).OnDelete(DeleteBehavior.SetNull);
+
         builder.HasIndex(c => new { c.TransportOrderId, c.Sequence });
 
         // A barcode may recur across orders (EAN reuse) but must stay unambiguous within one order.

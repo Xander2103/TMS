@@ -633,6 +633,81 @@ public class TransportOrderServiceTests
     }
 
     [Fact]
+    public async Task Cargo_RichLine_RoundTrips_WithDerivedVolume_AndExplicitStopLinks()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent"), Stop(StopType.Unloading, city: "Brugge")) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput("Europalletten bouwmateriaal", "PAL-1", 10, "paletten", null,
+                    UnitType: Modules.Packages.Entities.PackageUnitType.EuroPallet,
+                    TotalWeightKg: 8000, WeightPerUnitKg: 800,
+                    LengthMeters: 1.2m, WidthMeters: 0.8m, HeightMeters: 1.5m,
+                    AdrRequired: true, AdrDetails: "UN 1263, klasse 3", Stackable: false, Reference: "LIJN-1",
+                    LoadingStopIndex: 0, UnloadingStopIndex: 2),
+            ],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var line = Assert.Single(created.Order!.CargoItems);
+        Assert.Equal(Modules.Packages.Entities.PackageUnitType.EuroPallet, line.UnitType);
+        Assert.Equal(1.44m, line.VolumeM3);
+        Assert.False(line.VolumeIsManual);
+        Assert.True(line.AdrRequired);
+        Assert.False(line.Stackable);
+        Assert.Equal(created.Order.Stops[0].Id, line.LoadingStopId);
+        Assert.Equal(created.Order.Stops[2].Id, line.UnloadingStopId);
+    }
+
+    [Fact]
+    public async Task Cargo_OmittedStopLinks_AutoLink_WhenUnambiguous()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Colli", null, 5, "colli", null)],
+        }, CancellationToken.None);
+
+        var line = Assert.Single(created.Order!.CargoItems);
+        Assert.Equal(created.Order.Stops[0].Id, line.LoadingStopId);
+        Assert.Equal(created.Order.Stops[1].Id, line.UnloadingStopId);
+    }
+
+    [Fact]
+    public async Task Cargo_InvalidStopLinks_AndNegativeWeights_AreRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var stops = new[] { Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent") };
+
+        var wrongType = await h.Sut.CreateAsync(Request(h.CustomerId, stops) with
+        {
+            CargoItems = [new CargoItemInput("X", null, 1, null, null, UnloadingStopIndex: 0)],
+        }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, wrongType.Outcome);
+
+        var wrongOrder = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Unloading, city: "Gent"), Stop(StopType.Loading, h.LocationId)) with
+        {
+            CargoItems = [new CargoItemInput("X", null, 1, null, null, LoadingStopIndex: 1, UnloadingStopIndex: 0)],
+        }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, wrongOrder.Outcome);
+
+        var negative = await h.Sut.CreateAsync(Request(h.CustomerId, stops) with
+        {
+            CargoItems = [new CargoItemInput("X", null, 1, null, null, TotalWeightKg: -5)],
+        }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, negative.Outcome);
+    }
+
+    [Fact]
     public async Task Timeline_MergesAuditAndStatusHistory_Chronologically()
     {
         var h = await SeedAsync();

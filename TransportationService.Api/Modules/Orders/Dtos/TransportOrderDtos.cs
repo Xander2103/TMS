@@ -92,14 +92,49 @@ public record CargoItemDto(
     string? Barcode,
     decimal ExpectedQuantity,
     string? QuantityUnit,
-    string? Notes);
+    string? Notes,
+    TransportationService.Api.Modules.Packages.Entities.PackageUnitType? UnitType = null,
+    string? UnitTypeLabel = null,
+    decimal? TotalWeightKg = null,
+    decimal? WeightPerUnitKg = null,
+    decimal? LengthMeters = null,
+    decimal? WidthMeters = null,
+    decimal? HeightMeters = null,
+    decimal? VolumeM3 = null,
+    bool VolumeIsManual = false,
+    bool AdrRequired = false,
+    string? AdrDetails = null,
+    bool Stackable = true,
+    string? Reference = null,
+    Guid? LoadingStopId = null,
+    Guid? UnloadingStopId = null);
 
+/// <summary>
+/// Stop links use INDEXES into the request's stop list (stops receive fresh ids on every
+/// save). Omitted indexes auto-link when the order has exactly one loading and one
+/// unloading stop; otherwise the line stays unlinked until assigned.
+/// </summary>
 public record CargoItemInput(
     string Description,
     string? Barcode,
     decimal ExpectedQuantity,
     string? QuantityUnit,
-    string? Notes);
+    string? Notes,
+    TransportationService.Api.Modules.Packages.Entities.PackageUnitType? UnitType = null,
+    string? UnitTypeLabel = null,
+    decimal? TotalWeightKg = null,
+    decimal? WeightPerUnitKg = null,
+    decimal? LengthMeters = null,
+    decimal? WidthMeters = null,
+    decimal? HeightMeters = null,
+    decimal? VolumeM3 = null,
+    bool VolumeIsManual = false,
+    bool AdrRequired = false,
+    string? AdrDetails = null,
+    bool Stackable = true,
+    string? Reference = null,
+    int? LoadingStopIndex = null,
+    int? UnloadingStopIndex = null);
 
 public record TransportOrderStopInput(
     StopType StopType,

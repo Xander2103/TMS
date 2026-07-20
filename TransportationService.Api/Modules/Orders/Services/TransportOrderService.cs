@@ -158,7 +158,7 @@ public class TransportOrderService : ITransportOrderService
             return validation;
         }
 
-        if (CargoItemsError(request.CargoItems) is { } cargoError)
+        if (CargoItemsError(request.CargoItems, request.Stops) is { } cargoError)
         {
             return TransportOrderOperationResult.Invalid(cargoError);
         }
@@ -188,7 +188,7 @@ public class TransportOrderService : ITransportOrderService
         };
 
         _dbContext.Add(order);
-        _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems));
+        _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems, order.Stops));
         await TenantNumbering.SaveWithClaimedNumberAsync(
             _dbContext, settings,
             () => order.OrderNumber = GenerateOrderNumber(settings),
@@ -232,7 +232,7 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(confirmError);
         }
 
-        if (CargoItemsError(request.CargoItems) is { } cargoError)
+        if (CargoItemsError(request.CargoItems, request.Stops) is { } cargoError)
         {
             return TransportOrderOperationResult.Invalid(cargoError);
         }
@@ -270,7 +270,7 @@ public class TransportOrderService : ITransportOrderService
             .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
             .ToListAsync(cancellationToken);
         _dbContext.RemoveRange(existingCargo);
-        _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems));
+        _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems, order.Stops));
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -579,7 +579,7 @@ public class TransportOrderService : ITransportOrderService
     }
 
     /// <summary>Validates the cargo list: description + positive quantity per item, barcode unambiguous within the order.</summary>
-    private static string? CargoItemsError(IReadOnlyList<CargoItemInput>? items)
+    private static string? CargoItemsError(IReadOnlyList<CargoItemInput>? items, IReadOnlyList<TransportOrderStopInput> stops)
     {
         if (items is null || items.Count == 0)
         {
@@ -596,6 +596,36 @@ public class TransportOrderService : ITransportOrderService
             return "De verwachte hoeveelheid van een goederenlijn moet groter dan nul zijn.";
         }
 
+        if (items.Any(i => i.TotalWeightKg is < 0 || i.WeightPerUnitKg is < 0
+            || i.LengthMeters is < 0 || i.WidthMeters is < 0 || i.HeightMeters is < 0 || i.VolumeM3 is < 0))
+        {
+            return "Gewichten, afmetingen en volume van een goederenlijn mogen niet negatief zijn.";
+        }
+
+        foreach (var item in items)
+        {
+            if (item.LoadingStopIndex is { } load)
+            {
+                if (load < 0 || load >= stops.Count || stops[load].StopType != StopType.Loading)
+                {
+                    return "De laadstop van een goederenlijn moet naar een bestaande laadstop verwijzen.";
+                }
+            }
+
+            if (item.UnloadingStopIndex is { } unload)
+            {
+                if (unload < 0 || unload >= stops.Count || stops[unload].StopType != StopType.Unloading)
+                {
+                    return "De losstop van een goederenlijn moet naar een bestaande losstop verwijzen.";
+                }
+            }
+
+            if (item.LoadingStopIndex is { } l2 && item.UnloadingStopIndex is { } u2 && l2 >= u2)
+            {
+                return "De laadstop van een goederenlijn moet vóór de losstop liggen.";
+            }
+        }
+
         var barcodes = items
             .Select(i => i.Barcode?.Trim().ToLowerInvariant())
             .Where(b => !string.IsNullOrEmpty(b))
@@ -608,19 +638,49 @@ public class TransportOrderService : ITransportOrderService
         return null;
     }
 
-    private List<CargoItem> BuildCargoItems(Guid orderId, IReadOnlyList<CargoItemInput>? inputs) =>
-        (inputs ?? []).Select((input, index) => new CargoItem
+    private List<CargoItem> BuildCargoItems(Guid orderId, IReadOnlyList<CargoItemInput>? inputs, IReadOnlyList<TransportOrderStop> stops)
+    {
+        // Unambiguous orders (one loading + one unloading stop) auto-link omitted stop indexes.
+        var loadingStops = stops.Where(s => s.StopType == StopType.Loading).ToList();
+        var unloadingStops = stops.Where(s => s.StopType == StopType.Unloading).ToList();
+        var defaultLoading = loadingStops.Count == 1 ? loadingStops[0].Id : (Guid?)null;
+        var defaultUnloading = unloadingStops.Count == 1 ? unloadingStops[0].Id : (Guid?)null;
+
+        return (inputs ?? []).Select((input, index) =>
         {
-            Id = Guid.NewGuid(),
-            TenantId = _tenantContext.TenantId,
-            TransportOrderId = orderId,
-            Sequence = index + 1,
-            Description = input.Description.Trim(),
-            Barcode = Trim(input.Barcode),
-            ExpectedQuantity = input.ExpectedQuantity,
-            QuantityUnit = Trim(input.QuantityUnit),
-            Notes = Trim(input.Notes),
+            var (volume, volumeIsManual) = Modules.Fleet.Services.FleetFieldRules.ResolveVolume(
+                input.LengthMeters, input.WidthMeters, input.HeightMeters, input.VolumeM3, input.VolumeIsManual,
+                field: $"cargoItems[{index}].volumeM3");
+
+            return new CargoItem
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                TransportOrderId = orderId,
+                Sequence = index + 1,
+                Description = input.Description.Trim(),
+                Barcode = Trim(input.Barcode),
+                ExpectedQuantity = input.ExpectedQuantity,
+                QuantityUnit = Trim(input.QuantityUnit),
+                Notes = Trim(input.Notes),
+                UnitType = input.UnitType,
+                UnitTypeLabel = Trim(input.UnitTypeLabel),
+                TotalWeightKg = NonNegative(input.TotalWeightKg),
+                WeightPerUnitKg = NonNegative(input.WeightPerUnitKg),
+                LengthMeters = NonNegative(input.LengthMeters),
+                WidthMeters = NonNegative(input.WidthMeters),
+                HeightMeters = NonNegative(input.HeightMeters),
+                VolumeM3 = volume,
+                VolumeIsManual = volumeIsManual,
+                AdrRequired = input.AdrRequired,
+                AdrDetails = Trim(input.AdrDetails),
+                Stackable = input.Stackable,
+                Reference = Trim(input.Reference),
+                LoadingStopId = input.LoadingStopIndex is { } load ? stops[load].Id : defaultLoading,
+                UnloadingStopId = input.UnloadingStopIndex is { } unload ? stops[unload].Id : defaultUnloading,
+            };
         }).ToList();
+    }
 
     private static string? WindowError(DateTime? from, DateTime? to) =>
         from is { } f && to is { } t && t < f
@@ -711,7 +771,11 @@ public class TransportOrderService : ITransportOrderService
         var cargoItems = await _dbContext.CargoItems.AsNoTracking()
             .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
             .OrderBy(c => c.Sequence)
-            .Select(c => new CargoItemDto(c.Id, c.Sequence, c.Description, c.Barcode, c.ExpectedQuantity, c.QuantityUnit, c.Notes))
+            .Select(c => new CargoItemDto(
+                c.Id, c.Sequence, c.Description, c.Barcode, c.ExpectedQuantity, c.QuantityUnit, c.Notes,
+                c.UnitType, c.UnitTypeLabel, c.TotalWeightKg, c.WeightPerUnitKg,
+                c.LengthMeters, c.WidthMeters, c.HeightMeters, c.VolumeM3, c.VolumeIsManual,
+                c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference, c.LoadingStopId, c.UnloadingStopId))
             .ToListAsync(cancellationToken);
 
         return new TransportOrderDetailDto(

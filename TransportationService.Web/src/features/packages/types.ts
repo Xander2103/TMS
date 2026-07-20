@@ -3,8 +3,12 @@ export type PackageUnitType =
   | 'Parcel'
   | 'Colli'
   | 'Pallet'
+  | 'EuroPallet'
+  | 'BlockPallet'
+  | 'Box'
   | 'Crate'
   | 'RollContainer'
+  | 'Drum'
   | 'Container'
   | 'Document'
   | 'Other'
@@ -37,8 +41,12 @@ export const UNIT_TYPE_LABELS: Record<PackageUnitType, string> = {
   Parcel: 'Pakje',
   Colli: 'Colli',
   Pallet: 'Pallet',
+  EuroPallet: 'Europallet',
+  BlockPallet: 'Blokpallet',
+  Box: 'Doos',
   Crate: 'Krat',
   RollContainer: 'Rolcontainer',
+  Drum: 'Vat',
   Container: 'Container',
   Document: 'Document',
   Other: 'Anders',

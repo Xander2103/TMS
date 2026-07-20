@@ -9,6 +9,8 @@ import { LocationQuickCreateDialog } from '../../locations/components/LocationQu
 import type { LocationOption } from '../../locations/types'
 import { useAuth } from '../../auth/authContextValue'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
+import { UNIT_TYPE_LABELS, type PackageUnitType } from '../../packages/types'
+import { computeVolumeM3 } from '../../../utils/volume'
 import { STOP_TYPE_LABELS, type StopInput, type TransportOrderDetail, type TransportOrderInput } from '../types'
 import './transport-order-form.css'
 
@@ -19,6 +21,28 @@ interface CargoFormRow {
   expectedQuantity: string
   quantityUnit: string
   notes: string
+  unitType: PackageUnitType | ''
+  unitTypeLabel: string
+  totalWeightKg: string
+  weightPerUnitKg: string
+  lengthMeters: string
+  widthMeters: string
+  heightMeters: string
+  volumeM3: string
+  volumeIsManual: boolean
+  adrRequired: boolean
+  adrDetails: string
+  stackable: boolean
+  reference: string
+  /** '' = automatic (unambiguous orders link themselves server-side). */
+  loadingStopIndex: string
+  unloadingStopIndex: string
+}
+
+function numberOrNullFrom(value: string): number | null {
+  if (value.trim() === '') return null
+  const parsed = Number(value.replace(',', '.'))
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 interface StopFormRow {
@@ -153,14 +177,33 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
   )
 
   const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() =>
-    (order?.cargoItems ?? []).map((c) => ({
-      key: nextStopKey(),
-      description: c.description,
-      barcode: c.barcode ?? '',
-      expectedQuantity: String(c.expectedQuantity),
-      quantityUnit: c.quantityUnit ?? '',
-      notes: c.notes ?? '',
-    })),
+    (order?.cargoItems ?? []).map((c) => {
+      const loadingIndex = order?.stops.findIndex((s) => s.id === c.loadingStopId) ?? -1
+      const unloadingIndex = order?.stops.findIndex((s) => s.id === c.unloadingStopId) ?? -1
+      return {
+        key: nextStopKey(),
+        description: c.description,
+        barcode: c.barcode ?? '',
+        expectedQuantity: String(c.expectedQuantity),
+        quantityUnit: c.quantityUnit ?? '',
+        notes: c.notes ?? '',
+        unitType: c.unitType ?? '',
+        unitTypeLabel: c.unitTypeLabel ?? '',
+        totalWeightKg: c.totalWeightKg !== null ? String(c.totalWeightKg) : '',
+        weightPerUnitKg: c.weightPerUnitKg !== null ? String(c.weightPerUnitKg) : '',
+        lengthMeters: c.lengthMeters !== null ? String(c.lengthMeters) : '',
+        widthMeters: c.widthMeters !== null ? String(c.widthMeters) : '',
+        heightMeters: c.heightMeters !== null ? String(c.heightMeters) : '',
+        volumeM3: c.volumeM3 !== null ? String(c.volumeM3) : '',
+        volumeIsManual: c.volumeIsManual,
+        adrRequired: c.adrRequired,
+        adrDetails: c.adrDetails ?? '',
+        stackable: c.stackable,
+        reference: c.reference ?? '',
+        loadingStopIndex: loadingIndex >= 0 ? String(loadingIndex) : '',
+        unloadingStopIndex: unloadingIndex >= 0 ? String(unloadingIndex) : '',
+      }
+    }),
   )
 
   const [formError, setFormError] = useState<string | null>(null)
@@ -307,6 +350,27 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         expectedQuantity: Number(cargo.expectedQuantity),
         quantityUnit: cargo.quantityUnit.trim() || null,
         notes: cargo.notes.trim() || null,
+        unitType: cargo.unitType || null,
+        unitTypeLabel: cargo.unitType === 'Other' ? cargo.unitTypeLabel.trim() || null : null,
+        totalWeightKg: numberOrNullFrom(cargo.totalWeightKg),
+        weightPerUnitKg: numberOrNullFrom(cargo.weightPerUnitKg),
+        lengthMeters: numberOrNullFrom(cargo.lengthMeters),
+        widthMeters: numberOrNullFrom(cargo.widthMeters),
+        heightMeters: numberOrNullFrom(cargo.heightMeters),
+        volumeM3: cargo.volumeIsManual
+          ? numberOrNullFrom(cargo.volumeM3)
+          : computeVolumeM3(
+              numberOrNullFrom(cargo.lengthMeters),
+              numberOrNullFrom(cargo.widthMeters),
+              numberOrNullFrom(cargo.heightMeters),
+            ),
+        volumeIsManual: cargo.volumeIsManual,
+        adrRequired: cargo.adrRequired,
+        adrDetails: cargo.adrRequired ? cargo.adrDetails.trim() || null : null,
+        stackable: cargo.stackable,
+        reference: cargo.reference.trim() || null,
+        loadingStopIndex: cargo.loadingStopIndex === '' ? null : Number(cargo.loadingStopIndex),
+        unloadingStopIndex: cargo.unloadingStopIndex === '' ? null : Number(cargo.unloadingStopIndex),
       })),
     }
 
@@ -571,7 +635,29 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
             onClick={() =>
               setCargoItems((rows) => [
                 ...rows,
-                { key: nextStopKey(), description: '', barcode: '', expectedQuantity: '1', quantityUnit: '', notes: '' },
+                {
+                  key: nextStopKey(),
+                  description: '',
+                  barcode: '',
+                  expectedQuantity: '1',
+                  quantityUnit: '',
+                  notes: '',
+                  unitType: '',
+                  unitTypeLabel: '',
+                  totalWeightKg: '',
+                  weightPerUnitKg: '',
+                  lengthMeters: '',
+                  widthMeters: '',
+                  heightMeters: '',
+                  volumeM3: '',
+                  volumeIsManual: false,
+                  adrRequired: false,
+                  adrDetails: '',
+                  stackable: true,
+                  reference: '',
+                  loadingStopIndex: '',
+                  unloadingStopIndex: '',
+                },
               ])
             }
             disabled={saving}
@@ -602,6 +688,137 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
               <input id={`cg-unit-${cargo.key}`} value={cargo.quantityUnit} onChange={(e) => setCargo(cargo.key, { quantityUnit: e.target.value })} disabled={saving} maxLength={50} placeholder="bv. colli" />
             </FormField>
           </div>
+          <div className="tof-row">
+            <FormField label="Verpakkingstype" htmlFor={`cg-type-${cargo.key}`}>
+              <select
+                id={`cg-type-${cargo.key}`}
+                value={cargo.unitType}
+                onChange={(e) => setCargo(cargo.key, { unitType: e.target.value as PackageUnitType | '' })}
+                disabled={saving}
+              >
+                <option value="">— Niet opgegeven —</option>
+                {Object.entries(UNIT_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            {cargo.unitType === 'Other' && (
+              <FormField label="Eigen typenaam" htmlFor={`cg-typelabel-${cargo.key}`}>
+                <input id={`cg-typelabel-${cargo.key}`} value={cargo.unitTypeLabel} onChange={(e) => setCargo(cargo.key, { unitTypeLabel: e.target.value })} disabled={saving} maxLength={50} />
+              </FormField>
+            )}
+            <FormField label="Laadstop" htmlFor={`cg-load-${cargo.key}`} hint="Automatisch bij één laad- en losstop.">
+              <select
+                id={`cg-load-${cargo.key}`}
+                value={cargo.loadingStopIndex}
+                onChange={(e) => setCargo(cargo.key, { loadingStopIndex: e.target.value })}
+                disabled={saving}
+              >
+                <option value="">— Automatisch —</option>
+                {stops.map((stop, stopIndex) =>
+                  stop.stopType === 'Loading' ? (
+                    <option key={stop.key} value={stopIndex}>
+                      {stopIndex + 1}. Laden — {stop.city || stop.locationName || 'stop'}
+                    </option>
+                  ) : null,
+                )}
+              </select>
+            </FormField>
+            <FormField label="Losstop" htmlFor={`cg-unload-${cargo.key}`}>
+              <select
+                id={`cg-unload-${cargo.key}`}
+                value={cargo.unloadingStopIndex}
+                onChange={(e) => setCargo(cargo.key, { unloadingStopIndex: e.target.value })}
+                disabled={saving}
+              >
+                <option value="">— Automatisch —</option>
+                {stops.map((stop, stopIndex) =>
+                  stop.stopType === 'Unloading' ? (
+                    <option key={stop.key} value={stopIndex}>
+                      {stopIndex + 1}. Lossen — {stop.city || stop.locationName || 'stop'}
+                    </option>
+                  ) : null,
+                )}
+              </select>
+            </FormField>
+          </div>
+          <details className="tof-stop-details">
+            <summary>Gewicht, afmetingen &amp; ADR</summary>
+            <div className="tof-row tof-row-4">
+              <FormField label="Totaal gewicht (kg)" htmlFor={`cg-weight-${cargo.key}`}>
+                <input id={`cg-weight-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.totalWeightKg} onChange={(e) => setCargo(cargo.key, { totalWeightKg: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField label="Gewicht per stuk (kg)" htmlFor={`cg-unitweight-${cargo.key}`}>
+                <input id={`cg-unitweight-${cargo.key}`} type="number" min={0} step="0.001" value={cargo.weightPerUnitKg} onChange={(e) => setCargo(cargo.key, { weightPerUnitKg: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField label="Referentie" htmlFor={`cg-ref-${cargo.key}`}>
+                <input id={`cg-ref-${cargo.key}`} value={cargo.reference} onChange={(e) => setCargo(cargo.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
+              </FormField>
+              <FormField label="Opmerkingen" htmlFor={`cg-notes-${cargo.key}`}>
+                <input id={`cg-notes-${cargo.key}`} value={cargo.notes} onChange={(e) => setCargo(cargo.key, { notes: e.target.value })} disabled={saving} maxLength={500} />
+              </FormField>
+            </div>
+            <div className="tof-row tof-row-4">
+              <FormField label="Lengte (m)" htmlFor={`cg-length-${cargo.key}`}>
+                <input id={`cg-length-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.lengthMeters} onChange={(e) => setCargo(cargo.key, { lengthMeters: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField label="Breedte (m)" htmlFor={`cg-width-${cargo.key}`}>
+                <input id={`cg-width-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.widthMeters} onChange={(e) => setCargo(cargo.key, { widthMeters: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField label="Hoogte (m)" htmlFor={`cg-height-${cargo.key}`}>
+                <input id={`cg-height-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.heightMeters} onChange={(e) => setCargo(cargo.key, { heightMeters: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField
+                label="Volume per stuk (m³)"
+                htmlFor={`cg-volume-${cargo.key}`}
+                hint={cargo.volumeIsManual ? 'Handmatige waarde.' : 'Automatisch uit L × B × H.'}
+              >
+                <input
+                  id={`cg-volume-${cargo.key}`}
+                  type="number"
+                  min={0}
+                  step="0.001"
+                  value={
+                    cargo.volumeIsManual
+                      ? cargo.volumeM3
+                      : (computeVolumeM3(
+                          numberOrNullFrom(cargo.lengthMeters),
+                          numberOrNullFrom(cargo.widthMeters),
+                          numberOrNullFrom(cargo.heightMeters),
+                        ) ?? '')
+                  }
+                  onChange={(e) => setCargo(cargo.key, { volumeM3: e.target.value })}
+                  disabled={saving || !cargo.volumeIsManual}
+                />
+                <label className="tof-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={cargo.volumeIsManual}
+                    onChange={(e) => setCargo(cargo.key, { volumeIsManual: e.target.checked })}
+                    disabled={saving}
+                  />
+                  Handmatig
+                </label>
+              </FormField>
+            </div>
+            <div className="tof-row">
+              <label className="tof-checkbox">
+                <input type="checkbox" checked={cargo.adrRequired} onChange={(e) => setCargo(cargo.key, { adrRequired: e.target.checked })} disabled={saving} />
+                ADR-goederen
+              </label>
+              {cargo.adrRequired && (
+                <FormField label="ADR-details" htmlFor={`cg-adr-${cargo.key}`} hint="UN-nummer, klasse, verpakkingsgroep…">
+                  <input id={`cg-adr-${cargo.key}`} value={cargo.adrDetails} onChange={(e) => setCargo(cargo.key, { adrDetails: e.target.value })} disabled={saving} maxLength={500} />
+                </FormField>
+              )}
+              <label className="tof-checkbox">
+                <input type="checkbox" checked={cargo.stackable} onChange={(e) => setCargo(cargo.key, { stackable: e.target.checked })} disabled={saving} />
+                Stapelbaar
+              </label>
+            </div>
+          </details>
           <div className="tof-stop-toolbar">
             <button
               type="button"

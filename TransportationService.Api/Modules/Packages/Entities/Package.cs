@@ -13,6 +13,11 @@ public enum PackageUnitType
     Container,
     Document,
     Other,
+    // Stored as strings, so appending members is safe.
+    EuroPallet,
+    BlockPallet,
+    Box,
+    Drum,
 }
 
 public enum PackageLifecycleStatus

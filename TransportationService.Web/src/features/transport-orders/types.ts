@@ -1,3 +1,5 @@
+import type { PackageUnitType } from '../packages/types'
+
 export type TransportOrderStatus = 'Draft' | 'Confirmed' | 'Planned' | 'InProgress' | 'Completed' | 'Invoiced' | 'Cancelled'
 export type StopType = 'Loading' | 'Unloading'
 
@@ -91,6 +93,21 @@ export interface CargoItem {
   expectedQuantity: number
   quantityUnit: string | null
   notes: string | null
+  unitType: PackageUnitType | null
+  unitTypeLabel: string | null
+  totalWeightKg: number | null
+  weightPerUnitKg: number | null
+  lengthMeters: number | null
+  widthMeters: number | null
+  heightMeters: number | null
+  volumeM3: number | null
+  volumeIsManual: boolean
+  adrRequired: boolean
+  adrDetails: string | null
+  stackable: boolean
+  reference: string | null
+  loadingStopId: string | null
+  unloadingStopId: string | null
 }
 
 export interface CargoItemInput {
@@ -99,6 +116,22 @@ export interface CargoItemInput {
   expectedQuantity: number
   quantityUnit: string | null
   notes: string | null
+  unitType: PackageUnitType | null
+  unitTypeLabel: string | null
+  totalWeightKg: number | null
+  weightPerUnitKg: number | null
+  lengthMeters: number | null
+  widthMeters: number | null
+  heightMeters: number | null
+  volumeM3: number | null
+  volumeIsManual: boolean
+  adrRequired: boolean
+  adrDetails: string | null
+  stackable: boolean
+  reference: string | null
+  /** Index into the submitted stops list (stops get fresh ids on every save). */
+  loadingStopIndex: number | null
+  unloadingStopIndex: number | null
 }
 
 export interface TransportOrderDetail {
