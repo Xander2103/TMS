@@ -57,6 +57,7 @@ export interface TrailerDetail {
   widthMeters: number | null
   heightMeters: number | null
   volumeM3: number | null
+  volumeIsManual: boolean
   hasRefrigeration: boolean
   adrSuitable: boolean
   ownershipType: TrailerOwnershipType

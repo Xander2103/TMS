@@ -38,6 +38,10 @@ export function updateVehicle(id: string, input: VehicleInput): Promise<VehicleD
   return apiClient.putJson<VehicleDetail, VehicleInput>(`/api/vehicles/${id}`, input)
 }
 
+export function setVehicleActive(id: string, isActive: boolean): Promise<void> {
+  return apiClient.postJson<void, { isActive: boolean }>(`/api/vehicles/${id}/active`, { isActive })
+}
+
 export function deleteVehicle(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/vehicles/${id}`)
 }

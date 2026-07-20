@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
+import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -20,7 +21,8 @@ import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocum
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { DamagePanel } from '../../damage/components/DamagePanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
-import { deleteTrailer, getTrailer, updateTrailer } from '../api/trailersApi'
+import { computeVolumeM3 } from '../../../utils/volume'
+import { deleteTrailer, getTrailer, setTrailerActive, updateTrailer } from '../api/trailersApi'
 import {
   TRAILER_OWNERSHIP_LABELS,
   TRAILER_STATUS_LABELS,
@@ -55,6 +57,7 @@ export function TrailerDetailPage() {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmActive, setConfirmActive] = useState<null | 'activate' | 'deactivate'>(null)
 
   const requestedTab = searchParams.get('tab')
   const tab: TabId = TAB_IDS.includes(requestedTab as TabId) ? (requestedTab as TabId) : 'overzicht'
@@ -105,6 +108,7 @@ export function TrailerDetailPage() {
       statusReason: trailer.statusReason,
       isActive: trailer.isActive,
       notes: trailer.notes,
+      volumeIsManual: trailer.volumeIsManual,
     })
     setDirty(false)
     setEditing(true)
@@ -150,12 +154,18 @@ export function TrailerDetailPage() {
   return (
     <div>
       <Breadcrumbs items={[{ label: 'Opleggers', to: '/trailers' }, { label: trailer.internalNumber }]} />
+      <BackButton to="/trailers" label="Terug naar opleggers" />
       <PageHeader
         title={`${trailer.brand ?? ''} ${trailer.model ?? ''}`.trim() || trailer.internalNumber}
         subtitle={`${trailer.internalNumber} · ${trailer.licensePlate}`}
         action={
           <div className="trailer-detail-actions">
             {canEdit && !editing && <Button variant="secondary" onClick={startEdit}>Bewerken</Button>}
+            {canEdit && !editing && (
+              <Button variant="secondary" onClick={() => setConfirmActive(trailer.isActive ? 'deactivate' : 'activate')}>
+                {trailer.isActive ? 'Deactiveren' : 'Heractiveren'}
+              </Button>
+            )}
             {hasPermission('trailers.delete') && !editing && (
               <Button variant="danger" onClick={() => setConfirmDelete(true)}>Verwijderen</Button>
             )}
@@ -201,12 +211,6 @@ export function TrailerDetailPage() {
                 <input id="t-status-reason" value={form.statusReason ?? ''} onChange={(e) => set('statusReason', e.target.value || null)} maxLength={500} disabled={saving} />
               </FormField>
             )}
-            <FormField label="Administratief actief" htmlFor="t-active" hint="Inactieve opleggers verdwijnen uit keuzelijsten en planning.">
-              <label className="trailer-checkbox">
-                <input id="t-active" type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} disabled={saving} />
-                <span>Oplegger is actief</span>
-              </label>
-            </FormField>
           </FormSection>
 
           <FormSection title="Basisgegevens" columns={3}>
@@ -234,8 +238,16 @@ export function TrailerDetailPage() {
             <FormField label="Model" htmlFor="t-model">
               <input id="t-model" value={form.model ?? ''} onChange={(e) => set('model', e.target.value || null)} disabled={saving} maxLength={100} />
             </FormField>
-            <FormField label="Bouwjaar" htmlFor="t-year">
-              <input id="t-year" type="number" value={form.year ?? ''} onChange={(e) => set('year', e.target.value ? Number(e.target.value) : null)} disabled={saving} />
+            <FormField label="Bouwjaar" htmlFor="t-year" hint={`Maximaal ${new Date().getFullYear()}.`}>
+              <input
+                id="t-year"
+                type="number"
+                min={1900}
+                max={new Date().getFullYear()}
+                value={form.year ?? ''}
+                onChange={(e) => set('year', e.target.value ? Number(e.target.value) : null)}
+                disabled={saving}
+              />
             </FormField>
             <FormField label="Eerste inschrijving" htmlFor="t-firstreg">
               <input id="t-firstreg" type="date" value={form.firstRegistrationDate ?? ''} onChange={(e) => set('firstRegistrationDate', e.target.value || null)} disabled={saving} />
@@ -264,8 +276,36 @@ export function TrailerDetailPage() {
             <FormField label="Hoogte (m)" htmlFor="t-height">
               <input id="t-height" inputMode="decimal" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', numberOrNull(e.target.value))} disabled={saving} />
             </FormField>
-            <FormField label="Volume (m³)" htmlFor="t-volume">
-              <input id="t-volume" inputMode="decimal" value={form.volumeM3 ?? ''} onChange={(e) => set('volumeM3', numberOrNull(e.target.value))} disabled={saving} />
+            <FormField
+              label="Volume (m³)"
+              htmlFor="t-volume"
+              hint={form.volumeIsManual ? 'Handmatige waarde; vink uit om opnieuw te berekenen.' : 'Automatisch berekend uit lengte × breedte × hoogte.'}
+            >
+              <input
+                id="t-volume"
+                inputMode="decimal"
+                value={
+                  form.volumeIsManual
+                    ? (form.volumeM3 ?? '')
+                    : (computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters) ?? form.volumeM3 ?? '')
+                }
+                onChange={(e) => set('volumeM3', numberOrNull(e.target.value))}
+                disabled={saving || !form.volumeIsManual}
+              />
+              <label className="trailer-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.volumeIsManual}
+                  onChange={(e) => {
+                    set('volumeIsManual', e.target.checked)
+                    if (e.target.checked) {
+                      set('volumeM3', form.volumeM3 ?? computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters))
+                    }
+                  }}
+                  disabled={saving}
+                />
+                <span>Handmatig invullen</span>
+              </label>
             </FormField>
             <div className="vehicle-form-equipment form-span-all">
               <label className="trailer-checkbox">
@@ -381,6 +421,32 @@ export function TrailerDetailPage() {
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
+      {confirmActive && (
+        <ConfirmDialog
+          title={confirmActive === 'deactivate' ? 'Oplegger deactiveren' : 'Oplegger heractiveren'}
+          message={
+            confirmActive === 'deactivate'
+              ? `${trailer.internalNumber} deactiveren? Historiek blijft behouden, maar de oplegger is niet meer inzetbaar voor nieuwe ritten.`
+              : `${trailer.internalNumber} heractiveren? De oplegger is daarna weer inzetbaar.`
+          }
+          confirmLabel={confirmActive === 'deactivate' ? 'Deactiveren' : 'Heractiveren'}
+          onConfirm={async () => {
+            if (!id) return
+            try {
+              await setTrailerActive(id, confirmActive === 'activate')
+              showSuccess(confirmActive === 'activate' ? 'Oplegger geheractiveerd.' : 'Oplegger gedeactiveerd.')
+              setConfirmActive(null)
+              const refreshed = await getTrailer(id)
+              setTrailer(refreshed)
+            } catch (err) {
+              showError(err instanceof ApiError ? err.message : 'De actie kon niet worden uitgevoerd.')
+              setConfirmActive(null)
+            }
+          }}
+          onCancel={() => setConfirmActive(null)}
         />
       )}
     </div>

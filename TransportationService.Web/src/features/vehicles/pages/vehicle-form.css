@@ -112,3 +112,15 @@
   gap: 20px;
   flex-wrap: wrap;
 }
+
+.vehicle-form-collapsible > summary {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-h);
+  cursor: pointer;
+  list-style: revert;
+}
+
+.vehicle-form-collapsible[open] > summary {
+  margin-bottom: 14px;
+}

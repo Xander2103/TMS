@@ -71,6 +71,9 @@ public class Vehicle : AuditableTenantEntity
     public decimal? HeightMeters { get; set; }
     public decimal? VolumeM3 { get; set; }
 
+    /// <summary>True when the volume was entered manually; false when derived from L×W×H.</summary>
+    public bool VolumeIsManual { get; set; }
+
     public int OdometerKm { get; set; }
 
     /// <summary>Configured norm consumption for cost estimates; measured averages win for actuals.</summary>

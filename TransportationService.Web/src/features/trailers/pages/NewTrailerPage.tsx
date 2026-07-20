@@ -6,6 +6,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
+import { describeApiError } from '../../../api/problemDetails'
+import { computeVolumeM3 } from '../../../utils/volume'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { createTrailer } from '../api/trailersApi'
 import {
@@ -28,6 +30,7 @@ const EMPTY: TrailerInput = {
   widthMeters: null,
   heightMeters: null,
   volumeM3: null,
+  volumeIsManual: false,
   hasRefrigeration: false,
   adrSuitable: false,
   ownershipType: 'Owned',
@@ -43,7 +46,11 @@ export function NewTrailerPage() {
   const { options: categories } = useLookupOptions('/api/trailer-categories')
   const [form, setForm] = useState<TrailerInput>(EMPTY)
   const [error, setError] = useState<string | null>(null)
+  const [yearError, setYearError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  const currentYear = new Date().getFullYear()
+  const autoVolume = computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters)
 
   function set<K extends keyof TrailerInput>(key: K, value: TrailerInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -56,13 +63,22 @@ export function NewTrailerPage() {
       setError('Kenteken is verplicht.')
       return
     }
+    if (form.year !== null && form.year > currentYear) {
+      setYearError(`Bouwjaar mag niet in de toekomst liggen (maximaal ${currentYear}).`)
+      return
+    }
+    setYearError(null)
     setSubmitting(true)
     try {
       const trailer = await createTrailer(form)
       showSuccess(`Oplegger ${trailer.internalNumber} aangemaakt.`)
       navigate(`/trailers/${trailer.id}`)
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 409 ? 'Er bestaat al een oplegger met dit kenteken.' : 'Oplegger kon niet worden aangemaakt.')
+      setError(
+        err instanceof ApiError && err.status === 409
+          ? 'Er bestaat al een oplegger met dit kenteken.'
+          : describeApiError(err, 'Oplegger kon niet worden aangemaakt.').message,
+      )
       setSubmitting(false)
     }
   }
@@ -112,8 +128,17 @@ export function NewTrailerPage() {
             <FormField label="Model" htmlFor="t-model">
               <input id="t-model" value={form.model ?? ''} onChange={(e) => set('model', e.target.value || null)} disabled={submitting} />
             </FormField>
-            <FormField label="Bouwjaar" htmlFor="t-year">
-              <input id="t-year" type="number" value={form.year ?? ''} onChange={(e) => set('year', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
+            <FormField label="Bouwjaar" htmlFor="t-year" error={yearError ?? undefined}>
+              <input
+                id="t-year"
+                type="number"
+                min={1900}
+                max={currentYear}
+                value={form.year ?? ''}
+                onChange={(e) => set('year', e.target.value === '' ? null : Number(e.target.value))}
+                aria-invalid={yearError ? 'true' : undefined}
+                disabled={submitting}
+              />
             </FormField>
             <FormField label="Eerste registratie" htmlFor="t-first-reg">
               <input id="t-first-reg" type="date" value={form.firstRegistrationDate ?? ''} onChange={(e) => set('firstRegistrationDate', e.target.value || null)} disabled={submitting} />
@@ -127,9 +152,6 @@ export function NewTrailerPage() {
             <FormField label="Laadvermogen (kg)" htmlFor="t-capacity">
               <input id="t-capacity" type="number" step="0.01" value={form.capacityKg ?? ''} onChange={(e) => set('capacityKg', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
             </FormField>
-            <FormField label="Volume (m³)" htmlFor="t-volume">
-              <input id="t-volume" type="number" step="0.01" value={form.volumeM3 ?? ''} onChange={(e) => set('volumeM3', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
-            </FormField>
             <FormField label="Lengte (m)" htmlFor="t-length">
               <input id="t-length" type="number" step="0.01" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
             </FormField>
@@ -138,6 +160,33 @@ export function NewTrailerPage() {
             </FormField>
             <FormField label="Hoogte (m)" htmlFor="t-height">
               <input id="t-height" type="number" step="0.01" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
+            </FormField>
+            <FormField
+              label="Volume (m³)"
+              htmlFor="t-volume"
+              hint={form.volumeIsManual ? 'Handmatige waarde; vink uit om opnieuw te berekenen.' : 'Automatisch berekend uit lengte × breedte × hoogte.'}
+            >
+              <input
+                id="t-volume"
+                type="number"
+                min={0}
+                step="0.001"
+                value={form.volumeIsManual ? (form.volumeM3 ?? '') : (autoVolume ?? '')}
+                onChange={(e) => set('volumeM3', e.target.value === '' ? null : Number(e.target.value))}
+                disabled={submitting || !form.volumeIsManual}
+              />
+              <label className="trailer-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.volumeIsManual}
+                  onChange={(e) => {
+                    set('volumeIsManual', e.target.checked)
+                    if (e.target.checked) set('volumeM3', form.volumeM3 ?? autoVolume)
+                  }}
+                  disabled={submitting}
+                />
+                <span>Handmatig invullen</span>
+              </label>
             </FormField>
           </div>
           <div className="trailer-form-checkboxes">

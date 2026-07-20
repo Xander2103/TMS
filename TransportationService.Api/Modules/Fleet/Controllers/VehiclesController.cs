@@ -77,6 +77,13 @@ public class VehiclesController : ControllerBase
         return Handle(result, created: false);
     }
 
+    [HttpPost("{id:guid}/active")]
+    [RequirePermission(PermissionCodes.VehiclesEdit)]
+    public async Task<IActionResult> SetActive(Guid id, SetVehicleActiveRequest request, CancellationToken cancellationToken)
+    {
+        return await _service.SetActiveAsync(id, request, cancellationToken) ? NoContent() : NotFound();
+    }
+
     [HttpDelete("{id:guid}")]
     [RequirePermission(PermissionCodes.VehiclesDelete)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

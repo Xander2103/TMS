@@ -30,6 +30,7 @@ public record TrailerDetailDto(
     decimal? WidthMeters,
     decimal? HeightMeters,
     decimal? VolumeM3,
+    bool VolumeIsManual,
     bool HasRefrigeration,
     bool AdrSuitable,
     VehicleOwnershipType OwnershipType,
@@ -54,7 +55,8 @@ public record CreateTrailerRequest(
     bool HasRefrigeration,
     bool AdrSuitable,
     VehicleOwnershipType OwnershipType,
-    string? Notes);
+    string? Notes,
+    bool VolumeIsManual = false);
 
 public record UpdateTrailerRequest(
     string LicensePlate,
@@ -75,7 +77,10 @@ public record UpdateTrailerRequest(
     TrailerOperationalStatus OperationalStatus,
     bool IsActive,
     string? Notes,
-    string? StatusReason = null);
+    string? StatusReason = null,
+    bool VolumeIsManual = false);
+
+public record SetTrailerActiveRequest(bool IsActive);
 
 public enum TrailerOperationOutcome
 {

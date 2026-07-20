@@ -40,7 +40,7 @@ public class NumberingConcurrencyTests
     private static VehicleService BuildVehicleService(Harness h)
     {
         var tenant = new DevTenantContext(h.TenantId);
-        return new VehicleService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+        return new VehicleService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)), TimeProvider.System);
     }
 
     private static CreateVehicleRequest VehicleRequest(string plate) => new(

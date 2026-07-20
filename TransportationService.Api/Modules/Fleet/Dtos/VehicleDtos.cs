@@ -33,6 +33,7 @@ public record VehicleDetailDto(
     decimal? WidthMeters,
     decimal? HeightMeters,
     decimal? VolumeM3,
+    bool VolumeIsManual,
     int OdometerKm,
     decimal? ConsumptionLPer100Km,
     bool HasCrane,
@@ -74,7 +75,8 @@ public record CreateVehicleRequest(
     VehicleOwnershipType OwnershipType,
     Guid? FixedDriverId,
     Guid? CurrentDriverId,
-    string? Notes);
+    string? Notes,
+    bool VolumeIsManual = false);
 
 public record UpdateVehicleRequest(
     string LicensePlate,
@@ -102,7 +104,10 @@ public record UpdateVehicleRequest(
     VehicleOperationalStatus OperationalStatus,
     bool IsActive,
     string? Notes,
-    string? StatusReason = null);
+    string? StatusReason = null,
+    bool VolumeIsManual = false);
+
+public record SetVehicleActiveRequest(bool IsActive);
 
 /// <summary>Body for the vehicle-side assignment endpoints; null DriverId clears the slot.</summary>
 public record AssignVehicleDriverRequest(Guid? DriverId, bool ReplaceExisting = false);

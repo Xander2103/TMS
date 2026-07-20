@@ -6,6 +6,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
+import { describeApiError } from '../../../api/problemDetails'
+import { computeVolumeM3 } from '../../../utils/volume'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import type { DriverListItem } from '../../drivers/types'
@@ -37,6 +39,7 @@ const EMPTY: CreateVehicleInput = {
   widthMeters: null,
   heightMeters: null,
   volumeM3: null,
+  volumeIsManual: false,
   odometerKm: 0,
   consumptionLPer100Km: null,
   hasCrane: false,
@@ -59,7 +62,11 @@ export function NewVehiclePage() {
   const [drivers, setDrivers] = useState<DriverListItem[]>([])
   const [form, setForm] = useState<CreateVehicleInput>(EMPTY)
   const [error, setError] = useState<string | null>(null)
+  const [yearError, setYearError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  const currentYear = new Date().getFullYear()
+  const autoVolume = computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters)
 
   useEffect(() => {
     let mounted = true
@@ -86,13 +93,22 @@ export function NewVehiclePage() {
       setError('Kenteken is verplicht.')
       return
     }
+    if (form.year !== null && form.year > currentYear) {
+      setYearError(`Bouwjaar mag niet in de toekomst liggen (maximaal ${currentYear}).`)
+      return
+    }
+    setYearError(null)
     setSubmitting(true)
     try {
       const vehicle = await createVehicle(form)
       showSuccess(`Voertuig ${vehicle.internalNumber} aangemaakt.`)
       navigate(`/vehicles/${vehicle.id}`)
     } catch (err) {
-      setError(err instanceof ApiError && err.status === 409 ? 'Er bestaat al een voertuig met dit kenteken.' : 'Voertuig kon niet worden aangemaakt.')
+      setError(
+        err instanceof ApiError && err.status === 409
+          ? 'Er bestaat al een voertuig met dit kenteken.'
+          : describeApiError(err, 'Voertuig kon niet worden aangemaakt.').message,
+      )
       setSubmitting(false)
     }
   }
@@ -133,11 +149,68 @@ export function NewVehiclePage() {
             <FormField label="Model" htmlFor="v-model">
               <input id="v-model" value={form.model ?? ''} onChange={(e) => set('model', e.target.value || null)} disabled={submitting} />
             </FormField>
-            <FormField label="Bouwjaar" htmlFor="v-year">
-              <input id="v-year" type="number" value={form.year ?? ''} onChange={(e) => set('year', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
+            <FormField label="Bouwjaar" htmlFor="v-year" error={yearError ?? undefined}>
+              <input
+                id="v-year"
+                type="number"
+                min={1900}
+                max={currentYear}
+                value={form.year ?? ''}
+                onChange={(e) => set('year', e.target.value === '' ? null : Number(e.target.value))}
+                aria-invalid={yearError ? 'true' : undefined}
+                disabled={submitting}
+              />
             </FormField>
           </div>
         </section>
+
+        <details className="vehicle-form-card vehicle-form-collapsible">
+          <summary>Capaciteit &amp; afmetingen (optioneel)</summary>
+          <div className="vehicle-form-grid">
+            <FormField label="MTM (kg)" htmlFor="v-gvw" hint="Maximaal toegelaten massa.">
+              <input id="v-gvw" type="number" min={0} value={form.grossVehicleWeightKg ?? ''} onChange={(e) => set('grossVehicleWeightKg', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
+            </FormField>
+            <FormField label="Laadvermogen (kg)" htmlFor="v-payload">
+              <input id="v-payload" type="number" min={0} value={form.payloadKg ?? ''} onChange={(e) => set('payloadKg', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
+            </FormField>
+            <FormField label="Lengte (m)" htmlFor="v-length">
+              <input id="v-length" type="number" min={0} step="0.01" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
+            </FormField>
+            <FormField label="Breedte (m)" htmlFor="v-width">
+              <input id="v-width" type="number" min={0} step="0.01" value={form.widthMeters ?? ''} onChange={(e) => set('widthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
+            </FormField>
+            <FormField label="Hoogte (m)" htmlFor="v-height">
+              <input id="v-height" type="number" min={0} step="0.01" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
+            </FormField>
+            <FormField
+              label="Volume (m³)"
+              htmlFor="v-volume"
+              hint={form.volumeIsManual ? 'Handmatige waarde; vink uit om opnieuw te berekenen.' : 'Automatisch berekend uit lengte × breedte × hoogte.'}
+            >
+              <input
+                id="v-volume"
+                type="number"
+                min={0}
+                step="0.001"
+                value={form.volumeIsManual ? (form.volumeM3 ?? '') : (autoVolume ?? '')}
+                onChange={(e) => set('volumeM3', e.target.value === '' ? null : Number(e.target.value))}
+                disabled={submitting || !form.volumeIsManual}
+              />
+              <label className="vehicle-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.volumeIsManual}
+                  onChange={(e) => {
+                    set('volumeIsManual', e.target.checked)
+                    if (e.target.checked) set('volumeM3', form.volumeM3 ?? autoVolume)
+                  }}
+                  disabled={submitting}
+                />
+                <span>Handmatig invullen</span>
+              </label>
+            </FormField>
+          </div>
+        </details>
 
         <section className="vehicle-form-card">
           <h2>Techniek</h2>

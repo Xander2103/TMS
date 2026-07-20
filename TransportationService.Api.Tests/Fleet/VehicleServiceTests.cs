@@ -27,7 +27,7 @@ public class VehicleServiceTests
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);
-        var sut = new VehicleService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)));
+        var sut = new VehicleService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), TimeProvider.System);
         return new Harness(db, sut, tenantId);
     }
 
@@ -124,5 +124,54 @@ public class VehicleServiceTests
         var options = await h.Sut.GetOptionsAsync(CancellationToken.None);
 
         Assert.Empty(options);
+    }
+
+    [Fact]
+    public async Task Create_ConstructionYearInTheFuture_IsRejected_YearProof()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        // Derived from the real clock so this test never goes stale at year rollover.
+        var nextYear = DateTime.UtcNow.Year + 1;
+        var ex = await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(
+            () => h.Sut.CreateAsync(CreateRequest() with { Year = nextYear }, CancellationToken.None));
+
+        Assert.Contains("year", ex.FieldErrors!.Keys);
+    }
+
+    [Fact]
+    public async Task Create_ComputesVolumeFromDimensions_UnlessManuallyOverridden()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        // CreateRequest carries 16.5 × 2.55 × 4 and a (stale) volume of 90 → auto wins.
+        var auto = await h.Sut.CreateAsync(CreateRequest("1-AAA-001"), CancellationToken.None);
+        Assert.Equal(168.3m, auto.Vehicle!.VolumeM3);
+        Assert.False(auto.Vehicle.VolumeIsManual);
+
+        var manual = await h.Sut.CreateAsync(
+            CreateRequest("1-AAA-002") with { VolumeIsManual = true, VolumeM3 = 90m }, CancellationToken.None);
+        Assert.Equal(90m, manual.Vehicle!.VolumeM3);
+        Assert.True(manual.Vehicle.VolumeIsManual);
+    }
+
+    [Fact]
+    public async Task SetActive_TogglesLifecycle_AndAudits()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(CreateRequest(), CancellationToken.None);
+
+        var ok = await h.Sut.SetActiveAsync(created.Vehicle!.Id, new SetVehicleActiveRequest(false), CancellationToken.None);
+
+        Assert.True(ok);
+        Assert.False((await h.Sut.GetByIdAsync(created.Vehicle.Id, CancellationToken.None))!.IsActive);
+        Assert.Single(h.Db.Context.AuditLogs, l => l.EntityType == "Vehicle" && l.Action == "Deactivated");
+        Assert.Empty(await h.Sut.GetOptionsAsync(CancellationToken.None));
+
+        await h.Sut.SetActiveAsync(created.Vehicle.Id, new SetVehicleActiveRequest(true), CancellationToken.None);
+        Assert.True((await h.Sut.GetByIdAsync(created.Vehicle.Id, CancellationToken.None))!.IsActive);
     }
 }

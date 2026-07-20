@@ -75,6 +75,13 @@ public class TrailersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    [HttpPost("{id:guid}/active")]
+    [RequirePermission(PermissionCodes.TrailersEdit)]
+    public async Task<IActionResult> SetActive(Guid id, SetTrailerActiveRequest request, CancellationToken cancellationToken)
+    {
+        return await _service.SetActiveAsync(id, request, cancellationToken) ? NoContent() : NotFound();
+    }
+
     [HttpDelete("{id:guid}")]
     [RequirePermission(PermissionCodes.TrailersDelete)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

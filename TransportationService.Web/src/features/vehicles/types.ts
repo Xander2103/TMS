@@ -83,6 +83,7 @@ export interface VehicleDetail {
   widthMeters: number | null
   heightMeters: number | null
   volumeM3: number | null
+  volumeIsManual: boolean
   odometerKm: number
   consumptionLPer100Km: number | null
   hasCrane: boolean

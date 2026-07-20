@@ -106,3 +106,15 @@
     grid-template-columns: 1fr;
   }
 }
+
+.trailer-form-collapsible > summary {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-h);
+  cursor: pointer;
+  list-style: revert;
+}
+
+.trailer-form-collapsible[open] > summary {
+  margin-bottom: 14px;
+}

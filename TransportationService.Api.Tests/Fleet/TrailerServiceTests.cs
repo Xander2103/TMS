@@ -25,7 +25,7 @@ public class TrailerServiceTests
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);
-        var sut = new TrailerService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)));
+        var sut = new TrailerService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), TimeProvider.System);
         return new Harness(db, sut, tenantId);
     }
 

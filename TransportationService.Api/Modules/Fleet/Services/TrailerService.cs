@@ -17,12 +17,15 @@ public class TrailerService : ITrailerService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly TimeProvider _timeProvider;
 
-    public TrailerService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public TrailerService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        TimeProvider timeProvider)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _timeProvider = timeProvider;
     }
 
     private IQueryable<Trailer> TenantScoped() =>
@@ -102,7 +105,7 @@ public class TrailerService : ITrailerService
         };
         ApplyEditableFields(trailer, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.CapacityKg, request.LengthMeters, request.WidthMeters, request.HeightMeters,
-            request.VolumeM3, request.HasRefrigeration, request.AdrSuitable, request.OwnershipType, request.Notes);
+            request.VolumeM3, request.VolumeIsManual, request.HasRefrigeration, request.AdrSuitable, request.OwnershipType, request.Notes);
 
         _dbContext.Add(trailer);
         try
@@ -153,7 +156,7 @@ public class TrailerService : ITrailerService
         trailer.IsActive = request.IsActive;
         ApplyEditableFields(trailer, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.CapacityKg, request.LengthMeters, request.WidthMeters, request.HeightMeters,
-            request.VolumeM3, request.HasRefrigeration, request.AdrSuitable, request.OwnershipType, request.Notes);
+            request.VolumeM3, request.VolumeIsManual, request.HasRefrigeration, request.AdrSuitable, request.OwnershipType, request.Notes);
 
         try
         {
@@ -168,6 +171,27 @@ public class TrailerService : ITrailerService
             new { trailer.LicensePlate, trailer.OperationalStatus, trailer.StatusReason, trailer.IsActive }, cancellationToken);
 
         return TrailerOperationResult.Success(await MapToDetailAsync(trailer, cancellationToken));
+    }
+
+    public async Task<bool> SetActiveAsync(Guid id, SetTrailerActiveRequest request, CancellationToken cancellationToken)
+    {
+        var trailer = await TenantScoped().FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        if (trailer is null)
+        {
+            return false;
+        }
+
+        if (trailer.IsActive != request.IsActive)
+        {
+            trailer.IsActive = request.IsActive;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await _auditService.RecordAsync(EntityType, trailer.Id.ToString(),
+                request.IsActive ? "Activated" : "Deactivated", null,
+                new { trailer.IsActive }, cancellationToken);
+        }
+
+        return true;
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
@@ -187,11 +211,14 @@ public class TrailerService : ITrailerService
         return true;
     }
 
-    private static void ApplyEditableFields(
+    private void ApplyEditableFields(
         Trailer t, string? vin, Guid? categoryId, string? brand, string? model, int? year,
         DateOnly? firstRegistration, decimal? capacity, decimal? length, decimal? width, decimal? height, decimal? volume,
-        bool refrigeration, bool adr, VehicleOwnershipType ownership, string? notes)
+        bool volumeIsManual, bool refrigeration, bool adr, VehicleOwnershipType ownership, string? notes)
     {
+        FleetFieldRules.ValidateConstructionYear(year, _timeProvider.GetUtcNow().Year);
+        var (resolvedVolume, isManual) = FleetFieldRules.ResolveVolume(length, width, height, volume, volumeIsManual);
+
         t.Vin = Trim(vin);
         t.CategoryId = categoryId;
         t.Brand = Trim(brand);
@@ -202,7 +229,8 @@ public class TrailerService : ITrailerService
         t.LengthMeters = length;
         t.WidthMeters = width;
         t.HeightMeters = height;
-        t.VolumeM3 = volume;
+        t.VolumeM3 = resolvedVolume;
+        t.VolumeIsManual = isManual;
         t.HasRefrigeration = refrigeration;
         t.AdrSuitable = adr;
         t.OwnershipType = ownership;
@@ -224,7 +252,7 @@ public class TrailerService : ITrailerService
 
         return new TrailerDetailDto(
             t.Id, t.InternalNumber, t.LicensePlate, t.Vin, t.CategoryId, categoryName, t.Brand, t.Model, t.Year, t.FirstRegistrationDate,
-            t.CapacityKg, t.LengthMeters, t.WidthMeters, t.HeightMeters, t.VolumeM3,
+            t.CapacityKg, t.LengthMeters, t.WidthMeters, t.HeightMeters, t.VolumeM3, t.VolumeIsManual,
             t.HasRefrigeration, t.AdrSuitable, t.OwnershipType, t.OperationalStatus, t.StatusReason, t.IsActive, t.Notes);
     }
 
