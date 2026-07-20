@@ -34,6 +34,7 @@ const TransportOrderDetailPage = lazyPage(() => import('../features/transport-or
 const PlanningPage = lazyPage(() => import('../features/planning/pages/PlanningPage'), 'PlanningPage')
 const PlanningCenterPage = lazyPage(() => import('../features/planning-center/pages/PlanningCenterPage'), 'PlanningCenterPage')
 const OperationsPage = lazyPage(() => import('../features/operations/pages/OperationsPage'), 'OperationsPage')
+const ProfitabilityPage = lazyPage(() => import('../features/profitability/pages/ProfitabilityPage'), 'ProfitabilityPage')
 const DriverLayout = lazyPage(() => import('../features/driver/components/DriverLayout'), 'DriverLayout')
 const DriverHomePage = lazyPage(() => import('../features/driver/pages/DriverHomePage'), 'DriverHomePage')
 const DriverDocumentsPage = lazyPage(() => import('../features/driver/pages/DriverDocumentsPage'), 'DriverDocumentsPage')
@@ -144,6 +145,7 @@ const router = createBrowserRouter(
           <Route path="/planning" element={<PlanningPage />} />
           <Route path="/planning-center" element={<PlanningCenterPage />} />
           <Route path="/operations" element={<OperationsPage />} />
+          <Route path="/profitability" element={<ProfitabilityPage />} />
           <Route path="/planning/:id" element={<TripDetailPage />} />
           <Route path="/exceptions" element={<ExceptionsPage />} />
           <Route path="/exceptions/:id" element={<ExceptionDetailPage />} />

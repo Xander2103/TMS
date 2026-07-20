@@ -183,6 +183,12 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services
 builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services.IOperationsOverviewService,
     TransportationService.Api.Modules.Operations.Services.OperationsOverviewService>();
 
+// Profitability read models + export
+builder.Services.AddScoped<TransportationService.Api.Modules.Profitability.Services.IProfitabilityQueryService,
+    TransportationService.Api.Modules.Profitability.Services.ProfitabilityQueryService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Profitability.Services.IProfitabilityExportService,
+    TransportationService.Api.Modules.Profitability.Services.ProfitabilityExportService>();
+
 // Driver app (self-scoped dashboard, documents and incident reporting)
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IDriverAppService,
     TransportationService.Api.Modules.Planning.Services.DriverAppService>();
