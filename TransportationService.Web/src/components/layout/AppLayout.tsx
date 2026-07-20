@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { LoadingState } from '../feedback/LoadingState'
 import { CommandPalette } from './CommandPalette'
 import { OfflineBanner } from './OfflineBanner'
 import { Sidebar } from './Sidebar'
@@ -32,7 +33,10 @@ export function AppLayout() {
       <Sidebar open={navOpen} onNavigate={() => setNavOpen(false)} />
       <CommandPalette />
       <main className="content">
-        <Outlet />
+        {/* Pages are code-split per route; the shell stays visible while a chunk loads. */}
+        <Suspense fallback={<LoadingState message="Pagina laden..." />}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   )

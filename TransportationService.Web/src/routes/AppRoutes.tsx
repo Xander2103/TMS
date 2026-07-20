@@ -1,3 +1,4 @@
+import { lazy, Suspense, type ComponentType } from 'react'
 import {
   createBrowserRouter,
   createRoutesFromElements,
@@ -10,84 +11,103 @@ import { AuthProvider } from '../features/auth/AuthContext'
 import { LoginPage } from '../features/auth/LoginPage'
 import { RequireAuth } from '../features/auth/RequireAuth'
 import { AppLayout } from '../components/layout/AppLayout'
+import { LoadingState } from '../components/feedback/LoadingState'
 import { NotFoundPage } from '../components/feedback/NotFoundPage'
-import { DashboardPage } from '../features/dashboard/pages/DashboardPage'
-import { TransportOrdersPage } from '../features/transport-orders/pages/TransportOrdersPage'
-import { NewTransportOrderPage } from '../features/transport-orders/pages/NewTransportOrderPage'
-import { TransportOrderDetailPage } from '../features/transport-orders/pages/TransportOrderDetailPage'
-import { PlanningPage } from '../features/planning/pages/PlanningPage'
-import { TripDetailPage } from '../features/planning/pages/TripDetailPage'
-import { MyTripsPage } from '../features/my-trips/pages/MyTripsPage'
-import { TripExecutionPage } from '../features/my-trips/pages/TripExecutionPage'
-import { ExceptionsPage } from '../features/exceptions/pages/ExceptionsPage'
-import { ExceptionDetailPage } from '../features/exceptions/pages/ExceptionDetailPage'
-import { PodDetailPage } from '../features/pod/pages/PodDetailPage'
-import { PackageDetailPage } from '../features/packages/pages/PackageDetailPage'
-import { WarehousePage } from '../features/packages/pages/WarehousePage'
-import { PortalDashboardPage } from '../features/portal/pages/PortalDashboardPage'
-import { PortalPlanningPage } from '../features/portal/pages/PortalPlanningPage'
-import { EmployeePlanningPage } from '../features/employee-planning/pages/EmployeePlanningPage'
-import { MessagingPage } from '../features/messaging/pages/MessagingPage'
-import { EdiPage } from '../features/edi/pages/EdiPage'
-import { IntegrationsPage } from '../features/integrations/pages/IntegrationsPage'
-import { PortalAbsencesPage } from '../features/portal/pages/PortalAbsencesPage'
-import { PortalQualificationsPage } from '../features/portal/pages/PortalQualificationsPage'
-import { PortalProfilePage } from '../features/portal/pages/PortalProfilePage'
-import { InvoicesPage } from '../features/invoices/pages/InvoicesPage'
-import { NewInvoicePage } from '../features/invoices/pages/NewInvoicePage'
-import { InvoiceDetailPage } from '../features/invoices/pages/InvoiceDetailPage'
-import { NotificationsPage } from '../features/notifications/pages/NotificationsPage'
-import { CustomersPage } from '../features/customers/pages/CustomersPage'
-import { NewCustomerPage } from '../features/customers/pages/NewCustomerPage'
-import { CustomerDetailPage } from '../features/customers/pages/CustomerDetailPage'
-import { DriversPage } from '../features/drivers/pages/DriversPage'
-import { NewDriverPage } from '../features/drivers/pages/NewDriverPage'
-import { DriverDetailPage } from '../features/drivers/pages/DriverDetailPage'
-import { VehiclesPage } from '../features/vehicles/pages/VehiclesPage'
-import { NewVehiclePage } from '../features/vehicles/pages/NewVehiclePage'
-import { VehicleDetailPage } from '../features/vehicles/pages/VehicleDetailPage'
-import { TrailersPage } from '../features/trailers/pages/TrailersPage'
-import { NewTrailerPage } from '../features/trailers/pages/NewTrailerPage'
-import { TrailerDetailPage } from '../features/trailers/pages/TrailerDetailPage'
-import { AbsencesPage } from '../features/absences/pages/AbsencesPage'
-import { FleetDashboardPage } from '../features/fleet-dashboard/pages/FleetDashboardPage'
-import { TankCardsPage } from '../features/tank-cards/pages/TankCardsPage'
-import { MaintenancePoliciesPage } from '../features/maintenance-policies/pages/MaintenancePoliciesPage'
-import { CustomerPortalOrdersPage } from '../features/customer-portal/pages/CustomerPortalOrdersPage'
-import { CustomerPortalNewOrderPage } from '../features/customer-portal/pages/CustomerPortalNewOrderPage'
-import { CustomerPortalOrderDetailPage } from '../features/customer-portal/pages/CustomerPortalOrderDetailPage'
-import { ChangePasswordPage, ForgotPasswordPage, ResetPasswordPage } from '../features/auth/PasswordFlowPages'
-import { JobFunctionMappingsPage } from '../features/roles/pages/JobFunctionMappingsPage'
-import { InboxPage } from '../features/inbox/pages/InboxPage'
-import { CostRatesPage } from '../features/trip-costing/pages/CostRatesPage'
-import { RateCardsPage } from '../features/tarification/pages/RateCardsPage'
-import { KpiDashboardPage } from '../features/kpi/pages/KpiDashboardPage'
-import { KpiTripsPage } from '../features/kpi/pages/KpiTripsPage'
-import { LocationsPage } from '../features/locations/pages/LocationsPage'
-import { NewLocationPage } from '../features/locations/pages/NewLocationPage'
-import { LocationDetailPage } from '../features/locations/pages/LocationDetailPage'
-import { SettingsPage } from '../features/settings/pages/SettingsPage'
-import { UsersPage } from '../features/users/pages/UsersPage'
-import { NewUserPage } from '../features/users/pages/NewUserPage'
-import { UserDetailPage } from '../features/users/pages/UserDetailPage'
-import { RolesPage } from '../features/roles/pages/RolesPage'
-import { RoleDetailPage } from '../features/roles/pages/RoleDetailPage'
-import { EmployeesPage } from '../features/employees/pages/EmployeesPage'
-import { QualificationsOverviewPage } from '../features/qualifications/pages/QualificationsOverviewPage'
-import { NewEmployeePage } from '../features/employees/pages/NewEmployeePage'
-import { EmployeeDetailPage } from '../features/employees/pages/EmployeeDetailPage'
-import { DossiersPage } from '../features/dossiers/pages/DossiersPage'
-import { DossierDetailPage } from '../features/dossiers/pages/DossierDetailPage'
-import { IncidentsPage } from '../features/incidents/pages/IncidentsPage'
-import { IncidentDetailPage } from '../features/incidents/pages/IncidentDetailPage'
-import { LookupPage } from '../features/master-data/pages/LookupPage'
 import { LOOKUP_RESOURCES } from '../features/master-data/lookupRegistry'
+
+/**
+ * Route-based code splitting: every page loads as its own chunk on first visit, so the
+ * initial bundle only carries the shell (auth, layout, shared kit). Pages use named
+ * exports, hence the pick-helper around React.lazy.
+ */
+function lazyPage<TModule extends Record<string, unknown>>(
+  loader: () => Promise<TModule>,
+  name: keyof TModule,
+) {
+  return lazy(async () => ({ default: (await loader())[name] as ComponentType }))
+}
+
+const DashboardPage = lazyPage(() => import('../features/dashboard/pages/DashboardPage'), 'DashboardPage')
+const TransportOrdersPage = lazyPage(() => import('../features/transport-orders/pages/TransportOrdersPage'), 'TransportOrdersPage')
+const NewTransportOrderPage = lazyPage(() => import('../features/transport-orders/pages/NewTransportOrderPage'), 'NewTransportOrderPage')
+const TransportOrderDetailPage = lazyPage(() => import('../features/transport-orders/pages/TransportOrderDetailPage'), 'TransportOrderDetailPage')
+const PlanningPage = lazyPage(() => import('../features/planning/pages/PlanningPage'), 'PlanningPage')
+const TripDetailPage = lazyPage(() => import('../features/planning/pages/TripDetailPage'), 'TripDetailPage')
+const MyTripsPage = lazyPage(() => import('../features/my-trips/pages/MyTripsPage'), 'MyTripsPage')
+const TripExecutionPage = lazyPage(() => import('../features/my-trips/pages/TripExecutionPage'), 'TripExecutionPage')
+const ExceptionsPage = lazyPage(() => import('../features/exceptions/pages/ExceptionsPage'), 'ExceptionsPage')
+const ExceptionDetailPage = lazyPage(() => import('../features/exceptions/pages/ExceptionDetailPage'), 'ExceptionDetailPage')
+const PodDetailPage = lazyPage(() => import('../features/pod/pages/PodDetailPage'), 'PodDetailPage')
+const PackageDetailPage = lazyPage(() => import('../features/packages/pages/PackageDetailPage'), 'PackageDetailPage')
+const WarehousePage = lazyPage(() => import('../features/packages/pages/WarehousePage'), 'WarehousePage')
+const PortalDashboardPage = lazyPage(() => import('../features/portal/pages/PortalDashboardPage'), 'PortalDashboardPage')
+const PortalPlanningPage = lazyPage(() => import('../features/portal/pages/PortalPlanningPage'), 'PortalPlanningPage')
+const EmployeePlanningPage = lazyPage(() => import('../features/employee-planning/pages/EmployeePlanningPage'), 'EmployeePlanningPage')
+const MessagingPage = lazyPage(() => import('../features/messaging/pages/MessagingPage'), 'MessagingPage')
+const EdiPage = lazyPage(() => import('../features/edi/pages/EdiPage'), 'EdiPage')
+const IntegrationsPage = lazyPage(() => import('../features/integrations/pages/IntegrationsPage'), 'IntegrationsPage')
+const PortalAbsencesPage = lazyPage(() => import('../features/portal/pages/PortalAbsencesPage'), 'PortalAbsencesPage')
+const PortalQualificationsPage = lazyPage(() => import('../features/portal/pages/PortalQualificationsPage'), 'PortalQualificationsPage')
+const PortalProfilePage = lazyPage(() => import('../features/portal/pages/PortalProfilePage'), 'PortalProfilePage')
+const InvoicesPage = lazyPage(() => import('../features/invoices/pages/InvoicesPage'), 'InvoicesPage')
+const NewInvoicePage = lazyPage(() => import('../features/invoices/pages/NewInvoicePage'), 'NewInvoicePage')
+const InvoiceDetailPage = lazyPage(() => import('../features/invoices/pages/InvoiceDetailPage'), 'InvoiceDetailPage')
+const NotificationsPage = lazyPage(() => import('../features/notifications/pages/NotificationsPage'), 'NotificationsPage')
+const CustomersPage = lazyPage(() => import('../features/customers/pages/CustomersPage'), 'CustomersPage')
+const NewCustomerPage = lazyPage(() => import('../features/customers/pages/NewCustomerPage'), 'NewCustomerPage')
+const CustomerDetailPage = lazyPage(() => import('../features/customers/pages/CustomerDetailPage'), 'CustomerDetailPage')
+const DriversPage = lazyPage(() => import('../features/drivers/pages/DriversPage'), 'DriversPage')
+const NewDriverPage = lazyPage(() => import('../features/drivers/pages/NewDriverPage'), 'NewDriverPage')
+const DriverDetailPage = lazyPage(() => import('../features/drivers/pages/DriverDetailPage'), 'DriverDetailPage')
+const VehiclesPage = lazyPage(() => import('../features/vehicles/pages/VehiclesPage'), 'VehiclesPage')
+const NewVehiclePage = lazyPage(() => import('../features/vehicles/pages/NewVehiclePage'), 'NewVehiclePage')
+const VehicleDetailPage = lazyPage(() => import('../features/vehicles/pages/VehicleDetailPage'), 'VehicleDetailPage')
+const TrailersPage = lazyPage(() => import('../features/trailers/pages/TrailersPage'), 'TrailersPage')
+const NewTrailerPage = lazyPage(() => import('../features/trailers/pages/NewTrailerPage'), 'NewTrailerPage')
+const TrailerDetailPage = lazyPage(() => import('../features/trailers/pages/TrailerDetailPage'), 'TrailerDetailPage')
+const AbsencesPage = lazyPage(() => import('../features/absences/pages/AbsencesPage'), 'AbsencesPage')
+const FleetDashboardPage = lazyPage(() => import('../features/fleet-dashboard/pages/FleetDashboardPage'), 'FleetDashboardPage')
+const TankCardsPage = lazyPage(() => import('../features/tank-cards/pages/TankCardsPage'), 'TankCardsPage')
+const MaintenancePoliciesPage = lazyPage(() => import('../features/maintenance-policies/pages/MaintenancePoliciesPage'), 'MaintenancePoliciesPage')
+const CustomerPortalOrdersPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalOrdersPage'), 'CustomerPortalOrdersPage')
+const CustomerPortalNewOrderPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalNewOrderPage'), 'CustomerPortalNewOrderPage')
+const CustomerPortalOrderDetailPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalOrderDetailPage'), 'CustomerPortalOrderDetailPage')
+const ForgotPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ForgotPasswordPage')
+const ResetPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ResetPasswordPage')
+const ChangePasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ChangePasswordPage')
+const JobFunctionMappingsPage = lazyPage(() => import('../features/roles/pages/JobFunctionMappingsPage'), 'JobFunctionMappingsPage')
+const InboxPage = lazyPage(() => import('../features/inbox/pages/InboxPage'), 'InboxPage')
+const CostRatesPage = lazyPage(() => import('../features/trip-costing/pages/CostRatesPage'), 'CostRatesPage')
+const RateCardsPage = lazyPage(() => import('../features/tarification/pages/RateCardsPage'), 'RateCardsPage')
+const KpiDashboardPage = lazyPage(() => import('../features/kpi/pages/KpiDashboardPage'), 'KpiDashboardPage')
+const KpiTripsPage = lazyPage(() => import('../features/kpi/pages/KpiTripsPage'), 'KpiTripsPage')
+const LocationsPage = lazyPage(() => import('../features/locations/pages/LocationsPage'), 'LocationsPage')
+const NewLocationPage = lazyPage(() => import('../features/locations/pages/NewLocationPage'), 'NewLocationPage')
+const LocationDetailPage = lazyPage(() => import('../features/locations/pages/LocationDetailPage'), 'LocationDetailPage')
+const SettingsPage = lazyPage(() => import('../features/settings/pages/SettingsPage'), 'SettingsPage')
+const UsersPage = lazyPage(() => import('../features/users/pages/UsersPage'), 'UsersPage')
+const NewUserPage = lazyPage(() => import('../features/users/pages/NewUserPage'), 'NewUserPage')
+const UserDetailPage = lazyPage(() => import('../features/users/pages/UserDetailPage'), 'UserDetailPage')
+const RolesPage = lazyPage(() => import('../features/roles/pages/RolesPage'), 'RolesPage')
+const RoleDetailPage = lazyPage(() => import('../features/roles/pages/RoleDetailPage'), 'RoleDetailPage')
+const EmployeesPage = lazyPage(() => import('../features/employees/pages/EmployeesPage'), 'EmployeesPage')
+const QualificationsOverviewPage = lazyPage(() => import('../features/qualifications/pages/QualificationsOverviewPage'), 'QualificationsOverviewPage')
+const NewEmployeePage = lazyPage(() => import('../features/employees/pages/NewEmployeePage'), 'NewEmployeePage')
+const EmployeeDetailPage = lazyPage(() => import('../features/employees/pages/EmployeeDetailPage'), 'EmployeeDetailPage')
+const LookupPage = lazyPage(() => import('../features/master-data/pages/LookupPage'), 'LookupPage')
+const DossiersPage = lazyPage(() => import('../features/dossiers/pages/DossiersPage'), 'DossiersPage')
+const DossierDetailPage = lazyPage(() => import('../features/dossiers/pages/DossierDetailPage'), 'DossierDetailPage')
+const IncidentsPage = lazyPage(() => import('../features/incidents/pages/IncidentsPage'), 'IncidentsPage')
+const IncidentDetailPage = lazyPage(() => import('../features/incidents/pages/IncidentDetailPage'), 'IncidentDetailPage')
 
 /** Root layout route: providers that need to live inside the router render an Outlet. */
 function RootProviders() {
   return (
     <AuthProvider>
-      <Outlet />
+      {/* Boundary for lazily loaded routes outside the app shell (login/password flows). */}
+      <Suspense fallback={<LoadingState message="Laden..." />}>
+        <Outlet />
+      </Suspense>
     </AuthProvider>
   )
 }
