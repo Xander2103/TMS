@@ -36,6 +36,7 @@ const operationsNavItems: NavItem[] = [
   { label: 'Locaties', to: '/locations', permissions: ['locations.view'] },
   { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
   { label: 'Kostentarieven', to: '/cost-rates', permissions: ['trip_costs.view', 'trip_costs.manage'] },
+  { label: 'Verkooptarieven', to: '/rate-cards', permissions: ['tariffs.view', 'tariffs.manage'] },
   { label: 'Berichten (e-mail/SMS)', to: '/messaging', permissions: ['messaging.manage'] },
   { label: 'EDI', to: '/edi', permissions: ['edi.manage'] },
   { label: 'Integraties', to: '/integrations', permissions: ['integrations.manage'] },

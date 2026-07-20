@@ -70,6 +70,10 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierRelation> DossierRelations => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierRelation>();
     public DbSet<TransportationService.Api.Modules.Incidents.Entities.Incident> Incidents => Set<TransportationService.Api.Modules.Incidents.Entities.Incident>();
 
+    // Tarification
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.RateCard> RateCards => Set<TransportationService.Api.Modules.Tarification.Entities.RateCard>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.RateSurcharge> RateSurcharges => Set<TransportationService.Api.Modules.Tarification.Entities.RateSurcharge>();
+
     // Invoicing (Phase 8)
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceLine> InvoiceLines => Set<InvoiceLine>();

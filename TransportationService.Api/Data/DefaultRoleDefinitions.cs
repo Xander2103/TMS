@@ -63,6 +63,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PackageReportsExport,
                 PermissionCodes.DossiersView, PermissionCodes.DossiersManage,
                 PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
+                PermissionCodes.TariffsView,
             ]),
 
         new("dispatcher", "Dispatcher",
@@ -118,6 +119,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PackageReportsExport,
                 PermissionCodes.DossiersView, PermissionCodes.DossiersManage,
                 PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
+                PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -135,6 +137,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.KpiView, PermissionCodes.KpiExport,
                 PermissionCodes.PackageReportsExport,
                 PermissionCodes.DossiersView, PermissionCodes.IncidentsView,
+                PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
             ]),
 
         new("hr", "HR",

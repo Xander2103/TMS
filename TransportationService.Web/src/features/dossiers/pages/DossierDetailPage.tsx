@@ -14,6 +14,7 @@ import { SearchableSelect, type SearchableSelectOption } from '../../../componen
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { addRecentItem } from '../../../hooks/recentItems'
 import { useAuth } from '../../auth/authContextValue'
 import { euro } from '../../invoices/types'
 import { searchCustomers } from '../../customers/api/customersApi'
@@ -92,6 +93,11 @@ export function DossierDetailPage() {
       .then((data) => {
         setDossier(data)
         setLoadError(null)
+        addRecentItem({
+          category: 'Dossiers',
+          title: `${data.dossierNumber} · ${data.title}`,
+          route: `/dossiers/${data.id}`,
+        })
       })
       .catch(() => setLoadError('Het dossier kon niet worden geladen.'))
   }, [id])

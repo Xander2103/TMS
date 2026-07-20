@@ -159,6 +159,48 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>
+    /// Bulk status change: each order runs through the exact same transition rules and side
+    /// effects as a single change; failures are reported per order and never block the rest.
+    /// </summary>
+    [HttpPost("bulk-status")]
+    [RequirePermission(PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<BulkStatusResultDto>> BulkChangeStatus(
+        BulkChangeStatusRequest request, CancellationToken cancellationToken)
+    {
+        var ids = (request.OrderIds ?? []).Distinct().Take(100).ToList();
+        if (ids.Count == 0)
+        {
+            return BadRequest(new { message = "Geen opdrachten geselecteerd." });
+        }
+
+        var results = new List<BulkStatusItemResultDto>();
+        foreach (var orderId in ids)
+        {
+            var result = await _service.ChangeStatusAsync(orderId, request.Status, cancellationToken);
+            if (result.Outcome == TransportOrderOperationOutcome.Success)
+            {
+                await _ediService.QueueOutboundStatusAsync(orderId, request.Status.ToString(), cancellationToken);
+                if (request.Status == Entities.TransportOrderStatus.Confirmed)
+                {
+                    await _packageGeneration.GenerateForOrderAsync(orderId, cancellationToken);
+                }
+
+                results.Add(new BulkStatusItemResultDto(orderId, true, null));
+            }
+            else
+            {
+                results.Add(new BulkStatusItemResultDto(orderId, false,
+                    result.Outcome == TransportOrderOperationOutcome.NotFound
+                        ? "Opdracht niet gevonden."
+                        : result.Error ?? "De statuswijziging is niet toegestaan."));
+            }
+        }
+
+        return Ok(new BulkStatusResultDto(
+            results.Count(r => r.Success), results.Count(r => !r.Success), results));
+    }
+
     [HttpPost("{id:guid}/cancel")]
     [RequirePermission(PermissionCodes.OrdersCancel, PermissionCodes.OrdersManage)]
     public async Task<ActionResult<TransportOrderDetailDto>> Cancel(

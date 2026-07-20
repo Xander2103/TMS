@@ -158,6 +158,10 @@ public static class PermissionCodes
     public const string IncidentsView = "incidents.view";
     public const string IncidentsManage = "incidents.manage";
 
+    // --- Tariffs (customer rate cards) ---
+    public const string TariffsView = "tariffs.view";
+    public const string TariffsManage = "tariffs.manage";
+
     // --- Customer portal (all data scoped to the authenticated user's linked customer) ---
     public const string CustomerPortalView = "customer_portal.view";
     public const string CustomerPortalSubmitOrders = "customer_portal.submit_orders";
@@ -343,6 +347,8 @@ public static class PermissionCodes
         (DossiersManage, "dossiers", "manage", "Transportdossiers beheren (aanmaken, koppelen, sluiten)"),
         (IncidentsView, "incidents", "view", "Incidenten bekijken"),
         (IncidentsManage, "incidents", "manage", "Incidenten registreren en afhandelen"),
+        (TariffsView, "tariffs", "view", "Tarievenkaarten bekijken en prijzen berekenen"),
+        (TariffsManage, "tariffs", "manage", "Tarievenkaarten beheren"),
         (CustomerPortalView, "customer_portal", "view", "Klantportaal: eigen opdrachten bekijken"),
         (CustomerPortalSubmitOrders, "customer_portal", "submit_orders", "Klantportaal: opdrachten indienen"),
         (CustomerPortalManageLocations, "customer_portal", "manage_locations", "Klantportaal: eigen locaties beheren"),

@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 5;
+    public const int CurrentVersion = 6;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -151,6 +151,24 @@ public static class DefaultRoleUpgrades
                 ["boekhouding"] =
                 [
                     PermissionCodes.DossiersView, PermissionCodes.IncidentsView,
+                ],
+            }),
+
+        new(6,
+            "Improvement wave 2026-07-20: customer rate cards (tarification slice).",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] =
+                [
+                    PermissionCodes.TariffsView,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
+                ],
+                ["boekhouding"] =
+                [
+                    PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
                 ],
             }),
     ];

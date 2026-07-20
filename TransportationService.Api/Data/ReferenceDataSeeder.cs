@@ -61,17 +61,55 @@ public static class ReferenceDataSeeder
 
         // Countries are global reference data seeded by CountrySeeder, not tenant lookups.
 
-        await SeedIfEmptyAsync<Language>(dbContext, tenantId,
-            [("nl", "Nederlands"), ("fr", "Frans"), ("en", "Engels"), ("de", "Duits")],
-            cancellationToken);
-
-        await SeedIfEmptyAsync<Nationality>(dbContext, tenantId,
-            [("BE", "Belg"), ("NL", "Nederlander"), ("DE", "Duitser"), ("FR", "Fransman"), ("PL", "Pool")],
-            cancellationToken);
+        // Languages and nationalities converge on the full standard list (add-if-missing by
+        // code, mirroring the CountrySeeder idea) so existing tenants also get the long tail;
+        // entries a tenant renamed or deactivated are never touched.
+        await SeedMissingAsync<Language>(dbContext, tenantId, NationalityLanguageSeedData.Languages, cancellationToken);
+        await SeedMissingAsync<Nationality>(dbContext, tenantId, NationalityLanguageSeedData.Nationalities, cancellationToken);
 
         await SeedIfEmptyAsync<ContractType>(dbContext, tenantId,
             [("VAST", "Vast contract"), ("BEP", "Bepaalde duur"), ("UITZ", "Uitzendkracht"), ("ZELF", "Zelfstandig")],
             cancellationToken);
+    }
+
+    private static async Task SeedMissingAsync<TEntity>(
+        TransportationDbContext dbContext,
+        Guid tenantId,
+        IReadOnlyList<(string Code, string Name, int SortOrder)> items,
+        CancellationToken cancellationToken)
+        where TEntity : LookupEntity, new()
+    {
+        var set = dbContext.Set<TEntity>();
+        var existing = (await set
+                .Where(e => e.TenantId == tenantId)
+                .Select(e => e.Code)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var added = false;
+        foreach (var (code, name, sortOrder) in items)
+        {
+            if (existing.Contains(code))
+            {
+                continue;
+            }
+
+            set.Add(new TEntity
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Code = code,
+                Name = name,
+                IsActive = true,
+                SortOrder = sortOrder,
+            });
+            added = true;
+        }
+
+        if (added)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 
     private static async Task SeedIfEmptyAsync<TEntity>(

@@ -12,7 +12,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
-import { searchTransportOrders } from '../api/transportOrdersApi'
+import { bulkChangeOrderStatus, searchTransportOrders } from '../api/transportOrdersApi'
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
@@ -30,6 +30,46 @@ export function TransportOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<TransportOrderStatus | ''>('')
   const [page, setPage] = useState(1)
   const [exporting, setExporting] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkStatus, setBulkStatus] = useState<TransportOrderStatus | ''>('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const canBulk = hasAnyPermission(['orders.change_status', 'orders.manage'])
+
+  function toggleSelected(id: string) {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  async function applyBulkStatus() {
+    if (!bulkStatus || selected.size === 0) return
+    setBulkBusy(true)
+    try {
+      const result = await bulkChangeOrderStatus([...selected], bulkStatus)
+      if (result.failedCount === 0) {
+        toast.showSuccess(`${result.succeededCount} opdracht(en) bijgewerkt.`)
+      } else {
+        toast.showError(
+          `${result.succeededCount} gelukt, ${result.failedCount} mislukt: ${
+            result.results.find((r) => !r.success)?.error ?? 'zie de opdrachtstatussen'
+          }`,
+        )
+      }
+      setSelected(new Set())
+      setBulkStatus('')
+      reload()
+    } catch {
+      toast.showError('De bulkactie is mislukt.')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
 
   async function handleExport() {
     setExporting(true)
@@ -68,6 +108,24 @@ export function TransportOrdersPage() {
   }, [statusFilter])
 
   const columns: Column<TransportOrderListItem>[] = [
+    ...(canBulk
+      ? [
+          {
+            key: 'select',
+            header: '',
+            width: '36px',
+            render: (row: TransportOrderListItem) => (
+              <input
+                type="checkbox"
+                checked={selected.has(row.id)}
+                onChange={() => toggleSelected(row.id)}
+                onClick={(event) => event.stopPropagation()}
+                aria-label={`Selecteer ${row.orderNumber}`}
+              />
+            ),
+          } satisfies Column<TransportOrderListItem>,
+        ]
+      : []),
     { key: 'number', header: 'Nummer', width: '110px', render: (row) => <code>{row.orderNumber}</code> },
     { key: 'date', header: 'Datum', width: '110px', render: (row) => row.orderDate },
     { key: 'customer', header: 'Klant', render: (row) => row.customerName },
@@ -142,6 +200,29 @@ export function TransportOrdersPage() {
           ))}
         </select>
       </div>
+      {canBulk && selected.size > 0 && (
+        <div className="to-bulkbar">
+          <span>{selected.size} geselecteerd</span>
+          <select
+            value={bulkStatus}
+            onChange={(event) => setBulkStatus(event.target.value as TransportOrderStatus | '')}
+            aria-label="Nieuwe status"
+          >
+            <option value="">— Kies status —</option>
+            {ORDER_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {ORDER_STATUS_LABELS[status]}
+              </option>
+            ))}
+          </select>
+          <Button onClick={() => void applyBulkStatus()} disabled={bulkBusy || !bulkStatus}>
+            Status toepassen
+          </Button>
+          <Button variant="secondary" onClick={() => setSelected(new Set())} disabled={bulkBusy}>
+            Selectie wissen
+          </Button>
+        </div>
+      )}
       <DataTable
         columns={columns}
         rows={items}

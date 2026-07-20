@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { CommandPalette } from './CommandPalette'
 import { OfflineBanner } from './OfflineBanner'
 import { Sidebar } from './Sidebar'
 import './AppLayout.css'
@@ -29,6 +30,7 @@ export function AppLayout() {
       </header>
       {navOpen && <div className="mobile-nav-overlay" onClick={() => setNavOpen(false)} aria-hidden="true" />}
       <Sidebar open={navOpen} onNavigate={() => setNavOpen(false)} />
+      <CommandPalette />
       <main className="content">
         <Outlet />
       </main>

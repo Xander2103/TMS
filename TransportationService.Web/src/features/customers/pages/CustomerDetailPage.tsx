@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { addRecentItem } from '../../../hooks/recentItems'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
@@ -40,6 +41,12 @@ export function CustomerDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showUnblockConfirm, setShowUnblockConfirm] = useState(false)
   const [showActiveConfirm, setShowActiveConfirm] = useState<null | 'activate' | 'deactivate'>(null)
+
+  useEffect(() => {
+    if (customer) {
+      addRecentItem({ category: 'Klanten', title: customer.name, route: `/customers/${customer.id}` })
+    }
+  }, [customer])
 
   if (isLoading) return <LoadingState message="Klant laden..." />
   if (error || !customer) return <ErrorState message={error ?? 'Klant niet gevonden.'} />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { addRecentItem } from '../../../hooks/recentItems'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
@@ -71,6 +72,11 @@ export function TransportOrderDetailPage() {
         if (!mounted) return
         setOrder(data)
         setLoadError(null)
+        addRecentItem({
+          category: 'Transportopdrachten',
+          title: `${data.orderNumber} — ${data.customerName}`,
+          route: `/transport-orders/${data.id}`,
+        })
       })
       .catch(() => {
         if (mounted) setLoadError('De transportopdracht kon niet worden geladen.')
@@ -182,6 +188,15 @@ export function TransportOrderDetailPage() {
             {order.allowedCorrections.length > 0 && hasAnyPermission(['orders.correct_status', 'orders.manage']) && (
               <Button variant="secondary" onClick={() => setCorrectDialogOpen(true)} disabled={busy || editing}>
                 Status corrigeren
+              </Button>
+            )}
+            {hasAnyPermission(['orders.create', 'orders.manage']) && (
+              <Button
+                variant="secondary"
+                onClick={() => navigate(`/transport-orders/new?template=${order.id}`)}
+                disabled={busy || editing}
+              >
+                Gebruik als sjabloon
               </Button>
             )}
           </span>

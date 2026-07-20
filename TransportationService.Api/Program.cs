@@ -167,6 +167,14 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.I
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IIncidentService,
     TransportationService.Api.Modules.Incidents.Services.IncidentService>();
 
+// Tarification
+builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IRateCardService,
+    TransportationService.Api.Modules.Tarification.Services.RateCardService>();
+
+// Global (Ctrl+K) search
+builder.Services.AddScoped<TransportationService.Api.Modules.Search.Services.IGlobalSearchService,
+    TransportationService.Api.Modules.Search.Services.GlobalSearchService>();
+
 // HR availability
 builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IAbsenceService,
     TransportationService.Api.Modules.Hr.Services.AbsenceService>();

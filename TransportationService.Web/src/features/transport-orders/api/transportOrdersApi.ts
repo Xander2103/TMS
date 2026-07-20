@@ -32,6 +32,25 @@ export function searchTransportOrders(
   return apiClient.getJson<PagedResult<TransportOrderListItem>>(`/api/transport-orders?${query.toString()}`)
 }
 
+export interface BulkStatusItemResult {
+  orderId: string
+  success: boolean
+  error: string | null
+}
+
+export interface BulkStatusResult {
+  succeededCount: number
+  failedCount: number
+  results: BulkStatusItemResult[]
+}
+
+export function bulkChangeOrderStatus(orderIds: string[], status: string): Promise<BulkStatusResult> {
+  return apiClient.postJson<BulkStatusResult, { orderIds: string[]; status: string }>(
+    '/api/transport-orders/bulk-status',
+    { orderIds, status },
+  )
+}
+
 export function getTransportOrder(id: string): Promise<TransportOrderDetail> {
   return apiClient.getJson<TransportOrderDetail>(`/api/transport-orders/${id}`)
 }

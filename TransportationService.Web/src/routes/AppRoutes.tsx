@@ -60,6 +60,7 @@ import { ChangePasswordPage, ForgotPasswordPage, ResetPasswordPage } from '../fe
 import { JobFunctionMappingsPage } from '../features/roles/pages/JobFunctionMappingsPage'
 import { InboxPage } from '../features/inbox/pages/InboxPage'
 import { CostRatesPage } from '../features/trip-costing/pages/CostRatesPage'
+import { RateCardsPage } from '../features/tarification/pages/RateCardsPage'
 import { KpiDashboardPage } from '../features/kpi/pages/KpiDashboardPage'
 import { KpiTripsPage } from '../features/kpi/pages/KpiTripsPage'
 import { LocationsPage } from '../features/locations/pages/LocationsPage'
@@ -152,6 +153,7 @@ const router = createBrowserRouter(
           <Route path="/customer-portal/new" element={<CustomerPortalNewOrderPage />} />
           <Route path="/customer-portal/orders/:id" element={<CustomerPortalOrderDetailPage />} />
           <Route path="/cost-rates" element={<CostRatesPage />} />
+          <Route path="/rate-cards" element={<RateCardsPage />} />
           <Route path="/kpi" element={<KpiDashboardPage />} />
           <Route path="/kpi/trips" element={<KpiTripsPage />} />
           <Route path="/locations" element={<LocationsPage />} />
