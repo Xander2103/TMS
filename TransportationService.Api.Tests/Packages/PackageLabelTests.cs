@@ -162,7 +162,7 @@ public class PackageLabelTests
 
         Assert.Null(error);
         // 9 labels at 8 per A4 page → exactly 2 pages.
-        using var document = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf!), PdfSharp.Pdf.IO.PdfDocumentOpenMode.InformationOnly);
+        using var document = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf!), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
         Assert.Equal(2, document.PageCount);
     }
 

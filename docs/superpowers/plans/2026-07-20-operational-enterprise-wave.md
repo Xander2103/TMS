@@ -1,5 +1,10 @@
 # Operational Enterprise Wave — Implementation Plan
 
+> **STATUS 2026-07-21: COMPLETE.** All phases A–J implemented, tested and committed
+> (ca8f745 … see git log). Documentation: docs/operations-architecture.md,
+> planning-center.md, driver-app.md, profitability.md, warehouse-dock-planning.md,
+> permission-matrix-operations.md.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This plan is executed in-session by the authoring agent; interface contracts are specified exactly, step-level code is authored at implementation time following the conventions locked in §Architecture Decisions.
 
 **Goal:** Turn the administrative TMS into a daily operations platform: Dispatcher/Planning Center, Operation Control Center, mobile Driver App, Profitability, Warehouse/Dock Planning and shared productivity UX — all on the existing architecture.

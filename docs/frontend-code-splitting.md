@@ -35,3 +35,11 @@ kon splitsen. `manualChunks` was daarom niet het juiste middel.
 Registreer nieuwe pagina's altijd via `lazyPage(...)` in `AppRoutes.tsx`. Importeer een
 pagina nooit statisch vanuit de schil (layout/sidebar/palette), anders belandt hij weer in
 de hoofdchunk.
+
+## Update 2026-07-21 — operationele wave
+
+Alle nieuwe pagina's (PlanningCenter, Operations, Driver*, Profitability, Warehouses,
+DockPlanning) laden via hetzelfde `lazyPage`-idioom als eigen chunks (grootste: planbord
+~32 kB). De hoofdbundel bleef binnen de marge (334 kB → 339 kB door de gedeelde
+shortcut-/commando-registers en offline-queue-hooks in de shell); er is geen
+large-chunk-waarschuwing.
