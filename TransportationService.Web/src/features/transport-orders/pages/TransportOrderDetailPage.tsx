@@ -4,6 +4,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -15,6 +16,7 @@ import { ApiError } from '../../../api/apiClient'
 import {
   cancelTransportOrder,
   changeTransportOrderStatus,
+  correctTransportOrderStatus,
   deleteTransportOrder,
   getTransportOrder,
   updateTransportOrder,
@@ -55,6 +57,9 @@ export function TransportOrderDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+  const [correctDialogOpen, setCorrectDialogOpen] = useState(false)
+  const [correctTarget, setCorrectTarget] = useState<TransportOrderStatus | ''>('')
+  const [correctReason, setCorrectReason] = useState('')
   const [planStop, setPlanStop] = useState<TransportOrderStop | null>(null)
 
   useEffect(() => {
@@ -105,6 +110,30 @@ export function TransportOrderDetailPage() {
     }
   }
 
+  async function handleCorrectStatus() {
+    if (!correctTarget) {
+      showError('Kies de status waarnaar je wilt corrigeren.')
+      return
+    }
+    if (!correctReason.trim()) {
+      showError('Een reden is verplicht bij een statuscorrectie.')
+      return
+    }
+    setBusy(true)
+    try {
+      const updated = await correctTransportOrderStatus(id, correctTarget, correctReason.trim())
+      setOrder(updated)
+      setCorrectDialogOpen(false)
+      setCorrectTarget('')
+      setCorrectReason('')
+      showSuccess(`Status gecorrigeerd naar ${ORDER_STATUS_LABELS[updated.status]}.`)
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De status kon niet worden gecorrigeerd.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleDelete() {
     try {
       await deleteTransportOrder(id)
@@ -130,6 +159,7 @@ export function TransportOrderDetailPage() {
   return (
     <div>
       <Breadcrumbs items={[{ label: 'Transportopdrachten', to: '/transport-orders' }, { label: order.orderNumber }]} />
+      <BackButton to="/transport-orders" label="Terug naar opdrachten" />
       <PageHeader
         title={`${order.orderNumber} — ${order.customerName}`}
         subtitle={`Opdracht van ${order.orderDate}${order.customerReference ? ` · ref. ${order.customerReference}` : ''}`}
@@ -145,6 +175,11 @@ export function TransportOrderDetailPage() {
             {order.canCancel && hasAnyPermission(['orders.cancel', 'orders.manage']) && (
               <Button variant="secondary" onClick={() => setCancelDialogOpen(true)} disabled={busy || editing}>
                 Annuleren
+              </Button>
+            )}
+            {order.allowedCorrections.length > 0 && hasAnyPermission(['orders.correct_status', 'orders.manage']) && (
+              <Button variant="secondary" onClick={() => setCorrectDialogOpen(true)} disabled={busy || editing}>
+                Status corrigeren
               </Button>
             )}
           </span>
@@ -176,7 +211,7 @@ export function TransportOrderDetailPage() {
             <dl className="to-facts">
               <div>
                 <dt>Goederen</dt>
-                <dd>{order.goodsDescription}</dd>
+                <dd>{order.goodsDescription ?? '—'}</dd>
               </div>
               <div>
                 <dt>Aantal</dt>
@@ -347,6 +382,53 @@ export function TransportOrderDetailPage() {
               onChange={(e) => setCancelReason(e.target.value)}
               maxLength={500}
               autoFocus
+            />
+          </FormField>
+        </Modal>
+      )}
+
+      {correctDialogOpen && (
+        <Modal
+          title={`Status van ${order.orderNumber} corrigeren`}
+          onClose={() => setCorrectDialogOpen(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setCorrectDialogOpen(false)} disabled={busy}>
+                Terug
+              </Button>
+              <Button onClick={() => void handleCorrectStatus()} disabled={busy}>
+                {busy ? 'Corrigeren…' : 'Status corrigeren'}
+              </Button>
+            </>
+          }
+        >
+          <p className="to-cancel-reason" role="note">
+            Een correctie draait een per ongeluk gekozen status terug. De wijziging wordt met reden en gebruiker
+            vastgelegd in de historiek; POD-, scan- en factuurgegevens blijven onaangetast.
+          </p>
+          <FormField label="Corrigeren naar" htmlFor="correct-target" required>
+            <select
+              id="correct-target"
+              value={correctTarget}
+              onChange={(e) => setCorrectTarget(e.target.value as TransportOrderStatus)}
+              autoFocus
+            >
+              <option value="">— Kies status —</option>
+              {order.allowedCorrections.map((target) => (
+                <option key={target} value={target}>
+                  {ORDER_STATUS_LABELS[target]}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Reden" htmlFor="correct-reason" required hint="Verplicht; wordt vastgelegd in de historiek.">
+            <textarea
+              id="correct-reason"
+              rows={3}
+              value={correctReason}
+              onChange={(e) => setCorrectReason(e.target.value)}
+              maxLength={1000}
             />
           </FormField>
         </Modal>

@@ -99,12 +99,14 @@ public static class DefaultRoleUpgrades
                 ["planner"] =
                 [
                     PermissionCodes.CustomersDeactivate,
+                    PermissionCodes.OrdersCorrectStatus,
                 ],
                 ["management"] =
                 [
                     PermissionCodes.CustomersDeactivate,
                     PermissionCodes.MaintenancePoliciesView,
                     PermissionCodes.MaintenancePoliciesManage,
+                    PermissionCodes.OrdersCorrectStatus,
                 ],
             }),
     ];

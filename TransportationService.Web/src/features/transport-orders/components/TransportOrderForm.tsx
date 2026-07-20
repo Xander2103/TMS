@@ -228,10 +228,6 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
       setFormError('Selecteer een klant.')
       return
     }
-    if (!goodsDescription.trim()) {
-      setFormError('Een omschrijving van de goederen is verplicht.')
-      return
-    }
     for (const stop of stops) {
       if (!stop.locationId && !stop.city.trim()) {
         setFormError('Elke stop heeft een locatie of minstens een plaatsnaam nodig.')
@@ -271,7 +267,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
       customerId,
       customerReference: customerReference.trim() || null,
       orderDate: orderDate || null,
-      goodsDescription: goodsDescription.trim(),
+      goodsDescription: goodsDescription.trim() || null,
       quantity: quantity === '' ? null : Number(quantity),
       quantityUnit: quantityUnit.trim() || null,
       weightKg: weightKg === '' ? null : Number(weightKg),
@@ -372,7 +368,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         </p>
       )}
 
-      <FormField label="Omschrijving goederen" htmlFor="to-goods" required>
+      <FormField label="Omschrijving goederen" htmlFor="to-goods" hint="Optioneel — gestructureerde gegevens horen bij de goederenlijnen.">
         <textarea id="to-goods" rows={2} value={goodsDescription} onChange={(e) => setGoodsDescription(e.target.value)} disabled={saving} maxLength={1000} />
       </FormField>
 

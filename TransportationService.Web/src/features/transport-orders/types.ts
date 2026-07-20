@@ -47,7 +47,7 @@ export interface TransportOrderListItem {
   customerName: string
   customerReference: string | null
   status: TransportOrderStatus
-  goodsDescription: string
+  goodsDescription: string | null
   firstLoadingCity: string | null
   lastUnloadingCity: string | null
   stopCount: number
@@ -109,7 +109,7 @@ export interface TransportOrderDetail {
   customerName: string
   customerReference: string | null
   status: TransportOrderStatus
-  goodsDescription: string
+  goodsDescription: string | null
   quantity: number | null
   quantityUnit: string | null
   weightKg: number | null
@@ -123,6 +123,7 @@ export interface TransportOrderDetail {
   stops: TransportOrderStop[]
   cargoItems: CargoItem[]
   allowedTransitions: TransportOrderStatus[]
+  allowedCorrections: TransportOrderStatus[]
   canCancel: boolean
 }
 
@@ -168,7 +169,7 @@ export interface TransportOrderInput {
   customerId: string
   customerReference: string | null
   orderDate: string | null
-  goodsDescription: string
+  goodsDescription: string | null
   quantity: number | null
   quantityUnit: string | null
   weightKg: number | null

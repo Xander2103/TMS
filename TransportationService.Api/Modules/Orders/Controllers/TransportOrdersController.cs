@@ -155,6 +155,15 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    [HttpPost("{id:guid}/correct-status")]
+    [RequirePermission(PermissionCodes.OrdersCorrectStatus, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> CorrectStatus(
+        Guid id, CorrectTransportOrderStatusRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.CorrectStatusAsync(id, request.TargetStatus, request.Reason, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     [HttpDelete("{id:guid}")]
     [RequirePermission(PermissionCodes.OrdersDelete, PermissionCodes.OrdersManage)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

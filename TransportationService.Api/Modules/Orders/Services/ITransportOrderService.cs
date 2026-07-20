@@ -24,6 +24,8 @@ public interface ITransportOrderService
     /// <summary>Cancels the order with a mandatory reason. Allowed from every non-final status.</summary>
     Task<TransportOrderOperationResult> CancelAsync(Guid id, string reason, CancellationToken cancellationToken);
 
+    Task<TransportOrderOperationResult> CorrectStatusAsync(Guid id, TransportOrderStatus target, string reason, CancellationToken cancellationToken);
+
     /// <summary>All orders matching the filters (bounded), for CSV export.</summary>
     Task<IReadOnlyList<TransportOrderListItemDto>> ListForExportAsync(
         string? search, TransportOrderStatus? status, Guid? customerId,

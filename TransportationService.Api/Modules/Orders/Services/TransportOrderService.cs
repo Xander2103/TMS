@@ -34,6 +34,22 @@ public class TransportOrderService : ITransportOrderService
     private static readonly TransportOrderStatus[] CancellableStatuses =
         [TransportOrderStatus.Draft, TransportOrderStatus.Confirmed, TransportOrderStatus.Planned, TransportOrderStatus.InProgress];
 
+    /// <summary>
+    /// Controlled CORRECTIVE (backward) transitions for fixing an accidentally selected status.
+    /// Guarded by orders.correct_status, a mandatory reason and an immutable history row.
+    /// Invoiced is deliberately absent: once invoiced, a correction would have to unwind
+    /// financial documents — that requires the invoicing flow, not a status rollback.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<TransportOrderStatus, TransportOrderStatus[]> CorrectiveTransitions =
+        new Dictionary<TransportOrderStatus, TransportOrderStatus[]>
+        {
+            [TransportOrderStatus.Confirmed] = [TransportOrderStatus.Draft],
+            [TransportOrderStatus.Planned] = [TransportOrderStatus.Confirmed],
+            [TransportOrderStatus.InProgress] = [TransportOrderStatus.Confirmed],
+            [TransportOrderStatus.Completed] = [TransportOrderStatus.InProgress],
+            [TransportOrderStatus.Cancelled] = [TransportOrderStatus.Draft],
+        };
+
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
@@ -77,7 +93,7 @@ public class TransportOrderService : ITransportOrderService
                 x.o.OrderNumber.ToLower().Contains(term) ||
                 (x.o.CustomerReference != null && x.o.CustomerReference.ToLower().Contains(term)) ||
                 x.CustomerName.ToLower().Contains(term) ||
-                x.o.GoodsDescription.ToLower().Contains(term));
+                (x.o.GoodsDescription != null && x.o.GoodsDescription.ToLower().Contains(term)));
         }
 
         var totalCount = await joined.CountAsync(cancellationToken);
@@ -158,7 +174,7 @@ public class TransportOrderService : ITransportOrderService
             CustomerReference = Trim(request.CustomerReference),
             OrderDate = request.OrderDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime),
             Status = TransportOrderStatus.Draft,
-            GoodsDescription = request.GoodsDescription.Trim(),
+            GoodsDescription = Trim(request.GoodsDescription),
             Quantity = NonNegative(request.Quantity),
             QuantityUnit = Trim(request.QuantityUnit),
             WeightKg = NonNegative(request.WeightKg),
@@ -226,7 +242,7 @@ public class TransportOrderService : ITransportOrderService
         order.CustomerId = request.CustomerId;
         order.CustomerReference = Trim(request.CustomerReference);
         order.OrderDate = request.OrderDate ?? order.OrderDate;
-        order.GoodsDescription = request.GoodsDescription.Trim();
+        order.GoodsDescription = Trim(request.GoodsDescription);
         order.Quantity = NonNegative(request.Quantity);
         order.QuantityUnit = Trim(request.QuantityUnit);
         order.WeightKg = NonNegative(request.WeightKg);
@@ -304,6 +320,56 @@ public class TransportOrderService : ITransportOrderService
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
 
+    public async Task<TransportOrderOperationResult> CorrectStatusAsync(
+        Guid id, TransportOrderStatus target, string reason, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return TransportOrderOperationResult.Invalid("Een reden is verplicht bij een statuscorrectie.");
+        }
+
+        var order = await TenantScoped()
+            .Include(o => o.Stops)
+            .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        if (!CorrectiveTransitions.TryGetValue(order.Status, out var targets) || !targets.Contains(target))
+        {
+            return TransportOrderOperationResult.InvalidState(
+                $"Een opdracht met status '{order.Status}' kan niet worden gecorrigeerd naar '{target}'.");
+        }
+
+        // Corrections never touch POD, scan or invoice history; an order on a live trip must
+        // be released through planning first so trip and order state cannot diverge.
+        if (await _dbContext.TripOrders.AnyAsync(t => t.TransportOrderId == order.Id
+                && _dbContext.Trips.Any(trip => trip.Id == t.TripId
+                    && (trip.Status == Modules.Planning.Entities.TripStatus.Planned
+                        || trip.Status == Modules.Planning.Entities.TripStatus.InProgress)), cancellationToken))
+        {
+            return TransportOrderOperationResult.InvalidState(
+                "Deze opdracht is aan een actieve rit gekoppeld; haal ze eerst uit de planning voordat je de status corrigeert.");
+        }
+
+        var before = new { order.Status };
+        order.PendingStatusChangeReason = reason.Trim();
+        order.PendingStatusChangeIsCorrection = true;
+        order.Status = target;
+        if (order.Status != TransportOrderStatus.Cancelled)
+        {
+            order.CancellationReason = null;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, order.Id.ToString(), "StatusCorrected", before,
+            new { order.Status, Reason = reason.Trim() }, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
     public async Task<TransportOrderOperationResult> CancelAsync(Guid id, string reason, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(reason))
@@ -326,6 +392,7 @@ public class TransportOrderService : ITransportOrderService
         }
 
         var before = new { order.Status };
+        order.PendingStatusChangeReason = reason.Trim();
         order.Status = TransportOrderStatus.Cancelled;
         order.CancellationReason = reason.Trim();
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -440,15 +507,10 @@ public class TransportOrderService : ITransportOrderService
 
     /// <summary>Shared shape validation for create/update. Returns null when valid.</summary>
     private async Task<TransportOrderOperationResult?> ValidateAsync(
-        Guid customerId, string? customerReference, string goodsDescription,
+        Guid customerId, string? customerReference, string? goodsDescription,
         IReadOnlyList<TransportOrderStopInput> stops, bool enforceCustomerIntake,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(goodsDescription))
-        {
-            return TransportOrderOperationResult.Invalid("Een omschrijving van de goederen is verplicht.");
-        }
-
         var customer = await _dbContext.Customers
             .Where(c => c.Id == customerId && c.TenantId == _tenantContext.TenantId)
             .Select(c => new { c.IsBlocked, c.IsActive, c.CustomerReferenceRequired })
@@ -659,7 +721,8 @@ public class TransportOrderService : ITransportOrderService
             order.AdrRequired, order.CraneRequired, order.AgreedPrice, order.Notes,
             order.CancellationReason,
             stops, cargoItems, Transitions[order.Status],
-            CancellableStatuses.Contains(order.Status));
+            CancellableStatuses.Contains(order.Status),
+            CorrectiveTransitions.TryGetValue(order.Status, out var corrections) ? corrections : []);
     }
 
     private static string GenerateOrderNumber(TenantSettings? settings)

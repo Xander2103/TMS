@@ -52,14 +52,17 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddTenantContextAccessors();
 builder.Services.AddSingleton(TimeProvider.System);
 
-// Cross-cutting persistence behaviour (audit stamps, soft delete)
+// Cross-cutting persistence behaviour (audit stamps, soft delete, order status history)
 builder.Services.AddSingleton<AuditingSaveChangesInterceptor>();
+builder.Services.AddSingleton<TransportationService.Api.Modules.Orders.Services.OrderStatusHistoryInterceptor>();
 
 // PostgreSQL + EF Core
 builder.Services.AddDbContext<TransportationDbContext>((serviceProvider, options) =>
     options
         .UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-        .AddInterceptors(serviceProvider.GetRequiredService<AuditingSaveChangesInterceptor>())
+        .AddInterceptors(
+            serviceProvider.GetRequiredService<AuditingSaveChangesInterceptor>(),
+            serviceProvider.GetRequiredService<TransportationService.Api.Modules.Orders.Services.OrderStatusHistoryInterceptor>())
 );
 
 // Identity en permissions

@@ -22,10 +22,12 @@ public sealed class SqliteTestDbContext : IDisposable
         _connection.Open();
 
         var interceptor = new AuditingSaveChangesInterceptor(new HttpContextAccessor(), TimeProvider.System);
+        var statusHistoryInterceptor = new TransportationService.Api.Modules.Orders.Services.OrderStatusHistoryInterceptor(
+            new HttpContextAccessor(), TimeProvider.System);
 
         var options = new DbContextOptionsBuilder<TransportationDbContext>()
             .UseSqlite(_connection)
-            .AddInterceptors(interceptor)
+            .AddInterceptors(interceptor, statusHistoryInterceptor)
             .Options;
 
         Context = new TransportationDbContext(options);

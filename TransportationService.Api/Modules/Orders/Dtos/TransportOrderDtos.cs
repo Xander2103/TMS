@@ -10,7 +10,7 @@ public record TransportOrderListItemDto(
     string CustomerName,
     string? CustomerReference,
     TransportOrderStatus Status,
-    string GoodsDescription,
+    string? GoodsDescription,
     string? FirstLoadingCity,
     string? LastUnloadingCity,
     int StopCount,
@@ -52,7 +52,7 @@ public record TransportOrderDetailDto(
     string CustomerName,
     string? CustomerReference,
     TransportOrderStatus Status,
-    string GoodsDescription,
+    string? GoodsDescription,
     decimal? Quantity,
     string? QuantityUnit,
     decimal? WeightKg,
@@ -67,10 +67,15 @@ public record TransportOrderDetailDto(
     IReadOnlyList<CargoItemDto> CargoItems,
     IReadOnlyList<TransportOrderStatus> AllowedTransitions,
     /// <summary>Whether the order can currently be cancelled (separate action, orders.cancel).</summary>
-    bool CanCancel);
+    bool CanCancel,
+    /// <summary>Backward corrections available via the controlled correction flow (orders.correct_status).</summary>
+    IReadOnlyList<TransportOrderStatus> AllowedCorrections);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
+
+/// <summary>Body for the controlled status-correction action; the reason is mandatory and audited.</summary>
+public record CorrectTransportOrderStatusRequest(TransportOrderStatus TargetStatus, string Reason);
 
 public record CargoItemDto(
     Guid Id,
@@ -132,7 +137,7 @@ public record CreateTransportOrderRequest(
     Guid CustomerId,
     string? CustomerReference,
     DateOnly? OrderDate,
-    string GoodsDescription,
+    string? GoodsDescription,
     decimal? Quantity,
     string? QuantityUnit,
     decimal? WeightKg,
@@ -149,7 +154,7 @@ public record UpdateTransportOrderRequest(
     Guid CustomerId,
     string? CustomerReference,
     DateOnly? OrderDate,
-    string GoodsDescription,
+    string? GoodsDescription,
     decimal? Quantity,
     string? QuantityUnit,
     decimal? WeightKg,

@@ -83,8 +83,8 @@ export function TransportOrdersPage() {
       key: 'goods',
       header: 'Goederen',
       render: (row) => (
-        <span className="to-goods" title={row.goodsDescription}>
-          {row.goodsDescription}
+        <span className="to-goods" title={row.goodsDescription ?? undefined}>
+          {row.goodsDescription ?? '—'}
           {row.adrRequired && <Badge tone="danger">ADR</Badge>}
           {row.craneRequired && <Badge tone="info">Kraan</Badge>}
         </span>

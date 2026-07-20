@@ -42,8 +42,8 @@ public static class DefaultRoleDefinitions
             [
                 .. CommonViewPermissions,
                 PermissionCodes.OrdersView, PermissionCodes.OrdersCreate, PermissionCodes.OrdersEdit,
-                PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersCancel, PermissionCodes.OrdersAssign,
-                PermissionCodes.OrdersExport,
+                PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersCorrectStatus, PermissionCodes.OrdersCancel,
+                PermissionCodes.OrdersAssign, PermissionCodes.OrdersExport,
                 PermissionCodes.PlanningView, PermissionCodes.PlanningCreate, PermissionCodes.PlanningEdit,
                 PermissionCodes.ScanningView,
                 PermissionCodes.ExceptionsView, PermissionCodes.ExceptionsResolve,

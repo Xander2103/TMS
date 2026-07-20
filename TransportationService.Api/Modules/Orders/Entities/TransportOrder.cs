@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using TransportationService.Api.Common.Abstractions;
 
 namespace TransportationService.Api.Modules.Orders.Entities;
@@ -38,7 +39,18 @@ public class TransportOrder : AuditableTenantEntity
 
     public TransportOrderStatus Status { get; set; } = TransportOrderStatus.Draft;
 
-    public string GoodsDescription { get; set; } = string.Empty;
+    /// <summary>
+    /// Transient context for the status-history interceptor: reason and correction marker of
+    /// the status change staged in the current SaveChanges. Cleared once recorded.
+    /// </summary>
+    [NotMapped]
+    public string? PendingStatusChangeReason { get; set; }
+
+    [NotMapped]
+    public bool PendingStatusChangeIsCorrection { get; set; }
+
+    /// <summary>Optional free-text description of the goods (structured data lives in cargo items).</summary>
+    public string? GoodsDescription { get; set; }
     public decimal? Quantity { get; set; }
     public string? QuantityUnit { get; set; }
     public decimal? WeightKg { get; set; }

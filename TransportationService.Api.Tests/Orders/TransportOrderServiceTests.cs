@@ -550,4 +550,102 @@ public class TransportOrderServiceTests
 
         Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
     }
+
+    [Fact]
+    public async Task Create_WithoutGoodsDescription_Succeeds()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with { GoodsDescription = "  " },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Null(created.Order!.GoodsDescription);
+    }
+
+    [Fact]
+    public async Task StatusChanges_AreRecordedInImmutableHistory()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var id = order.Order!.Id;
+
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.Confirmed, CancellationToken.None);
+        await h.Sut.CancelAsync(id, "Klant heeft afgezegd", CancellationToken.None);
+
+        var history = h.Db.Context.TransportOrderStatusHistories
+            .Where(x => x.TransportOrderId == id).OrderBy(x => x.ChangedAt).ThenBy(x => x.ToStatus).ToList();
+        Assert.Equal(2, history.Count);
+        Assert.Contains(history, x => x.FromStatus == TransportOrderStatus.Draft && x.ToStatus == TransportOrderStatus.Confirmed && x.Reason == null);
+        Assert.Contains(history, x => x.ToStatus == TransportOrderStatus.Cancelled && x.Reason == "Klant heeft afgezegd" && !x.IsCorrection);
+    }
+
+    [Fact]
+    public async Task CorrectStatus_RequiresReason_FollowsCorrectiveMap_AndRecordsCorrection()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var id = order.Order!.Id;
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.Confirmed, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.InProgress, CancellationToken.None);
+        await h.Sut.ChangeStatusAsync(id, TransportOrderStatus.Completed, CancellationToken.None);
+
+        var withoutReason = await h.Sut.CorrectStatusAsync(id, TransportOrderStatus.InProgress, " ", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, withoutReason.Outcome);
+
+        // Completed → Draft is not a defined correction.
+        var invalidTarget = await h.Sut.CorrectStatusAsync(id, TransportOrderStatus.Draft, "Vergissing", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, invalidTarget.Outcome);
+
+        var corrected = await h.Sut.CorrectStatusAsync(id, TransportOrderStatus.InProgress, "Verkeerd afgevinkt", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, corrected.Outcome);
+        Assert.Equal(TransportOrderStatus.InProgress, corrected.Order!.Status);
+
+        var correction = h.Db.Context.TransportOrderStatusHistories
+            .Single(x => x.TransportOrderId == id && x.IsCorrection);
+        Assert.Equal(TransportOrderStatus.Completed, correction.FromStatus);
+        Assert.Equal(TransportOrderStatus.InProgress, correction.ToStatus);
+        Assert.Equal("Verkeerd afgevinkt", correction.Reason);
+        Assert.Contains(h.Db.Context.AuditLogs, a => a.Action == "StatusCorrected");
+    }
+
+    [Fact]
+    public async Task CorrectStatus_FromCancelled_ReactivatesToDraft_AndClearsCancellationReason()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        await h.Sut.CancelAsync(order.Order!.Id, "Per ongeluk geannuleerd", CancellationToken.None);
+
+        var corrected = await h.Sut.CorrectStatusAsync(order.Order.Id, TransportOrderStatus.Draft, "Annulatie was een vergissing", CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, corrected.Outcome);
+        Assert.Equal(TransportOrderStatus.Draft, corrected.Order!.Status);
+        Assert.Null(corrected.Order.CancellationReason);
+        Assert.Contains(TransportOrderStatus.Confirmed, corrected.Order.AllowedTransitions);
+    }
+
+    [Fact]
+    public async Task CorrectStatus_OnInvoicedOrder_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var order = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")), CancellationToken.None);
+        var stored = await h.Db.Context.TransportOrders.FindAsync(order.Order!.Id);
+        stored!.Status = TransportOrderStatus.Invoiced;
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var result = await h.Sut.CorrectStatusAsync(order.Order.Id, TransportOrderStatus.Completed, "Toch niet klaar", CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
+    }
 }

@@ -138,6 +138,7 @@ public static class PermissionCodes
     public const string OrdersEdit = "orders.edit";
     public const string OrdersDelete = "orders.delete";
     public const string OrdersChangeStatus = "orders.change_status";
+    public const string OrdersCorrectStatus = "orders.correct_status";
     public const string OrdersCancel = "orders.cancel";
     public const string OrdersAssign = "orders.assign";
     public const string OrdersExport = "orders.export";
@@ -316,6 +317,7 @@ public static class PermissionCodes
         (OrdersEdit, "orders", "edit", "Transportopdrachten bewerken"),
         (OrdersDelete, "orders", "delete", "Transportopdrachten verwijderen"),
         (OrdersChangeStatus, "orders", "change_status", "Status van transportopdrachten wijzigen"),
+        (OrdersCorrectStatus, "orders", "correct_status", "Status van transportopdrachten corrigeren (terugdraaien met reden)"),
         (OrdersCancel, "orders", "cancel", "Transportopdrachten annuleren"),
         (OrdersAssign, "orders", "assign", "Transportopdrachten aan ritten koppelen"),
         (OrdersExport, "orders", "export", "Transportopdrachten exporteren"),
