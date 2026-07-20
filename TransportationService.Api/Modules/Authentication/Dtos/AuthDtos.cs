@@ -22,7 +22,9 @@ public record CurrentUserDto(
     string LastName,
     Guid? EmployeeId,
     IReadOnlyList<string> Roles,
-    IReadOnlyList<string> Permissions);
+    IReadOnlyList<string> Permissions,
+    /// <summary>True while a temporary/admin-set credential is active: the UI forces a change first.</summary>
+    bool MustChangePassword = false);
 
 public enum AuthOutcome
 {

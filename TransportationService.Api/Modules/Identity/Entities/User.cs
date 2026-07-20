@@ -12,6 +12,9 @@ public class User
     public Guid? CustomerId { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsBlocked { get; set; }
+
+    /// <summary>Forces a password change at the next login (temporary/admin-set credentials).</summary>
+    public bool MustChangePassword { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

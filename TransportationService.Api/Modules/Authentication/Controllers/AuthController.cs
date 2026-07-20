@@ -2,18 +2,43 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Modules.Authentication.Dtos;
 using TransportationService.Api.Modules.Authentication.Services;
+using TransportationService.Api.Modules.Identity.Services;
 
 namespace TransportationService.Api.Modules.Authentication.Controllers;
+
+public record ForgotPasswordRequest(string Email);
+
+public record ResetPasswordRequest(string Token, string NewPassword);
 
 [ApiController]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly IUserAccountFlowService _accountFlows;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, IUserAccountFlowService accountFlows)
     {
         _authService = authService;
+        _accountFlows = accountFlows;
+    }
+
+    /// <summary>Always returns 204 — the response never reveals whether an account exists.</summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
+        await _accountFlows.RequestPasswordResetAsync(request.Email, cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>Completes password reset or account activation with a single-use token.</summary>
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken cancellationToken)
+    {
+        var error = await _accountFlows.CompleteWithTokenAsync(request.Token, request.NewPassword, cancellationToken);
+        return error is null ? NoContent() : BadRequest(new { message = error });
     }
 
     [HttpPost("login")]

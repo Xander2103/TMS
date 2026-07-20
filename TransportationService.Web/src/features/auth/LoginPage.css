@@ -84,3 +84,10 @@
   margin-top: 12px;
   justify-content: center;
 }
+
+.login-forgot {
+  display: block;
+  margin-top: 12px;
+  font-size: 14px;
+  text-align: center;
+}

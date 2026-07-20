@@ -46,6 +46,8 @@ public class UserService : IUserService
         }
 
         user.PasswordHash = _passwordHasher.Hash(password);
+        // An admin-set credential is temporary by definition: the user must pick their own.
+        user.MustChangePassword = true;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync("User", user.Id.ToString(), "PasswordSet", null,

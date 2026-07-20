@@ -13,6 +13,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { AbsencesTab } from '../../absences/components/AbsencesTab'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
+import { CreateUserAccountDialog } from '../components/CreateUserAccountDialog'
 import { EmployeeForm } from '../components/EmployeeForm'
 import { EmployeePlanningTab } from '../components/EmployeePlanningTab'
 import { EmployeeTripsTab } from '../components/EmployeeTripsTab'
@@ -38,6 +39,7 @@ export function EmployeeDetailPage() {
   const [editedFunctionCodes, setEditedFunctionCodes] = useState<string[] | null>(null)
   const [offerDriverDeactivation, setOfferDriverDeactivation] = useState(false)
   const [driverBusy, setDriverBusy] = useState(false)
+  const [showAccountDialog, setShowAccountDialog] = useState(false)
 
   const requestedTab = searchParams.get('tab')
   const tab: TabId = TAB_IDS.includes(requestedTab as TabId) ? (requestedTab as TabId) : 'profiel'
@@ -61,15 +63,22 @@ export function EmployeeDetailPage() {
         title={`${employee.firstName} ${employee.lastName}`}
         subtitle={`${employee.employeeNumber}${employee.functionNames.length > 0 ? ` · ${employee.functionNames.join(', ')}` : ''}`}
         action={
-          canDeactivate && (
-            <Button
-              variant={employee.isActive ? 'danger' : 'secondary'}
-              onClick={() => setConfirmLifecycle(employee.isActive ? 'deactivate' : 'reactivate')}
-              disabled={mutations.isSubmitting}
-            >
-              {employee.isActive ? 'Deactiveren' : 'Heractiveren'}
-            </Button>
-          )
+          <>
+            {hasPermission('users.create') && (
+              <Button variant="secondary" onClick={() => setShowAccountDialog(true)} disabled={mutations.isSubmitting}>
+                Account aanmaken
+              </Button>
+            )}
+            {canDeactivate && (
+              <Button
+                variant={employee.isActive ? 'danger' : 'secondary'}
+                onClick={() => setConfirmLifecycle(employee.isActive ? 'deactivate' : 'reactivate')}
+                disabled={mutations.isSubmitting}
+              >
+                {employee.isActive ? 'Deactiveren' : 'Heractiveren'}
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -236,6 +245,19 @@ export function EmployeeDetailPage() {
             }
           }}
           onCancel={() => setConfirmLifecycle(null)}
+        />
+      )}
+
+      {showAccountDialog && (
+        <CreateUserAccountDialog
+          employeeId={employee.id}
+          firstName={employee.firstName}
+          lastName={employee.lastName}
+          email={employee.email}
+          onClose={(created) => {
+            setShowAccountDialog(false)
+            if (created) toast.showSuccess('Gebruikersaccount aangemaakt.')
+          }}
         />
       )}
     </div>

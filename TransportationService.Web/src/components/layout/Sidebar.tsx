@@ -42,6 +42,7 @@ const operationsNavItems: NavItem[] = [
 const administrationNavItems: NavItem[] = [
   { label: 'Gebruikers', to: '/users', permissions: ['users.view'] },
   { label: 'Rollen en rechten', to: '/roles', permissions: ['roles.view'] },
+  { label: 'Functie→rol-koppelingen', to: '/job-function-mappings', permissions: ['roles.view', 'roles.manage_permissions'] },
   { label: 'Personeel', to: '/employees', permissions: ['employees.view'] },
   { label: 'Kwalificaties', to: '/qualifications', permissions: ['employee_documents.view'] },
 ]

@@ -71,6 +71,8 @@ builder.Services.AddScoped<
     PermissionAuthorizationService
 >();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IUserAccountFlowService, UserAccountFlowService>();
+builder.Services.AddScoped<IJobFunctionRoleMappingService, JobFunctionRoleMappingService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 
 // Employees

@@ -56,6 +56,8 @@ import { MaintenancePoliciesPage } from '../features/maintenance-policies/pages/
 import { CustomerPortalOrdersPage } from '../features/customer-portal/pages/CustomerPortalOrdersPage'
 import { CustomerPortalNewOrderPage } from '../features/customer-portal/pages/CustomerPortalNewOrderPage'
 import { CustomerPortalOrderDetailPage } from '../features/customer-portal/pages/CustomerPortalOrderDetailPage'
+import { ChangePasswordPage, ForgotPasswordPage, ResetPasswordPage } from '../features/auth/PasswordFlowPages'
+import { JobFunctionMappingsPage } from '../features/roles/pages/JobFunctionMappingsPage'
 import { CostRatesPage } from '../features/trip-costing/pages/CostRatesPage'
 import { KpiDashboardPage } from '../features/kpi/pages/KpiDashboardPage'
 import { KpiTripsPage } from '../features/kpi/pages/KpiTripsPage'
@@ -89,7 +91,10 @@ const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<RootProviders />}>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<RequireAuth />}>
+        <Route path="/change-password" element={<ChangePasswordPage />} />
         <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/transport-orders" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -146,6 +151,7 @@ const router = createBrowserRouter(
           <Route path="/users/new" element={<NewUserPage />} />
           <Route path="/users/:id" element={<UserDetailPage />} />
           <Route path="/roles" element={<RolesPage />} />
+          <Route path="/job-function-mappings" element={<JobFunctionMappingsPage />} />
           <Route path="/roles/:id" element={<RoleDetailPage />} />
           <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/employees/new" element={<NewEmployeePage />} />

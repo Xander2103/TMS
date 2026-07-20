@@ -8,7 +8,7 @@ import './RequireAuth.css'
  * redirected to /login with the originally requested location preserved for post-login return.
  */
 export function RequireAuth() {
-  const { status } = useAuth()
+  const { status, user } = useAuth()
   const location = useLocation()
 
   if (status === 'loading') {
@@ -22,6 +22,11 @@ export function RequireAuth() {
 
   if (status === 'unauthenticated') {
     return <Navigate to="/login" state={{ from: location }} replace />
+  }
+
+  // A temporary credential must be replaced before anything else is reachable.
+  if (user?.mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />
   }
 
   return <Outlet />

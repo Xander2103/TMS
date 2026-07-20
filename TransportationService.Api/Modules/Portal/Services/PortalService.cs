@@ -314,6 +314,7 @@ public class PortalService : IPortalService
         }
 
         user.PasswordHash = _passwordHasher.Hash(request.NewPassword);
+        user.MustChangePassword = false; // the user now owns their credential
         user.UpdatedAt = _timeProvider.GetUtcNow().UtcDateTime;
         await _dbContext.SaveChangesAsync(cancellationToken);
 

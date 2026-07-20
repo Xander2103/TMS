@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate, useLocation, useNavigate, type Location } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { FormField } from '../../components/ui/FormField'
 import { useAuth } from './authContextValue'
@@ -88,6 +88,9 @@ export function LoginPage() {
           <Button type="submit" variant="primary" className="login-submit" disabled={submitting}>
             {submitting ? 'Bezig met aanmelden…' : 'Inloggen'}
           </Button>
+          <Link to="/forgot-password" className="login-forgot">
+            Wachtwoord vergeten?
+          </Link>
         </form>
       </div>
     </div>

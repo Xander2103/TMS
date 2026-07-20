@@ -8,6 +8,8 @@ export interface CurrentUser {
   employeeId: string | null
   roles: string[]
   permissions: string[]
+  /** Temporary/admin-set credential: the UI forces a password change before anything else. */
+  mustChangePassword: boolean
 }
 
 export interface AuthTokens {
