@@ -21,6 +21,7 @@ import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocum
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { DamagePanel } from '../../damage/components/DamagePanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
+import { FleetKpiPanel } from '../../fleet-kpi/FleetKpiPanel'
 import { computeVolumeM3 } from '../../../utils/volume'
 import { deleteTrailer, getTrailer, setTrailerActive, updateTrailer } from '../api/trailersApi'
 import {
@@ -34,7 +35,7 @@ import {
 } from '../types'
 import './trailer-form.css'
 
-const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'onderhoud', 'keuringen', 'schade', 'historiek'] as const
+const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'onderhoud', 'keuringen', 'schade', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 function numberOrNull(value: string): number | null {
@@ -352,6 +353,7 @@ export function TrailerDetailPage() {
               { id: 'onderhoud', label: 'Onderhoud' },
               { id: 'keuringen', label: 'Keuringen' },
               { id: 'schade', label: 'Schade' },
+              { id: 'kpi', label: 'KPI' },
               { id: 'historiek', label: 'Historiek' },
             ]}
             activeId={tab}
@@ -413,6 +415,11 @@ export function TrailerDetailPage() {
           {tab === 'schade' && id && (
             <TabPanel tabId="schade">
               <DamagePanel ownerType="trailer" ownerId={id} />
+            </TabPanel>
+          )}
+          {tab === 'kpi' && id && (
+            <TabPanel tabId="kpi">
+              <FleetKpiPanel ownerType="trailer" ownerId={id} />
             </TabPanel>
           )}
           {tab === 'historiek' && (

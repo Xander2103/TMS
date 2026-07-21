@@ -22,6 +22,7 @@ import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocum
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { DamagePanel } from '../../damage/components/DamagePanel'
 import { FuelPanel } from '../../fuel/components/FuelPanel'
+import { FleetKpiPanel } from '../../fleet-kpi/FleetKpiPanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import { computeVolumeM3 } from '../../../utils/volume'
@@ -42,7 +43,7 @@ import {
 } from '../types'
 import './vehicle-form.css'
 
-const TAB_IDS = ['overzicht', 'techniek', 'toewijzing', 'documenten', 'onderhoud', 'keuringen', 'schade', 'brandstof', 'historiek'] as const
+const TAB_IDS = ['overzicht', 'techniek', 'toewijzing', 'documenten', 'onderhoud', 'keuringen', 'schade', 'brandstof', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 function numberOrNull(value: string): number | null {
@@ -447,6 +448,7 @@ export function VehicleDetailPage() {
               { id: 'keuringen', label: 'Keuringen' },
               { id: 'schade', label: 'Schade' },
               { id: 'brandstof', label: 'Brandstof' },
+              { id: 'kpi', label: 'KPI' },
               { id: 'historiek', label: 'Historiek' },
             ]}
             activeId={tab}
@@ -561,6 +563,11 @@ export function VehicleDetailPage() {
           {tab === 'brandstof' && id && (
             <TabPanel tabId="brandstof">
               <FuelPanel vehicleId={id} />
+            </TabPanel>
+          )}
+          {tab === 'kpi' && id && (
+            <TabPanel tabId="kpi">
+              <FleetKpiPanel ownerType="vehicle" ownerId={id} />
             </TabPanel>
           )}
           {tab === 'historiek' && (
