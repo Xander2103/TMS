@@ -52,7 +52,7 @@ export function setLocationActive(id: string, isActive: boolean): Promise<void> 
 
 export function setLocationDefaults(
   id: string,
-  defaults: { isDefaultLoadingLocation: boolean; isDefaultUnloadingLocation: boolean },
+  defaults: { isDefaultLoadingLocation: boolean; isDefaultUnloadingLocation: boolean; isDefaultBillingLocation: boolean },
 ): Promise<LocationDetail> {
   return apiClient.putJson<LocationDetail, typeof defaults>(`/api/locations/${id}/defaults`, defaults)
 }

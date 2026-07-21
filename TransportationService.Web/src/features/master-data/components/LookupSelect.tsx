@@ -16,6 +16,12 @@ interface LookupSelectProps {
   id?: string
   /** Lookup resource base path, e.g. `/api/customer-categories`. */
   basePath: string
+  /**
+   * Permission required to load/see the options, e.g. `contact_departments.view`. When the
+   * user lacks it, no request is made and the select renders disabled. Omit for lookups
+   * every authenticated user may read.
+   */
+  viewPermission?: string
   /** Permission required for the inline "add new" action, e.g. `customer_categories.manage`. */
   managePermission: string
   /** Singular noun for the create dialog title, e.g. "klantcategorie". */
@@ -46,9 +52,10 @@ function suggestCode(name: string): string {
  * manage permission get an "add new" row that opens a small dialog; the created item is
  * selected automatically so the surrounding form keeps all entered data.
  */
-export function LookupSelect({ id, basePath, managePermission, singular, value, onChange, placeholder, disabled }: LookupSelectProps) {
+export function LookupSelect({ id, basePath, viewPermission, managePermission, singular, value, onChange, placeholder, disabled }: LookupSelectProps) {
   const { hasPermission } = useAuth()
-  const { options, isLoading } = useLookupOptions(basePath)
+  const canView = viewPermission === undefined || hasPermission(viewPermission)
+  const { options, isLoading } = useLookupOptions(basePath, { enabled: canView })
   const [pending, setPending] = useState<PendingCreate | null>(null)
 
   const selectOptions = useMemo<SearchableSelectOption[]>(
@@ -56,7 +63,7 @@ export function LookupSelect({ id, basePath, managePermission, singular, value, 
     [options],
   )
 
-  const canCreate = hasPermission(managePermission)
+  const canCreate = canView && hasPermission(managePermission)
 
   const onCreate = useMemo<SearchableSelectCreateConfig | undefined>(() => {
     if (!canCreate || disabled) return undefined
@@ -77,7 +84,7 @@ export function LookupSelect({ id, basePath, managePermission, singular, value, 
         onChange={onChange}
         options={selectOptions}
         placeholder={placeholder ?? '— Selecteer —'}
-        disabled={disabled}
+        disabled={disabled || !canView}
         isLoading={isLoading}
         onCreate={onCreate}
       />

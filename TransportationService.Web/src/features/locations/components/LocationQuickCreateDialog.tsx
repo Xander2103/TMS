@@ -72,6 +72,7 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
         notes: null,
         isDefaultLoadingLocation: false,
         isDefaultUnloadingLocation: false,
+        isDefaultBillingLocation: false,
       })
       onClose({
         id: created.id,
@@ -81,6 +82,7 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
         city: created.city,
         isDefaultLoadingLocation: created.isDefaultLoadingLocation,
         isDefaultUnloadingLocation: created.isDefaultUnloadingLocation,
+        isDefaultBillingLocation: created.isDefaultBillingLocation,
       })
     } catch (err) {
       const described = describeApiError(err, 'Locatie kon niet worden aangemaakt.')

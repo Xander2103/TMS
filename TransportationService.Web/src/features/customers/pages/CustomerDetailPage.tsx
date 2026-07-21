@@ -209,6 +209,12 @@ export function CustomerDetailPage() {
                     blocked={{ isBlocked: customer.isBlocked, reason: customer.blockReason }}
                   />
                 </dd>
+                {customer.nickname && (
+                  <>
+                    <dt>Roepnaam</dt>
+                    <dd>{customer.nickname}</dd>
+                  </>
+                )}
                 {customer.categoryName && (
                   <>
                     <dt>Categorie</dt>
@@ -245,10 +251,16 @@ export function CustomerDetailPage() {
             </div>
 
             <div className="customer-summary customer-vat-summary">
-              <h3>BTW & Peppol</h3>
+              <h3>Fiscaal & Peppol</h3>
               <dl>
                 <dt>BTW-nummer</dt>
                 <dd>{customer.vatNumber ?? '—'}</dd>
+                {customer.companyNumber && (
+                  <>
+                    <dt>Ondernemingsnummer</dt>
+                    <dd>{customer.companyNumber}</dd>
+                  </>
+                )}
                 <dt>BTW-behandeling</dt>
                 <dd>{VAT_TREATMENT_LABELS[customer.vatTreatment]}</dd>
                 <dt>Standaard tarief</dt>
@@ -261,6 +273,18 @@ export function CustomerDetailPage() {
                 )}
                 <dt>Peppol</dt>
                 <dd>{customer.peppolId ? `${customer.peppolScheme ?? '?'}:${customer.peppolId}` : 'Niet geconfigureerd'}</dd>
+                {customer.iban && (
+                  <>
+                    <dt>IBAN</dt>
+                    <dd>{customer.iban}{customer.bic ? ` (${customer.bic})` : ''}</dd>
+                  </>
+                )}
+                {customer.currencyCode && customer.currencyCode !== 'EUR' && (
+                  <>
+                    <dt>Valuta</dt>
+                    <dd>{customer.currencyCode}</dd>
+                  </>
+                )}
                 {customer.invoiceEmail && (
                   <>
                     <dt>Facturatie-e-mail</dt>

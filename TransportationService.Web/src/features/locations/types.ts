@@ -8,6 +8,10 @@ export type LocationType =
   | 'UnloadingLocation'
   | 'ParkingLocation'
   | 'Office'
+  | 'RegisteredOffice'
+  | 'AdministrativeAddress'
+  | 'BillingAddress'
+  | 'ReturnsAddress'
 
 export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
   CompanySite: 'Bedrijfssite',
@@ -19,6 +23,10 @@ export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
   UnloadingLocation: 'Loslocatie',
   ParkingLocation: 'Parking',
   Office: 'Kantoor',
+  RegisteredOffice: 'Maatschappelijke zetel',
+  AdministrativeAddress: 'Administratief adres',
+  BillingAddress: 'Facturatieadres',
+  ReturnsAddress: 'Retouradres',
 }
 
 export const LOCATION_TYPES = Object.keys(LOCATION_TYPE_LABELS) as LocationType[]
@@ -34,6 +42,7 @@ export interface LocationListItem {
   isActive: boolean
   isDefaultLoadingLocation: boolean
   isDefaultUnloadingLocation: boolean
+  isDefaultBillingLocation: boolean
 }
 
 export interface LocationOption {
@@ -44,6 +53,7 @@ export interface LocationOption {
   city: string | null
   isDefaultLoadingLocation: boolean
   isDefaultUnloadingLocation: boolean
+  isDefaultBillingLocation: boolean
 }
 
 export interface LocationDetail {
@@ -76,6 +86,7 @@ export interface LocationDetail {
   notes: string | null
   isDefaultLoadingLocation: boolean
   isDefaultUnloadingLocation: boolean
+  isDefaultBillingLocation: boolean
 }
 
 export type LocationInput = Omit<LocationDetail, 'id' | 'customerName'>

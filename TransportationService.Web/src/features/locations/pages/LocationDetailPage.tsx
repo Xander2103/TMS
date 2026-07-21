@@ -78,6 +78,7 @@ export function LocationDetailPage() {
       // Carried through so saving an edit never silently clears the customer defaults.
       isDefaultLoadingLocation: location.isDefaultLoadingLocation,
       isDefaultUnloadingLocation: location.isDefaultUnloadingLocation,
+      isDefaultBillingLocation: location.isDefaultBillingLocation,
     })
     setEditing(true)
   }

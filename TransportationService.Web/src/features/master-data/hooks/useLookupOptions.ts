@@ -8,8 +8,12 @@ interface UseLookupOptionsResult {
   error: string | null
 }
 
-/** Loads the active options for a lookup resource (e.g. `/api/customer-categories`) for dropdowns. */
-export function useLookupOptions(basePath: string): UseLookupOptionsResult {
+/**
+ * Loads the active options for a lookup resource (e.g. `/api/customer-categories`) for dropdowns.
+ * Pass `enabled: false` (e.g. when the user lacks the view permission) to skip the request.
+ */
+export function useLookupOptions(basePath: string, opts?: { enabled?: boolean }): UseLookupOptionsResult {
+  const enabled = opts?.enabled ?? true
   const [state, setState] = useState<{ options: LookupOption[]; error: string | null; loadedKey: string }>({
     options: [],
     error: null,
@@ -17,6 +21,7 @@ export function useLookupOptions(basePath: string): UseLookupOptionsResult {
   })
 
   useEffect(() => {
+    if (!enabled) return
     let isMounted = true
     const api = createLookupApi(basePath)
     api
@@ -32,7 +37,7 @@ export function useLookupOptions(basePath: string): UseLookupOptionsResult {
     return () => {
       isMounted = false
     }
-  }, [basePath])
+  }, [basePath, enabled])
 
-  return { options: state.options, isLoading: state.loadedKey !== basePath, error: state.error }
+  return { options: state.options, isLoading: enabled && state.loadedKey !== basePath, error: state.error }
 }

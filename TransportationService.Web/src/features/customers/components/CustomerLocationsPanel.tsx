@@ -98,6 +98,7 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
           {row.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>}
           {row.isDefaultLoadingLocation && <Badge tone="info">Standaard laden</Badge>}
           {row.isDefaultUnloadingLocation && <Badge tone="info">Standaard lossen</Badge>}
+          {row.isDefaultBillingLocation && <Badge tone="info">Standaard facturatie</Badge>}
         </span>
       ),
     },
@@ -119,6 +120,7 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
                           setLocationDefaults(row.id, {
                             isDefaultLoadingLocation: true,
                             isDefaultUnloadingLocation: row.isDefaultUnloadingLocation,
+                            isDefaultBillingLocation: row.isDefaultBillingLocation,
                           }),
                         'Standaard laadlocatie ingesteld.',
                       )
@@ -138,12 +140,33 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
                           setLocationDefaults(row.id, {
                             isDefaultLoadingLocation: row.isDefaultLoadingLocation,
                             isDefaultUnloadingLocation: true,
+                            isDefaultBillingLocation: row.isDefaultBillingLocation,
                           }),
                         'Standaard loslocatie ingesteld.',
                       )
                     }
                   >
                     Maak standaard lossen
+                  </Button>
+                )}
+                {!row.isDefaultBillingLocation && row.isActive && (
+                  <Button
+                    variant="ghost"
+                    disabled={busyId === row.id}
+                    onClick={() =>
+                      runRowAction(
+                        row,
+                        () =>
+                          setLocationDefaults(row.id, {
+                            isDefaultLoadingLocation: row.isDefaultLoadingLocation,
+                            isDefaultUnloadingLocation: row.isDefaultUnloadingLocation,
+                            isDefaultBillingLocation: true,
+                          }),
+                        'Standaard facturatieadres ingesteld.',
+                      )
+                    }
+                  >
+                    Maak standaard facturatie
                   </Button>
                 )}
                 {row.isActive ? (
@@ -182,7 +205,7 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
         </label>
         {canCreate && (
           <Link to={`/locations/new?customerId=${customerId}`} className="customer-locations-new">
-            <Button>Nieuwe locatie</Button>
+            <Button>+ Adres toevoegen</Button>
           </Link>
         )}
       </div>

@@ -41,6 +41,7 @@ const EMPTY: LocationInput = {
   notes: null,
   isDefaultLoadingLocation: false,
   isDefaultUnloadingLocation: false,
+  isDefaultBillingLocation: false,
 }
 
 export function NewLocationPage() {

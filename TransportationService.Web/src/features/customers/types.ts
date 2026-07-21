@@ -18,6 +18,12 @@ export interface CustomerContact {
   phoneNumber: string | null
   isPrimary: boolean
   notes: string | null
+  displayName: string | null
+  nickname: string | null
+  mobilePhone: string | null
+  departmentId: string | null
+  preferredLanguageCode: string | null
+  isActive: boolean
 }
 
 export type VatTreatment =
@@ -35,6 +41,37 @@ export const VAT_TREATMENT_LABELS: Record<VatTreatment, string> = {
   ExportOutsideEu: 'Uitvoer buiten de EU',
   VatExempt: 'Vrijgesteld van BTW',
   Other: 'Afwijkende regeling',
+}
+
+/** One VAT-treatment catalog entry from GET /api/customers/vat-treatments (backend is authoritative). */
+export interface VatTreatmentInfo {
+  treatment: VatTreatment
+  label: string
+  requiresVatNumber: boolean
+  standardRates: number[]
+  defaultRatePercent: number | null
+  invoiceLegalText: string | null
+  allowsCustomRate: boolean
+}
+
+/** Company data from the official registry (POST /api/customers/registry-lookup). */
+export interface CompanyRegistryResult {
+  legalName: string | null
+  companyNumber: string | null
+  vatNumber: string | null
+  street: string | null
+  houseNumber: string | null
+  postalCode: string | null
+  city: string | null
+  countryCode: string | null
+  peppolId: string | null
+  peppolScheme: string | null
+}
+
+export interface RegistryLookupResponse {
+  /** False when no registry provider is configured for this tenant. */
+  configured: boolean
+  result: CompanyRegistryResult | null
 }
 
 export interface CustomerVatProfile {
@@ -73,6 +110,13 @@ export interface CustomerDetail extends CustomerVatProfile {
   isActive: boolean
   isBlocked: boolean
   blockReason: string | null
+  nickname: string | null
+  companyNumber: string | null
+  currencyCode: string
+  iban: string | null
+  bic: string | null
+  bankName: string | null
+  bankAccountNumber: string | null
   contacts: CustomerContact[]
 }
 
@@ -97,6 +141,13 @@ export interface CustomerInput extends CustomerVatProfile {
   paymentTermDays: number
   defaultLanguageCode: string | null
   notes: string | null
+  nickname: string | null
+  companyNumber: string | null
+  currencyCode: string | null
+  iban: string | null
+  bic: string | null
+  bankName: string | null
+  bankAccountNumber: string | null
 }
 
 export interface UpdateCustomerInput extends CustomerInput {
@@ -143,4 +194,10 @@ export interface CustomerContactInput {
   phoneNumber: string | null
   isPrimary: boolean
   notes: string | null
+  displayName: string | null
+  nickname: string | null
+  mobilePhone: string | null
+  departmentId: string | null
+  preferredLanguageCode: string | null
+  isActive: boolean
 }

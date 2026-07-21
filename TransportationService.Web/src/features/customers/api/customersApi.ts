@@ -7,7 +7,9 @@ import type {
   CustomerDetail,
   CustomerInput,
   CustomerListItem,
+  RegistryLookupResponse,
   UpdateCustomerInput,
+  VatTreatmentInfo,
 } from '../types'
 
 export interface SearchCustomersParams {
@@ -26,6 +28,16 @@ export function searchCustomers(params: SearchCustomersParams): Promise<PagedRes
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<CustomerListItem>>(`/api/customers?${query.toString()}`)
+}
+
+/** The coherent VAT-treatment catalog (labels, rates, legal texts); backend is authoritative. */
+export function getVatTreatments(): Promise<VatTreatmentInfo[]> {
+  return apiClient.getJson<VatTreatmentInfo[]>('/api/customers/vat-treatments')
+}
+
+/** Official company-registry lookup on VAT or enterprise number (customers.create/edit). */
+export function registryLookup(number: string): Promise<RegistryLookupResponse> {
+  return apiClient.postJson<RegistryLookupResponse, { number: string }>('/api/customers/registry-lookup', { number })
 }
 
 export function getCustomer(id: string): Promise<CustomerDetail> {
