@@ -7,8 +7,11 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
-import { createInvoice, listUninvoicedOrders } from '../api/invoicesApi'
+import { getActiveLegalEntity, getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
+import type { LegalEntityOption } from '../../legal-entities/types'
+import { createInvoice, getNextInvoiceNumber, listUninvoicedOrders } from '../api/invoicesApi'
 import { euro, type ManualLineInput, type UninvoicedOrder } from '../types'
+import { comparePeriods, dateToPeriod, formatPeriod, monthInputToPeriod, periodToMonthInput } from '../utils/invoicePeriod'
 import './invoices.css'
 
 interface ManualRow extends ManualLineInput {
@@ -30,6 +33,15 @@ export function NewInvoicePage() {
   const [notes, setNotes] = useState('')
   const [busy, setBusy] = useState(false)
 
+  const [entities, setEntities] = useState<LegalEntityOption[]>([])
+  const [legalEntityId, setLegalEntityId] = useState('')
+  // The invoice date defaults to today on the backend, so the period starts on today's month.
+  const [periodInput, setPeriodInput] = useState(() => {
+    const today = dateToPeriod(null)
+    return periodToMonthInput(today.year, today.month)
+  })
+  const [nextNumber, setNextNumber] = useState<string | null>(null)
+
   useEffect(() => {
     let mounted = true
     searchCustomers({ isActive: true, page: 1, pageSize: 200 })
@@ -37,10 +49,51 @@ export function NewInvoicePage() {
         if (mounted) setCustomers(data.items)
       })
       .catch(() => {})
+    // Entity picker: preselect the user's own active entity, else the configured default.
+    Promise.all([
+      getLegalEntityOptions().catch(() => [] as LegalEntityOption[]),
+      getActiveLegalEntity().catch(() => ({ legalEntityId: null })),
+    ])
+      .then(([options, active]) => {
+        if (!mounted) return
+        const usable = options.filter((option) => option.isActive)
+        setEntities(usable)
+        const preferred =
+          usable.find((option) => option.id === active.legalEntityId) ??
+          usable.find((option) => option.isDefault) ??
+          usable[0]
+        if (preferred) setLegalEntityId(preferred.id)
+      })
+      .catch(() => {})
     return () => {
       mounted = false
     }
   }, [])
+
+  // Live "next number" preview; refetches (debounced) whenever entity or period changes.
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      const period = monthInputToPeriod(periodInput)
+      if (!period) {
+        setNextNumber(null)
+        return
+      }
+      getNextInvoiceNumber(
+        { legalEntityId: legalEntityId || undefined, year: period.year, month: period.month },
+        { signal: controller.signal },
+      )
+        .then((preview) => setNextNumber(preview.invoiceNumber))
+        .catch(() => {
+          // Hide the preview on 404 (no active entity) or any other failure.
+          if (!controller.signal.aborted) setNextNumber(null)
+        })
+    }, 250)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [legalEntityId, periodInput])
 
   useEffect(() => {
     if (!customerId) {
@@ -76,6 +129,10 @@ export function NewInvoicePage() {
     setManualLines((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
   }
 
+  const period = monthInputToPeriod(periodInput)
+  // Warn (without blocking) when invoicing in a month before the invoice date's month (= today).
+  const isPastPeriod = period !== null && comparePeriods(period, dateToPeriod(null)) < 0
+
   const estimatedSubtotal =
     (orders ?? [])
       .filter((o) => selectedOrderIds.includes(o.id))
@@ -110,6 +167,9 @@ export function NewInvoicePage() {
           vatRatePercent: line.vatRatePercent,
         })),
         notes: notes.trim() || null,
+        legalEntityId: legalEntityId || null,
+        invoicePeriodYear: period?.year ?? null,
+        invoicePeriodMonth: period?.month ?? null,
       })
       showSuccess(`Factuur ${invoice.invoiceNumber} aangemaakt.`)
       navigate(`/invoices/${invoice.id}`)
@@ -136,6 +196,42 @@ export function NewInvoicePage() {
             ))}
           </select>
         </FormField>
+
+        <div className="inv-entity-period">
+          <FormField label="Facturerende entiteit" htmlFor="inv-legal-entity">
+            <select
+              id="inv-legal-entity"
+              value={legalEntityId}
+              onChange={(e) => setLegalEntityId(e.target.value)}
+              disabled={busy}
+            >
+              {entities.length === 0 && <option value="">Geen entiteit beschikbaar</option>}
+              {entities.map((entity) => (
+                <option key={entity.id} value={entity.id}>
+                  {entity.displayName}
+                  {entity.isDefault ? ' (standaard)' : ''}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Factuurperiode" htmlFor="inv-period">
+            <input
+              id="inv-period"
+              type="month"
+              value={periodInput}
+              onChange={(e) => setPeriodInput(e.target.value)}
+              disabled={busy}
+            />
+          </FormField>
+        </div>
+        {nextNumber && (
+          <p className="inv-next-number">
+            Volgend factuurnummer: <strong>{nextNumber}</strong>
+          </p>
+        )}
+        {isPastPeriod && period && (
+          <p className="inv-period-warning">Je factureert in een eerdere periode ({formatPeriod(period.year, period.month)}).</p>
+        )}
 
         {customerId && orders !== null && (
           <section className="inv-section">

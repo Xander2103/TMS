@@ -3,6 +3,7 @@ import type { PagedResult } from '../../../api/types'
 import type {
   InvoiceDetail,
   InvoiceListItem,
+  InvoiceNumberPreview,
   InvoiceStatus,
   ManualLineInput,
   UninvoicedOrder,
@@ -35,12 +36,44 @@ export function listUninvoicedOrders(customerId: string): Promise<UninvoicedOrde
   return apiClient.getJson<UninvoicedOrder[]>(`/api/invoices/uninvoiced-orders?customerId=${customerId}`)
 }
 
+export interface NextInvoiceNumberParams {
+  legalEntityId?: string
+  year?: number
+  month?: number
+}
+
+/** Informative preview of the next number for an entity + period; 404s when no active entity exists. */
+export function getNextInvoiceNumber(
+  params: NextInvoiceNumberParams,
+  options?: { signal?: AbortSignal },
+): Promise<InvoiceNumberPreview> {
+  const query = new URLSearchParams()
+  if (params.legalEntityId) query.set('legalEntityId', params.legalEntityId)
+  if (params.year !== undefined) query.set('year', String(params.year))
+  if (params.month !== undefined) query.set('month', String(params.month))
+  const suffix = query.toString()
+  return apiClient.getJson<InvoiceNumberPreview>(`/api/invoices/next-number${suffix ? `?${suffix}` : ''}`, options)
+}
+
+export interface OverrideInvoiceNumberInput {
+  invoiceNumber: string
+  reason: string
+}
+
+/** Manual number correction (Draft only, permission invoices.override_number). */
+export function overrideInvoiceNumber(id: string, input: OverrideInvoiceNumberInput): Promise<InvoiceDetail> {
+  return apiClient.postJson<InvoiceDetail, OverrideInvoiceNumberInput>(`/api/invoices/${id}/number-override`, input)
+}
+
 export interface CreateInvoiceInput {
   customerId: string
   invoiceDate: string | null
   orderIds: string[]
   manualLines: ManualLineInput[]
   notes: string | null
+  legalEntityId?: string | null
+  invoicePeriodYear?: number | null
+  invoicePeriodMonth?: number | null
 }
 
 export function createInvoice(input: CreateInvoiceInput): Promise<InvoiceDetail> {
@@ -52,6 +85,8 @@ export interface UpdateInvoiceInput {
   dueDate: string
   lines: UpdateLineInput[]
   notes: string | null
+  invoicePeriodYear?: number | null
+  invoicePeriodMonth?: number | null
 }
 
 export function updateInvoice(id: string, input: UpdateInvoiceInput): Promise<InvoiceDetail> {

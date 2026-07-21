@@ -66,6 +66,19 @@ export interface InvoiceDetail {
   vatAmount: number
   total: number
   allowedTransitions: InvoiceStatus[]
+  legalEntityId: string | null
+  legalEntityName: string | null
+  invoicePeriodYear: number
+  invoicePeriodMonth: number
+  numberIsManual: boolean
+}
+
+/** Mirrors InvoiceNumberPreviewDto (GET /api/invoices/next-number). */
+export interface InvoiceNumberPreview {
+  invoiceNumber: string
+  legalEntityId: string
+  year: number
+  month: number
 }
 
 export interface UninvoicedOrder {

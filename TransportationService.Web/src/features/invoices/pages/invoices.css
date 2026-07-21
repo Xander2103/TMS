@@ -51,6 +51,60 @@
   width: 100%;
 }
 
+.inv-entity-period {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.inv-entity-period .ui-form-field {
+  flex: 1;
+  min-width: 220px;
+}
+
+.inv-next-number {
+  margin: -4px 0 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.inv-period-warning {
+  margin: -4px 0 0;
+  font-size: 13px;
+  color: #b45309;
+}
+
+.inv-meta {
+  margin: -8px 0 16px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.inv-override-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inv-override-form input,
+.inv-override-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.inv-override-error {
+  margin: 0;
+  font-size: 14px;
+  color: #dc2626;
+}
+
 .inv-section h3 {
   font-size: 16px;
   margin: 8px 0;
