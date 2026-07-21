@@ -106,6 +106,8 @@ public class TrailerService : ITrailerService
         ApplyEditableFields(trailer, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.CapacityKg, request.LengthMeters, request.WidthMeters, request.HeightMeters,
             request.VolumeM3, request.VolumeIsManual, request.HasRefrigeration, request.AdrSuitable, request.OwnershipType, request.Notes);
+        trailer.AxleCount = Math.Clamp(request.AxleCount, 0, 12);
+        trailer.LoadingMeters = request.LoadingMeters < 0 ? 0 : Math.Round(request.LoadingMeters, 2);
 
         _dbContext.Add(trailer);
         try
@@ -157,6 +159,8 @@ public class TrailerService : ITrailerService
         ApplyEditableFields(trailer, request.Vin, request.CategoryId, request.Brand, request.Model, request.Year,
             request.FirstRegistrationDate, request.CapacityKg, request.LengthMeters, request.WidthMeters, request.HeightMeters,
             request.VolumeM3, request.VolumeIsManual, request.HasRefrigeration, request.AdrSuitable, request.OwnershipType, request.Notes);
+        trailer.AxleCount = Math.Clamp(request.AxleCount, 0, 12);
+        trailer.LoadingMeters = request.LoadingMeters < 0 ? 0 : Math.Round(request.LoadingMeters, 2);
 
         try
         {
@@ -253,7 +257,8 @@ public class TrailerService : ITrailerService
         return new TrailerDetailDto(
             t.Id, t.InternalNumber, t.LicensePlate, t.Vin, t.CategoryId, categoryName, t.Brand, t.Model, t.Year, t.FirstRegistrationDate,
             t.CapacityKg, t.LengthMeters, t.WidthMeters, t.HeightMeters, t.VolumeM3, t.VolumeIsManual,
-            t.HasRefrigeration, t.AdrSuitable, t.OwnershipType, t.OperationalStatus, t.StatusReason, t.IsActive, t.Notes);
+            t.HasRefrigeration, t.AdrSuitable, t.OwnershipType, t.OperationalStatus, t.StatusReason, t.IsActive, t.Notes,
+            t.AxleCount, t.LoadingMeters);
     }
 
     private static string GenerateInternalNumber(TenantSettings? settings)

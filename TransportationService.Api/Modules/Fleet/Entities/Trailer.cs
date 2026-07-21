@@ -37,6 +37,10 @@ public class Trailer : AuditableTenantEntity
     /// <summary>True when the volume was entered manually; false when derived from L×W×H.</summary>
     public bool VolumeIsManual { get; set; }
 
+    // Maut / toll data (not calculated yet; prepared for future toll integrations).
+    public int AxleCount { get; set; }
+    public decimal LoadingMeters { get; set; }
+
     public bool HasRefrigeration { get; set; }
     public bool AdrSuitable { get; set; }
 

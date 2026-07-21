@@ -22,6 +22,11 @@ public enum EmissionClass
     Euro6,
     Electric,
     Other,
+    // Additive values (string-stored) for the full Maut emission range.
+    Euro0,
+    Euro1,
+    Euro2,
+    Euro7,
 }
 
 public enum VehicleOwnershipType
@@ -78,6 +83,18 @@ public class Vehicle : AuditableTenantEntity
 
     /// <summary>Configured norm consumption for cost estimates; measured averages win for actuals.</summary>
     public decimal? ConsumptionLPer100Km { get; set; }
+
+    // Maut / toll data (prepared for future route/toll integrations; not calculated yet).
+    /// <summary>Number of axles (0 = unknown).</summary>
+    public int AxleCount { get; set; }
+    /// <summary>Loading meters (laadmeter/LDM).</summary>
+    public decimal LoadingMeters { get; set; }
+
+    /// <summary>
+    /// Minimum driving-licence category required to drive this vehicle (B/C/CE/C1/C1E).
+    /// Null = no explicit check. Enforced by the planning eligibility rules.
+    /// </summary>
+    public string? RequiredLicenceCode { get; set; }
 
     public bool HasCrane { get; set; }
     public bool HasRefrigeration { get; set; }

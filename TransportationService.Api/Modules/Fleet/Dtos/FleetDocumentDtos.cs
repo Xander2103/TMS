@@ -22,7 +22,9 @@ public record FleetDocumentDto(
     int? WarningDays,
     FleetDocumentStatus Status,
     bool HasAttachment,
-    string? Notes);
+    string? Notes,
+    string? IssuingAuthority = null,
+    string? FileName = null);
 
 /// <summary>Row for the expiring-documents overview (fleet dashboard / warnings).</summary>
 public record ExpiringFleetDocumentDto(
@@ -43,7 +45,8 @@ public record CreateFleetDocumentRequest(
     DateOnly? IssueDate,
     DateOnly? ExpiryDate,
     int? WarningDays,
-    string? Notes);
+    string? Notes,
+    string? IssuingAuthority = null);
 
 public record UpdateFleetDocumentRequest(
     FleetDocumentType DocumentType,
@@ -52,7 +55,8 @@ public record UpdateFleetDocumentRequest(
     DateOnly? IssueDate,
     DateOnly? ExpiryDate,
     int? WarningDays,
-    string? Notes);
+    string? Notes,
+    string? IssuingAuthority = null);
 
 public enum FleetDocumentOperationOutcome
 {

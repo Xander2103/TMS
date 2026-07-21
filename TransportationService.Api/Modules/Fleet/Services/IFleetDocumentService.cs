@@ -18,4 +18,8 @@ public interface IFleetDocumentService
     Task<FleetDocumentOperationResult> UpdateAsync(Guid id, UpdateFleetDocumentRequest request, CancellationToken cancellationToken);
 
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<FleetDocumentOperationResult> AttachFileAsync(Guid id, string fileName, string contentType, Stream content, CancellationToken cancellationToken);
+    Task<(Stream Content, string FileName, string ContentType)?> OpenFileAsync(Guid id, CancellationToken cancellationToken);
+    Task<FleetDocumentOperationResult> RemoveFileAsync(Guid id, CancellationToken cancellationToken);
 }

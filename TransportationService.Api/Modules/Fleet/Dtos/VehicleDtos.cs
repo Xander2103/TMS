@@ -48,7 +48,10 @@ public record VehicleDetailDto(
     string? FixedDriverName,
     Guid? CurrentDriverId,
     string? CurrentDriverName,
-    string? Notes);
+    string? Notes,
+    int AxleCount = 0,
+    decimal LoadingMeters = 0,
+    string? RequiredLicenceCode = null);
 
 public record CreateVehicleRequest(
     string LicensePlate,
@@ -76,7 +79,10 @@ public record CreateVehicleRequest(
     Guid? FixedDriverId,
     Guid? CurrentDriverId,
     string? Notes,
-    bool VolumeIsManual = false);
+    bool VolumeIsManual = false,
+    int AxleCount = 0,
+    decimal LoadingMeters = 0,
+    string? RequiredLicenceCode = null);
 
 public record UpdateVehicleRequest(
     string LicensePlate,
@@ -105,7 +111,10 @@ public record UpdateVehicleRequest(
     bool IsActive,
     string? Notes,
     string? StatusReason = null,
-    bool VolumeIsManual = false);
+    bool VolumeIsManual = false,
+    int AxleCount = 0,
+    decimal LoadingMeters = 0,
+    string? RequiredLicenceCode = null);
 
 public record SetVehicleActiveRequest(bool IsActive);
 

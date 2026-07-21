@@ -36,7 +36,7 @@ public class FleetDashboardServiceTests
             tenant,
             new MaintenanceService(db.Context, tenant, audit, clock),
             new InspectionService(db.Context, tenant, audit, clock),
-            new FleetDocumentService(db.Context, tenant, audit, clock),
+            new FleetDocumentService(db.Context, tenant, audit, clock, new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ts-tests", System.Guid.NewGuid().ToString("N")))),
             new DamageReportService(db.Context, tenant, audit),
             new FuelService(db.Context, tenant, audit));
         return new Harness(db, sut, tenantId, vehicleId);

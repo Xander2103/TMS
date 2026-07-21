@@ -3,6 +3,7 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Fleet.Dtos;
 using TransportationService.Api.Modules.Fleet.Entities;
+using TransportationService.Api.Modules.Qualifications.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Fleet.Services;
@@ -10,6 +11,7 @@ namespace TransportationService.Api.Modules.Fleet.Services;
 public class FleetDocumentService : IFleetDocumentService
 {
     private const string EntityType = "FleetDocument";
+    private const string StorageCategory = "fleet-documents";
 
     /// <summary>Default warning window when a document has no per-document override.</summary>
     public const int DefaultWarningDays = 60;
@@ -18,17 +20,20 @@ public class FleetDocumentService : IFleetDocumentService
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
+    private readonly IFileStorageService _fileStorage;
 
     public FleetDocumentService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IFileStorageService fileStorage)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _timeProvider = timeProvider;
+        _fileStorage = fileStorage;
     }
 
     private IQueryable<FleetDocument> TenantScoped() =>
@@ -122,6 +127,7 @@ public class FleetDocumentService : IFleetDocumentService
         document.IssueDate = request.IssueDate;
         document.ExpiryDate = request.ExpiryDate;
         document.WarningDays = NormalizeWarningDays(request.WarningDays);
+        document.IssuingAuthority = Trim(request.IssuingAuthority);
         document.Notes = Trim(request.Notes);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -178,6 +184,7 @@ public class FleetDocumentService : IFleetDocumentService
             IssueDate = request.IssueDate,
             ExpiryDate = request.ExpiryDate,
             WarningDays = NormalizeWarningDays(request.WarningDays),
+            IssuingAuthority = Trim(request.IssuingAuthority),
             Notes = Trim(request.Notes),
         };
 
@@ -186,6 +193,65 @@ public class FleetDocumentService : IFleetDocumentService
 
         await _auditService.RecordAsync(EntityType, document.Id.ToString(), "Created", null,
             new { document.DocumentType, document.VehicleId, document.TrailerId, document.ExpiryDate }, cancellationToken);
+
+        return FleetDocumentOperationResult.Success(Map(document));
+    }
+
+    public async Task<FleetDocumentOperationResult> AttachFileAsync(
+        Guid id, string fileName, string contentType, Stream content, CancellationToken cancellationToken)
+    {
+        var document = await TenantScoped().FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        if (document is null)
+        {
+            return FleetDocumentOperationResult.NotFound;
+        }
+
+        var previousKey = document.DocumentPath;
+        document.DocumentPath = await _fileStorage.SaveAsync(_tenantContext.TenantId, StorageCategory, fileName, content, cancellationToken);
+        document.FileName = fileName;
+        document.ContentType = contentType;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (previousKey is not null)
+        {
+            await _fileStorage.DeleteAsync(previousKey, cancellationToken);
+        }
+
+        await _auditService.RecordAsync(EntityType, document.Id.ToString(), "DocumentUploaded", null,
+            new { FileName = fileName }, cancellationToken);
+
+        return FleetDocumentOperationResult.Success(Map(document));
+    }
+
+    public async Task<(Stream Content, string FileName, string ContentType)?> OpenFileAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await TenantScoped().AsNoTracking().FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        if (document?.DocumentPath is null)
+        {
+            return null;
+        }
+
+        var stream = await _fileStorage.OpenReadAsync(document.DocumentPath, cancellationToken);
+        return (stream, document.FileName ?? "document", document.ContentType ?? "application/octet-stream");
+    }
+
+    public async Task<FleetDocumentOperationResult> RemoveFileAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var document = await TenantScoped().FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        if (document is null)
+        {
+            return FleetDocumentOperationResult.NotFound;
+        }
+
+        if (document.DocumentPath is { } key)
+        {
+            document.DocumentPath = null;
+            document.FileName = null;
+            document.ContentType = null;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _fileStorage.DeleteAsync(key, cancellationToken);
+            await _auditService.RecordAsync(EntityType, document.Id.ToString(), "DocumentRemoved", null, null, cancellationToken);
+        }
 
         return FleetDocumentOperationResult.Success(Map(document));
     }
@@ -227,7 +293,7 @@ public class FleetDocumentService : IFleetDocumentService
         d.IssueDate, d.ExpiryDate, d.WarningDays,
         ComputeStatus(d.ExpiryDate, d.WarningDays, Today),
         HasAttachment: d.DocumentPath is not null,
-        d.Notes);
+        d.Notes, d.IssuingAuthority, d.FileName);
 
     public static FleetDocumentStatus ComputeStatus(DateOnly? expiryDate, int? warningDays, DateOnly today)
     {

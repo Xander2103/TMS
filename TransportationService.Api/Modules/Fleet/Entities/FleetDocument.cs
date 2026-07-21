@@ -12,6 +12,9 @@ public enum FleetDocumentType
     RefrigerationCertificate,
     AdrCertificate,
     Other,
+    // Additive types.
+    LeasingContract,
+    TachographCalibration,
 }
 
 /// <summary>
@@ -41,8 +44,15 @@ public class FleetDocument : AuditableTenantEntity
     /// <summary>Days before expiry at which the document counts as expiring; falls back to the module default.</summary>
     public int? WarningDays { get; set; }
 
+    /// <summary>Issuing authority (keuringsstation, verzekeraar, ...).</summary>
+    public string? IssuingAuthority { get; set; }
+
     /// <summary>Opaque IFileStorageService storage key of the attachment, when present.</summary>
     public string? DocumentPath { get; set; }
+
+    /// <summary>Original file name + content type of the uploaded attachment.</summary>
+    public string? FileName { get; set; }
+    public string? ContentType { get; set; }
 
     public string? Notes { get; set; }
 }

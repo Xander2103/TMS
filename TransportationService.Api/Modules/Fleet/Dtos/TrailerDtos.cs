@@ -37,7 +37,9 @@ public record TrailerDetailDto(
     TrailerOperationalStatus OperationalStatus,
     string? StatusReason,
     bool IsActive,
-    string? Notes);
+    string? Notes,
+    int AxleCount = 0,
+    decimal LoadingMeters = 0);
 
 public record CreateTrailerRequest(
     string LicensePlate,
@@ -56,7 +58,9 @@ public record CreateTrailerRequest(
     bool AdrSuitable,
     VehicleOwnershipType OwnershipType,
     string? Notes,
-    bool VolumeIsManual = false);
+    bool VolumeIsManual = false,
+    int AxleCount = 0,
+    decimal LoadingMeters = 0);
 
 public record UpdateTrailerRequest(
     string LicensePlate,
@@ -78,7 +82,9 @@ public record UpdateTrailerRequest(
     bool IsActive,
     string? Notes,
     string? StatusReason = null,
-    bool VolumeIsManual = false);
+    bool VolumeIsManual = false,
+    int AxleCount = 0,
+    decimal LoadingMeters = 0);
 
 public record SetTrailerActiveRequest(bool IsActive);
 

@@ -75,6 +75,52 @@ public class FleetDocumentsController : ControllerBase
         return await _service.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
     }
 
+    private const long MaxDocumentBytes = 10 * 1024 * 1024;
+    private static readonly string[] AllowedExtensions = [".pdf", ".jpg", ".jpeg", ".png"];
+
+    [HttpPost("api/fleet-documents/{id:guid}/document")]
+    [RequirePermission(PermissionCodes.FleetDocumentsEdit)]
+    [RequestSizeLimit(MaxDocumentBytes + 1024)]
+    public async Task<ActionResult<FleetDocumentDto>> UploadDocument(Guid id, IFormFile file, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0 || file.Length > MaxDocumentBytes)
+        {
+            return BadRequest(new { message = "Het document moet tussen 1 byte en 10 MB groot zijn." });
+        }
+
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        if (!AllowedExtensions.Contains(extension))
+        {
+            return BadRequest(new { message = "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan." });
+        }
+
+        var contentType = extension switch
+        {
+            ".pdf" => "application/pdf",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".png" => "image/png",
+            _ => "application/octet-stream",
+        };
+
+        await using var stream = file.OpenReadStream();
+        return Handle(await _service.AttachFileAsync(id, file.FileName, contentType, stream, cancellationToken), created: false);
+    }
+
+    [HttpGet("api/fleet-documents/{id:guid}/document")]
+    [RequirePermission(PermissionCodes.FleetDocumentsView)]
+    public async Task<IActionResult> DownloadDocument(Guid id, CancellationToken cancellationToken)
+    {
+        var file = await _service.OpenFileAsync(id, cancellationToken);
+        return file is { } found ? File(found.Content, found.ContentType, found.FileName) : NotFound();
+    }
+
+    [HttpDelete("api/fleet-documents/{id:guid}/document")]
+    [RequirePermission(PermissionCodes.FleetDocumentsEdit)]
+    public async Task<ActionResult<FleetDocumentDto>> RemoveDocument(Guid id, CancellationToken cancellationToken)
+    {
+        return Handle(await _service.RemoveFileAsync(id, cancellationToken), created: false);
+    }
+
     private ActionResult<FleetDocumentDto> Handle(FleetDocumentOperationResult result, bool created) => result.Outcome switch
     {
         FleetDocumentOperationOutcome.Success when created => StatusCode(StatusCodes.Status201Created, result.Document),

@@ -37,7 +37,7 @@ public class DashboardServiceTests
         var fleet = new FleetDashboardService(db.Context, tenant,
             new MaintenanceService(db.Context, tenant, audit, clock),
             new InspectionService(db.Context, tenant, audit, clock),
-            new FleetDocumentService(db.Context, tenant, audit, clock),
+            new FleetDocumentService(db.Context, tenant, audit, clock, new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ts-tests", System.Guid.NewGuid().ToString("N")))),
             new DamageReportService(db.Context, tenant, audit),
             new FuelService(db.Context, tenant, audit));
         var trips = new TripService(db.Context, tenant, audit,

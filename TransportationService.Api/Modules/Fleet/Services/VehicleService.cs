@@ -124,6 +124,7 @@ public class VehicleService : IVehicleService
             request.GrossVehicleWeightKg, request.PayloadKg, request.LengthMeters, request.WidthMeters, request.HeightMeters, request.VolumeM3,
             request.VolumeIsManual, request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
             request.OwnershipType, request.Notes);
+        ApplyMautFields(vehicle, request.AxleCount, request.LoadingMeters, request.RequiredLicenceCode);
 
         _dbContext.Add(vehicle);
         try
@@ -179,6 +180,7 @@ public class VehicleService : IVehicleService
             request.GrossVehicleWeightKg, request.PayloadKg, request.LengthMeters, request.WidthMeters, request.HeightMeters, request.VolumeM3,
             request.VolumeIsManual, request.OdometerKm, request.ConsumptionLPer100Km, request.HasCrane, request.HasRefrigeration, request.HasTailLift, request.AdrSuitable,
             request.OwnershipType, request.Notes);
+        ApplyMautFields(vehicle, request.AxleCount, request.LoadingMeters, request.RequiredLicenceCode);
 
         try
         {
@@ -268,6 +270,13 @@ public class VehicleService : IVehicleService
         v.Notes = Trim(notes);
     }
 
+    private static void ApplyMautFields(Vehicle v, int axleCount, decimal loadingMeters, string? requiredLicenceCode)
+    {
+        v.AxleCount = Math.Clamp(axleCount, 0, 12);
+        v.LoadingMeters = loadingMeters < 0 ? 0 : Math.Round(loadingMeters, 2);
+        v.RequiredLicenceCode = string.IsNullOrWhiteSpace(requiredLicenceCode) ? null : requiredLicenceCode.Trim().ToUpperInvariant();
+    }
+
     /// <summary>All optional references on a vehicle must resolve within the current tenant.</summary>
     private async Task<bool> ReferencesInTenantAsync(
         Guid? categoryId, Guid? fixedDriverId, Guid? currentDriverId, CancellationToken cancellationToken)
@@ -308,7 +317,8 @@ public class VehicleService : IVehicleService
             v.FuelType, v.EmissionClass, v.GrossVehicleWeightKg, v.PayloadKg, v.LengthMeters, v.WidthMeters, v.HeightMeters, v.VolumeM3,
             v.VolumeIsManual, v.OdometerKm, v.ConsumptionLPer100Km, v.HasCrane, v.HasRefrigeration, v.HasTailLift, v.AdrSuitable,
             v.OwnershipType, v.OperationalStatus, v.StatusReason, v.IsActive,
-            v.FixedDriverId, fixedDriverName, v.CurrentDriverId, currentDriverName, v.Notes);
+            v.FixedDriverId, fixedDriverName, v.CurrentDriverId, currentDriverName, v.Notes,
+            v.AxleCount, v.LoadingMeters, v.RequiredLicenceCode);
     }
 
     private async Task<string?> ResolveDriverNameAsync(Guid? driverId, CancellationToken cancellationToken)

@@ -32,6 +32,8 @@ public class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         builder.Property(v => v.WidthMeters).HasPrecision(6, 2);
         builder.Property(v => v.HeightMeters).HasPrecision(6, 2);
         builder.Property(v => v.VolumeM3).HasPrecision(8, 2);
+        builder.Property(v => v.LoadingMeters).HasPrecision(5, 2);
+        builder.Property(v => v.RequiredLicenceCode).HasMaxLength(10);
 
         builder.HasIndex(v => new { v.TenantId, v.InternalNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(v => new { v.TenantId, v.LicensePlate }).IsUnique().HasFilter("\"IsDeleted\" = false");
