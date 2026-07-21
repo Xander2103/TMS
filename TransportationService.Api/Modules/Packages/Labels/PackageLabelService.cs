@@ -167,11 +167,19 @@ public class PackageLabelService : IPackageLabelService
             .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
             .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == tenantId),
                 o => o.CustomerId, c => c.Id,
-                (o, c) => new { o.Id, o.OrderNumber, CustomerName = c.Name, o.AdrRequired })
+                (o, c) => new { o.Id, o.OrderNumber, CustomerName = c.Name, o.AdrRequired, o.CustomerReference })
             .ToDictionaryAsync(o => o.Id, cancellationToken);
         var stops = await _dbContext.TransportOrderStops.AsNoTracking()
             .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId))
             .ToListAsync(cancellationToken);
+
+        // Resolve linked master locations for full street/city/country on the label.
+        var locationIds = stops.Where(s => s.LocationId is not null).Select(s => s.LocationId!.Value).Distinct().ToList();
+        var locations = locationIds.Count == 0
+            ? new Dictionary<Guid, Locations.Entities.Location>()
+            : await _dbContext.Locations.AsNoTracking()
+                .Where(l => l.TenantId == tenantId && locationIds.Contains(l.Id))
+                .ToDictionaryAsync(l => l.Id, cancellationToken);
 
         // Sequence "Collo n van m": within the cargo line for generated packages, within the
         // order for manually created ones. Ordered by package number (stable, immutable).
@@ -200,6 +208,9 @@ public class PackageLabelService : IPackageLabelService
                 .ToList();
             var position = group.FindIndex(s => s.Id == package.Id) + 1;
 
+            var loadingAddress = ResolveAddress(loading, locations);
+            var deliveryAddress = ResolveAddress(delivery, locations);
+
             result[package.Id] = new LabelSnapshot(
                 tenantName,
                 package.PackageNumber,
@@ -218,7 +229,24 @@ public class PackageLabelService : IPackageLabelService
                 order?.AdrRequired ?? false,
                 package.RequiresTemperatureControl,
                 package.RequiresSignature,
-                position > 0 ? $"Collo {position} van {group.Count}" : null);
+                position > 0 ? $"Collo {position} van {group.Count}" : null,
+                // Redesigned horizontal-label fields.
+                SenderName: loadingAddress.Name,
+                SenderStreet: loadingAddress.Street,
+                SenderPostalCodeCity: loadingAddress.PostalCity,
+                SenderCountry: loadingAddress.Country,
+                PickupDate: loading?.PlannedFrom?.ToString("dd-MM-yyyy"),
+                PickupTime: loading?.PlannedFrom?.ToString("HH:mm"),
+                RecipientName: deliveryAddress.Name,
+                RecipientStreet: deliveryAddress.Street,
+                RecipientPostalCodeCity: deliveryAddress.PostalCity,
+                RecipientCountry: deliveryAddress.Country,
+                DeliveryDate: delivery?.PlannedFrom?.ToString("dd-MM-yyyy"),
+                DeliveryTime: delivery?.PlannedFrom?.ToString("HH:mm"),
+                SequenceNumber: position > 0 ? position : null,
+                SequenceTotal: position > 0 ? group.Count : null,
+                VolumeM3: package.VolumeM3,
+                PurchaseOrderNumber: order?.CustomerReference);
         }
 
         return result;
@@ -226,6 +254,30 @@ public class PackageLabelService : IPackageLabelService
 
     private static string? LocationLabel(TransportOrderStop? stop) =>
         stop is null ? null : string.Join(", ", new[] { stop.LocationName, stop.City }.Where(v => !string.IsNullOrWhiteSpace(v)));
+
+    /// <summary>Full address for a stop: prefers the inline stop fields, falls back to the linked location.</summary>
+    private static (string? Name, string? Street, string? PostalCity, string? Country) ResolveAddress(
+        TransportOrderStop? stop, IReadOnlyDictionary<Guid, Locations.Entities.Location> locations)
+    {
+        if (stop is null)
+        {
+            return (null, null, null, null);
+        }
+
+        var location = stop.LocationId is { } id && locations.TryGetValue(id, out var loc) ? loc : null;
+        var name = FirstNonEmpty(stop.LocationName, location?.Name);
+        var street = FirstNonEmpty(
+            stop.Address,
+            location is not null ? string.Join(" ", new[] { location.Street, location.HouseNumber }.Where(v => !string.IsNullOrWhiteSpace(v))) : null);
+        var postalCity = FirstNonEmpty(
+            string.Join(" ", new[] { stop.PostalCode, stop.City }.Where(v => !string.IsNullOrWhiteSpace(v))),
+            location is not null ? string.Join(" ", new[] { location.PostalCode, location.City }.Where(v => !string.IsNullOrWhiteSpace(v))) : null);
+        var country = FirstNonEmpty(stop.CountryCode, location?.CountryCode);
+        return (name, street, string.IsNullOrWhiteSpace(postalCity) ? null : postalCity, country);
+    }
+
+    private static string? FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
 
     private static string UnitTypeDutch(PackageUnitType type, string? customLabel) => type switch
     {

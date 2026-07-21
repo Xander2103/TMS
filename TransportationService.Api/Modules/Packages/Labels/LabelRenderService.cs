@@ -25,7 +25,25 @@ public sealed record LabelSnapshot(
     bool RequiresTemperatureControl,
     bool RequiresSignature,
     /// <summary>"Collo n van m" within the cargo line (or order). Optional so historical snapshots keep deserializing.</summary>
-    string? SequenceLabel = null);
+    string? SequenceLabel = null,
+    // --- Redesigned horizontal layout fields (all optional so old snapshots re-render) ---
+    string? SenderName = null,
+    string? SenderStreet = null,
+    string? SenderPostalCodeCity = null,
+    string? SenderCountry = null,
+    string? PickupDate = null,
+    string? PickupTime = null,
+    string? RecipientName = null,
+    string? RecipientStreet = null,
+    string? RecipientPostalCodeCity = null,
+    string? RecipientCountry = null,
+    string? DeliveryDate = null,
+    string? DeliveryTime = null,
+    int? SequenceNumber = null,
+    int? SequenceTotal = null,
+    decimal? VolumeM3 = null,
+    string? PurchaseOrderNumber = null,
+    string? CashOnDelivery = null);
 
 public interface ILabelRenderService
 {
@@ -60,10 +78,11 @@ public class LabelRenderService : ILabelRenderService
             foreach (var snapshot in snapshots)
             {
                 var page = document.AddPage();
-                page.Width = XUnit.FromMillimeter(100);
-                page.Height = XUnit.FromMillimeter(150);
+                // Redesigned horizontal label: 150 mm wide × 100 mm high (landscape).
+                page.Width = XUnit.FromMillimeter(150);
+                page.Height = XUnit.FromMillimeter(100);
                 using var gfx = XGraphics.FromPdfPage(page);
-                DrawLabel(gfx, snapshot, new XRect(0, 0, page.Width.Point, page.Height.Point), compact: false);
+                DrawHorizontalLabel(gfx, snapshot, new XRect(0, 0, page.Width.Point, page.Height.Point));
             }
         }
         else
@@ -250,5 +269,173 @@ public class LabelRenderService : ILabelRenderService
             gfx.DrawString(label.BarcodeValue, Mono, XBrushes.Black,
                 new XRect(x, barY + barHeight + 2, width, 10), XStringFormats.TopCenter);
         }
+    }
+
+    private static readonly XFont HeaderCompany = new("Arial", 13, XFontStyleEx.Bold);
+    private static readonly XFont ZoneHeading = new("Arial", 7.5, XFontStyleEx.Bold);
+    private static readonly XFont ZoneBody = new("Arial", 9, XFontStyleEx.Regular);
+    private static readonly XFont SummaryLabel = new("Arial", 7, XFontStyleEx.Regular);
+    private static readonly XFont SummaryValue = new("Arial", 9.5, XFontStyleEx.Bold);
+
+    /// <summary>
+    /// Redesigned horizontal label (150×100 mm). Deterministic fixed zones:
+    /// header band (company + human-readable barcode number), a left column with grouped
+    /// EXPÉDITEUR/VERZENDER and DESTINATAIRE/BESTEMMING blocks, a right summary column
+    /// (reference, collo x/y, weight, volume, PO, indicators), and a full-width Code 128 at
+    /// the bottom. All text is truncated with an ellipsis; nothing clips. Falls back to the
+    /// legacy snapshot fields when the redesign fields are absent (old snapshots re-render).
+    /// </summary>
+    private static void DrawHorizontalLabel(XGraphics gfx, LabelSnapshot label, XRect area)
+    {
+        const double margin = 12;
+        var left = area.X + margin;
+        var right = area.Right - margin;
+        var contentWidth = right - left;
+        var summaryWidth = contentWidth * 0.34;
+        var addressWidth = contentWidth - summaryWidth - 12;
+        var addressRight = left + addressWidth;
+
+        string Fit(string text, double maxWidth, XFont font)
+        {
+            if (string.IsNullOrEmpty(text) || gfx.MeasureString(text, font).Width <= maxWidth)
+            {
+                return text ?? string.Empty;
+            }
+
+            while (text.Length > 1 && gfx.MeasureString(text + "…", font).Width > maxWidth)
+            {
+                text = text[..^1];
+            }
+
+            return text + "…";
+        }
+
+        // 1. Header band: company (left), human-readable barcode number (right).
+        var y = area.Y + margin;
+        gfx.DrawString(Fit(label.TenantName, contentWidth * 0.6, HeaderCompany), HeaderCompany, XBrushes.Black, new XPoint(left, y + 12));
+        gfx.DrawString(label.BarcodeValue, Mono, XBrushes.Black, new XRect(left, y, contentWidth, 14), XStringFormats.TopRight);
+        y += 22;
+        gfx.DrawLine(new XPen(XColors.Black, 1.0), left, y, right, y);
+        y += 8;
+
+        // 2. Address column: sender + destination blocks.
+        var senderName = label.SenderName ?? label.CustomerName;
+        var senderCity = label.SenderPostalCodeCity ?? label.LoadingLocation;
+        var blockTop = y;
+        y = DrawAddressBlock(gfx, "EXPÉDITEUR - VERZENDER", senderName,
+            label.SenderStreet, senderCity, label.SenderCountry, label.PickupDate, label.PickupTime,
+            left, addressRight - left, y, Fit);
+
+        y += 6;
+        var recipientName = label.RecipientName ?? label.DeliveryLocation;
+        var recipientCity = label.RecipientPostalCodeCity ?? label.DeliveryLocation;
+        DrawAddressBlock(gfx, "DESTINATAIRE - BESTEMMING", recipientName,
+            label.RecipientStreet, recipientCity, label.RecipientCountry, label.DeliveryDate, label.DeliveryTime,
+            left, addressRight - left, y, Fit);
+
+        // Vertical divider between addresses and summary.
+        var summaryX = addressRight + 12;
+        gfx.DrawLine(new XPen(XColors.LightGray, 0.6), addressRight + 6, blockTop, addressRight + 6, area.Bottom - 34);
+
+        // 3. Right summary column.
+        var sy = blockTop;
+        void Summary(string labelText, string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            gfx.DrawString(labelText, SummaryLabel, XBrushes.Gray, new XPoint(summaryX, sy + 6));
+            gfx.DrawString(Fit(value, summaryWidth, SummaryValue), SummaryValue, XBrushes.Black, new XPoint(summaryX, sy + 17));
+            sy += 22;
+        }
+
+        var sequence = label.SequenceNumber is { } n && label.SequenceTotal is { } t ? $"{n} / {t}" : label.SequenceLabel;
+        Summary("Referentie", label.CustomerReference);
+        Summary("Collo", sequence);
+        Summary("Gewicht", label.WeightKg is { } w ? $"{w:0.##} kg" : null);
+        Summary("Volume", label.VolumeM3 is { } v ? $"{v:0.###} m³" : null);
+        Summary("PO-nummer", label.PurchaseOrderNumber);
+        Summary("Rembours", label.CashOnDelivery);
+
+        var indicators = new List<string>();
+        if (label.AdrRequired) indicators.Add("ADR");
+        if (label.RequiresTemperatureControl) indicators.Add("TEMP");
+        if (label.IsFragile) indicators.Add("BREEKBAAR");
+        if (label.RequiresSignature) indicators.Add("HANDTEK.");
+        if (indicators.Count > 0)
+        {
+            gfx.DrawString(Fit(string.Join("  ·  ", indicators), summaryWidth, ZoneHeading), ZoneHeading, XBrushes.Black, new XPoint(summaryX, sy + 8));
+        }
+
+        if (!string.IsNullOrWhiteSpace(label.HandlingInstructions))
+        {
+            gfx.DrawString(Fit(label.HandlingInstructions, summaryWidth, Small), Small, XBrushes.Black, new XPoint(summaryX, sy + 22));
+        }
+
+        // 4. Full-width Code 128 at the bottom.
+        var modules = Code128Encoder.ModuleWidths(label.BarcodeValue);
+        if (modules is not null)
+        {
+            var totalModules = modules.Sum();
+            var barHeight = 26.0;
+            var barY = area.Bottom - margin - barHeight;
+            var moduleWidth = Math.Min(contentWidth / totalModules, 1.4);
+            var barsWidth = totalModules * moduleWidth;
+            var barX = left + (contentWidth - barsWidth) / 2;
+            var isBar = true;
+            foreach (var module in modules)
+            {
+                var barWidth = module * moduleWidth;
+                if (isBar)
+                {
+                    gfx.DrawRectangle(XBrushes.Black, barX, barY, barWidth, barHeight);
+                }
+
+                barX += barWidth;
+                isBar = !isBar;
+            }
+        }
+    }
+
+    private static double DrawAddressBlock(
+        XGraphics gfx, string heading, string? name, string? street, string? city, string? country,
+        string? date, string? time, double x, double width, double y, Func<string, double, XFont, string> fit)
+    {
+        gfx.DrawString(heading, ZoneHeading, XBrushes.Black, new XPoint(x, y + 7));
+        y += 12;
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            gfx.DrawString(fit(name, width, new XFont("Arial", 9, XFontStyleEx.Bold)), new XFont("Arial", 9, XFontStyleEx.Bold), XBrushes.Black, new XPoint(x, y + 8));
+            y += 12;
+        }
+
+        if (!string.IsNullOrWhiteSpace(street))
+        {
+            gfx.DrawString(fit(street, width, ZoneBody), ZoneBody, XBrushes.Black, new XPoint(x, y + 8));
+            y += 11;
+        }
+
+        if (!string.IsNullOrWhiteSpace(city))
+        {
+            gfx.DrawString(fit(city, width, ZoneBody), ZoneBody, XBrushes.Black, new XPoint(x, y + 8));
+            y += 11;
+        }
+
+        if (!string.IsNullOrWhiteSpace(country))
+        {
+            gfx.DrawString(fit(country, width, ZoneBody), ZoneBody, XBrushes.Black, new XPoint(x, y + 8));
+            y += 11;
+        }
+
+        var dateTime = string.Join("  ", new[] { date, time }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        if (!string.IsNullOrWhiteSpace(dateTime))
+        {
+            gfx.DrawString(fit(dateTime, width, Small), Small, XBrushes.Black, new XPoint(x, y + 8));
+            y += 11;
+        }
+
+        return y;
     }
 }
