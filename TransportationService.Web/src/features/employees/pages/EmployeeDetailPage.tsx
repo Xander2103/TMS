@@ -14,6 +14,7 @@ import { AbsencesTab } from '../../absences/components/AbsencesTab'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { DriverProfilePanel } from '../../drivers/components/DriverProfilePanel'
+import { IssuedItemsTab } from '../../issued-items/IssuedItemsTab'
 import { CreateUserAccountDialog } from '../components/CreateUserAccountDialog'
 import { EmployeeDocumentsTab } from '../components/EmployeeDocumentsTab'
 import { EmployeeForm } from '../components/EmployeeForm'
@@ -25,7 +26,7 @@ import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
 
-const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'afwezigheden', 'ritten', 'chauffeursprofiel', 'historiek'] as const
+const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'afwezigheden', 'ritten', 'chauffeursprofiel', 'bedrijfsmiddelen', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 export function EmployeeDetailPage() {
@@ -51,6 +52,7 @@ export function EmployeeDetailPage() {
   const canViewPlanning = hasPermission('employee_planning.view') || hasPermission('employee_planning.manage')
   const canViewTrips = hasPermission('planning.view')
   const canViewDocuments = hasPermission('employee_documents.view')
+  const canViewIssuedItems = hasPermission('issued_items.view') || hasPermission('issued_items.manage')
 
   if (isLoading) return <LoadingState message="Medewerker laden..." />
   if (error || !employee) return <ErrorState message={error ?? 'Medewerker niet gevonden.'} />
@@ -116,6 +118,7 @@ export function EmployeeDetailPage() {
           { id: 'afwezigheden', label: 'Afwezigheden' },
           ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: 'Ritten' }] : []),
           ...(employee.driverId ? [{ id: 'chauffeursprofiel', label: 'Chauffeursprofiel' }] : []),
+          ...(canViewIssuedItems ? [{ id: 'bedrijfsmiddelen', label: 'Bedrijfsmiddelen' }] : []),
           { id: 'historiek', label: 'Historiek' },
         ]}
         activeId={tab}
@@ -234,6 +237,12 @@ export function EmployeeDetailPage() {
               setTab('profiel')
             }}
           />
+        </TabPanel>
+      )}
+
+      {tab === 'bedrijfsmiddelen' && canViewIssuedItems && (
+        <TabPanel tabId="bedrijfsmiddelen">
+          <IssuedItemsTab employeeId={employee.id} />
         </TabPanel>
       )}
 

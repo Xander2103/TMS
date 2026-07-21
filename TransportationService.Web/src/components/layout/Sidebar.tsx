@@ -90,7 +90,7 @@ const portalNavItems: NavItem[] = [
 ]
 
 export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNavigate?: () => void }) {
-  const { user, logout, hasAnyPermission } = useAuth()
+  const { user, logout, hasAnyPermission, hasPermission } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
 
   // The sidebar only shows what the user may actually open; the backend enforces the
@@ -188,7 +188,8 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
         ))}
 
         {(hasAnyPermission(['legal_entities.view', 'legal_entities.manage']) ||
-          hasAnyPermission(['company_settings.view', 'company_settings.manage'])) && (
+          hasAnyPermission(['company_settings.view', 'company_settings.manage']) ||
+          hasPermission('issued_items.manage_templates')) && (
           <ul className="nav-footer">
             {hasAnyPermission(['legal_entities.view', 'legal_entities.manage']) && (
               <li>
@@ -197,6 +198,16 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
                   className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
                 >
                   Eigen bedrijven
+                </NavLink>
+              </li>
+            )}
+            {hasPermission('issued_items.manage_templates') && (
+              <li>
+                <NavLink
+                  to="/settings/issued-item-templates"
+                  className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
+                >
+                  Bedrijfsmiddelen (sjablonen)
                 </NavLink>
               </li>
             )}
