@@ -13,7 +13,21 @@ import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { formatIban, formatNrn, validateIban, validateNrn } from '../utils/personFormats'
-import { EMPLOYMENT_STATUS_LABELS, type EmployeeDetail, type EmployeeInput, type EmploymentStatus } from '../types/employee'
+import {
+  addEmergencyContactRow,
+  emergencyContactRowsFromDetail,
+  emergencyContactRowsToPayload,
+  removeEmergencyContactRow,
+  updateEmergencyContactRow,
+} from '../utils/emergencyContacts'
+import {
+  CIVIL_STATUS_LABELS,
+  EMPLOYMENT_STATUS_LABELS,
+  type CivilStatus,
+  type EmployeeDetail,
+  type EmployeeInput,
+  type EmploymentStatus,
+} from '../types/employee'
 import './EmployeeForm.css'
 
 interface EmployeeFormProps {
@@ -45,7 +59,7 @@ function nullable(value: string): string | null {
   return trimmed ? trimmed : null
 }
 
-export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, extraSections, onFunctionsChanged }: EmployeeFormProps) {
+export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, extraSections, onFunctionsChanged }: EmployeeFormProps) {
   const { hasPermission } = useAuth()
   const canSeeConfidential = hasPermission('employees.view_confidential')
 
@@ -77,8 +91,14 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
   const [contractTypeId, setContractTypeId] = useState<string | null>(initial?.contractTypeId ?? null)
   const [jobFunctionIds, setJobFunctionIds] = useState<string[]>(initial?.jobFunctionIds ?? [])
 
-  const [emergencyContactName, setEmergencyContactName] = useState(initial?.emergencyContactName ?? '')
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState(initial?.emergencyContactPhone ?? '')
+  const [emergencyRows, setEmergencyRows] = useState(() => emergencyContactRowsFromDetail(initial?.emergencyContacts))
+
+  const [civilStatus, setCivilStatus] = useState<CivilStatus | ''>(initial?.civilStatus ?? '')
+  const [dimonaNumber, setDimonaNumber] = useState(initial?.dimonaNumber ?? '')
+  const [dependentChildren, setDependentChildren] = useState(
+    initial?.dependentChildren != null ? String(initial.dependentChildren) : '',
+  )
+  const [identityCardNumber, setIdentityCardNumber] = useState(initial?.identityCardNumber ?? '')
 
   const [nationalRegisterNumber, setNationalRegisterNumber] = useState(initial?.nationalRegisterNumber ?? '')
   const [iban, setIban] = useState(initial?.iban ?? '')
@@ -91,6 +111,11 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
 
   function touch() {
     if (!dirty) setDirty(true)
+  }
+
+  function patchEmergencyRow(key: string, patch: Parameters<typeof updateEmergencyContactRow>[2]) {
+    setEmergencyRows((rows) => updateEmergencyContactRow(rows, key, patch))
+    touch()
   }
 
   function updateFunctions(next: string[]) {
@@ -157,17 +182,20 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
       city: city.trim(),
       countryCode: countryCode || null,
       employmentStartDate,
-      employmentEndDate: mode === 'edit' ? employmentEndDate || null : null,
+      employmentEndDate: employmentEndDate || null,
       employmentStatus,
       departmentId: departmentId || null,
       contractTypeId: contractTypeId || null,
       jobFunctionIds,
-      emergencyContactName: nullable(emergencyContactName),
-      emergencyContactPhone: nullable(emergencyContactPhone),
       nationalRegisterNumber: canSeeConfidential ? nullable(nationalRegisterNumber) : null,
       iban: canSeeConfidential ? nullable(iban) : null,
       bic: canSeeConfidential ? nullable(bic) : null,
       notes: nullable(notes),
+      civilStatus: civilStatus || null,
+      dependentChildren: dependentChildren.trim() ? Number(dependentChildren) : null,
+      dimonaNumber: nullable(dimonaNumber),
+      identityCardNumber: canSeeConfidential ? nullable(identityCardNumber) : null,
+      emergencyContacts: emergencyContactRowsToPayload(emergencyRows),
     }
     setDirty(false)
     onSubmit(values)
@@ -267,11 +295,6 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
         <FormField label="Startdatum" htmlFor="e-start" error={fieldErrors.employmentStartDate} required>
           <input id="e-start" type="date" value={employmentStartDate} onChange={(e) => setEmploymentStartDate(e.target.value)} aria-invalid={fieldErrors.employmentStartDate ? 'true' : undefined} />
         </FormField>
-        {mode === 'edit' && (
-          <FormField label="Einddatum" htmlFor="e-end" hint="Leeg = onbepaalde duur.">
-            <input id="e-end" type="date" value={employmentEndDate} onChange={(e) => setEmploymentEndDate(e.target.value)} />
-          </FormField>
-        )}
         <FormField label="Dienstverbandstatus" htmlFor="e-status">
           <select id="e-status" value={employmentStatus} onChange={(e) => setEmploymentStatus(e.target.value as EmploymentStatus)}>
             {Object.entries(EMPLOYMENT_STATUS_LABELS).map(([value, label]) => (
@@ -342,13 +365,137 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
         </div>
       </FormSection>
 
-      <FormSection title="Noodcontact" columns={2}>
-        <FormField label="Naam" htmlFor="e-emergency-name">
-          <input id="e-emergency-name" value={emergencyContactName} onChange={(e) => setEmergencyContactName(e.target.value)} maxLength={150} />
+      <FormSection title="Persoonlijk / HR" columns={3}>
+        <FormField label="Burgerlijke staat" htmlFor="e-civil-status">
+          <select
+            id="e-civil-status"
+            value={civilStatus}
+            onChange={(e) => {
+              setCivilStatus(e.target.value as CivilStatus | '')
+              touch()
+            }}
+          >
+            <option value="">— Onbekend —</option>
+            {Object.entries(CIVIL_STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
         </FormField>
-        <FormField label="Telefoon" htmlFor="e-emergency-phone">
-          <input id="e-emergency-phone" value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} maxLength={30} />
+        <FormField label="Aantal kinderen ten laste" htmlFor="e-dependent-children">
+          <input
+            id="e-dependent-children"
+            type="number"
+            min={0}
+            max={30}
+            value={dependentChildren}
+            onChange={(e) => setDependentChildren(e.target.value)}
+          />
         </FormField>
+        <FormField label="Einddatum tewerkstelling" htmlFor="e-end" hint="Leeg = onbepaalde duur.">
+          <input id="e-end" type="date" value={employmentEndDate} onChange={(e) => setEmploymentEndDate(e.target.value)} />
+        </FormField>
+        <FormField label="DIMONA-nummer" htmlFor="e-dimona">
+          <input id="e-dimona" value={dimonaNumber} onChange={(e) => setDimonaNumber(e.target.value)} maxLength={50} />
+        </FormField>
+        {canSeeConfidential && (
+          <FormField
+            label="Identiteitskaartnummer"
+            htmlFor="e-identity-card"
+            hint="Vertrouwelijk — alleen zichtbaar met de juiste rechten."
+          >
+            <input
+              id="e-identity-card"
+              value={identityCardNumber}
+              onChange={(e) => setIdentityCardNumber(e.target.value)}
+              maxLength={50}
+            />
+          </FormField>
+        )}
+      </FormSection>
+
+      <FormSection
+        title="Noodcontacten"
+        columns={1}
+        description="Eén of meer contactpersonen voor noodgevallen. De laagste prioriteit wordt als eerste gecontacteerd."
+      >
+        <div className="form-span-all">
+          {emergencyRows.map((row, index) => (
+            <div key={row.key} className="employee-emergency-row">
+              <FormField label={`Naam ${index + 1}`} htmlFor={`e-ec-name-${row.key}`} required={index === 0}>
+                <input
+                  id={`e-ec-name-${row.key}`}
+                  value={row.name}
+                  onChange={(e) => patchEmergencyRow(row.key, { name: e.target.value })}
+                  maxLength={150}
+                />
+              </FormField>
+              <FormField label="Relatie" htmlFor={`e-ec-rel-${row.key}`}>
+                <input
+                  id={`e-ec-rel-${row.key}`}
+                  value={row.relationship}
+                  onChange={(e) => patchEmergencyRow(row.key, { relationship: e.target.value })}
+                  maxLength={100}
+                />
+              </FormField>
+              <FormField label="Telefoon" htmlFor={`e-ec-phone-${row.key}`}>
+                <input
+                  id={`e-ec-phone-${row.key}`}
+                  value={row.phone}
+                  onChange={(e) => patchEmergencyRow(row.key, { phone: e.target.value })}
+                  maxLength={30}
+                />
+              </FormField>
+              <FormField label="GSM" htmlFor={`e-ec-mobile-${row.key}`}>
+                <input
+                  id={`e-ec-mobile-${row.key}`}
+                  value={row.mobilePhone}
+                  onChange={(e) => patchEmergencyRow(row.key, { mobilePhone: e.target.value })}
+                  maxLength={30}
+                />
+              </FormField>
+              <FormField label="Prioriteit" htmlFor={`e-ec-prio-${row.key}`}>
+                <input
+                  id={`e-ec-prio-${row.key}`}
+                  type="number"
+                  min={1}
+                  value={row.priority}
+                  onChange={(e) => patchEmergencyRow(row.key, { priority: Number(e.target.value) || index + 1 })}
+                />
+              </FormField>
+              <div className="employee-emergency-row-actions">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setEmergencyRows((rows) => removeEmergencyContactRow(rows, row.key))
+                    touch()
+                  }}
+                  aria-label={`Noodcontact ${index + 1} verwijderen`}
+                >
+                  Verwijderen
+                </Button>
+              </div>
+              <FormField label="Notities" htmlFor={`e-ec-notes-${row.key}`} className="employee-emergency-notes">
+                <input
+                  id={`e-ec-notes-${row.key}`}
+                  value={row.notes}
+                  onChange={(e) => patchEmergencyRow(row.key, { notes: e.target.value })}
+                  maxLength={500}
+                />
+              </FormField>
+            </div>
+          ))}
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setEmergencyRows((rows) => addEmergencyContactRow(rows))
+              touch()
+            }}
+          >
+            + Noodcontact toevoegen
+          </Button>
+        </div>
       </FormSection>
 
       {canSeeConfidential && (

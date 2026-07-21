@@ -14,6 +14,47 @@ export const EMPLOYMENT_STATUS_TONES: Record<EmploymentStatus, 'success' | 'warn
   Terminated: 'neutral',
 }
 
+export type CivilStatus =
+  | 'Married'
+  | 'Unmarried'
+  | 'Widowed'
+  | 'Divorced'
+  | 'LegallyCohabiting'
+  | 'Single'
+  | 'Other'
+
+export const CIVIL_STATUS_LABELS: Record<CivilStatus, string> = {
+  Married: 'Gehuwd',
+  Unmarried: 'Ongehuwd',
+  Widowed: 'Weduwe/weduwnaar',
+  Divorced: 'Gescheiden',
+  LegallyCohabiting: 'Wettelijk samenwonend',
+  Single: 'Alleenstaand',
+  Other: 'Andere',
+}
+
+/** Emergency contact as returned in EmployeeDetail (EmployeeEmergencyContactDto). */
+export interface EmployeeEmergencyContact {
+  id: string
+  name: string
+  relationship: string | null
+  phone: string | null
+  mobilePhone: string | null
+  notes: string | null
+  priority: number
+}
+
+/** Emergency contact payload (EmployeeEmergencyContactInput); existing contacts keep their id. */
+export interface EmployeeEmergencyContactInput {
+  id?: string | null
+  name: string
+  relationship: string | null
+  phone: string | null
+  mobilePhone: string | null
+  notes: string | null
+  priority: number
+}
+
 export interface EmployeeListItem {
   id: string
   employeeNumber: string
@@ -61,6 +102,12 @@ export interface EmployeeDetail {
   nationalRegisterNumber: string | null
   iban: string | null
   bic: string | null
+  civilStatus: CivilStatus | null
+  dependentChildren: number | null
+  dimonaNumber: string | null
+  // Confidential — null when the user lacks employees.view_confidential.
+  identityCardNumber: string | null
+  emergencyContacts: EmployeeEmergencyContact[]
 }
 
 export interface EmployeeInput {
@@ -84,12 +131,16 @@ export interface EmployeeInput {
   departmentId: string | null
   contractTypeId: string | null
   jobFunctionIds: string[]
-  emergencyContactName: string | null
-  emergencyContactPhone: string | null
   nationalRegisterNumber: string | null
   iban: string | null
   bic: string | null
   notes: string | null
+  civilStatus: CivilStatus | null
+  dependentChildren: number | null
+  dimonaNumber: string | null
+  identityCardNumber: string | null
+  /** Wholesale sync — the backend derives the legacy single emergency name/phone from this. */
+  emergencyContacts: EmployeeEmergencyContactInput[]
 }
 
 export interface CreateEmployeeQualificationInput {
@@ -101,7 +152,7 @@ export interface CreateEmployeeQualificationInput {
 }
 
 export interface CreateEmployeeInput extends EmployeeInput {
-  driverProfile?: { driverCategoryId: string | null; notes: string | null } | null
+  driverProfile?: { driverCategoryIds: string[]; notes: string | null } | null
   /** Optional qualifications created atomically with the employee. */
   qualifications?: CreateEmployeeQualificationInput[] | null
 }

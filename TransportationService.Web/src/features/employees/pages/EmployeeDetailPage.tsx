@@ -14,16 +14,17 @@ import { AbsencesTab } from '../../absences/components/AbsencesTab'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { CreateUserAccountDialog } from '../components/CreateUserAccountDialog'
+import { EmployeeDocumentsTab } from '../components/EmployeeDocumentsTab'
 import { EmployeeForm } from '../components/EmployeeForm'
 import { EmployeePlanningTab } from '../components/EmployeePlanningTab'
 import { EmployeeTripsTab } from '../components/EmployeeTripsTab'
 import { QualificationsTab } from '../components/QualificationsTab'
 import { useEmployee } from '../hooks/useEmployee'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
-import { EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
+import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
 
-const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'afwezigheden', 'ritten', 'historiek'] as const
+const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'afwezigheden', 'ritten', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 export function EmployeeDetailPage() {
@@ -48,6 +49,7 @@ export function EmployeeDetailPage() {
   const canDeactivate = hasPermission('employees.deactivate')
   const canViewPlanning = hasPermission('employee_planning.view') || hasPermission('employee_planning.manage')
   const canViewTrips = hasPermission('planning.view')
+  const canViewDocuments = hasPermission('employee_documents.view')
 
   if (isLoading) return <LoadingState message="Medewerker laden..." />
   if (error || !employee) return <ErrorState message={error ?? 'Medewerker niet gevonden.'} />
@@ -109,6 +111,7 @@ export function EmployeeDetailPage() {
           { id: 'profiel', label: 'Profiel' },
           ...(canViewPlanning ? [{ id: 'planning', label: 'Planning' }] : []),
           { id: 'kwalificaties', label: 'Kwalificaties' },
+          ...(canViewDocuments ? [{ id: 'documenten', label: 'Documenten' }] : []),
           { id: 'afwezigheden', label: 'Afwezigheden' },
           ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: 'Ritten' }] : []),
           { id: 'historiek', label: 'Historiek' },
@@ -146,7 +149,45 @@ export function EmployeeDetailPage() {
               }}
             />
           ) : (
-            <p className="placeholder-text">Je hebt alleen leesrechten voor dit profiel.</p>
+            <div className="employee-readonly-profile">
+              <p className="placeholder-text">Je hebt alleen leesrechten voor dit profiel.</p>
+              <dl className="employee-readonly-grid">
+                <div>
+                  <dt>Burgerlijke staat</dt>
+                  <dd>{employee.civilStatus ? CIVIL_STATUS_LABELS[employee.civilStatus] : '—'}</dd>
+                </div>
+                <div>
+                  <dt>Aantal kinderen ten laste</dt>
+                  <dd>{employee.dependentChildren ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>DIMONA-nummer</dt>
+                  <dd>{employee.dimonaNumber ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>Einddatum tewerkstelling</dt>
+                  <dd>{employee.employmentEndDate ?? '—'}</dd>
+                </div>
+              </dl>
+              <h3 className="employee-readonly-subtitle">Noodcontacten</h3>
+              {employee.emergencyContacts.length === 0 ? (
+                <p className="placeholder-text">Geen noodcontacten geregistreerd.</p>
+              ) : (
+                <ul className="employee-readonly-contacts">
+                  {[...employee.emergencyContacts]
+                    .sort((a, b) => a.priority - b.priority)
+                    .map((contact) => (
+                      <li key={contact.id}>
+                        <span className="employee-readonly-contact-name">{contact.name}</span>
+                        {contact.relationship && <span> · {contact.relationship}</span>}
+                        {(contact.phone || contact.mobilePhone) && (
+                          <span> · {[contact.phone, contact.mobilePhone].filter(Boolean).join(' / ')}</span>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
           )}
         </TabPanel>
       )}
@@ -160,6 +201,12 @@ export function EmployeeDetailPage() {
       {tab === 'kwalificaties' && (
         <TabPanel tabId="kwalificaties">
           <QualificationsTab employeeId={employee.id} />
+        </TabPanel>
+      )}
+
+      {tab === 'documenten' && canViewDocuments && (
+        <TabPanel tabId="documenten">
+          <EmployeeDocumentsTab employeeId={employee.id} />
         </TabPanel>
       )}
 

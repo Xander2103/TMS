@@ -1,0 +1,136 @@
+.employee-documents-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1000px;
+}
+
+.employee-documents-info {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--surface-muted, rgba(127, 127, 127, 0.12));
+  border: 1px solid var(--border);
+  font-size: 13.5px;
+}
+
+.employee-documents-upload {
+  display: grid;
+  grid-template-columns: 1fr 1fr 2fr;
+  gap: 12px 16px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.employee-documents-upload-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+}
+
+.employee-documents-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.employee-documents-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.employee-documents-group-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.employee-documents-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.employee-document {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.employee-document.is-archived {
+  opacity: 0.65;
+}
+
+.employee-document-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.employee-document-name {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.employee-document-meta {
+  font-size: 12.5px;
+  color: var(--text-muted, #6b7280);
+}
+
+.employee-document-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.employee-document-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.employee-document-link {
+  border: none;
+  background: transparent;
+  color: var(--primary, #2563eb);
+  cursor: pointer;
+  font-size: 13.5px;
+  padding: 0;
+}
+
+.employee-document-link:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.employee-document-link.is-busy {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.employee-document-link-danger {
+  color: var(--danger, #dc2626);
+}
+
+@media (max-width: 800px) {
+  .employee-documents-upload {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-document {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

@@ -8,7 +8,7 @@ import { FormSection } from '../../../components/ui/FormSection'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { LookupSelect } from '../../master-data/components/LookupSelect'
+import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { EmployeeForm } from '../components/EmployeeForm'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { useQualificationTypes } from '../hooks/useQualificationTypes'
@@ -34,8 +34,9 @@ export function NewEmployeePage() {
 
   const [isDriver, setIsDriver] = useState(false)
   const [driverSuggested, setDriverSuggested] = useState(false)
-  const [driverCategoryId, setDriverCategoryId] = useState<string | null>(null)
+  const [driverCategoryIds, setDriverCategoryIds] = useState<string[]>([])
   const [driverNotes, setDriverNotes] = useState('')
+  const driverCategories = useLookupOptions('/api/driver-categories', { enabled: canCreateDriver })
   const [qualificationRows, setQualificationRows] = useState<QualificationRow[]>([])
 
   // Suggest (once) enabling the driver profile when a driver-type function is chosen;
@@ -105,16 +106,27 @@ export function NewEmployeePage() {
                 </div>
                 {isDriver && (
                   <>
-                    <FormField label="Chauffeurcategorie" htmlFor="ne-driver-category">
-                      <LookupSelect
-                        id="ne-driver-category"
-                        basePath="/api/driver-categories"
-                        managePermission="driver_categories.manage"
-                        singular="chauffeurcategorie"
-                        value={driverCategoryId}
-                        onChange={setDriverCategoryId}
-                        placeholder="— Geen —"
-                      />
+                    <FormField label="Chauffeurcategorieën" htmlFor="ne-driver-categories" hint="Eén of meer categorieën aanvinken.">
+                      <div id="ne-driver-categories" className="ne-driver-categories">
+                        {driverCategories.isLoading && <span className="ne-driver-categories-empty">Categorieën laden…</span>}
+                        {!driverCategories.isLoading && driverCategories.options.length === 0 && (
+                          <span className="ne-driver-categories-empty">Geen categorieën beschikbaar.</span>
+                        )}
+                        {driverCategories.options.map((category) => (
+                          <label key={category.id} className="customer-form-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={driverCategoryIds.includes(category.id)}
+                              onChange={(e) =>
+                                setDriverCategoryIds((ids) =>
+                                  e.target.checked ? [...ids, category.id] : ids.filter((id) => id !== category.id),
+                                )
+                              }
+                            />
+                            {category.name}
+                          </label>
+                        ))}
+                      </div>
                     </FormField>
                     <FormField label="Chauffeursnotities" htmlFor="ne-driver-notes">
                       <textarea id="ne-driver-notes" rows={2} value={driverNotes} onChange={(e) => setDriverNotes(e.target.value)} maxLength={2000} />
@@ -187,7 +199,7 @@ export function NewEmployeePage() {
         onSubmit={async (values) => {
           const created = await mutations.create({
             ...values,
-            driverProfile: isDriver ? { driverCategoryId, notes: driverNotes.trim() || null } : null,
+            driverProfile: isDriver ? { driverCategoryIds, notes: driverNotes.trim() || null } : null,
             qualifications: buildQualifications(),
           })
           if (created) {

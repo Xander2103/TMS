@@ -113,12 +113,10 @@ export function QualificationDialog({ employeeId, existing, onSaved, onCancel }:
           <input id="obtainedDate" type="date" value={obtainedDate} onChange={(e) => setObtainedDate(e.target.value)} />
         </FormField>
 
-        <FormField
-          label="Vervaldatum"
-          htmlFor="expiryDate"
-          required={selectedType?.requiresExpiryDate}
-          hint={selectedType?.requiresExpiryDate ? 'Verplicht voor dit type.' : 'Leeg = geen vervaldatum.'}
-        >
+        <FormField label="Vervaldatum" htmlFor="expiryDate" required={selectedType?.requiresExpiryDate}>
+          <p className="ui-form-field-hint">
+            {selectedType?.requiresExpiryDate ? 'Verplicht voor dit type.' : 'Laat leeg indien deze kwalificatie niet vervalt.'}
+          </p>
           <input id="expiryDate" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
         </FormField>
 
