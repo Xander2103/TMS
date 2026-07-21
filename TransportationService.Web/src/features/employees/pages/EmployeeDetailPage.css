@@ -16,6 +16,15 @@
   text-decoration: underline;
 }
 
+/* Reset the button that opens the chauffeursprofiel tab so it reads as a link. */
+.employee-driver-link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 .employee-readonly-profile {
   display: flex;
   flex-direction: column;

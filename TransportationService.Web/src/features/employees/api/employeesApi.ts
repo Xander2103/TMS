@@ -8,6 +8,7 @@ export interface SearchEmployeesParams {
   departmentId?: string
   employmentStatus?: EmploymentStatus
   excludeDrivers?: boolean
+  hasDriverProfile?: boolean
   page: number
   pageSize: number
 }
@@ -20,6 +21,7 @@ export function searchEmployees(params: SearchEmployeesParams): Promise<Employee
   if (params.departmentId) query.set('departmentId', params.departmentId)
   if (params.employmentStatus) query.set('employmentStatus', params.employmentStatus)
   if (params.excludeDrivers) query.set('excludeDrivers', 'true')
+  if (params.hasDriverProfile !== undefined) query.set('hasDriverProfile', String(params.hasDriverProfile))
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
 

@@ -65,6 +65,18 @@ export interface EmployeeListItem {
   employmentStatus: EmploymentStatus
   isActive: boolean
   isDriver: boolean
+  /** Populated only in the "Chauffeurs" view (rows with a driver profile). */
+  driverIsBlocked?: boolean | null
+  driverAvailability?: DriverAvailabilityStatus | null
+}
+
+export type DriverAvailabilityStatus = 'Available' | 'Unavailable' | 'OnLeave' | 'OnTrip'
+
+export const DRIVER_AVAILABILITY_LABELS: Record<DriverAvailabilityStatus, string> = {
+  Available: 'Beschikbaar',
+  Unavailable: 'Niet beschikbaar',
+  OnLeave: 'Afwezig',
+  OnTrip: 'Onderweg',
 }
 
 export interface EmployeeDetail {

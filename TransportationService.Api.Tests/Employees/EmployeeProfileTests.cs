@@ -204,8 +204,8 @@ public class EmployeeProfileTests
             canEditConfidential: true, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
 
-        var chauffeurs = await h.Sut.SearchAsync(null, null, h.FunctionChauffeur, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
-        var planningDept = await h.Sut.SearchAsync(null, null, null, h.DepartmentId, null, false, PageRequest.Of(1, 25), CancellationToken.None);
+        var chauffeurs = await h.Sut.SearchAsync(null, null, h.FunctionChauffeur, null, null, false, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var planningDept = await h.Sut.SearchAsync(null, null, null, h.DepartmentId, null, false, null, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Single(chauffeurs.Items);
         Assert.Equal("Janssen", chauffeurs.Items[0].LastName);
@@ -291,10 +291,36 @@ public class EmployeeProfileTests
             EmploymentStatus.Active), canEditConfidential: true, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
 
-        var withoutDrivers = await h.Sut.SearchAsync(null, null, null, null, null, true, PageRequest.Of(1, 25), CancellationToken.None);
+        var withoutDrivers = await h.Sut.SearchAsync(null, null, null, null, null, true, null, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Single(withoutDrivers.Items);
         Assert.DoesNotContain(withoutDrivers.Items, e => e.Id == withDriver.Id);
+    }
+
+    [Fact]
+    public async Task Search_HasDriverProfile_ReturnsOnlyDriversWithReadinessColumns()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.ChangeTracker.Clear();
+        var withDriver = await h.Sut.CreateAsync(FullRequest(h) with
+        {
+            DriverProfile = new CreateEmployeeDriverProfile(null, null),
+        }, canEditConfidential: true, CancellationToken.None);
+        await h.Sut.CreateAsync(new CreateEmployeeRequest(
+            "Piet", "Peeters", new DateOnly(1985, 1, 1),
+            "Dorpstraat", "2", "2000", "Antwerpen",
+            "+323", "piet2@acme.example", new DateOnly(2021, 1, 1),
+            EmploymentStatus.Active), canEditConfidential: true, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var onlyDrivers = await h.Sut.SearchAsync(null, null, null, null, null, false, true, PageRequest.Of(1, 25), CancellationToken.None);
+
+        var row = Assert.Single(onlyDrivers.Items);
+        Assert.Equal(withDriver.Id, row.Id);
+        Assert.True(row.IsDriver);
+        Assert.False(row.DriverIsBlocked);
+        Assert.NotNull(row.DriverAvailability);
     }
 
     [Fact]

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
@@ -13,6 +13,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { searchEmployees } from '../api/employeesApi'
 import {
+  DRIVER_AVAILABILITY_LABELS,
   EMPLOYMENT_STATUS_LABELS,
   EMPLOYMENT_STATUS_TONES,
   type EmployeeListItem,
@@ -23,6 +24,8 @@ import './employees-page.css'
 export function EmployeesPage() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const isDriversView = searchParams.get('view') === 'chauffeurs'
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [jobFunctionId, setJobFunctionId] = useState('')
@@ -40,6 +43,7 @@ export function EmployeesPage() {
         jobFunctionId: jobFunctionId || undefined,
         departmentId: departmentId || undefined,
         employmentStatus: employmentStatus || undefined,
+        hasDriverProfile: isDriversView || undefined,
       }),
     { search, isActive: activeFilter, page, errorMessage: 'Medewerkers konden niet worden geladen.' },
   )
@@ -48,7 +52,7 @@ export function EmployeesPage() {
   useEffect(() => {
     reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobFunctionId, departmentId, employmentStatus])
+  }, [jobFunctionId, departmentId, employmentStatus, isDriversView])
 
   const columns: Column<EmployeeListItem>[] = [
     { key: 'number', header: 'Nummer', width: '120px', render: (row) => <code>{row.employeeNumber}</code> },
@@ -71,6 +75,23 @@ export function EmployeesPage() {
         ),
     },
     { key: 'department', header: 'Afdeling', width: '150px', render: (row) => row.departmentName ?? '—' },
+    ...(isDriversView
+      ? [
+          {
+            key: 'availability',
+            header: 'Beschikbaarheid',
+            width: '150px',
+            render: (row: EmployeeListItem) =>
+              row.driverAvailability ? (
+                <Badge tone={row.driverAvailability === 'Available' ? 'success' : 'neutral'}>
+                  {DRIVER_AVAILABILITY_LABELS[row.driverAvailability]}
+                </Badge>
+              ) : (
+                '—'
+              ),
+          },
+        ]
+      : []),
     {
       key: 'status',
       header: 'Status',
@@ -82,6 +103,7 @@ export function EmployeesPage() {
             label: EMPLOYMENT_STATUS_LABELS[row.employmentStatus],
             tone: EMPLOYMENT_STATUS_TONES[row.employmentStatus],
           }}
+          blocked={isDriversView ? { isBlocked: row.driverIsBlocked ?? false } : undefined}
         />
       ),
     },
@@ -89,15 +111,48 @@ export function EmployeesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Personeel' }]} />
+      <Breadcrumbs items={[{ label: isDriversView ? 'Chauffeurs' : 'Personeel' }]} />
       <PageHeader
-        title="Personeel"
+        title={isDriversView ? 'Chauffeurs' : 'Personeel'}
+        subtitle={isDriversView ? 'Medewerkers met een chauffeursprofiel.' : undefined}
         action={
-          hasPermission('employees.create') && (
-            <Button onClick={() => navigate('/employees/new')}>Nieuwe medewerker</Button>
-          )
+          isDriversView
+            ? hasPermission('drivers.create') && (
+                <Button onClick={() => navigate('/drivers/new')}>Nieuwe chauffeur</Button>
+              )
+            : hasPermission('employees.create') && (
+                <Button onClick={() => navigate('/employees/new')}>Nieuwe medewerker</Button>
+              )
         }
       />
+      {hasPermission('drivers.view') && (
+        <div className="employees-view-toggle" role="tablist" aria-label="Weergave">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isDriversView}
+            className={!isDriversView ? 'active' : ''}
+            onClick={() => {
+              setSearchParams({}, { replace: true })
+              setPage(1)
+            }}
+          >
+            Alle medewerkers
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isDriversView}
+            className={isDriversView ? 'active' : ''}
+            onClick={() => {
+              setSearchParams({ view: 'chauffeurs' }, { replace: true })
+              setPage(1)
+            }}
+          >
+            Chauffeurs
+          </button>
+        </div>
+      )}
       <FilterBar
         search={search}
         onSearchChange={(value) => {

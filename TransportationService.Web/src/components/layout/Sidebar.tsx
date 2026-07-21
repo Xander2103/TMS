@@ -33,7 +33,6 @@ const operationsNavItems: NavItem[] = [
   { label: 'Mijn ritten', to: '/my-trips', permissions: ['driver_workflow.view'] },
   { label: 'Klanten', to: '/customers', permissions: ['customers.view'] },
   { label: 'Klantportaal', to: '/customer-portal', permissions: ['customer_portal.view'] },
-  { label: 'Chauffeurs', to: '/drivers', permissions: ['drivers.view'] },
   { label: 'Personeelsplanning', to: '/employee-planning', permissions: ['employee_planning.view', 'employee_planning.manage'] },
   { label: 'Afwezigheden', to: '/absences', permissions: ['absences.view'] },
   { label: 'Vloot', to: '/fleet', permissions: ['vehicles.view'] },
@@ -55,6 +54,8 @@ const administrationNavItems: NavItem[] = [
   { label: 'Rollen en rechten', to: '/roles', permissions: ['roles.view'] },
   { label: 'Functie→rol-koppelingen', to: '/job-function-mappings', permissions: ['roles.view', 'roles.manage_permissions'] },
   { label: 'Personeel', to: '/employees', permissions: ['employees.view'] },
+  // Driver profiles live inside the personnel dossier; this is the filtered "Chauffeurs" view.
+  { label: 'Chauffeurs', to: '/employees?view=chauffeurs', permissions: ['drivers.view'] },
   { label: 'Kwalificaties', to: '/qualifications', permissions: ['employee_documents.view'] },
 ]
 

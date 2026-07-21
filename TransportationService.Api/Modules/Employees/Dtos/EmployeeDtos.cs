@@ -1,3 +1,4 @@
+using TransportationService.Api.Modules.Drivers.Entities;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Qualifications.Dtos;
 
@@ -12,7 +13,10 @@ public record EmployeeListItemDto(
     string? DepartmentName,
     EmploymentStatus EmploymentStatus,
     bool IsActive,
-    bool IsDriver);
+    bool IsDriver,
+    /// <summary>Populated only for the personnel "Chauffeurs" view (rows with a driver profile).</summary>
+    bool? DriverIsBlocked = null,
+    DriverAvailabilityStatus? DriverAvailability = null);
 
 /// <summary>
 /// Full employee profile. NationalRegisterNumber, Iban and Bic are null when the caller

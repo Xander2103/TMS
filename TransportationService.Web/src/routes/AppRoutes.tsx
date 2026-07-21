@@ -65,7 +65,6 @@ const NotificationsPage = lazyPage(() => import('../features/notifications/pages
 const CustomersPage = lazyPage(() => import('../features/customers/pages/CustomersPage'), 'CustomersPage')
 const NewCustomerPage = lazyPage(() => import('../features/customers/pages/NewCustomerPage'), 'NewCustomerPage')
 const CustomerDetailPage = lazyPage(() => import('../features/customers/pages/CustomerDetailPage'), 'CustomerDetailPage')
-const DriversPage = lazyPage(() => import('../features/drivers/pages/DriversPage'), 'DriversPage')
 const NewDriverPage = lazyPage(() => import('../features/drivers/pages/NewDriverPage'), 'NewDriverPage')
 const DriverDetailPage = lazyPage(() => import('../features/drivers/pages/DriverDetailPage'), 'DriverDetailPage')
 const VehiclesPage = lazyPage(() => import('../features/vehicles/pages/VehiclesPage'), 'VehiclesPage')
@@ -175,7 +174,9 @@ const router = createBrowserRouter(
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/customers/new" element={<NewCustomerPage />} />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
-          <Route path="/drivers" element={<DriversPage />} />
+          {/* Driver profiles are merged into the personnel dossier: the list is the
+              "Chauffeurs" view of /employees, and driver detail redirects to its tab. */}
+          <Route path="/drivers" element={<Navigate to="/employees?view=chauffeurs" replace />} />
           <Route path="/drivers/new" element={<NewDriverPage />} />
           <Route path="/drivers/:id" element={<DriverDetailPage />} />
           <Route path="/fleet" element={<FleetDashboardPage />} />

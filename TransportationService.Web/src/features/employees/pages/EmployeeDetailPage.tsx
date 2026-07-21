@@ -13,6 +13,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { AbsencesTab } from '../../absences/components/AbsencesTab'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
+import { DriverProfilePanel } from '../../drivers/components/DriverProfilePanel'
 import { CreateUserAccountDialog } from '../components/CreateUserAccountDialog'
 import { EmployeeDocumentsTab } from '../components/EmployeeDocumentsTab'
 import { EmployeeForm } from '../components/EmployeeForm'
@@ -24,7 +25,7 @@ import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
 
-const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'afwezigheden', 'ritten', 'historiek'] as const
+const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'afwezigheden', 'ritten', 'chauffeursprofiel', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 export function EmployeeDetailPage() {
@@ -93,9 +94,9 @@ export function EmployeeDetailPage() {
           }}
         />
         {employee.driverId ? (
-          <Link to={`/drivers/${employee.driverId}`} className="employee-driver-link">
+          <button type="button" className="employee-driver-link employee-driver-link-button" onClick={() => setTab('chauffeursprofiel')}>
             Chauffeursprofiel bekijken →
-          </Link>
+          </button>
         ) : (
           hasPermission('drivers.create') &&
           employee.isActive && (
@@ -114,6 +115,7 @@ export function EmployeeDetailPage() {
           ...(canViewDocuments ? [{ id: 'documenten', label: 'Documenten' }] : []),
           { id: 'afwezigheden', label: 'Afwezigheden' },
           ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: 'Ritten' }] : []),
+          ...(employee.driverId ? [{ id: 'chauffeursprofiel', label: 'Chauffeursprofiel' }] : []),
           { id: 'historiek', label: 'Historiek' },
         ]}
         activeId={tab}
@@ -219,6 +221,19 @@ export function EmployeeDetailPage() {
       {tab === 'ritten' && employee.driverId && canViewTrips && (
         <TabPanel tabId="ritten">
           <EmployeeTripsTab driverId={employee.driverId} />
+        </TabPanel>
+      )}
+
+      {tab === 'chauffeursprofiel' && employee.driverId && (
+        <TabPanel tabId="chauffeursprofiel">
+          <DriverProfilePanel
+            driverId={employee.driverId}
+            onChanged={reload}
+            onDeleted={() => {
+              reload()
+              setTab('profiel')
+            }}
+          />
         </TabPanel>
       )}
 

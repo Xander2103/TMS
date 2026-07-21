@@ -43,7 +43,7 @@ public class EmployeeService : IEmployeeService
 
     public async Task<PagedResult<EmployeeListItemDto>> SearchAsync(
         string? searchText, bool? isActive, Guid? jobFunctionId, Guid? departmentId,
-        EmploymentStatus? employmentStatus, bool excludeDrivers, PageRequest page, CancellationToken cancellationToken)
+        EmploymentStatus? employmentStatus, bool excludeDrivers, bool? hasDriverProfile, PageRequest page, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
         var query = TenantScoped().AsNoTracking();
@@ -56,6 +56,13 @@ public class EmployeeService : IEmployeeService
         if (excludeDrivers)
         {
             query = query.Where(e => !_dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId));
+        }
+
+        if (hasDriverProfile is { } driverFilter)
+        {
+            query = driverFilter
+                ? query.Where(e => _dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId))
+                : query.Where(e => !_dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId));
         }
 
         if (jobFunctionId is { } functionFilter)
@@ -103,7 +110,15 @@ public class EmployeeService : IEmployeeService
                     .Select(d => d.Name)
                     .FirstOrDefault(),
                 e.EmploymentStatus, e.IsActive,
-                _dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId)))
+                _dbContext.Drivers.Any(d => d.EmployeeId == e.Id && d.TenantId == tenantId),
+                _dbContext.Drivers
+                    .Where(d => d.EmployeeId == e.Id && d.TenantId == tenantId)
+                    .Select(d => (bool?)d.IsBlocked)
+                    .FirstOrDefault(),
+                _dbContext.Drivers
+                    .Where(d => d.EmployeeId == e.Id && d.TenantId == tenantId)
+                    .Select(d => (DriverAvailabilityStatus?)d.AvailabilityStatus)
+                    .FirstOrDefault()))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<EmployeeListItemDto>(items, totalCount, page.Page, page.PageSize);
