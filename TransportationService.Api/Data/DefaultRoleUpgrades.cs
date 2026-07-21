@@ -238,6 +238,7 @@ public static class DefaultRoleUpgrades
                 [
                     PermissionCodes.LegalEntitiesView, PermissionCodes.LegalEntitiesManage,
                     PermissionCodes.InvoicesOverrideNumber,
+                    PermissionCodes.CustomersImport, PermissionCodes.CustomersOverrideNumber,
                 ],
             }),
     ];

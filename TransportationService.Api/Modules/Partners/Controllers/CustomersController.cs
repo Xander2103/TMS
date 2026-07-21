@@ -73,6 +73,16 @@ public class CustomersController : ControllerBase
         return await _customerService.DeleteAsync(id, cancellationToken) ? NoContent() : NotFound();
     }
 
+    /// <summary>Manual customer-number change: accounting-significant, so gated + audited.</summary>
+    [HttpPost("{id:guid}/number")]
+    [RequirePermission(PermissionCodes.CustomersOverrideNumber)]
+    public async Task<ActionResult<CustomerDetailDto>> ChangeNumber(
+        Guid id, ChangeCustomerNumberRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _customerService.ChangeNumberAsync(id, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
     [HttpPost("{id:guid}/blocked")]
     [RequirePermission(PermissionCodes.CustomersEdit)]
     public async Task<IActionResult> SetBlocked(Guid id, SetCustomerBlockedRequest request, CancellationToken cancellationToken)

@@ -156,10 +156,30 @@ public class CustomerService : ICustomerService
         }
 
         _dbContext.Customers.Add(customer);
-        await TenantNumbering.SaveWithClaimedNumberAsync(
-            _dbContext, settings,
-            () => customer.CustomerNumber = GenerateCustomerNumber(settings),
-            cancellationToken);
+        if (Trim(request.CustomerNumber) is { } explicitNumber)
+        {
+            // Explicit (imported/accounting) number: duplicates are always refused.
+            if (explicitNumber.Length > 30)
+            {
+                throw new DomainValidationException("customerNumber", "Het klantnummer mag maximaal 30 tekens lang zijn.");
+            }
+
+            var inUse = await TenantScoped().AnyAsync(c => c.CustomerNumber == explicitNumber, cancellationToken);
+            if (inUse)
+            {
+                throw new DomainValidationException("customerNumber", $"Klantnummer '{explicitNumber}' is al in gebruik.");
+            }
+
+            customer.CustomerNumber = explicitNumber;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            await TenantNumbering.SaveWithClaimedNumberAsync(
+                _dbContext, settings,
+                () => customer.CustomerNumber = GenerateCustomerNumber(settings),
+                cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "Created", null,
             new { customer.CustomerNumber, customer.Name }, cancellationToken);
@@ -212,6 +232,48 @@ public class CustomerService : ICustomerService
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "Updated", oldValues,
             new { customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber }, cancellationToken);
+
+        var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
+        return MapToDetail(customer, categoryName);
+    }
+
+    public async Task<CustomerDetailDto?> ChangeNumberAsync(
+        Guid id, ChangeCustomerNumberRequest request, CancellationToken cancellationToken)
+    {
+        var customer = await TenantScoped().Include(c => c.Contacts).FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+        if (customer is null)
+        {
+            return null;
+        }
+
+        var newNumber = request.CustomerNumber?.Trim();
+        if (string.IsNullOrEmpty(newNumber) || newNumber.Length > 30)
+        {
+            throw new DomainValidationException("customerNumber", "Een klantnummer van maximaal 30 tekens is verplicht.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new DomainValidationException("reason", "Een reden is verplicht bij het wijzigen van een klantnummer.");
+        }
+
+        if (!string.Equals(customer.CustomerNumber, newNumber, StringComparison.Ordinal))
+        {
+            var inUse = await TenantScoped().AnyAsync(
+                c => c.Id != customer.Id && c.CustomerNumber == newNumber, cancellationToken);
+            if (inUse)
+            {
+                throw new DomainValidationException("customerNumber", $"Klantnummer '{newNumber}' is al in gebruik.");
+            }
+
+            var oldNumber = customer.CustomerNumber;
+            customer.CustomerNumber = newNumber;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+
+            await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "NumberChanged",
+                new { CustomerNumber = oldNumber },
+                new { CustomerNumber = newNumber, request.Reason }, cancellationToken);
+        }
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
         return MapToDetail(customer, categoryName);

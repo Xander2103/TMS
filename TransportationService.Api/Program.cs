@@ -123,6 +123,8 @@ builder.Services.AddScoped(typeof(TransportationService.Api.Common.Lookups.ILook
     typeof(TransportationService.Api.Common.Lookups.LookupService<>));
 
 // Partners
+builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerImportService,
+    TransportationService.Api.Modules.Partners.Services.CustomerImportService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerService,
     TransportationService.Api.Modules.Partners.Services.CustomerService>();
 

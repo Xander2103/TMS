@@ -84,7 +84,8 @@ public record CreateCustomerRequest(
     bool PurchaseOrderRequired = false,
     bool SignedDeliveryNoteRequired = false,
     bool CustomerReferenceRequired = false,
-    CreateCustomerContactRequest? InitialContact = null);
+    CreateCustomerContactRequest? InitialContact = null,
+    string? CustomerNumber = null);
 
 public record UpdateCustomerRequest(
     string Name,
@@ -116,6 +117,9 @@ public record UpdateCustomerRequest(
     bool CustomerReferenceRequired = false);
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
+
+/// <summary>Manual customer-number change; requires customers.override_number + reason (audited).</summary>
+public record ChangeCustomerNumberRequest(string CustomerNumber, string Reason);
 
 public record SetCustomerActiveRequest(bool IsActive);
 

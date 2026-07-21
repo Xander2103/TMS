@@ -154,6 +154,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ProfitabilityExport,
                 PermissionCodes.LegalEntitiesView, PermissionCodes.LegalEntitiesManage,
                 PermissionCodes.InvoicesOverrideNumber,
+                PermissionCodes.CustomersImport, PermissionCodes.CustomersOverrideNumber,
             ]),
 
         new("hr", "HR",

@@ -14,6 +14,9 @@ public interface ICustomerService
 
     Task<CustomerDetailDto?> UpdateAsync(Guid id, UpdateCustomerRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Manual customer-number change (customers.override_number + reason; audited).</summary>
+    Task<CustomerDetailDto?> ChangeNumberAsync(Guid id, ChangeCustomerNumberRequest request, CancellationToken cancellationToken);
+
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
     Task<bool> SetBlockedAsync(Guid id, SetCustomerBlockedRequest request, CancellationToken cancellationToken);
