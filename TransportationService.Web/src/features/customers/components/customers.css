@@ -195,3 +195,108 @@
 .customer-detail-tabs {
   margin: 0 0 20px;
 }
+
+/* Customer Excel import dialog */
+
+.customer-import-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.customer-import-intro {
+  margin: 0;
+}
+
+.customer-import-template-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent, #2563eb);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.customer-import-template-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.customer-import-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.customer-import-hint {
+  margin: 0 0 0 24px;
+  font-size: 13px;
+  color: var(--text-muted, var(--text));
+}
+
+.customer-import-message {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.customer-import-message-error {
+  background: color-mix(in srgb, #dc2626 12%, transparent);
+  color: #b91c1c;
+}
+
+.customer-import-summary {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.customer-import-summary p {
+  margin: 0;
+}
+
+.customer-import-danger {
+  color: #b91c1c;
+}
+
+.customer-import-table-wrapper {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.customer-import-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.customer-import-table th,
+.customer-import-table td {
+  text-align: left;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.customer-import-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+}
+
+.customer-import-row-error td {
+  background: color-mix(in srgb, #dc2626 8%, transparent);
+}
+
+.customer-number-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

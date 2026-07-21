@@ -10,6 +10,7 @@ import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useAuth } from '../../auth/authContextValue'
 import { searchCustomers } from '../api/customersApi'
+import { CustomerImportDialog } from '../components/CustomerImportDialog'
 import type { CustomerListItem } from '../types'
 import '../components/customers.css'
 
@@ -19,8 +20,9 @@ export function CustomersPage() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [page, setPage] = useState(1)
+  const [showImportDialog, setShowImportDialog] = useState(false)
 
-  const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<CustomerListItem>(
+  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<CustomerListItem>(
     (args) => searchCustomers(args),
     { search, isActive: activeFilter, page, errorMessage: 'Klanten konden niet worden geladen.' },
   )
@@ -49,7 +51,16 @@ export function CustomersPage() {
       <PageHeader
         title="Klanten"
         action={
-          hasPermission('customers.create') && <Button onClick={() => navigate('/customers/new')}>Nieuwe klant</Button>
+          <div className="customer-detail-toolbar">
+            {hasPermission('customers.import') && (
+              <Button variant="secondary" onClick={() => setShowImportDialog(true)}>
+                Importeren
+              </Button>
+            )}
+            {hasPermission('customers.create') && (
+              <Button onClick={() => navigate('/customers/new')}>Nieuwe klant</Button>
+            )}
+          </div>
         }
       />
       <FilterBar
@@ -76,6 +87,7 @@ export function CustomersPage() {
         onRowClick={(row) => navigate(`/customers/${row.id}`)}
       />
       <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />
+      {showImportDialog && <CustomerImportDialog onClose={() => setShowImportDialog(false)} onImported={reload} />}
     </div>
   )
 }

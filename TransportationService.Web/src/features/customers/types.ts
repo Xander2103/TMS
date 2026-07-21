@@ -79,6 +79,8 @@ export interface CustomerDetail extends CustomerVatProfile {
 export interface CustomerInput extends CustomerVatProfile {
   /** Optional first contact created together with the customer (create flow only). */
   initialContact?: CustomerContactInput | null
+  /** Optional manual customer number (create flow only); empty = automatic numbering. */
+  customerNumber?: string | null
   name: string
   legalName: string | null
   vatNumber: string | null
@@ -99,6 +101,38 @@ export interface CustomerInput extends CustomerVatProfile {
 
 export interface UpdateCustomerInput extends CustomerInput {
   isActive: boolean
+}
+
+export interface ChangeCustomerNumberInput {
+  customerNumber: string
+  reason: string
+}
+
+export type CustomerImportRowAction = 'Create' | 'Update' | 'Error'
+
+export interface CustomerImportRow {
+  rowNumber: number
+  action: CustomerImportRowAction
+  customerNumber: string | null
+  name: string
+  messages: string[]
+}
+
+export interface CustomerImportPreview {
+  totalRows: number
+  creates: number
+  updates: number
+  errors: number
+  rows: CustomerImportRow[]
+}
+
+export interface CustomerImportCommit {
+  created: number
+  updated: number
+  failed: number
+  committed: boolean
+  rows: CustomerImportRow[]
+  errorWorkbookBase64: string | null
 }
 
 export interface CustomerContactInput {

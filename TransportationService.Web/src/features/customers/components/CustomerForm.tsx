@@ -27,6 +27,7 @@ interface CustomerFormProps {
 /** User-facing labels for backend field paths, for the validation summary. */
 const FIELD_LABELS: Record<string, string> = {
   name: 'Naam',
+  customerNumber: 'Klantnummer',
   vatNumber: 'BTW-nummer',
   countryCode: 'Land',
   vatCountryCode: 'BTW-land',
@@ -54,6 +55,8 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   const languages = useLookupOptions('/api/languages')
 
   const [name, setName] = useState(initial?.name ?? '')
+  // Manual customer number (create flow only); the detail page owns audited number changes.
+  const [customerNumber, setCustomerNumber] = useState('')
   const [legalName, setLegalName] = useState(initial?.legalName ?? '')
   const [categoryId, setCategoryId] = useState<string | null>(initial?.categoryId ?? null)
   const [email, setEmail] = useState(initial?.email ?? '')
@@ -150,6 +153,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
 
     const base: CustomerInput = {
       name: name.trim(),
+      ...(mode === 'create' ? { customerNumber: nullable(customerNumber) } : {}),
       legalName: nullable(legalName),
       vatNumber: nullable(vatNumber),
       categoryId: categoryId || null,
@@ -211,6 +215,22 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
         <FormField label="Naam" htmlFor="c-name" error={nameError ?? getFieldError(serverFieldErrors, 'name')} required>
           <input id="c-name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={nameError ? 'true' : undefined} maxLength={200} />
         </FormField>
+        {mode === 'create' && (
+          <FormField
+            label="Klantnummer"
+            htmlFor="c-number"
+            hint="Leeg laten voor automatische nummering."
+            error={getFieldError(serverFieldErrors, 'customerNumber')}
+          >
+            <input
+              id="c-number"
+              value={customerNumber}
+              onChange={(e) => setCustomerNumber(e.target.value)}
+              aria-invalid={getFieldError(serverFieldErrors, 'customerNumber') ? 'true' : undefined}
+              maxLength={30}
+            />
+          </FormField>
+        )}
         <FormField label="Juridische naam" htmlFor="c-legal">
           <input id="c-legal" value={legalName} onChange={(e) => setLegalName(e.target.value)} maxLength={200} />
         </FormField>

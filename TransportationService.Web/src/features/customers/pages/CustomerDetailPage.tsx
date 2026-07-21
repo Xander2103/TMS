@@ -13,7 +13,9 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadges } from '../../../components/ui/StatusBadges'
 import { Tabs, TabPanel } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
+import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { changeCustomerNumber } from '../api/customersApi'
 import { CustomerForm } from '../components/CustomerForm'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
 import { CustomerLocationsPanel } from '../components/CustomerLocationsPanel'
@@ -33,6 +35,7 @@ export function CustomerDetailPage() {
   const canDelete = hasPermission('customers.delete')
   const canDeactivate = hasPermission('customers.deactivate')
   const canViewLocations = hasPermission('locations.view')
+  const canOverrideNumber = hasPermission('customers.override_number')
 
   const [activeTab, setActiveTab] = useState('general')
   const [isEditing, setIsEditing] = useState(false)
@@ -41,6 +44,13 @@ export function CustomerDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showUnblockConfirm, setShowUnblockConfirm] = useState(false)
   const [showActiveConfirm, setShowActiveConfirm] = useState<null | 'activate' | 'deactivate'>(null)
+  const [showNumberDialog, setShowNumberDialog] = useState(false)
+  const [newNumber, setNewNumber] = useState('')
+  const [numberReason, setNumberReason] = useState('')
+  const [numberBusy, setNumberBusy] = useState(false)
+  const [numberError, setNumberError] = useState<string | null>(null)
+  const [numberFieldErrors, setNumberFieldErrors] = useState<FieldErrors>({})
+  const [numberLocalErrors, setNumberLocalErrors] = useState<{ customerNumber?: string; reason?: string }>({})
 
   useEffect(() => {
     if (customer) {
@@ -50,6 +60,43 @@ export function CustomerDetailPage() {
 
   if (isLoading) return <LoadingState message="Klant laden..." />
   if (error || !customer) return <ErrorState message={error ?? 'Klant niet gevonden.'} />
+
+  function openNumberDialog() {
+    setNewNumber('')
+    setNumberReason('')
+    setNumberError(null)
+    setNumberFieldErrors({})
+    setNumberLocalErrors({})
+    setShowNumberDialog(true)
+  }
+
+  async function handleChangeNumber(event: FormEvent) {
+    event.preventDefault()
+    if (!id) return
+
+    const localErrors: { customerNumber?: string; reason?: string } = {}
+    if (!newNumber.trim()) localErrors.customerNumber = 'Nieuw klantnummer is verplicht.'
+    else if (newNumber.trim().length > 30) localErrors.customerNumber = 'Maximaal 30 tekens.'
+    if (!numberReason.trim()) localErrors.reason = 'Reden is verplicht.'
+    setNumberLocalErrors(localErrors)
+    if (localErrors.customerNumber || localErrors.reason) return
+
+    setNumberBusy(true)
+    setNumberError(null)
+    setNumberFieldErrors({})
+    try {
+      await changeCustomerNumber(id, { customerNumber: newNumber.trim(), reason: numberReason.trim() })
+      toast.showSuccess('Klantnummer gewijzigd.')
+      setShowNumberDialog(false)
+      reload()
+    } catch (err) {
+      const described = describeApiError(err, 'Het klantnummer kon niet worden gewijzigd.')
+      setNumberError(described.message)
+      setNumberFieldErrors(described.fieldErrors)
+    } finally {
+      setNumberBusy(false)
+    }
+  }
 
   async function handleBlock(event: FormEvent) {
     event.preventDefault()
@@ -146,7 +193,14 @@ export function CustomerDetailPage() {
               <dl>
                 <dt>Klantnummer</dt>
                 <dd>
-                  <code>{customer.customerNumber}</code>
+                  <span className="customer-number-line">
+                    <code>{customer.customerNumber}</code>
+                    {canOverrideNumber && (
+                      <Button variant="secondary" onClick={openNumberDialog}>
+                        Nummer wijzigen
+                      </Button>
+                    )}
+                  </span>
                 </dd>
                 <dt>Status</dt>
                 <dd>
@@ -281,6 +335,66 @@ export function CustomerDetailPage() {
             </TabPanel>
           )}
         </>
+      )}
+
+      {showNumberDialog && (
+        <Modal
+          title="Klantnummer wijzigen"
+          onClose={() => setShowNumberDialog(false)}
+          busy={numberBusy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setShowNumberDialog(false)} disabled={numberBusy}>
+                Annuleren
+              </Button>
+              <Button type="submit" form="change-number-form" disabled={numberBusy}>
+                {numberBusy ? 'Opslaan...' : 'Wijzigen'}
+              </Button>
+            </>
+          }
+        >
+          <form id="change-number-form" onSubmit={handleChangeNumber}>
+            {numberError && (
+              <p className="customer-import-message customer-import-message-error" role="alert">
+                {numberError}
+              </p>
+            )}
+            <FormField
+              label="Nieuw klantnummer"
+              htmlFor="change-number"
+              required
+              error={numberLocalErrors.customerNumber ?? getFieldError(numberFieldErrors, 'customerNumber')}
+            >
+              <input
+                id="change-number"
+                value={newNumber}
+                onChange={(e) => setNewNumber(e.target.value)}
+                maxLength={30}
+                aria-invalid={
+                  numberLocalErrors.customerNumber ?? getFieldError(numberFieldErrors, 'customerNumber')
+                    ? 'true'
+                    : undefined
+                }
+              />
+            </FormField>
+            <FormField
+              label="Reden"
+              htmlFor="change-number-reason"
+              required
+              hint="Wordt vastgelegd in de historiek."
+              error={numberLocalErrors.reason ?? getFieldError(numberFieldErrors, 'reason')}
+            >
+              <textarea
+                id="change-number-reason"
+                value={numberReason}
+                onChange={(e) => setNumberReason(e.target.value)}
+                rows={3}
+                maxLength={500}
+                aria-invalid={numberLocalErrors.reason ?? getFieldError(numberFieldErrors, 'reason') ? 'true' : undefined}
+              />
+            </FormField>
+          </form>
+        </Modal>
       )}
 
       {showBlockDialog && (

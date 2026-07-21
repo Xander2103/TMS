@@ -1,6 +1,7 @@
 import { apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
 import type {
+  ChangeCustomerNumberInput,
   CustomerContact,
   CustomerContactInput,
   CustomerDetail,
@@ -41,6 +42,11 @@ export function updateCustomer(id: string, input: UpdateCustomerInput): Promise<
 
 export function deleteCustomer(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/customers/${id}`)
+}
+
+/** Manual customer-number change (customers.override_number); reason is audited. */
+export function changeCustomerNumber(id: string, input: ChangeCustomerNumberInput): Promise<CustomerDetail> {
+  return apiClient.postJson<CustomerDetail, ChangeCustomerNumberInput>(`/api/customers/${id}/number`, input)
 }
 
 export function setCustomerActive(id: string, isActive: boolean): Promise<void> {
