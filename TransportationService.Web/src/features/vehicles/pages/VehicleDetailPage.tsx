@@ -23,6 +23,8 @@ import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { DamagePanel } from '../../damage/components/DamagePanel'
 import { FuelPanel } from '../../fuel/components/FuelPanel'
 import { FleetKpiPanel } from '../../fleet-kpi/FleetKpiPanel'
+import { TachographPanel } from '../../fleet-compliance/TachographPanel'
+import { LeasingPanel } from '../../fleet-compliance/LeasingPanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import { computeVolumeM3 } from '../../../utils/volume'
@@ -43,7 +45,7 @@ import {
 } from '../types'
 import './vehicle-form.css'
 
-const TAB_IDS = ['overzicht', 'techniek', 'toewijzing', 'documenten', 'onderhoud', 'keuringen', 'schade', 'brandstof', 'kpi', 'historiek'] as const
+const TAB_IDS = ['overzicht', 'techniek', 'toewijzing', 'documenten', 'tachograaf', 'leasing', 'onderhoud', 'keuringen', 'schade', 'brandstof', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 function numberOrNull(value: string): number | null {
@@ -444,6 +446,8 @@ export function VehicleDetailPage() {
               { id: 'techniek', label: 'Techniek' },
               { id: 'toewijzing', label: 'Toewijzing' },
               { id: 'documenten', label: 'Documenten' },
+              ...(hasPermission('tachograph.view') ? [{ id: 'tachograaf', label: 'Tachograaf' }] : []),
+              { id: 'leasing', label: 'Leasing' },
               { id: 'onderhoud', label: 'Onderhoud' },
               { id: 'keuringen', label: 'Keuringen' },
               { id: 'schade', label: 'Schade' },
@@ -543,6 +547,16 @@ export function VehicleDetailPage() {
           {tab === 'documenten' && id && (
             <TabPanel tabId="documenten">
               <FleetDocumentsPanel ownerType="vehicle" ownerId={id} />
+            </TabPanel>
+          )}
+          {tab === 'tachograaf' && id && hasPermission('tachograph.view') && (
+            <TabPanel tabId="tachograaf">
+              <TachographPanel vehicleId={id} />
+            </TabPanel>
+          )}
+          {tab === 'leasing' && id && (
+            <TabPanel tabId="leasing">
+              <LeasingPanel ownerType="vehicle" ownerId={id} />
             </TabPanel>
           )}
           {tab === 'onderhoud' && id && (
