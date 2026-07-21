@@ -6,6 +6,7 @@ import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerDetail, CustomerListItem } from '../../customers/types'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
+import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { LocationSelect } from '../../locations/components/LocationSelect'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
 import type { LocationOption } from '../../locations/types'
@@ -22,6 +23,7 @@ interface CargoFormRow {
   barcode: string
   expectedQuantity: string
   quantityUnit: string
+  quantityUnitCode: string | null
   notes: string
   unitType: PackageUnitType | ''
   unitTypeLabel: string
@@ -136,7 +138,10 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
   const [orderDate, setOrderDate] = useState(order?.orderDate ?? new Date().toISOString().slice(0, 10))
   const [goodsDescription, setGoodsDescription] = useState(order?.goodsDescription ?? '')
   const [quantity, setQuantity] = useState(order?.quantity === null || order === undefined ? '' : String(order.quantity))
-  const [quantityUnit, setQuantityUnit] = useState(order?.quantityUnit ?? '')
+  // Legacy free-text unit is preserved (still submitted) but no longer editable — the managed
+  // unit-type code replaces it as the input.
+  const [quantityUnit] = useState(order?.quantityUnit ?? '')
+  const [quantityUnitCode, setQuantityUnitCode] = useState<string | null>(order?.quantityUnitCode ?? null)
   const [weightKg, setWeightKg] = useState(order?.weightKg === null || order === undefined ? '' : String(order.weightKg))
   const [volumeM3, setVolumeM3] = useState(order?.volumeM3 === null || order === undefined ? '' : String(order.volumeM3))
   const [palletCount, setPalletCount] = useState(
@@ -199,6 +204,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         barcode: c.barcode ?? '',
         expectedQuantity: String(c.expectedQuantity),
         quantityUnit: c.quantityUnit ?? '',
+        quantityUnitCode: c.quantityUnitCode ?? null,
         notes: c.notes ?? '',
         unitType: c.unitType ?? '',
         unitTypeLabel: c.unitTypeLabel ?? '',
@@ -343,6 +349,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
       goodsDescription: goodsDescription.trim() || null,
       quantity: quantity === '' ? null : Number(quantity),
       quantityUnit: quantityUnit.trim() || null,
+      quantityUnitCode: quantityUnitCode,
       weightKg: weightKg === '' ? null : Number(weightKg),
       volumeM3: volumeM3 === '' ? null : Number(volumeM3),
       palletCount: palletCount === '' ? null : Number(palletCount),
@@ -383,6 +390,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         barcode: cargo.barcode.trim() || null,
         expectedQuantity: Number(cargo.expectedQuantity),
         quantityUnit: cargo.quantityUnit.trim() || null,
+        quantityUnitCode: cargo.quantityUnitCode,
         notes: cargo.notes.trim() || null,
         unitType: cargo.unitType || null,
         unitTypeLabel: cargo.unitType === 'Other' ? cargo.unitTypeLabel.trim() || null : null,
@@ -474,8 +482,18 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         <FormField label="Aantal" htmlFor="to-qty">
           <input id="to-qty" type="number" min={0} step="0.01" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={saving} />
         </FormField>
-        <FormField label="Eenheid" htmlFor="to-unit">
-          <input id="to-unit" value={quantityUnit} onChange={(e) => setQuantityUnit(e.target.value)} disabled={saving} maxLength={50} placeholder="bv. paletten" />
+        <FormField label="Eenheid" htmlFor="to-unit" hint={!quantityUnitCode && quantityUnit ? `Bestaande waarde: ${quantityUnit}` : undefined}>
+          <LookupSelect
+            id="to-unit"
+            basePath="/api/unit-types"
+            managePermission="unit_types.manage"
+            singular="eenheid"
+            valueKey="code"
+            value={quantityUnitCode}
+            onChange={setQuantityUnitCode}
+            disabled={saving}
+            placeholder="— Eenheid —"
+          />
         </FormField>
         <FormField label="Gewicht (kg)" htmlFor="to-weight">
           <input id="to-weight" type="number" min={0} step="0.01" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} disabled={saving} />
@@ -738,6 +756,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
                   barcode: '',
                   expectedQuantity: '1',
                   quantityUnit: '',
+                  quantityUnitCode: null,
                   notes: '',
                   unitType: '',
                   unitTypeLabel: '',
@@ -781,8 +800,22 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
             <FormField label="Verwacht aantal" htmlFor={`cg-qty-${cargo.key}`} required>
               <input id={`cg-qty-${cargo.key}`} type="number" min={0.01} step="0.01" value={cargo.expectedQuantity} onChange={(e) => setCargo(cargo.key, { expectedQuantity: e.target.value })} disabled={saving} />
             </FormField>
-            <FormField label="Eenheid" htmlFor={`cg-unit-${cargo.key}`}>
-              <input id={`cg-unit-${cargo.key}`} value={cargo.quantityUnit} onChange={(e) => setCargo(cargo.key, { quantityUnit: e.target.value })} disabled={saving} maxLength={50} placeholder="bv. colli" />
+            <FormField
+              label="Eenheid"
+              htmlFor={`cg-unit-${cargo.key}`}
+              hint={!cargo.quantityUnitCode && cargo.quantityUnit ? `Bestaande waarde: ${cargo.quantityUnit}` : undefined}
+            >
+              <LookupSelect
+                id={`cg-unit-${cargo.key}`}
+                basePath="/api/unit-types"
+                managePermission="unit_types.manage"
+                singular="eenheid"
+                valueKey="code"
+                value={cargo.quantityUnitCode}
+                onChange={(code) => setCargo(cargo.key, { quantityUnitCode: code })}
+                disabled={saving}
+                placeholder="— Eenheid —"
+              />
             </FormField>
           </div>
           <div className="tof-row">

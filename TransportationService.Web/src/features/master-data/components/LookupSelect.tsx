@@ -26,8 +26,13 @@ interface LookupSelectProps {
   managePermission: string
   /** Singular noun for the create dialog title, e.g. "klantcategorie". */
   singular: string
+  /**
+   * What the select stores/returns: the lookup `id` (default) or its stable `code`. Use `code`
+   * when the surrounding form persists a code rather than a foreign key (e.g. order unit types).
+   */
+  valueKey?: 'id' | 'code'
   value: string | null
-  onChange: (id: string | null) => void
+  onChange: (value: string | null) => void
   placeholder?: string
   disabled?: boolean
 }
@@ -52,15 +57,15 @@ function suggestCode(name: string): string {
  * manage permission get an "add new" row that opens a small dialog; the created item is
  * selected automatically so the surrounding form keeps all entered data.
  */
-export function LookupSelect({ id, basePath, viewPermission, managePermission, singular, value, onChange, placeholder, disabled }: LookupSelectProps) {
+export function LookupSelect({ id, basePath, viewPermission, managePermission, singular, valueKey = 'id', value, onChange, placeholder, disabled }: LookupSelectProps) {
   const { hasPermission } = useAuth()
   const canView = viewPermission === undefined || hasPermission(viewPermission)
   const { options, isLoading } = useLookupOptions(basePath, { enabled: canView })
   const [pending, setPending] = useState<PendingCreate | null>(null)
 
   const selectOptions = useMemo<SearchableSelectOption[]>(
-    () => options.map((o) => ({ value: o.id, label: o.name, keywords: o.code })),
-    [options],
+    () => options.map((o) => ({ value: valueKey === 'code' ? o.code : o.id, label: o.name, keywords: o.code })),
+    [options, valueKey],
   )
 
   const canCreate = canView && hasPermission(managePermission)
@@ -92,6 +97,7 @@ export function LookupSelect({ id, basePath, viewPermission, managePermission, s
         <LookupCreateDialog
           basePath={basePath}
           singular={singular}
+          valueKey={valueKey}
           initialName={pending.query}
           onCreated={(option) => {
             pending.resolve(option)
@@ -110,12 +116,14 @@ export function LookupSelect({ id, basePath, viewPermission, managePermission, s
 function LookupCreateDialog({
   basePath,
   singular,
+  valueKey,
   initialName,
   onCreated,
   onCancel,
 }: {
   basePath: string
   singular: string
+  valueKey: 'id' | 'code'
   initialName: string
   onCreated: (option: SearchableSelectOption) => void
   onCancel: () => void
@@ -143,7 +151,7 @@ function LookupCreateDialog({
         isActive: true,
         sortOrder: 0,
       })
-      onCreated({ value: created.id, label: created.name, keywords: created.code })
+      onCreated({ value: valueKey === 'code' ? created.code : created.id, label: created.name, keywords: created.code })
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 409

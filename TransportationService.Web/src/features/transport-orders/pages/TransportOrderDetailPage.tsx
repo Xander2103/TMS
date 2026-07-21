@@ -27,6 +27,7 @@ import { OrderTimelinePanel } from '../components/OrderTimelinePanel'
 import { StopExecutionPlanDialog } from '../components/StopExecutionPlanDialog'
 import { OrderPackagesPanel } from '../../packages/components/OrderPackagesPanel'
 import { UNIT_TYPE_LABELS } from '../../packages/types'
+import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CustomerPackagesSummary } from '../../packages/components/CustomerPackagesSummary'
 import {
   ORDER_STATUS_LABELS,
@@ -52,6 +53,11 @@ export function TransportOrderDetailPage() {
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
   const { hasPermission, hasAnyPermission } = useAuth()
+  const { options: unitTypes } = useLookupOptions('/api/unit-types')
+
+  // Managed unit-type name when a code is set, else the preserved legacy free-text value.
+  const unitLabel = (code: string | null, legacy: string | null): string =>
+    (code ? unitTypes.find((u) => u.code === code)?.name ?? code : null) ?? legacy ?? ''
 
   const [order, setOrder] = useState<TransportOrderDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -232,7 +238,7 @@ export function TransportOrderDetailPage() {
               </div>
               <div>
                 <dt>Aantal</dt>
-                <dd>{order.quantity !== null ? `${order.quantity} ${order.quantityUnit ?? ''}`.trim() : '—'}</dd>
+                <dd>{order.quantity !== null ? `${order.quantity} ${unitLabel(order.quantityUnitCode, order.quantityUnit)}`.trim() : '—'}</dd>
               </div>
               <div>
                 <dt>Gewicht</dt>
@@ -355,7 +361,7 @@ export function TransportOrderDetailPage() {
                       <td>{item.unitType ? (item.unitTypeLabel ?? UNIT_TYPE_LABELS[item.unitType]) : '—'}</td>
                       <td>{item.barcode ? <code>{item.barcode}</code> : '—'}</td>
                       <td>
-                        {item.expectedQuantity} {item.quantityUnit ?? ''}
+                        {item.expectedQuantity} {unitLabel(item.quantityUnitCode, item.quantityUnit)}
                       </td>
                       <td>{item.totalWeightKg !== null ? `${item.totalWeightKg.toLocaleString('nl-BE')} kg` : '—'}</td>
                       <td>{item.volumeM3 !== null ? `${item.volumeM3.toLocaleString('nl-BE')} m³` : '—'}</td>

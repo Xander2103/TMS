@@ -114,6 +114,7 @@ export interface CargoItem {
   barcode: string | null
   expectedQuantity: number
   quantityUnit: string | null
+  quantityUnitCode: string | null
   notes: string | null
   unitType: PackageUnitType | null
   unitTypeLabel: string | null
@@ -137,6 +138,7 @@ export interface CargoItemInput {
   barcode: string | null
   expectedQuantity: number
   quantityUnit: string | null
+  quantityUnitCode: string | null
   notes: string | null
   unitType: PackageUnitType | null
   unitTypeLabel: string | null
@@ -167,6 +169,7 @@ export interface TransportOrderDetail {
   goodsDescription: string | null
   quantity: number | null
   quantityUnit: string | null
+  quantityUnitCode: string | null
   weightKg: number | null
   volumeM3: number | null
   palletCount: number | null
@@ -234,6 +237,7 @@ export interface TransportOrderInput {
   goodsDescription: string | null
   quantity: number | null
   quantityUnit: string | null
+  quantityUnitCode: string | null
   weightKg: number | null
   volumeM3: number | null
   palletCount: number | null
