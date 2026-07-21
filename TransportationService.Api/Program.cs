@@ -80,6 +80,8 @@ builder.Services.AddScoped<IRoleService, RoleService>();
 
 // Employees
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IEmployeeDocumentService,
+    TransportationService.Api.Modules.Employees.Services.EmployeeDocumentService>();
 
 // Qualification file storage
 builder.Services.AddSingleton<IFileStorageService>(

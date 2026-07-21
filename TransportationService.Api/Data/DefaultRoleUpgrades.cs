@@ -243,6 +243,8 @@ public static class DefaultRoleUpgrades
                 ["hr"] =
                 [
                     PermissionCodes.ContactDepartmentsView,
+                    PermissionCodes.EmployeeDocumentsCreate, PermissionCodes.EmployeeDocumentsEdit,
+                    PermissionCodes.EmployeeDocumentsDelete, PermissionCodes.EmployeeDocumentsViewSensitive,
                 ],
                 ["boekhouding"] =
                 [

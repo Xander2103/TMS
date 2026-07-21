@@ -25,6 +25,7 @@ public static class PermissionCodes
     public const string EmployeeDocumentsEdit = "employee_documents.edit";
     public const string EmployeeDocumentsDelete = "employee_documents.delete";
     public const string EmployeeDocumentsApprove = "employee_documents.approve";
+    public const string EmployeeDocumentsViewSensitive = "employee_documents.view_sensitive";
 
     public const string PlanningView = "planning.view";
     public const string PlanningCreate = "planning.create";
@@ -291,6 +292,7 @@ public static class PermissionCodes
         (EmployeeDocumentsEdit, "employee_documents", "edit", "Personeelsdocumenten bewerken"),
         (EmployeeDocumentsDelete, "employee_documents", "delete", "Personeelsdocumenten verwijderen"),
         (EmployeeDocumentsApprove, "employee_documents", "approve", "Personeelsdocumenten goedkeuren"),
+        (EmployeeDocumentsViewSensitive, "employee_documents", "view_sensitive", "Gevoelige personeelsdocumenten (ID, medisch, contract) bekijken"),
         (PlanningView, "planning", "view", "Planning bekijken"),
         (PlanningCreate, "planning", "create", "Planning aanmaken"),
         (PlanningEdit, "planning", "edit", "Planning bewerken"),
