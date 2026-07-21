@@ -526,10 +526,13 @@ public class InvoiceService : IInvoiceService
 
         if (target == InvoiceStatus.Sent)
         {
-            // Fail-safe: sending requires a valid, active, same-tenant issuing entity.
+            // Fail-safe: sending requires a valid, active, same-tenant issuing entity. Only
+            // a tenant with NO entities configured at all (pre-seed legacy) is exempt.
             var entityValid = invoice.LegalEntityId is { } entityId
-                && await _dbContext.LegalEntities.AnyAsync(
-                    e => e.TenantId == _tenantContext.TenantId && e.Id == entityId && e.IsActive, cancellationToken);
+                ? await _dbContext.LegalEntities.AnyAsync(
+                    e => e.TenantId == _tenantContext.TenantId && e.Id == entityId && e.IsActive, cancellationToken)
+                : !await _dbContext.LegalEntities.AnyAsync(
+                    e => e.TenantId == _tenantContext.TenantId, cancellationToken);
             if (!entityValid)
             {
                 return InvoiceOperationResult.InvalidState(
