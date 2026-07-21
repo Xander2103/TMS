@@ -131,6 +131,8 @@ public class TransportationDbContext : DbContext
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
     public DbSet<Trailer> Trailers => Set<Trailer>();
     public DbSet<FleetDocument> FleetDocuments => Set<FleetDocument>();
+    public DbSet<TachographCalibration> TachographCalibrations => Set<TachographCalibration>();
+    public DbSet<LeasingContract> LeasingContracts => Set<LeasingContract>();
     public DbSet<MaintenanceRecord> MaintenanceRecords => Set<MaintenanceRecord>();
     public DbSet<Inspection> Inspections => Set<Inspection>();
     public DbSet<DamageReport> DamageReports => Set<DamageReport>();

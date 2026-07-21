@@ -239,6 +239,8 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.LegalEntitiesView,
                     PermissionCodes.ContactDepartmentsView,
                     PermissionCodes.InvoiceAttachmentsView,
+                    PermissionCodes.TachographView, PermissionCodes.TachographManage,
+                    PermissionCodes.FleetFinanceView, PermissionCodes.FleetFinanceManage,
                 ],
                 ["hr"] =
                 [

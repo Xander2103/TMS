@@ -123,6 +123,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.FleetDocumentsView, PermissionCodes.MaintenanceView,
                 PermissionCodes.MaintenancePoliciesView, PermissionCodes.MaintenancePoliciesManage,
                 PermissionCodes.InspectionsView, PermissionCodes.DamageReportsView,
+                PermissionCodes.TachographView, PermissionCodes.TachographManage,
+                PermissionCodes.FleetFinanceView, PermissionCodes.FleetFinanceManage,
                 PermissionCodes.TankCardsView, PermissionCodes.FuelView,
                 PermissionCodes.CompanySettingsView,
                 PermissionCodes.UsersView, PermissionCodes.RolesView,

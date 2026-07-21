@@ -116,6 +116,14 @@ public static class PermissionCodes
     public const string TrailersEdit = "trailers.edit";
     public const string TrailersDelete = "trailers.delete";
 
+    // --- Tachograph calibration ---
+    public const string TachographView = "tachograph.view";
+    public const string TachographManage = "tachograph.manage";
+
+    // --- Sensitive fleet finance (leasing amounts, ...) ---
+    public const string FleetFinanceView = "fleet_finance.view";
+    public const string FleetFinanceManage = "fleet_finance.manage";
+
     // --- Fleet documents (vehicle/trailer certificates & papers) ---
     public const string FleetDocumentsView = "fleet_documents.view";
     public const string FleetDocumentsCreate = "fleet_documents.create";
@@ -360,6 +368,10 @@ public static class PermissionCodes
         (TrailersCreate, "trailers", "create", "Opleggers aanmaken"),
         (TrailersEdit, "trailers", "edit", "Opleggers bewerken"),
         (TrailersDelete, "trailers", "delete", "Opleggers verwijderen"),
+        (TachographView, "tachograph", "view", "Tachograaf-ijkingen bekijken"),
+        (TachographManage, "tachograph", "manage", "Tachograaf-ijkingen beheren"),
+        (FleetFinanceView, "fleet_finance", "view", "Financiële leasinggegevens bekijken"),
+        (FleetFinanceManage, "fleet_finance", "manage", "Leasingcontracten beheren"),
         (FleetDocumentsView, "fleet_documents", "view", "Voertuig- en opleggerdocumenten bekijken"),
         (FleetDocumentsCreate, "fleet_documents", "create", "Voertuig- en opleggerdocumenten toevoegen"),
         (FleetDocumentsEdit, "fleet_documents", "edit", "Voertuig- en opleggerdocumenten bewerken"),
