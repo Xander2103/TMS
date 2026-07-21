@@ -31,19 +31,22 @@ public class InvoiceService : IInvoiceService
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
     private readonly IInvoiceNumberService _numberService;
+    private readonly Partners.Services.ICustomerBillingConfigService _billingConfig;
 
     public InvoiceService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
         TimeProvider timeProvider,
-        IInvoiceNumberService numberService)
+        IInvoiceNumberService numberService,
+        Partners.Services.ICustomerBillingConfigService billingConfig)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _timeProvider = timeProvider;
         _numberService = numberService;
+        _billingConfig = billingConfig;
     }
 
     private IQueryable<Invoice> TenantScoped() =>
@@ -294,6 +297,38 @@ public class InvoiceService : IInvoiceService
             order.Status = TransportOrderStatus.Invoiced;
         }
 
+        // Diesel surcharge: customer config (order overrides respected) → separate lines.
+        var surchargeConfig = await _dbContext.CustomerDieselSurcharges
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.CustomerId == request.CustomerId, cancellationToken);
+        if (orderDtos.Count > 0 && DieselSurchargeCalculator.Applies(surchargeConfig, invoiceDate))
+        {
+            var overridesByOrder = orders.ToDictionary(
+                o => o.Id, o => o.DieselSurchargeOverride ? o.DieselSurchargePercentOverride : null);
+            var bases = orderDtos
+                .Select(o => new DieselSurchargeCalculator.OrderBase(
+                    o.Id, o.OrderNumber, o.AgreedPrice ?? 0m, overridesByOrder.GetValueOrDefault(o.Id)))
+                .ToList();
+            foreach (var surchargeLine in DieselSurchargeCalculator.BuildLines(surchargeConfig!, bases, invoiceDate))
+            {
+                invoice.Lines.Add(new InvoiceLine
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    TransportOrderId = surchargeLine.OrderId,
+                    Sequence = sequence++,
+                    Description = surchargeLine.Description,
+                    Quantity = 1m,
+                    UnitPrice = surchargeLine.Amount,
+                    VatRatePercent = vatRate,
+                });
+            }
+        }
+
+        // PO number: explicit request value → effective customer PO → single distinct order reference.
+        invoice.PurchaseOrderNumber = Trim(request.PurchaseOrderNumber)
+            ?? await _billingConfig.ResolveEffectivePoNumberAsync(request.CustomerId, invoiceDate, cancellationToken)
+            ?? SingleDistinctReference(orders);
+
         _dbContext.Add(invoice);
         if (legalEntity is not null)
         {
@@ -362,6 +397,7 @@ public class InvoiceService : IInvoiceService
         invoice.InvoiceDate = request.InvoiceDate;
         invoice.DueDate = request.DueDate < request.InvoiceDate ? request.InvoiceDate : request.DueDate;
         invoice.Notes = Trim(request.Notes);
+        invoice.PurchaseOrderNumber = Trim(request.PurchaseOrderNumber);
 
         var existingById = invoice.Lines.Where(l => !l.IsDeleted).ToDictionary(l => l.Id);
         var keptIds = request.Lines.Where(l => l.Id is not null).Select(l => l.Id!.Value).ToHashSet();
@@ -466,6 +502,21 @@ public class InvoiceService : IInvoiceService
         if (!Transitions[invoice.Status].Contains(target))
         {
             return InvoiceOperationResult.InvalidState($"Een factuur met status '{invoice.Status}' kan niet naar '{target}'.");
+        }
+
+        if (target == InvoiceStatus.Sent)
+        {
+            // PO policy: a Required customer blocks sending without an effective PO number.
+            var poPolicy = await _dbContext.Customers
+                .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId)
+                .Select(c => c.PurchaseOrderPolicy)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (poPolicy == Partners.Entities.PurchaseOrderPolicy.Required
+                && string.IsNullOrWhiteSpace(invoice.PurchaseOrderNumber))
+            {
+                return InvoiceOperationResult.InvalidState(
+                    "Deze klant vereist een PO-nummer. Voeg een geldig PO-nummer toe voor verzending.");
+            }
         }
 
         var before = new { invoice.Status };
@@ -659,7 +710,8 @@ public class InvoiceService : IInvoiceService
             invoice.Status, invoice.Currency, invoice.Notes,
             lines, subtotal, vat, subtotal + vat, Transitions[invoice.Status],
             invoice.LegalEntityId, legalEntityName,
-            invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth, invoice.NumberIsManual);
+            invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth, invoice.NumberIsManual,
+            invoice.PurchaseOrderNumber);
     }
 
     private static string GenerateInvoiceNumber(TenantSettings? settings)
@@ -672,6 +724,18 @@ public class InvoiceService : IInvoiceService
         var number = $"{settings.InvoiceNumberPrefix}{settings.InvoiceNumberNextValue:0000}";
         settings.InvoiceNumberNextValue++;
         return number;
+    }
+
+    /// <summary>The orders' single distinct customer reference, if exactly one exists.</summary>
+    private static string? SingleDistinctReference(IReadOnlyList<TransportOrder> orders)
+    {
+        var references = orders
+            .Select(o => o.CustomerReference)
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Select(r => r!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return references.Count == 1 ? references[0] : null;
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

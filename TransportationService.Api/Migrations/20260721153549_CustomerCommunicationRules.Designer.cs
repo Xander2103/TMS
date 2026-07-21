@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TransportationService.Api.Data;
@@ -11,9 +12,11 @@ using TransportationService.Api.Data;
 namespace TransportationService.Api.Migrations
 {
     [DbContext(typeof(TransportationDbContext))]
-    partial class TransportationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260721153549_CustomerCommunicationRules")]
+    partial class CustomerCommunicationRules
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3053,10 +3056,6 @@ namespace TransportationService.Api.Migrations
                     b.Property<bool>("NumberIsManual")
                         .HasColumnType("boolean");
 
-                    b.Property<string>("PurchaseOrderNumber")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -4141,17 +4140,6 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
-
-                    b.Property<bool>("DieselSurchargeOverride")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("DieselSurchargeOverrideReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<decimal?>("DieselSurchargePercentOverride")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
 
                     b.Property<string>("GoodsDescription")
                         .HasMaxLength(1000)
@@ -5323,11 +5311,6 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<string>("PurchaseOrderPolicy")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
                     b.Property<bool>("PurchaseOrderRequired")
                         .HasColumnType("boolean");
 
@@ -5661,139 +5644,6 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("TenantId", "CustomerId");
 
                     b.ToTable("customer_contacts", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Partners.Entities.CustomerDieselSurcharge", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Basis")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly?>("EffectiveFrom")
-                        .HasColumnType("date");
-
-                    b.Property<DateOnly?>("EffectiveUntil")
-                        .HasColumnType("date");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("FormulaDescription")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<decimal>("Percent")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<string>("Presentation")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<string>("Rounding")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("TenantId", "CustomerId")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
-                    b.ToTable("customer_diesel_surcharges", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Partners.Entities.CustomerPurchaseOrderNumber", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("PoNumber")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly>("ValidFrom")
-                        .HasColumnType("date");
-
-                    b.Property<DateOnly?>("ValidUntil")
-                        .HasColumnType("date");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId");
-
-                    b.HasIndex("TenantId", "CustomerId", "ValidFrom");
-
-                    b.ToTable("customer_purchase_order_numbers", (string)null);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Planning.Entities.ConflictOverride", b =>
@@ -8439,24 +8289,6 @@ namespace TransportationService.Api.Migrations
                         .WithMany()
                         .HasForeignKey("DepartmentId")
                         .OnDelete(DeleteBehavior.SetNull);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Partners.Entities.CustomerDieselSurcharge", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.Partners.Entities.Customer", null)
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Partners.Entities.CustomerPurchaseOrderNumber", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.Partners.Entities.Customer", null)
-                        .WithMany()
-                        .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Planning.Entities.StopExecution", b =>

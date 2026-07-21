@@ -70,6 +70,9 @@ public static class PermissionCodes
     public const string CustomersImport = "customers.import";
     public const string CustomersOverrideNumber = "customers.override_number";
     public const string CustomersManageFiscal = "customers.manage_fiscal";
+    public const string CustomersManageCommunication = "customers.manage_communication";
+    public const string CustomersManageSurcharge = "customers.manage_surcharge";
+    public const string CustomersManagePo = "customers.manage_po";
 
     // --- Locations (sites/addresses) ---
     public const string LocationsView = "locations.view";
@@ -317,6 +320,9 @@ public static class PermissionCodes
         (CustomersImport, "customers", "import", "Klanten importeren uit Excel"),
         (CustomersOverrideNumber, "customers", "override_number", "Klantnummers handmatig wijzigen"),
         (CustomersManageFiscal, "customers", "manage_fiscal", "Fiscale, Peppol- en bankgegevens van klanten beheren"),
+        (CustomersManageCommunication, "customers", "manage_communication", "Communicatie-ontvangers van klanten beheren"),
+        (CustomersManageSurcharge, "customers", "manage_surcharge", "Dieseltoeslag van klanten beheren"),
+        (CustomersManagePo, "customers", "manage_po", "PO-beleid en PO-nummers van klanten beheren"),
         (LocationsView, "locations", "view", "Locaties bekijken"),
         (LocationsCreate, "locations", "create", "Locaties aanmaken"),
         (LocationsEdit, "locations", "edit", "Locaties bewerken"),

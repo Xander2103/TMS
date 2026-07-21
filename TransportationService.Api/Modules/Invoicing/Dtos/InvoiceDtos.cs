@@ -47,7 +47,8 @@ public record InvoiceDetailDto(
     string? LegalEntityName,
     int InvoicePeriodYear,
     int InvoicePeriodMonth,
-    bool NumberIsManual);
+    bool NumberIsManual,
+    string? PurchaseOrderNumber = null);
 
 /// <summary>Completed, not-yet-invoiced order offered in the invoice builder.</summary>
 public record UninvoicedOrderDto(
@@ -73,7 +74,8 @@ public record CreateInvoiceRequest(
     string? Notes,
     Guid? LegalEntityId = null,
     int? InvoicePeriodYear = null,
-    int? InvoicePeriodMonth = null);
+    int? InvoicePeriodMonth = null,
+    string? PurchaseOrderNumber = null);
 
 public record UpdateInvoiceRequest(
     DateOnly InvoiceDate,
@@ -81,7 +83,8 @@ public record UpdateInvoiceRequest(
     IReadOnlyList<UpdateInvoiceLineInput> Lines,
     string? Notes,
     int? InvoicePeriodYear = null,
-    int? InvoicePeriodMonth = null);
+    int? InvoicePeriodMonth = null,
+    string? PurchaseOrderNumber = null);
 
 /// <summary>Draft-only manual invoice-number correction; requires invoices.override_number + reason.</summary>
 public record OverrideInvoiceNumberRequest(string InvoiceNumber, string Reason);

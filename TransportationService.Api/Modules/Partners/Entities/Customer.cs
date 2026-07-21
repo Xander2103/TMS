@@ -65,6 +65,12 @@ public class Customer : AuditableTenantEntity
     public string? InvoiceLanguageCode { get; set; }
 
     // Order-intake requirements for this customer.
+    /// <summary>
+    /// PO-number policy (None/Optional/Required). The legacy PurchaseOrderRequired bool is
+    /// kept in sync on write for backward compatibility but the policy is authoritative.
+    /// </summary>
+    public PurchaseOrderPolicy PurchaseOrderPolicy { get; set; } = PurchaseOrderPolicy.None;
+
     public bool PurchaseOrderRequired { get; set; }
     public bool SignedDeliveryNoteRequired { get; set; }
     public bool CustomerReferenceRequired { get; set; }

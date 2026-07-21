@@ -38,6 +38,13 @@ public class Invoice : AuditableTenantEntity
     /// <summary>True when the number was manually corrected (permission + reason, audited).</summary>
     public bool NumberIsManual { get; set; }
 
+    /// <summary>
+    /// PO number on the invoice. Defaults from the customer's effective PO (by invoice
+    /// date) else the orders' single distinct reference; editable on Draft. When the
+    /// customer's PO policy is Required, sending is blocked while this is empty.
+    /// </summary>
+    public string? PurchaseOrderNumber { get; set; }
+
     public DateOnly InvoiceDate { get; set; }
     public DateOnly DueDate { get; set; }
 

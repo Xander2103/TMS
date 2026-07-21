@@ -190,6 +190,8 @@ public class TransportOrderService : ITransportOrderService
             Notes = Trim(request.Notes),
             Stops = BuildStops(request.Stops),
         };
+        ApplyDieselSurchargeOverride(order,
+            request.DieselSurchargeOverride, request.DieselSurchargePercentOverride, request.DieselSurchargeOverrideReason);
 
         _dbContext.Add(order);
         _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems, order.Stops));
@@ -259,6 +261,12 @@ public class TransportOrderService : ITransportOrderService
         order.AgreedPrice = NonNegative(request.AgreedPrice);
         order.Notes = Trim(request.Notes);
 
+        var surchargeBefore = new { order.DieselSurchargeOverride, order.DieselSurchargePercentOverride };
+        ApplyDieselSurchargeOverride(order,
+            request.DieselSurchargeOverride, request.DieselSurchargePercentOverride, request.DieselSurchargeOverrideReason);
+        var surchargeChanged = surchargeBefore.DieselSurchargeOverride != order.DieselSurchargeOverride
+            || surchargeBefore.DieselSurchargePercentOverride != order.DieselSurchargePercentOverride;
+
         // Wholesale stop replacement; removal is soft, so the trail stays auditable.
         _dbContext.RemoveRange(order.Stops);
         order.Stops = BuildStops(request.Stops);
@@ -283,7 +291,49 @@ public class TransportOrderService : ITransportOrderService
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Updated", before,
             new { order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count }, cancellationToken);
 
+        if (surchargeChanged)
+        {
+            // Record the inherited customer default next to the override for the audit trail.
+            var inherited = await _dbContext.CustomerDieselSurcharges.AsNoTracking()
+                .Where(s => s.TenantId == _tenantContext.TenantId && s.CustomerId == order.CustomerId)
+                .Select(s => (decimal?)s.Percent)
+                .FirstOrDefaultAsync(cancellationToken);
+            await _auditService.RecordAsync(EntityType, order.Id.ToString(), "DieselSurchargeOverridden",
+                new { surchargeBefore.DieselSurchargeOverride, surchargeBefore.DieselSurchargePercentOverride, InheritedPercent = inherited },
+                new { order.DieselSurchargeOverride, order.DieselSurchargePercentOverride, order.DieselSurchargeOverrideReason },
+                cancellationToken);
+        }
+
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    /// <summary>Override requires an explicit percentage and a reason; clearing wipes both.</summary>
+    private static void ApplyDieselSurchargeOverride(
+        TransportOrder order, bool overrideEnabled, decimal? percent, string? reason)
+    {
+        if (!overrideEnabled)
+        {
+            order.DieselSurchargeOverride = false;
+            order.DieselSurchargePercentOverride = null;
+            order.DieselSurchargeOverrideReason = null;
+            return;
+        }
+
+        if (percent is null or < 0 or > 100)
+        {
+            throw new Common.DomainValidationException("dieselSurchargePercentOverride",
+                "Een overschreven dieseltoeslag vereist een percentage tussen 0 en 100.");
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new Common.DomainValidationException("dieselSurchargeOverrideReason",
+                "Een reden is verplicht bij het overschrijven van de dieseltoeslag.");
+        }
+
+        order.DieselSurchargeOverride = true;
+        order.DieselSurchargePercentOverride = percent;
+        order.DieselSurchargeOverrideReason = reason.Trim();
     }
 
     public async Task<TransportOrderOperationResult> ChangeStatusAsync(
@@ -820,7 +870,8 @@ public class TransportOrderService : ITransportOrderService
             stops, cargoItems, Transitions[order.Status],
             CancellableStatuses.Contains(order.Status),
             CorrectiveTransitions.TryGetValue(order.Status, out var corrections) ? corrections : [],
-            order.Priority);
+            order.Priority,
+            order.DieselSurchargeOverride, order.DieselSurchargePercentOverride, order.DieselSurchargeOverrideReason);
     }
 
     private static string GenerateOrderNumber(TenantSettings? settings)

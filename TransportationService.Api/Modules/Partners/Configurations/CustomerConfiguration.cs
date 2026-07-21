@@ -35,6 +35,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.Notes).HasMaxLength(2000);
         builder.Property(c => c.BlockReason).HasMaxLength(500);
 
+        builder.Property(c => c.PurchaseOrderPolicy).HasConversion<string>().HasMaxLength(20);
         builder.Property(c => c.VatTreatment).HasConversion<string>().HasMaxLength(30);
         builder.Property(c => c.DefaultVatRatePercent).HasPrecision(5, 2);
         builder.Property(c => c.VatCountryCode).HasMaxLength(2);

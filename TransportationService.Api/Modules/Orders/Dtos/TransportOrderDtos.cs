@@ -71,7 +71,10 @@ public record TransportOrderDetailDto(
     bool CanCancel,
     /// <summary>Backward corrections available via the controlled correction flow (orders.correct_status).</summary>
     IReadOnlyList<TransportOrderStatus> AllowedCorrections,
-    OrderPriority Priority = OrderPriority.Normal);
+    OrderPriority Priority = OrderPriority.Normal,
+    bool DieselSurchargeOverride = false,
+    decimal? DieselSurchargePercentOverride = null,
+    string? DieselSurchargeOverrideReason = null);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
@@ -194,7 +197,10 @@ public record CreateTransportOrderRequest(
     string? Notes,
     IReadOnlyList<TransportOrderStopInput> Stops,
     IReadOnlyList<CargoItemInput>? CargoItems = null,
-    OrderPriority? Priority = null);
+    OrderPriority? Priority = null,
+    bool DieselSurchargeOverride = false,
+    decimal? DieselSurchargePercentOverride = null,
+    string? DieselSurchargeOverrideReason = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -212,7 +218,10 @@ public record UpdateTransportOrderRequest(
     string? Notes,
     IReadOnlyList<TransportOrderStopInput> Stops,
     IReadOnlyList<CargoItemInput>? CargoItems = null,
-    OrderPriority? Priority = null);
+    OrderPriority? Priority = null,
+    bool DieselSurchargeOverride = false,
+    decimal? DieselSurchargePercentOverride = null,
+    string? DieselSurchargeOverrideReason = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

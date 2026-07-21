@@ -75,6 +75,12 @@ public class TransportOrder : AuditableTenantEntity
     /// <summary>Simple agreed price; the real pricing/invoicing engine is Phase 8.</summary>
     public decimal? AgreedPrice { get; set; }
 
+    // Diesel-surcharge override (customer config is the default). Overriding requires a
+    // reason; the inherited value, override, actor and timestamp are audited.
+    public bool DieselSurchargeOverride { get; set; }
+    public decimal? DieselSurchargePercentOverride { get; set; }
+    public string? DieselSurchargeOverrideReason { get; set; }
+
     public string? Notes { get; set; }
 
     /// <summary>Mandatory when the order was cancelled; set only through the cancel action.</summary>

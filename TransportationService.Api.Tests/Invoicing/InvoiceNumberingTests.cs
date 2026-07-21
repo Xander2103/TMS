@@ -45,7 +45,8 @@ public class InvoiceNumberingTests
         var tenant = new DevTenantContext(tenantId);
         var sut = new InvoiceService(db.Context, tenant,
             new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), new TestClock(Now),
-            new InvoiceNumberService(db.Context, tenant));
+            new InvoiceNumberService(db.Context, tenant),
+            new TransportationService.Api.Modules.Partners.Services.CustomerBillingConfigService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)), new TestClock(Now)));
         return new Harness(db, sut, tenantId, customerId, entity, secondEntity);
     }
 

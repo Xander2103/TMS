@@ -226,7 +226,8 @@ public static class DefaultRoleUpgrades
                 [
                     PermissionCodes.LegalEntitiesView,
                     PermissionCodes.ContactDepartmentsView, PermissionCodes.ContactDepartmentsManage,
-                    PermissionCodes.CustomersManageFiscal,
+                    PermissionCodes.CustomersManageFiscal, PermissionCodes.CustomersManageCommunication,
+                    PermissionCodes.CustomersManageSurcharge, PermissionCodes.CustomersManagePo,
                 ],
                 ["dispatcher"] =
                 [
@@ -248,7 +249,8 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.InvoicesOverrideNumber,
                     PermissionCodes.CustomersImport, PermissionCodes.CustomersOverrideNumber,
                     PermissionCodes.ContactDepartmentsView, PermissionCodes.ContactDepartmentsManage,
-                    PermissionCodes.CustomersManageFiscal,
+                    PermissionCodes.CustomersManageFiscal, PermissionCodes.CustomersManageCommunication,
+                    PermissionCodes.CustomersManageSurcharge, PermissionCodes.CustomersManagePo,
                 ],
             }),
     ];
