@@ -71,6 +71,7 @@ export interface CreateInvoiceInput {
   orderIds: string[]
   manualLines: ManualLineInput[]
   notes: string | null
+  purchaseOrderNumber?: string | null
   legalEntityId?: string | null
   invoicePeriodYear?: number | null
   invoicePeriodMonth?: number | null
@@ -85,6 +86,7 @@ export interface UpdateInvoiceInput {
   dueDate: string
   lines: UpdateLineInput[]
   notes: string | null
+  purchaseOrderNumber?: string | null
   invoicePeriodYear?: number | null
   invoicePeriodMonth?: number | null
 }

@@ -87,6 +87,126 @@ export interface CustomerVatProfile {
   customerReferenceRequired: boolean
 }
 
+// --- Communicatieregels (mirrors CustomerCommunicationRuleDto) ---
+
+export type CustomerCommunicationType =
+  | 'PlanningAlert'
+  | 'DeliveryChange'
+  | 'DelayNotification'
+  | 'EtaUpdate'
+  | 'OrderConfirmation'
+  | 'Invoice'
+  | 'InvoiceReminder'
+  | 'GeneralReminder'
+  | 'Claims'
+  | 'Other'
+
+export const COMMUNICATION_TYPE_LABELS: Record<CustomerCommunicationType, string> = {
+  PlanningAlert: 'Planningsmeldingen',
+  DeliveryChange: 'Leveringswijzigingen',
+  DelayNotification: 'Vertragingsmeldingen',
+  EtaUpdate: 'ETA-updates',
+  OrderConfirmation: 'Orderbevestiging',
+  Invoice: 'Factuur',
+  InvoiceReminder: 'Factuurherinnering',
+  GeneralReminder: 'Algemene herinnering',
+  Claims: 'Claims',
+  Other: 'Andere',
+}
+
+export const COMMUNICATION_TYPES = Object.keys(COMMUNICATION_TYPE_LABELS) as CustomerCommunicationType[]
+
+/** Display label for a rule type; 'Other' shows the customer-specific label. */
+export function communicationTypeLabel(type: CustomerCommunicationType, customTypeLabel: string | null): string {
+  if (type === 'Other' && customTypeLabel?.trim()) return `Andere: ${customTypeLabel.trim()}`
+  return COMMUNICATION_TYPE_LABELS[type] ?? type
+}
+
+export interface CustomerCommunicationRule {
+  id: string
+  type: CustomerCommunicationType
+  customTypeLabel: string | null
+  channel: string
+  ccEmail: string | null
+  languageCode: string | null
+  fallbackContactId: string | null
+  isActive: boolean
+  contactIds: string[]
+}
+
+/** Mirrors SaveCustomerCommunicationRuleRequest (create + update share the body). */
+export interface SaveCommunicationRuleInput {
+  type: CustomerCommunicationType
+  customTypeLabel: string | null
+  ccEmail: string | null
+  languageCode: string | null
+  fallbackContactId: string | null
+  isActive: boolean
+  contactIds: string[]
+}
+
+// --- Dieseltoeslag & PO-beleid (mirrors CustomerBillingConfigService DTOs) ---
+
+export type DieselSurchargeBasis = 'OrderAmount' | 'InvoiceSubtotal'
+export type DieselSurchargePresentation = 'PerOrderLine' | 'AggregatedLine'
+export type DieselSurchargeRounding = 'NearestCent' | 'RoundUpCent'
+export type PurchaseOrderPolicy = 'None' | 'Optional' | 'Required'
+
+export const DIESEL_BASIS_LABELS: Record<DieselSurchargeBasis, string> = {
+  OrderAmount: 'Per opdracht',
+  InvoiceSubtotal: 'Op factuursubtotaal',
+}
+
+export const DIESEL_PRESENTATION_LABELS: Record<DieselSurchargePresentation, string> = {
+  PerOrderLine: 'Lijn per opdracht',
+  AggregatedLine: 'Eén samengevoegde lijn',
+}
+
+export const DIESEL_ROUNDING_LABELS: Record<DieselSurchargeRounding, string> = {
+  NearestCent: 'Normaal (per cent)',
+  RoundUpCent: 'Naar boven (per cent)',
+}
+
+export const PO_POLICY_LABELS: Record<PurchaseOrderPolicy, string> = {
+  None: 'Geen',
+  Optional: 'Vrij (optioneel)',
+  Required: 'Verplicht',
+}
+
+export interface CustomerDieselSurcharge {
+  enabled: boolean
+  percent: number
+  basis: DieselSurchargeBasis
+  presentation: DieselSurchargePresentation
+  rounding: DieselSurchargeRounding
+  formulaDescription: string | null
+  /** yyyy-MM-dd (DateOnly) or null. */
+  effectiveFrom: string | null
+  effectiveUntil: string | null
+}
+
+export interface CustomerPoNumber {
+  id: string
+  poNumber: string
+  validFrom: string
+  validUntil: string | null
+  notes: string | null
+  isEffectiveToday: boolean
+}
+
+export interface SaveCustomerPoNumberInput {
+  poNumber: string
+  validFrom: string
+  validUntil: string | null
+  notes: string | null
+}
+
+export interface CustomerPoPolicy {
+  policy: PurchaseOrderPolicy
+  effectivePoNumber: string | null
+  history: CustomerPoNumber[]
+}
+
 export interface CustomerDetail extends CustomerVatProfile {
   id: string
   customerNumber: string
@@ -117,6 +237,7 @@ export interface CustomerDetail extends CustomerVatProfile {
   bic: string | null
   bankName: string | null
   bankAccountNumber: string | null
+  defaultLegalEntityId: string | null
   contacts: CustomerContact[]
 }
 
@@ -148,6 +269,8 @@ export interface CustomerInput extends CustomerVatProfile {
   bic: string | null
   bankName: string | null
   bankAccountNumber: string | null
+  /** Standaard facturerende entiteit voor deze klant (null = tenant-standaard). */
+  defaultLegalEntityId: string | null
 }
 
 export interface UpdateCustomerInput extends CustomerInput {

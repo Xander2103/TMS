@@ -4,6 +4,8 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerDetail, CustomerListItem } from '../../customers/types'
+import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
+import type { LegalEntityOption } from '../../legal-entities/types'
 import { LocationSelect } from '../../locations/components/LocationSelect'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
 import type { LocationOption } from '../../locations/types'
@@ -146,6 +148,17 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
     order?.agreedPrice === null || order === undefined ? '' : String(order.agreedPrice),
   )
   const [notes, setNotes] = useState(order?.notes ?? '')
+
+  const [legalEntities, setLegalEntities] = useState<LegalEntityOption[]>([])
+  const [legalEntityId, setLegalEntityId] = useState(order?.legalEntityId ?? '')
+  const [dieselSurchargeOverride, setDieselSurchargeOverride] = useState(order?.dieselSurchargeOverride ?? false)
+  const [dieselSurchargePercentOverride, setDieselSurchargePercentOverride] = useState(
+    order?.dieselSurchargePercentOverride === null || order?.dieselSurchargePercentOverride === undefined
+      ? ''
+      : String(order.dieselSurchargePercentOverride),
+  )
+  const [dieselSurchargeOverrideReason, setDieselSurchargeOverrideReason] = useState(order?.dieselSurchargeOverrideReason ?? '')
+
   const [stops, setStops] = useState<StopFormRow[]>(() =>
     order && order.stops.length > 0
       ? order.stops.map((s) => ({
@@ -215,6 +228,19 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
     searchCustomers({ isActive: true, page: 1, pageSize: 200 })
       .then((data) => {
         if (mounted) setCustomers(data.items)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // Facturerende entiteit is optioneel; bij laadfout of ontbrekende rechten blijft alleen "klantstandaard".
+  useEffect(() => {
+    let mounted = true
+    getLegalEntityOptions()
+      .then((data) => {
+        if (mounted) setLegalEntities(data)
       })
       .catch(() => {})
     return () => {
@@ -305,6 +331,10 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
       setFormError('Een barcode mag maar één keer voorkomen binnen dezelfde opdracht.')
       return
     }
+    if (dieselSurchargeOverride && !dieselSurchargeOverrideReason.trim()) {
+      setFormError('Geef een reden op voor het afwijkende dieseltoeslagpercentage.')
+      return
+    }
 
     const input: TransportOrderInput = {
       customerId,
@@ -320,6 +350,10 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
       craneRequired,
       agreedPrice: agreedPrice === '' ? null : Number(agreedPrice),
       notes: notes.trim() || null,
+      legalEntityId: legalEntityId || null,
+      dieselSurchargeOverride,
+      dieselSurchargePercentOverride: dieselSurchargeOverride ? numberOrNullFrom(dieselSurchargePercentOverride) : null,
+      dieselSurchargeOverrideReason: dieselSurchargeOverride ? dieselSurchargeOverrideReason.trim() || null : null,
       stops: stops.map((stop) => ({
         stopType: stop.stopType,
         locationId: stop.locationId || null,
@@ -467,6 +501,69 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
           Kraan vereist
         </label>
       </div>
+
+      <div className="tof-row">
+        <FormField
+          label="Facturerende entiteit"
+          htmlFor="to-legal-entity"
+          hint="Leeg = de standaardentiteit van de klant."
+        >
+          <select id="to-legal-entity" value={legalEntityId} onChange={(e) => setLegalEntityId(e.target.value)} disabled={saving}>
+            <option value="">— Klantstandaard —</option>
+            {legalEntities.map((entity) => (
+              <option key={entity.id} value={entity.id}>
+                {entity.displayName}
+                {entity.isDefault ? ' (standaard)' : ''}
+                {!entity.isActive ? ' — inactief' : ''}
+              </option>
+            ))}
+          </select>
+        </FormField>
+      </div>
+
+      <details className="tof-stop-extended" open={dieselSurchargeOverride}>
+        <summary>Dieseltoeslag afwijking</summary>
+        <label className="tof-checkbox">
+          <input
+            type="checkbox"
+            checked={dieselSurchargeOverride}
+            onChange={(e) => setDieselSurchargeOverride(e.target.checked)}
+            disabled={saving}
+          />
+          Afwijkend percentage voor deze opdracht
+        </label>
+        {dieselSurchargeOverride && (
+          <div className="tof-row">
+            <FormField label="Percentage (%)" htmlFor="to-diesel-pct">
+              <input
+                id="to-diesel-pct"
+                type="number"
+                min={0}
+                max={100}
+                step="0.01"
+                value={dieselSurchargePercentOverride}
+                onChange={(e) => setDieselSurchargePercentOverride(e.target.value)}
+                disabled={saving}
+              />
+            </FormField>
+            <FormField
+              label="Reden"
+              htmlFor="to-diesel-reason"
+              required
+              hint="De klantconfiguratie is de standaard; afwijkingen worden gelogd."
+            >
+              <textarea
+                id="to-diesel-reason"
+                rows={2}
+                value={dieselSurchargeOverrideReason}
+                onChange={(e) => setDieselSurchargeOverrideReason(e.target.value)}
+                disabled={saving}
+                maxLength={500}
+              />
+            </FormField>
+          </div>
+        )}
+      </details>
 
       <div className="tof-stops-header">
         <h3>Stops</h3>

@@ -19,6 +19,8 @@ import { changeCustomerNumber } from '../api/customersApi'
 import { CustomerForm } from '../components/CustomerForm'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
 import { CustomerLocationsPanel } from '../components/CustomerLocationsPanel'
+import { CustomerCommunicationPanel } from '../components/CustomerCommunicationPanel'
+import { CustomerBillingPanel } from '../components/CustomerBillingPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
 import { VAT_TREATMENT_LABELS } from '../types'
@@ -28,13 +30,14 @@ export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const toast = useToast()
-  const { hasPermission } = useAuth()
+  const { hasPermission, hasAnyPermission } = useAuth()
   const { customer, isLoading, error, reload } = useCustomer(id)
   const mutations = useCustomerMutations()
   const canEdit = hasPermission('customers.edit')
   const canDelete = hasPermission('customers.delete')
   const canDeactivate = hasPermission('customers.deactivate')
   const canViewLocations = hasPermission('locations.view')
+  const canViewBilling = hasAnyPermission(['customers.view'])
   const canOverrideNumber = hasPermission('customers.override_number')
 
   const [activeTab, setActiveTab] = useState('general')
@@ -180,6 +183,8 @@ export function CustomerDetailPage() {
                 { id: 'general', label: 'Algemeen' },
                 { id: 'contacts', label: 'Contactpersonen', badge: customer.contacts.length || undefined },
                 ...(canViewLocations ? [{ id: 'locations', label: 'Locaties' }] : []),
+                { id: 'communication', label: 'Communicatie' },
+                ...(canViewBilling ? [{ id: 'billing', label: 'Facturatie' }] : []),
               ]}
               activeId={activeTab}
               onChange={setActiveTab}
@@ -356,6 +361,18 @@ export function CustomerDetailPage() {
           {activeTab === 'locations' && canViewLocations && id && (
             <TabPanel tabId="locations">
               <CustomerLocationsPanel customerId={id} />
+            </TabPanel>
+          )}
+
+          {activeTab === 'communication' && id && (
+            <TabPanel tabId="communication">
+              <CustomerCommunicationPanel customerId={id} contacts={customer.contacts} />
+            </TabPanel>
+          )}
+
+          {activeTab === 'billing' && canViewBilling && id && (
+            <TabPanel tabId="billing">
+              <CustomerBillingPanel customerId={id} />
             </TabPanel>
           )}
         </>

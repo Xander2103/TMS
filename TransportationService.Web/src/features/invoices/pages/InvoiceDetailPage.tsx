@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -13,6 +13,17 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { changeInvoiceStatus, deleteInvoice, getInvoice, overrideInvoiceNumber, updateInvoice } from '../api/invoicesApi'
+import {
+  deleteInvoiceAttachment,
+  downloadInvoiceAttachment,
+  listInvoiceAttachments,
+  updateInvoiceAttachment,
+  uploadInvoiceAttachment,
+  INVOICE_ATTACHMENT_ACCEPT,
+  MAX_INVOICE_ATTACHMENT_BYTES,
+  type InvoiceAttachment,
+} from '../api/invoiceAttachmentsApi'
+import { formatFileSize } from '../utils/fileSize'
 import {
   euro,
   INVOICE_STATUS_LABELS,
@@ -36,7 +47,7 @@ export function InvoiceDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
-  const { hasPermission } = useAuth()
+  const { hasPermission, hasAnyPermission } = useAuth()
 
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -47,6 +58,7 @@ export function InvoiceDetailPage() {
   const [dueDate, setDueDate] = useState('')
   const [periodInput, setPeriodInput] = useState('')
   const [notes, setNotes] = useState('')
+  const [poNumber, setPoNumber] = useState('')
   const [lines, setLines] = useState<EditableLine[]>([])
 
   const [confirmTransition, setConfirmTransition] = useState<InvoiceStatus | null>(null)
@@ -80,6 +92,7 @@ export function InvoiceDetailPage() {
     setDueDate(invoice.dueDate)
     setPeriodInput(periodToMonthInput(invoice.invoicePeriodYear, invoice.invoicePeriodMonth))
     setNotes(invoice.notes ?? '')
+    setPoNumber(invoice.purchaseOrderNumber ?? '')
     setLines(
       invoice.lines.map((l) => ({
         key: `l-${++lineKey}`,
@@ -113,6 +126,7 @@ export function InvoiceDetailPage() {
         invoicePeriodYear: period?.year ?? null,
         invoicePeriodMonth: period?.month ?? null,
         notes: notes.trim() || null,
+        purchaseOrderNumber: poNumber.trim() || null,
         lines: lines.map((line) => ({
           id: line.id,
           description: line.description,
@@ -226,6 +240,7 @@ export function InvoiceDetailPage() {
       <p className="inv-meta">
         {invoice.legalEntityName && <>Facturerende entiteit: {invoice.legalEntityName} · </>}
         Periode: {formatPeriod(invoice.invoicePeriodYear, invoice.invoicePeriodMonth)}
+        {invoice.purchaseOrderNumber && <> · PO-nummer: {invoice.purchaseOrderNumber}</>}
       </p>
 
       {editing ? (
@@ -242,6 +257,10 @@ export function InvoiceDetailPage() {
             <label>
               Factuurperiode
               <input type="month" value={periodInput} onChange={(e) => setPeriodInput(e.target.value)} disabled={busy} />
+            </label>
+            <label>
+              PO-nummer
+              <input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} disabled={busy} maxLength={100} />
             </label>
           </div>
           <table className="inv-lines-table">
@@ -374,6 +393,14 @@ export function InvoiceDetailPage() {
         </>
       )}
 
+      {hasAnyPermission(['invoice_attachments.view', 'invoice_attachments.manage']) && (
+        <InvoiceAttachmentsSection
+          invoiceId={invoice.id}
+          canManage={hasPermission('invoice_attachments.manage')}
+          isDraft={invoice.status === 'Draft'}
+        />
+      )}
+
       {overrideOpen && (
         <Modal
           title="Factuurnummer corrigeren"
@@ -454,5 +481,174 @@ export function InvoiceDetailPage() {
         />
       )}
     </div>
+  )
+}
+
+interface InvoiceAttachmentsSectionProps {
+  invoiceId: string
+  canManage: boolean
+  isDraft: boolean
+}
+
+/** Bijlagen van een factuur: uploaden, meesturen togglen, downloaden en (in concept) verwijderen. */
+export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: InvoiceAttachmentsSectionProps) {
+  const { showSuccess, showError } = useToast()
+  const [attachments, setAttachments] = useState<InvoiceAttachment[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState<InvoiceAttachment | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const reload = useCallback(() => {
+    listInvoiceAttachments(invoiceId)
+      .then((data) => {
+        setAttachments(data)
+        setLoadError(null)
+      })
+      .catch(() => setLoadError('De bijlagen konden niet worden geladen.'))
+  }, [invoiceId])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  async function handleUpload(file: File) {
+    if (file.size > MAX_INVOICE_ATTACHMENT_BYTES) {
+      showError('Het bestand is te groot (maximaal 10 MB).')
+      return
+    }
+    setBusy(true)
+    try {
+      await uploadInvoiceAttachment(invoiceId, file)
+      showSuccess('Bijlage geüpload.')
+      reload()
+    } catch (err) {
+      showError(describeApiError(err, 'De bijlage kon niet worden geüpload.').message)
+    } finally {
+      setBusy(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function toggleInclude(attachment: InvoiceAttachment) {
+    setBusy(true)
+    try {
+      const updated = await updateInvoiceAttachment(invoiceId, attachment.id, {
+        includeWhenSending: !attachment.includeWhenSending,
+        notes: attachment.notes,
+      })
+      setAttachments((rows) => (rows ?? []).map((row) => (row.id === updated.id ? updated : row)))
+    } catch (err) {
+      showError(describeApiError(err, 'De bijlage kon niet worden bijgewerkt.').message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="inv-section">
+      <div className="inv-manual-head">
+        <h3>Bijlagen</h3>
+        {canManage && (
+          <span className="inv-attachment-upload">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={INVOICE_ATTACHMENT_ACCEPT}
+              disabled={busy}
+              aria-label="Bijlage kiezen"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) void handleUpload(file)
+              }}
+            />
+          </span>
+        )}
+      </div>
+
+      {loadError && (
+        <p className="inv-override-error" role="alert">
+          {loadError}
+        </p>
+      )}
+      {!loadError && attachments !== null && attachments.length === 0 && (
+        <p className="placeholder-text">Nog geen bijlagen.</p>
+      )}
+      {attachments !== null && attachments.length > 0 && (
+        <table className="inv-lines-table">
+          <thead>
+            <tr>
+              <th>Bestand</th>
+              <th>Grootte</th>
+              <th>Geüpload op</th>
+              <th>Meesturen</th>
+              <th aria-label="Acties" />
+            </tr>
+          </thead>
+          <tbody>
+            {attachments.map((attachment) => (
+              <tr key={attachment.id}>
+                <td>{attachment.fileName}</td>
+                <td>{formatFileSize(attachment.sizeBytes)}</td>
+                <td>{attachment.uploadedAt.slice(0, 10)}</td>
+                <td>
+                  <label className="inv-attachment-toggle">
+                    <input
+                      type="checkbox"
+                      checked={attachment.includeWhenSending}
+                      onChange={() => void toggleInclude(attachment)}
+                      disabled={!canManage || busy}
+                    />
+                    <span>{attachment.includeWhenSending ? 'Ja' : 'Nee'}</span>
+                  </label>
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="inv-link"
+                    onClick={() =>
+                      void downloadInvoiceAttachment(invoiceId, attachment.id, attachment.fileName).catch(() =>
+                        showError('De bijlage kon niet worden gedownload.'),
+                      )
+                    }
+                  >
+                    Download
+                  </button>
+                  {isDraft && canManage && (
+                    <button type="button" className="inv-link inv-link-danger" onClick={() => setRemoveTarget(attachment)} disabled={busy}>
+                      Verwijderen
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {removeTarget && (
+        <ConfirmDialog
+          title="Bijlage verwijderen"
+          message={`Bijlage '${removeTarget.fileName}' verwijderen?`}
+          confirmLabel="Verwijderen"
+          destructive
+          busy={busy}
+          onConfirm={async () => {
+            setBusy(true)
+            try {
+              await deleteInvoiceAttachment(invoiceId, removeTarget.id)
+              showSuccess('Bijlage verwijderd.')
+              setRemoveTarget(null)
+              reload()
+            } catch (err) {
+              showError(describeApiError(err, 'De bijlage kon niet worden verwijderd.').message)
+            } finally {
+              setBusy(false)
+            }
+          }}
+          onCancel={() => setRemoveTarget(null)}
+        />
+      )}
+    </section>
   )
 }

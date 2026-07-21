@@ -61,6 +61,7 @@ export interface InvoiceDetail {
   status: InvoiceStatus
   currency: string
   notes: string | null
+  purchaseOrderNumber: string | null
   lines: InvoiceLine[]
   subtotal: number
   vatAmount: number

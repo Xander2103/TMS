@@ -7,6 +7,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
+import { getPoPolicy } from '../../customers/api/customerBillingConfigApi'
 import { getActiveLegalEntity, getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { createInvoice, getNextInvoiceNumber, listUninvoicedOrders } from '../api/invoicesApi'
@@ -31,6 +32,8 @@ export function NewInvoicePage() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([])
   const [manualLines, setManualLines] = useState<ManualRow[]>([])
   const [notes, setNotes] = useState('')
+  const [poNumber, setPoNumber] = useState('')
+  const [poPolicyRequired, setPoPolicyRequired] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const [entities, setEntities] = useState<LegalEntityOption[]>([])
@@ -114,11 +117,34 @@ export function NewInvoicePage() {
     }
   }, [customerId])
 
+  // PO-beleid van de gekozen klant: waarschuw bij 'Verplicht' en vul een actief PO-nummer voor.
+  // De reset bij het wisselen van klant gebeurt in handleCustomerChange (niet in dit effect).
+  useEffect(() => {
+    if (!customerId) return
+    let mounted = true
+    getPoPolicy(customerId)
+      .then((policy) => {
+        if (!mounted) return
+        setPoPolicyRequired(policy.policy === 'Required')
+        if (policy.effectivePoNumber) {
+          setPoNumber((current) => (current.trim() === '' ? policy.effectivePoNumber ?? '' : current))
+        }
+      })
+      .catch(() => {
+        if (mounted) setPoPolicyRequired(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [customerId])
+
   function handleCustomerChange(value: string) {
     setCustomerId(value)
     // Reset synchronously with the user event, not inside the effect.
     setOrders(null)
     setSelectedOrderIds([])
+    setPoNumber('')
+    setPoPolicyRequired(false)
   }
 
   function toggleOrder(id: string) {
@@ -167,6 +193,7 @@ export function NewInvoicePage() {
           vatRatePercent: line.vatRatePercent,
         })),
         notes: notes.trim() || null,
+        purchaseOrderNumber: poNumber.trim() || null,
         legalEntityId: legalEntityId || null,
         invoicePeriodYear: period?.year ?? null,
         invoicePeriodMonth: period?.month ?? null,
@@ -231,6 +258,13 @@ export function NewInvoicePage() {
         )}
         {isPastPeriod && period && (
           <p className="inv-period-warning">Je factureert in een eerdere periode ({formatPeriod(period.year, period.month)}).</p>
+        )}
+
+        <FormField label="PO-nummer" htmlFor="inv-po" hint="Optioneel referentienummer van de klant.">
+          <input id="inv-po" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} disabled={busy} maxLength={100} />
+        </FormField>
+        {poPolicyRequired && poNumber.trim() === '' && (
+          <p className="inv-period-warning">Deze klant vereist een PO-nummer.</p>
         )}
 
         {customerId && orders !== null && (

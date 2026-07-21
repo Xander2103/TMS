@@ -11,6 +11,8 @@ import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { getVatTreatments, registryLookup } from '../api/customersApi'
+import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
+import type { LegalEntityOption } from '../../legal-entities/types'
 import { validateVatNumber } from '../utils/vatNumber'
 import { resolveRateOptions } from '../utils/vatTreatment'
 import {
@@ -128,6 +130,23 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   const [bankName, setBankName] = useState(initial?.bankName ?? '')
   const [bankAccountNumber, setBankAccountNumber] = useState(initial?.bankAccountNumber ?? '')
   const [currencyCode, setCurrencyCode] = useState(initial?.currencyCode ?? 'EUR')
+
+  // Legal-entity options for the default billing entity; empty on load failure or no permission.
+  const [legalEntities, setLegalEntities] = useState<LegalEntityOption[]>([])
+  const [defaultLegalEntityId, setDefaultLegalEntityId] = useState<string>(initial?.defaultLegalEntityId ?? '')
+  useEffect(() => {
+    let mounted = true
+    getLegalEntityOptions()
+      .then((data) => {
+        if (mounted) setLegalEntities(data)
+      })
+      .catch(() => {
+        /* geen rechten of laadfout: lege select met alleen de tenant-standaard */
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const [invoiceEmail, setInvoiceEmail] = useState(initial?.invoiceEmail ?? '')
   const [invoiceLanguageCode, setInvoiceLanguageCode] = useState(initial?.invoiceLanguageCode ?? '')
@@ -319,6 +338,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       invoiceEmail: nullable(invoiceEmail),
       paymentTermDays: Number.isFinite(Number(paymentTermDays)) ? Number(paymentTermDays) : 0,
       defaultLanguageCode: defaultLanguageCode || null,
+      defaultLegalEntityId: defaultLegalEntityId || null,
       notes: nullable(notes),
       vatNotes: nullable(vatNotes),
       bankName: nullable(bankName),
@@ -709,6 +729,22 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
         </FormField>
         <FormField label="Betaaltermijn (dagen)" htmlFor="c-payterm">
           <input id="c-payterm" type="number" min={0} value={paymentTermDays} onChange={(e) => setPaymentTermDays(e.target.value)} />
+        </FormField>
+        <FormField
+          label="Standaard facturerende entiteit"
+          htmlFor="c-legal-entity"
+          hint="Wordt voorgesteld op facturen voor deze klant. Leeg = de tenant-standaard."
+        >
+          <select id="c-legal-entity" value={defaultLegalEntityId} onChange={(e) => setDefaultLegalEntityId(e.target.value)}>
+            <option value="">— Tenant-standaard —</option>
+            {legalEntities.map((entity) => (
+              <option key={entity.id} value={entity.id}>
+                {entity.displayName}
+                {entity.isDefault ? ' (standaard)' : ''}
+                {!entity.isActive ? ' — inactief' : ''}
+              </option>
+            ))}
+          </select>
         </FormField>
         <div className="customer-form-requirements form-span-all">
           <label className="customer-form-checkbox">

@@ -181,6 +181,12 @@ export interface TransportOrderDetail {
   allowedCorrections: TransportOrderStatus[]
   canCancel: boolean
   priority: OrderPriority
+  /** Facturerende entiteit voor deze opdracht; null = klantstandaard. */
+  legalEntityId: string | null
+  /** Afwijkend dieseltoeslagpercentage voor deze opdracht (los van de klantconfiguratie). */
+  dieselSurchargeOverride: boolean
+  dieselSurchargePercentOverride: number | null
+  dieselSurchargeOverrideReason: string | null
 }
 
 export interface StopInput {
@@ -239,4 +245,9 @@ export interface TransportOrderInput {
   cargoItems: CargoItemInput[]
   /** Omitted = Normal on create, unchanged on update. */
   priority?: OrderPriority
+  /** Facturerende entiteit; null = klantstandaard. */
+  legalEntityId: string | null
+  dieselSurchargeOverride: boolean
+  dieselSurchargePercentOverride: number | null
+  dieselSurchargeOverrideReason: string | null
 }
