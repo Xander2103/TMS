@@ -39,9 +39,20 @@ public class Employee : ITenantOwned, IAuditableEntity
     /// <summary>ISO 3166-1 alpha-2 code validated against the global country reference.</summary>
     public string? CountryCode { get; set; }
 
-    // Emergency contact
+    // Emergency contact. Legacy single pair: mirrors the priority-1 EmployeeEmergencyContact
+    // row (kept in sync on write) so nothing that reads these columns breaks.
     public string? EmergencyContactName { get; set; }
     public string? EmergencyContactPhone { get; set; }
+
+    /// <summary>All emergency contacts, ordered by Priority (1 = first to call).</summary>
+    public List<EmployeeEmergencyContact> EmergencyContacts { get; set; } = [];
+
+    // Civil status / household (HR)
+    public CivilStatus? CivilStatus { get; set; }
+    public int? DependentChildren { get; set; }
+
+    /// <summary>Identity-card number. Confidential (like NRN/IBAN).</summary>
+    public string? IdentityCardNumber { get; set; }
 
     // Banking (confidential)
     public string? Iban { get; set; }
@@ -53,6 +64,9 @@ public class Employee : ITenantOwned, IAuditableEntity
     public EmploymentStatus EmploymentStatus { get; set; }
     public Guid? DepartmentId { get; set; }
     public Guid? ContractTypeId { get; set; }
+
+    /// <summary>DIMONA declaration reference (Belgian employment registration).</summary>
+    public string? DimonaNumber { get; set; }
 
     /// <summary>HR job functions (multi). These are labels — application permissions are
     /// managed exclusively through user roles.</summary>

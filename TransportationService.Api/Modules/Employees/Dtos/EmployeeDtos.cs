@@ -52,13 +52,26 @@ public record EmployeeDetailDto(
     Guid? DriverId,
     string? NationalRegisterNumber,
     string? Iban,
-    string? Bic);
+    string? Bic,
+    CivilStatus? CivilStatus = null,
+    int? DependentChildren = null,
+    string? DimonaNumber = null,
+    /// <summary>Confidential: null without employees.view_confidential.</summary>
+    string? IdentityCardNumber = null,
+    IReadOnlyList<EmployeeEmergencyContactDto>? EmergencyContacts = null);
+
+public record EmployeeEmergencyContactDto(
+    Guid Id, string Name, string? Relationship, string? Phone, string? MobilePhone, string? Notes, int Priority);
+
+/// <summary>Existing contacts keep their id; new ones come without one (wholesale sync).</summary>
+public record EmployeeEmergencyContactInput(
+    Guid? Id, string Name, string? Relationship, string? Phone, string? MobilePhone, string? Notes, int Priority);
 
 /// <summary>
 /// Optional driver profile created atomically with the employee — one workflow, one
 /// transaction, no re-entering personal data on a separate screen.
 /// </summary>
-public record CreateEmployeeDriverProfile(Guid? DriverCategoryId, string? Notes);
+public record CreateEmployeeDriverProfile(Guid? DriverCategoryId, string? Notes, IReadOnlyList<Guid>? DriverCategoryIds = null);
 
 public record CreateEmployeeRequest(
     string FirstName,
@@ -87,7 +100,13 @@ public record CreateEmployeeRequest(
     string? Bic = null,
     string? Notes = null,
     CreateEmployeeDriverProfile? DriverProfile = null,
-    IReadOnlyList<CreateEmployeeQualificationRequest>? Qualifications = null);
+    IReadOnlyList<CreateEmployeeQualificationRequest>? Qualifications = null,
+    CivilStatus? CivilStatus = null,
+    int? DependentChildren = null,
+    string? DimonaNumber = null,
+    string? IdentityCardNumber = null,
+    DateOnly? EmploymentEndDate = null,
+    IReadOnlyList<EmployeeEmergencyContactInput>? EmergencyContacts = null);
 
 public record UpdateEmployeeRequest(
     string FirstName,
@@ -115,4 +134,9 @@ public record UpdateEmployeeRequest(
     string? NationalRegisterNumber = null,
     string? Iban = null,
     string? Bic = null,
-    string? Notes = null);
+    string? Notes = null,
+    CivilStatus? CivilStatus = null,
+    int? DependentChildren = null,
+    string? DimonaNumber = null,
+    string? IdentityCardNumber = null,
+    IReadOnlyList<EmployeeEmergencyContactInput>? EmergencyContacts = null);

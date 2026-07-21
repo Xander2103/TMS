@@ -46,21 +46,26 @@ public record DriverDetailDto(
     string? FixedTrailerLabel,
     string? Notes,
     DriverReadinessDto Readiness,
-    IReadOnlyList<DriverQualificationDto> Qualifications);
+    IReadOnlyList<DriverQualificationDto> Qualifications,
+    IReadOnlyList<Guid>? CategoryIds = null,
+    IReadOnlyList<string>? CategoryNames = null);
 
 public record CreateDriverRequest(
     Guid EmployeeId,
     Guid? DriverCategoryId,
     DriverAvailabilityStatus AvailabilityStatus = DriverAvailabilityStatus.Available,
     Guid? FixedTrailerId = null,
-    string? Notes = null);
+    string? Notes = null,
+    /// <summary>Multi-category selection; when provided, the first entry is the primary.</summary>
+    IReadOnlyList<Guid>? DriverCategoryIds = null);
 
 public record UpdateDriverRequest(
     Guid? DriverCategoryId,
     DriverAvailabilityStatus AvailabilityStatus,
     bool IsActive,
     Guid? FixedTrailerId = null,
-    string? Notes = null);
+    string? Notes = null,
+    IReadOnlyList<Guid>? DriverCategoryIds = null);
 
 /// <summary>Body for the driver-side assignment endpoints; null VehicleId clears the slot.</summary>
 public record AssignDriverVehicleRequest(Guid? VehicleId, bool ReplaceExisting = false);

@@ -42,5 +42,8 @@ public class Driver : AuditableTenantEntity
     /// <summary>Long-term trailer preference. FK-constrained, SetNull on trailer delete.</summary>
     public Guid? FixedTrailerId { get; set; }
 
+    /// <summary>Operational categories (multi); DriverCategoryId mirrors the primary one.</summary>
+    public List<DriverDriverCategory> Categories { get; set; } = [];
+
     public string? Notes { get; set; }
 }

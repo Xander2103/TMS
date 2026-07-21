@@ -151,17 +151,24 @@ public class DriverService : IDriverService
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
+        var categoryIds = NormalizeCategoryIds(request.DriverCategoryIds, request.DriverCategoryId);
+        if (!await CategoriesInTenantAsync(categoryIds, cancellationToken))
+        {
+            return DriverOperationResult.InvalidReference;
+        }
+
         var driver = new Driver
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
             EmployeeId = request.EmployeeId,
-            DriverCategoryId = request.DriverCategoryId,
+            DriverCategoryId = categoryIds.Count > 0 ? categoryIds[0] : null,
             AvailabilityStatus = request.AvailabilityStatus,
             FixedTrailerId = request.FixedTrailerId,
             Notes = Trim(request.Notes),
             IsActive = true,
         };
+        SyncCategories(driver, categoryIds);
 
         _dbContext.Add(driver);
         try
@@ -185,7 +192,7 @@ public class DriverService : IDriverService
 
     public async Task<DriverOperationResult> UpdateAsync(Guid id, UpdateDriverRequest request, CancellationToken cancellationToken)
     {
-        var driver = await TenantScoped().FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+        var driver = await TenantScoped().Include(d => d.Categories).FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
         if (driver is null)
         {
             return DriverOperationResult.NotFound;
@@ -196,9 +203,16 @@ public class DriverService : IDriverService
             return DriverOperationResult.InvalidReference;
         }
 
+        var categoryIds = NormalizeCategoryIds(request.DriverCategoryIds, request.DriverCategoryId);
+        if (!await CategoriesInTenantAsync(categoryIds, cancellationToken))
+        {
+            return DriverOperationResult.InvalidReference;
+        }
+
         var oldValues = new { driver.DriverCategoryId, driver.AvailabilityStatus, driver.IsActive };
 
-        driver.DriverCategoryId = request.DriverCategoryId;
+        driver.DriverCategoryId = categoryIds.Count > 0 ? categoryIds[0] : null;
+        SyncCategories(driver, categoryIds);
         driver.AvailabilityStatus = request.AvailabilityStatus;
         driver.IsActive = request.IsActive;
         driver.FixedTrailerId = request.FixedTrailerId;
@@ -270,6 +284,53 @@ public class DriverService : IDriverService
         return true;
     }
 
+    /// <summary>Explicit multi-select wins; else the single legacy id; ordered, deduped.</summary>
+    private static List<Guid> NormalizeCategoryIds(IReadOnlyList<Guid>? multi, Guid? single) =>
+        multi is { Count: > 0 } ? multi.Distinct().ToList() : single is { } id ? [id] : [];
+
+    private async Task<bool> CategoriesInTenantAsync(IReadOnlyList<Guid> categoryIds, CancellationToken cancellationToken)
+    {
+        if (categoryIds.Count == 0)
+        {
+            return true;
+        }
+
+        var known = await _dbContext.Set<DriverCategory>()
+            .CountAsync(c => c.TenantId == _tenantContext.TenantId && categoryIds.Contains(c.Id), cancellationToken);
+        return known == categoryIds.Count;
+    }
+
+    /// <summary>Wholesale sync of the category join rows in the given order.</summary>
+    private void SyncCategories(Driver driver, IReadOnlyList<Guid> categoryIds)
+    {
+        var wanted = categoryIds.ToList();
+        foreach (var removed in driver.Categories.Where(c => !wanted.Contains(c.DriverCategoryId)).ToList())
+        {
+            driver.Categories.Remove(removed);
+            _dbContext.Remove(removed);
+        }
+
+        var existing = driver.Categories.ToDictionary(c => c.DriverCategoryId);
+        for (var index = 0; index < wanted.Count; index += 1)
+        {
+            if (existing.TryGetValue(wanted[index], out var link))
+            {
+                link.SortOrder = index;
+            }
+            else
+            {
+                _dbContext.Set<DriverDriverCategory>().Add(new DriverDriverCategory
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = _tenantContext.TenantId,
+                    DriverId = driver.Id,
+                    DriverCategoryId = wanted[index],
+                    SortOrder = index,
+                });
+            }
+        }
+    }
+
     private async Task<DriverDetailDto> MapToDetailAsync(Driver driver, CancellationToken cancellationToken)
     {
         var employee = await _dbContext.Employees.AsNoTracking()
@@ -301,6 +362,15 @@ public class DriverService : IDriverService
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
+        var categoryLinks = await _dbContext.Set<DriverDriverCategory>().AsNoTracking()
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.DriverId == driver.Id)
+            .OrderBy(c => c.SortOrder)
+            .Join(_dbContext.Set<DriverCategory>().AsNoTracking().Where(cat => cat.TenantId == _tenantContext.TenantId),
+                link => link.DriverCategoryId, cat => cat.Id,
+                (link, cat) => new { link.SortOrder, cat.Id, cat.Name })
+            .ToListAsync(cancellationToken);
+        var orderedCategories = categoryLinks.OrderBy(c => c.SortOrder).ToList();
+
         return new DriverDetailDto(
             driver.Id, driver.DriverNumber, driver.EmployeeId,
             employee is null ? string.Empty : $"{employee.FirstName} {employee.LastName}",
@@ -310,7 +380,9 @@ public class DriverService : IDriverService
             driver.IsActive, driver.IsBlocked, driver.BlockReason,
             fixedVehicle, currentVehicle,
             driver.FixedTrailerId, fixedTrailerLabel,
-            driver.Notes, readiness, qualifications);
+            driver.Notes, readiness, qualifications,
+            orderedCategories.Select(c => c.Id).ToList(),
+            orderedCategories.Select(c => c.Name).ToList());
     }
 
     private async Task<List<DriverQualificationDto>> LoadQualificationsAsync(Guid employeeId, CancellationToken cancellationToken)

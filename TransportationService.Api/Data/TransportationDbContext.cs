@@ -100,6 +100,7 @@ public class TransportationDbContext : DbContext
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<EmployeeEmergencyContact> EmployeeEmergencyContacts => Set<EmployeeEmergencyContact>();
 
     public DbSet<QualificationType> QualificationTypes => Set<QualificationType>();
     public DbSet<EmployeeQualification> EmployeeQualifications => Set<EmployeeQualification>();
@@ -136,6 +137,7 @@ public class TransportationDbContext : DbContext
 
     // Drivers
     public DbSet<Driver> Drivers => Set<Driver>();
+    public DbSet<DriverDriverCategory> DriverDriverCategories => Set<DriverDriverCategory>();
 
     // HR availability
     public DbSet<Absence> Absences => Set<Absence>();

@@ -115,6 +115,7 @@ public class EmployeeService : IEmployeeService
             .AsNoTracking()
             .Include(e => e.JobFunctions)
             .ThenInclude(j => j.JobFunction)
+            .Include(e => e.EmergencyContacts)
             .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
         return employee is null ? null : await MapToDetailAsync(employee, includeConfidential, cancellationToken);
@@ -151,9 +152,13 @@ public class EmployeeService : IEmployeeService
             EmergencyContactName = Trim(request.EmergencyContactName),
             EmergencyContactPhone = Trim(request.EmergencyContactPhone),
             EmploymentStartDate = request.EmploymentStartDate,
+            EmploymentEndDate = request.EmploymentEndDate,
             EmploymentStatus = request.EmploymentStatus,
             DepartmentId = request.DepartmentId,
             ContractTypeId = request.ContractTypeId,
+            CivilStatus = request.CivilStatus,
+            DependentChildren = ValidateDependentChildren(request.DependentChildren),
+            DimonaNumber = Trim(request.DimonaNumber),
             IsActive = true,
             Notes = Trim(request.Notes),
         };
@@ -163,7 +168,11 @@ public class EmployeeService : IEmployeeService
             employee.NationalRegisterNumber = EmployeePersonValidators.NormalizeNationalRegisterNumber(request.NationalRegisterNumber);
             employee.Iban = EmployeePersonValidators.NormalizeIban(request.Iban);
             employee.Bic = EmployeePersonValidators.NormalizeBic(request.Bic);
+            employee.IdentityCardNumber = Trim(request.IdentityCardNumber);
         }
+
+        SyncEmergencyContacts(employee, request.EmergencyContacts,
+            request.EmergencyContactName, request.EmergencyContactPhone);
 
         foreach (var functionId in (request.JobFunctionIds ?? []).Distinct())
         {
@@ -187,7 +196,7 @@ public class EmployeeService : IEmployeeService
         {
             var driverResult = await _driverService.CreateAsync(new CreateDriverRequest(
                 employee.Id, driverProfile.DriverCategoryId, DriverAvailabilityStatus.Available,
-                Notes: driverProfile.Notes), cancellationToken);
+                Notes: driverProfile.Notes, DriverCategoryIds: driverProfile.DriverCategoryIds), cancellationToken);
 
             if (driverResult.Outcome != DriverOperationOutcome.Success)
             {
@@ -213,6 +222,7 @@ public class EmployeeService : IEmployeeService
     {
         var employee = await TenantScoped()
             .Include(e => e.JobFunctions)
+            .Include(e => e.EmergencyContacts)
             .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
         if (employee is null)
         {
@@ -246,6 +256,9 @@ public class EmployeeService : IEmployeeService
         employee.EmploymentStatus = request.EmploymentStatus;
         employee.DepartmentId = request.DepartmentId;
         employee.ContractTypeId = request.ContractTypeId;
+        employee.CivilStatus = request.CivilStatus;
+        employee.DependentChildren = ValidateDependentChildren(request.DependentChildren);
+        employee.DimonaNumber = Trim(request.DimonaNumber);
         employee.Notes = Trim(request.Notes);
 
         // Confidential fields are only touched by callers holding employees.view_confidential;
@@ -255,7 +268,11 @@ public class EmployeeService : IEmployeeService
             employee.NationalRegisterNumber = EmployeePersonValidators.NormalizeNationalRegisterNumber(request.NationalRegisterNumber);
             employee.Iban = EmployeePersonValidators.NormalizeIban(request.Iban);
             employee.Bic = EmployeePersonValidators.NormalizeBic(request.Bic);
+            employee.IdentityCardNumber = Trim(request.IdentityCardNumber);
         }
+
+        SyncEmergencyContacts(employee, request.EmergencyContacts,
+            request.EmergencyContactName, request.EmergencyContactPhone);
 
         var requestedFunctionIds = (request.JobFunctionIds ?? []).Distinct().ToHashSet();
         var toRemove = employee.JobFunctions.Where(j => !requestedFunctionIds.Contains(j.JobFunctionId)).ToList();
@@ -451,7 +468,113 @@ public class EmployeeService : IEmployeeService
             driverId,
             includeConfidential ? e.NationalRegisterNumber : null,
             includeConfidential ? e.Iban : null,
-            includeConfidential ? e.Bic : null);
+            includeConfidential ? e.Bic : null,
+            e.CivilStatus, e.DependentChildren, e.DimonaNumber,
+            includeConfidential ? e.IdentityCardNumber : null,
+            e.EmergencyContacts
+                .Where(c => !c.IsDeleted)
+                .OrderBy(c => c.Priority).ThenBy(c => c.Name)
+                .Select(c => new EmployeeEmergencyContactDto(c.Id, c.Name, c.Relationship, c.Phone, c.MobilePhone, c.Notes, c.Priority))
+                .ToList());
+    }
+
+    private static int? ValidateDependentChildren(int? value)
+    {
+        if (value is { } v and (< 0 or > 30))
+        {
+            throw new Common.DomainValidationException("dependentChildren", "Het aantal kinderen ten laste moet tussen 0 en 30 liggen.");
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// Wholesale sync of the emergency-contact collection. When the request carries no
+    /// collection (older clients), the legacy single name/phone pair drives the priority-1
+    /// row instead; either way the legacy columns end up mirroring the priority-1 contact.
+    /// </summary>
+    private void SyncEmergencyContacts(Employee employee,
+        IReadOnlyList<EmployeeEmergencyContactInput>? contacts, string? legacyName, string? legacyPhone)
+    {
+        if (contacts is null)
+        {
+            // Legacy pair only: keep the priority-1 row aligned with it.
+            var primary = employee.EmergencyContacts.Where(c => !c.IsDeleted).OrderBy(c => c.Priority).FirstOrDefault();
+            var name = Trim(legacyName);
+            if (name is null)
+            {
+                return;
+            }
+
+            if (primary is null)
+            {
+                _dbContext.Set<EmployeeEmergencyContact>().Add(new EmployeeEmergencyContact
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = _tenantContext.TenantId,
+                    EmployeeId = employee.Id,
+                    Name = name,
+                    Phone = Trim(legacyPhone),
+                    Priority = 1,
+                });
+            }
+            else
+            {
+                primary.Name = name;
+                primary.Phone = Trim(legacyPhone);
+            }
+
+            return;
+        }
+
+        foreach (var input in contacts)
+        {
+            if (string.IsNullOrWhiteSpace(input.Name))
+            {
+                throw new Common.DomainValidationException("emergencyContacts", "Elke noodcontactpersoon heeft een naam nodig.");
+            }
+        }
+
+        var keptIds = contacts.Where(c => c.Id is not null).Select(c => c.Id!.Value).ToHashSet();
+        foreach (var removed in employee.EmergencyContacts.Where(c => !keptIds.Contains(c.Id)).ToList())
+        {
+            employee.EmergencyContacts.Remove(removed);
+            _dbContext.Remove(removed);
+        }
+
+        var byId = employee.EmergencyContacts.ToDictionary(c => c.Id);
+        foreach (var input in contacts)
+        {
+            if (input.Id is { } contactId && byId.TryGetValue(contactId, out var existing))
+            {
+                existing.Name = input.Name.Trim();
+                existing.Relationship = Trim(input.Relationship);
+                existing.Phone = Trim(input.Phone);
+                existing.MobilePhone = Trim(input.MobilePhone);
+                existing.Notes = Trim(input.Notes);
+                existing.Priority = Math.Max(1, input.Priority);
+            }
+            else
+            {
+                _dbContext.Set<EmployeeEmergencyContact>().Add(new EmployeeEmergencyContact
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = _tenantContext.TenantId,
+                    EmployeeId = employee.Id,
+                    Name = input.Name.Trim(),
+                    Relationship = Trim(input.Relationship),
+                    Phone = Trim(input.Phone),
+                    MobilePhone = Trim(input.MobilePhone),
+                    Notes = Trim(input.Notes),
+                    Priority = Math.Max(1, input.Priority),
+                });
+            }
+        }
+
+        // Legacy mirror: the priority-1 contact drives the historic single pair.
+        var first = contacts.OrderBy(c => c.Priority).FirstOrDefault();
+        employee.EmergencyContactName = first is null ? null : first.Name.Trim();
+        employee.EmergencyContactPhone = first is null ? null : (Trim(first.Phone) ?? Trim(first.MobilePhone));
     }
 
     private static string GenerateEmployeeNumber(Tenancy.Entities.TenantSettings? settings)
