@@ -114,6 +114,25 @@ public class PlanningConflictService : IPlanningConflictService
                     conflicts.Add(new(PlanningConflictCode.VehicleDoubleBooked, true,
                         $"Voertuig {vehicle.InternalNumber} is op {trip.TripDate:dd-MM-yyyy} al ingepland op rit {doubleBooked}."));
                 }
+
+                // Tachograph: overdue calibration is a warning (overrideable) on planning.
+                var tachoOverdue = await _dbContext.TachographCalibrations.AsNoTracking()
+                    .Where(c => c.TenantId == tenantId && c.VehicleId == vehicleId)
+                    .OrderByDescending(c => c.CalibrationDate)
+                    .Select(c => (DateOnly?)c.NextCalibrationDue)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (tachoOverdue is { } due && due < DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime))
+                {
+                    conflicts.Add(new(PlanningConflictCode.TachographOverdue, false,
+                        $"De tachograaf-ijking van {vehicle.InternalNumber} is vervallen ({due:dd-MM-yyyy})."));
+                }
+
+                // Driving-licence rank: the driver must hold a valid licence of at least the
+                // rank the vehicle requires (e.g. a CE tractor needs a CE driver).
+                if (trip.DriverId is { } licenceDriverId && vehicle.RequiredLicenceCode is { Length: > 0 } required)
+                {
+                    await EvaluateLicenceRankAsync(conflicts, licenceDriverId, vehicle.InternalNumber, required, cancellationToken);
+                }
             }
         }
 
@@ -190,6 +209,8 @@ public class PlanningConflictService : IPlanningConflictService
             PlanningConflictCode.VehicleNotOperational => (ConflictCategory.Resource, "Plan het onderhoud of kies een ander voertuig."),
             PlanningConflictCode.TrailerNotOperational => (ConflictCategory.Resource, "Plan het onderhoud of kies een andere oplegger."),
             PlanningConflictCode.DriverNotReady => (ConflictCategory.Qualification, "Werk de kwalificatie bij of kies een andere chauffeur."),
+            PlanningConflictCode.DriverLicenceInsufficient => (ConflictCategory.Qualification, "Kies een chauffeur met het juiste rijbewijs of een ander voertuig."),
+            PlanningConflictCode.TachographOverdue => (ConflictCategory.Document, "Laat de tachograaf opnieuw ijken of kies een ander voertuig."),
             PlanningConflictCode.OrderRequiresCrane => (ConflictCategory.Equipment, "Kies een voertuig met kraan of verplaats de opdracht."),
             PlanningConflictCode.OrderRequiresAdr => (ConflictCategory.Equipment, "Kies ADR-geschikt materieel of verplaats de opdracht."),
             PlanningConflictCode.CapacityExceeded => (ConflictCategory.Capacity, "Verdeel de opdrachten over meerdere ritten of kies groter materieel."),
@@ -201,9 +222,10 @@ public class PlanningConflictService : IPlanningConflictService
             PlanningConflictCode.DriverAbsent or PlanningConflictCode.DriverBlocked or PlanningConflictCode.DriverInactive
                 or PlanningConflictCode.DriverNotReady or PlanningConflictCode.DriverDoubleBooked
                 or PlanningConflictCode.DriverShiftOverlap or PlanningConflictCode.DriverTraining
+                or PlanningConflictCode.DriverLicenceInsufficient
                 => ("Driver", trip.DriverId),
             PlanningConflictCode.VehicleNotOperational or PlanningConflictCode.VehicleInactive
-                or PlanningConflictCode.VehicleDoubleBooked
+                or PlanningConflictCode.VehicleDoubleBooked or PlanningConflictCode.TachographOverdue
                 => ("Vehicle", trip.VehicleId),
             PlanningConflictCode.TrailerNotOperational or PlanningConflictCode.TrailerInactive
                 or PlanningConflictCode.TrailerDoubleBooked
@@ -352,6 +374,79 @@ public class PlanningConflictService : IPlanningConflictService
             conflicts.Add(new(PlanningConflictCode.CapacityCheckIncomplete, false,
                 $"Capaciteitscontrole onvolledig: {string.Join(" en ", missing)}.",
                 ConflictSeverity.Information));
+        }
+    }
+
+    /// <summary>Licence rank order (higher covers lower). Unknown codes rank 0.</summary>
+    private static int LicenceRank(string code) => code.Trim().ToUpperInvariant() switch
+    {
+        "B" => 1,
+        "C1" => 2,
+        "C" => 3,
+        "C1E" => 4,
+        "CE" => 5,
+        _ => 0,
+    };
+
+    private static readonly IReadOnlyDictionary<string, string> LicenceQualificationCodes = new Dictionary<string, string>
+    {
+        ["B"] = QualificationTypeCodes.DrivingLicenceB,
+        ["C"] = QualificationTypeCodes.DrivingLicenceC,
+        ["CE"] = QualificationTypeCodes.DrivingLicenceCE,
+    };
+
+    private async Task EvaluateLicenceRankAsync(
+        List<PlanningConflictDto> conflicts, Guid driverId, string vehicleNumber, string requiredCode, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var requiredRank = LicenceRank(requiredCode);
+        if (requiredRank == 0)
+        {
+            return;
+        }
+
+        var employeeId = await _dbContext.Drivers.AsNoTracking()
+            .Where(d => d.Id == driverId && d.TenantId == tenantId)
+            .Select(d => (Guid?)d.EmployeeId)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (employeeId is not { } empId)
+        {
+            return;
+        }
+
+        // Held licence qualifications that are not expired/rejected/suspended.
+        var warningDays = await _dbContext.TenantSettings.AsNoTracking()
+            .Where(s => s.TenantId == tenantId).Select(s => (int?)s.QualificationExpiryWarningDays)
+            .FirstOrDefaultAsync(cancellationToken) ?? DefaultExpiryWarningDays;
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+
+        var licenceTypeCodes = LicenceQualificationCodes.Values.ToList();
+        var licences = await _dbContext.EmployeeQualifications.AsNoTracking()
+            .Where(q => q.TenantId == tenantId && q.EmployeeId == empId)
+            .Join(_dbContext.QualificationTypes.AsNoTracking().Where(t => licenceTypeCodes.Contains(t.Code)),
+                q => q.QualificationTypeId, t => t.Id, (q, t) => new { Qualification = q, t.Code })
+            .ToListAsync(cancellationToken);
+
+        var highestHeldRank = 0;
+        foreach (var licence in licences)
+        {
+            var status = _statusCalculator.CalculateEffectiveStatus(licence.Qualification, today, warningDays);
+            if (status is QualificationStatus.Expired or QualificationStatus.Rejected or QualificationStatus.Suspended)
+            {
+                continue;
+            }
+
+            var code = LicenceQualificationCodes.FirstOrDefault(kv => kv.Value == licence.Code).Key;
+            if (code is not null)
+            {
+                highestHeldRank = Math.Max(highestHeldRank, LicenceRank(code));
+            }
+        }
+
+        if (highestHeldRank < requiredRank)
+        {
+            conflicts.Add(new(PlanningConflictCode.DriverLicenceInsufficient, true,
+                $"De chauffeur heeft geen geldig rijbewijs {requiredCode.ToUpperInvariant()} dat vereist is voor voertuig {vehicleNumber}."));
         }
     }
 

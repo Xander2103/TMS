@@ -29,6 +29,10 @@ public enum PlanningConflictCode
     CapacityExceeded,
     /// <summary>The capacity calculation is incomplete: orders without weight/volume data.</summary>
     CapacityCheckIncomplete,
+    /// <summary>The driver lacks the driving-licence rank the vehicle requires.</summary>
+    DriverLicenceInsufficient,
+    /// <summary>The vehicle's tachograph calibration is overdue.</summary>
+    TachographOverdue,
 }
 
 /// <summary>
