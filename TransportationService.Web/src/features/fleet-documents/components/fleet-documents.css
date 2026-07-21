@@ -58,6 +58,20 @@
   color: #dc2626;
 }
 
+.fleet-docs-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+  text-decoration: none;
+}
+
+.fleet-docs-file {
+  white-space: nowrap;
+}
+
+.fleet-docs-file-input {
+  display: none;
+}
+
 .fleet-docs-form {
   display: flex;
   flex-direction: column;

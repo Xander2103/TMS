@@ -6,6 +6,8 @@ export type FleetDocumentType =
   | 'CraneInspection'
   | 'RefrigerationCertificate'
   | 'AdrCertificate'
+  | 'LeasingContract'
+  | 'TachographCalibration'
   | 'Other'
 
 export type FleetDocumentStatus = 'NoExpiry' | 'Valid' | 'ExpiringSoon' | 'Expired'
@@ -18,6 +20,8 @@ export const FLEET_DOCUMENT_TYPE_LABELS: Record<FleetDocumentType, string> = {
   CraneInspection: 'Kraankeuring',
   RefrigerationCertificate: 'Koelcertificaat',
   AdrCertificate: 'ADR-certificaat',
+  LeasingContract: 'Leasingcontract',
+  TachographCalibration: 'Tachograafijking',
   Other: 'Overig',
 }
 
@@ -42,6 +46,8 @@ export interface FleetDocument {
   warningDays: number | null
   status: FleetDocumentStatus
   hasAttachment: boolean
+  fileName: string | null
+  issuingAuthority: string | null
   notes: string | null
 }
 
@@ -52,6 +58,7 @@ export interface FleetDocumentInput {
   issueDate: string | null
   expiryDate: string | null
   warningDays: number | null
+  issuingAuthority: string | null
   notes: string | null
 }
 

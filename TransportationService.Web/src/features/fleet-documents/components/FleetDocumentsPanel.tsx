@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -9,8 +9,12 @@ import { useAuth } from '../../auth/authContextValue'
 import {
   createFleetDocument,
   deleteFleetDocument,
+  deleteFleetDocumentFile,
+  downloadFleetDocumentFile,
+  FLEET_DOCUMENT_ACCEPT,
   listFleetDocuments,
   updateFleetDocument,
+  uploadFleetDocumentFile,
   type FleetDocumentOwnerType,
 } from '../api/fleetDocumentsApi'
 import {
@@ -38,6 +42,7 @@ const EMPTY_FORM: FleetDocumentInput = {
   issueDate: null,
   expiryDate: null,
   warningDays: null,
+  issuingAuthority: null,
   notes: null,
 }
 
@@ -98,6 +103,7 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
       issueDate: doc.issueDate,
       expiryDate: doc.expiryDate,
       warningDays: doc.warningDays,
+      issuingAuthority: doc.issuingAuthority,
       notes: doc.notes,
     })
     setFormError(null)
@@ -142,6 +148,52 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
     }
   }
 
+  // Attachment upload/replace goes through a hidden file input, keyed to the row being uploaded.
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [uploadTargetId, setUploadTargetId] = useState<string | null>(null)
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
+
+  function pickFile(docId: string) {
+    setUploadTargetId(docId)
+    fileInputRef.current?.click()
+  }
+
+  async function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !uploadTargetId) return
+    const docId = uploadTargetId
+    setUploadTargetId(null)
+    setUploadingId(docId)
+    try {
+      await uploadFleetDocumentFile(docId, file)
+      showSuccess('Bestand geüpload.')
+      setReloadToken((t) => t + 1)
+    } catch {
+      showError('Het bestand kon niet worden geüpload (max. 10 MB, pdf/jpg/png).')
+    } finally {
+      setUploadingId(null)
+    }
+  }
+
+  async function handleDownload(doc: FleetDocument) {
+    try {
+      await downloadFleetDocumentFile(doc.id, doc.fileName ?? 'document')
+    } catch {
+      showError('Het bestand kon niet worden gedownload.')
+    }
+  }
+
+  async function handleRemoveFile(doc: FleetDocument) {
+    try {
+      await deleteFleetDocumentFile(doc.id)
+      showSuccess('Bestand verwijderd.')
+      setReloadToken((t) => t + 1)
+    } catch {
+      showError('Het bestand kon niet worden verwijderd.')
+    }
+  }
+
   return (
     <section className="fleet-docs">
       <div className="fleet-docs-header">
@@ -168,6 +220,7 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
               <th>Uitgifte</th>
               <th>Vervaldatum</th>
               <th>Status</th>
+              <th>Bestand</th>
               <th aria-label="Acties" />
             </tr>
           </thead>
@@ -180,6 +233,31 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
                 <td>{doc.expiryDate ?? '—'}</td>
                 <td>
                   <Badge tone={STATUS_TONE[doc.status]}>{FLEET_DOCUMENT_STATUS_LABELS[doc.status]}</Badge>
+                </td>
+                <td className="fleet-docs-file">
+                  {doc.hasAttachment ? (
+                    <>
+                      <button type="button" className="fleet-docs-link" onClick={() => handleDownload(doc)}>
+                        Downloaden
+                      </button>
+                      {hasPermission('fleet_documents.edit') && (
+                        <button type="button" className="fleet-docs-link" onClick={() => pickFile(doc.id)} disabled={uploadingId === doc.id}>
+                          {uploadingId === doc.id ? 'Bezig…' : 'Vervangen'}
+                        </button>
+                      )}
+                      {hasPermission('fleet_documents.edit') && (
+                        <button type="button" className="fleet-docs-link fleet-docs-link-danger" onClick={() => handleRemoveFile(doc)}>
+                          Wissen
+                        </button>
+                      )}
+                    </>
+                  ) : hasPermission('fleet_documents.edit') ? (
+                    <button type="button" className="fleet-docs-link" onClick={() => pickFile(doc.id)} disabled={uploadingId === doc.id}>
+                      {uploadingId === doc.id ? 'Bezig…' : 'Uploaden'}
+                    </button>
+                  ) : (
+                    '—'
+                  )}
                 </td>
                 <td className="fleet-docs-actions">
                   {hasPermission('fleet_documents.edit') && (
@@ -255,6 +333,15 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
                 maxLength={100}
               />
             </FormField>
+            <FormField label="Uitgevende instantie" htmlFor="fd-authority">
+              <input
+                id="fd-authority"
+                value={form.issuingAuthority ?? ''}
+                onChange={(e) => set('issuingAuthority', e.target.value || null)}
+                disabled={saving}
+                maxLength={150}
+              />
+            </FormField>
             <div className="fleet-docs-form-row">
               <FormField label="Uitgiftedatum" htmlFor="fd-issue">
                 <input
@@ -313,6 +400,14 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
           onCancel={() => setDeleteTarget(null)}
         />
       )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={FLEET_DOCUMENT_ACCEPT}
+        className="fleet-docs-file-input"
+        onChange={handleFileSelected}
+      />
     </section>
   )
 }
