@@ -13,10 +13,17 @@ public class CustomerContactConfiguration : IEntityTypeConfiguration<CustomerCon
 
         builder.Property(c => c.FirstName).IsRequired().HasMaxLength(100);
         builder.Property(c => c.LastName).IsRequired().HasMaxLength(100);
+        builder.Property(c => c.DisplayName).HasMaxLength(150);
+        builder.Property(c => c.Nickname).HasMaxLength(100);
         builder.Property(c => c.Role).HasMaxLength(100);
         builder.Property(c => c.Email).HasMaxLength(250);
         builder.Property(c => c.PhoneNumber).HasMaxLength(30);
+        builder.Property(c => c.MobilePhone).HasMaxLength(30);
+        builder.Property(c => c.PreferredLanguageCode).HasMaxLength(10);
         builder.Property(c => c.Notes).HasMaxLength(1000);
+
+        builder.HasOne<ContactDepartment>().WithMany()
+            .HasForeignKey(c => c.DepartmentId).OnDelete(Microsoft.EntityFrameworkCore.DeleteBehavior.SetNull);
 
         builder.HasIndex(c => new { c.TenantId, c.CustomerId });
 

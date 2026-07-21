@@ -53,6 +53,10 @@ public static class PermissionCodes
     public const string CustomerCategoriesView = "customer_categories.view";
     public const string CustomerCategoriesManage = "customer_categories.manage";
 
+    // --- Customer-contact departments (lookup) ---
+    public const string ContactDepartmentsView = "contact_departments.view";
+    public const string ContactDepartmentsManage = "contact_departments.manage";
+
     // --- Reference data (countries, languages, nationalities, contract types) ---
     public const string ReferenceDataView = "reference_data.view";
     public const string ReferenceDataManage = "reference_data.manage";
@@ -65,6 +69,7 @@ public static class PermissionCodes
     public const string CustomersDeactivate = "customers.deactivate";
     public const string CustomersImport = "customers.import";
     public const string CustomersOverrideNumber = "customers.override_number";
+    public const string CustomersManageFiscal = "customers.manage_fiscal";
 
     // --- Locations (sites/addresses) ---
     public const string LocationsView = "locations.view";
@@ -300,6 +305,8 @@ public static class PermissionCodes
         (DriverCategoriesManage, "driver_categories", "manage", "Chauffeurcategorieën beheren"),
         (CustomerCategoriesView, "customer_categories", "view", "Klantcategorieën bekijken"),
         (CustomerCategoriesManage, "customer_categories", "manage", "Klantcategorieën beheren"),
+        (ContactDepartmentsView, "contact_departments", "view", "Contactafdelingen bekijken"),
+        (ContactDepartmentsManage, "contact_departments", "manage", "Contactafdelingen beheren"),
         (ReferenceDataView, "reference_data", "view", "Referentiegegevens bekijken"),
         (ReferenceDataManage, "reference_data", "manage", "Referentiegegevens beheren"),
         (CustomersView, "customers", "view", "Klanten bekijken"),
@@ -309,6 +316,7 @@ public static class PermissionCodes
         (CustomersDeactivate, "customers", "deactivate", "Klanten activeren/deactiveren"),
         (CustomersImport, "customers", "import", "Klanten importeren uit Excel"),
         (CustomersOverrideNumber, "customers", "override_number", "Klantnummers handmatig wijzigen"),
+        (CustomersManageFiscal, "customers", "manage_fiscal", "Fiscale, Peppol- en bankgegevens van klanten beheren"),
         (LocationsView, "locations", "view", "Locaties bekijken"),
         (LocationsCreate, "locations", "create", "Locaties aanmaken"),
         (LocationsEdit, "locations", "edit", "Locaties bewerken"),

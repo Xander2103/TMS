@@ -125,6 +125,9 @@ builder.Services.AddScoped(typeof(TransportationService.Api.Common.Lookups.ILook
 // Partners
 builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerImportService,
     TransportationService.Api.Modules.Partners.Services.CustomerImportService>();
+// Official company-registry seam: no provider configured by default (no scraping).
+builder.Services.AddSingleton<TransportationService.Api.Modules.Partners.Services.ICompanyRegistryProvider,
+    TransportationService.Api.Modules.Partners.Services.NullCompanyRegistryProvider>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerService,
     TransportationService.Api.Modules.Partners.Services.CustomerService>();
 

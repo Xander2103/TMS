@@ -10,9 +10,9 @@ public interface ICustomerService
 
     Task<CustomerDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<CustomerDetailDto> CreateAsync(CreateCustomerRequest request, CancellationToken cancellationToken);
+    Task<CustomerDetailDto> CreateAsync(CreateCustomerRequest request, CancellationToken cancellationToken, bool canManageFiscal = true);
 
-    Task<CustomerDetailDto?> UpdateAsync(Guid id, UpdateCustomerRequest request, CancellationToken cancellationToken);
+    Task<CustomerDetailDto?> UpdateAsync(Guid id, UpdateCustomerRequest request, CancellationToken cancellationToken, bool canManageFiscal = true);
 
     /// <summary>Manual customer-number change (customers.override_number + reason; audited).</summary>
     Task<CustomerDetailDto?> ChangeNumberAsync(Guid id, ChangeCustomerNumberRequest request, CancellationToken cancellationToken);

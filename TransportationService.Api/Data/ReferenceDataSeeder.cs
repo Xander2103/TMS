@@ -30,6 +30,11 @@ public static class ReferenceDataSeeder
             [("PLAN", "Planning"), ("MAG", "Magazijn"), ("WERK", "Werkplaats"), ("ADMIN", "Administratie"), ("DIR", "Directie")],
             cancellationToken);
 
+        await SeedIfEmptyAsync<Modules.Partners.Entities.ContactDepartment>(dbContext, tenantId,
+            [("PLAN", "Planning"), ("BOEK", "Boekhouding"), ("AANK", "Aankoop"), ("MAG", "Magazijn"),
+             ("DIR", "Directie"), ("KLNT", "Klantendienst"), ("CLAIM", "Claims")],
+            cancellationToken);
+
         await SeedIfEmptyAsync<JobFunction>(dbContext, tenantId,
             [("CHAUF", "Chauffeur"), ("CHAUF-B", "Chauffeur B"), ("CHAUF-C", "Chauffeur C"), ("CHAUF-CE", "Chauffeur CE"),
              ("PLAN", "Planner"), ("DISP", "Dispatcher"), ("MAGM", "Magazijnmedewerker"),

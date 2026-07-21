@@ -17,6 +17,10 @@ public enum LocationType
     UnloadingLocation,
     ParkingLocation,
     Office,
+    RegisteredOffice,
+    AdministrativeAddress,
+    BillingAddress,
+    ReturnsAddress,
 }
 
 /// <summary>
@@ -73,6 +77,9 @@ public class Location : AuditableTenantEntity
 
     /// <inheritdoc cref="IsDefaultLoadingLocation"/>
     public bool IsDefaultUnloadingLocation { get; set; }
+
+    /// <inheritdoc cref="IsDefaultLoadingLocation"/>
+    public bool IsDefaultBillingLocation { get; set; }
 
     public string? Notes { get; set; }
 }

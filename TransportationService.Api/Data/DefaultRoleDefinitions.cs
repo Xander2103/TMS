@@ -32,6 +32,7 @@ public static class DefaultRoleDefinitions
         PermissionCodes.TrailerCategoriesView,
         PermissionCodes.DriverCategoriesView,
         PermissionCodes.CustomerCategoriesView,
+        PermissionCodes.ContactDepartmentsView,
         PermissionCodes.ReferenceDataView,
     ];
 
@@ -53,6 +54,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.TripCostsView,
                 PermissionCodes.MessagingManage, PermissionCodes.MessageTemplatesManage, PermissionCodes.MessagesSend,
                 PermissionCodes.CustomersCreate, PermissionCodes.CustomersEdit, PermissionCodes.CustomersDeactivate,
+                PermissionCodes.CustomersManageFiscal,
                 PermissionCodes.LocationsCreate, PermissionCodes.LocationsEdit,
                 PermissionCodes.EmployeeDocumentsView,
                 PermissionCodes.PackagesView, PermissionCodes.PackagesCreate, PermissionCodes.PackagesManage,
@@ -68,6 +70,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OperationsView, PermissionCodes.OperationsManageAlerts,
                 PermissionCodes.WarehouseSchedule, PermissionCodes.WarehouseConflictOverride,
                 PermissionCodes.LegalEntitiesView,
+                PermissionCodes.ContactDepartmentsManage,
             ]),
 
         new("dispatcher", "Dispatcher",
@@ -143,7 +146,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OrdersView, PermissionCodes.OrdersExport,
                 PermissionCodes.PodView,
                 PermissionCodes.CustomersView, PermissionCodes.CustomersEdit,
-                PermissionCodes.CustomerCategoriesView, PermissionCodes.ReferenceDataView,
+                PermissionCodes.CustomerCategoriesView, PermissionCodes.ContactDepartmentsView,
+                PermissionCodes.ContactDepartmentsManage, PermissionCodes.ReferenceDataView,
                 PermissionCodes.CompanySettingsView,
                 PermissionCodes.TripCostsView, PermissionCodes.ProfitabilityView,
                 PermissionCodes.KpiView, PermissionCodes.KpiExport,
@@ -155,6 +159,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.LegalEntitiesView, PermissionCodes.LegalEntitiesManage,
                 PermissionCodes.InvoicesOverrideNumber,
                 PermissionCodes.CustomersImport, PermissionCodes.CustomersOverrideNumber,
+                PermissionCodes.CustomersManageFiscal,
             ]),
 
         new("hr", "HR",
@@ -169,6 +174,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeDocumentsView, PermissionCodes.MessagesSend,
                 PermissionCodes.QualificationTypesView,
                 PermissionCodes.DepartmentsView, PermissionCodes.JobFunctionsView,
+                PermissionCodes.ContactDepartmentsView,
                 PermissionCodes.ReportsView,
             ]),
 

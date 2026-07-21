@@ -225,20 +225,30 @@ public static class DefaultRoleUpgrades
                 ["planner"] =
                 [
                     PermissionCodes.LegalEntitiesView,
+                    PermissionCodes.ContactDepartmentsView, PermissionCodes.ContactDepartmentsManage,
+                    PermissionCodes.CustomersManageFiscal,
                 ],
                 ["dispatcher"] =
                 [
                     PermissionCodes.LegalEntitiesView,
+                    PermissionCodes.ContactDepartmentsView,
                 ],
                 ["management"] =
                 [
                     PermissionCodes.LegalEntitiesView,
+                    PermissionCodes.ContactDepartmentsView,
+                ],
+                ["hr"] =
+                [
+                    PermissionCodes.ContactDepartmentsView,
                 ],
                 ["boekhouding"] =
                 [
                     PermissionCodes.LegalEntitiesView, PermissionCodes.LegalEntitiesManage,
                     PermissionCodes.InvoicesOverrideNumber,
                     PermissionCodes.CustomersImport, PermissionCodes.CustomersOverrideNumber,
+                    PermissionCodes.ContactDepartmentsView, PermissionCodes.ContactDepartmentsManage,
+                    PermissionCodes.CustomersManageFiscal,
                 ],
             }),
     ];

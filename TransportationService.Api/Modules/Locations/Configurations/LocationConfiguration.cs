@@ -53,6 +53,9 @@ public class LocationConfiguration : IEntityTypeConfiguration<Location>
         builder.HasIndex(l => new { l.TenantId, l.CustomerId }, "IX_locations_default_unloading_per_customer")
             .IsUnique()
             .HasFilter("\"IsDefaultUnloadingLocation\" = true AND \"CustomerId\" IS NOT NULL AND \"IsDeleted\" = false");
+        builder.HasIndex(l => new { l.TenantId, l.CustomerId }, "IX_locations_default_billing_per_customer")
+            .IsUnique()
+            .HasFilter("\"IsDefaultBillingLocation\" = true AND \"CustomerId\" IS NOT NULL AND \"IsDeleted\" = false");
 
         builder.HasQueryFilter(l => !l.IsDeleted);
     }

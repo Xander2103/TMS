@@ -145,6 +145,7 @@ public class TransportationDbContext : DbContext
     // Partners
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();
+    public DbSet<ContactDepartment> ContactDepartments => Set<ContactDepartment>();
 
     // Reference data
     public DbSet<Country> Countries => Set<Country>();

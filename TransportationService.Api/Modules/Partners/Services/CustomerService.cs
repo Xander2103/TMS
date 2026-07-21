@@ -88,9 +88,13 @@ public class CustomerService : ICustomerService
         return MapToDetail(customer, categoryName);
     }
 
-    public async Task<CustomerDetailDto> CreateAsync(CreateCustomerRequest request, CancellationToken cancellationToken)
+    public async Task<CustomerDetailDto> CreateAsync(CreateCustomerRequest request, CancellationToken cancellationToken, bool canManageFiscal = true)
     {
         await EnsureCategoryInTenantAsync(request.CategoryId, cancellationToken);
+        if (!canManageFiscal && AnyFiscalValueProvided(request))
+        {
+            throw new DomainValidationException("Je hebt geen toestemming om fiscale of bankgegevens in te voeren (customers.manage_fiscal).");
+        }
 
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
@@ -117,6 +121,9 @@ public class CustomerService : ICustomerService
             Notes = Trim(request.Notes),
             IsActive = true,
         };
+        ApplyBankAndIdentityFields(customer,
+            request.Nickname, request.CompanyNumber, request.CurrencyCode,
+            request.Iban, request.Bic, request.BankName, request.BankAccountNumber);
         await ApplyVatAndPeppolProfileAsync(customer,
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
@@ -138,6 +145,7 @@ public class CustomerService : ICustomerService
                 throw new DomainValidationException("initialContact.lastName", "Achternaam van de contactpersoon is verplicht.");
             }
 
+            await EnsureContactDepartmentInTenantAsync(contactRequest.DepartmentId, cancellationToken);
             initialContact = new CustomerContact
             {
                 Id = Guid.NewGuid(),
@@ -145,10 +153,16 @@ public class CustomerService : ICustomerService
                 CustomerId = customer.Id,
                 FirstName = contactRequest.FirstName.Trim(),
                 LastName = contactRequest.LastName.Trim(),
+                DisplayName = Trim(contactRequest.DisplayName),
+                Nickname = Trim(contactRequest.Nickname),
                 Role = Trim(contactRequest.Role),
+                DepartmentId = contactRequest.DepartmentId,
                 Email = Trim(contactRequest.Email),
                 PhoneNumber = Trim(contactRequest.PhoneNumber),
+                MobilePhone = Trim(contactRequest.MobilePhone),
+                PreferredLanguageCode = Trim(contactRequest.PreferredLanguageCode)?.ToLowerInvariant(),
                 IsPrimary = contactRequest.IsPrimary,
+                IsActive = contactRequest.IsActive,
                 Notes = Trim(contactRequest.Notes),
             };
             _dbContext.CustomerContacts.Add(initialContact);
@@ -193,7 +207,7 @@ public class CustomerService : ICustomerService
         return MapToDetail(customer, categoryName);
     }
 
-    public async Task<CustomerDetailDto?> UpdateAsync(Guid id, UpdateCustomerRequest request, CancellationToken cancellationToken)
+    public async Task<CustomerDetailDto?> UpdateAsync(Guid id, UpdateCustomerRequest request, CancellationToken cancellationToken, bool canManageFiscal = true)
     {
         var customer = await TenantScoped().Include(c => c.Contacts).FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
         if (customer is null)
@@ -204,6 +218,11 @@ public class CustomerService : ICustomerService
         await EnsureCategoryInTenantAsync(request.CategoryId, cancellationToken);
 
         var oldValues = new { customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber };
+
+        if (!canManageFiscal && FiscalValuesChanged(customer, request))
+        {
+            throw new DomainValidationException("Je hebt geen toestemming om fiscale of bankgegevens te wijzigen (customers.manage_fiscal).");
+        }
 
         customer.Name = request.Name.Trim();
         customer.LegalName = Trim(request.LegalName);
@@ -222,6 +241,9 @@ public class CustomerService : ICustomerService
         customer.DefaultLanguageCode = Trim(request.DefaultLanguageCode);
         customer.Notes = Trim(request.Notes);
         customer.IsActive = request.IsActive;
+        ApplyBankAndIdentityFields(customer,
+            request.Nickname, request.CompanyNumber, request.CurrencyCode,
+            request.Iban, request.Bic, request.BankName, request.BankAccountNumber);
         await ApplyVatAndPeppolProfileAsync(customer,
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
@@ -345,6 +367,8 @@ public class CustomerService : ICustomerService
             return null;
         }
 
+        await EnsureContactDepartmentInTenantAsync(request.DepartmentId, cancellationToken);
+
         var contact = new CustomerContact
         {
             Id = Guid.NewGuid(),
@@ -352,10 +376,16 @@ public class CustomerService : ICustomerService
             CustomerId = customerId,
             FirstName = request.FirstName.Trim(),
             LastName = request.LastName.Trim(),
+            DisplayName = Trim(request.DisplayName),
+            Nickname = Trim(request.Nickname),
             Role = Trim(request.Role),
+            DepartmentId = request.DepartmentId,
             Email = Trim(request.Email),
             PhoneNumber = Trim(request.PhoneNumber),
+            MobilePhone = Trim(request.MobilePhone),
+            PreferredLanguageCode = Trim(request.PreferredLanguageCode)?.ToLowerInvariant(),
             IsPrimary = request.IsPrimary,
+            IsActive = request.IsActive,
             Notes = Trim(request.Notes),
         };
 
@@ -385,12 +415,20 @@ public class CustomerService : ICustomerService
             return null;
         }
 
+        await EnsureContactDepartmentInTenantAsync(request.DepartmentId, cancellationToken);
+
         contact.FirstName = request.FirstName.Trim();
         contact.LastName = request.LastName.Trim();
+        contact.DisplayName = Trim(request.DisplayName);
+        contact.Nickname = Trim(request.Nickname);
         contact.Role = Trim(request.Role);
+        contact.DepartmentId = request.DepartmentId;
         contact.Email = Trim(request.Email);
         contact.PhoneNumber = Trim(request.PhoneNumber);
+        contact.MobilePhone = Trim(request.MobilePhone);
+        contact.PreferredLanguageCode = Trim(request.PreferredLanguageCode)?.ToLowerInvariant();
         contact.IsPrimary = request.IsPrimary;
+        contact.IsActive = request.IsActive;
         contact.Notes = Trim(request.Notes);
 
         if (contact.IsPrimary)
@@ -512,8 +550,67 @@ public class CustomerService : ICustomerService
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static bool AnyFiscalValueProvided(CreateCustomerRequest r) =>
+        !string.IsNullOrWhiteSpace(r.VatNumber) || r.VatTreatment != VatTreatment.DomesticVat
+        || r.DefaultVatRatePercent is not null || !string.IsNullOrWhiteSpace(r.VatCountryCode)
+        || !string.IsNullOrWhiteSpace(r.PeppolId) || !string.IsNullOrWhiteSpace(r.PeppolScheme)
+        || !string.IsNullOrWhiteSpace(r.CompanyNumber) || !string.IsNullOrWhiteSpace(r.Iban)
+        || !string.IsNullOrWhiteSpace(r.Bic) || !string.IsNullOrWhiteSpace(r.BankAccountNumber)
+        || (!string.IsNullOrWhiteSpace(r.CurrencyCode) && !string.Equals(r.CurrencyCode.Trim(), "EUR", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Round-trip comparison: the form echoes normalized values, so plain equality suffices.</summary>
+    private static bool FiscalValuesChanged(Customer c, UpdateCustomerRequest r) =>
+        !string.Equals(Trim(r.VatNumber), c.VatNumber, StringComparison.OrdinalIgnoreCase)
+        || r.VatTreatment != c.VatTreatment
+        || r.DefaultVatRatePercent != c.DefaultVatRatePercent
+        || !string.Equals(Trim(r.VatCountryCode), c.VatCountryCode, StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(Trim(r.PeppolId), c.PeppolId, StringComparison.Ordinal)
+        || !string.Equals(Trim(r.PeppolScheme), c.PeppolScheme, StringComparison.Ordinal)
+        || !string.Equals(Trim(r.CompanyNumber), c.CompanyNumber, StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(Trim(r.Iban)?.Replace(" ", string.Empty), c.Iban, StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(Trim(r.Bic), c.Bic, StringComparison.OrdinalIgnoreCase)
+        || !string.Equals(Trim(r.BankAccountNumber), c.BankAccountNumber, StringComparison.OrdinalIgnoreCase)
+        || (!string.IsNullOrWhiteSpace(r.CurrencyCode)
+            && !string.Equals(r.CurrencyCode.Trim(), c.CurrencyCode, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Nickname/company-number/currency/bank fields (all optional; validated).</summary>
+    private static void ApplyBankAndIdentityFields(Customer customer,
+        string? nickname, string? companyNumber, string? currencyCode,
+        string? iban, string? bic, string? bankName, string? bankAccountNumber)
+    {
+        customer.Nickname = Trim(nickname);
+        customer.CompanyNumber = Trim(companyNumber);
+
+        var currency = Trim(currencyCode)?.ToUpperInvariant() ?? customer.CurrencyCode;
+        if (string.IsNullOrEmpty(currency))
+        {
+            currency = "EUR";
+        }
+
+        if (currency.Length != 3 || !currency.All(char.IsAsciiLetter))
+        {
+            throw new DomainValidationException("currencyCode", "Een geldige valutacode van 3 letters is verplicht (bv. EUR).");
+        }
+
+        customer.CurrencyCode = currency;
+        customer.Iban = Common.Validation.BankingValidators.NormalizeIban(iban);
+        customer.Bic = Common.Validation.BankingValidators.NormalizeBic(bic);
+        customer.BankName = Trim(bankName);
+        customer.BankAccountNumber = Trim(bankAccountNumber);
+    }
+
+    private async Task EnsureContactDepartmentInTenantAsync(Guid? departmentId, CancellationToken cancellationToken)
+    {
+        if (departmentId is { } id && !await _dbContext.Set<ContactDepartment>()
+                .AnyAsync(d => d.TenantId == _tenantContext.TenantId && d.Id == id, cancellationToken))
+        {
+            throw new DomainValidationException("departmentId", "De gekozen afdeling bestaat niet.");
+        }
+    }
+
     private static CustomerContactDto MapContact(CustomerContact c) =>
-        new(c.Id, c.FirstName, c.LastName, c.Role, c.Email, c.PhoneNumber, c.IsPrimary, c.Notes);
+        new(c.Id, c.FirstName, c.LastName, c.Role, c.Email, c.PhoneNumber, c.IsPrimary, c.Notes,
+            c.DisplayName, c.Nickname, c.MobilePhone, c.DepartmentId, c.PreferredLanguageCode, c.IsActive);
 
     private static CustomerDetailDto MapToDetail(Customer c, string? categoryName) => new(
         c.Id, c.CustomerNumber, c.Name, c.LegalName, c.VatNumber, c.CategoryId, categoryName,
@@ -524,5 +621,7 @@ public class CustomerService : ICustomerService
         c.VatTreatment, c.DefaultVatRatePercent, c.VatCountryCode, c.VatNotes,
         c.PeppolId, c.PeppolScheme, c.InvoiceLanguageCode,
         c.PurchaseOrderRequired, c.SignedDeliveryNoteRequired, c.CustomerReferenceRequired,
-        c.Contacts.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.LastName).Select(MapContact).ToList());
+        c.Contacts.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.LastName).Select(MapContact).ToList(),
+        c.Nickname, c.CompanyNumber, c.CurrencyCode,
+        c.Iban, c.Bic, c.BankName, c.BankAccountNumber);
 }

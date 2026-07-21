@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Partners.Dtos;
 using TransportationService.Api.Modules.Partners.Services;
 
@@ -12,10 +13,47 @@ namespace TransportationService.Api.Modules.Partners.Controllers;
 public class CustomersController : ControllerBase
 {
     private readonly ICustomerService _customerService;
+    private readonly ICurrentUserContext _currentUser;
+    private readonly IPermissionAuthorizationService _authorization;
+    private readonly ICompanyRegistryProvider _registryProvider;
 
-    public CustomersController(ICustomerService customerService)
+    public CustomersController(ICustomerService customerService, ICurrentUserContext currentUser,
+        IPermissionAuthorizationService authorization, ICompanyRegistryProvider registryProvider)
     {
         _customerService = customerService;
+        _currentUser = currentUser;
+        _authorization = authorization;
+        _registryProvider = registryProvider;
+    }
+
+    /// <summary>Fiscal/Peppol/bank mutations are gated on customers.manage_fiscal.</summary>
+    private async Task<bool> HasFiscalAccessAsync(CancellationToken cancellationToken) =>
+        _currentUser.CurrentUserId is { } userId
+        && await _authorization.UserHasPermissionAsync(userId, PermissionCodes.CustomersManageFiscal, cancellationToken);
+
+    /// <summary>The coherent VAT-treatment catalog (labels, rates, legal texts) for the UI.</summary>
+    [HttpGet("vat-treatments")]
+    [RequirePermission(PermissionCodes.CustomersView)]
+    public ActionResult<IReadOnlyList<VatTreatmentCatalog.VatTreatmentInfo>> VatTreatments()
+    {
+        return Ok(VatTreatmentCatalog.All);
+    }
+
+    /// <summary>
+    /// Official company-registry lookup. Without a configured provider this reports
+    /// configured=false so the UI can show its manual-entry fallback state.
+    /// </summary>
+    [HttpPost("registry-lookup")]
+    [RequirePermission(PermissionCodes.CustomersCreate, PermissionCodes.CustomersEdit)]
+    public async Task<IActionResult> RegistryLookup(CompanyRegistryLookupRequest request, CancellationToken cancellationToken)
+    {
+        if (!_registryProvider.IsConfigured)
+        {
+            return Ok(new { configured = false, result = (CompanyRegistryResult?)null });
+        }
+
+        var result = await _registryProvider.LookupAsync(request.Number?.Trim() ?? string.Empty, cancellationToken);
+        return Ok(new { configured = true, result });
     }
 
     [HttpGet]
@@ -49,7 +87,7 @@ public class CustomersController : ControllerBase
             return BadRequest(new { message = "Naam is verplicht." });
         }
 
-        var created = await _customerService.CreateAsync(request, cancellationToken);
+        var created = await _customerService.CreateAsync(request, cancellationToken, await HasFiscalAccessAsync(cancellationToken));
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
@@ -62,7 +100,7 @@ public class CustomersController : ControllerBase
             return BadRequest(new { message = "Naam is verplicht." });
         }
 
-        var updated = await _customerService.UpdateAsync(id, request, cancellationToken);
+        var updated = await _customerService.UpdateAsync(id, request, cancellationToken, await HasFiscalAccessAsync(cancellationToken));
         return updated is null ? NotFound() : Ok(updated);
     }
 

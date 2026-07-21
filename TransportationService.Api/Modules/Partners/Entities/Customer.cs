@@ -11,7 +11,14 @@ public class Customer : AuditableTenantEntity
     public string CustomerNumber { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string? LegalName { get; set; }
+
+    /// <summary>Short/nickname used internally (e.g. "AB Log" for "AB Logistics Belgium NV").</summary>
+    public string? Nickname { get; set; }
+
     public string? VatNumber { get; set; }
+
+    /// <summary>Company (enterprise) number, e.g. Belgian KBO 0xxx.xxx.xxx.</summary>
+    public string? CompanyNumber { get; set; }
 
     public Guid? CategoryId { get; set; }
 
@@ -31,6 +38,14 @@ public class Customer : AuditableTenantEntity
     public string? InvoiceEmail { get; set; }
     public int PaymentTermDays { get; set; } = 30;
     public string? DefaultLanguageCode { get; set; }
+    public string CurrencyCode { get; set; } = "EUR";
+
+    // Banking (optional; for direct debits / refunds)
+    public string? Iban { get; set; }
+    public string? Bic { get; set; }
+    public string? BankName { get; set; }
+    /// <summary>Non-IBAN account reference for customers outside the SEPA zone.</summary>
+    public string? BankAccountNumber { get; set; }
 
     // VAT profile. Treatment (how VAT is applied) is deliberately separate from the default
     // rate (which percentage), and the rate is nullable: null = use the tenant default.

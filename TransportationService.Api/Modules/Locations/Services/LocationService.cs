@@ -69,7 +69,7 @@ public class LocationService : ILocationService
                         select new LocationListItemDto(
                             l.Id, l.Code, l.Name, l.Type, l.City, l.CountryCode,
                             c != null ? c.Name : null, l.IsActive,
-                            l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation);
+                            l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation, l.IsDefaultBillingLocation);
 
         return await projected.ToPagedResultAsync(page, dto => dto, cancellationToken);
     }
@@ -88,7 +88,7 @@ public class LocationService : ILocationService
             .ThenBy(l => l.Name)
             .Select(l => new LocationOptionDto(
                 l.Id, l.Code, l.Name, l.Type, l.City,
-                l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation))
+                l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation, l.IsDefaultBillingLocation))
             .ToListAsync(cancellationToken);
     }
 
@@ -136,7 +136,7 @@ public class LocationService : ILocationService
         // Transaction: default-demotion runs as an immediate UPDATE and must roll back when the
         // insert itself fails.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, cancellationToken);
+        await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, request.IsDefaultBillingLocation, cancellationToken);
 
         _dbContext.Add(location);
         try
@@ -194,7 +194,7 @@ public class LocationService : ILocationService
             request.AlfapassRequired, request.AppointmentRequired, request.CustomerId, request.Notes);
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, cancellationToken);
+        await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, request.IsDefaultBillingLocation, cancellationToken);
 
         try
         {
@@ -242,13 +242,13 @@ public class LocationService : ILocationService
             return LocationOperationResult.NotFound;
         }
 
-        var before = new { location.IsDefaultLoadingLocation, location.IsDefaultUnloadingLocation };
+        var before = new { location.IsDefaultLoadingLocation, location.IsDefaultUnloadingLocation, location.IsDefaultBillingLocation };
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, cancellationToken);
+        await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, request.IsDefaultBillingLocation, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, location.Id.ToString(), "DefaultsChanged", before,
-            new { location.IsDefaultLoadingLocation, location.IsDefaultUnloadingLocation }, cancellationToken);
+            new { location.IsDefaultLoadingLocation, location.IsDefaultUnloadingLocation, location.IsDefaultBillingLocation }, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return LocationOperationResult.Success(await MapToDetailAsync(location, cancellationToken));
@@ -262,28 +262,31 @@ public class LocationService : ILocationService
     /// unique index.
     /// </summary>
     private async Task ApplyDefaultFlagsAsync(
-        Location location, bool isDefaultLoading, bool isDefaultUnloading, CancellationToken cancellationToken)
+        Location location, bool isDefaultLoading, bool isDefaultUnloading, bool isDefaultBilling, CancellationToken cancellationToken)
     {
-        if ((isDefaultLoading || isDefaultUnloading) && location.CustomerId is null)
+        if ((isDefaultLoading || isDefaultUnloading || isDefaultBilling) && location.CustomerId is null)
         {
             throw new DomainValidationException("isDefaultLoadingLocation",
-                "Alleen locaties die aan een klant gekoppeld zijn, kunnen als standaard laad- of loslocatie dienen.");
+                "Alleen locaties die aan een klant gekoppeld zijn, kunnen als standaard laad-, los- of facturatieadres dienen.");
         }
 
-        if (location.CustomerId is { } customerId && (isDefaultLoading || isDefaultUnloading))
+        if (location.CustomerId is { } customerId && (isDefaultLoading || isDefaultUnloading || isDefaultBilling))
         {
             await TenantScoped()
                 .Where(l => l.CustomerId == customerId && l.Id != location.Id
                     && ((isDefaultLoading && l.IsDefaultLoadingLocation)
-                        || (isDefaultUnloading && l.IsDefaultUnloadingLocation)))
+                        || (isDefaultUnloading && l.IsDefaultUnloadingLocation)
+                        || (isDefaultBilling && l.IsDefaultBillingLocation)))
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(l => l.IsDefaultLoadingLocation, l => !isDefaultLoading && l.IsDefaultLoadingLocation)
-                    .SetProperty(l => l.IsDefaultUnloadingLocation, l => !isDefaultUnloading && l.IsDefaultUnloadingLocation),
+                    .SetProperty(l => l.IsDefaultUnloadingLocation, l => !isDefaultUnloading && l.IsDefaultUnloadingLocation)
+                    .SetProperty(l => l.IsDefaultBillingLocation, l => !isDefaultBilling && l.IsDefaultBillingLocation),
                     cancellationToken);
         }
 
         location.IsDefaultLoadingLocation = isDefaultLoading;
         location.IsDefaultUnloadingLocation = isDefaultUnloading;
+        location.IsDefaultBillingLocation = isDefaultBilling;
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
@@ -361,7 +364,7 @@ public class LocationService : ILocationService
             l.OpeningHours, l.LoadingInstructions, l.UnloadingInstructions, l.AccessInstructions,
             l.AccessRestrictions, l.VehicleRestrictions, l.TrailerRestrictions,
             l.AlfapassRequired, l.AppointmentRequired, l.IsActive, l.CustomerId, customerName, l.Notes,
-            l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation);
+            l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation, l.IsDefaultBillingLocation);
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

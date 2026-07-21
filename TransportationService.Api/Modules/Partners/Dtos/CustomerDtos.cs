@@ -20,7 +20,13 @@ public record CustomerContactDto(
     string? Email,
     string? PhoneNumber,
     bool IsPrimary,
-    string? Notes);
+    string? Notes,
+    string? DisplayName = null,
+    string? Nickname = null,
+    string? MobilePhone = null,
+    Guid? DepartmentId = null,
+    string? PreferredLanguageCode = null,
+    bool IsActive = true);
 
 public record CustomerDetailDto(
     Guid Id,
@@ -55,7 +61,14 @@ public record CustomerDetailDto(
     bool PurchaseOrderRequired,
     bool SignedDeliveryNoteRequired,
     bool CustomerReferenceRequired,
-    IReadOnlyList<CustomerContactDto> Contacts);
+    IReadOnlyList<CustomerContactDto> Contacts,
+    string? Nickname = null,
+    string? CompanyNumber = null,
+    string CurrencyCode = "EUR",
+    string? Iban = null,
+    string? Bic = null,
+    string? BankName = null,
+    string? BankAccountNumber = null);
 
 public record CreateCustomerRequest(
     string Name,
@@ -85,7 +98,14 @@ public record CreateCustomerRequest(
     bool SignedDeliveryNoteRequired = false,
     bool CustomerReferenceRequired = false,
     CreateCustomerContactRequest? InitialContact = null,
-    string? CustomerNumber = null);
+    string? CustomerNumber = null,
+    string? Nickname = null,
+    string? CompanyNumber = null,
+    string? CurrencyCode = null,
+    string? Iban = null,
+    string? Bic = null,
+    string? BankName = null,
+    string? BankAccountNumber = null);
 
 public record UpdateCustomerRequest(
     string Name,
@@ -114,9 +134,19 @@ public record UpdateCustomerRequest(
     string? InvoiceLanguageCode = null,
     bool PurchaseOrderRequired = false,
     bool SignedDeliveryNoteRequired = false,
-    bool CustomerReferenceRequired = false);
+    bool CustomerReferenceRequired = false,
+    string? Nickname = null,
+    string? CompanyNumber = null,
+    string? CurrencyCode = null,
+    string? Iban = null,
+    string? Bic = null,
+    string? BankName = null,
+    string? BankAccountNumber = null);
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
+
+/// <summary>Company-registry lookup request (VAT or enterprise number).</summary>
+public record CompanyRegistryLookupRequest(string Number);
 
 /// <summary>Manual customer-number change; requires customers.override_number + reason (audited).</summary>
 public record ChangeCustomerNumberRequest(string CustomerNumber, string Reason);
@@ -130,7 +160,13 @@ public record CreateCustomerContactRequest(
     string? Email,
     string? PhoneNumber,
     bool IsPrimary,
-    string? Notes);
+    string? Notes,
+    string? DisplayName = null,
+    string? Nickname = null,
+    string? MobilePhone = null,
+    Guid? DepartmentId = null,
+    string? PreferredLanguageCode = null,
+    bool IsActive = true);
 
 public record UpdateCustomerContactRequest(
     string FirstName,
@@ -139,4 +175,10 @@ public record UpdateCustomerContactRequest(
     string? Email,
     string? PhoneNumber,
     bool IsPrimary,
-    string? Notes);
+    string? Notes,
+    string? DisplayName = null,
+    string? Nickname = null,
+    string? MobilePhone = null,
+    Guid? DepartmentId = null,
+    string? PreferredLanguageCode = null,
+    bool IsActive = true);

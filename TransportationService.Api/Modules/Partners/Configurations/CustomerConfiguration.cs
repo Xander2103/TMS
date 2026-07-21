@@ -14,7 +14,14 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.CustomerNumber).IsRequired().HasMaxLength(30);
         builder.Property(c => c.Name).IsRequired().HasMaxLength(200);
         builder.Property(c => c.LegalName).HasMaxLength(200);
+        builder.Property(c => c.Nickname).HasMaxLength(100);
         builder.Property(c => c.VatNumber).HasMaxLength(30);
+        builder.Property(c => c.CompanyNumber).HasMaxLength(30);
+        builder.Property(c => c.CurrencyCode).IsRequired().HasMaxLength(3).HasDefaultValue("EUR");
+        builder.Property(c => c.Iban).HasMaxLength(34);
+        builder.Property(c => c.Bic).HasMaxLength(11);
+        builder.Property(c => c.BankName).HasMaxLength(100);
+        builder.Property(c => c.BankAccountNumber).HasMaxLength(50);
         builder.Property(c => c.Email).HasMaxLength(250);
         builder.Property(c => c.PhoneNumber).HasMaxLength(30);
         builder.Property(c => c.Website).HasMaxLength(200);
