@@ -14,6 +14,7 @@ import type { DriverListItem } from '../../drivers/types'
 import { createVehicle } from '../api/vehiclesApi'
 import {
   EMISSION_CLASS_LABELS,
+  REQUIRED_LICENCE_CODES,
   FUEL_TYPE_LABELS,
   OWNERSHIP_TYPE_LABELS,
   type CreateVehicleInput,
@@ -42,6 +43,9 @@ const EMPTY: CreateVehicleInput = {
   volumeIsManual: false,
   odometerKm: 0,
   consumptionLPer100Km: null,
+  axleCount: 0,
+  loadingMeters: 0,
+  requiredLicenceCode: null,
   hasCrane: false,
   hasRefrigeration: false,
   hasTailLift: false,
@@ -230,6 +234,22 @@ export function NewVehiclePage() {
                 {Object.entries(EMISSION_CLASS_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField label="Aantal assen" htmlFor="v-axles" hint="Voor Maut/tolberekening.">
+              <input id="v-axles" type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={submitting} />
+            </FormField>
+            <FormField label="Laadmeters" htmlFor="v-ldm">
+              <input id="v-ldm" type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={submitting} />
+            </FormField>
+            <FormField label="Vereist rijbewijs" htmlFor="v-licence" hint="Minimaal rijbewijs voor de eligibiliteitscontrole; leeg = geen controle.">
+              <select id="v-licence" value={form.requiredLicenceCode ?? ''} onChange={(e) => set('requiredLicenceCode', e.target.value || null)} disabled={submitting}>
+                <option value="">— Geen controle —</option>
+                {REQUIRED_LICENCE_CODES.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
                   </option>
                 ))}
               </select>

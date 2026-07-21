@@ -1,5 +1,15 @@
 export type FuelType = 'Diesel' | 'Petrol' | 'Electric' | 'Hybrid' | 'Lng' | 'Cng' | 'Hydrogen' | 'Other'
-export type EmissionClass = 'Euro3' | 'Euro4' | 'Euro5' | 'Euro6' | 'Electric' | 'Other'
+export type EmissionClass =
+  | 'Euro0'
+  | 'Euro1'
+  | 'Euro2'
+  | 'Euro3'
+  | 'Euro4'
+  | 'Euro5'
+  | 'Euro6'
+  | 'Euro7'
+  | 'Electric'
+  | 'Other'
 export type VehicleOwnershipType = 'Owned' | 'Rented' | 'Leased'
 export type VehicleOperationalStatus = 'Available' | 'InUse' | 'InMaintenance' | 'OutOfService'
 
@@ -15,13 +25,20 @@ export const FUEL_TYPE_LABELS: Record<FuelType, string> = {
 }
 
 export const EMISSION_CLASS_LABELS: Record<EmissionClass, string> = {
+  Euro0: 'Euro 0',
+  Euro1: 'Euro 1',
+  Euro2: 'Euro 2',
   Euro3: 'Euro 3',
   Euro4: 'Euro 4',
   Euro5: 'Euro 5',
   Euro6: 'Euro 6',
+  Euro7: 'Euro 7',
   Electric: 'Elektrisch',
   Other: 'Overig',
 }
+
+/** Belgian driving-licence codes relevant for vehicle eligibility (B < C1 < C < CE). */
+export const REQUIRED_LICENCE_CODES = ['B', 'C1', 'C', 'CE'] as const
 
 export const OWNERSHIP_TYPE_LABELS: Record<VehicleOwnershipType, string> = {
   Owned: 'Eigendom',
@@ -86,6 +103,9 @@ export interface VehicleDetail {
   volumeIsManual: boolean
   odometerKm: number
   consumptionLPer100Km: number | null
+  axleCount: number
+  loadingMeters: number
+  requiredLicenceCode: string | null
   hasCrane: boolean
   hasRefrigeration: boolean
   hasTailLift: boolean

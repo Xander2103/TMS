@@ -31,6 +31,8 @@ const EMPTY: TrailerInput = {
   heightMeters: null,
   volumeM3: null,
   volumeIsManual: false,
+  axleCount: 0,
+  loadingMeters: 0,
   hasRefrigeration: false,
   adrSuitable: false,
   ownershipType: 'Owned',
@@ -149,6 +151,12 @@ export function NewTrailerPage() {
         <section className="trailer-form-card">
           <h2>Capaciteit &amp; afmetingen</h2>
           <div className="trailer-form-grid">
+            <FormField label="Aantal assen" htmlFor="t-axles" hint="Voor Maut/tolberekening.">
+              <input id="t-axles" type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={submitting} />
+            </FormField>
+            <FormField label="Laadmeters" htmlFor="t-ldm">
+              <input id="t-ldm" type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={submitting} />
+            </FormField>
             <FormField label="Laadvermogen (kg)" htmlFor="t-capacity">
               <input id="t-capacity" type="number" step="0.01" value={form.capacityKg ?? ''} onChange={(e) => set('capacityKg', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
             </FormField>

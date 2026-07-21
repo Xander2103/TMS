@@ -28,6 +28,7 @@ import { computeVolumeM3 } from '../../../utils/volume'
 import { deleteVehicle, getVehicle, setVehicleActive, setVehicleDriver, updateVehicle } from '../api/vehiclesApi'
 import {
   EMISSION_CLASS_LABELS,
+  REQUIRED_LICENCE_CODES,
   FUEL_TYPE_LABELS,
   OPERATIONAL_STATUS_LABELS,
   OPERATIONAL_STATUS_TONES,
@@ -120,6 +121,9 @@ export function VehicleDetailPage() {
       volumeM3: vehicle.volumeM3,
       odometerKm: vehicle.odometerKm,
       consumptionLPer100Km: vehicle.consumptionLPer100Km,
+      axleCount: vehicle.axleCount,
+      loadingMeters: vehicle.loadingMeters,
+      requiredLicenceCode: vehicle.requiredLicenceCode,
       hasCrane: vehicle.hasCrane,
       hasRefrigeration: vehicle.hasRefrigeration,
       hasTailLift: vehicle.hasTailLift,
@@ -334,6 +338,22 @@ export function VehicleDetailPage() {
                 ))}
               </select>
             </FormField>
+            <FormField label="Aantal assen" htmlFor="e-axles" hint="Voor Maut/tolberekening.">
+              <input id="e-axles" type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={saving} />
+            </FormField>
+            <FormField label="Laadmeters" htmlFor="e-ldm">
+              <input id="e-ldm" type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={saving} />
+            </FormField>
+            <FormField label="Vereist rijbewijs" htmlFor="e-licence" hint="Minimaal rijbewijs voor de eligibiliteitscontrole; leeg = geen controle.">
+              <select id="e-licence" value={form.requiredLicenceCode ?? ''} onChange={(e) => set('requiredLicenceCode', e.target.value || null)} disabled={saving}>
+                <option value="">— Geen controle —</option>
+                {REQUIRED_LICENCE_CODES.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </FormField>
             <FormField label="MTM (kg)" htmlFor="e-gvw">
               <input id="e-gvw" inputMode="decimal" value={form.grossVehicleWeightKg ?? ''} onChange={(e) => set('grossVehicleWeightKg', numberOrNull(e.target.value))} disabled={saving} />
             </FormField>
@@ -455,6 +475,9 @@ export function VehicleDetailPage() {
               <div className="vehicle-detail-grid">
                 <FormField label="Brandstof"><span>{FUEL_TYPE_LABELS[vehicle.fuelType]}</span></FormField>
                 <FormField label="Emissieklasse"><span>{vehicle.emissionClass ? EMISSION_CLASS_LABELS[vehicle.emissionClass] : '—'}</span></FormField>
+                <FormField label="Aantal assen" hint="Voor Maut/tolberekening."><span>{vehicle.axleCount || '—'}</span></FormField>
+                <FormField label="Laadmeters"><span>{vehicle.loadingMeters ? `${vehicle.loadingMeters} ldm` : '—'}</span></FormField>
+                <FormField label="Vereist rijbewijs"><span>{vehicle.requiredLicenceCode ?? '—'}</span></FormField>
                 <FormField label="MTM"><span>{vehicle.grossVehicleWeightKg !== null ? `${vehicle.grossVehicleWeightKg} kg` : '—'}</span></FormField>
                 <FormField label="Laadvermogen"><span>{vehicle.payloadKg !== null ? `${vehicle.payloadKg} kg` : '—'}</span></FormField>
                 <FormField label="Afmetingen (L×B×H)">

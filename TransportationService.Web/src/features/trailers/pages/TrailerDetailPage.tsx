@@ -101,6 +101,8 @@ export function TrailerDetailPage() {
       widthMeters: trailer.widthMeters,
       heightMeters: trailer.heightMeters,
       volumeM3: trailer.volumeM3,
+      axleCount: trailer.axleCount,
+      loadingMeters: trailer.loadingMeters,
       hasRefrigeration: trailer.hasRefrigeration,
       adrSuitable: trailer.adrSuitable,
       ownershipType: trailer.ownershipType,
@@ -264,6 +266,12 @@ export function TrailerDetailPage() {
           </FormSection>
 
           <FormSection title="Techniek" columns={3}>
+            <FormField label="Aantal assen" htmlFor="t-axles" hint="Voor Maut/tolberekening.">
+              <input id="t-axles" type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={saving} />
+            </FormField>
+            <FormField label="Laadmeters" htmlFor="t-ldm">
+              <input id="t-ldm" type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={saving} />
+            </FormField>
             <FormField label="Laadvermogen (kg)" htmlFor="t-capacity">
               <input id="t-capacity" inputMode="decimal" value={form.capacityKg ?? ''} onChange={(e) => set('capacityKg', numberOrNull(e.target.value))} disabled={saving} />
             </FormField>
@@ -367,6 +375,8 @@ export function TrailerDetailPage() {
           {tab === 'techniek' && (
             <TabPanel tabId="techniek">
               <div className="trailer-detail-grid">
+                <FormField label="Aantal assen" hint="Voor Maut/tolberekening."><span>{trailer.axleCount || '—'}</span></FormField>
+                <FormField label="Laadmeters"><span>{trailer.loadingMeters ? `${trailer.loadingMeters} ldm` : '—'}</span></FormField>
                 <FormField label="Laadvermogen"><span>{trailer.capacityKg !== null ? `${trailer.capacityKg} kg` : '—'}</span></FormField>
                 <FormField label="Afmetingen (L×B×H)">
                   <span>
