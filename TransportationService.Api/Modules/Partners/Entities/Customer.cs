@@ -34,6 +34,9 @@ public class Customer : AuditableTenantEntity
     public string? City { get; set; }
     public string? CountryCode { get; set; }
 
+    /// <summary>Default own company that invoices this customer (orders/invoices inherit it).</summary>
+    public Guid? DefaultLegalEntityId { get; set; }
+
     // Commercial terms
     public string? InvoiceEmail { get; set; }
     public int PaymentTermDays { get; set; } = 30;

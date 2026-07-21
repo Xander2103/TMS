@@ -160,7 +160,7 @@ public class InvoiceService : IInvoiceService
 
         var customerVat = await _dbContext.Customers
             .Where(c => c.Id == request.CustomerId && c.TenantId == tenantId)
-            .Select(c => new { c.VatTreatment, c.DefaultVatRatePercent })
+            .Select(c => new { c.VatTreatment, c.DefaultVatRatePercent, c.DefaultLegalEntityId, c.VatNumber })
             .FirstOrDefaultAsync(cancellationToken);
         if (customerVat is null)
         {
@@ -213,7 +213,7 @@ public class InvoiceService : IInvoiceService
                 : 0m);
         var invoiceDate = request.InvoiceDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
-        // Issuing entity: explicit choice wins; otherwise the tenant's default entity.
+        // Issuing entity: explicit choice → customer default → tenant default.
         LegalEntity? legalEntity;
         if (request.LegalEntityId is { } explicitEntityId)
         {
@@ -226,7 +226,11 @@ public class InvoiceService : IInvoiceService
         }
         else
         {
-            legalEntity = await GetDefaultLegalEntityAsync(cancellationToken);
+            legalEntity = customerVat.DefaultLegalEntityId is { } customerDefault
+                ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
+                    e => e.TenantId == tenantId && e.Id == customerDefault && e.IsActive, cancellationToken)
+                : null;
+            legalEntity ??= await GetDefaultLegalEntityAsync(cancellationToken);
         }
 
         // Invoice period drives the numbering sequence: default = invoice-date month; an
@@ -329,6 +333,8 @@ public class InvoiceService : IInvoiceService
             ?? await _billingConfig.ResolveEffectivePoNumberAsync(request.CustomerId, invoiceDate, cancellationToken)
             ?? SingleDistinctReference(orders);
 
+        ApplySnapshots(invoice, legalEntity, customerVat.VatTreatment, customerVat.VatNumber);
+
         _dbContext.Add(invoice);
         if (legalEntity is not null)
         {
@@ -398,6 +404,20 @@ public class InvoiceService : IInvoiceService
         invoice.DueDate = request.DueDate < request.InvoiceDate ? request.InvoiceDate : request.DueDate;
         invoice.Notes = Trim(request.Notes);
         invoice.PurchaseOrderNumber = Trim(request.PurchaseOrderNumber);
+
+        // While Draft, snapshots track current master data; Sent freezes them for good.
+        var snapshotEntity = invoice.LegalEntityId is { } snapEntityId
+            ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
+                e => e.TenantId == _tenantContext.TenantId && e.Id == snapEntityId, cancellationToken)
+            : null;
+        var snapshotCustomer = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId)
+            .Select(c => new { c.VatTreatment, c.VatNumber })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (snapshotCustomer is not null)
+        {
+            ApplySnapshots(invoice, snapshotEntity, snapshotCustomer.VatTreatment, snapshotCustomer.VatNumber);
+        }
 
         var existingById = invoice.Lines.Where(l => !l.IsDeleted).ToDictionary(l => l.Id);
         var keptIds = request.Lines.Where(l => l.Id is not null).Select(l => l.Id!.Value).ToHashSet();
@@ -506,16 +526,37 @@ public class InvoiceService : IInvoiceService
 
         if (target == InvoiceStatus.Sent)
         {
-            // PO policy: a Required customer blocks sending without an effective PO number.
-            var poPolicy = await _dbContext.Customers
+            // Fail-safe: sending requires a valid, active, same-tenant issuing entity.
+            var entityValid = invoice.LegalEntityId is { } entityId
+                && await _dbContext.LegalEntities.AnyAsync(
+                    e => e.TenantId == _tenantContext.TenantId && e.Id == entityId && e.IsActive, cancellationToken);
+            if (!entityValid)
+            {
+                return InvoiceOperationResult.InvalidState(
+                    "Deze factuur heeft geen geldige facturerende entiteit en kan niet worden verzonden.");
+            }
+
+            var customerChecks = await _dbContext.Customers
                 .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId)
-                .Select(c => c.PurchaseOrderPolicy)
+                .Select(c => new { c.PurchaseOrderPolicy, c.VatTreatment, c.VatNumber })
                 .FirstOrDefaultAsync(cancellationToken);
-            if (poPolicy == Partners.Entities.PurchaseOrderPolicy.Required
+
+            // PO policy: a Required customer blocks sending without an effective PO number.
+            if (customerChecks?.PurchaseOrderPolicy == Partners.Entities.PurchaseOrderPolicy.Required
                 && string.IsNullOrWhiteSpace(invoice.PurchaseOrderNumber))
             {
                 return InvoiceOperationResult.InvalidState(
                     "Deze klant vereist een PO-nummer. Voeg een geldig PO-nummer toe voor verzending.");
+            }
+
+            // Coherent VAT model: treatments like reverse charge / intra-community require
+            // the customer's VAT number on the invoice.
+            if (customerChecks is not null
+                && Partners.Services.VatTreatmentCatalog.Resolve(customerChecks.VatTreatment).RequiresVatNumber
+                && string.IsNullOrWhiteSpace(invoice.CustomerVatNumberSnapshot ?? customerChecks.VatNumber))
+            {
+                return InvoiceOperationResult.InvalidState(
+                    "Deze btw-regeling vereist een BTW-nummer van de klant. Vul het BTW-nummer aan voor verzending.");
             }
         }
 
@@ -624,6 +665,25 @@ public class InvoiceService : IInvoiceService
         var previewMonth = Math.Clamp(month ?? today.Month, 1, 12);
         var number = await _numberService.PreviewAsync(legalEntity, previewYear, previewMonth, cancellationToken);
         return new InvoiceNumberPreviewDto(number, legalEntity.Id, previewYear, previewMonth);
+    }
+
+    /// <summary>Freezes seller + customer fiscal facts on the invoice (refreshed while Draft only).</summary>
+    private static void ApplySnapshots(Invoice invoice, LegalEntity? entity, VatTreatment treatment, string? customerVatNumber)
+    {
+        if (entity is not null)
+        {
+            invoice.SellerName = entity.TradingName ?? entity.LegalName;
+            invoice.SellerVatNumber = entity.VatNumber;
+            invoice.SellerIban = entity.Iban;
+            var streetPart = string.Join(' ', new[] { entity.Street, entity.HouseNumber }.Where(v => !string.IsNullOrWhiteSpace(v)));
+            var cityPart = string.Join(' ', new[] { entity.PostalCode, entity.City }.Where(v => !string.IsNullOrWhiteSpace(v)));
+            var line = string.Join(", ", new[] { streetPart, cityPart }.Where(v => !string.IsNullOrWhiteSpace(v)));
+            invoice.SellerAddressLine = string.IsNullOrWhiteSpace(line) ? null : line;
+        }
+
+        invoice.CustomerVatTreatment = treatment.ToString();
+        invoice.CustomerVatNumberSnapshot = customerVatNumber;
+        invoice.VatLegalText = Partners.Services.VatTreatmentCatalog.Resolve(treatment).InvoiceLegalText;
     }
 
     private async Task<LegalEntity?> GetDefaultLegalEntityAsync(CancellationToken cancellationToken)

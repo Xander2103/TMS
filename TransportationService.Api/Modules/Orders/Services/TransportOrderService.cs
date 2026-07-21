@@ -192,6 +192,8 @@ public class TransportOrderService : ITransportOrderService
         };
         ApplyDieselSurchargeOverride(order,
             request.DieselSurchargeOverride, request.DieselSurchargePercentOverride, request.DieselSurchargeOverrideReason);
+        // Selling entity: explicit request value else the customer's default entity.
+        order.LegalEntityId = await ResolveOrderLegalEntityAsync(request.LegalEntityId, request.CustomerId, cancellationToken);
 
         _dbContext.Add(order);
         _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems, order.Stops));
@@ -267,6 +269,12 @@ public class TransportOrderService : ITransportOrderService
         var surchargeChanged = surchargeBefore.DieselSurchargeOverride != order.DieselSurchargeOverride
             || surchargeBefore.DieselSurchargePercentOverride != order.DieselSurchargePercentOverride;
 
+        // Null keeps the current entity (never silently cleared); explicit ids are validated.
+        if (request.LegalEntityId is { } requestedEntity && requestedEntity != order.LegalEntityId)
+        {
+            order.LegalEntityId = await ResolveOrderLegalEntityAsync(requestedEntity, order.CustomerId, cancellationToken);
+        }
+
         // Wholesale stop replacement; removal is soft, so the trail stays auditable.
         _dbContext.RemoveRange(order.Stops);
         order.Stops = BuildStops(request.Stops);
@@ -305,6 +313,28 @@ public class TransportOrderService : ITransportOrderService
         }
 
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    private async Task<Guid?> ResolveOrderLegalEntityAsync(
+        Guid? requestedId, Guid customerId, CancellationToken cancellationToken)
+    {
+        if (requestedId is { } id)
+        {
+            var valid = await _dbContext.LegalEntities.AnyAsync(
+                e => e.TenantId == _tenantContext.TenantId && e.Id == id && e.IsActive, cancellationToken);
+            if (!valid)
+            {
+                throw new Common.DomainValidationException("legalEntityId",
+                    "De gekozen facturerende entiteit bestaat niet of is niet actief.");
+            }
+
+            return id;
+        }
+
+        return await _dbContext.Customers
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == customerId)
+            .Select(c => c.DefaultLegalEntityId)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <summary>Override requires an explicit percentage and a reason; clearing wipes both.</summary>
@@ -871,7 +901,8 @@ public class TransportOrderService : ITransportOrderService
             CancellableStatuses.Contains(order.Status),
             CorrectiveTransitions.TryGetValue(order.Status, out var corrections) ? corrections : [],
             order.Priority,
-            order.DieselSurchargeOverride, order.DieselSurchargePercentOverride, order.DieselSurchargeOverrideReason);
+            order.DieselSurchargeOverride, order.DieselSurchargePercentOverride, order.DieselSurchargeOverrideReason,
+            order.LegalEntityId);
     }
 
     private static string GenerateOrderNumber(TenantSettings? settings)

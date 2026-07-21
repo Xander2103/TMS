@@ -68,7 +68,8 @@ public record CustomerDetailDto(
     string? Iban = null,
     string? Bic = null,
     string? BankName = null,
-    string? BankAccountNumber = null);
+    string? BankAccountNumber = null,
+    Guid? DefaultLegalEntityId = null);
 
 public record CreateCustomerRequest(
     string Name,
@@ -105,7 +106,8 @@ public record CreateCustomerRequest(
     string? Iban = null,
     string? Bic = null,
     string? BankName = null,
-    string? BankAccountNumber = null);
+    string? BankAccountNumber = null,
+    Guid? DefaultLegalEntityId = null);
 
 public record UpdateCustomerRequest(
     string Name,
@@ -141,7 +143,8 @@ public record UpdateCustomerRequest(
     string? Iban = null,
     string? Bic = null,
     string? BankName = null,
-    string? BankAccountNumber = null);
+    string? BankAccountNumber = null,
+    Guid? DefaultLegalEntityId = null);
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
 

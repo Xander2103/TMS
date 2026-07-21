@@ -16,6 +16,13 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 
         builder.Property(i => i.InvoiceNumber).IsRequired().HasMaxLength(30);
         builder.Property(i => i.PurchaseOrderNumber).HasMaxLength(100);
+        builder.Property(i => i.SellerName).HasMaxLength(200);
+        builder.Property(i => i.SellerVatNumber).HasMaxLength(30);
+        builder.Property(i => i.SellerIban).HasMaxLength(34);
+        builder.Property(i => i.SellerAddressLine).HasMaxLength(300);
+        builder.Property(i => i.CustomerVatTreatment).HasMaxLength(30);
+        builder.Property(i => i.CustomerVatNumberSnapshot).HasMaxLength(30);
+        builder.Property(i => i.VatLegalText).HasMaxLength(300);
         builder.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(i => i.Currency).IsRequired().HasMaxLength(3);
         builder.Property(i => i.Notes).HasMaxLength(4000);
@@ -38,6 +45,27 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasQueryFilter(i => !i.IsDeleted);
+    }
+}
+
+public class InvoiceAttachmentConfiguration : IEntityTypeConfiguration<InvoiceAttachment>
+{
+    public void Configure(EntityTypeBuilder<InvoiceAttachment> builder)
+    {
+        builder.ToTable("invoice_attachments");
+        builder.HasKey(a => a.Id);
+
+        builder.Property(a => a.FileName).IsRequired().HasMaxLength(255);
+        builder.Property(a => a.ContentType).IsRequired().HasMaxLength(100);
+        builder.Property(a => a.StorageKey).IsRequired().HasMaxLength(500);
+        builder.Property(a => a.Notes).HasMaxLength(500);
+
+        builder.HasIndex(a => new { a.TenantId, a.InvoiceId });
+
+        builder.HasOne<Invoice>().WithMany()
+            .HasForeignKey(a => a.InvoiceId).OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasQueryFilter(a => !a.IsDeleted);
     }
 }
 

@@ -191,6 +191,8 @@ public static class PermissionCodes
     public const string InvoicesDelete = "invoices.delete";
     public const string InvoicesChangeStatus = "invoices.change_status";
     public const string InvoicesOverrideNumber = "invoices.override_number";
+    public const string InvoiceAttachmentsView = "invoice_attachments.view";
+    public const string InvoiceAttachmentsManage = "invoice_attachments.manage";
 
     // --- Driver workflow (trip execution) ---
     public const string DriverWorkflowView = "driver_workflow.view";
@@ -399,6 +401,8 @@ public static class PermissionCodes
         (InvoicesDelete, "invoices", "delete", "Facturen verwijderen"),
         (InvoicesChangeStatus, "invoices", "change_status", "Factuurstatus wijzigen"),
         (InvoicesOverrideNumber, "invoices", "override_number", "Factuurnummers handmatig corrigeren"),
+        (InvoiceAttachmentsView, "invoice_attachments", "view", "Factuurbijlagen bekijken"),
+        (InvoiceAttachmentsManage, "invoice_attachments", "manage", "Factuurbijlagen beheren"),
         (DriverWorkflowView, "driver_workflow", "view", "Eigen ritten en rituitvoering bekijken"),
         (DriverWorkflowExecute, "driver_workflow", "execute", "Stops registreren tijdens rituitvoering"),
         (ScanningView, "scanning", "view", "Scanhistoriek en scanstatus bekijken"),

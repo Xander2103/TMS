@@ -238,6 +238,7 @@ public static class DefaultRoleUpgrades
                 [
                     PermissionCodes.LegalEntitiesView,
                     PermissionCodes.ContactDepartmentsView,
+                    PermissionCodes.InvoiceAttachmentsView,
                 ],
                 ["hr"] =
                 [
@@ -251,6 +252,7 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.ContactDepartmentsView, PermissionCodes.ContactDepartmentsManage,
                     PermissionCodes.CustomersManageFiscal, PermissionCodes.CustomersManageCommunication,
                     PermissionCodes.CustomersManageSurcharge, PermissionCodes.CustomersManagePo,
+                    PermissionCodes.InvoiceAttachmentsView, PermissionCodes.InvoiceAttachmentsManage,
                 ],
             }),
     ];

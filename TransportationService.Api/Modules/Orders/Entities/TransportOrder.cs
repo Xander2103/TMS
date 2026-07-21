@@ -46,6 +46,12 @@ public class TransportOrder : AuditableTenantEntity
     /// <summary>The customer's own reference for this order (PO number, booking id, ...).</summary>
     public string? CustomerReference { get; set; }
 
+    /// <summary>
+    /// Selling own company. Inherits the customer's default at creation; may be overridden
+    /// per order. The invoice snapshot freezes the final entity data at invoicing time.
+    /// </summary>
+    public Guid? LegalEntityId { get; set; }
+
     public DateOnly OrderDate { get; set; }
 
     public TransportOrderStatus Status { get; set; } = TransportOrderStatus.Draft;

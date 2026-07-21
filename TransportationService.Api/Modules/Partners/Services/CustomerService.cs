@@ -124,6 +124,7 @@ public class CustomerService : ICustomerService
         ApplyBankAndIdentityFields(customer,
             request.Nickname, request.CompanyNumber, request.CurrencyCode,
             request.Iban, request.Bic, request.BankName, request.BankAccountNumber);
+        customer.DefaultLegalEntityId = await EnsureLegalEntityInTenantAsync(request.DefaultLegalEntityId, cancellationToken);
         await ApplyVatAndPeppolProfileAsync(customer,
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
@@ -244,6 +245,7 @@ public class CustomerService : ICustomerService
         ApplyBankAndIdentityFields(customer,
             request.Nickname, request.CompanyNumber, request.CurrencyCode,
             request.Iban, request.Bic, request.BankName, request.BankAccountNumber);
+        customer.DefaultLegalEntityId = await EnsureLegalEntityInTenantAsync(request.DefaultLegalEntityId, cancellationToken);
         await ApplyVatAndPeppolProfileAsync(customer,
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
@@ -599,6 +601,17 @@ public class CustomerService : ICustomerService
         customer.BankAccountNumber = Trim(bankAccountNumber);
     }
 
+    private async Task<Guid?> EnsureLegalEntityInTenantAsync(Guid? legalEntityId, CancellationToken cancellationToken)
+    {
+        if (legalEntityId is { } id && !await _dbContext.LegalEntities
+                .AnyAsync(e => e.TenantId == _tenantContext.TenantId && e.Id == id && e.IsActive, cancellationToken))
+        {
+            throw new DomainValidationException("defaultLegalEntityId", "De gekozen facturerende entiteit bestaat niet of is niet actief.");
+        }
+
+        return legalEntityId;
+    }
+
     private async Task EnsureContactDepartmentInTenantAsync(Guid? departmentId, CancellationToken cancellationToken)
     {
         if (departmentId is { } id && !await _dbContext.Set<ContactDepartment>()
@@ -623,5 +636,6 @@ public class CustomerService : ICustomerService
         c.PurchaseOrderRequired, c.SignedDeliveryNoteRequired, c.CustomerReferenceRequired,
         c.Contacts.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.LastName).Select(MapContact).ToList(),
         c.Nickname, c.CompanyNumber, c.CurrencyCode,
-        c.Iban, c.Bic, c.BankName, c.BankAccountNumber);
+        c.Iban, c.Bic, c.BankName, c.BankAccountNumber,
+        c.DefaultLegalEntityId);
 }

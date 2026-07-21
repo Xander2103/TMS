@@ -115,6 +115,7 @@ public class TransportationDbContext : DbContext
     public DbSet<LegalEntity> LegalEntities => Set<LegalEntity>();
     public DbSet<UserLegalEntitySelection> UserLegalEntitySelections => Set<UserLegalEntitySelection>();
     public DbSet<InvoiceSequence> InvoiceSequences => Set<InvoiceSequence>();
+    public DbSet<InvoiceAttachment> InvoiceAttachments => Set<InvoiceAttachment>();
 
     // Classification categories
     public DbSet<VehicleCategory> VehicleCategories => Set<VehicleCategory>();

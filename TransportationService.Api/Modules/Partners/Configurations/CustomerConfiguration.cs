@@ -49,6 +49,9 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.HasIndex(c => new { c.TenantId, c.IsActive });
         builder.HasIndex(c => new { c.TenantId, c.CategoryId });
 
+        builder.HasOne<Modules.Organization.Entities.LegalEntity>().WithMany()
+            .HasForeignKey(c => c.DefaultLegalEntityId).OnDelete(Microsoft.EntityFrameworkCore.DeleteBehavior.SetNull);
+
         builder.HasMany(c => c.Contacts)
             .WithOne()
             .HasForeignKey(contact => contact.CustomerId)

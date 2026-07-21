@@ -45,6 +45,17 @@ public class Invoice : AuditableTenantEntity
     /// </summary>
     public string? PurchaseOrderNumber { get; set; }
 
+    // Seller/customer snapshot: copied from the legal entity + customer at creation and
+    // refreshed while Draft. Once Sent, later master-data changes never mutate these.
+    public string? SellerName { get; set; }
+    public string? SellerVatNumber { get; set; }
+    public string? SellerIban { get; set; }
+    public string? SellerAddressLine { get; set; }
+    public string? CustomerVatTreatment { get; set; }
+    public string? CustomerVatNumberSnapshot { get; set; }
+    /// <summary>Legal VAT text (e.g. "Btw verlegd ...") from the treatment catalog.</summary>
+    public string? VatLegalText { get; set; }
+
     public DateOnly InvoiceDate { get; set; }
     public DateOnly DueDate { get; set; }
 
@@ -69,6 +80,22 @@ public class InvoiceSequence : AuditableTenantEntity
     public int Year { get; set; }
     public int Month { get; set; }
     public int NextValue { get; set; } = 1;
+}
+
+/// <summary>
+/// File attached to an invoice (PDF, XML, XLSX, ...). Internal by default; only
+/// attachments with IncludeWhenSending are ever meant to accompany an outgoing invoice.
+/// Content lives in IFileStorageService (category "invoices"); this row is metadata only.
+/// </summary>
+public class InvoiceAttachment : AuditableTenantEntity
+{
+    public Guid InvoiceId { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public long SizeBytes { get; set; }
+    public string StorageKey { get; set; } = string.Empty;
+    public bool IncludeWhenSending { get; set; }
+    public string? Notes { get; set; }
 }
 
 /// <summary>One invoice line; order-backed lines reference their transport order, manual lines don't.</summary>

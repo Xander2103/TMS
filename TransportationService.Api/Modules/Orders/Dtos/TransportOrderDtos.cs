@@ -74,7 +74,8 @@ public record TransportOrderDetailDto(
     OrderPriority Priority = OrderPriority.Normal,
     bool DieselSurchargeOverride = false,
     decimal? DieselSurchargePercentOverride = null,
-    string? DieselSurchargeOverrideReason = null);
+    string? DieselSurchargeOverrideReason = null,
+    Guid? LegalEntityId = null);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
@@ -200,7 +201,8 @@ public record CreateTransportOrderRequest(
     OrderPriority? Priority = null,
     bool DieselSurchargeOverride = false,
     decimal? DieselSurchargePercentOverride = null,
-    string? DieselSurchargeOverrideReason = null);
+    string? DieselSurchargeOverrideReason = null,
+    Guid? LegalEntityId = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -221,7 +223,8 @@ public record UpdateTransportOrderRequest(
     OrderPriority? Priority = null,
     bool DieselSurchargeOverride = false,
     decimal? DieselSurchargePercentOverride = null,
-    string? DieselSurchargeOverrideReason = null);
+    string? DieselSurchargeOverrideReason = null,
+    Guid? LegalEntityId = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 
