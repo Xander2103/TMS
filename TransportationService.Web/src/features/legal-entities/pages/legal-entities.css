@@ -1,0 +1,106 @@
+.le-page {
+  max-width: 1000px;
+}
+
+.le-name {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.le-name-legal {
+  color: var(--text-h);
+  font-weight: 500;
+}
+
+.le-name-trading {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.le-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.le-link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.le-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.le-link-danger {
+  color: var(--danger);
+}
+
+.le-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.le-form-error {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--danger-border);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.le-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.le-logo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.le-logo-current {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.le-logo-current strong {
+  color: var(--text-h);
+}
+
+.le-logo-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.le-logo-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0.8;
+}
+
+.le-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}

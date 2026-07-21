@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 8;
+    public const int CurrentVersion = 9;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -215,6 +215,29 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.OperationsView,
                     PermissionCodes.WarehouseManage, PermissionCodes.WarehouseSchedule,
                     PermissionCodes.WarehouseConflictOverride,
+                ],
+            }),
+
+        new(9,
+            "Business feedback wave 2026-07-21: legal entities, customer master data, HR and fleet compliance.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] =
+                [
+                    PermissionCodes.LegalEntitiesView,
+                ],
+                ["dispatcher"] =
+                [
+                    PermissionCodes.LegalEntitiesView,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.LegalEntitiesView,
+                ],
+                ["boekhouding"] =
+                [
+                    PermissionCodes.LegalEntitiesView, PermissionCodes.LegalEntitiesManage,
+                    PermissionCodes.InvoicesOverrideNumber,
                 ],
             }),
     ];

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { LOOKUP_GROUP_LABELS, LOOKUP_RESOURCES, type LookupGroup } from '../../features/master-data/lookupRegistry'
 import { useAuth } from '../../features/auth/authContextValue'
+import { LegalEntitySwitcher } from '../../features/legal-entities/components/LegalEntitySwitcher'
 import { getUnreadCount } from '../../features/notifications/api/notificationsApi'
 import '../../features/notifications/pages/notifications.css'
 import './Sidebar.css'
@@ -128,6 +129,7 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
   return (
     <aside className={open ? 'sidebar sidebar-open' : 'sidebar'}>
       <h1 className="app-title">Transportation Service</h1>
+      <LegalEntitySwitcher />
       <nav>
         {/* The self-service portal is available to every user with an employee link. */}
         {user?.employeeId && (
@@ -184,13 +186,26 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
           </div>
         ))}
 
-        {hasAnyPermission(['company_settings.view', 'company_settings.manage']) && (
+        {(hasAnyPermission(['legal_entities.view', 'legal_entities.manage']) ||
+          hasAnyPermission(['company_settings.view', 'company_settings.manage'])) && (
           <ul className="nav-footer">
-            <li>
-              <NavLink to="/settings" className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-                Instellingen
-              </NavLink>
-            </li>
+            {hasAnyPermission(['legal_entities.view', 'legal_entities.manage']) && (
+              <li>
+                <NavLink
+                  to="/settings/legal-entities"
+                  className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
+                >
+                  Eigen bedrijven
+                </NavLink>
+              </li>
+            )}
+            {hasAnyPermission(['company_settings.view', 'company_settings.manage']) && (
+              <li>
+                <NavLink to="/settings" end className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
+                  Instellingen
+                </NavLink>
+              </li>
+            )}
           </ul>
         )}
       </nav>

@@ -39,6 +39,10 @@ public static class PermissionCodes
     public const string JobFunctionsView = "job_functions.view";
     public const string JobFunctionsManage = "job_functions.manage";
 
+    // --- Own companies / invoicing entities ---
+    public const string LegalEntitiesView = "legal_entities.view";
+    public const string LegalEntitiesManage = "legal_entities.manage";
+
     // --- Classification categories ---
     public const string VehicleCategoriesView = "vehicle_categories.view";
     public const string VehicleCategoriesManage = "vehicle_categories.manage";
@@ -176,6 +180,7 @@ public static class PermissionCodes
     public const string InvoicesEdit = "invoices.edit";
     public const string InvoicesDelete = "invoices.delete";
     public const string InvoicesChangeStatus = "invoices.change_status";
+    public const string InvoicesOverrideNumber = "invoices.override_number";
 
     // --- Driver workflow (trip execution) ---
     public const string DriverWorkflowView = "driver_workflow.view";
@@ -283,6 +288,8 @@ public static class PermissionCodes
         (DepartmentsManage, "departments", "manage", "Afdelingen beheren"),
         (JobFunctionsView, "job_functions", "view", "Functies bekijken"),
         (JobFunctionsManage, "job_functions", "manage", "Functies beheren"),
+        (LegalEntitiesView, "legal_entities", "view", "Eigen bedrijven (facturerende entiteiten) bekijken"),
+        (LegalEntitiesManage, "legal_entities", "manage", "Eigen bedrijven (facturerende entiteiten) beheren"),
         (VehicleCategoriesView, "vehicle_categories", "view", "Voertuigcategorieën bekijken"),
         (VehicleCategoriesManage, "vehicle_categories", "manage", "Voertuigcategorieën beheren"),
         (TrailerCategoriesView, "trailer_categories", "view", "Opleggercategorieën bekijken"),
@@ -373,6 +380,7 @@ public static class PermissionCodes
         (InvoicesEdit, "invoices", "edit", "Facturen bewerken"),
         (InvoicesDelete, "invoices", "delete", "Facturen verwijderen"),
         (InvoicesChangeStatus, "invoices", "change_status", "Factuurstatus wijzigen"),
+        (InvoicesOverrideNumber, "invoices", "override_number", "Factuurnummers handmatig corrigeren"),
         (DriverWorkflowView, "driver_workflow", "view", "Eigen ritten en rituitvoering bekijken"),
         (DriverWorkflowExecute, "driver_workflow", "execute", "Stops registreren tijdens rituitvoering"),
         (ScanningView, "scanning", "view", "Scanhistoriek en scanstatus bekijken"),

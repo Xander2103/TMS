@@ -25,8 +25,11 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.HasIndex(i => new { i.TenantId, i.CustomerId });
         builder.HasIndex(i => new { i.TenantId, i.InvoiceDate });
         builder.HasIndex(i => new { i.TenantId, i.Status });
+        builder.HasIndex(i => new { i.TenantId, i.LegalEntityId, i.InvoicePeriodYear, i.InvoicePeriodMonth });
 
         builder.HasOne<Customer>().WithMany().HasForeignKey(i => i.CustomerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Modules.Organization.Entities.LegalEntity>().WithMany()
+            .HasForeignKey(i => i.LegalEntityId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(i => i.Lines)
             .WithOne()
@@ -34,6 +37,28 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasQueryFilter(i => !i.IsDeleted);
+    }
+}
+
+public class InvoiceSequenceConfiguration : IEntityTypeConfiguration<InvoiceSequence>
+{
+    public void Configure(EntityTypeBuilder<InvoiceSequence> builder)
+    {
+        builder.ToTable("invoice_sequences");
+
+        builder.HasKey(s => s.Id);
+
+        // Concurrency token: two concurrent claims of the same value conflict at SaveChanges.
+        builder.Property(s => s.NextValue).IsConcurrencyToken();
+
+        builder.HasIndex(s => new { s.TenantId, s.LegalEntityId, s.Year, s.Month })
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false");
+
+        builder.HasOne<Modules.Organization.Entities.LegalEntity>().WithMany()
+            .HasForeignKey(s => s.LegalEntityId).OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasQueryFilter(s => !s.IsDeleted);
     }
 }
 

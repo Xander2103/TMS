@@ -138,6 +138,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFle
 builder.Services.AddScoped<TransportationService.Api.Modules.Tenancy.Services.ICompanySettingsService,
     TransportationService.Api.Modules.Tenancy.Services.CompanySettingsService>();
 
+// Own companies / invoicing entities
+builder.Services.AddScoped<TransportationService.Api.Modules.Organization.Services.ILegalEntityService,
+    TransportationService.Api.Modules.Organization.Services.LegalEntityService>();
+
 // Locations
 builder.Services.AddScoped<TransportationService.Api.Modules.Locations.Services.ILocationService,
     TransportationService.Api.Modules.Locations.Services.LocationService>();
@@ -336,6 +340,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Eta.Services.IEtaSe
 // Invoicing
 builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceService,
     TransportationService.Api.Modules.Invoicing.Services.InvoiceService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoiceNumberService,
+    TransportationService.Api.Modules.Invoicing.Services.InvoiceNumberService>();
 
 // Notifications (in-app)
 builder.Services.AddScoped<TransportationService.Api.Modules.Notifications.Services.INotificationService,
@@ -378,6 +384,7 @@ if (app.Environment.IsDevelopment())
     await PermissionCatalogSeeder.SyncAsync(dbContext);
     await ReferenceDataSeeder.SeedAsync(dbContext);
     await DefaultRoleSeeder.SyncAsync(dbContext);
+    await LegalEntitySeeder.SeedAsync(dbContext);
 
     // Ensure the development administrator has a usable password (only when unset, so a
     // deliberately-changed password is never reset). Reported to the console below.

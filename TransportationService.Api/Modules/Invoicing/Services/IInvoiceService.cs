@@ -24,4 +24,10 @@ public interface IInvoiceService
     Task<InvoiceOperationResult> ChangeStatusAsync(Guid id, InvoiceStatus target, CancellationToken cancellationToken);
 
     Task<InvoiceOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Draft-only manual number correction (permission + mandatory reason, audited).</summary>
+    Task<InvoiceOperationResult> OverrideNumberAsync(Guid id, OverrideInvoiceNumberRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Next expected number for an entity + period without claiming it; null when no entity exists.</summary>
+    Task<InvoiceNumberPreviewDto?> PreviewNextNumberAsync(Guid? legalEntityId, int? year, int? month, CancellationToken cancellationToken);
 }

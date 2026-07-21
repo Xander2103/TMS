@@ -6,6 +6,7 @@ using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Invoicing.Dtos;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Organization.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -29,17 +30,20 @@ public class InvoiceService : IInvoiceService
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
+    private readonly IInvoiceNumberService _numberService;
 
     public InvoiceService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IInvoiceNumberService numberService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _timeProvider = timeProvider;
+        _numberService = numberService;
     }
 
     private IQueryable<Invoice> TenantScoped() =>
@@ -206,14 +210,43 @@ public class InvoiceService : IInvoiceService
                 : 0m);
         var invoiceDate = request.InvoiceDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
+        // Issuing entity: explicit choice wins; otherwise the tenant's default entity.
+        LegalEntity? legalEntity;
+        if (request.LegalEntityId is { } explicitEntityId)
+        {
+            legalEntity = await _dbContext.LegalEntities.FirstOrDefaultAsync(
+                e => e.TenantId == tenantId && e.Id == explicitEntityId && e.IsActive, cancellationToken);
+            if (legalEntity is null)
+            {
+                return InvoiceOperationResult.InvalidReference("De facturerende entiteit bestaat niet of is niet actief.");
+            }
+        }
+        else
+        {
+            legalEntity = await GetDefaultLegalEntityAsync(cancellationToken);
+        }
+
+        // Invoice period drives the numbering sequence: default = invoice-date month; an
+        // explicitly picked earlier month is allowed (invoicing July in August), a future
+        // month never is.
+        var periodYear = request.InvoicePeriodYear ?? invoiceDate.Year;
+        var periodMonth = request.InvoicePeriodMonth ?? invoiceDate.Month;
+        if (ValidatePeriod(periodYear, periodMonth, invoiceDate) is { } periodError)
+        {
+            return InvoiceOperationResult.Invalid(periodError);
+        }
+
         var invoice = new Invoice
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
             CustomerId = request.CustomerId,
+            LegalEntityId = legalEntity?.Id,
+            InvoicePeriodYear = periodYear,
+            InvoicePeriodMonth = periodMonth,
             InvoiceDate = invoiceDate,
             DueDate = invoiceDate.AddDays(settings?.PaymentTermDays ?? 30),
-            Currency = settings?.DefaultCurrency ?? "EUR",
+            Currency = legalEntity?.DefaultCurrency ?? settings?.DefaultCurrency ?? "EUR",
             Notes = Trim(request.Notes),
         };
 
@@ -262,10 +295,20 @@ public class InvoiceService : IInvoiceService
         }
 
         _dbContext.Add(invoice);
-        await TenantNumbering.SaveWithClaimedNumberAsync(
-            _dbContext, settings,
-            () => invoice.InvoiceNumber = GenerateInvoiceNumber(settings),
-            cancellationToken);
+        if (legalEntity is not null)
+        {
+            // Entity-scoped monthly sequence (concurrency-safe claim + save in one go).
+            await _numberService.ClaimAsync(legalEntity, periodYear, periodMonth,
+                number => invoice.InvoiceNumber = number, cancellationToken);
+        }
+        else
+        {
+            // No legal entity configured (pre-seed edge case): legacy tenant counter.
+            await TenantNumbering.SaveWithClaimedNumberAsync(
+                _dbContext, settings,
+                () => invoice.InvoiceNumber = GenerateInvoiceNumber(settings),
+                cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "Created", null,
             new { invoice.InvoiceNumber, invoice.CustomerId, LineCount = invoice.Lines.Count }, cancellationToken);
@@ -306,6 +349,15 @@ public class InvoiceService : IInvoiceService
         }
 
         var before = new { invoice.InvoiceDate, LineCount = invoice.Lines.Count };
+
+        // Optional invoice-period change (Draft only): re-issues a number in the new period.
+        var newPeriodYear = request.InvoicePeriodYear ?? invoice.InvoicePeriodYear;
+        var newPeriodMonth = request.InvoicePeriodMonth ?? invoice.InvoicePeriodMonth;
+        var periodChanged = newPeriodYear != invoice.InvoicePeriodYear || newPeriodMonth != invoice.InvoicePeriodMonth;
+        if (periodChanged && ValidatePeriod(newPeriodYear, newPeriodMonth, request.InvoiceDate) is { } periodError)
+        {
+            return InvoiceOperationResult.Invalid(periodError);
+        }
 
         invoice.InvoiceDate = request.InvoiceDate;
         invoice.DueDate = request.DueDate < request.InvoiceDate ? request.InvoiceDate : request.DueDate;
@@ -366,7 +418,35 @@ public class InvoiceService : IInvoiceService
         _dbContext.AddRange(newLines);
         invoice.Lines = invoice.Lines.Where(l => keptIds.Contains(l.Id)).Concat(newLines).ToList();
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (periodChanged)
+        {
+            var oldPeriod = new { invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth, invoice.InvoiceNumber };
+            invoice.InvoicePeriodYear = newPeriodYear;
+            invoice.InvoicePeriodMonth = newPeriodMonth;
+
+            var legalEntity = invoice.LegalEntityId is { } entityId
+                ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
+                    e => e.TenantId == _tenantContext.TenantId && e.Id == entityId, cancellationToken)
+                : null;
+
+            if (legalEntity is not null && !invoice.NumberIsManual)
+            {
+                // The old number is abandoned, never reused: sequences only move forward.
+                await _numberService.ClaimAsync(legalEntity, newPeriodYear, newPeriodMonth,
+                    number => invoice.InvoiceNumber = number, cancellationToken);
+            }
+            else
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "PeriodChanged", oldPeriod,
+                new { invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth, invoice.InvoiceNumber }, cancellationToken);
+        }
+        else
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "Updated", before,
             new { invoice.InvoiceDate, LineCount = invoice.Lines.Count }, cancellationToken);
@@ -432,6 +512,92 @@ public class InvoiceService : IInvoiceService
         return InvoiceOperationResult.Success(await MapDetailAsync(invoice, cancellationToken));
     }
 
+    public async Task<InvoiceOperationResult> OverrideNumberAsync(
+        Guid id, OverrideInvoiceNumberRequest request, CancellationToken cancellationToken)
+    {
+        var invoice = await TenantScoped().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+        if (invoice is null)
+        {
+            return InvoiceOperationResult.NotFound;
+        }
+
+        if (invoice.Status != InvoiceStatus.Draft)
+        {
+            return InvoiceOperationResult.InvalidState("Alleen het nummer van een conceptfactuur kan worden gecorrigeerd.");
+        }
+
+        var newNumber = request.InvoiceNumber?.Trim();
+        if (string.IsNullOrEmpty(newNumber) || newNumber.Length > 30)
+        {
+            return InvoiceOperationResult.Invalid("Een factuurnummer van maximaal 30 tekens is verplicht.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            return InvoiceOperationResult.Invalid("Een reden is verplicht bij een handmatige nummercorrectie.");
+        }
+
+        var duplicate = await TenantScoped().AnyAsync(
+            i => i.Id != invoice.Id && i.InvoiceNumber == newNumber, cancellationToken);
+        if (duplicate)
+        {
+            return InvoiceOperationResult.Invalid($"Factuurnummer '{newNumber}' is al in gebruik.");
+        }
+
+        var oldNumber = invoice.InvoiceNumber;
+        invoice.InvoiceNumber = newNumber;
+        invoice.NumberIsManual = true;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "NumberOverridden",
+            new { InvoiceNumber = oldNumber },
+            new { InvoiceNumber = newNumber, request.Reason }, cancellationToken);
+
+        return InvoiceOperationResult.Success(await MapDetailAsync(invoice, cancellationToken));
+    }
+
+    public async Task<InvoiceNumberPreviewDto?> PreviewNextNumberAsync(
+        Guid? legalEntityId, int? year, int? month, CancellationToken cancellationToken)
+    {
+        var legalEntity = legalEntityId is { } id
+            ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
+                e => e.TenantId == _tenantContext.TenantId && e.Id == id && e.IsActive, cancellationToken)
+            : await GetDefaultLegalEntityAsync(cancellationToken);
+        if (legalEntity is null)
+        {
+            return null;
+        }
+
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        var previewYear = year ?? today.Year;
+        var previewMonth = Math.Clamp(month ?? today.Month, 1, 12);
+        var number = await _numberService.PreviewAsync(legalEntity, previewYear, previewMonth, cancellationToken);
+        return new InvoiceNumberPreviewDto(number, legalEntity.Id, previewYear, previewMonth);
+    }
+
+    private async Task<LegalEntity?> GetDefaultLegalEntityAsync(CancellationToken cancellationToken)
+    {
+        return await _dbContext.LegalEntities
+            .Where(e => e.TenantId == _tenantContext.TenantId && e.IsActive)
+            .OrderByDescending(e => e.IsDefault).ThenBy(e => e.LegalName)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>Null when valid; a Dutch error otherwise. Past months are fine, future months never.</summary>
+    private string? ValidatePeriod(int year, int month, DateOnly invoiceDate)
+    {
+        if (month is < 1 or > 12 || year is < 2000 or > 2100)
+        {
+            return "De factuurperiode is ongeldig.";
+        }
+
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        var maxIndex = Math.Max(today.Year * 12 + today.Month, invoiceDate.Year * 12 + invoiceDate.Month);
+        return year * 12 + month > maxIndex
+            ? "De factuurperiode mag niet in de toekomst liggen."
+            : null;
+    }
+
     private async Task ReleaseOrdersAsync(Invoice invoice, CancellationToken cancellationToken)
     {
         var orderIds = invoice.Lines
@@ -480,11 +646,20 @@ public class InvoiceService : IInvoiceService
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
         var vat = Math.Round(liveLines.Sum(l => l.Quantity * l.UnitPrice * l.VatRatePercent / 100m), 2);
 
+        var legalEntityName = invoice.LegalEntityId is { } entityId
+            ? await _dbContext.LegalEntities.AsNoTracking()
+                .Where(e => e.TenantId == tenantId && e.Id == entityId)
+                .Select(e => e.TradingName ?? e.LegalName)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
         return new InvoiceDetailDto(
             invoice.Id, invoice.InvoiceNumber, invoice.InvoiceDate, invoice.DueDate,
             invoice.CustomerId, customer?.Name ?? string.Empty, customer?.VatNumber,
             invoice.Status, invoice.Currency, invoice.Notes,
-            lines, subtotal, vat, subtotal + vat, Transitions[invoice.Status]);
+            lines, subtotal, vat, subtotal + vat, Transitions[invoice.Status],
+            invoice.LegalEntityId, legalEntityName,
+            invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth, invoice.NumberIsManual);
     }
 
     private static string GenerateInvoiceNumber(TenantSettings? settings)

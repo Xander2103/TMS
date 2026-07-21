@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TransportationService.Api.Data;
@@ -11,9 +12,11 @@ using TransportationService.Api.Data;
 namespace TransportationService.Api.Migrations
 {
     [DbContext(typeof(TransportationDbContext))]
-    partial class TransportationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260721150026_LegalEntities")]
+    partial class LegalEntities
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -3034,24 +3037,12 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
-                    b.Property<int>("InvoicePeriodMonth")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("InvoicePeriodYear")
-                        .HasColumnType("integer");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
-
-                    b.Property<Guid?>("LegalEntityId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
-
-                    b.Property<bool>("NumberIsManual")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -3071,8 +3062,6 @@ namespace TransportationService.Api.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.HasIndex("LegalEntityId");
-
                     b.HasIndex("TenantId", "CustomerId");
 
                     b.HasIndex("TenantId", "InvoiceDate");
@@ -3082,8 +3071,6 @@ namespace TransportationService.Api.Migrations
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.HasIndex("TenantId", "Status");
-
-                    b.HasIndex("TenantId", "LegalEntityId", "InvoicePeriodYear", "InvoicePeriodMonth");
 
                     b.ToTable("invoices", (string)null);
                 });
@@ -3153,60 +3140,6 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("TenantId", "TransportOrderId");
 
                     b.ToTable("invoice_lines", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Invoicing.Entities.InvoiceSequence", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("LegalEntityId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Month")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("NextValue")
-                        .IsConcurrencyToken()
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Year")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LegalEntityId");
-
-                    b.HasIndex("TenantId", "LegalEntityId", "Year", "Month")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
-                    b.ToTable("invoice_sequences", (string)null);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Locations.Entities.Location", b =>
@@ -7825,11 +7758,6 @@ namespace TransportationService.Api.Migrations
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("TransportationService.Api.Modules.Organization.Entities.LegalEntity", null)
-                        .WithMany()
-                        .HasForeignKey("LegalEntityId")
-                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Invoicing.Entities.InvoiceLine", b =>
@@ -7844,15 +7772,6 @@ namespace TransportationService.Api.Migrations
                         .WithMany()
                         .HasForeignKey("TransportOrderId")
                         .OnDelete(DeleteBehavior.SetNull);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Invoicing.Entities.InvoiceSequence", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.Organization.Entities.LegalEntity", null)
-                        .WithMany()
-                        .HasForeignKey("LegalEntityId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Notifications.Entities.InternalMessageRecipient", b =>

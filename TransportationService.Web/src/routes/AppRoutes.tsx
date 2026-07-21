@@ -94,6 +94,7 @@ const LocationsPage = lazyPage(() => import('../features/locations/pages/Locatio
 const NewLocationPage = lazyPage(() => import('../features/locations/pages/NewLocationPage'), 'NewLocationPage')
 const LocationDetailPage = lazyPage(() => import('../features/locations/pages/LocationDetailPage'), 'LocationDetailPage')
 const SettingsPage = lazyPage(() => import('../features/settings/pages/SettingsPage'), 'SettingsPage')
+const LegalEntitiesPage = lazyPage(() => import('../features/legal-entities/pages/LegalEntitiesPage'), 'LegalEntitiesPage')
 const UsersPage = lazyPage(() => import('../features/users/pages/UsersPage'), 'UsersPage')
 const NewUserPage = lazyPage(() => import('../features/users/pages/NewUserPage'), 'NewUserPage')
 const UserDetailPage = lazyPage(() => import('../features/users/pages/UserDetailPage'), 'UserDetailPage')
@@ -221,6 +222,7 @@ const router = createBrowserRouter(
           />
           <Route path="/master-data/:resource" element={<LookupPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/legal-entities" element={<LegalEntitiesPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

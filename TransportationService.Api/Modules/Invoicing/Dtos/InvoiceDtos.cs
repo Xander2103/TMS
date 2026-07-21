@@ -42,7 +42,12 @@ public record InvoiceDetailDto(
     decimal Subtotal,
     decimal VatAmount,
     decimal Total,
-    IReadOnlyList<InvoiceStatus> AllowedTransitions);
+    IReadOnlyList<InvoiceStatus> AllowedTransitions,
+    Guid? LegalEntityId,
+    string? LegalEntityName,
+    int InvoicePeriodYear,
+    int InvoicePeriodMonth,
+    bool NumberIsManual);
 
 /// <summary>Completed, not-yet-invoiced order offered in the invoice builder.</summary>
 public record UninvoicedOrderDto(
@@ -65,13 +70,23 @@ public record CreateInvoiceRequest(
     DateOnly? InvoiceDate,
     IReadOnlyList<Guid> OrderIds,
     IReadOnlyList<ManualInvoiceLineInput> ManualLines,
-    string? Notes);
+    string? Notes,
+    Guid? LegalEntityId = null,
+    int? InvoicePeriodYear = null,
+    int? InvoicePeriodMonth = null);
 
 public record UpdateInvoiceRequest(
     DateOnly InvoiceDate,
     DateOnly DueDate,
     IReadOnlyList<UpdateInvoiceLineInput> Lines,
-    string? Notes);
+    string? Notes,
+    int? InvoicePeriodYear = null,
+    int? InvoicePeriodMonth = null);
+
+/// <summary>Draft-only manual invoice-number correction; requires invoices.override_number + reason.</summary>
+public record OverrideInvoiceNumberRequest(string InvoiceNumber, string Reason);
+
+public record InvoiceNumberPreviewDto(string InvoiceNumber, Guid LegalEntityId, int Year, int Month);
 
 /// <summary>Existing lines keep their id; new manual lines come without one. Order-backed lines cannot be added here.</summary>
 public record UpdateInvoiceLineInput(

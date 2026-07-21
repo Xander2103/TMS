@@ -49,6 +49,28 @@ public class InvoicesController : ControllerBase
         return Ok(await _service.ListUninvoicedOrdersAsync(customerId, cancellationToken));
     }
 
+    /// <summary>Next expected invoice number for an entity + period (informative, never claims).</summary>
+    [HttpGet("next-number")]
+    [RequirePermission(PermissionCodes.InvoicesView, PermissionCodes.InvoicesCreate)]
+    public async Task<ActionResult<InvoiceNumberPreviewDto>> NextNumber(
+        [FromQuery] Guid? legalEntityId, [FromQuery] int? year, [FromQuery] int? month, CancellationToken cancellationToken)
+    {
+        var preview = await _service.PreviewNextNumberAsync(legalEntityId, year, month, cancellationToken);
+        return preview is null
+            ? NotFound(new { message = "Er is geen actieve facturerende entiteit geconfigureerd." })
+            : Ok(preview);
+    }
+
+    /// <summary>Manual number correction (Draft only). Requires a reason; fully audited.</summary>
+    [HttpPost("{id:guid}/number-override")]
+    [RequirePermission(PermissionCodes.InvoicesOverrideNumber)]
+    public async Task<ActionResult<InvoiceDetailDto>> OverrideNumber(
+        Guid id, OverrideInvoiceNumberRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.OverrideNumberAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     [HttpPost]
     [RequirePermission(PermissionCodes.InvoicesCreate)]
     public async Task<ActionResult<InvoiceDetailDto>> Create(CreateInvoiceRequest request, CancellationToken cancellationToken)

@@ -67,6 +67,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ReportsView,
                 PermissionCodes.OperationsView, PermissionCodes.OperationsManageAlerts,
                 PermissionCodes.WarehouseSchedule, PermissionCodes.WarehouseConflictOverride,
+                PermissionCodes.LegalEntitiesView,
             ]),
 
         new("dispatcher", "Dispatcher",
@@ -90,6 +91,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ReportsView,
                 PermissionCodes.OperationsView, PermissionCodes.OperationsManageAlerts,
                 PermissionCodes.WarehouseSchedule,
+                PermissionCodes.LegalEntitiesView,
             ]),
 
         new("management", "Management",
@@ -129,6 +131,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ReportsView,
                 PermissionCodes.OperationsView,
                 PermissionCodes.ProfitabilityExport,
+                PermissionCodes.LegalEntitiesView,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -149,6 +152,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
                 PermissionCodes.ReportsView,
                 PermissionCodes.ProfitabilityExport,
+                PermissionCodes.LegalEntitiesView, PermissionCodes.LegalEntitiesManage,
+                PermissionCodes.InvoicesOverrideNumber,
             ]),
 
         new("hr", "HR",
