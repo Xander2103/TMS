@@ -70,6 +70,10 @@ public static class PermissionCodes
     public const string ReferenceDataView = "reference_data.view";
     public const string ReferenceDataManage = "reference_data.manage";
 
+    // --- Order unit types (managed lookup) ---
+    public const string UnitTypesView = "unit_types.view";
+    public const string UnitTypesManage = "unit_types.manage";
+
     // --- Customers ---
     public const string CustomersView = "customers.view";
     public const string CustomersCreate = "customers.create";
@@ -336,6 +340,8 @@ public static class PermissionCodes
         (ContactDepartmentsManage, "contact_departments", "manage", "Contactafdelingen beheren"),
         (ReferenceDataView, "reference_data", "view", "Referentiegegevens bekijken"),
         (ReferenceDataManage, "reference_data", "manage", "Referentiegegevens beheren"),
+        (UnitTypesView, "unit_types", "view", "Eenheidstypes bekijken"),
+        (UnitTypesManage, "unit_types", "manage", "Eenheidstypes beheren"),
         (CustomersView, "customers", "view", "Klanten bekijken"),
         (CustomersCreate, "customers", "create", "Klanten aanmaken"),
         (CustomersEdit, "customers", "edit", "Klanten bewerken"),

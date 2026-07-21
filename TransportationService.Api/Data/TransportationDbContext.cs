@@ -167,6 +167,7 @@ public class TransportationDbContext : DbContext
     public DbSet<Language> Languages => Set<Language>();
     public DbSet<Nationality> Nationalities => Set<Nationality>();
     public DbSet<ContractType> ContractTypes => Set<ContractType>();
+    public DbSet<TransportationService.Api.Modules.Reference.Entities.UnitType> UnitTypes => Set<TransportationService.Api.Modules.Reference.Entities.UnitType>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

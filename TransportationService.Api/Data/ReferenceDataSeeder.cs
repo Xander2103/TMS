@@ -35,6 +35,13 @@ public static class ReferenceDataSeeder
              ("DIR", "Directie"), ("KLNT", "Klantendienst"), ("CLAIM", "Claims")],
             cancellationToken);
 
+        await SeedIfEmptyAsync<Modules.Reference.Entities.UnitType>(dbContext, tenantId,
+            [("COLLI", "Colli"), ("EUROPALLET", "Europallet"), ("PALLET", "Standaardpallet"), ("BLOCKPALLET", "Blokpallet"),
+             ("CONTAINER", "Container"), ("CRATE", "Krat"), ("BOX", "Doos"), ("ROLLCONTAINER", "Rolcontainer"),
+             ("PIECE", "Stuks"), ("LOADINGMETER", "Laadmeter"), ("KG", "Kilogram"), ("TON", "Ton"),
+             ("DRUM", "Vat"), ("DOCUMENT", "Document"), ("PARCEL", "Pakket"), ("OTHER", "Andere")],
+            cancellationToken);
+
         await SeedIfEmptyAsync<JobFunction>(dbContext, tenantId,
             [("CHAUF", "Chauffeur"), ("CHAUF-B", "Chauffeur B"), ("CHAUF-C", "Chauffeur C"), ("CHAUF-CE", "Chauffeur CE"),
              ("PLAN", "Planner"), ("DISP", "Dispatcher"), ("MAGM", "Magazijnmedewerker"),

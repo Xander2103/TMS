@@ -180,6 +180,7 @@ public class TransportOrderService : ITransportOrderService
             GoodsDescription = Trim(request.GoodsDescription),
             Quantity = NonNegative(request.Quantity),
             QuantityUnit = Trim(request.QuantityUnit),
+            QuantityUnitCode = NormalizeUnitCode(request.QuantityUnitCode),
             WeightKg = NonNegative(request.WeightKg),
             VolumeM3 = NonNegative(request.VolumeM3),
             PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null,
@@ -253,6 +254,7 @@ public class TransportOrderService : ITransportOrderService
         order.GoodsDescription = Trim(request.GoodsDescription);
         order.Quantity = NonNegative(request.Quantity);
         order.QuantityUnit = Trim(request.QuantityUnit);
+        order.QuantityUnitCode = NormalizeUnitCode(request.QuantityUnitCode);
         order.WeightKg = NonNegative(request.WeightKg);
         order.VolumeM3 = NonNegative(request.VolumeM3);
         order.PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null;
@@ -902,8 +904,12 @@ public class TransportOrderService : ITransportOrderService
             CorrectiveTransitions.TryGetValue(order.Status, out var corrections) ? corrections : [],
             order.Priority,
             order.DieselSurchargeOverride, order.DieselSurchargePercentOverride, order.DieselSurchargeOverrideReason,
-            order.LegalEntityId);
+            order.LegalEntityId, order.QuantityUnitCode);
     }
+
+    /// <summary>Uppercases a managed unit code; blank → null (free-text QuantityUnit is the fallback).</summary>
+    private static string? NormalizeUnitCode(string? code) =>
+        string.IsNullOrWhiteSpace(code) ? null : code.Trim().ToUpperInvariant();
 
     private static string GenerateOrderNumber(TenantSettings? settings)
     {

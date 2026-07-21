@@ -75,7 +75,8 @@ public record TransportOrderDetailDto(
     bool DieselSurchargeOverride = false,
     decimal? DieselSurchargePercentOverride = null,
     string? DieselSurchargeOverrideReason = null,
-    Guid? LegalEntityId = null);
+    Guid? LegalEntityId = null,
+    string? QuantityUnitCode = null);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
@@ -113,7 +114,8 @@ public record CargoItemDto(
     bool Stackable = true,
     string? Reference = null,
     Guid? LoadingStopId = null,
-    Guid? UnloadingStopId = null);
+    Guid? UnloadingStopId = null,
+    string? QuantityUnitCode = null);
 
 /// <summary>
 /// Stop links use INDEXES into the request's stop list (stops receive fresh ids on every
@@ -202,7 +204,8 @@ public record CreateTransportOrderRequest(
     bool DieselSurchargeOverride = false,
     decimal? DieselSurchargePercentOverride = null,
     string? DieselSurchargeOverrideReason = null,
-    Guid? LegalEntityId = null);
+    Guid? LegalEntityId = null,
+    string? QuantityUnitCode = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -224,7 +227,8 @@ public record UpdateTransportOrderRequest(
     bool DieselSurchargeOverride = false,
     decimal? DieselSurchargePercentOverride = null,
     string? DieselSurchargeOverrideReason = null,
-    Guid? LegalEntityId = null);
+    Guid? LegalEntityId = null,
+    string? QuantityUnitCode = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

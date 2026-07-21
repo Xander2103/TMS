@@ -72,6 +72,9 @@ public class TransportOrder : AuditableTenantEntity
     public string? GoodsDescription { get; set; }
     public decimal? Quantity { get; set; }
     public string? QuantityUnit { get; set; }
+
+    /// <summary>Managed unit-type code (from the UnitType lookup); QuantityUnit is the legacy free-text fallback.</summary>
+    public string? QuantityUnitCode { get; set; }
     public decimal? WeightKg { get; set; }
     public decimal? VolumeM3 { get; set; }
     public int? PalletCount { get; set; }

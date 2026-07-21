@@ -25,6 +25,9 @@ public class CargoItem : AuditableTenantEntity
 
     public string? QuantityUnit { get; set; }
 
+    /// <summary>Managed unit-type code (from the UnitType lookup); QuantityUnit is the legacy free-text fallback.</summary>
+    public string? QuantityUnitCode { get; set; }
+
     public string? Notes { get; set; }
 
     /// <summary>Packaging type; shares the package module's classification so generated packages inherit it 1:1.</summary>
