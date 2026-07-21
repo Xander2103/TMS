@@ -30,6 +30,11 @@ public static class PermissionCodes
     // --- HR settings (reminders, expiry policies) ---
     public const string HrSettingsManage = "hr_settings.manage";
 
+    // --- Issued items (bedrijfsmiddelen) ---
+    public const string IssuedItemsView = "issued_items.view";
+    public const string IssuedItemsManage = "issued_items.manage";
+    public const string IssuedItemsManageTemplates = "issued_items.manage_templates";
+
     public const string PlanningView = "planning.view";
     public const string PlanningCreate = "planning.create";
     public const string PlanningEdit = "planning.edit";
@@ -297,6 +302,9 @@ public static class PermissionCodes
         (EmployeeDocumentsApprove, "employee_documents", "approve", "Personeelsdocumenten goedkeuren"),
         (EmployeeDocumentsViewSensitive, "employee_documents", "view_sensitive", "Gevoelige personeelsdocumenten (ID, medisch, contract) bekijken"),
         (HrSettingsManage, "hr_settings", "manage", "HR-instellingen en herinneringen beheren"),
+        (IssuedItemsView, "issued_items", "view", "Bedrijfsmiddelen van medewerkers bekijken"),
+        (IssuedItemsManage, "issued_items", "manage", "Bedrijfsmiddelen uitreiken en innemen"),
+        (IssuedItemsManageTemplates, "issued_items", "manage_templates", "Sjablonen voor bedrijfsmiddelen beheren"),
         (PlanningView, "planning", "view", "Planning bekijken"),
         (PlanningCreate, "planning", "create", "Planning aanmaken"),
         (PlanningEdit, "planning", "edit", "Planning bewerken"),

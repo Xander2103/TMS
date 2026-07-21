@@ -246,6 +246,11 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.EmployeeDocumentsCreate, PermissionCodes.EmployeeDocumentsEdit,
                     PermissionCodes.EmployeeDocumentsDelete, PermissionCodes.EmployeeDocumentsViewSensitive,
                     PermissionCodes.HrSettingsManage,
+                    PermissionCodes.IssuedItemsView, PermissionCodes.IssuedItemsManage, PermissionCodes.IssuedItemsManageTemplates,
+                ],
+                ["magazijn"] =
+                [
+                    PermissionCodes.IssuedItemsView,
                 ],
                 ["boekhouding"] =
                 [

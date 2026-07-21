@@ -178,6 +178,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeDocumentsView, PermissionCodes.EmployeeDocumentsCreate,
                 PermissionCodes.EmployeeDocumentsEdit, PermissionCodes.EmployeeDocumentsDelete,
                 PermissionCodes.EmployeeDocumentsViewSensitive, PermissionCodes.HrSettingsManage,
+                PermissionCodes.IssuedItemsView, PermissionCodes.IssuedItemsManage, PermissionCodes.IssuedItemsManageTemplates,
                 PermissionCodes.MessagesSend,
                 PermissionCodes.QualificationTypesView,
                 PermissionCodes.DepartmentsView, PermissionCodes.JobFunctionsView,
@@ -219,6 +220,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OperationsView,
                 PermissionCodes.WarehouseManage, PermissionCodes.WarehouseSchedule,
                 PermissionCodes.WarehouseConflictOverride,
+                PermissionCodes.IssuedItemsView,
             ]),
     ];
 }
