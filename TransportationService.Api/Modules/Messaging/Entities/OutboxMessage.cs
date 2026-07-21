@@ -37,11 +37,15 @@ public static class MessageKinds
     public const string LeaveRejected = "leave_rejected";
     public const string PlanningChanged = "planning_changed";
     public const string QualificationExpiry = "qualification_expiry";
+    public const string HrBirthday = "hr_birthday";
+    public const string HrSeniority = "hr_seniority";
+    public const string HrEmploymentEnd = "hr_employment_end";
 
     public static readonly IReadOnlyList<string> All =
     [
         OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate, Delay, DeliveryCompleted,
         PodAvailable, LeaveSubmitted, LeaveApproved, LeaveRejected, PlanningChanged, QualificationExpiry,
+        HrBirthday, HrSeniority, HrEmploymentEnd,
     ];
 }
 

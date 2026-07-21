@@ -142,6 +142,9 @@ public class TransportationDbContext : DbContext
 
     // HR availability
     public DbSet<Absence> Absences => Set<Absence>();
+    public DbSet<TransportationService.Api.Modules.Hr.Entities.HrReminderSettings> HrReminderSettings => Set<TransportationService.Api.Modules.Hr.Entities.HrReminderSettings>();
+    public DbSet<TransportationService.Api.Modules.Hr.Entities.ExpiryReminderPolicy> ExpiryReminderPolicies => Set<TransportationService.Api.Modules.Hr.Entities.ExpiryReminderPolicy>();
+    public DbSet<TransportationService.Api.Modules.Hr.Entities.ReminderDispatchLog> ReminderDispatchLogs => Set<TransportationService.Api.Modules.Hr.Entities.ReminderDispatchLog>();
 
     // Locations
     public DbSet<Location> Locations => Set<Location>();

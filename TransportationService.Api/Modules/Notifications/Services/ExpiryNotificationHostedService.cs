@@ -49,7 +49,9 @@ public sealed class ExpiryNotificationHostedService : BackgroundService
     {
         using var scope = _scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<TransportationDbContext>();
-        var producer = new ExpiryNotificationProducer(dbContext, scope.ServiceProvider.GetRequiredService<TimeProvider>());
+        var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
+        var producer = new ExpiryNotificationProducer(dbContext, timeProvider);
+        var hrProducer = new Modules.Hr.Services.HrReminderProducer(dbContext, timeProvider);
 
         var tenantIds = await dbContext.Tenants.AsNoTracking()
             .Where(t => t.IsActive)
@@ -59,6 +61,7 @@ public sealed class ExpiryNotificationHostedService : BackgroundService
         foreach (var tenantId in tenantIds)
         {
             await producer.ProduceForTenantAsync(tenantId, cancellationToken);
+            await hrProducer.ProduceForTenantAsync(tenantId, cancellationToken);
         }
     }
 }

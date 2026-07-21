@@ -33,24 +33,44 @@ public class ExpiryNotificationProducer
             .Where(s => s.TenantId == tenantId)
             .Select(s => (int?)s.QualificationExpiryWarningDays)
             .FirstOrDefaultAsync(cancellationToken) ?? DefaultWarningDays;
-        var horizon = today.AddDays(warningDays);
+
+        // Configurable lead times per qualification type (fallback to the tenant default).
+        var qualificationPolicies = await _dbContext.ExpiryReminderPolicies.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && p.IsActive
+                        && p.TargetKind == Modules.Hr.Entities.ExpiryReminderTargetKind.QualificationType)
+            .Select(p => new { p.TargetCode, p.LeadTimeDays })
+            .ToListAsync(cancellationToken);
+        var leadByTypeCode = qualificationPolicies
+            .Where(p => p.TargetCode != "*")
+            .ToDictionary(p => p.TargetCode, p => p.LeadTimeDays, StringComparer.OrdinalIgnoreCase);
+        var wildcardLead = qualificationPolicies.FirstOrDefault(p => p.TargetCode == "*")?.LeadTimeDays;
+        var maxHorizon = today.AddDays(Math.Max(warningDays,
+            Math.Max(wildcardLead ?? 0, leadByTypeCode.Count > 0 ? leadByTypeCode.Values.Max() : 0)));
 
         var added = false;
 
-        // Qualifications: warn the employee (own user) and HR document viewers.
+        // Qualifications: warn the employee (own user) and HR document viewers. The broad
+        // maxHorizon prefilters; the per-type lead time is applied precisely below.
         var expiringQualifications = await (
                 from q in _dbContext.EmployeeQualifications.AsNoTracking()
                 where q.TenantId == tenantId
                       && (q.Status == QualificationStatus.Valid || q.Status == QualificationStatus.ExpiringSoon)
-                      && q.ExpiryDate != null && q.ExpiryDate <= horizon && q.ExpiryDate >= today.AddDays(-7)
+                      && q.ExpiryDate != null && q.ExpiryDate <= maxHorizon && q.ExpiryDate >= today.AddDays(-7)
                 join t in _dbContext.QualificationTypes.AsNoTracking() on q.QualificationTypeId equals t.Id
                 join e in _dbContext.Employees.AsNoTracking().Where(e => e.TenantId == tenantId)
                     on q.EmployeeId equals e.Id
-                select new { q.Id, q.ExpiryDate, TypeName = t.Name, e.FirstName, e.LastName, EmployeeId = e.Id })
+                select new { q.Id, q.ExpiryDate, TypeName = t.Name, TypeCode = t.Code, e.FirstName, e.LastName, EmployeeId = e.Id })
             .ToListAsync(cancellationToken);
 
         foreach (var qualification in expiringQualifications)
         {
+            // Apply the effective lead time for this qualification type.
+            var lead = leadByTypeCode.GetValueOrDefault(qualification.TypeCode, wildcardLead ?? warningDays);
+            if (qualification.ExpiryDate > today.AddDays(lead))
+            {
+                continue;
+            }
+
             var userId = await _dbContext.Users.AsNoTracking()
                 .Where(u => u.TenantId == tenantId && u.EmployeeId == qualification.EmployeeId && u.IsActive)
                 .Select(u => (Guid?)u.Id)

@@ -82,6 +82,8 @@ builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IEmployeeDocumentService,
     TransportationService.Api.Modules.Employees.Services.EmployeeDocumentService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IHrReminderConfigService,
+    TransportationService.Api.Modules.Hr.Services.HrReminderConfigService>();
 
 // Qualification file storage
 builder.Services.AddSingleton<IFileStorageService>(
@@ -398,6 +400,7 @@ if (app.Environment.IsDevelopment())
     await ReferenceDataSeeder.SeedAsync(dbContext);
     await DefaultRoleSeeder.SyncAsync(dbContext);
     await LegalEntitySeeder.SeedAsync(dbContext);
+    await ExpiryPolicySeeder.SeedAsync(dbContext);
 
     // Ensure the development administrator has a usable password (only when unset, so a
     // deliberately-changed password is never reset). Reported to the console below.

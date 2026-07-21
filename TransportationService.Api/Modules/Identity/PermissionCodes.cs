@@ -27,6 +27,9 @@ public static class PermissionCodes
     public const string EmployeeDocumentsApprove = "employee_documents.approve";
     public const string EmployeeDocumentsViewSensitive = "employee_documents.view_sensitive";
 
+    // --- HR settings (reminders, expiry policies) ---
+    public const string HrSettingsManage = "hr_settings.manage";
+
     public const string PlanningView = "planning.view";
     public const string PlanningCreate = "planning.create";
     public const string PlanningEdit = "planning.edit";
@@ -293,6 +296,7 @@ public static class PermissionCodes
         (EmployeeDocumentsDelete, "employee_documents", "delete", "Personeelsdocumenten verwijderen"),
         (EmployeeDocumentsApprove, "employee_documents", "approve", "Personeelsdocumenten goedkeuren"),
         (EmployeeDocumentsViewSensitive, "employee_documents", "view_sensitive", "Gevoelige personeelsdocumenten (ID, medisch, contract) bekijken"),
+        (HrSettingsManage, "hr_settings", "manage", "HR-instellingen en herinneringen beheren"),
         (PlanningView, "planning", "view", "Planning bekijken"),
         (PlanningCreate, "planning", "create", "Planning aanmaken"),
         (PlanningEdit, "planning", "edit", "Planning bewerken"),
