@@ -166,6 +166,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IVeh
     TransportationService.Api.Modules.Fleet.Services.VehicleService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.ITrailerService,
     TransportationService.Api.Modules.Fleet.Services.TrailerService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFleetKpiService,
+    TransportationService.Api.Modules.Fleet.Services.FleetKpiService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.ITachographService,
     TransportationService.Api.Modules.Fleet.Services.TachographService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.ILeasingContractService,
