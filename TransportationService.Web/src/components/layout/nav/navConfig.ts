@@ -13,6 +13,8 @@ export interface NavItem {
   permissions?: string[]
   icon?: LucideIcon
   badge?: BadgeKey
+  /** Exact-match highlighting: active only on this route, not descendant routes (NavLink `end`). */
+  end?: boolean
   /** Future nested submenu — rendered as an inner collapsible group. */
   children?: NavItem[]
 }
@@ -76,7 +78,7 @@ export function getNavModules(): NavModule[] {
       icon: CircleUser,
       requiresEmployee: true,
       items: [
-        { label: 'Mijn dashboard', to: '/portal' },
+        { label: 'Mijn dashboard', to: '/portal', end: true },
         { label: 'Mijn planning', to: '/portal/planning' },
         { label: 'Mijn afwezigheden', to: '/portal/absences' },
         { label: 'Mijn kwalificaties', to: '/portal/qualifications' },
@@ -176,7 +178,7 @@ export function getNavModules(): NavModule[] {
         { label: 'Gebruikers', to: '/users', permissions: ['users.view'] },
         { label: 'Rollen & rechten', to: '/roles', permissions: ['roles.view'] },
         { label: 'Functie → rol', to: '/job-function-mappings', permissions: ['roles.view', 'roles.manage_permissions'] },
-        { label: 'Instellingen', to: '/settings', permissions: ['company_settings.view', 'company_settings.manage'] },
+        { label: 'Instellingen', to: '/settings', end: true, permissions: ['company_settings.view', 'company_settings.manage'] },
       ],
     },
     masterDataModule(),

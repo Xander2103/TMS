@@ -47,6 +47,7 @@ function NavItemRow({ item, depth, unreadCount, onNavigate }: NavItemRowProps) {
     <li>
       <NavLink
         to={item.to}
+        end={item.end}
         style={indent}
         className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
         onClick={onNavigate}

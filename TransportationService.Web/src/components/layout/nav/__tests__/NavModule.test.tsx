@@ -68,4 +68,23 @@ describe('NavModule', () => {
     await userEvent.click(parentToggle)
     expect(screen.getByRole('link', { name: 'Kind' })).toHaveAttribute('href', '/parent/child')
   })
+
+  it('honours end:true so a parent route is not active on a descendant route', () => {
+    // Regression guard: /settings must NOT highlight while on /settings/legal-entities.
+    const settings: VisibleModule = {
+      module: { id: 'beheer', label: 'Beheer', icon: Truck, items: [] },
+      items: [
+        { label: 'Instellingen', to: '/settings', end: true },
+        { label: 'Eigen bedrijven', to: '/settings/legal-entities' },
+      ],
+      subgroups: [],
+    }
+    render(
+      <MemoryRouter initialEntries={['/settings/legal-entities']}>
+        <NavModule vm={settings} expanded active={false} unreadCount={0} onToggle={vi.fn()} />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'Instellingen' })).not.toHaveClass('active')
+    expect(screen.getByRole('link', { name: 'Eigen bedrijven' })).toHaveClass('active')
+  })
 })
