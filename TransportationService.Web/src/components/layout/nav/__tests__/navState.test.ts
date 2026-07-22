@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { NavModule } from '../navConfig'
 import { getNavModules } from '../navConfig'
 import { filterModule, findActiveModuleId, moduleHasUnread } from '../navState'
+import { Truck } from 'lucide-react'
 
 const modules = getNavModules()
 const allowAll = () => true
@@ -58,5 +60,64 @@ describe('moduleHasUnread', () => {
     expect(moduleHasUnread(comms, 0)).toBe(false)
     const transport = filterModule(modules.find((m) => m.id === 'transport')!, { hasAnyPermission: allowAll, hasEmployee: false, query: '' })!
     expect(moduleHasUnread(transport, 3)).toBe(false)
+  })
+})
+
+describe('findActiveModuleId — cross-module prefix boundary', () => {
+  // Two DIFFERENT modules whose routes share a prefix: this is the collision the
+  // trailing-slash guard must prevent. If the guard regressed to a bare startsWith,
+  // '/warehouses' would wrongly resolve to the '/warehouse' module.
+  const synthetic: NavModule[] = [
+    { id: 'alpha', label: 'A', icon: Truck, items: [{ label: 'Ware', to: '/warehouse' }] },
+    { id: 'beta', label: 'B', icon: Truck, items: [{ label: 'Wares', to: '/warehouses' }] },
+  ]
+
+  it('does not prefix-match /warehouses onto the /warehouse module', () => {
+    expect(findActiveModuleId(synthetic, '/warehouses')).toBe('beta')
+    expect(findActiveModuleId(synthetic, '/warehouse')).toBe('alpha')
+    expect(findActiveModuleId(synthetic, '/warehouse/123')).toBe('alpha')
+  })
+})
+
+describe('filterModule / moduleHasUnread — nested children recursion', () => {
+  const nested: NavModule = {
+    id: 'nest',
+    label: 'Nest',
+    icon: Truck,
+    items: [
+      {
+        label: 'Parent',
+        to: '/parent',
+        permissions: ['p.parent'],
+        children: [
+          { label: 'Alpha child', to: '/parent/alpha', permissions: ['p.alpha'] },
+          { label: 'Beta child', to: '/parent/beta', badge: 'notifications' },
+        ],
+      },
+    ],
+  }
+
+  it('keeps a parent when only a descendant matches the query', () => {
+    const vm = filterModule(nested, { hasAnyPermission: () => true, hasEmployee: false, query: 'beta child' })!
+    expect(vm.items).toHaveLength(1)
+    expect(vm.items[0].children!.map((c) => c.label)).toEqual(['Beta child'])
+  })
+
+  it('drops descendants the user lacks permission for, keeps permitted and ungated ones', () => {
+    const only = (codes: string[]) => codes.includes('p.parent') || codes.includes('p.alpha')
+    const vm = filterModule(nested, { hasAnyPermission: only, hasEmployee: false, query: '' })!
+    expect(vm.items[0].children!.map((c) => c.to)).toEqual(['/parent/alpha', '/parent/beta'])
+  })
+
+  it('drops the parent when its only query-matching descendant is filtered out by permission', () => {
+    const only = (codes: string[]) => codes.includes('p.parent')
+    const vm = filterModule(nested, { hasAnyPermission: only, hasEmployee: false, query: 'alpha child' })
+    expect(vm).toBeNull()
+  })
+
+  it('detects an unread badge nested inside children', () => {
+    const vm = filterModule(nested, { hasAnyPermission: () => true, hasEmployee: false, query: '' })!
+    expect(moduleHasUnread(vm, 4)).toBe(true)
+    expect(moduleHasUnread(vm, 0)).toBe(false)
   })
 })
