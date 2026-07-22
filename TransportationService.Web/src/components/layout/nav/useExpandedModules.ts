@@ -15,29 +15,44 @@ function readStored(key: string): string[] | null {
   }
 }
 
+/** Stored expanded ids (if any) unioned with the active module, which always starts expanded. */
 function seed(key: string, activeModuleId: string | null): Set<string> {
   const stored = readStored(key)
-  if (stored) return new Set(stored)
-  return new Set(activeModuleId ? [activeModuleId] : [])
+  const base = stored ? new Set(stored) : new Set<string>()
+  if (activeModuleId) base.add(activeModuleId)
+  return base
 }
 
 /**
  * Per-user set of expanded module ids. Persists to localStorage keyed by user id so two
- * accounts on the same browser keep independent state. The active module always expands.
+ * accounts on the same browser keep independent state. The active module auto-expands on
+ * navigation; the user can still collapse it afterwards until they navigate again.
+ *
+ * State is adjusted during render (React's "storing information from previous renders"
+ * pattern) rather than in an effect, so navigation never triggers a cascading re-render.
  */
 export function useExpandedModules(userId: string | null, activeModuleId: string | null) {
   const key = storageKey(userId)
   const [expanded, setExpanded] = useState<Set<string>>(() => seed(key, activeModuleId))
   const [prevKey, setPrevKey] = useState(key)
+  const [prevActive, setPrevActive] = useState(activeModuleId)
 
-  // Re-seed synchronously when the user (key) changes — before any effect runs — so the
-  // persist effect can never write one user's expand state under another user's key.
   if (key !== prevKey) {
+    // User switched: re-seed from the new user's storage so we never write one user's
+    // state under another's key.
     setPrevKey(key)
+    setPrevActive(activeModuleId)
     setExpanded(seed(key, activeModuleId))
+  } else if (activeModuleId !== prevActive) {
+    // Navigation changed the active module: expand it without collapsing the others.
+    setPrevActive(activeModuleId)
+    if (activeModuleId) {
+      setExpanded((prev) => (prev.has(activeModuleId) ? prev : new Set(prev).add(activeModuleId)))
+    }
   }
 
-  // Persist on every change (cheap; the set is tiny).
+  // Persist on every change (cheap; the set is tiny). Writing to localStorage is a legit
+  // external-system sync, unlike the setState relocated into render above.
   useEffect(() => {
     try {
       window.localStorage.setItem(key, JSON.stringify([...expanded]))
@@ -45,12 +60,6 @@ export function useExpandedModules(userId: string | null, activeModuleId: string
       /* storage unavailable — expansion just won't persist */
     }
   }, [key, expanded])
-
-  // Auto-expand the active module when navigation changes it. Same-ref return avoids churn.
-  useEffect(() => {
-    if (!activeModuleId) return
-    setExpanded((prev) => (prev.has(activeModuleId) ? prev : new Set(prev).add(activeModuleId)))
-  }, [activeModuleId])
 
   const toggle = useCallback((id: string) => {
     setExpanded((prev) => {

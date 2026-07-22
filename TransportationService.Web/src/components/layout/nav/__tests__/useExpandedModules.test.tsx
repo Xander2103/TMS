@@ -47,4 +47,22 @@ describe('useExpandedModules', () => {
     // u1's stored state must survive u2 mounting on the same browser.
     expect(JSON.parse(window.localStorage.getItem('nav.expanded.u1.v1')!)).toEqual(['klanten'])
   })
+
+  it('auto-expands a newly active module on navigation without collapsing others', () => {
+    const { result, rerender } = renderHook(
+      ({ active }: { active: string | null }) => useExpandedModules('u9', active),
+      { initialProps: { active: 'vloot' as string | null } },
+    )
+    expect(result.current.isExpanded('vloot')).toBe(true)
+    rerender({ active: 'klanten' })
+    expect(result.current.isExpanded('klanten')).toBe(true)
+    expect(result.current.isExpanded('vloot')).toBe(true)
+  })
+
+  it('lets the user collapse the currently active module', () => {
+    const { result } = renderHook(() => useExpandedModules('u10', 'vloot'))
+    expect(result.current.isExpanded('vloot')).toBe(true)
+    act(() => result.current.toggle('vloot'))
+    expect(result.current.isExpanded('vloot')).toBe(false)
+  })
 })
