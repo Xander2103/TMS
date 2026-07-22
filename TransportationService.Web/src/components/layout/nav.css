@@ -1,0 +1,125 @@
+/* src/components/layout/nav.css */
+.nav-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--accent-bg);
+}
+.nav-filter:focus-within { border-color: var(--accent-border); }
+.nav-filter-icon { flex-shrink: 0; opacity: 0.6; }
+.nav-filter-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 8px 0;
+}
+.nav-filter-input:focus { outline: none; }
+.nav-filter-kbd {
+  flex-shrink: 0;
+  font-size: 11px;
+  opacity: 0.5;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.nav-modules { list-style: none; margin: 0; padding: 0; }
+
+/* Clear separation between modules. */
+.nav-module { margin-bottom: 6px; }
+
+/* Module header is visually distinct from items: heavier, uppercase, full-width band. */
+.nav-module-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.nav-module-header:hover { background: var(--accent-bg); }
+.nav-module-header:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.nav-module-icon { flex-shrink: 0; opacity: 0.85; }
+.nav-module-title { flex: 1; text-align: left; }
+
+/* Active module: tinted band + accent left rail so "where am I" is unmistakable. */
+.nav-module-active > .nav-module-header {
+  background: var(--accent-bg);
+  color: var(--text-h);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.nav-module-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.nav-chevron { flex-shrink: 0; opacity: 0.6; transition: transform 0.18s ease; }
+.nav-chevron-open { transform: rotate(180deg); }
+
+/* Collapsible body via grid-rows; inert (set in JSX) handles focus/AT when collapsed. */
+.nav-module-region {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease;
+}
+.nav-module-region[data-expanded='true'] { grid-template-rows: 1fr; }
+.nav-module-region-inner { overflow: hidden; }
+
+.nav-module-items, .nav-subitems { list-style: none; margin: 0; padding: 0; }
+.nav-module-items { padding: 2px 0 6px; display: flex; flex-direction: column; gap: 2px; }
+
+.nav-item, .nav-subitem-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.nav-item:hover, .nav-subitem-toggle:hover { background: var(--accent-bg); }
+.nav-item.active { background: var(--accent-bg); color: var(--text-h); font-weight: 500; }
+.nav-item:focus-visible, .nav-subitem-toggle:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.nav-item-icon { flex-shrink: 0; opacity: 0.7; }
+.nav-item-label { flex: 1; min-width: 0; }
+
+.nav-subgroup { margin-top: 4px; }
+.nav-subgroup-label {
+  margin: 6px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  opacity: 0.45;
+}
+
+.nav-empty { padding: 8px 12px; font-size: 13px; opacity: 0.6; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-module-region, .nav-chevron { transition: none; }
+}
