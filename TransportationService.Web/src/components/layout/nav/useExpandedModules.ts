@@ -7,10 +7,18 @@ function storageKey(userId: string | null): string {
 function readStored(key: string): string[] | null {
   try {
     const raw = window.localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as string[]) : null
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as string[]) : null
   } catch {
     return null
   }
+}
+
+function seed(key: string, activeModuleId: string | null): Set<string> {
+  const stored = readStored(key)
+  if (stored) return new Set(stored)
+  return new Set(activeModuleId ? [activeModuleId] : [])
 }
 
 /**
@@ -19,11 +27,15 @@ function readStored(key: string): string[] | null {
  */
 export function useExpandedModules(userId: string | null, activeModuleId: string | null) {
   const key = storageKey(userId)
-  const [expanded, setExpanded] = useState<Set<string>>(() => {
-    const stored = readStored(key)
-    if (stored) return new Set(stored)
-    return new Set(activeModuleId ? [activeModuleId] : [])
-  })
+  const [expanded, setExpanded] = useState<Set<string>>(() => seed(key, activeModuleId))
+  const [prevKey, setPrevKey] = useState(key)
+
+  // Re-seed synchronously when the user (key) changes — before any effect runs — so the
+  // persist effect can never write one user's expand state under another user's key.
+  if (key !== prevKey) {
+    setPrevKey(key)
+    setExpanded(seed(key, activeModuleId))
+  }
 
   // Persist on every change (cheap; the set is tiny).
   useEffect(() => {
