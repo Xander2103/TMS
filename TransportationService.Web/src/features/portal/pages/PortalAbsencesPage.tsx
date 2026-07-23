@@ -19,6 +19,7 @@ import {
   type AbsenceType,
 } from '../../absences/types'
 import { cancelMyAbsence, createMyAbsence, listMyAbsences, uploadMyAbsenceAttachment } from '../api/portalApi'
+import { MyLeaveBalanceCard } from '../../leave-balance/components/MyLeaveBalanceCard'
 import './portal.css'
 
 /** Own leave/absence requests: view status, request new, withdraw pending ones. */
@@ -116,6 +117,8 @@ export function PortalAbsencesPage() {
         subtitle="Verlof, ziekte en andere afwezigheden — met hun status."
         action={<Button onClick={() => setDialogOpen(true)}>+ Verlof aanvragen</Button>}
       />
+
+      <MyLeaveBalanceCard />
 
       {absences.length === 0 && <p className="portal-empty">Nog geen afwezigheden.</p>}
 

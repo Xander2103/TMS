@@ -8,6 +8,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { changeMyPassword, getMyProfile } from '../api/portalApi'
+import { MyLeaveBalanceCard } from '../../leave-balance/components/MyLeaveBalanceCard'
 import type { MyProfile } from '../types'
 import './portal.css'
 
@@ -73,6 +74,8 @@ export function PortalProfilePage() {
         subtitle={`${profile.employeeNumber}${profile.departmentName ? ` · ${profile.departmentName}` : ''}`}
         action={profile.isDriver ? <Badge tone="info">Chauffeur {profile.driverNumber}</Badge> : undefined}
       />
+
+      <MyLeaveBalanceCard />
 
       <section className="to-section">
         <h2>Contact & adres</h2>
