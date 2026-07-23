@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useSearchParams } from 'react-router-dom'
 import { useSectionNavigation, firstSectionWithError } from '../useSectionNavigation'
 
 function Harness({ ids }: { ids: string[] }) {
   const { activeId, setActive } = useSectionNavigation(ids, ids[0])
-  const [params] = useSearchParams()
   return (
     <div>
       <span data-testid="active">{activeId}</span>
-      <span data-testid="param">{params.get('section') ?? ''}</span>
       {ids.map((id) => (
         <button key={id} onClick={() => setActive(id)}>{id}</button>
       ))}
@@ -20,23 +17,28 @@ function Harness({ ids }: { ids: string[] }) {
 
 describe('useSectionNavigation', () => {
   it('defaults to the first section', () => {
-    render(<MemoryRouter><Harness ids={['a', 'b']} /></MemoryRouter>)
+    render(<Harness ids={['a', 'b']} />)
     expect(screen.getByTestId('active')).toHaveTextContent('a')
   })
 
-  it('reads the initial section from the URL', () => {
-    render(<MemoryRouter initialEntries={['/?section=b']}><Harness ids={['a', 'b']} /></MemoryRouter>)
+  it('changes the active section on setActive (component state, no router)', async () => {
+    render(<Harness ids={['a', 'b']} />)
+    await userEvent.click(screen.getByRole('button', { name: 'b' }))
     expect(screen.getByTestId('active')).toHaveTextContent('b')
   })
 
-  it('writes the active section to the URL on change', async () => {
-    render(<MemoryRouter><Harness ids={['a', 'b']} /></MemoryRouter>)
-    await userEvent.click(screen.getByRole('button', { name: 'b' }))
-    expect(screen.getByTestId('param')).toHaveTextContent('b')
-  })
-
-  it('ignores an unknown section in the URL and falls back to default', () => {
-    render(<MemoryRouter initialEntries={['/?section=zzz']}><Harness ids={['a', 'b']} /></MemoryRouter>)
+  it('ignores an unknown section id', async () => {
+    function UnknownHarness() {
+      const { activeId, setActive } = useSectionNavigation(['a', 'b'], 'a')
+      return (
+        <div>
+          <span data-testid="active">{activeId}</span>
+          <button onClick={() => setActive('zzz')}>bad</button>
+        </div>
+      )
+    }
+    render(<UnknownHarness />)
+    await userEvent.click(screen.getByRole('button', { name: 'bad' }))
     expect(screen.getByTestId('active')).toHaveTextContent('a')
   })
 })

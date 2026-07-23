@@ -1,40 +1,27 @@
-import { useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
-
-const DEFAULT_PARAM = 'section'
+import { useCallback, useState } from 'react'
 
 /**
- * Tracks the active section of a {@link SectionedForm}, syncing it to a `?section=` URL
- * parameter so a section is deep-linkable and survives navigation. Active-section state
- * lives in the URL only — the form's field values stay lifted in the parent component,
- * so switching sections never loses data.
+ * Tracks the active section of a {@link SectionedForm} in local component state.
+ *
+ * Section switching is *internal form navigation*, not application navigation: it must never
+ * mutate the router (no `useSearchParams`/`navigate`), because a dirty form's
+ * {@link UnsavedChangesGuard} blocks router navigations and would otherwise pop the
+ * "unsaved changes" modal on every section switch. Field values stay lifted in the parent
+ * form component, so switching sections never loses data.
  */
-export function useSectionNavigation(
-  ids: string[],
-  defaultId: string,
-  opts?: { paramKey?: string },
-) {
-  const paramKey = opts?.paramKey ?? DEFAULT_PARAM
-  const [params, setParams] = useSearchParams()
-  const fromUrl = params.get(paramKey)
-  const activeId = fromUrl && ids.includes(fromUrl) ? fromUrl : defaultId
+export function useSectionNavigation(ids: string[], defaultId: string) {
+  const [activeId, setActiveId] = useState(defaultId)
+  // Clamp on read so a section removed between renders (e.g. mode change) falls back cleanly.
+  const current = ids.includes(activeId) ? activeId : defaultId
 
   const setActive = useCallback(
     (id: string) => {
-      if (!ids.includes(id)) return
-      setParams(
-        (prev) => {
-          const next = new URLSearchParams(prev)
-          next.set(paramKey, id)
-          return next
-        },
-        { replace: true },
-      )
+      if (ids.includes(id)) setActiveId(id)
     },
-    [ids, paramKey, setParams],
+    [ids],
   )
 
-  return { activeId, setActive }
+  return { activeId: current, setActive }
 }
 
 /**
