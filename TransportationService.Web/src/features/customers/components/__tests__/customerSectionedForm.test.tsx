@@ -67,6 +67,13 @@ describe('CustomerForm section navigation', () => {
     expect(screen.getByLabelText(/Participant-ID/i)).toBeInTheDocument()
   })
 
+  it('shows Bank section content immediately on tab click (no second accordion click)', async () => {
+    renderForm()
+    await userEvent.click(screen.getByRole('tab', { name: /Bank/i }))
+    expect(screen.getByRole('textbox', { name: /IBAN/i })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /BIC/i })).toBeInTheDocument()
+  })
+
   it('routes to Algemeen when a required field fails on submit', async () => {
     renderForm()
     await userEvent.click(screen.getByRole('tab', { name: /Bank/i }))

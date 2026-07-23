@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { SectionedForm, type SectionDef } from '../SectionedForm'
+import { FormSection } from '../FormSection'
 
 function buildSections(): SectionDef[] {
   return [
@@ -71,5 +73,42 @@ describe('SectionedForm', () => {
     screen.getByRole('tab', { name: /Algemeen/ }).focus()
     await userEvent.keyboard('{ArrowRight}')
     expect(onActiveChange).toHaveBeenCalledWith('hr')
+  })
+
+  describe('active section is always expanded', () => {
+    function Harness() {
+      const [active, setActive] = useState('algemeen')
+      const sections: SectionDef[] = [
+        { id: 'algemeen', label: 'Algemeen', render: () => <input aria-label="naam" /> },
+        {
+          id: 'bank',
+          label: 'Bank',
+          render: () => (
+            <FormSection title="Bank" collapsible defaultOpen={false}>
+              <input aria-label="iban" />
+            </FormSection>
+          ),
+        },
+      ]
+      return <SectionedForm sections={sections} activeId={active} onActiveChange={setActive} />
+    }
+
+    it('shows collapsible FormSection content immediately when its section becomes active', async () => {
+      render(<Harness />)
+      expect(screen.queryByLabelText('iban')).not.toBeInTheDocument()
+      // One click on the tab — the content must be visible without a second (accordion) click.
+      await userEvent.click(screen.getByRole('tab', { name: /Bank/ }))
+      expect(screen.getByLabelText('iban')).toBeInTheDocument()
+      // No collapse toggle is offered inside a sectioned form.
+      expect(screen.queryByRole('button', { name: /Bank/ })).not.toBeInTheDocument()
+    })
+
+    it('keeps the newly active section expanded when switching back and forth', async () => {
+      render(<Harness />)
+      await userEvent.click(screen.getByRole('tab', { name: /Bank/ }))
+      await userEvent.click(screen.getByRole('tab', { name: /Algemeen/ }))
+      await userEvent.click(screen.getByRole('tab', { name: /Bank/ }))
+      expect(screen.getByLabelText('iban')).toBeInTheDocument()
+    })
   })
 })

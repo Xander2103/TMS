@@ -1,7 +1,14 @@
-import type { ReactNode } from 'react'
+import { createContext, type ReactNode } from 'react'
 import { SectionNav } from './SectionNav'
 import { SectionSelect } from './SectionSelect'
 import './SectionedForm.css'
+
+/**
+ * True inside a SectionedForm body. The active section was an explicit user choice, so
+ * nested collapsible sections/accordions must render expanded — a section tab click may
+ * never require a second click to reveal the content.
+ */
+export const SectionedFormBodyContext = createContext(false)
 
 export interface SectionDef {
   id: string
@@ -49,7 +56,7 @@ export function SectionedForm({ sections, activeId, onActiveChange, actions }: S
         id={`section-panel-${active.id}`}
         aria-labelledby={`section-tab-${active.id}`}
       >
-        {active.render()}
+        <SectionedFormBodyContext.Provider value={true}>{active.render()}</SectionedFormBodyContext.Provider>
       </div>
       {actions && !active.panel && <div className="ui-sectioned-form-actions">{actions}</div>}
     </div>

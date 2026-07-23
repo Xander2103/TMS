@@ -1,4 +1,5 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useContext, useId, useState, type ReactNode } from 'react'
+import { SectionedFormBodyContext } from './SectionedForm'
 import './FormSection.css'
 
 interface FormSectionProps {
@@ -31,12 +32,16 @@ export function FormSection({
 }: FormSectionProps) {
   const [open, setOpen] = useState(defaultOpen)
   const bodyId = useId()
-  const expanded = !collapsible || open
+  // Inside a SectionedForm the user explicitly opened this section via its tab, so the
+  // content must be immediately visible — never behind a second (accordion) click.
+  const inSectionedForm = useContext(SectionedFormBodyContext)
+  const effectiveCollapsible = collapsible && !inSectionedForm
+  const expanded = !effectiveCollapsible || open
 
   return (
     <fieldset className="ui-form-section">
       <legend>
-        {collapsible ? (
+        {effectiveCollapsible ? (
           <button
             type="button"
             className="ui-form-section-toggle"

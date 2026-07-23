@@ -183,8 +183,6 @@ export function NewEmployeePage() {
           <FormSection
             title="Kwalificaties (optioneel)"
             columns={1}
-            collapsible
-            defaultOpen={qualificationRows.length > 0}
             description="Rijbewijs, medische schifting, ADR, … — worden samen met de medewerker aangemaakt en zijn later beheerbaar op de detailpagina."
           >
             <div className="form-span-all">

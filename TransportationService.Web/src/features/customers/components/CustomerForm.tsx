@@ -309,10 +309,6 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     mode === 'create' &&
     [contactFirstName, contactLastName, contactRole, contactEmail, contactPhone].some((value) => value.trim() !== '')
 
-  const bankHasValues = Boolean(
-    initial && (initial.iban || initial.bic || initial.bankName || initial.bankAccountNumber || (initial.currencyCode && initial.currencyCode !== 'EUR')),
-  )
-
   // Badge a section when one of its fields is failing (client or server error).
   const combinedErrorKeys = new Set<string>()
   if (nameError) combinedErrorKeys.add('name')
@@ -704,8 +700,6 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
         <FormSection
           title="Bank"
           columns={3}
-          collapsible
-          defaultOpen={bankHasValues}
           description={fiscalHint ?? 'Bankrekening en valuta voor facturatie en betalingen.'}
         >
           <FormField label="IBAN" htmlFor="c-iban" error={getFieldError(serverFieldErrors, 'iban')}>

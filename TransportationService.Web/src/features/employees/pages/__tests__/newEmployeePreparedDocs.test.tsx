@@ -63,6 +63,14 @@ function renderPage() {
   )
 }
 
+describe('NewEmployeePage section expansion', () => {
+  it('shows the Kwalificaties editor immediately on tab click (no second accordion click)', async () => {
+    renderPage()
+    await userEvent.click(screen.getByRole('tab', { name: /Kwalificaties/i }))
+    expect(screen.getByRole('button', { name: /Kwalificatie toevoegen/i })).toBeInTheDocument()
+  })
+})
+
 describe('NewEmployeePage prepared documents', () => {
   it('lets you prepare a document during creation and keeps it across section switches', async () => {
     const { container } = renderPage()
