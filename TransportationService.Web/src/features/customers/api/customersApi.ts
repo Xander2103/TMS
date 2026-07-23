@@ -7,6 +7,7 @@ import type {
   CustomerDetail,
   CustomerInput,
   CustomerListItem,
+  PeppolScheme,
   RegistryLookupResponse,
   UpdateCustomerInput,
   VatTreatmentInfo,
@@ -33,6 +34,10 @@ export function searchCustomers(params: SearchCustomersParams): Promise<PagedRes
 /** The coherent VAT-treatment catalog (labels, rates, legal texts); backend is authoritative. */
 export function getVatTreatments(): Promise<VatTreatmentInfo[]> {
   return apiClient.getJson<VatTreatmentInfo[]>('/api/customers/vat-treatments')
+}
+
+export function getPeppolSchemes(): Promise<PeppolScheme[]> {
+  return apiClient.getJson<PeppolScheme[]>('/api/customers/peppol-schemes')
 }
 
 /** Official company-registry lookup on VAT or enterprise number (customers.create/edit). */

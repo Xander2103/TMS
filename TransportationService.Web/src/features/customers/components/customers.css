@@ -375,3 +375,52 @@
   gap: 10px;
   flex-wrap: wrap;
 }
+
+/* Grouped Peppol control (scheme + participant ID) with provenance status chip. */
+.peppol-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0;
+}
+.peppol-group-legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+.peppol-group-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+@media (max-width: 720px) {
+  .peppol-group-fields {
+    grid-template-columns: 1fr;
+  }
+}
+.peppol-status {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.peppol-status-auto {
+  color: var(--success);
+  background: var(--success-bg);
+  border-color: var(--success-border);
+}
+.peppol-status-manual {
+  color: var(--text);
+}
+.peppol-status-not-found {
+  color: var(--warning);
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+}
+.peppol-status-not-validated {
+  color: var(--text);
+}

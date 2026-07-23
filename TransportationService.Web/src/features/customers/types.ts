@@ -74,6 +74,16 @@ export interface RegistryLookupResponse {
   result: CompanyRegistryResult | null
 }
 
+/** Provenance of the grouped Peppol control's current value, shown as a status chip. */
+export type PeppolStatus = 'auto' | 'manual' | 'not-found' | 'not-validated'
+
+/** One Peppol scheme (EAS) option served by GET /api/customers/peppol-schemes. */
+export interface PeppolScheme {
+  code: string
+  label: string
+  countryCode: string | null
+}
+
 export interface CustomerVatProfile {
   vatTreatment: VatTreatment
   defaultVatRatePercent: number | null
