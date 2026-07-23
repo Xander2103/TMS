@@ -81,3 +81,42 @@
   color: var(--text);
   font-style: italic;
 }
+
+/* Create-mode prepared-follow-up editors (documents, company assets). */
+.prepared-editor-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.prepared-editor-file {
+  grid-column: 1 / -1;
+}
+.prepared-editor-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+@media (max-width: 640px) {
+  .prepared-editor-row {
+    grid-template-columns: 1fr;
+  }
+}
+.followup-results {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.followup-ok {
+  color: var(--success);
+}
+.followup-failed {
+  color: var(--danger);
+}
