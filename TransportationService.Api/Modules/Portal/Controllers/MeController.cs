@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Modules.Hr.Dtos;
+using TransportationService.Api.Modules.Identity;
+using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Portal.Dtos;
 using TransportationService.Api.Modules.Portal.Services;
 using TransportationService.Api.Modules.Qualifications.Dtos;
@@ -56,6 +58,18 @@ public class MeController : ControllerBase
         CreateAbsenceRequest request, CancellationToken cancellationToken)
     {
         return HandleAbsence(await _service.CreateMyAbsenceAsync(request, cancellationToken));
+    }
+
+    /// <summary>Own leave balance (read-only, self-scoped). Requires the view-own permission.</summary>
+    [HttpGet("leave-balance")]
+    [RequirePermission(PermissionCodes.LeaveBalancesViewOwn)]
+    public async Task<ActionResult<EmployeeLeaveBalanceDto>> LeaveBalance([FromQuery] int? year, CancellationToken cancellationToken)
+    {
+        var resolved = year ?? DateTime.UtcNow.Year;
+        var balance = await _service.GetMyLeaveBalanceAsync(resolved, cancellationToken);
+        return balance is null
+            ? NotFound(new { message = "Er is geen personeelsdossier gekoppeld aan dit account." })
+            : Ok(balance);
     }
 
     [HttpPost("absences/{id:guid}/cancel")]

@@ -19,6 +19,7 @@ public interface IPortalService
     Task<IReadOnlyList<AbsenceDto>?> ListMyAbsencesAsync(CancellationToken cancellationToken);
 
     Task<PortalAbsenceResult> CreateMyAbsenceAsync(CreateAbsenceRequest request, CancellationToken cancellationToken);
+    Task<EmployeeLeaveBalanceDto?> GetMyLeaveBalanceAsync(int year, CancellationToken cancellationToken);
 
     /// <summary>Withdraw an own, still pending request; decided absences are HR territory.</summary>
     Task<PortalAbsenceResult> CancelMyAbsenceAsync(Guid absenceId, CancellationToken cancellationToken);

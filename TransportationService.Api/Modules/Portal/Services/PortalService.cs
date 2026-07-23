@@ -33,6 +33,7 @@ public class PortalService : IPortalService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAuditService _auditService;
     private readonly IShiftService _shiftService;
+    private readonly TransportationService.Api.Modules.Hr.Services.ILeaveBalanceService _leaveBalanceService;
     private readonly TimeProvider _timeProvider;
 
     public PortalService(
@@ -46,9 +47,11 @@ public class PortalService : IPortalService
         IPasswordHasher passwordHasher,
         IAuditService auditService,
         IShiftService shiftService,
+        TransportationService.Api.Modules.Hr.Services.ILeaveBalanceService leaveBalanceService,
         TimeProvider timeProvider)
     {
         _shiftService = shiftService;
+        _leaveBalanceService = leaveBalanceService;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUserContext = currentUserContext;
@@ -229,8 +232,30 @@ public class PortalService : IPortalService
             return PortalAbsenceResult.NoEmployeeLink;
         }
 
+        // Self-service over-request guard: for a balance-deducting leave type, block a request
+        // that would go below zero unless the tenant allows negative balances. (HR-side creation
+        // via AbsencesController is unaffected — those users are authorised to overdraw.)
+        if (request.LeaveTypeId is { } leaveTypeId)
+        {
+            var availability = await _leaveBalanceService.CheckRequestAsync(
+                employeeId, leaveTypeId, request.StartDate, request.EndDate, request.PartDay, cancellationToken);
+            if (!availability.Allowed)
+            {
+                return PortalAbsenceResult.InvalidState(availability.Message ?? "Onvoldoende verlofsaldo voor deze aanvraag.");
+            }
+        }
+
         var result = await _absenceService.CreateForEmployeeAsync(employeeId, request, cancellationToken);
         return Map(result);
+    }
+
+    public async Task<EmployeeLeaveBalanceDto?> GetMyLeaveBalanceAsync(int year, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+        return await _leaveBalanceService.GetForEmployeeAsync(employeeId, year, cancellationToken);
     }
 
     public async Task<PortalAbsenceResult> CancelMyAbsenceAsync(Guid absenceId, CancellationToken cancellationToken)

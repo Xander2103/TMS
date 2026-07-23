@@ -16,6 +16,13 @@ public interface ILeaveBalanceService
     Task AddAdjustmentAsync(Guid employeeId, int year, AddLeaveAdjustmentRequest request, CancellationToken cancellationToken);
     Task<IReadOnlyList<LeaveAdjustmentDto>> GetAdjustmentsAsync(Guid employeeId, int year, Guid balanceTypeId, CancellationToken cancellationToken);
     Task<LeaveAvailabilityResult> CheckRequestAsync(Guid employeeId, Guid leaveTypeId, DateOnly start, DateOnly end, AbsencePartDay part, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<LeaveBalanceTypeDto>> ListBalanceTypesAsync(CancellationToken cancellationToken);
+    Task<LeaveBalanceTypeDto> SaveBalanceTypeAsync(Guid? id, SaveLeaveBalanceTypeRequest request, CancellationToken cancellationToken);
+    Task<IReadOnlyList<LeaveTypeDto>> ListLeaveTypesAsync(bool activeOnly, bool selfServiceOnly, CancellationToken cancellationToken);
+    Task<LeaveTypeDto> SaveLeaveTypeAsync(Guid? id, SaveLeaveTypeRequest request, CancellationToken cancellationToken);
+    Task<LeaveSettingsDto> GetSettingsAsync(CancellationToken cancellationToken);
+    Task<LeaveSettingsDto> UpdateSettingsAsync(LeaveSettingsDto request, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -255,6 +262,128 @@ public class LeaveBalanceService : ILeaveBalanceService
         _db.EmployeeLeaveBalances.Add(row);
         await _db.SaveChangesAsync(cancellationToken);
         return row;
+    }
+
+    public async Task<IReadOnlyList<LeaveBalanceTypeDto>> ListBalanceTypesAsync(CancellationToken cancellationToken)
+    {
+        await EnsureSeededAsync(cancellationToken);
+        return await _db.LeaveBalanceTypes
+            .Where(t => t.TenantId == _tenant.TenantId)
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
+            .Select(t => new LeaveBalanceTypeDto(t.Id, t.Code, t.Name, t.Description, t.IsActive, t.SortOrder))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<LeaveBalanceTypeDto> SaveBalanceTypeAsync(Guid? id, SaveLeaveBalanceTypeRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Code)) throw new DomainValidationException("code", "Een code is verplicht.");
+        if (string.IsNullOrWhiteSpace(request.Name)) throw new DomainValidationException("name", "Een naam is verplicht.");
+        var tenantId = _tenant.TenantId;
+        var code = request.Code.Trim();
+        var duplicate = await _db.LeaveBalanceTypes.AnyAsync(t => t.TenantId == tenantId && t.Code == code && t.Id != (id ?? Guid.Empty), cancellationToken);
+        if (duplicate) throw new DomainValidationException("code", "Deze code bestaat al.");
+
+        LeaveBalanceType entity;
+        if (id is { } existingId)
+        {
+            entity = await _db.LeaveBalanceTypes.FirstOrDefaultAsync(t => t.TenantId == tenantId && t.Id == existingId, cancellationToken)
+                ?? throw new DomainValidationException("id", "Onbekend saldotype.");
+        }
+        else
+        {
+            entity = new LeaveBalanceType { Id = Guid.NewGuid(), TenantId = tenantId };
+            _db.LeaveBalanceTypes.Add(entity);
+        }
+        entity.Code = code;
+        entity.Name = request.Name.Trim();
+        entity.Description = request.Description?.Trim();
+        entity.IsActive = request.IsActive;
+        entity.SortOrder = request.SortOrder;
+        await _db.SaveChangesAsync(cancellationToken);
+        await _audit.RecordAsync("LeaveBalanceType", entity.Id.ToString(), id is null ? "Created" : "Updated", null,
+            new { entity.Code, entity.Name, entity.IsActive }, cancellationToken);
+        return new LeaveBalanceTypeDto(entity.Id, entity.Code, entity.Name, entity.Description, entity.IsActive, entity.SortOrder);
+    }
+
+    public async Task<IReadOnlyList<LeaveTypeDto>> ListLeaveTypesAsync(bool activeOnly, bool selfServiceOnly, CancellationToken cancellationToken)
+    {
+        await EnsureSeededAsync(cancellationToken);
+        var query = _db.LeaveTypes.Where(t => t.TenantId == _tenant.TenantId);
+        if (activeOnly) query = query.Where(t => t.IsActive);
+        if (selfServiceOnly) query = query.Where(t => t.VisibleInSelfService);
+        return await query
+            .OrderBy(t => t.SortOrder).ThenBy(t => t.Name)
+            .Select(t => new LeaveTypeDto(t.Id, t.Code, t.Name, t.Description, t.IsActive, t.IsPaid,
+                t.DeductsFromBalance, t.BalanceTypeId, t.AbsenceType, t.RequiresApproval, t.AllowsHalfDays,
+                t.RequiresReason, t.RequiresAttachment, t.VisibleInSelfService, t.Colour, t.SortOrder))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<LeaveTypeDto> SaveLeaveTypeAsync(Guid? id, SaveLeaveTypeRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Code)) throw new DomainValidationException("code", "Een code is verplicht.");
+        if (string.IsNullOrWhiteSpace(request.Name)) throw new DomainValidationException("name", "Een naam is verplicht.");
+        if (request.DeductsFromBalance && request.BalanceTypeId is null)
+            throw new DomainValidationException("balanceTypeId", "Kies een saldotype voor een verloftype dat saldo afboekt.");
+        var tenantId = _tenant.TenantId;
+        var code = request.Code.Trim();
+        var duplicate = await _db.LeaveTypes.AnyAsync(t => t.TenantId == tenantId && t.Code == code && t.Id != (id ?? Guid.Empty), cancellationToken);
+        if (duplicate) throw new DomainValidationException("code", "Deze code bestaat al.");
+        if (request.BalanceTypeId is { } balanceId && !await _db.LeaveBalanceTypes.AnyAsync(t => t.TenantId == tenantId && t.Id == balanceId, cancellationToken))
+            throw new DomainValidationException("balanceTypeId", "Onbekend saldotype.");
+
+        LeaveType entity;
+        if (id is { } existingId)
+        {
+            entity = await _db.LeaveTypes.FirstOrDefaultAsync(t => t.TenantId == tenantId && t.Id == existingId, cancellationToken)
+                ?? throw new DomainValidationException("id", "Onbekend verloftype.");
+        }
+        else
+        {
+            entity = new LeaveType { Id = Guid.NewGuid(), TenantId = tenantId };
+            _db.LeaveTypes.Add(entity);
+        }
+        entity.Code = code;
+        entity.Name = request.Name.Trim();
+        entity.Description = request.Description?.Trim();
+        entity.IsActive = request.IsActive;
+        entity.IsPaid = request.IsPaid;
+        entity.DeductsFromBalance = request.DeductsFromBalance;
+        entity.BalanceTypeId = request.DeductsFromBalance ? request.BalanceTypeId : null;
+        entity.AbsenceType = request.AbsenceType;
+        entity.RequiresApproval = request.RequiresApproval;
+        entity.AllowsHalfDays = request.AllowsHalfDays;
+        entity.RequiresReason = request.RequiresReason;
+        entity.RequiresAttachment = request.RequiresAttachment;
+        entity.VisibleInSelfService = request.VisibleInSelfService;
+        entity.Colour = request.Colour?.Trim();
+        entity.SortOrder = request.SortOrder;
+        await _db.SaveChangesAsync(cancellationToken);
+        await _audit.RecordAsync("LeaveType", entity.Id.ToString(), id is null ? "Created" : "Updated", null,
+            new { entity.Code, entity.Name, entity.IsActive, entity.DeductsFromBalance }, cancellationToken);
+        return new LeaveTypeDto(entity.Id, entity.Code, entity.Name, entity.Description, entity.IsActive, entity.IsPaid,
+            entity.DeductsFromBalance, entity.BalanceTypeId, entity.AbsenceType, entity.RequiresApproval, entity.AllowsHalfDays,
+            entity.RequiresReason, entity.RequiresAttachment, entity.VisibleInSelfService, entity.Colour, entity.SortOrder);
+    }
+
+    public async Task<LeaveSettingsDto> GetSettingsAsync(CancellationToken cancellationToken)
+    {
+        var s = await GetOrCreateSettingsAsync(cancellationToken);
+        return new LeaveSettingsDto(s.DefaultAnnualEntitlementDays, s.PendingReservesBalance, s.AllowNegativeBalance, s.CarryOverEnabled, s.MaxCarryOverDays);
+    }
+
+    public async Task<LeaveSettingsDto> UpdateSettingsAsync(LeaveSettingsDto request, CancellationToken cancellationToken)
+    {
+        var s = await GetOrCreateSettingsAsync(cancellationToken);
+        s.DefaultAnnualEntitlementDays = Math.Max(0m, request.DefaultAnnualEntitlementDays);
+        s.PendingReservesBalance = request.PendingReservesBalance;
+        s.AllowNegativeBalance = request.AllowNegativeBalance;
+        s.CarryOverEnabled = request.CarryOverEnabled;
+        s.MaxCarryOverDays = request.MaxCarryOverDays is { } m && m >= 0m ? m : null;
+        await _db.SaveChangesAsync(cancellationToken);
+        await _audit.RecordAsync("LeaveEntitlementSettings", s.TenantId.ToString(), "Updated", null,
+            new { s.DefaultAnnualEntitlementDays, s.PendingReservesBalance, s.AllowNegativeBalance, s.CarryOverEnabled }, cancellationToken);
+        return new LeaveSettingsDto(s.DefaultAnnualEntitlementDays, s.PendingReservesBalance, s.AllowNegativeBalance, s.CarryOverEnabled, s.MaxCarryOverDays);
     }
 
     private async Task<LeaveEntitlementSettings> GetOrCreateSettingsAsync(CancellationToken cancellationToken)

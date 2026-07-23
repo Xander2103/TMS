@@ -125,6 +125,7 @@ public class PortalServiceTests
             new TransportationService.Api.Modules.EmployeePlanning.Services.ShiftService(
                 db.Context, tenant, audit, notifications,
                 new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(), clock),
+            new TransportationService.Api.Modules.Hr.Services.LeaveBalanceService(db.Context, tenant, audit),
             clock);
     }
 

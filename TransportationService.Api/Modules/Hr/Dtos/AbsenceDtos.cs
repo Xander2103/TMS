@@ -19,21 +19,25 @@ public record AbsenceDto(
     /// <summary>HR-only; the portal blanks this before it reaches the employee.</summary>
     string? InternalNote = null,
     bool HasAttachment = false,
-    string? AttachmentFileName = null);
+    string? AttachmentFileName = null,
+    /// <summary>Configurable leave type (source of truth for balance deduction); null on legacy rows.</summary>
+    Guid? LeaveTypeId = null);
 
 public record CreateAbsenceRequest(
     AbsenceType Type,
     DateOnly StartDate,
     DateOnly EndDate,
     string? Reason,
-    AbsencePartDay PartDay = AbsencePartDay.FullDay);
+    AbsencePartDay PartDay = AbsencePartDay.FullDay,
+    Guid? LeaveTypeId = null);
 
 public record UpdateAbsenceRequest(
     AbsenceType Type,
     DateOnly StartDate,
     DateOnly EndDate,
     string? Reason,
-    AbsencePartDay PartDay = AbsencePartDay.FullDay);
+    AbsencePartDay PartDay = AbsencePartDay.FullDay,
+    Guid? LeaveTypeId = null);
 
 public record DecideAbsenceRequest(bool Approve, string? Note);
 

@@ -142,12 +142,20 @@ public class AbsenceService : IAbsenceService
             return AbsenceOperationResult.Overlap;
         }
 
+        var (resolvedType, leaveTypeId, leaveTypeError) =
+            await ResolveLeaveTypeAsync(request.LeaveTypeId, request.Type, request.Reason, request.PartDay, cancellationToken);
+        if (leaveTypeError is { } ltError)
+        {
+            return AbsenceOperationResult.Invalid(ltError);
+        }
+
         var absence = new Absence
         {
             Id = Guid.NewGuid(),
             TenantId = _tenantContext.TenantId,
             EmployeeId = employeeId,
-            Type = request.Type,
+            Type = resolvedType,
+            LeaveTypeId = leaveTypeId,
             StartDate = request.StartDate,
             EndDate = request.EndDate,
             PartDay = request.PartDay,
@@ -564,7 +572,28 @@ public class AbsenceService : IAbsenceService
         r.Absence.Type, r.Absence.StartDate, r.Absence.EndDate, r.Absence.Status,
         r.Absence.Reason, r.Absence.DecisionNote, r.Absence.DecidedAt,
         r.Absence.PartDay, r.Absence.InternalNote,
-        r.Absence.AttachmentPath != null, r.Absence.AttachmentFileName);
+        r.Absence.AttachmentPath != null, r.Absence.AttachmentFileName, r.Absence.LeaveTypeId);
+
+    /// <summary>
+    /// Resolves an optional configurable leave type to the effective <see cref="AbsenceType"/>
+    /// (leave type is the source of truth) and validates its per-request rules. Returns an error
+    /// message when the type is unknown/inactive or a rule is violated; null leave type keeps the
+    /// caller's fallback type (legacy/backward-compatible path).
+    /// </summary>
+    private async Task<(AbsenceType Type, Guid? LeaveTypeId, string? Error)> ResolveLeaveTypeAsync(
+        Guid? leaveTypeId, AbsenceType fallbackType, string? reason, AbsencePartDay partDay, CancellationToken cancellationToken)
+    {
+        if (leaveTypeId is not { } id) return (fallbackType, null, null);
+        var leaveType = await _dbContext.LeaveTypes
+            .FirstOrDefaultAsync(t => t.TenantId == _tenantContext.TenantId && t.Id == id, cancellationToken);
+        if (leaveType is null) return (fallbackType, null, "Onbekend verloftype.");
+        if (!leaveType.IsActive) return (fallbackType, null, "Dit verloftype is niet meer actief.");
+        if (leaveType.RequiresReason && string.IsNullOrWhiteSpace(reason))
+            return (leaveType.AbsenceType, id, "Voor dit verloftype is een reden verplicht.");
+        if (!leaveType.AllowsHalfDays && partDay != AbsencePartDay.FullDay)
+            return (leaveType.AbsenceType, id, "Halve dagen zijn niet toegestaan voor dit verloftype.");
+        return (leaveType.AbsenceType, id, null);
+    }
 
     private async Task<AbsenceDto> RequireDtoAsync(Guid id, CancellationToken cancellationToken)
     {

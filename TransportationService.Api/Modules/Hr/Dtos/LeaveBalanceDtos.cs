@@ -26,3 +26,23 @@ public sealed record LeaveAvailabilityResult(bool Allowed, decimal RemainingDays
 public sealed record SetLeaveEntitlementRequest(Guid BalanceTypeId, decimal BaseEntitlementDays, decimal CarryOverDays);
 
 public sealed record AddLeaveAdjustmentRequest(Guid BalanceTypeId, decimal Days, string Reason, LeaveAdjustmentKind Kind);
+
+public sealed record LeaveBalanceTypeDto(Guid Id, string Code, string Name, string? Description, bool IsActive, int SortOrder);
+
+public sealed record SaveLeaveBalanceTypeRequest(string Code, string Name, string? Description, bool IsActive, int SortOrder);
+
+public sealed record LeaveTypeDto(
+    Guid Id, string Code, string Name, string? Description, bool IsActive, bool IsPaid,
+    bool DeductsFromBalance, Guid? BalanceTypeId, AbsenceType AbsenceType, bool RequiresApproval,
+    bool AllowsHalfDays, bool RequiresReason, bool RequiresAttachment, bool VisibleInSelfService,
+    string? Colour, int SortOrder);
+
+public sealed record SaveLeaveTypeRequest(
+    string Code, string Name, string? Description, bool IsActive, bool IsPaid,
+    bool DeductsFromBalance, Guid? BalanceTypeId, AbsenceType AbsenceType, bool RequiresApproval,
+    bool AllowsHalfDays, bool RequiresReason, bool RequiresAttachment, bool VisibleInSelfService,
+    string? Colour, int SortOrder);
+
+public sealed record LeaveSettingsDto(
+    decimal DefaultAnnualEntitlementDays, bool PendingReservesBalance, bool AllowNegativeBalance,
+    bool CarryOverEnabled, decimal? MaxCarryOverDays);
