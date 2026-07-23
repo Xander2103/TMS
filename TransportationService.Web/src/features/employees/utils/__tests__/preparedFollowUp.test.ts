@@ -33,6 +33,9 @@ function item(overrides: Partial<PreparedIssuedItem> = {}): PreparedIssuedItem {
     notes: '',
     returnRequired: true,
     requiresSerialNumber: false,
+    variantsEnabled: false,
+    variantId: null,
+    variantLabel: '',
     ...overrides,
   }
 }

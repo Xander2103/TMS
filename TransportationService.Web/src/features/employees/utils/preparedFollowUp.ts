@@ -35,6 +35,12 @@ export interface PreparedIssuedItem {
   returnRequired: boolean
   /** Whether a serial number is required (copied from the template; drives validation). */
   requiresSerialNumber: boolean
+  /** Whether the template requires a variant choice (stock + variants enabled). */
+  variantsEnabled: boolean
+  /** Chosen variant for variant-enabled templates; sent with the issuance. */
+  variantId: string | null
+  /** Display label of the chosen variant (client-side only). */
+  variantLabel: string
 }
 
 export interface FollowUpResult {
@@ -82,8 +88,8 @@ export async function uploadPreparedDocuments(
 
 /**
  * Creates each prepared issued-item record; never throws — returns a per-item result.
- * Stock movements are intentionally NOT emitted here: the stock subsystem is a later wave;
- * when it lands, the issuance already exists to attach a movement to.
+ * Runs only AFTER the employee row exists, so a failed employee create never consumes
+ * stock; each issuance consumes stock in its own backend transaction.
  */
 export async function createPreparedIssuedItems(
   employeeId: string,
@@ -103,6 +109,7 @@ export async function createPreparedIssuedItems(
         notes: item.notes.trim() || null,
         returnedDate: null,
         returnCondition: null,
+        variantId: item.variantId,
       })
       results.push({ key: item.key, kind: 'issued-item', label: item.name || 'Bedrijfsmiddel', ok: true })
     } catch (err) {
