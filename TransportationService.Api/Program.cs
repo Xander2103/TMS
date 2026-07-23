@@ -84,6 +84,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.
     TransportationService.Api.Modules.Employees.Services.EmployeeDocumentService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IHrReminderConfigService,
     TransportationService.Api.Modules.Hr.Services.HrReminderConfigService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.ILeaveBalanceService,
+    TransportationService.Api.Modules.Hr.Services.LeaveBalanceService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IIssuedItemService,
     TransportationService.Api.Modules.Employees.Services.IssuedItemService>();
 
