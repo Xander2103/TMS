@@ -336,6 +336,8 @@ export function EmployeePlanningPage() {
         </label>
       </div>
 
+      <ScheduleLegend />
+
       {loading && <p className="portal-empty">Planning laden…</p>}
 
       {!listView && (
@@ -450,8 +452,6 @@ export function EmployeePlanningPage() {
           </tbody>
         </table>
       )}
-
-      <ScheduleLegend />
 
       {dialog && (
         <Modal
