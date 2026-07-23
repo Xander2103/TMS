@@ -39,6 +39,14 @@ public class CustomersController : ControllerBase
         return Ok(VatTreatmentCatalog.All);
     }
 
+    /// <summary>Authoritative Peppol scheme (EAS) catalog for the grouped Peppol control.</summary>
+    [HttpGet("peppol-schemes")]
+    [RequirePermission(PermissionCodes.CustomersView)]
+    public ActionResult<IReadOnlyList<PeppolSchemeDto>> GetPeppolSchemes()
+        => Ok(PeppolSchemeCatalog.All
+            .Select(s => new PeppolSchemeDto(s.Code, s.Label, s.CountryCode))
+            .ToList());
+
     /// <summary>
     /// Official company-registry lookup. Without a configured provider this reports
     /// configured=false so the UI can show its manual-entry fallback state.

@@ -2,6 +2,9 @@ using TransportationService.Api.Modules.Partners.Entities;
 
 namespace TransportationService.Api.Modules.Partners.Dtos;
 
+/// <summary>One Peppol scheme (EAS) option for the grouped Peppol control.</summary>
+public sealed record PeppolSchemeDto(string Code, string Label, string? CountryCode);
+
 public record CustomerListItemDto(
     Guid Id,
     string CustomerNumber,
