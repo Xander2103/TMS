@@ -54,6 +54,7 @@ function masterDataModule(): NavModule {
         label: 'Algemeen',
         items: [
           { label: 'Eigen bedrijven', to: '/settings/legal-entities', permissions: ['legal_entities.view', 'legal_entities.manage'] },
+          { label: 'Verlof (types & saldi)', to: '/settings/leave', permissions: ['leave_types.manage'] },
           ...lookupItems('organisatie'),
           ...lookupItems('referentie'),
         ],

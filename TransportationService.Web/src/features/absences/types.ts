@@ -55,6 +55,7 @@ export interface Absence {
   internalNote: string | null
   hasAttachment: boolean
   attachmentFileName: string | null
+  leaveTypeId: string | null
 }
 
 export interface AbsenceInput {
@@ -63,6 +64,8 @@ export interface AbsenceInput {
   endDate: string
   reason: string | null
   partDay?: AbsencePartDay
+  /** Configurable leave type (source of truth for new records); drives balance deduction. */
+  leaveTypeId?: string | null
 }
 
 export interface OverlappingShift {

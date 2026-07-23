@@ -20,6 +20,8 @@ import {
 } from '../../absences/types'
 import { cancelMyAbsence, createMyAbsence, listMyAbsences, uploadMyAbsenceAttachment } from '../api/portalApi'
 import { MyLeaveBalanceCard } from '../../leave-balance/components/MyLeaveBalanceCard'
+import { getLeaveTypes } from '../../leave-balance/api/leaveBalanceApi'
+import type { LeaveType } from '../../leave-balance/types'
 import './portal.css'
 
 /** Own leave/absence requests: view status, request new, withdraw pending ones. */
@@ -32,6 +34,8 @@ export function PortalAbsencesPage() {
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [type, setType] = useState<AbsenceType>('Vacation')
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([])
+  const [leaveTypeId, setLeaveTypeId] = useState<string>('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [partDay, setPartDay] = useState<AbsencePartDay>('FullDay')
@@ -48,6 +52,22 @@ export function PortalAbsencesPage() {
 
   useEffect(reload, [])
 
+  useEffect(() => {
+    let mounted = true
+    getLeaveTypes({ activeOnly: true, selfServiceOnly: true })
+      .then((types) => {
+        if (!mounted) return
+        setLeaveTypes(types)
+        if (types.length > 0) setLeaveTypeId((current) => current || types[0].id)
+      })
+      .catch(() => {
+        /* leave types optional; the plain type selector stays available */
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   async function handleCreate(event: FormEvent) {
     event.preventDefault()
     if (!startDate || !endDate) {
@@ -58,10 +78,12 @@ export function PortalAbsencesPage() {
       showError('De einddatum moet op of na de begindatum liggen.')
       return
     }
+    const selectedLeaveType = leaveTypes.find((t) => t.id === leaveTypeId)
     setBusy(true)
     try {
       await createMyAbsence({
-        type,
+        type: selectedLeaveType ? selectedLeaveType.absenceType : type,
+        leaveTypeId: selectedLeaveType ? selectedLeaveType.id : null,
         startDate,
         endDate,
         reason: reason.trim() || null,
@@ -183,13 +205,21 @@ export function PortalAbsencesPage() {
         >
           <form id="portal-absence-form" className="portal-form" onSubmit={handleCreate} noValidate>
             <FormField label="Type" htmlFor="pa-type" required>
-              <select id="pa-type" value={type} onChange={(e) => setType(e.target.value as AbsenceType)} disabled={busy}>
-                {ABSENCE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {ABSENCE_TYPE_LABELS[t]}
-                  </option>
-                ))}
-              </select>
+              {leaveTypes.length > 0 ? (
+                <select id="pa-type" value={leaveTypeId} onChange={(e) => setLeaveTypeId(e.target.value)} disabled={busy}>
+                  {leaveTypes.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <select id="pa-type" value={type} onChange={(e) => setType(e.target.value as AbsenceType)} disabled={busy}>
+                  {ABSENCE_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {ABSENCE_TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+              )}
             </FormField>
             <FormField label="Van" htmlFor="pa-start" required>
               <input id="pa-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} disabled={busy} />

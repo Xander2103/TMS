@@ -73,3 +73,18 @@
 .leave-balance-card h3 {
   margin: 0 0 0.75rem;
 }
+.lb-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.lb-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+.leave-balance-card + .leave-balance-card {
+  margin-top: 1rem;
+}
