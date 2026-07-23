@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Badge, type BadgeTone } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
@@ -6,6 +6,7 @@ import { FormField } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../components/ui/toastContext'
 import { useAuth } from '../auth/authContextValue'
+import { describeApiError } from '../../api/problemDetails'
 import {
   deleteEmployeeIssuedItem,
   downloadIssuedItemsAcknowledgement,
@@ -13,12 +14,15 @@ import {
   ISSUED_ITEM_STATUSES,
   listEmployeeIssuedItems,
   listIssuedItemTemplates,
+  RETURN_DISPOSITION_LABELS,
   saveEmployeeIssuedItem,
   type EmployeeIssuedItem,
   type EmployeeIssuedItemInput,
   type IssuedItemStatus,
   type IssuedItemTemplate,
+  type ReturnDisposition,
 } from './issuedItemsApi'
+import { getTemplateDetail, type IssuedItemVariant } from './inventoryApi'
 import './issued-items.css'
 
 const STATUS_TONE: Record<IssuedItemStatus, BadgeTone> = {
@@ -41,14 +45,20 @@ function emptyForm(): EmployeeIssuedItemInput {
     notes: null,
     returnedDate: null,
     returnCondition: null,
+    variantId: null,
+    returnDisposition: null,
+    restoreStock: null,
+    overrideInsufficientStock: false,
+    overrideReason: null,
   }
 }
 
-/** Employee "Bedrijfsmiddelen" checklist: issued items with status, add/edit, PDF acknowledgement. */
+/** Employee "Bedrijfsmiddelen" checklist: stock-aware issue/return flow, PDF acknowledgement. */
 export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('issued_items.manage')
+  const canOverrideStock = hasPermission('inventory.override_negative_stock')
 
   const [items, setItems] = useState<EmployeeIssuedItem[] | null>(null)
   const [templates, setTemplates] = useState<IssuedItemTemplate[]>([])
@@ -58,6 +68,7 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EmployeeIssuedItemInput>(emptyForm())
+  const [variants, setVariants] = useState<IssuedItemVariant[]>([])
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<EmployeeIssuedItem | null>(null)
@@ -92,14 +103,37 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
     }
   }, [canManage])
 
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === form.templateId) ?? null,
+    [templates, form.templateId],
+  )
+  const selectedVariant = useMemo(
+    () => variants.find((v) => v.id === form.variantId) ?? null,
+    [variants, form.variantId],
+  )
+  const stockTracked = selectedTemplate?.stockTrackingEnabled ?? false
+  const availableStock = selectedTemplate?.variantsEnabled
+    ? selectedVariant?.currentStock ?? null
+    : stockTracked
+      ? selectedTemplate?.totalAvailable ?? null
+      : null
+  const stockShortage =
+    stockTracked &&
+    form.status === 'Issued' &&
+    !editingId &&
+    availableStock !== null &&
+    form.quantity > availableStock &&
+    !(selectedTemplate?.allowNegativeStock ?? false)
+
   function set<K extends keyof EmployeeIssuedItemInput>(key: K, value: EmployeeIssuedItemInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  function applyTemplate(templateId: string) {
+  async function applyTemplate(templateId: string) {
     const template = templates.find((t) => t.id === templateId)
+    setVariants([])
     if (!template) {
-      setForm((f) => ({ ...f, templateId: null }))
+      setForm((f) => ({ ...f, templateId: null, variantId: null }))
       return
     }
     setForm((f) => ({
@@ -108,12 +142,22 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
       name: template.name,
       category: template.category,
       quantity: template.defaultQuantity,
+      variantId: null,
     }))
+    if (template.variantsEnabled) {
+      try {
+        const detail = await getTemplateDetail(template.id)
+        setVariants(detail.variants.filter((v) => v.isActive))
+      } catch {
+        /* variant list unavailable; backend still validates the choice */
+      }
+    }
   }
 
   function openCreate() {
     setEditingId(null)
     setForm(emptyForm())
+    setVariants([])
     setFormError(null)
     setEditorOpen(true)
   }
@@ -131,7 +175,13 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
       notes: item.notes,
       returnedDate: item.returnedDate,
       returnCondition: item.returnCondition,
+      variantId: item.variantId,
+      returnDisposition: item.status === 'Returned' ? 'good' : null,
+      restoreStock: null,
+      overrideInsufficientStock: false,
+      overrideReason: null,
     })
+    setVariants([])
     setFormError(null)
     setEditorOpen(true)
   }
@@ -143,14 +193,27 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
       setFormError('Naam en categorie zijn verplicht.')
       return
     }
+    if (!editingId && selectedTemplate?.variantsEnabled && !form.variantId) {
+      setFormError('Kies een variant (maat/uitvoering).')
+      return
+    }
+    if (selectedTemplate?.requiresSerialNumber && form.status === 'Issued' && !form.serialNumber?.trim()) {
+      setFormError('Een serienummer is verplicht voor dit middel.')
+      return
+    }
+    const payload: EmployeeIssuedItemInput = {
+      ...form,
+      returnDisposition: form.status === 'Returned' ? (form.returnDisposition ?? 'good') : null,
+      restoreStock: form.status === 'Returned' && form.returnDisposition === 'good' ? (form.restoreStock ?? true) : null,
+    }
     setSaving(true)
     try {
-      await saveEmployeeIssuedItem(employeeId, editingId, form)
+      await saveEmployeeIssuedItem(employeeId, editingId, payload)
       showSuccess(editingId ? 'Bedrijfsmiddel bijgewerkt.' : 'Bedrijfsmiddel toegevoegd.')
       setEditorOpen(false)
       setReloadToken((t) => t + 1)
-    } catch {
-      setFormError('Het bedrijfsmiddel kon niet worden opgeslagen.')
+    } catch (err) {
+      setFormError(describeApiError(err, 'Het bedrijfsmiddel kon niet worden opgeslagen.').message)
     } finally {
       setSaving(false)
     }
@@ -202,6 +265,7 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
           <thead>
             <tr>
               <th>Middel</th>
+              <th>Variant</th>
               <th>Categorie</th>
               <th>Aantal</th>
               <th>Serienr.</th>
@@ -214,6 +278,7 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
             {items.map((item) => (
               <tr key={item.id}>
                 <td>{item.name}</td>
+                <td>{item.variantLabel ?? '—'}</td>
                 <td>{item.category}</td>
                 <td>{item.quantity}</td>
                 <td>{item.serialNumber ?? '—'}</td>
@@ -273,6 +338,30 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
                 </select>
               </FormField>
             )}
+            {!editingId && selectedTemplate?.variantsEnabled && (
+              <FormField label="Variant (maat/uitvoering)" htmlFor="ii-variant" required>
+                <select id="ii-variant" value={form.variantId ?? ''} onChange={(e) => set('variantId', e.target.value || null)} disabled={saving}>
+                  <option value="">— Kies variant —</option>
+                  {variants.map((variant) => (
+                    <option key={variant.id} value={variant.id}>
+                      {variant.label} — voorraad: {variant.currentStock}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+            )}
+            {editingId && form.variantId && (
+              <p className="customer-form-muted">
+                Variant: {items?.find((i) => i.id === editingId)?.variantLabel ?? '—'} (vast na uitgifte)
+              </p>
+            )}
+            {stockTracked && availableStock !== null && !editingId && (
+              <p className={`issued-items-stock-preview${stockShortage ? ' issued-items-stock-preview-warning' : ''}`} role="status">
+                Beschikbare voorraad: {availableStock}
+                {selectedTemplate?.unit ? ` ${selectedTemplate.unit}` : ''}
+                {stockShortage && ' — onvoldoende voor dit aantal.'}
+              </p>
+            )}
             <div className="issued-items-form-row">
               <FormField label="Middel" htmlFor="ii-name" required>
                 <input id="ii-name" value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} disabled={saving} maxLength={150} />
@@ -299,10 +388,34 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
               <FormField label="Uitreikingsdatum" htmlFor="ii-date">
                 <input id="ii-date" type="date" value={form.issuedDate ?? ''} onChange={(e) => set('issuedDate', e.target.value || null)} disabled={saving} />
               </FormField>
-              <FormField label="Serienummer" htmlFor="ii-serial">
+              <FormField label="Serienummer" htmlFor="ii-serial" required={selectedTemplate?.requiresSerialNumber && form.status === 'Issued'}>
                 <input id="ii-serial" value={form.serialNumber ?? ''} onChange={(e) => set('serialNumber', e.target.value || null)} disabled={saving} maxLength={100} />
               </FormField>
             </div>
+            {stockShortage && canOverrideStock && (
+              <>
+                <label className="issued-items-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.overrideInsufficientStock ?? false}
+                    onChange={(e) => set('overrideInsufficientStock', e.target.checked)}
+                    disabled={saving}
+                  />
+                  <span>Toch uitreiken zonder voldoende voorraad (override)</span>
+                </label>
+                {form.overrideInsufficientStock && (
+                  <FormField label="Reden voor override" htmlFor="ii-override-reason" required>
+                    <input
+                      id="ii-override-reason"
+                      value={form.overrideReason ?? ''}
+                      onChange={(e) => set('overrideReason', e.target.value || null)}
+                      disabled={saving}
+                      maxLength={300}
+                    />
+                  </FormField>
+                )}
+              </>
+            )}
             {(form.status === 'Returned' || form.status === 'Damaged') && (
               <div className="issued-items-form-row">
                 <FormField label="Datum teruggave" htmlFor="ii-retdate">
@@ -311,6 +424,35 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
                 <FormField label="Staat bij teruggave" htmlFor="ii-retcond">
                   <input id="ii-retcond" value={form.returnCondition ?? ''} onChange={(e) => set('returnCondition', e.target.value || null)} disabled={saving} maxLength={150} />
                 </FormField>
+              </div>
+            )}
+            {form.status === 'Returned' && (
+              <div className="issued-items-form-row">
+                <FormField label="Retourconditie" htmlFor="ii-disposition" hint="Alleen goede staat kan de voorraad aanvullen.">
+                  <select
+                    id="ii-disposition"
+                    value={form.returnDisposition ?? 'good'}
+                    onChange={(e) => set('returnDisposition', e.target.value as ReturnDisposition)}
+                    disabled={saving}
+                  >
+                    {(Object.keys(RETURN_DISPOSITION_LABELS) as ReturnDisposition[]).map((disposition) => (
+                      <option key={disposition} value={disposition}>
+                        {RETURN_DISPOSITION_LABELS[disposition]}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+                {(form.returnDisposition ?? 'good') === 'good' && (
+                  <label className="issued-items-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={form.restoreStock ?? true}
+                      onChange={(e) => set('restoreStock', e.target.checked)}
+                      disabled={saving}
+                    />
+                    <span>Terug in voorraad opnemen</span>
+                  </label>
+                )}
               </div>
             )}
             <FormField label="Notities" htmlFor="ii-notes">

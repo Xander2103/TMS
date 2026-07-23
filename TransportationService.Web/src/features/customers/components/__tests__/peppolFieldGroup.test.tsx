@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { PeppolFieldGroup, combinePeppolValue, parsePeppolValue, peppolFormatError } from '../PeppolFieldGroup'
+import { PeppolFieldGroup } from '../PeppolFieldGroup'
+import { combinePeppolValue, parsePeppolValue, peppolFormatError } from '../../utils/peppolValue'
 import type { PeppolScheme } from '../../types'
 
 const schemes: PeppolScheme[] = [

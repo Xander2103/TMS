@@ -17,7 +17,8 @@ import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { validateVatNumber } from '../utils/vatNumber'
 import { resolveRateOptions } from '../utils/vatTreatment'
-import { PeppolFieldGroup, combinePeppolValue, peppolFormatError } from './PeppolFieldGroup'
+import { PeppolFieldGroup } from './PeppolFieldGroup'
+import { combinePeppolValue, peppolFormatError } from '../utils/peppolValue'
 import { CUSTOMER_SECTION_FIELD_KEYS } from './customerSections'
 import {
   VAT_TREATMENT_LABELS,

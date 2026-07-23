@@ -1,5 +1,5 @@
 import { useContext, useId, useState, type ReactNode } from 'react'
-import { SectionedFormBodyContext } from './SectionedForm'
+import { SectionedFormBodyContext } from './sectionedFormContext'
 import './FormSection.css'
 
 interface FormSectionProps {

@@ -14,6 +14,16 @@ export const ISSUED_ITEM_STATUS_LABELS: Record<IssuedItemStatus, string> = {
 
 export const ISSUED_ITEM_STATUSES: IssuedItemStatus[] = ['NotIssued', 'Issued', 'Returned', 'Missing', 'Damaged']
 
+/** Structured return outcome; only "good" may restore usable stock. */
+export type ReturnDisposition = 'good' | 'damaged' | 'lost' | 'disposed'
+
+export const RETURN_DISPOSITION_LABELS: Record<ReturnDisposition, string> = {
+  good: 'Goede staat',
+  damaged: 'Beschadigd',
+  lost: 'Verloren',
+  disposed: 'Afgevoerd',
+}
+
 export interface IssuedItemTemplate {
   id: string
   name: string
@@ -25,6 +35,19 @@ export interface IssuedItemTemplate {
   returnRequired: boolean
   isActive: boolean
   sortOrder: number
+  description: string | null
+  unit: string | null
+  notes: string | null
+  stockTrackingEnabled: boolean
+  variantsEnabled: boolean
+  allowNegativeStock: boolean
+  lowStockThreshold: number | null
+  minimumStock: number | null
+  storageLocation: string | null
+  currentStock: number
+  totalAvailable: number
+  lowStock: boolean
+  variantCount: number
 }
 
 export interface IssuedItemTemplateInput {
@@ -37,6 +60,15 @@ export interface IssuedItemTemplateInput {
   returnRequired: boolean
   isActive: boolean
   sortOrder: number
+  description: string | null
+  unit: string | null
+  notes: string | null
+  stockTrackingEnabled: boolean
+  variantsEnabled: boolean
+  allowNegativeStock: boolean
+  lowStockThreshold: number | null
+  minimumStock: number | null
+  storageLocation: string | null
 }
 
 export interface EmployeeIssuedItem {
@@ -53,6 +85,8 @@ export interface EmployeeIssuedItem {
   returnedDate: string | null
   returnCondition: string | null
   receivedBackByUserId: string | null
+  variantId: string | null
+  variantLabel: string | null
 }
 
 export interface EmployeeIssuedItemInput {
@@ -66,6 +100,11 @@ export interface EmployeeIssuedItemInput {
   notes: string | null
   returnedDate: string | null
   returnCondition: string | null
+  variantId?: string | null
+  returnDisposition?: ReturnDisposition | null
+  restoreStock?: boolean | null
+  overrideInsufficientStock?: boolean
+  overrideReason?: string | null
 }
 
 // ---- Templates ----

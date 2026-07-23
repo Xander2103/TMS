@@ -76,3 +76,139 @@
   align-items: center;
   gap: 8px;
 }
+
+.issued-items-checkbox-strong {
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.issued-items-stock-config {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-left: 3px solid var(--border, #e5e7eb);
+  padding-left: 12px;
+}
+
+.issued-items-filters {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.issued-items-filters .ui-form-field {
+  min-width: 180px;
+}
+
+.issued-items-stock-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.issued-items-card {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.issued-items-card h2 {
+  font-size: 1.05rem;
+  margin: 0 0 10px;
+}
+
+.issued-items-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.issued-items-card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.issued-items-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px 20px;
+  margin: 0;
+}
+
+.issued-items-summary dt {
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+}
+
+.issued-items-summary dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+
+.issued-items-attribute {
+  border-top: 1px solid var(--border, #e5e7eb);
+  padding: 10px 0;
+}
+
+.issued-items-attribute-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.issued-items-attribute-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.issued-items-chip {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 13px;
+}
+
+.issued-items-option-add {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.issued-items-option-add input {
+  max-width: 160px;
+}
+
+.issued-items-variant-value {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.issued-items-stock-figure {
+  font-size: 1.3rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 0;
+}
+
+.issued-items-stock-preview {
+  font-size: 13px;
+  color: var(--muted, #6b7280);
+}
+
+.issued-items-stock-preview-warning {
+  color: #b45309;
+}

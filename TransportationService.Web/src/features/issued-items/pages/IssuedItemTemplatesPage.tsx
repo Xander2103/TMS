@@ -1,48 +1,35 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
-import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import {
-  createIssuedItemTemplate,
   deleteIssuedItemTemplate,
   listIssuedItemTemplates,
-  updateIssuedItemTemplate,
   type IssuedItemTemplate,
-  type IssuedItemTemplateInput,
 } from '../issuedItemsApi'
+import { TemplateFormModal } from '../TemplateFormModal'
 import '../issued-items.css'
 
-function emptyForm(): IssuedItemTemplateInput {
-  return {
-    name: '',
-    category: 'Algemeen',
-    applicableJobFunctionCodes: null,
-    defaultQuantity: 1,
-    requiresSerialNumber: false,
-    requiresReceivedDate: true,
-    returnRequired: false,
-    isActive: true,
-    sortOrder: 0,
-  }
-}
+type StockFilter = 'all' | 'managed' | 'unmanaged' | 'low'
 
-/** Settings page to manage issued-item ("Bedrijfsmiddelen") templates. */
+/** Settings page to manage issued-item ("Bedrijfsmiddelen") templates and their stock state. */
 export function IssuedItemTemplatesPage() {
   const { showSuccess, showError } = useToast()
   const [templates, setTemplates] = useState<IssuedItemTemplate[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('active')
+  const [stockFilter, setStockFilter] = useState<StockFilter>('all')
+
   const [editorOpen, setEditorOpen] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [form, setForm] = useState<IssuedItemTemplateInput>(emptyForm())
-  const [formError, setFormError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState<IssuedItemTemplate | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<IssuedItemTemplate | null>(null)
 
   useEffect(() => {
@@ -61,58 +48,24 @@ export function IssuedItemTemplatesPage() {
     }
   }, [reloadToken])
 
-  function set<K extends keyof IssuedItemTemplateInput>(key: K, value: IssuedItemTemplateInput[K]) {
-    setForm((f) => ({ ...f, [key]: value }))
-  }
+  const categories = useMemo(
+    () => [...new Set((templates ?? []).map((t) => t.category))].sort((a, b) => a.localeCompare(b)),
+    [templates],
+  )
 
-  function openCreate() {
-    setEditingId(null)
-    setForm(emptyForm())
-    setFormError(null)
-    setEditorOpen(true)
-  }
-
-  function openEdit(template: IssuedItemTemplate) {
-    setEditingId(template.id)
-    setForm({
-      name: template.name,
-      category: template.category,
-      applicableJobFunctionCodes: template.applicableJobFunctionCodes,
-      defaultQuantity: template.defaultQuantity,
-      requiresSerialNumber: template.requiresSerialNumber,
-      requiresReceivedDate: template.requiresReceivedDate,
-      returnRequired: template.returnRequired,
-      isActive: template.isActive,
-      sortOrder: template.sortOrder,
-    })
-    setFormError(null)
-    setEditorOpen(true)
-  }
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    setFormError(null)
-    if (!form.name.trim() || !form.category.trim()) {
-      setFormError('Naam en categorie zijn verplicht.')
-      return
-    }
-    setSaving(true)
-    try {
-      if (editingId) {
-        await updateIssuedItemTemplate(editingId, form)
-        showSuccess('Sjabloon bijgewerkt.')
-      } else {
-        await createIssuedItemTemplate(form)
-        showSuccess('Sjabloon toegevoegd.')
-      }
-      setEditorOpen(false)
-      setReloadToken((t) => t + 1)
-    } catch {
-      setFormError('Het sjabloon kon niet worden opgeslagen.')
-    } finally {
-      setSaving(false)
-    }
-  }
+  const visible = useMemo(
+    () =>
+      (templates ?? []).filter((t) => {
+        if (categoryFilter && t.category !== categoryFilter) return false
+        if (activeFilter === 'active' && !t.isActive) return false
+        if (activeFilter === 'inactive' && t.isActive) return false
+        if (stockFilter === 'managed' && !t.stockTrackingEnabled) return false
+        if (stockFilter === 'unmanaged' && t.stockTrackingEnabled) return false
+        if (stockFilter === 'low' && !(t.stockTrackingEnabled && t.lowStock)) return false
+        return true
+      }),
+    [templates, categoryFilter, activeFilter, stockFilter],
+  )
 
   async function handleDelete() {
     if (!deleteTarget) return
@@ -132,23 +85,64 @@ export function IssuedItemTemplatesPage() {
       <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Bedrijfsmiddelen' }]} />
       <PageHeader
         title="Bedrijfsmiddelen — sjablonen"
-        subtitle="Standaardlijst die per medewerker als checklist wordt aangeboden."
-        action={<Button onClick={openCreate}>Sjabloon toevoegen</Button>}
+        subtitle="Standaardlijst die per medewerker als checklist wordt aangeboden; met optioneel voorraadbeheer."
+        action={
+          <Button
+            onClick={() => {
+              setEditing(null)
+              setEditorOpen(true)
+            }}
+          >
+            Sjabloon toevoegen
+          </Button>
+        }
       />
+
+      <div className="issued-items-filters">
+        <FormField label="Categorie" htmlFor="tpl-filter-cat">
+          <select id="tpl-filter-cat" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <option value="">Alle categorieën</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Status" htmlFor="tpl-filter-active">
+          <select id="tpl-filter-active" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}>
+            <option value="active">Actief</option>
+            <option value="inactive">Inactief</option>
+            <option value="all">Alles</option>
+          </select>
+        </FormField>
+        <FormField label="Voorraad" htmlFor="tpl-filter-stock">
+          <select id="tpl-filter-stock" value={stockFilter} onChange={(e) => setStockFilter(e.target.value as StockFilter)}>
+            <option value="all">Alles</option>
+            <option value="managed">Met voorraadbeheer</option>
+            <option value="unmanaged">Zonder voorraadbeheer</option>
+            <option value="low">Lage voorraad</option>
+          </select>
+        </FormField>
+      </div>
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
       {!loadError && templates === null && <p className="placeholder-text">Laden…</p>}
-      {!loadError && templates !== null && templates.length === 0 && (
-        <p className="placeholder-text">Nog geen sjablonen. Voeg er een toe om te beginnen.</p>
+      {!loadError && templates !== null && visible.length === 0 && (
+        <p className="placeholder-text">
+          {templates.length === 0 ? 'Nog geen sjablonen. Voeg er een toe om te beginnen.' : 'Geen sjablonen voor deze filters.'}
+        </p>
       )}
 
-      {!loadError && templates !== null && templates.length > 0 && (
+      {!loadError && templates !== null && visible.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
               <th>Naam</th>
               <th>Categorie</th>
-              <th>Aantal</th>
+              <th>Voorraadbeheer</th>
+              <th>Varianten</th>
+              <th>Beschikbaar</th>
               <th>Serienr.</th>
               <th>Retour</th>
               <th>Status</th>
@@ -156,18 +150,41 @@ export function IssuedItemTemplatesPage() {
             </tr>
           </thead>
           <tbody>
-            {templates.map((t) => (
+            {visible.map((t) => (
               <tr key={t.id}>
-                <td>{t.name}</td>
+                <td>
+                  <Link className="issued-items-link" to={`/settings/issued-item-templates/${t.id}`}>
+                    {t.name}
+                  </Link>
+                </td>
                 <td>{t.category}</td>
-                <td>{t.defaultQuantity}</td>
+                <td>{t.stockTrackingEnabled ? 'Ja' : 'Nee'}</td>
+                <td>{t.variantsEnabled ? t.variantCount : '—'}</td>
+                <td>
+                  {t.stockTrackingEnabled ? (
+                    <span className="issued-items-stock-cell">
+                      {t.totalAvailable}
+                      {t.unit ? ` ${t.unit}` : ''}
+                      {t.lowStock && <Badge tone="warning">Lage voorraad</Badge>}
+                    </span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
                 <td>{t.requiresSerialNumber ? 'Ja' : 'Nee'}</td>
                 <td>{t.returnRequired ? 'Ja' : 'Nee'}</td>
                 <td>
                   <Badge tone={t.isActive ? 'success' : 'neutral'}>{t.isActive ? 'Actief' : 'Inactief'}</Badge>
                 </td>
                 <td className="issued-items-row-actions">
-                  <button type="button" className="issued-items-link" onClick={() => openEdit(t)}>
+                  <button
+                    type="button"
+                    className="issued-items-link"
+                    onClick={() => {
+                      setEditing(t)
+                      setEditorOpen(true)
+                    }}
+                  >
                     Bewerken
                   </button>
                   <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(t)}>
@@ -181,74 +198,15 @@ export function IssuedItemTemplatesPage() {
       )}
 
       {editorOpen && (
-        <Modal
-          title={editingId ? 'Sjabloon bewerken' : 'Sjabloon toevoegen'}
+        <TemplateFormModal
+          editing={editing}
           onClose={() => setEditorOpen(false)}
-          busy={saving}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
-              </Button>
-              <Button type="submit" form="template-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
-              </Button>
-            </>
-          }
-        >
-          <form id="template-form" className="issued-items-form" onSubmit={handleSubmit} noValidate>
-            {formError && (
-              <div className="issued-items-form-error" role="alert">
-                {formError}
-              </div>
-            )}
-            <div className="issued-items-form-row">
-              <FormField label="Naam" htmlFor="tpl-name" required>
-                <input id="tpl-name" value={form.name} onChange={(e) => set('name', e.target.value)} disabled={saving} maxLength={150} />
-              </FormField>
-              <FormField label="Categorie" htmlFor="tpl-cat" required hint="bv. Algemeen / Chauffeur / Magazijn">
-                <input id="tpl-cat" value={form.category} onChange={(e) => set('category', e.target.value)} disabled={saving} maxLength={100} />
-              </FormField>
-            </div>
-            <FormField
-              label="Toepasselijke functiecodes"
-              htmlFor="tpl-functions"
-              hint="Komma-gescheiden functiecodes; leeg = voor iedereen."
-            >
-              <input
-                id="tpl-functions"
-                value={form.applicableJobFunctionCodes ?? ''}
-                onChange={(e) => set('applicableJobFunctionCodes', e.target.value || null)}
-                disabled={saving}
-                maxLength={300}
-              />
-            </FormField>
-            <div className="issued-items-form-row">
-              <FormField label="Standaardaantal" htmlFor="tpl-qty">
-                <input id="tpl-qty" type="number" min={1} value={form.defaultQuantity} onChange={(e) => set('defaultQuantity', Number(e.target.value) || 1)} disabled={saving} />
-              </FormField>
-              <FormField label="Volgorde" htmlFor="tpl-sort">
-                <input id="tpl-sort" type="number" value={form.sortOrder} onChange={(e) => set('sortOrder', Number(e.target.value) || 0)} disabled={saving} />
-              </FormField>
-            </div>
-            <label className="issued-items-checkbox">
-              <input type="checkbox" checked={form.requiresSerialNumber} onChange={(e) => set('requiresSerialNumber', e.target.checked)} disabled={saving} />
-              <span>Serienummer vereist</span>
-            </label>
-            <label className="issued-items-checkbox">
-              <input type="checkbox" checked={form.requiresReceivedDate} onChange={(e) => set('requiresReceivedDate', e.target.checked)} disabled={saving} />
-              <span>Uitreikingsdatum vereist</span>
-            </label>
-            <label className="issued-items-checkbox">
-              <input type="checkbox" checked={form.returnRequired} onChange={(e) => set('returnRequired', e.target.checked)} disabled={saving} />
-              <span>Moet worden teruggebracht</span>
-            </label>
-            <label className="issued-items-checkbox">
-              <input type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} disabled={saving} />
-              <span>Actief</span>
-            </label>
-          </form>
-        </Modal>
+          onSaved={() => {
+            showSuccess(editing ? 'Sjabloon bijgewerkt.' : 'Sjabloon toegevoegd.')
+            setEditorOpen(false)
+            setReloadToken((t) => t + 1)
+          }}
+        />
       )}
 
       {deleteTarget && (
