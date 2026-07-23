@@ -12,6 +12,13 @@ namespace TransportationService.Api.Tests.Employees;
 
 public class IssuedItemTests
 {
+    /// <summary>Grants every permission — these tests exercise business rules, not authorization.</summary>
+    private sealed class AllowAllPermissions : IPermissionAuthorizationService
+    {
+        public Task<bool> UserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken) =>
+            Task.FromResult(true);
+    }
+
     private sealed record Harness(SqliteTestDbContext Db, IssuedItemService Sut, Guid TenantId, Guid EmployeeId);
 
     private static async Task<Harness> SeedAsync()
@@ -30,8 +37,10 @@ public class IssuedItemTests
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);
-        var sut = new IssuedItemService(db.Context, tenant, new DevCurrentUserContext(null),
-            new AuditService(db.Context, tenant, new DevCurrentUserContext(null)));
+        var currentUser = new DevCurrentUserContext(null);
+        var audit = new AuditService(db.Context, tenant, currentUser);
+        var inventory = new InventoryService(db.Context, tenant, currentUser, audit);
+        var sut = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions());
         return new Harness(db, sut, tenantId, employeeId);
     }
 

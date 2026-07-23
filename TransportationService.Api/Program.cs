@@ -88,6 +88,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.ILeaveB
     TransportationService.Api.Modules.Hr.Services.LeaveBalanceService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IIssuedItemService,
     TransportationService.Api.Modules.Employees.Services.IssuedItemService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IInventoryService,
+    TransportationService.Api.Modules.Employees.Services.InventoryService>();
 
 // Qualification file storage
 builder.Services.AddSingleton<IFileStorageService>(
