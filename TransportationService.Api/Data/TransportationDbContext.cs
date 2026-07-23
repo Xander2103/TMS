@@ -104,6 +104,12 @@ public class TransportationDbContext : DbContext
     public DbSet<EmployeeDocument> EmployeeDocuments => Set<EmployeeDocument>();
     public DbSet<IssuedItemTemplate> IssuedItemTemplates => Set<IssuedItemTemplate>();
     public DbSet<EmployeeIssuedItem> EmployeeIssuedItems => Set<EmployeeIssuedItem>();
+    public DbSet<IssuedItemAttributeDefinition> IssuedItemAttributeDefinitions => Set<IssuedItemAttributeDefinition>();
+    public DbSet<IssuedItemAttributeOption> IssuedItemAttributeOptions => Set<IssuedItemAttributeOption>();
+    public DbSet<IssuedItemTemplateAttribute> IssuedItemTemplateAttributes => Set<IssuedItemTemplateAttribute>();
+    public DbSet<IssuedItemVariant> IssuedItemVariants => Set<IssuedItemVariant>();
+    public DbSet<IssuedItemVariantValue> IssuedItemVariantValues => Set<IssuedItemVariantValue>();
+    public DbSet<StockMovement> StockMovements => Set<StockMovement>();
 
     public DbSet<QualificationType> QualificationTypes => Set<QualificationType>();
     public DbSet<EmployeeQualification> EmployeeQualifications => Set<EmployeeQualification>();

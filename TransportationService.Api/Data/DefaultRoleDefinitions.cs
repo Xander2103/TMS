@@ -132,6 +132,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.CustomersDeactivate,
                 PermissionCodes.PackagesView,
                 PermissionCodes.WarehouseView,
+                PermissionCodes.InventoryView,
                 PermissionCodes.PackageReportsExport,
                 PermissionCodes.DossiersView, PermissionCodes.DossiersManage,
                 PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage,
@@ -183,6 +184,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeDocumentsEdit, PermissionCodes.EmployeeDocumentsDelete,
                 PermissionCodes.EmployeeDocumentsViewSensitive, PermissionCodes.HrSettingsManage,
                 PermissionCodes.IssuedItemsView, PermissionCodes.IssuedItemsManage, PermissionCodes.IssuedItemsManageTemplates,
+                PermissionCodes.InventoryView, PermissionCodes.InventoryManage, PermissionCodes.InventoryAdjust,
+                PermissionCodes.InventoryOverrideNegativeStock,
                 PermissionCodes.LeaveBalancesView, PermissionCodes.LeaveBalancesManage, PermissionCodes.LeaveBalancesAdjust,
                 PermissionCodes.LeaveBalancesViewOwn, PermissionCodes.LeaveTypesManage,
                 PermissionCodes.MessagesSend,
@@ -228,6 +231,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.WarehouseManage, PermissionCodes.WarehouseSchedule,
                 PermissionCodes.WarehouseConflictOverride,
                 PermissionCodes.IssuedItemsView,
+                PermissionCodes.InventoryView, PermissionCodes.InventoryAdjust,
             ]),
     ];
 }

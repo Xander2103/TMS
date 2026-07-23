@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 10;
+    public const int CurrentVersion = 11;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -283,6 +283,25 @@ public static class DefaultRoleUpgrades
                 ["planner"] = [PermissionCodes.LeaveBalancesViewOwn],
                 ["dispatcher"] = [PermissionCodes.LeaveBalancesViewOwn],
                 ["chauffeur"] = [PermissionCodes.LeaveBalancesViewOwn],
+            }),
+
+        new(11,
+            "Stock subsystem 2026-07-23: inventory view/manage/adjust + negative-stock override for issued items.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["hr"] =
+                [
+                    PermissionCodes.InventoryView, PermissionCodes.InventoryManage,
+                    PermissionCodes.InventoryAdjust, PermissionCodes.InventoryOverrideNegativeStock,
+                ],
+                ["magazijn"] =
+                [
+                    PermissionCodes.InventoryView, PermissionCodes.InventoryAdjust,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.InventoryView,
+                ],
             }),
     ];
 }

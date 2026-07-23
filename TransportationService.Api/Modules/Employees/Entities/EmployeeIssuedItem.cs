@@ -22,6 +22,12 @@ public class EmployeeIssuedItem : AuditableTenantEntity
     public Guid EmployeeId { get; set; }
     public Guid? TemplateId { get; set; }
 
+    /// <summary>Soft reference to the issued variant (SetNull); the snapshot keeps history readable.</summary>
+    public Guid? VariantId { get; set; }
+
+    /// <summary>Frozen variant label ("M / Zwart") at issue time.</summary>
+    public string? VariantSnapshot { get; set; }
+
     public string NameSnapshot { get; set; } = string.Empty;
     public string CategorySnapshot { get; set; } = "Algemeen";
 

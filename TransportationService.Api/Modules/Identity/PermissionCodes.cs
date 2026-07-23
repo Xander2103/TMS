@@ -35,6 +35,12 @@ public static class PermissionCodes
     public const string IssuedItemsManage = "issued_items.manage";
     public const string IssuedItemsManageTemplates = "issued_items.manage_templates";
 
+    // --- Inventory / stock for issued items ---
+    public const string InventoryView = "inventory.view";
+    public const string InventoryManage = "inventory.manage";
+    public const string InventoryAdjust = "inventory.adjust";
+    public const string InventoryOverrideNegativeStock = "inventory.override_negative_stock";
+
     public const string PlanningView = "planning.view";
     public const string PlanningCreate = "planning.create";
     public const string PlanningEdit = "planning.edit";
@@ -324,6 +330,10 @@ public static class PermissionCodes
         (IssuedItemsView, "issued_items", "view", "Bedrijfsmiddelen van medewerkers bekijken"),
         (IssuedItemsManage, "issued_items", "manage", "Bedrijfsmiddelen uitreiken en innemen"),
         (IssuedItemsManageTemplates, "issued_items", "manage_templates", "Sjablonen voor bedrijfsmiddelen beheren"),
+        (InventoryView, "inventory", "view", "Voorraad van bedrijfsmiddelen bekijken"),
+        (InventoryManage, "inventory", "manage", "Voorraadkenmerken, varianten en attributen beheren"),
+        (InventoryAdjust, "inventory", "adjust", "Voorraad toevoegen en corrigeren"),
+        (InventoryOverrideNegativeStock, "inventory", "override_negative_stock", "Uitgifte bij onvoldoende voorraad toestaan"),
         (PlanningView, "planning", "view", "Planning bekijken"),
         (PlanningCreate, "planning", "create", "Planning aanmaken"),
         (PlanningEdit, "planning", "edit", "Planning bewerken"),

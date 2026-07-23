@@ -23,4 +23,35 @@ public class IssuedItemTemplate : AuditableTenantEntity
     public bool ReturnRequired { get; set; }
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
+
+    public string? Description { get; set; }
+
+    /// <summary>Unit label for stock counts (stuks, paar, set, ...).</summary>
+    public string? Unit { get; set; }
+
+    public string? Notes { get; set; }
+
+    /// <summary>Off = issuance never touches inventory (behaviour of templates before stock existed).</summary>
+    public bool StockTrackingEnabled { get; set; }
+
+    /// <summary>On = stock lives on the variants; issuance requires a variant choice.</summary>
+    public bool VariantsEnabled { get; set; }
+
+    /// <summary>Allows issuing below zero without the override permission.</summary>
+    public bool AllowNegativeStock { get; set; }
+
+    /// <summary>Warn when total available drops to or below this value.</summary>
+    public int? LowStockThreshold { get; set; }
+
+    public int? MinimumStock { get; set; }
+    public string? StorageLocation { get; set; }
+
+    /// <summary>
+    /// Cached aggregate of the template's stock movements; used only when the template has
+    /// no variants. Mutated exclusively inside the movement transaction.
+    /// </summary>
+    public int CurrentStock { get; set; }
+
+    /// <summary>Optimistic-concurrency token; rotated on every stock mutation.</summary>
+    public Guid Version { get; set; } = Guid.NewGuid();
 }
