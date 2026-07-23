@@ -165,6 +165,54 @@ export function CustomerDetailPage() {
           submitError={mutations.error}
           serverFieldErrors={mutations.fieldErrors}
           onCancel={() => setIsEditing(false)}
+          editPanels={{
+            adressen:
+              canViewLocations && id ? (
+                <CustomerLocationsPanel customerId={id} />
+              ) : (
+                <p className="customer-form-muted">Je hebt geen rechten om bijkomende adressen te beheren.</p>
+              ),
+            contactpersonen: (
+              <CustomerContactsPanel
+                contacts={customer.contacts}
+                isSubmitting={mutations.isSubmitting}
+                onAdd={async (input) => {
+                  if (!id) return false
+                  const ok = await mutations.addContact(id, input)
+                  if (ok) {
+                    toast.showSuccess('Contactpersoon toegevoegd.')
+                    reload()
+                  }
+                  return ok
+                }}
+                onUpdate={async (contactId, input) => {
+                  if (!id) return false
+                  const ok = await mutations.updateContact(id, contactId, input)
+                  if (ok) {
+                    toast.showSuccess('Contactpersoon bijgewerkt.')
+                    reload()
+                  }
+                  return ok
+                }}
+                onRemove={async (contactId) => {
+                  if (!id) return false
+                  const ok = await mutations.removeContact(id, contactId)
+                  if (ok) {
+                    toast.showSuccess('Contactpersoon verwijderd.')
+                    reload()
+                  }
+                  return ok
+                }}
+              />
+            ),
+            communicatie: id ? <CustomerCommunicationPanel customerId={id} contacts={customer.contacts} /> : null,
+            tarieven:
+              canViewBilling && id ? (
+                <CustomerBillingPanel customerId={id} />
+              ) : (
+                <p className="customer-form-muted">Je hebt geen rechten om tarieven te beheren.</p>
+              ),
+          }}
           onSubmit={async (values) => {
             if (!id) return
             const updated = await mutations.update(id, values)
