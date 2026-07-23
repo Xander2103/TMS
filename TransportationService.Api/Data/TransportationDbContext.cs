@@ -149,6 +149,11 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Hr.Entities.HrReminderSettings> HrReminderSettings => Set<TransportationService.Api.Modules.Hr.Entities.HrReminderSettings>();
     public DbSet<TransportationService.Api.Modules.Hr.Entities.ExpiryReminderPolicy> ExpiryReminderPolicies => Set<TransportationService.Api.Modules.Hr.Entities.ExpiryReminderPolicy>();
     public DbSet<TransportationService.Api.Modules.Hr.Entities.ReminderDispatchLog> ReminderDispatchLogs => Set<TransportationService.Api.Modules.Hr.Entities.ReminderDispatchLog>();
+    public DbSet<TransportationService.Api.Modules.Hr.Entities.LeaveBalanceType> LeaveBalanceTypes => Set<TransportationService.Api.Modules.Hr.Entities.LeaveBalanceType>();
+    public DbSet<TransportationService.Api.Modules.Hr.Entities.LeaveType> LeaveTypes => Set<TransportationService.Api.Modules.Hr.Entities.LeaveType>();
+    public DbSet<TransportationService.Api.Modules.Hr.Entities.EmployeeLeaveBalance> EmployeeLeaveBalances => Set<TransportationService.Api.Modules.Hr.Entities.EmployeeLeaveBalance>();
+    public DbSet<TransportationService.Api.Modules.Hr.Entities.LeaveBalanceAdjustment> LeaveBalanceAdjustments => Set<TransportationService.Api.Modules.Hr.Entities.LeaveBalanceAdjustment>();
+    public DbSet<TransportationService.Api.Modules.Hr.Entities.LeaveEntitlementSettings> LeaveEntitlementSettings => Set<TransportationService.Api.Modules.Hr.Entities.LeaveEntitlementSettings>();
 
     // Locations
     public DbSet<Location> Locations => Set<Location>();

@@ -41,6 +41,13 @@ public class Absence : AuditableTenantEntity
 
     public AbsenceType Type { get; set; }
 
+    /// <summary>
+    /// The configurable leave type driving balance deduction + per-request rules. Source of
+    /// truth for new records; null on legacy rows, which fall back to a default type per
+    /// <see cref="Type"/> for balance computation.
+    /// </summary>
+    public Guid? LeaveTypeId { get; set; }
+
     public DateOnly StartDate { get; set; }
 
     /// <summary>Inclusive end date (same day as start for a single-day absence).</summary>
