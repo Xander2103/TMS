@@ -131,6 +131,15 @@ public class DefaultRoleSeederTests
                                  select p.Code).ToListAsync();
         Assert.Contains(PermissionCodes.DriverWorkflowExecute, driverCodes);
         Assert.DoesNotContain(PermissionCodes.OrdersEdit, driverCodes);
+
+        // Leave-balance permissions (v10): HR manages, driver views own, management views only.
+        Assert.Contains(PermissionCodes.LeaveBalancesManage, hrCodes);
+        Assert.Contains(PermissionCodes.LeaveBalancesAdjust, hrCodes);
+        Assert.Contains(PermissionCodes.LeaveTypesManage, hrCodes);
+        Assert.Contains(PermissionCodes.LeaveBalancesViewOwn, driverCodes);
+        Assert.DoesNotContain(PermissionCodes.LeaveBalancesManage, driverCodes);
+        Assert.Contains(PermissionCodes.LeaveBalancesView, managementCodes);
+        Assert.DoesNotContain(PermissionCodes.LeaveBalancesManage, managementCodes);
     }
 
     [Fact]

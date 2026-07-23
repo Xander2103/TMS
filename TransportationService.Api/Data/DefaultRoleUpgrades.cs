@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 9;
+    public const int CurrentVersion = 10;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -264,6 +264,25 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.CustomersManageSurcharge, PermissionCodes.CustomersManagePo,
                     PermissionCodes.InvoiceAttachmentsView, PermissionCodes.InvoiceAttachmentsManage,
                 ],
+            }),
+
+        new(10,
+            "Leave balance 2026-07-23: verlofsaldo view/manage/adjust, configurable leave & balance types, and self-view.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["hr"] =
+                [
+                    PermissionCodes.LeaveBalancesView, PermissionCodes.LeaveBalancesManage,
+                    PermissionCodes.LeaveBalancesAdjust, PermissionCodes.LeaveBalancesViewOwn,
+                    PermissionCodes.LeaveTypesManage,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.LeaveBalancesView, PermissionCodes.LeaveBalancesViewOwn,
+                ],
+                ["planner"] = [PermissionCodes.LeaveBalancesViewOwn],
+                ["dispatcher"] = [PermissionCodes.LeaveBalancesViewOwn],
+                ["chauffeur"] = [PermissionCodes.LeaveBalancesViewOwn],
             }),
     ];
 }

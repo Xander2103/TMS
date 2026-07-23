@@ -34,6 +34,7 @@ public static class DefaultRoleDefinitions
         PermissionCodes.CustomerCategoriesView,
         PermissionCodes.ContactDepartmentsView,
         PermissionCodes.ReferenceDataView,
+        PermissionCodes.LeaveBalancesViewOwn,
     ];
 
     public static IReadOnlyList<RoleTemplate> All { get; } =
@@ -139,6 +140,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OperationsView,
                 PermissionCodes.ProfitabilityExport,
                 PermissionCodes.LegalEntitiesView,
+                PermissionCodes.LeaveBalancesView,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -181,6 +183,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeDocumentsEdit, PermissionCodes.EmployeeDocumentsDelete,
                 PermissionCodes.EmployeeDocumentsViewSensitive, PermissionCodes.HrSettingsManage,
                 PermissionCodes.IssuedItemsView, PermissionCodes.IssuedItemsManage, PermissionCodes.IssuedItemsManageTemplates,
+                PermissionCodes.LeaveBalancesView, PermissionCodes.LeaveBalancesManage, PermissionCodes.LeaveBalancesAdjust,
+                PermissionCodes.LeaveBalancesViewOwn, PermissionCodes.LeaveTypesManage,
                 PermissionCodes.MessagesSend,
                 PermissionCodes.QualificationTypesView,
                 PermissionCodes.DepartmentsView, PermissionCodes.JobFunctionsView,
@@ -196,6 +200,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ExceptionsCreate,
                 PermissionCodes.PodFinalize,
                 PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate,
+                PermissionCodes.LeaveBalancesViewOwn,
             ]),
 
         // Deliberately NO internal orders.view: portal users reach only the customer-portal
