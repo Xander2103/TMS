@@ -59,12 +59,27 @@ describe('CustomerForm section navigation', () => {
     expect(screen.getByRole('textbox', { name: 'Naam' })).toHaveValue('Acme')
   })
 
-  it('renders scheme and id together in one Peppol group', async () => {
+  it('renders one combined Peppol-ID field with the advanced fields hidden', async () => {
     renderForm()
     await userEvent.click(screen.getByRole('tab', { name: /Fiscaal & Peppol/i }))
     expect(screen.getByRole('group', { name: 'Peppol' })).toBeInTheDocument()
-    expect(screen.getByLabelText(/Schema/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Participant-ID/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Peppol-ID/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Schema/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Participant-ID/i)).not.toBeInTheDocument()
+  })
+
+  it('blocks submit on an invalid combined Peppol-ID and routes to the fiscal section', async () => {
+    const onSubmit = vi.fn()
+    renderForm({ onSubmit })
+    await userEvent.type(screen.getByRole('textbox', { name: 'Naam' }), 'Acme')
+    await userEvent.click(screen.getByRole('tab', { name: /Fiscaal & Peppol/i }))
+    await userEvent.type(screen.getByLabelText(/Peppol-ID/i), 'abcd:123')
+    await userEvent.click(screen.getByRole('tab', { name: /Bank/i }))
+    await userEvent.click(screen.getByRole('button', { name: /Opslaan/i }))
+    expect(onSubmit).not.toHaveBeenCalled()
+    const fiscaal = screen.getByRole('tab', { name: /Fiscaal & Peppol/i })
+    expect(fiscaal).toHaveAttribute('aria-selected', 'true')
+    expect(fiscaal).toHaveAttribute('data-has-error', 'true')
   })
 
   it('shows Bank section content immediately on tab click (no second accordion click)', async () => {

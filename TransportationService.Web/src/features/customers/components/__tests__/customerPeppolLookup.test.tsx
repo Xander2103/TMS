@@ -76,16 +76,15 @@ async function openFiscaalAndLookup() {
 }
 
 describe('Customer Peppol registry lookup', () => {
-  it('populates both scheme and id from a provider hit and marks them auto', async () => {
+  it('auto-fills the combined Peppol-ID from a provider hit and marks it validated', async () => {
     vi.spyOn(api, 'registryLookup').mockResolvedValue({
       configured: true,
       result: registryResult({ peppolId: '0123456789', peppolScheme: '0208', legalName: 'Acme NV' }),
     })
     renderForm()
     await openFiscaalAndLookup()
-    expect(await screen.findByText(/automatisch opgehaald/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/Participant-ID/i)).toHaveValue('0123456789')
-    expect(screen.getByLabelText(/Schema/i)).toHaveValue('0208')
+    expect(await screen.findByText('Gevalideerd')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Peppol-ID/i)).toHaveValue('0208:0123456789')
   })
 
   it('shows not-found when the provider returns no peppol data', async () => {
@@ -106,11 +105,12 @@ describe('Customer Peppol registry lookup', () => {
     })
     renderForm()
     await userEvent.click(screen.getByRole('tab', { name: /Fiscaal & Peppol/i }))
-    await userEvent.type(screen.getByLabelText(/Participant-ID/i), '0123456789')
+    await userEvent.type(screen.getByLabelText(/Peppol-ID/i), '0123456789')
     await userEvent.type(screen.getByLabelText(/Ondernemingsnummer/i), '0123456749')
     await userEvent.click(screen.getByRole('button', { name: /Gegevens opzoeken/i }))
     await userEvent.click(await screen.findByRole('button', { name: /Overnemen/i }))
     expect(confirmSpy).toHaveBeenCalled()
-    expect(screen.getByLabelText(/Participant-ID/i)).toHaveValue('0123456789') // unchanged
+    expect(screen.getByLabelText(/Peppol-ID/i)).toHaveValue('0123456789') // unchanged, still manual
+    expect(screen.getByText('Manueel ingevoerd')).toBeInTheDocument()
   })
 })

@@ -17,7 +17,7 @@ import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { validateVatNumber } from '../utils/vatNumber'
 import { resolveRateOptions } from '../utils/vatTreatment'
-import { PeppolFieldGroup } from './PeppolFieldGroup'
+import { PeppolFieldGroup, combinePeppolValue, peppolFormatError } from './PeppolFieldGroup'
 import { CUSTOMER_SECTION_FIELD_KEYS } from './customerSections'
 import {
   VAT_TREATMENT_LABELS,
@@ -70,6 +70,8 @@ const FIELD_LABELS: Record<string, string> = {
   bankAccountNumber: 'Rekeningnummer',
   'initialContact.firstName': 'Contactpersoon — voornaam',
   'initialContact.lastName': 'Contactpersoon — achternaam',
+  peppolId: 'Peppol-ID',
+  peppolScheme: 'Peppol-schema',
 }
 
 const FISCAL_PERMISSION_HINT = 'Vereist recht: fiscale gegevens beheren.'
@@ -265,7 +267,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
    * the provider ran but returned no Peppol (not-found), or a manual value was kept.
    */
   function applyRegistryResult(result: CompanyRegistryResult) {
-    const fields: { label: string; value: string | null; current: string; set: (v: string) => void; fiscal?: boolean; peppol?: boolean }[] = [
+    const fields: { label: string; value: string | null; current: string; set: (v: string) => void; fiscal?: boolean }[] = [
       { label: 'Juridische naam', value: result.legalName, current: legalName, set: setLegalName },
       { label: 'Ondernemingsnummer', value: result.companyNumber, current: companyNumber, set: setCompanyNumber, fiscal: true },
       { label: 'BTW-nummer', value: result.vatNumber, current: vatNumber, set: setVatNumber, fiscal: true },
@@ -274,28 +276,42 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       { label: 'Postcode', value: result.postalCode, current: postalCode, set: setPostalCode },
       { label: 'Plaats', value: result.city, current: city, set: setCity },
       { label: 'Land', value: result.countryCode, current: countryCode ?? '', set: (v) => setCountryCode(v) },
-      { label: 'Peppol-ID', value: result.peppolId, current: peppolId, set: setPeppolId, fiscal: true, peppol: true },
-      { label: 'Peppol-schema', value: result.peppolScheme, current: peppolScheme, set: setPeppolScheme, fiscal: true, peppol: true },
     ]
     const candidates = fields.filter((f) => f.value !== null && f.value.trim() !== '' && (canManageFiscal || !f.fiscal))
-    const conflicts = candidates.filter((f) => f.current.trim() !== '' && f.current.trim() !== f.value?.trim())
+    const conflicts: { label: string; current: string; next: string }[] = candidates
+      .filter((f) => f.current.trim() !== '' && f.current.trim() !== f.value?.trim())
+      .map((f) => ({ label: f.label, current: f.current, next: f.value?.trim() ?? '' }))
+
+    // Peppol is one atomic identifier (scheme + id). Never apply half of it: a provider
+    // scheme must not be glued onto a manually entered id, so any difference from a
+    // non-empty manual value is a conflict — even when one of the columns is still empty.
+    const providerPeppol = { scheme: result.peppolScheme?.trim() ?? '', id: result.peppolId?.trim() ?? '' }
+    const providerHasPeppol = Boolean(providerPeppol.scheme || providerPeppol.id)
+    const currentPeppol = combinePeppolValue(peppolScheme.trim(), peppolId.trim())
+    const nextPeppol = combinePeppolValue(providerPeppol.scheme, providerPeppol.id)
+    const peppolCandidate = canManageFiscal && providerHasPeppol && currentPeppol !== nextPeppol
+    if (peppolCandidate && currentPeppol !== '') {
+      conflicts.push({ label: 'Peppol-ID', current: currentPeppol, next: nextPeppol })
+    }
+
     let overwrite = false
     if (conflicts.length > 0) {
       overwrite = window.confirm(
         'Deze velden zijn al ingevuld en wijken af van het register:\n\n' +
-          conflicts.map((f) => `• ${f.label}: "${f.current}" → "${f.value}"`).join('\n') +
+          conflicts.map((c) => `• ${c.label}: "${c.current}" → "${c.next}"`).join('\n') +
           '\n\nOverschrijven met de registerwaarden?',
       )
     }
-    let peppolApplied = false
     for (const f of candidates) {
       const next = f.value?.trim() ?? ''
-      if (f.current.trim() === '' || (overwrite && f.current.trim() !== next)) {
-        f.set(next)
-        if (f.peppol) peppolApplied = true
-      }
+      if (f.current.trim() === '' || (overwrite && f.current.trim() !== next)) f.set(next)
     }
-    const providerHasPeppol = Boolean(result.peppolId || result.peppolScheme)
+    let peppolApplied = false
+    if (peppolCandidate && (currentPeppol === '' || overwrite)) {
+      setPeppolScheme(providerPeppol.scheme)
+      setPeppolId(providerPeppol.id)
+      peppolApplied = true
+    }
     if (canManageFiscal) {
       if (peppolApplied) setPeppolStatus('auto')
       else if (!providerHasPeppol) setPeppolStatus('not-found')
@@ -310,9 +326,11 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     [contactFirstName, contactLastName, contactRole, contactEmail, contactPhone].some((value) => value.trim() !== '')
 
   // Badge a section when one of its fields is failing (client or server error).
+  const peppolProblem = peppolFormatError(combinePeppolValue(peppolScheme, peppolId))
   const combinedErrorKeys = new Set<string>()
   if (nameError) combinedErrorKeys.add('name')
   if (vatError) combinedErrorKeys.add('vatNumber')
+  if (peppolProblem) combinedErrorKeys.add('peppolId')
   if (vatRateError) combinedErrorKeys.add('defaultVatRatePercent')
   if (contactErrors.firstName) combinedErrorKeys.add('initialContact.firstName')
   if (contactErrors.lastName) combinedErrorKeys.add('initialContact.lastName')
@@ -578,8 +596,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                       ['Postcode', lookup.result.postalCode],
                       ['Plaats', lookup.result.city],
                       ['Land', lookup.result.countryCode],
-                      ['Peppol-ID', lookup.result.peppolId],
-                      ['Peppol-schema', lookup.result.peppolScheme],
+                      ['Peppol-ID', combinePeppolValue(lookup.result.peppolScheme ?? '', lookup.result.peppolId ?? '') || null],
                     ] as const
                   )
                     .filter(([, value]) => value)
@@ -682,6 +699,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               status={peppolStatus}
               schemes={peppolSchemes}
               disabled={!canManageFiscal}
+              error={getFieldError(serverFieldErrors, 'peppolId') ?? getFieldError(serverFieldErrors, 'peppolScheme')}
               onChange={onPeppolChange}
             />
           </div>
@@ -848,6 +866,11 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     setVatError(vatMessage)
     if (vatMessage) {
       errorKeys.vatNumber = vatMessage
+      valid = false
+    }
+
+    if (canManageFiscal && peppolProblem) {
+      errorKeys.peppolId = peppolProblem
       valid = false
     }
 
