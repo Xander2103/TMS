@@ -174,15 +174,25 @@ Existing `RequiresSerialNumber`, `ReturnRequired`, `DefaultQuantity`, `IsActive`
 (the "Serienummer verplicht" / "Retour verplicht" toggles map to existing flags). Note: size tracking is not a
 separate flag — a "size" is simply an attribute named "Maat"; `VariantsEnabled` governs the whole system.
 
-**New — generic attribute system (no hardcoded attribute columns):**
-- `IssuedItemAttribute`: `Id`, `TemplateId`, `Name`, `AllowCustomValues` (bool), `SortOrder`, `IsActive`,
-  tenant + audit. Attribute *definitions* per template (e.g. Maat, Kleur, Opslag, Schoenmaat, Generatie).
-- `IssuedItemAttributeOption`: `Id`, `AttributeId`, `Value`, `SortOrder`, `IsActive`. Predefined selectable
-  values; admins add custom values here at any time.
+**New — generic attribute system (no hardcoded attribute columns; attributes are reusable master data):**
+- `IssuedItemAttributeDefinition`: `Id`, `TenantId`, `Name`, `AllowCustomValues` (bool), `IsShared` (bool —
+  `true` = reusable master attribute available to any template; `false` = template-specific), `SortOrder`,
+  `IsActive`, audit. Tenant-level attribute *definitions* (e.g. Maat, Kleur, Opslag, Schoenmaat, Model, Generatie)
+  reusable across templates.
+- `IssuedItemAttributeOption`: `Id`, `AttributeDefinitionId`, `Value`, `SortOrder`, `IsActive`, audit. Reusable
+  predefined values for a definition (Maat → XS/S/M/L/XL; Opslag → 64 GB/128 GB/256 GB; Model → MC3300/MC3400).
+  Admins add custom values here at any time.
+- `IssuedItemTemplateAttribute`: `Id`, `TemplateId`, `AttributeDefinitionId`, `SortOrder`. Join selecting which
+  attribute definitions a template uses. A template reuses existing shared definitions (and their values) or
+  references a template-specific (`IsShared=false`) definition when a bespoke attribute is needed.
 - `IssuedItemVariant`: `Id`, `TemplateId`, `Label` (generated display label from its values, e.g. "M / Zwart"),
   `CurrentStock` (cached), `IsActive`, `SortOrder`, `Guid Version` (concurrency token), tenant + audit.
-- `IssuedItemVariantValue`: `Id`, `VariantId`, `AttributeId`, `AttributeNameSnapshot`, `Value`. Carries the
-  concrete combination. A variant is a set of these.
+- `IssuedItemVariantValue`: `Id`, `VariantId`, `AttributeDefinitionId`, `AttributeNameSnapshot`,
+  `AttributeOptionId?`, `Value`. Carries the concrete combination (option reference when chosen from master
+  values, or a free `Value` when `AllowCustomValues`). A variant is a set of these.
+
+Reuse rule: templates reference shared master definitions/values where practical (Size, Colour, Shoe size,
+Storage, Model…), and only create template-specific definitions when the attribute is genuinely bespoke.
 
 **Stock ownership:** stock belongs to the **variant** when the template has variants, otherwise to the template's
 cached `CurrentStock`. `StockMovement` is the **source of truth**; `CurrentStock` is a cache mutated only inside
@@ -237,8 +247,9 @@ Purpose-built anonymous objects only — never file contents.
 
 ### Migrations
 
-Additive only. New tables (`issued_item_attributes`, `issued_item_attribute_options`, `issued_item_variants`,
-`issued_item_variant_values`, `stock_movements`) + additive columns on `issued_item_templates` and
+Additive only. New tables (`issued_item_attribute_definitions`, `issued_item_attribute_options`,
+`issued_item_template_attributes`, `issued_item_variants`, `issued_item_variant_values`, `stock_movements`)
++ additive columns on `issued_item_templates` and
 `employee_issued_items`. Safe defaults (stock/variants disabled). Historical issued items remain visible;
 snapshots preserve historically relevant template/variant labels.
 
