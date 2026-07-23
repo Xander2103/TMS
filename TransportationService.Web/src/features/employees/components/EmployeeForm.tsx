@@ -1,10 +1,12 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormActions } from '../../../components/ui/FormActions'
 import { FormField } from '../../../components/ui/FormField'
 import { FormSection } from '../../../components/ui/FormSection'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
+import { useSectionNavigation, firstSectionWithError } from '../../../components/ui/useSectionNavigation'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { getFieldError, type FieldErrors } from '../../../api/problemDetails'
@@ -28,6 +30,11 @@ import {
   type EmployeeInput,
   type EmploymentStatus,
 } from '../types/employee'
+import {
+  EMPLOYEE_CORE_SECTIONS,
+  EMPLOYEE_NOTITIES_SECTION,
+  EMPLOYEE_SECTION_FIELD_KEYS,
+} from './employeeSections'
 import './EmployeeForm.css'
 
 interface EmployeeFormProps {
@@ -39,8 +46,13 @@ interface EmployeeFormProps {
   serverFieldErrors?: FieldErrors
   onSubmit: (values: EmployeeInput) => void
   onCancel: () => void
-  /** Extra section rendered before the actions (used for the driver-profile workflow). */
-  extraSections?: ReactNode
+  /**
+   * Extra sections injected between the core sections and Notities. Create passes the
+   * inline driver-profile + qualifications + "available after creation" placeholders; edit
+   * passes the self-saving panel sections (Chauffeursprofiel, Kwalificaties, Documenten,
+   * Bedrijfsmiddelen). Both modes therefore present the same section configuration.
+   */
+  extraSections?: SectionDef[]
   /** Notifies the parent when the set of chosen job functions changes (driver suggestion). */
   onFunctionsChanged?: (functionCodes: string[]) => void
 }
@@ -140,7 +152,7 @@ export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldEr
     .map((id) => jobFunctions.options.find((o) => o.id === id))
     .filter((o): o is NonNullable<typeof o> => Boolean(o))
 
-  function validate(): boolean {
+  function validate(): Record<string, string> {
     const errors: Record<string, string> = {}
     if (!firstName.trim()) errors.firstName = 'Voornaam is verplicht.'
     if (!lastName.trim()) errors.lastName = 'Achternaam is verplicht.'
@@ -159,134 +171,102 @@ export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldEr
       if (ibanError) errors.iban = ibanError
     }
     setFieldErrors(errors)
-    return Object.keys(errors).length === 0
+    return errors
   }
 
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    if (!validate()) return
+  // Section-nav config: badge a section when one of its fields is failing (client or server),
+  // and route to the first failing section after a rejected submit.
+  const combinedErrorKeys = new Set<string>([
+    ...Object.keys(fieldErrors).filter((key) => fieldErrors[key]),
+    ...Object.keys(serverFieldErrors ?? {}),
+  ])
+  const sectionHasError = (id: string) =>
+    (EMPLOYEE_SECTION_FIELD_KEYS[id] ?? []).some((key) => combinedErrorKeys.has(key))
 
-    const values: EmployeeInput = {
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      dateOfBirth,
-      placeOfBirth: nullable(placeOfBirth),
-      nationalityCode: nationalityCode || null,
-      preferredLanguageCode: preferredLanguageCode || null,
-      email: email.trim(),
-      phoneNumber: phoneNumber.trim(),
-      mobilePhone: nullable(mobilePhone),
-      street: street.trim(),
-      houseNumber: houseNumber.trim(),
-      postalCode: postalCode.trim(),
-      city: city.trim(),
-      countryCode: countryCode || null,
-      employmentStartDate,
-      employmentEndDate: employmentEndDate || null,
-      employmentStatus,
-      departmentId: departmentId || null,
-      contractTypeId: contractTypeId || null,
-      jobFunctionIds,
-      nationalRegisterNumber: canSeeConfidential ? nullable(nationalRegisterNumber) : null,
-      iban: canSeeConfidential ? nullable(iban) : null,
-      bic: canSeeConfidential ? nullable(bic) : null,
-      notes: nullable(notes),
-      civilStatus: civilStatus || null,
-      dependentChildren: dependentChildren.trim() ? Number(dependentChildren) : null,
-      dimonaNumber: nullable(dimonaNumber),
-      identityCardNumber: canSeeConfidential ? nullable(identityCardNumber) : null,
-      emergencyContacts: emergencyContactRowsToPayload(emergencyRows),
-    }
-    setDirty(false)
-    onSubmit(values)
+  const algemeenSection: SectionDef = {
+    ...EMPLOYEE_CORE_SECTIONS[0],
+    hasError: sectionHasError('algemeen'),
+    render: () => (
+      <>
+        <FormSection title="Persoonlijk" columns={3}>
+          <FormField label="Voornaam" htmlFor="e-firstname" error={fieldErrors.firstName} required>
+            <input id="e-firstname" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.firstName ? 'true' : undefined} />
+          </FormField>
+          <FormField label="Achternaam" htmlFor="e-lastname" error={fieldErrors.lastName} required>
+            <input id="e-lastname" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.lastName ? 'true' : undefined} />
+          </FormField>
+          <FormField label="Geboortedatum" htmlFor="e-dob" error={fieldErrors.dateOfBirth} required>
+            <input id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} aria-invalid={fieldErrors.dateOfBirth ? 'true' : undefined} />
+          </FormField>
+          <FormField label="Geboorteplaats" htmlFor="e-pob">
+            <input id="e-pob" value={placeOfBirth} onChange={(e) => setPlaceOfBirth(e.target.value)} maxLength={100} />
+          </FormField>
+          <FormField label="Nationaliteit" htmlFor="e-nationality">
+            <SearchableSelect
+              id="e-nationality"
+              value={nationalityCode}
+              onChange={(v) => {
+                setNationalityCode(v)
+                touch()
+              }}
+              options={nationalities.options.map((o) => ({ value: o.code, label: o.name, keywords: o.code }))}
+              isLoading={nationalities.isLoading}
+              placeholder="— Selecteer —"
+            />
+          </FormField>
+          <FormField label="Voorkeurstaal" htmlFor="e-language">
+            <select id="e-language" value={preferredLanguageCode} onChange={(e) => setPreferredLanguageCode(e.target.value)}>
+              <option value="">— Geen —</option>
+              {languages.options.map((o) => (
+                <option key={o.id} value={o.code}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </FormSection>
+
+        <FormSection title="Contact & adres" columns={3}>
+          <FormField label="E-mail" htmlFor="e-email" error={fieldErrors.email} required>
+            <input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} aria-invalid={fieldErrors.email ? 'true' : undefined} />
+          </FormField>
+          <FormField label="Telefoon" htmlFor="e-phone" error={fieldErrors.phoneNumber} required>
+            <input id="e-phone" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} maxLength={30} aria-invalid={fieldErrors.phoneNumber ? 'true' : undefined} />
+          </FormField>
+          <FormField label="GSM" htmlFor="e-mobile">
+            <input id="e-mobile" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} maxLength={30} />
+          </FormField>
+          <FormField label="Straat" htmlFor="e-street" error={fieldErrors.street} required>
+            <input id="e-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} aria-invalid={fieldErrors.street ? 'true' : undefined} />
+          </FormField>
+          <FormField label="Nummer" htmlFor="e-houseno" error={fieldErrors.houseNumber} required>
+            <input id="e-houseno" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} maxLength={20} aria-invalid={fieldErrors.houseNumber ? 'true' : undefined} />
+          </FormField>
+          <FormField label="Postcode" htmlFor="e-postal" error={fieldErrors.postalCode} required>
+            <input id="e-postal" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} maxLength={20} aria-invalid={fieldErrors.postalCode ? 'true' : undefined} />
+          </FormField>
+          <FormField label="Plaats" htmlFor="e-city" error={fieldErrors.city} required>
+            <input id="e-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} aria-invalid={fieldErrors.city ? 'true' : undefined} />
+          </FormField>
+          <FormField label="Land" htmlFor="e-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
+            <CountryCombobox
+              id="e-country"
+              value={countryCode}
+              onChange={(code) => {
+                setCountryCode(code)
+                touch()
+              }}
+            />
+          </FormField>
+        </FormSection>
+      </>
+    ),
   }
 
-  return (
-    <form onSubmit={handleSubmit} className="employee-form" onChange={touch}>
-      <UnsavedChangesGuard when={dirty && !isSubmitting} />
-      <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={FIELD_LABELS} />
-
-      <FormActions position="top" dirty={dirty}>
-        <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
-          Annuleren
-        </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Opslaan…' : 'Opslaan'}
-        </Button>
-      </FormActions>
-
-      <FormSection title="Persoonlijk" columns={3}>
-        <FormField label="Voornaam" htmlFor="e-firstname" error={fieldErrors.firstName} required>
-          <input id="e-firstname" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.firstName ? 'true' : undefined} />
-        </FormField>
-        <FormField label="Achternaam" htmlFor="e-lastname" error={fieldErrors.lastName} required>
-          <input id="e-lastname" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.lastName ? 'true' : undefined} />
-        </FormField>
-        <FormField label="Geboortedatum" htmlFor="e-dob" error={fieldErrors.dateOfBirth} required>
-          <input id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} aria-invalid={fieldErrors.dateOfBirth ? 'true' : undefined} />
-        </FormField>
-        <FormField label="Geboorteplaats" htmlFor="e-pob">
-          <input id="e-pob" value={placeOfBirth} onChange={(e) => setPlaceOfBirth(e.target.value)} maxLength={100} />
-        </FormField>
-        <FormField label="Nationaliteit" htmlFor="e-nationality">
-          <SearchableSelect
-            id="e-nationality"
-            value={nationalityCode}
-            onChange={(v) => {
-              setNationalityCode(v)
-              touch()
-            }}
-            options={nationalities.options.map((o) => ({ value: o.code, label: o.name, keywords: o.code }))}
-            isLoading={nationalities.isLoading}
-            placeholder="— Selecteer —"
-          />
-        </FormField>
-        <FormField label="Voorkeurstaal" htmlFor="e-language">
-          <select id="e-language" value={preferredLanguageCode} onChange={(e) => setPreferredLanguageCode(e.target.value)}>
-            <option value="">— Geen —</option>
-            {languages.options.map((o) => (
-              <option key={o.id} value={o.code}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
-      </FormSection>
-
-      <FormSection title="Contact & adres" columns={3}>
-        <FormField label="E-mail" htmlFor="e-email" error={fieldErrors.email} required>
-          <input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} aria-invalid={fieldErrors.email ? 'true' : undefined} />
-        </FormField>
-        <FormField label="Telefoon" htmlFor="e-phone" error={fieldErrors.phoneNumber} required>
-          <input id="e-phone" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} maxLength={30} aria-invalid={fieldErrors.phoneNumber ? 'true' : undefined} />
-        </FormField>
-        <FormField label="GSM" htmlFor="e-mobile">
-          <input id="e-mobile" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} maxLength={30} />
-        </FormField>
-        <FormField label="Straat" htmlFor="e-street" error={fieldErrors.street} required>
-          <input id="e-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} aria-invalid={fieldErrors.street ? 'true' : undefined} />
-        </FormField>
-        <FormField label="Nummer" htmlFor="e-houseno" error={fieldErrors.houseNumber} required>
-          <input id="e-houseno" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} maxLength={20} aria-invalid={fieldErrors.houseNumber ? 'true' : undefined} />
-        </FormField>
-        <FormField label="Postcode" htmlFor="e-postal" error={fieldErrors.postalCode} required>
-          <input id="e-postal" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} maxLength={20} aria-invalid={fieldErrors.postalCode ? 'true' : undefined} />
-        </FormField>
-        <FormField label="Plaats" htmlFor="e-city" error={fieldErrors.city} required>
-          <input id="e-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} aria-invalid={fieldErrors.city ? 'true' : undefined} />
-        </FormField>
-        <FormField label="Land" htmlFor="e-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
-          <CountryCombobox
-            id="e-country"
-            value={countryCode}
-            onChange={(code) => {
-              setCountryCode(code)
-              touch()
-            }}
-          />
-        </FormField>
-      </FormSection>
-
+  const dienstverbandSection: SectionDef = {
+    ...EMPLOYEE_CORE_SECTIONS[1],
+    hasError: sectionHasError('dienstverband'),
+    render: () => (
       <FormSection
         title="Dienstverband"
         columns={3}
@@ -364,57 +344,117 @@ export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldEr
           </FormField>
         </div>
       </FormSection>
+    ),
+  }
 
-      <FormSection title="Persoonlijk / HR" columns={3}>
-        <FormField label="Burgerlijke staat" htmlFor="e-civil-status">
-          <select
-            id="e-civil-status"
-            value={civilStatus}
-            onChange={(e) => {
-              setCivilStatus(e.target.value as CivilStatus | '')
-              touch()
-            }}
-          >
-            <option value="">— Onbekend —</option>
-            {Object.entries(CIVIL_STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label="Aantal kinderen ten laste" htmlFor="e-dependent-children">
-          <input
-            id="e-dependent-children"
-            type="number"
-            min={0}
-            max={30}
-            value={dependentChildren}
-            onChange={(e) => setDependentChildren(e.target.value)}
-          />
-        </FormField>
-        <FormField label="Einddatum tewerkstelling" htmlFor="e-end" hint="Leeg = onbepaalde duur.">
-          <input id="e-end" type="date" value={employmentEndDate} onChange={(e) => setEmploymentEndDate(e.target.value)} />
-        </FormField>
-        <FormField label="DIMONA-nummer" htmlFor="e-dimona">
-          <input id="e-dimona" value={dimonaNumber} onChange={(e) => setDimonaNumber(e.target.value)} maxLength={50} />
-        </FormField>
-        {canSeeConfidential && (
-          <FormField
-            label="Identiteitskaartnummer"
-            htmlFor="e-identity-card"
-            hint="Vertrouwelijk — alleen zichtbaar met de juiste rechten."
-          >
+  const hrSection: SectionDef = {
+    ...EMPLOYEE_CORE_SECTIONS[2],
+    hasError: sectionHasError('hr'),
+    render: () => (
+      <>
+        <FormSection title="Persoonlijk / HR" columns={3}>
+          <FormField label="Burgerlijke staat" htmlFor="e-civil-status">
+            <select
+              id="e-civil-status"
+              value={civilStatus}
+              onChange={(e) => {
+                setCivilStatus(e.target.value as CivilStatus | '')
+                touch()
+              }}
+            >
+              <option value="">— Onbekend —</option>
+              {Object.entries(CIVIL_STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Aantal kinderen ten laste" htmlFor="e-dependent-children">
             <input
-              id="e-identity-card"
-              value={identityCardNumber}
-              onChange={(e) => setIdentityCardNumber(e.target.value)}
-              maxLength={50}
+              id="e-dependent-children"
+              type="number"
+              min={0}
+              max={30}
+              value={dependentChildren}
+              onChange={(e) => setDependentChildren(e.target.value)}
             />
           </FormField>
-        )}
-      </FormSection>
+          <FormField label="Einddatum tewerkstelling" htmlFor="e-end" hint="Leeg = onbepaalde duur.">
+            <input id="e-end" type="date" value={employmentEndDate} onChange={(e) => setEmploymentEndDate(e.target.value)} />
+          </FormField>
+          <FormField label="DIMONA-nummer" htmlFor="e-dimona">
+            <input id="e-dimona" value={dimonaNumber} onChange={(e) => setDimonaNumber(e.target.value)} maxLength={50} />
+          </FormField>
+          {canSeeConfidential && (
+            <FormField
+              label="Identiteitskaartnummer"
+              htmlFor="e-identity-card"
+              hint="Vertrouwelijk — alleen zichtbaar met de juiste rechten."
+            >
+              <input
+                id="e-identity-card"
+                value={identityCardNumber}
+                onChange={(e) => setIdentityCardNumber(e.target.value)}
+                maxLength={50}
+              />
+            </FormField>
+          )}
+        </FormSection>
 
+        {canSeeConfidential && (
+          <FormSection
+            title="Identiteit & bank"
+            columns={3}
+            description="Vertrouwelijke gegevens — alleen zichtbaar voor gebruikers met de juiste rechten."
+          >
+            <FormField
+              label="Rijksregisternummer"
+              htmlFor="e-nrn"
+              hint="Met of zonder leestekens, bv. 90.05.01-123.26."
+              error={fieldErrors.nationalRegisterNumber ?? getFieldError(serverFieldErrors, 'nationalRegisterNumber')}
+            >
+              <input
+                id="e-nrn"
+                value={nationalRegisterNumber}
+                onChange={(e) => setNationalRegisterNumber(e.target.value)}
+                onBlur={() => {
+                  const message = validateNrn(nationalRegisterNumber)
+                  setFieldErrors((current) => ({ ...current, nationalRegisterNumber: message ?? undefined }) as Record<string, string>)
+                  if (!message) setNationalRegisterNumber((value) => formatNrn(value))
+                }}
+                aria-invalid={fieldErrors.nationalRegisterNumber ? 'true' : undefined}
+                maxLength={15}
+              />
+            </FormField>
+            <FormField label="IBAN" htmlFor="e-iban" error={fieldErrors.iban ?? getFieldError(serverFieldErrors, 'iban')}>
+              <input
+                id="e-iban"
+                value={iban}
+                onChange={(e) => setIban(e.target.value)}
+                onBlur={() => {
+                  const message = validateIban(iban)
+                  setFieldErrors((current) => ({ ...current, iban: message ?? undefined }) as Record<string, string>)
+                  if (!message) setIban((value) => formatIban(value))
+                }}
+                aria-invalid={fieldErrors.iban ? 'true' : undefined}
+                maxLength={42}
+                placeholder="BE68 5390 0754 7034"
+              />
+            </FormField>
+            <FormField label="BIC" htmlFor="e-bic" error={getFieldError(serverFieldErrors, 'bic')}>
+              <input id="e-bic" value={bic} onChange={(e) => setBic(e.target.value)} maxLength={11} placeholder="KREDBEBB" />
+            </FormField>
+          </FormSection>
+        )}
+      </>
+    ),
+  }
+
+  const noodcontactenSection: SectionDef = {
+    ...EMPLOYEE_CORE_SECTIONS[3],
+    hasError: sectionHasError('noodcontacten'),
+    render: () => (
       <FormSection
         title="Noodcontacten"
         columns={1}
@@ -497,69 +537,99 @@ export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldEr
           </Button>
         </div>
       </FormSection>
+    ),
+  }
 
-      {canSeeConfidential && (
-        <FormSection
-          title="Identiteit & bank"
-          columns={3}
-          description="Vertrouwelijke gegevens — alleen zichtbaar voor gebruikers met de juiste rechten."
-        >
-          <FormField
-            label="Rijksregisternummer"
-            htmlFor="e-nrn"
-            hint="Met of zonder leestekens, bv. 90.05.01-123.26."
-            error={fieldErrors.nationalRegisterNumber ?? getFieldError(serverFieldErrors, 'nationalRegisterNumber')}
-          >
-            <input
-              id="e-nrn"
-              value={nationalRegisterNumber}
-              onChange={(e) => setNationalRegisterNumber(e.target.value)}
-              onBlur={() => {
-                const message = validateNrn(nationalRegisterNumber)
-                setFieldErrors((current) => ({ ...current, nationalRegisterNumber: message ?? undefined }) as Record<string, string>)
-                if (!message) setNationalRegisterNumber((value) => formatNrn(value))
-              }}
-              aria-invalid={fieldErrors.nationalRegisterNumber ? 'true' : undefined}
-              maxLength={15}
-            />
-          </FormField>
-          <FormField label="IBAN" htmlFor="e-iban" error={fieldErrors.iban ?? getFieldError(serverFieldErrors, 'iban')}>
-            <input
-              id="e-iban"
-              value={iban}
-              onChange={(e) => setIban(e.target.value)}
-              onBlur={() => {
-                const message = validateIban(iban)
-                setFieldErrors((current) => ({ ...current, iban: message ?? undefined }) as Record<string, string>)
-                if (!message) setIban((value) => formatIban(value))
-              }}
-              aria-invalid={fieldErrors.iban ? 'true' : undefined}
-              maxLength={42}
-              placeholder="BE68 5390 0754 7034"
-            />
-          </FormField>
-          <FormField label="BIC" htmlFor="e-bic" error={getFieldError(serverFieldErrors, 'bic')}>
-            <input id="e-bic" value={bic} onChange={(e) => setBic(e.target.value)} maxLength={11} placeholder="KREDBEBB" />
-          </FormField>
-        </FormSection>
-      )}
-
+  const notitiesSection: SectionDef = {
+    ...EMPLOYEE_NOTITIES_SECTION,
+    render: () => (
       <FormSection title="Notities" columns={1}>
         <FormField label="Interne notities" htmlFor="e-notes" className="form-span-all">
           <textarea id="e-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} />
         </FormField>
       </FormSection>
+    ),
+  }
 
-      {extraSections}
+  const sections: SectionDef[] = [
+    algemeenSection,
+    dienstverbandSection,
+    hrSection,
+    noodcontactenSection,
+    ...(extraSections ?? []),
+    notitiesSection,
+  ]
 
-      <FormActions dirty={dirty}>
-        <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
-          Annuleren
-        </Button>
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Opslaan…' : 'Opslaan'}
-        </Button>
-      </FormActions>
+  const { activeId, setActive } = useSectionNavigation(sections.map((s) => s.id), sections[0].id)
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    const errors = validate()
+    if (Object.keys(errors).length > 0) {
+      // Route to the first section that owns a failing field so the error is visible.
+      const target = firstSectionWithError(
+        sections.map((s) => ({ id: s.id, fieldKeys: EMPLOYEE_SECTION_FIELD_KEYS[s.id] })),
+        errors,
+      )
+      if (target) setActive(target)
+      return
+    }
+
+    const values: EmployeeInput = {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      dateOfBirth,
+      placeOfBirth: nullable(placeOfBirth),
+      nationalityCode: nationalityCode || null,
+      preferredLanguageCode: preferredLanguageCode || null,
+      email: email.trim(),
+      phoneNumber: phoneNumber.trim(),
+      mobilePhone: nullable(mobilePhone),
+      street: street.trim(),
+      houseNumber: houseNumber.trim(),
+      postalCode: postalCode.trim(),
+      city: city.trim(),
+      countryCode: countryCode || null,
+      employmentStartDate,
+      employmentEndDate: employmentEndDate || null,
+      employmentStatus,
+      departmentId: departmentId || null,
+      contractTypeId: contractTypeId || null,
+      jobFunctionIds,
+      nationalRegisterNumber: canSeeConfidential ? nullable(nationalRegisterNumber) : null,
+      iban: canSeeConfidential ? nullable(iban) : null,
+      bic: canSeeConfidential ? nullable(bic) : null,
+      notes: nullable(notes),
+      civilStatus: civilStatus || null,
+      dependentChildren: dependentChildren.trim() ? Number(dependentChildren) : null,
+      dimonaNumber: nullable(dimonaNumber),
+      identityCardNumber: canSeeConfidential ? nullable(identityCardNumber) : null,
+      emergencyContacts: emergencyContactRowsToPayload(emergencyRows),
+    }
+    setDirty(false)
+    onSubmit(values)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="employee-form" onChange={touch}>
+      <UnsavedChangesGuard when={dirty && !isSubmitting} />
+      <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={FIELD_LABELS} />
+
+      <SectionedForm
+        sections={sections}
+        activeId={activeId}
+        onActiveChange={setActive}
+        actions={
+          <FormActions dirty={dirty}>
+            <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+              Annuleren
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Opslaan…' : 'Opslaan'}
+            </Button>
+          </FormActions>
+        }
+      />
     </form>
   )
 }

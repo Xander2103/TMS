@@ -7,6 +7,7 @@ import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadges } from '../../../components/ui/StatusBadges'
+import type { SectionDef } from '../../../components/ui/SectionedForm'
 import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -60,6 +61,66 @@ export function EmployeeDetailPage() {
   function setTab(next: string) {
     setSearchParams(next === 'profiel' ? {} : { tab: next }, { replace: true })
   }
+
+  // Edit-only self-saving panels, embedded as sections of the profile form (they remain
+  // reachable as page tabs too). `panel: true` hides the form's shared Save — each panel
+  // saves through its own existing API.
+  const editExtraSections: SectionDef[] = [
+    {
+      id: 'chauffeursprofiel',
+      label: 'Chauffeursprofiel',
+      optional: true,
+      panel: true,
+      render: () =>
+        employee.driverId ? (
+          <DriverProfilePanel
+            driverId={employee.driverId}
+            onChanged={reload}
+            onDeleted={() => {
+              reload()
+              setTab('profiel')
+            }}
+          />
+        ) : hasPermission('drivers.create') && employee.isActive ? (
+          <p className="placeholder-text">
+            <Link to={`/drivers/new?employeeId=${employee.id}`}>Chauffeursprofiel aanmaken →</Link>
+          </p>
+        ) : (
+          <p className="placeholder-text">Deze medewerker heeft geen chauffeursprofiel.</p>
+        ),
+    },
+    {
+      id: 'kwalificaties',
+      label: 'Kwalificaties',
+      optional: true,
+      panel: true,
+      render: () => <QualificationsTab employeeId={employee.id} />,
+    },
+    {
+      id: 'documenten',
+      label: 'Documenten',
+      optional: true,
+      panel: true,
+      render: () =>
+        canViewDocuments ? (
+          <EmployeeDocumentsTab employeeId={employee.id} />
+        ) : (
+          <p className="placeholder-text">Je hebt geen rechten om documenten te bekijken.</p>
+        ),
+    },
+    {
+      id: 'bedrijfsmiddelen',
+      label: 'Bedrijfsmiddelen',
+      optional: true,
+      panel: true,
+      render: () =>
+        canViewIssuedItems ? (
+          <IssuedItemsTab employeeId={employee.id} />
+        ) : (
+          <p className="placeholder-text">Je hebt geen rechten om bedrijfsmiddelen te bekijken.</p>
+        ),
+    },
+  ]
 
   return (
     <div>
@@ -136,6 +197,7 @@ export function EmployeeDetailPage() {
               serverFieldErrors={mutations.fieldErrors}
               onCancel={() => navigate('/employees')}
               onFunctionsChanged={setEditedFunctionCodes}
+              extraSections={editExtraSections}
               onSubmit={async (values) => {
                 const updated = await mutations.update(employee.id, values)
                 if (updated) {
