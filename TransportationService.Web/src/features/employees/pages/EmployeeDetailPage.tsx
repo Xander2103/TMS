@@ -16,6 +16,7 @@ import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { DriverProfilePanel } from '../../drivers/components/DriverProfilePanel'
 import { IssuedItemsTab } from '../../issued-items/IssuedItemsTab'
+import { LeaveBalanceTab } from '../../leave-balance/components/LeaveBalanceTab'
 import { CreateUserAccountDialog } from '../components/CreateUserAccountDialog'
 import { EmployeeDocumentsTab } from '../components/EmployeeDocumentsTab'
 import { EmployeeForm } from '../components/EmployeeForm'
@@ -27,7 +28,7 @@ import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
 
-const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'afwezigheden', 'ritten', 'chauffeursprofiel', 'bedrijfsmiddelen', 'historiek'] as const
+const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlofsaldo', 'afwezigheden', 'ritten', 'chauffeursprofiel', 'bedrijfsmiddelen', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 export function EmployeeDetailPage() {
@@ -54,6 +55,7 @@ export function EmployeeDetailPage() {
   const canViewTrips = hasPermission('planning.view')
   const canViewDocuments = hasPermission('employee_documents.view')
   const canViewIssuedItems = hasPermission('issued_items.view') || hasPermission('issued_items.manage')
+  const canViewLeaveBalance = hasPermission('leave_balances.view')
 
   if (isLoading) return <LoadingState message="Medewerker laden..." />
   if (error || !employee) return <ErrorState message={error ?? 'Medewerker niet gevonden.'} />
@@ -106,6 +108,18 @@ export function EmployeeDetailPage() {
           <EmployeeDocumentsTab employeeId={employee.id} />
         ) : (
           <p className="placeholder-text">Je hebt geen rechten om documenten te bekijken.</p>
+        ),
+    },
+    {
+      id: 'verlofsaldo',
+      label: 'Verlofsaldo',
+      optional: true,
+      panel: true,
+      render: () =>
+        canViewLeaveBalance ? (
+          <LeaveBalanceTab employeeId={employee.id} />
+        ) : (
+          <p className="placeholder-text">Je hebt geen rechten om het verlofsaldo te bekijken.</p>
         ),
     },
     {
@@ -176,6 +190,7 @@ export function EmployeeDetailPage() {
           ...(canViewPlanning ? [{ id: 'planning', label: 'Planning' }] : []),
           { id: 'kwalificaties', label: 'Kwalificaties' },
           ...(canViewDocuments ? [{ id: 'documenten', label: 'Documenten' }] : []),
+          ...(canViewLeaveBalance ? [{ id: 'verlofsaldo', label: 'Verlofsaldo' }] : []),
           { id: 'afwezigheden', label: 'Afwezigheden' },
           ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: 'Ritten' }] : []),
           ...(employee.driverId ? [{ id: 'chauffeursprofiel', label: 'Chauffeursprofiel' }] : []),
@@ -274,6 +289,12 @@ export function EmployeeDetailPage() {
       {tab === 'documenten' && canViewDocuments && (
         <TabPanel tabId="documenten">
           <EmployeeDocumentsTab employeeId={employee.id} />
+        </TabPanel>
+      )}
+
+      {tab === 'verlofsaldo' && canViewLeaveBalance && (
+        <TabPanel tabId="verlofsaldo">
+          <LeaveBalanceTab employeeId={employee.id} />
         </TabPanel>
       )}
 

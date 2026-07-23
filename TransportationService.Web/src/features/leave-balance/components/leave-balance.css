@@ -1,0 +1,75 @@
+.leave-balance-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.lb-toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+.lb-toolbar select {
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  background: var(--bg);
+  color: var(--text-h);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.lb-table-wrap {
+  overflow-x: auto;
+}
+.lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.lb-table th,
+.lb-table td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.lb-table th {
+  color: var(--text);
+  font-weight: 600;
+}
+.lb-remaining {
+  font-weight: 700;
+  color: var(--text-h);
+}
+.lb-negative {
+  color: var(--danger);
+}
+.lb-reserved-note {
+  color: var(--text);
+  font-size: 0.8em;
+}
+.lb-row-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.lb-history {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+.lb-history ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.leave-balance-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+}
+.leave-balance-card h3 {
+  margin: 0 0 0.75rem;
+}

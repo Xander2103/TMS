@@ -256,6 +256,14 @@ export function NewEmployeePage() {
         ),
     },
     {
+      id: 'verlofsaldo',
+      label: 'Verlofsaldo',
+      optional: true,
+      render: () => (
+        <p className="placeholder-text">Het verlofsaldo (jaarrecht per saldotype) is beschikbaar na het opslaan van de medewerker.</p>
+      ),
+    },
+    {
       id: 'bedrijfsmiddelen',
       label: 'Bedrijfsmiddelen',
       optional: true,
