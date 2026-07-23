@@ -85,7 +85,7 @@ namespace TransportationService.Api.Migrations
                 """);
             migrationBuilder.Sql(
                 """
-                UPDATE cargo_items SET "QuantityUnitCode" = CASE lower(btrim("QuantityUnit"))
+                UPDATE order_cargo_items SET "QuantityUnitCode" = CASE lower(btrim("QuantityUnit"))
                     WHEN 'colli' THEN 'COLLI'
                     WHEN 'europallet' THEN 'EUROPALLET' WHEN 'pallet' THEN 'PALLET' WHEN 'blokpallet' THEN 'BLOCKPALLET'
                     WHEN 'container' THEN 'CONTAINER' WHEN 'krat' THEN 'CRATE' WHEN 'doos' THEN 'BOX'
