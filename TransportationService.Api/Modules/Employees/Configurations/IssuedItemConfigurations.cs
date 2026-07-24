@@ -21,6 +21,9 @@ public class IssuedItemTemplateConfiguration : IEntityTypeConfiguration<IssuedIt
         builder.Property(t => t.Version).IsConcurrencyToken();
 
         builder.HasIndex(t => new { t.TenantId, t.IsActive });
+        builder.HasIndex(t => new { t.TenantId, t.CategoryId });
+        builder.HasOne<IssuedItemCategory>().WithMany()
+            .HasForeignKey(t => t.CategoryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasQueryFilter(t => !t.IsDeleted);
     }
 }

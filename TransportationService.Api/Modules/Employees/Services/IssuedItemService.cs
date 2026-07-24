@@ -16,7 +16,8 @@ public record IssuedItemTemplateDto(
     string? Description, string? Unit, string? Notes,
     bool StockTrackingEnabled, bool VariantsEnabled, bool AllowNegativeStock,
     int? LowStockThreshold, int? MinimumStock, string? StorageLocation,
-    int CurrentStock, int TotalAvailable, bool LowStock, int VariantCount);
+    int CurrentStock, int TotalAvailable, bool LowStock, int VariantCount,
+    Guid? CategoryId = null);
 
 public record SaveIssuedItemTemplateRequest(
     string Name, string Category, string? ApplicableJobFunctionCodes,
@@ -24,7 +25,8 @@ public record SaveIssuedItemTemplateRequest(
     bool IsActive, int SortOrder,
     string? Description = null, string? Unit = null, string? Notes = null,
     bool StockTrackingEnabled = false, bool VariantsEnabled = false, bool AllowNegativeStock = false,
-    int? LowStockThreshold = null, int? MinimumStock = null, string? StorageLocation = null);
+    int? LowStockThreshold = null, int? MinimumStock = null, string? StorageLocation = null,
+    Guid? CategoryId = null);
 
 public record EmployeeIssuedItemDto(
     Guid Id, Guid? TemplateId, string Name, string Category, IssuedItemStatus Status,
@@ -44,7 +46,7 @@ public record SaveEmployeeIssuedItemRequest(
 
 public interface IIssuedItemService
 {
-    Task<IReadOnlyList<IssuedItemTemplateDto>> ListTemplatesAsync(bool includeInactive, CancellationToken cancellationToken);
+    Task<IReadOnlyList<IssuedItemTemplateDto>> ListTemplatesAsync(bool includeInactive, CancellationToken cancellationToken, Guid? categoryId = null);
     Task<IssuedItemTemplateDto> CreateTemplateAsync(SaveIssuedItemTemplateRequest request, CancellationToken cancellationToken);
     Task<IssuedItemTemplateDto?> UpdateTemplateAsync(Guid id, SaveIssuedItemTemplateRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteTemplateAsync(Guid id, CancellationToken cancellationToken);
@@ -82,10 +84,11 @@ public class IssuedItemService : IIssuedItemService
         _permissionService = permissionService;
     }
 
-    public async Task<IReadOnlyList<IssuedItemTemplateDto>> ListTemplatesAsync(bool includeInactive, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<IssuedItemTemplateDto>> ListTemplatesAsync(bool includeInactive, CancellationToken cancellationToken, Guid? categoryId = null)
     {
         var templates = await _dbContext.IssuedItemTemplates
             .Where(t => t.TenantId == _tenantContext.TenantId && (includeInactive || t.IsActive))
+            .Where(t => categoryId == null || t.CategoryId == categoryId)
             .OrderBy(t => t.SortOrder).ThenBy(t => t.Category).ThenBy(t => t.Name)
             .ToListAsync(cancellationToken);
 
@@ -109,6 +112,7 @@ public class IssuedItemService : IIssuedItemService
     {
         var template = new IssuedItemTemplate { Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId };
         Apply(template, request);
+        await ApplyCategoryAsync(template, request, cancellationToken);
         _dbContext.IssuedItemTemplates.Add(template);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "Created", null,
@@ -128,6 +132,7 @@ public class IssuedItemService : IIssuedItemService
         var oldStockTracking = template.StockTrackingEnabled;
         var oldVariants = template.VariantsEnabled;
         Apply(template, request);
+        await ApplyCategoryAsync(template, request, cancellationToken);
 
         if (oldVariants && !template.VariantsEnabled)
         {
@@ -532,6 +537,26 @@ public class IssuedItemService : IIssuedItemService
         template.StorageLocation = Trim(request.StorageLocation);
     }
 
+    /// <summary>
+    /// Resolves the master-data category and syncs the denormalized name snapshot. Without a
+    /// CategoryId the legacy free-text Category from the request is kept as-is.
+    /// </summary>
+    private async Task ApplyCategoryAsync(IssuedItemTemplate template, SaveIssuedItemTemplateRequest request, CancellationToken cancellationToken)
+    {
+        if (request.CategoryId is { } categoryId)
+        {
+            var category = await _dbContext.IssuedItemCategories
+                .FirstOrDefaultAsync(c => c.TenantId == _tenantContext.TenantId && c.Id == categoryId, cancellationToken)
+                ?? throw new DomainValidationException("categoryId", "De categorie bestaat niet.");
+            template.CategoryId = category.Id;
+            template.Category = category.Name;
+        }
+        else
+        {
+            template.CategoryId = null;
+        }
+    }
+
     private Task<bool> EmployeeExistsAsync(Guid employeeId, CancellationToken cancellationToken) =>
         _dbContext.Employees.AnyAsync(e => e.TenantId == _tenantContext.TenantId && e.Id == employeeId, cancellationToken);
 
@@ -546,7 +571,8 @@ public class IssuedItemService : IIssuedItemService
             t.Description, t.Unit, t.Notes,
             t.StockTrackingEnabled, t.VariantsEnabled, t.AllowNegativeStock,
             t.LowStockThreshold, t.MinimumStock, t.StorageLocation,
-            t.CurrentStock, total, low, variantCount);
+            t.CurrentStock, total, low, variantCount,
+            t.CategoryId);
     }
 
     private static EmployeeIssuedItemDto Map(EmployeeIssuedItem i) => new(

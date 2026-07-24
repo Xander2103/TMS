@@ -71,6 +71,18 @@
   font-size: 14px;
 }
 
+.issued-items-manage-link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.issued-items-manage-link:hover {
+  text-decoration: underline;
+}
+
 .issued-items-checkbox {
   display: flex;
   align-items: center;

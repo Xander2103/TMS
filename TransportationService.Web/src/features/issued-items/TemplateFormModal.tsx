@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { FormField } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { describeApiError } from '../../api/problemDetails'
+import { useAuth } from '../auth/authContextValue'
+import { LookupSelect } from '../master-data/components/LookupSelect'
 import {
   createIssuedItemTemplate,
   updateIssuedItemTemplate,
@@ -15,6 +18,7 @@ function emptyTemplateForm(): IssuedItemTemplateInput {
   return {
     name: '',
     category: 'Algemeen',
+    categoryId: null,
     applicableJobFunctionCodes: null,
     defaultQuantity: 1,
     requiresSerialNumber: false,
@@ -38,6 +42,7 @@ function templateToForm(template: IssuedItemTemplate): IssuedItemTemplateInput {
   return {
     name: template.name,
     category: template.category,
+    categoryId: template.categoryId,
     applicableJobFunctionCodes: template.applicableJobFunctionCodes,
     defaultQuantity: template.defaultQuantity,
     requiresSerialNumber: template.requiresSerialNumber,
@@ -69,9 +74,11 @@ interface TemplateFormModalProps {
  * stock tracking (mirrors the backend rule).
  */
 export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormModalProps) {
+  const { hasPermission } = useAuth()
   const [form, setForm] = useState<IssuedItemTemplateInput>(editing ? templateToForm(editing) : emptyTemplateForm())
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const canManageCategories = hasPermission('inventory.manage')
 
   function set<K extends keyof IssuedItemTemplateInput>(key: K, value: IssuedItemTemplateInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -80,7 +87,7 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     setFormError(null)
-    if (!form.name.trim() || !form.category.trim()) {
+    if (!form.name.trim() || (!form.categoryId && !form.category.trim())) {
       setFormError('Naam en categorie zijn verplicht.')
       return
     }
@@ -123,8 +130,23 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
           <FormField label="Naam" htmlFor="tpl-name" required>
             <input id="tpl-name" value={form.name} onChange={(e) => set('name', e.target.value)} disabled={saving} maxLength={150} />
           </FormField>
-          <FormField label="Categorie" htmlFor="tpl-cat" required hint="bv. Algemeen / Chauffeur / Magazijn">
-            <input id="tpl-cat" value={form.category} onChange={(e) => set('category', e.target.value)} disabled={saving} maxLength={100} />
+          <FormField label="Categorie" htmlFor="tpl-cat" required>
+            <LookupSelect
+              id="tpl-cat"
+              basePath="/api/issued-item-categories"
+              viewPermission="issued_items.view"
+              managePermission="inventory.manage"
+              singular="categorie"
+              value={form.categoryId}
+              onChange={(value) => set('categoryId', value)}
+              placeholder={form.categoryId ? undefined : form.category || 'Kies een categorie'}
+              disabled={saving}
+            />
+            {canManageCategories && (
+              <Link className="issued-items-manage-link" to="/master-data/issued-item-categories">
+                + Categorieën beheren
+              </Link>
+            )}
           </FormField>
         </div>
         <FormField label="Omschrijving" htmlFor="tpl-desc">
@@ -147,7 +169,11 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
           <FormField label="Standaardaantal" htmlFor="tpl-qty">
             <input id="tpl-qty" type="number" min={1} value={form.defaultQuantity} onChange={(e) => set('defaultQuantity', Number(e.target.value) || 1)} disabled={saving} />
           </FormField>
-          <FormField label="Volgorde" htmlFor="tpl-sort">
+          <FormField
+            label="Volgorde in lijst"
+            htmlFor="tpl-sort"
+            hint="Bepaalt de volgorde in het overzicht en in keuzelijsten; lager komt eerst."
+          >
             <input id="tpl-sort" type="number" value={form.sortOrder} onChange={(e) => set('sortOrder', Number(e.target.value) || 0)} disabled={saving} />
           </FormField>
         </div>
@@ -191,23 +217,17 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
               <span>Negatieve voorraad toestaan</span>
             </label>
             <div className="issued-items-form-row">
-              <FormField label="Lage-voorraadgrens" htmlFor="tpl-low" hint="Waarschuwing bij deze voorraad of lager.">
+              <FormField
+                label="Lage-voorraadgrens"
+                htmlFor="tpl-low"
+                hint="Het systeem waarschuwt wanneer de voorraad deze grens bereikt of eronder zakt."
+              >
                 <input
                   id="tpl-low"
                   type="number"
                   min={0}
                   value={form.lowStockThreshold ?? ''}
                   onChange={(e) => set('lowStockThreshold', e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))}
-                  disabled={saving}
-                />
-              </FormField>
-              <FormField label="Minimumvoorraad" htmlFor="tpl-min">
-                <input
-                  id="tpl-min"
-                  type="number"
-                  min={0}
-                  value={form.minimumStock ?? ''}
-                  onChange={(e) => set('minimumStock', e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))}
                   disabled={saving}
                 />
               </FormField>

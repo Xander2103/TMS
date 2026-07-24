@@ -28,6 +28,7 @@ export interface IssuedItemTemplate {
   id: string
   name: string
   category: string
+  categoryId: string | null
   applicableJobFunctionCodes: string | null
   defaultQuantity: number
   requiresSerialNumber: boolean
@@ -53,6 +54,7 @@ export interface IssuedItemTemplate {
 export interface IssuedItemTemplateInput {
   name: string
   category: string
+  categoryId: string | null
   applicableJobFunctionCodes: string | null
   defaultQuantity: number
   requiresSerialNumber: boolean

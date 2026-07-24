@@ -21,9 +21,9 @@ public class IssuedItemsController : ControllerBase
     [HttpGet("api/issued-item-templates")]
     [RequirePermission(PermissionCodes.IssuedItemsView, PermissionCodes.IssuedItemsManageTemplates)]
     public async Task<ActionResult<IReadOnlyList<IssuedItemTemplateDto>>> ListTemplates(
-        [FromQuery] bool includeInactive = false, CancellationToken cancellationToken = default)
+        [FromQuery] bool includeInactive = false, [FromQuery] Guid? categoryId = null, CancellationToken cancellationToken = default)
     {
-        return Ok(await _service.ListTemplatesAsync(includeInactive, cancellationToken));
+        return Ok(await _service.ListTemplatesAsync(includeInactive, cancellationToken, categoryId));
     }
 
     [HttpPost("api/issued-item-templates")]

@@ -11,8 +11,12 @@ public class IssuedItemTemplate : AuditableTenantEntity
 {
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>Grouping label (Algemeen, Chauffeur, Magazijn, Klasse 7, Optioneel, ...).</summary>
+    /// <summary>Grouping label (Algemeen, Chauffeur, Magazijn, Klasse 7, Optioneel, ...). Kept as
+    /// snapshot of the master-data category name so historical rows keep their label.</summary>
     public string Category { get; set; } = "Algemeen";
+
+    /// <summary>Master-data category (issued_item_categories); null on legacy rows.</summary>
+    public Guid? CategoryId { get; set; }
 
     /// <summary>CSV of JobFunction codes this item applies to; empty = everyone.</summary>
     public string? ApplicableJobFunctionCodes { get; set; }

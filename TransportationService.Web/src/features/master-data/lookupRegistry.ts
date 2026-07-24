@@ -31,6 +31,7 @@ export const LOOKUP_RESOURCES: LookupResourceConfig[] = [
   { slug: 'trailer-categories', title: 'Opleggercategorieën', singular: 'opleggercategorie', basePath: '/api/trailer-categories', group: 'categorieen', viewPermission: 'trailer_categories.view', managePermission: 'trailer_categories.manage' },
   { slug: 'driver-categories', title: 'Chauffeurcategorieën', singular: 'chauffeurcategorie', basePath: '/api/driver-categories', group: 'categorieen', viewPermission: 'driver_categories.view', managePermission: 'driver_categories.manage' },
   { slug: 'customer-categories', title: 'Klantcategorieën', singular: 'klantcategorie', basePath: '/api/customer-categories', group: 'categorieen', viewPermission: 'customer_categories.view', managePermission: 'customer_categories.manage' },
+  { slug: 'issued-item-categories', title: 'Bedrijfsmiddelcategorieën', singular: 'bedrijfsmiddelcategorie', basePath: '/api/issued-item-categories', group: 'categorieen', viewPermission: 'issued_items.view', managePermission: 'inventory.manage' },
   // Countries are deliberately absent: they are global ISO reference data (seeded, read-only),
   // not tenant master data. Country selection happens through the CountryCombobox everywhere.
   { slug: 'languages', title: 'Talen', singular: 'taal', basePath: '/api/languages', group: 'referentie', viewPermission: 'reference_data.view', managePermission: 'reference_data.manage', codeHint: 'ISO 639-1, bv. nl' },

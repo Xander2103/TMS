@@ -14,6 +14,7 @@ function makeTemplate(overrides: Partial<IssuedItemTemplate>): IssuedItemTemplat
     id: 't-1',
     name: 'Toegangsbadge',
     category: 'Algemeen',
+    categoryId: null,
     applicableJobFunctionCodes: null,
     defaultQuantity: 1,
     requiresSerialNumber: false,
