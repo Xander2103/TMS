@@ -21,6 +21,7 @@ import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
 import { CustomerLocationsPanel } from '../components/CustomerLocationsPanel'
 import { CustomerCommunicationPanel } from '../components/CustomerCommunicationPanel'
 import { CustomerBillingPanel } from '../components/CustomerBillingPanel'
+import { CustomerRateCardsPanel } from '../components/CustomerRateCardsPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
 import { VAT_TREATMENT_LABELS } from '../types'
@@ -208,7 +209,10 @@ export function CustomerDetailPage() {
             communicatie: id ? <CustomerCommunicationPanel customerId={id} contacts={customer.contacts} /> : null,
             tarieven:
               canViewBilling && id ? (
-                <CustomerBillingPanel customerId={id} />
+                <>
+                  <CustomerRateCardsPanel customerId={id} />
+                  <CustomerBillingPanel customerId={id} />
+                </>
               ) : (
                 <p className="customer-form-muted">Je hebt geen rechten om tarieven te beheren.</p>
               ),
@@ -232,7 +236,7 @@ export function CustomerDetailPage() {
                 { id: 'contacts', label: 'Contactpersonen', badge: customer.contacts.length || undefined },
                 ...(canViewLocations ? [{ id: 'locations', label: 'Locaties' }] : []),
                 { id: 'communication', label: 'Communicatie' },
-                ...(canViewBilling ? [{ id: 'billing', label: 'Facturatie' }] : []),
+                ...(canViewBilling ? [{ id: 'billing', label: 'Tarieven & toeslagen' }] : []),
               ]}
               activeId={activeTab}
               onChange={setActiveTab}
@@ -420,6 +424,7 @@ export function CustomerDetailPage() {
 
           {activeTab === 'billing' && canViewBilling && id && (
             <TabPanel tabId="billing">
+              <CustomerRateCardsPanel customerId={id} />
               <CustomerBillingPanel customerId={id} />
             </TabPanel>
           )}
