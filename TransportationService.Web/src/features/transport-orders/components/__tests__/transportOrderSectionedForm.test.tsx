@@ -52,9 +52,25 @@ vi.mock('../../../tarification/api/pricingApi', async () => {
       ]),
     getCustomerPricingConfig: () =>
       Promise.resolve({
-        preferredUnits: [{ unitTypeId: 'u-pallet', code: 'EUROPALLET', name: 'Europallet', sortOrder: 0 }],
+        preferredUnits: [
+          {
+            unitTypeId: 'u-pallet', code: 'EUROPALLET', name: 'Europallet', sortOrder: 0,
+            customerLabel: 'EURO PAL', ediCode: 'EPAL', excelCode: null, isFavourite: true,
+          },
+        ],
         serviceOptions: [],
       }),
+    listUnitTypeMaster: () =>
+      Promise.resolve([
+        {
+          id: 'u-pallet', code: 'EUROPALLET', name: 'Europallet', description: null, isActive: true, sortOrder: 0,
+          allowForOrderEntry: true, allowForPricing: true, category: 'Packaging', decimals: 0, symbol: null,
+          dimensionBehavior: 'DefaultButOverridable',
+          defaultLengthCm: 120, defaultWidthCm: 80, defaultHeightCm: null,
+          defaultWeightKg: null, maxWeightKg: null, defaultVolumeM3: null,
+          defaultLoadingMeters: null, defaultPalletPlaces: null,
+        },
+      ]),
     previewPrice: previewSpy.mockResolvedValue({
       lines: [
         { label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false },
@@ -110,12 +126,71 @@ describe('TransportOrderForm sections + pricing', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
 
     const unitSelect = screen.getByLabelText('Eenheid')
-    await waitFor(() => expect(unitSelect.querySelector('optgroup[label="Gebruikelijk voor deze klant"]')).toBeTruthy())
+    await waitFor(() => expect(unitSelect.querySelector('optgroup[label="Eenheden van deze klant"]')).toBeTruthy())
     expect(unitSelect.querySelectorAll('option')).toHaveLength(2) // placeholder + preferred only
 
     await userEvent.click(screen.getByRole('button', { name: 'Andere eenheden tonen' }))
     expect(unitSelect.querySelector('optgroup[label="Andere eenheden"]')).toBeTruthy()
     expect(unitSelect.querySelectorAll('option').length).toBeGreaterThan(2)
+  })
+
+  it('shows the customer label with a favourite star in the unit selector', async () => {
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+
+    const unitSelect = screen.getByLabelText('Eenheid')
+    await waitFor(() => expect(unitSelect.querySelector('optgroup[label="Eenheden van deze klant"]')).toBeTruthy())
+    const preferredOption = unitSelect.querySelector('option[value="EUROPALLET"]')
+    expect(preferredOption?.textContent).toBe('★ EURO PAL')
+  })
+
+  it('autofills cargo dimensions from the unit master defaults', async () => {
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
+    const cargoUnitSelects = screen.getAllByLabelText('Eenheid')
+    // The cargo-line unit select is the second "Eenheid" field (after the order-level one).
+    await userEvent.selectOptions(cargoUnitSelects[1], 'EUROPALLET')
+
+    // 120 × 80 cm from master data arrives as 1.2 × 0.8 m; empty fields only (overridable).
+    await waitFor(() => expect(screen.getByLabelText('Lengte (m)')).toHaveValue(1.2))
+    expect(screen.getByLabelText('Breedte (m)')).toHaveValue(0.8)
+    expect(screen.getByLabelText('Lengte (m)')).not.toBeDisabled()
+  })
+
+  it('shows the no-tariff diagnostics when nothing could be priced', async () => {
+    previewSpy.mockResolvedValueOnce({
+      lines: [{ label: 'Geen geldig tarief gevonden voor deze order.', amount: 0, source: 'Ontbrekend', informational: false }],
+      total: 0,
+      totalWithInformational: 0,
+      currency: 'EUR',
+      zoneCode: null,
+      zoneName: null,
+      requiresManualPrice: true,
+      serviceLines: [],
+      tariffDate: '2026-07-25',
+      configurationError: null,
+      diagnostics: ['Klant: Klant X', 'Eenheid: 3 × Europallet'],
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('tab', { name: /^Prijs$/ }))
+    await waitFor(() => expect(previewSpy).toHaveBeenCalled(), { timeout: 3000 })
+    await waitFor(() =>
+      expect(screen.getByText('Geen geldig tarief gevonden voor deze order — vul een handmatige prijs in of configureer tarieven.')).toBeInTheDocument(),
+    )
+    expect(screen.getByText('Klant: Klant X')).toBeInTheDocument()
+    expect(screen.getByText('Eenheid: 3 × Europallet')).toBeInTheDocument()
   })
 
   it('shows the calculated breakdown on the Prijs tab', async () => {

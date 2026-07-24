@@ -263,6 +263,58 @@ export interface UnitTypeSettings {
   allowForPricing: boolean
 }
 
+export type UnitCategory = 'Other' | 'Packaging' | 'Weight' | 'Volume' | 'Capacity' | 'Time' | 'Distance' | 'Commercial'
+
+export type UnitDimensionBehavior = 'Variable' | 'DefaultButOverridable' | 'Fixed'
+
+export const UNIT_CATEGORY_LABELS: Record<UnitCategory, string> = {
+  Packaging: 'Verpakking',
+  Weight: 'Gewicht',
+  Volume: 'Volume',
+  Capacity: 'Capaciteit',
+  Time: 'Tijd',
+  Distance: 'Afstand',
+  Commercial: 'Commercieel',
+  Other: 'Overig',
+}
+
+export const DIMENSION_BEHAVIOR_LABELS: Record<UnitDimensionBehavior, string> = {
+  Variable: 'Variabel',
+  DefaultButOverridable: 'Standaard, aanpasbaar',
+  Fixed: 'Vast',
+}
+
+export interface UnitTypeMaster {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  isActive: boolean
+  sortOrder: number
+  allowForOrderEntry: boolean
+  allowForPricing: boolean
+  category: UnitCategory
+  decimals: number
+  symbol: string | null
+  dimensionBehavior: UnitDimensionBehavior
+  defaultLengthCm: number | null
+  defaultWidthCm: number | null
+  defaultHeightCm: number | null
+  defaultWeightKg: number | null
+  maxWeightKg: number | null
+  defaultVolumeM3: number | null
+  defaultLoadingMeters: number | null
+  defaultPalletPlaces: number | null
+}
+
+export type UnitTypeMasterInput = Omit<UnitTypeMaster, 'id'>
+
+export const listUnitTypeMaster = (): Promise<UnitTypeMaster[]> => apiClient.getJson('/api/unit-types/master')
+export const createUnitTypeMaster = (input: UnitTypeMasterInput): Promise<UnitTypeMaster> =>
+  apiClient.postJson('/api/unit-types/master', input)
+export const updateUnitTypeMaster = (id: string, input: UnitTypeMasterInput): Promise<UnitTypeMaster> =>
+  apiClient.putJson(`/api/unit-types/${id}/master`, input)
+
 export const listUnitTypeSettings = (): Promise<UnitTypeSettings[]> => apiClient.getJson('/api/unit-types/settings')
 export const saveUnitTypeSettings = (
   id: string,

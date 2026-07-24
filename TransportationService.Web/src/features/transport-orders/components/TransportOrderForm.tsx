@@ -8,7 +8,6 @@ import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerDetail, CustomerListItem } from '../../customers/types'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
-import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LocationSelect } from '../../locations/components/LocationSelect'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
@@ -20,11 +19,14 @@ import { computeVolumeM3 } from '../../../utils/volume'
 import {
   getCustomerPricingConfig,
   listServiceOptions,
+  listUnitTypeMaster,
   previewPrice,
   type CustomerPricingConfig,
   type PriceCalculationResult,
   type ServiceOption,
+  type UnitTypeMaster,
 } from '../../tarification/api/pricingApi'
+import { UnitSelect } from './UnitSelect'
 import { STOP_TYPE_LABELS, type StopInput, type TransportOrderDetail, type TransportOrderInput } from '../types'
 import './transport-order-form.css'
 
@@ -259,7 +261,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     () => (order?.serviceLines ?? []).map((l) => l.serviceOptionId).filter((id): id is string => id !== null),
   )
   const [pricingConfig, setPricingConfig] = useState<{ customerId: string; config: CustomerPricingConfig } | null>(null)
-  const [showAllUnits, setShowAllUnits] = useState(false)
+  const [unitMaster, setUnitMaster] = useState<UnitTypeMaster[]>([])
   const [preview, setPreview] = useState<PriceCalculationResult | null>(null)
   const [priceIsManual, setPriceIsManual] = useState(order?.priceIsManual ?? false)
   const [priceOverrideReason, setPriceOverrideReason] = useState(order?.priceOverrideReason ?? '')
@@ -269,6 +271,12 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     listServiceOptions()
       .then((data) => {
         if (mounted) setServiceOptions(data)
+      })
+      .catch(() => {})
+    // Physical defaults for dimension autofill; unavailable (e.g. no permission) is fine.
+    listUnitTypeMaster()
+      .then((data) => {
+        if (mounted) setUnitMaster(data)
       })
       .catch(() => {})
     return () => {
@@ -291,8 +299,6 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
 
   const customerConfig = pricingConfig?.customerId === customerId ? pricingConfig.config : null
   const preferredUnits = customerConfig?.preferredUnits ?? []
-  const preferredCodes = new Set(preferredUnits.map((u) => u.code))
-  const otherUnits = unitOptions.filter((u) => !preferredCodes.has(u.code))
 
   // Live price preview, debounced on the pricing-relevant inputs.
   const lastUnloading = [...stops].reverse().find((s) => s.stopType === 'Unloading')
@@ -384,6 +390,43 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
 
   function setCargo(key: string, patch: Partial<CargoFormRow>) {
     setCargoItems((rows) => rows.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+  }
+
+  const masterByCode = (code: string | null) =>
+    code ? unitMaster.find((u) => u.code.toUpperCase() === code.toUpperCase()) ?? null : null
+
+  /** Fixed dimensions come from the unit definition and are not editable per order line. */
+  const cargoDimensionsFixed = (cargo: CargoFormRow) =>
+    masterByCode(cargo.quantityUnitCode)?.dimensionBehavior === 'Fixed'
+
+  /**
+   * Selecting a unit auto-fills the physical defaults from the unit master data (spec §2.2):
+   * Fixed always sets them, DefaultButOverridable only fills what is still empty, Variable
+   * leaves everything to the planner.
+   */
+  function applyCargoUnit(key: string, code: string | null) {
+    const master = masterByCode(code)
+    setCargoItems((rows) =>
+      rows.map((row) => {
+        if (row.key !== key) return row
+        const next: CargoFormRow = { ...row, quantityUnitCode: code }
+        if (!master || master.dimensionBehavior === 'Variable') return next
+        const fixed = master.dimensionBehavior === 'Fixed'
+        const cmToM = (cm: number | null) => (cm === null ? null : String(cm / 100))
+        const fill = (current: string, cm: number | null) => {
+          const value = cmToM(cm)
+          if (value === null) return fixed ? '' : current
+          return fixed || current.trim() === '' ? value : current
+        }
+        next.lengthMeters = fill(row.lengthMeters, master.defaultLengthCm)
+        next.widthMeters = fill(row.widthMeters, master.defaultWidthCm)
+        next.heightMeters = fill(row.heightMeters, master.defaultHeightCm)
+        if (master.defaultWeightKg !== null && (fixed || row.weightPerUnitKg.trim() === '')) {
+          next.weightPerUnitKg = String(master.defaultWeightKg)
+        }
+        return next
+      }),
+    )
   }
 
   function moveStop(index: number, delta: number) {
@@ -819,45 +862,15 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           htmlFor="to-unit"
           hint={!quantityUnitCode && quantityUnit ? `Bestaande waarde: ${quantityUnit}` : undefined}
         >
-          {/* Customer-preferred units first; "Andere eenheden tonen" reveals the full active list. */}
-          <select
+          {/* Customer units first (favourites ★, customer label); the full active list stays reachable. */}
+          <UnitSelect
             id="to-unit"
-            value={quantityUnitCode ?? ''}
-            onChange={(e) => setQuantityUnitCode(e.target.value || null)}
+            value={quantityUnitCode}
+            onChange={setQuantityUnitCode}
+            units={unitOptions}
+            preferredUnits={preferredUnits}
             disabled={saving}
-          >
-            <option value="">— Eenheid —</option>
-            {preferredUnits.length > 0 && (
-              <optgroup label="Gebruikelijk voor deze klant">
-                {preferredUnits.map((unit) => (
-                  <option key={unit.unitTypeId} value={unit.code}>
-                    {unit.name}
-                  </option>
-                ))}
-              </optgroup>
-            )}
-            {(preferredUnits.length === 0 || showAllUnits || (quantityUnitCode !== null && !preferredCodes.has(quantityUnitCode))) &&
-              (preferredUnits.length > 0 ? (
-                <optgroup label="Andere eenheden">
-                  {otherUnits.map((unit) => (
-                    <option key={unit.id} value={unit.code}>
-                      {unit.name}
-                    </option>
-                  ))}
-                </optgroup>
-              ) : (
-                unitOptions.map((unit) => (
-                  <option key={unit.id} value={unit.code}>
-                    {unit.name}
-                  </option>
-                ))
-              ))}
-          </select>
-          {preferredUnits.length > 0 && !showAllUnits && (
-            <button type="button" className="tof-link" onClick={() => setShowAllUnits(true)}>
-              Andere eenheden tonen
-            </button>
-          )}
+          />
         </FormField>
         <FormField label="Gewicht (kg)" htmlFor="to-weight">
           <input id="to-weight" type="number" min={0} step="0.01" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} disabled={saving} />
@@ -944,16 +957,13 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               htmlFor={`cg-unit-${cargo.key}`}
               hint={!cargo.quantityUnitCode && cargo.quantityUnit ? `Bestaande waarde: ${cargo.quantityUnit}` : undefined}
             >
-              <LookupSelect
+              <UnitSelect
                 id={`cg-unit-${cargo.key}`}
-                basePath="/api/unit-types"
-                managePermission="unit_types.manage"
-                singular="eenheid"
-                valueKey="code"
                 value={cargo.quantityUnitCode}
-                onChange={(code) => setCargo(cargo.key, { quantityUnitCode: code })}
+                onChange={(code) => applyCargoUnit(cargo.key, code)}
+                units={unitOptions}
+                preferredUnits={preferredUnits}
                 disabled={saving}
-                placeholder="— Eenheid —"
               />
             </FormField>
           </div>
@@ -1030,14 +1040,18 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               </FormField>
             </div>
             <div className="tof-row tof-row-4">
-              <FormField label="Lengte (m)" htmlFor={`cg-length-${cargo.key}`}>
-                <input id={`cg-length-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.lengthMeters} onChange={(e) => setCargo(cargo.key, { lengthMeters: e.target.value })} disabled={saving} />
+              <FormField
+                label="Lengte (m)"
+                htmlFor={`cg-length-${cargo.key}`}
+                hint={cargoDimensionsFixed(cargo) ? 'Vast volgens de eenheid.' : undefined}
+              >
+                <input id={`cg-length-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.lengthMeters} onChange={(e) => setCargo(cargo.key, { lengthMeters: e.target.value })} disabled={saving || cargoDimensionsFixed(cargo)} />
               </FormField>
               <FormField label="Breedte (m)" htmlFor={`cg-width-${cargo.key}`}>
-                <input id={`cg-width-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.widthMeters} onChange={(e) => setCargo(cargo.key, { widthMeters: e.target.value })} disabled={saving} />
+                <input id={`cg-width-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.widthMeters} onChange={(e) => setCargo(cargo.key, { widthMeters: e.target.value })} disabled={saving || cargoDimensionsFixed(cargo)} />
               </FormField>
               <FormField label="Hoogte (m)" htmlFor={`cg-height-${cargo.key}`}>
-                <input id={`cg-height-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.heightMeters} onChange={(e) => setCargo(cargo.key, { heightMeters: e.target.value })} disabled={saving} />
+                <input id={`cg-height-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.heightMeters} onChange={(e) => setCargo(cargo.key, { heightMeters: e.target.value })} disabled={saving || cargoDimensionsFixed(cargo)} />
               </FormField>
               <FormField
                 label="Volume per stuk (m³)"
@@ -1155,6 +1169,19 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     <>
       {preview ? (
         <div className="tof-price-breakdown">
+          <p className="customer-form-muted">
+            Tariefdatum: {preview.tariffDate ?? (orderDate || '—')}
+            {preview.zoneName ? ` · Zone: ${preview.zoneName} (${preview.zoneCode})` : ''}
+            {(() => {
+              const agreementNames = [...new Set(preview.lines.map((l) => l.agreementName).filter(Boolean))]
+              return agreementNames.length > 0 ? ` · Tarief: ${agreementNames.join(', ')}` : ''
+            })()}
+          </p>
+          {preview.configurationError && (
+            <div className="issued-items-form-error" role="alert">
+              {preview.configurationError}
+            </div>
+          )}
           <table className="issued-items-table">
             <thead>
               <tr>
@@ -1166,7 +1193,16 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
             <tbody>
               {preview.lines.map((line, index) => (
                 <tr key={index} className={line.informational ? 'tof-price-informational' : undefined}>
-                  <td>{line.label}</td>
+                  <td>
+                    {line.label}
+                    {(line.billableQuantity ?? null) !== null && (line.actualQuantity ?? null) !== null
+                      && line.billableQuantity !== line.actualQuantity && (
+                      <span className="customer-form-muted">
+                        {' '}
+                        ({line.actualQuantity} werkelijk / {line.billableQuantity} factureerbaar)
+                      </span>
+                    )}
+                  </td>
                   <td>{line.source}</td>
                   <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
                 </tr>
@@ -1183,10 +1219,17 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               </tr>
             </tfoot>
           </table>
-          {preview.requiresManualPrice && (
-            <p className="tof-customer-requirements" role="note">
-              Niet alles kon automatisch geprijsd worden — vul een handmatige prijs in of configureer tarieven.
-            </p>
+          {preview.requiresManualPrice && !preview.configurationError && (
+            <div className="tof-customer-requirements" role="note">
+              <p>Geen geldig tarief gevonden voor deze order — vul een handmatige prijs in of configureer tarieven.</p>
+              {preview.diagnostics && preview.diagnostics.length > 0 && (
+                <ul>
+                  {preview.diagnostics.map((line, index) => (
+                    <li key={index}>{line}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </div>
       ) : (

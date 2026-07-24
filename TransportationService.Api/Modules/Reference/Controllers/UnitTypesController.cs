@@ -65,9 +65,13 @@ public class UnitTypesController : LookupControllerBase<UnitType>
         return Ok(new UnitTypeSettingsDto(unit.Id, unit.Code, unit.Name, unit.IsActive, unit.SortOrder, unit.AllowForOrderEntry, unit.AllowForPricing));
     }
 
-    /// <summary>Full unit master list (Stamgegevens → Eenheden).</summary>
+    /// <summary>
+    /// Full unit master list (Stamgegevens → Eenheden). Order-entry permissions may read it
+    /// too: the order form needs the physical defaults for dimension autofill.
+    /// </summary>
     [HttpGet("master")]
-    [RequirePermission(PermissionCodes.UnitTypesView, PermissionCodes.UnitTypesManage, PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    [RequirePermission(PermissionCodes.UnitTypesView, PermissionCodes.UnitTypesManage, PermissionCodes.TariffsView, PermissionCodes.TariffsManage,
+        PermissionCodes.OrdersCreate, PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
     public async Task<ActionResult<IReadOnlyList<UnitTypeMasterDto>>> Master(CancellationToken cancellationToken) =>
         Ok(await _masterService.ListAsync(cancellationToken));
 

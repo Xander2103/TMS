@@ -18,14 +18,12 @@ import {
   deleteServiceOption,
   listPricingZones,
   listServiceOptions,
-  listUnitTypeSettings,
-  saveUnitTypeSettings,
   updatePricingZone,
   updateServiceOption,
   type PricingZone,
   type ServiceOption,
-  type UnitTypeSettings,
 } from '../api/pricingApi'
+import { UnitTypeMasterEditor } from '../components/UnitTypeMasterEditor'
 
 type TabId = 'zones' | 'diensten' | 'eenheden'
 
@@ -58,7 +56,6 @@ export function PricingSettingsPage() {
   const [tab, setTab] = useState<TabId>('zones')
   const [zones, setZones] = useState<PricingZone[]>([])
   const [options, setOptions] = useState<ServiceOption[]>([])
-  const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [zoneDraft, setZoneDraft] = useState<ZoneDraft | null>(null)
@@ -69,11 +66,10 @@ export function PricingSettingsPage() {
   const [busy, setBusy] = useState(false)
 
   const reload = useCallback(() => {
-    Promise.all([listPricingZones(), listServiceOptions(true), listUnitTypeSettings()])
-      .then(([zoneData, optionData, unitData]) => {
+    Promise.all([listPricingZones(), listServiceOptions(true)])
+      .then(([zoneData, optionData]) => {
         setZones(zoneData)
         setOptions(optionData)
-        setUnits(unitData)
         setLoadError(null)
       })
       .catch(() => setLoadError('De prijsinstellingen konden niet worden geladen.'))
@@ -139,18 +135,6 @@ export function PricingSettingsPage() {
       setDraftError(describeApiError(err, 'De dienst kon niet worden opgeslagen.').message)
     } finally {
       setBusy(false)
-    }
-  }
-
-  async function toggleUnitFlag(unit: UnitTypeSettings, flag: 'allowForOrderEntry' | 'allowForPricing') {
-    try {
-      const saved = await saveUnitTypeSettings(unit.id, {
-        allowForOrderEntry: flag === 'allowForOrderEntry' ? !unit.allowForOrderEntry : unit.allowForOrderEntry,
-        allowForPricing: flag === 'allowForPricing' ? !unit.allowForPricing : unit.allowForPricing,
-      })
-      setUnits((rows) => rows.map((row) => (row.id === saved.id ? saved : row)))
-    } catch (err) {
-      showError(describeApiError(err, 'De instelling kon niet worden opgeslagen.').message)
     }
   }
 
@@ -290,45 +274,8 @@ export function PricingSettingsPage() {
 
       {tab === 'eenheden' && (
         <TabPanel tabId="eenheden">
-          <p className="customer-form-muted">
-            Bepaal per eenheid of ze kiesbaar is bij orderinvoer en of er prijsafspraken op gemaakt kunnen worden.
-          </p>
-          <table className="issued-items-table">
-            <thead>
-              <tr>
-                <th>Eenheid</th>
-                <th>Code</th>
-                <th>Orderinvoer</th>
-                <th>Prijsafspraken</th>
-              </tr>
-            </thead>
-            <tbody>
-              {units.map((unit) => (
-                <tr key={unit.id}>
-                  <td>{unit.name}</td>
-                  <td>{unit.code}</td>
-                  <td>
-                    <input
-                      aria-label={`${unit.name} beschikbaar bij orderinvoer`}
-                      type="checkbox"
-                      checked={unit.allowForOrderEntry}
-                      onChange={() => void toggleUnitFlag(unit, 'allowForOrderEntry')}
-                      disabled={!canManage}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      aria-label={`${unit.name} beschikbaar voor prijsafspraken`}
-                      type="checkbox"
-                      checked={unit.allowForPricing}
-                      onChange={() => void toggleUnitFlag(unit, 'allowForPricing')}
-                      disabled={!canManage}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Same editor as Stamgegevens → Eenheden: one source of truth for unit master data. */}
+          <UnitTypeMasterEditor />
         </TabPanel>
       )}
 
