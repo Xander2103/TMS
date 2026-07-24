@@ -71,6 +71,10 @@ export interface IssuedItemTemplateInput {
   lowStockThreshold: number | null
   minimumStock: number | null
   storageLocation: string | null
+  /** Target physical stock; applied through the movement ledger server-side. */
+  stock?: number | null
+  /** Required when changing existing stock (ledger correction reason). */
+  stockCorrectionReason?: string | null
 }
 
 export interface EmployeeIssuedItem {

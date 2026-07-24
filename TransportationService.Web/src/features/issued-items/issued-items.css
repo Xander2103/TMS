@@ -83,6 +83,12 @@
   text-decoration: underline;
 }
 
+.issued-items-computed-stock {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text, #374151);
+}
+
 .issued-items-checkbox {
   display: flex;
   align-items: center;

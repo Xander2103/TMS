@@ -26,7 +26,8 @@ public record SaveIssuedItemTemplateRequest(
     string? Description = null, string? Unit = null, string? Notes = null,
     bool StockTrackingEnabled = false, bool VariantsEnabled = false, bool AllowNegativeStock = false,
     int? LowStockThreshold = null, int? MinimumStock = null, string? StorageLocation = null,
-    Guid? CategoryId = null);
+    Guid? CategoryId = null,
+    int? Stock = null, string? StockCorrectionReason = null);
 
 public record EmployeeIssuedItemDto(
     Guid Id, Guid? TemplateId, string Name, string Category, IssuedItemStatus Status,
@@ -114,6 +115,7 @@ public class IssuedItemService : IIssuedItemService
         Apply(template, request);
         await ApplyCategoryAsync(template, request, cancellationToken);
         _dbContext.IssuedItemTemplates.Add(template);
+        await ApplyStockTargetAsync(template, request, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "Created", null,
             new { template.Name, template.Category, template.StockTrackingEnabled, template.VariantsEnabled }, cancellationToken);
@@ -145,6 +147,7 @@ public class IssuedItemService : IIssuedItemService
             }
         }
 
+        await ApplyStockTargetAsync(template, request, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "Updated", null,
             new { template.Name, template.IsActive }, cancellationToken);
@@ -535,6 +538,49 @@ public class IssuedItemService : IIssuedItemService
         template.LowStockThreshold = request.LowStockThreshold;
         template.MinimumStock = request.MinimumStock;
         template.StorageLocation = Trim(request.StorageLocation);
+    }
+
+    /// <summary>
+    /// Applies the "Voorraad" value from the template form through the stock ledger. The first
+    /// set becomes InitialStock; later changes append a Correction with a mandatory reason, so
+    /// the auditable movement history is never overwritten. Variant-enabled templates hold
+    /// stock on their variants and ignore the template-level value.
+    /// </summary>
+    private async Task ApplyStockTargetAsync(IssuedItemTemplate template, SaveIssuedItemTemplateRequest request, CancellationToken cancellationToken)
+    {
+        if (request.Stock is not { } target || !template.StockTrackingEnabled || template.VariantsEnabled)
+        {
+            return;
+        }
+
+        if (target == template.CurrentStock)
+        {
+            return;
+        }
+
+        if (target < 0 && !template.AllowNegativeStock)
+        {
+            throw new DomainValidationException("stock", "Negatieve voorraad is niet toegestaan voor dit sjabloon.");
+        }
+
+        var hasMovements = await _dbContext.StockMovements.AnyAsync(
+            m => m.TenantId == _tenantContext.TenantId && m.TemplateId == template.Id && m.VariantId == null,
+            cancellationToken);
+        if (!hasMovements)
+        {
+            _inventoryService.ApplyMovement(template, null, StockMovementType.InitialStock,
+                target - template.CurrentStock, null, "Beginvoorraad via sjabloonformulier", null);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.StockCorrectionReason))
+        {
+            throw new DomainValidationException("stockCorrectionReason",
+                "Een reden is verplicht bij het aanpassen van bestaande voorraad.");
+        }
+
+        _inventoryService.ApplyMovement(template, null, StockMovementType.Correction,
+            target - template.CurrentStock, request.StockCorrectionReason.Trim(), null, null);
     }
 
     /// <summary>

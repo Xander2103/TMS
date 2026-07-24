@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { TemplateFormModal } from '../TemplateFormModal'
 
@@ -50,5 +51,19 @@ describe('TemplateFormModal', () => {
 
     expect(screen.getByLabelText('Volgorde in lijst')).toBeInTheDocument()
     expect(screen.queryByLabelText('Minimumvoorraad')).not.toBeInTheDocument()
+  })
+
+  it('shows a real Voorraad field when stock tracking is on without variants', async () => {
+    permissions.value = new Set()
+    renderModal()
+
+    await userEvent.click(screen.getByLabelText('Voorraadbeheer'))
+    expect(screen.getByLabelText('Voorraad')).toBeInTheDocument()
+    expect(screen.getByLabelText('Lage-voorraadgrens')).toBeInTheDocument()
+
+    // Enabling variants replaces the field with the computed-sum explanation.
+    await userEvent.click(screen.getByLabelText('Varianten (maat/uitvoering) — voorraad per variant'))
+    expect(screen.queryByLabelText('Voorraad')).not.toBeInTheDocument()
+    expect(screen.getByText(/som van alle varianten/)).toBeInTheDocument()
   })
 })

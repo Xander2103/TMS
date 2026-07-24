@@ -35,6 +35,8 @@ function emptyTemplateForm(): IssuedItemTemplateInput {
     lowStockThreshold: null,
     minimumStock: null,
     storageLocation: null,
+    stock: null,
+    stockCorrectionReason: null,
   }
 }
 
@@ -59,6 +61,8 @@ function templateToForm(template: IssuedItemTemplate): IssuedItemTemplateInput {
     lowStockThreshold: template.lowStockThreshold,
     minimumStock: template.minimumStock,
     storageLocation: template.storageLocation,
+    stock: template.stockTrackingEnabled && !template.variantsEnabled ? template.currentStock : null,
+    stockCorrectionReason: null,
   }
 }
 
@@ -79,6 +83,10 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const canManageCategories = hasPermission('inventory.manage')
+  // Reference value for detecting a stock change on an existing template (ledger correction).
+  const loadedStock = editing && editing.stockTrackingEnabled && !editing.variantsEnabled ? editing.currentStock : null
+  const stockChanged = form.stockTrackingEnabled && !form.variantsEnabled
+    && form.stock != null && form.stock !== (loadedStock ?? 0) && loadedStock !== null
 
   function set<K extends keyof IssuedItemTemplateInput>(key: K, value: IssuedItemTemplateInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -89,6 +97,10 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
     setFormError(null)
     if (!form.name.trim() || (!form.categoryId && !form.category.trim())) {
       setFormError('Naam en categorie zijn verplicht.')
+      return
+    }
+    if (stockChanged && editing && !form.stockCorrectionReason?.trim()) {
+      setFormError('Geef een reden op voor de voorraadcorrectie.')
       return
     }
     setSaving(true)
@@ -216,6 +228,36 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
               <input type="checkbox" checked={form.allowNegativeStock} onChange={(e) => set('allowNegativeStock', e.target.checked)} disabled={saving} />
               <span>Negatieve voorraad toestaan</span>
             </label>
+            {!form.variantsEnabled ? (
+              <FormField
+                label="Voorraad"
+                htmlFor="tpl-stock"
+                hint="Wat er nu fysiek aanwezig is. Wijzigingen worden als voorraadbeweging geregistreerd."
+              >
+                <input
+                  id="tpl-stock"
+                  type="number"
+                  value={form.stock ?? ''}
+                  onChange={(e) => set('stock', e.target.value === '' ? null : Number(e.target.value) || 0)}
+                  disabled={saving}
+                />
+              </FormField>
+            ) : (
+              <p className="issued-items-computed-stock">
+                Totale voorraad: {editing?.totalAvailable ?? 0} (som van alle varianten — beheer voorraad per variant op de detailpagina)
+              </p>
+            )}
+            {stockChanged && (
+              <FormField label="Reden voor correctie" htmlFor="tpl-stock-reason" required hint="Verplicht bij het aanpassen van bestaande voorraad.">
+                <input
+                  id="tpl-stock-reason"
+                  value={form.stockCorrectionReason ?? ''}
+                  onChange={(e) => set('stockCorrectionReason', e.target.value || null)}
+                  disabled={saving}
+                  maxLength={300}
+                />
+              </FormField>
+            )}
             <div className="issued-items-form-row">
               <FormField
                 label="Lage-voorraadgrens"
