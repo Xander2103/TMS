@@ -19,6 +19,8 @@ const tripEntry: ScheduleEntry = {
   statusLabel: 'Gepland',
   conflictSeverity: null,
   conflictNotes: null,
+  colour: null,
+  noteId: null,
 }
 
 describe('ScheduleChip interaction', () => {

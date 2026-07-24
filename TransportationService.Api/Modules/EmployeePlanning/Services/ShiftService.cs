@@ -344,6 +344,14 @@ public class ShiftService : IShiftService
                         && t.Date >= from && t.Date <= to)
             .ToListAsync(cancellationToken);
 
+        // Configurable leave-type colours flow into the calendar; enum-state CSS stays the fallback.
+        var leaveTypeIds = absences.Where(a => a.LeaveTypeId.HasValue).Select(a => a.LeaveTypeId!.Value).Distinct().ToList();
+        var leaveTypeColours = leaveTypeIds.Count == 0
+            ? new Dictionary<Guid, string?>()
+            : await _dbContext.LeaveTypes.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && leaveTypeIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => t.Colour, cancellationToken);
+
         var severitySettings = await _dbContext.TenantSettings.AsNoTracking()
             .Where(s => s.TenantId == tenantId)
             .Select(s => new { s.TrainingConflictSeverity, s.ShiftOverlapConflictSeverity })
@@ -360,7 +368,7 @@ public class ShiftService : IShiftService
             var days = new List<ScheduleDayDto>();
             for (var date = from; date <= to; date = date.AddDays(1))
             {
-                var entries = BuildEntries(date, employeeShifts, employeeAbsences, employeeTrips);
+                var entries = BuildEntries(date, employeeShifts, employeeAbsences, employeeTrips, leaveTypeColours);
                 days.Add(new ScheduleDayDto(date, AnnotateConflicts(entries, trainingSeverity, shiftOverlapSeverity)));
             }
 
@@ -387,7 +395,8 @@ public class ShiftService : IShiftService
 
     private static IReadOnlyList<ScheduleEntryDto> BuildEntries(
         DateOnly date, IReadOnlyList<Shift> shifts, IReadOnlyList<Absence> absences,
-        IReadOnlyList<TripPlanningEntry> tripEntries)
+        IReadOnlyList<TripPlanningEntry> tripEntries,
+        IReadOnlyDictionary<Guid, string?> leaveTypeColours)
     {
         var entries = new List<ScheduleEntryDto>();
 
@@ -441,8 +450,10 @@ public class ShiftService : IShiftService
                     _ => ScheduleEntryState.LeaveApproved,
                 },
             };
+            var colour = absence.LeaveTypeId is { } leaveTypeId ? leaveTypeColours.GetValueOrDefault(leaveTypeId) : null;
             entries.Add(new ScheduleEntryDto(state, null, absence.Id, null, "Absence",
-                AbsenceLabel(absence.Type), null, null, null, null, null, AbsenceStatusLabel(absence.Status)));
+                AbsenceLabel(absence.Type), null, null, null, null, null, AbsenceStatusLabel(absence.Status),
+                Colour: colour));
         }
 
         return entries;

@@ -128,6 +128,42 @@ public class MeController : ControllerBase
             : Ok(days);
     }
 
+    // --- Personal calendar notes (self-service; strictly own-employee scoped) ---
+
+    [HttpGet("calendar-notes")]
+    public async Task<IActionResult> ListCalendarNotes(
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
+    {
+        var notes = await _service.ListMyCalendarNotesAsync(from, to, cancellationToken);
+        return notes is null
+            ? NotFound(new { message = "Er is geen personeelsdossier gekoppeld aan dit account." })
+            : Ok(notes);
+    }
+
+    [HttpPost("calendar-notes")]
+    public async Task<IActionResult> CreateCalendarNote(
+        Dtos.SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken)
+    {
+        var created = await _service.CreateMyCalendarNoteAsync(request, cancellationToken);
+        return created is null
+            ? NotFound(new { message = "Er is geen personeelsdossier gekoppeld aan dit account." })
+            : Ok(created);
+    }
+
+    [HttpPut("calendar-notes/{id:guid}")]
+    public async Task<IActionResult> UpdateCalendarNote(
+        Guid id, Dtos.SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _service.UpdateMyCalendarNoteAsync(id, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("calendar-notes/{id:guid}")]
+    public async Task<IActionResult> DeleteCalendarNote(Guid id, CancellationToken cancellationToken)
+    {
+        return await _service.DeleteMyCalendarNoteAsync(id, cancellationToken) ? NoContent() : NotFound();
+    }
+
     /// <summary>Own planning as iCalendar — import/subscribe from any calendar client.</summary>
     [HttpGet("planning/ics")]
     public async Task<IActionResult> PlanningIcs(

@@ -14,6 +14,7 @@ export type ScheduleEntryState =
   | 'Unavailable'
   | 'Trip'
   | 'TripCancelled'
+  | 'Note'
 
 export const SCHEDULE_STATES: ScheduleEntryState[] = [
   'Draft',
@@ -28,6 +29,7 @@ export const SCHEDULE_STATES: ScheduleEntryState[] = [
   'Unavailable',
   'Trip',
   'TripCancelled',
+  'Note',
 ]
 
 export const SCHEDULE_STATE_LABELS: Record<ScheduleEntryState, string> = {
@@ -43,6 +45,7 @@ export const SCHEDULE_STATE_LABELS: Record<ScheduleEntryState, string> = {
   Unavailable: 'Onbeschikbaar',
   Trip: 'Rit',
   TripCancelled: 'Rit geannuleerd',
+  Note: 'Persoonlijke notitie',
 }
 
 /**
@@ -63,6 +66,7 @@ export const SCHEDULE_STATE_ICONS: Record<ScheduleEntryState, string> = {
   Unavailable: '⊘',
   Trip: '🚚',
   TripCancelled: '🚫',
+  Note: '📝',
 }
 
 export const SHIFT_TYPE_LABELS: Record<ShiftType, string> = {
@@ -77,7 +81,7 @@ export const SHIFT_STATUS_LABELS: Record<ShiftStatus, string> = {
   Confirmed: 'Bevestigd',
 }
 
-export type ScheduleSourceType = 'Shift' | 'Absence' | 'Trip'
+export type ScheduleSourceType = 'Shift' | 'Absence' | 'Trip' | 'Note'
 export type ConflictSeverity = 'Information' | 'Warning' | 'Blocking'
 
 export const CONFLICT_SEVERITY_LABELS: Record<ConflictSeverity, string> = {
@@ -101,6 +105,9 @@ export interface ScheduleEntry {
   statusLabel: string | null
   conflictSeverity: ConflictSeverity | null
   conflictNotes: string[] | null
+  /** Leave-type colour of absences or the chosen colour of a personal note. */
+  colour: string | null
+  noteId: string | null
 }
 
 export interface ScheduleDay {

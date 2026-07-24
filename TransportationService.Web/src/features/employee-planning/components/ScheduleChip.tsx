@@ -13,18 +13,24 @@ function timeRange(entry: ScheduleEntry): string | null {
   return `${entry.startTime.slice(0, 5)}–${entry.endTime.slice(0, 5)}`
 }
 
-/** Chip headline: trips show their trip number, everything else its state label. */
+/** Chip headline: trips show their trip number, notes their title, the rest its state label. */
 function chipText(entry: ScheduleEntry): string {
-  return entry.sourceType === 'Trip' ? entry.label : SCHEDULE_STATE_LABELS[entry.state]
+  return entry.sourceType === 'Trip' || entry.sourceType === 'Note' ? entry.label : SCHEDULE_STATE_LABELS[entry.state]
 }
 
 /** One schedule cell chip: colour + icon + label, never colour alone. */
-export function ScheduleChip({ entry, onClick }: { entry: ScheduleEntry; onClick?: () => void }) {
+export function ScheduleChip({ entry, onClick, compact }: { entry: ScheduleEntry; onClick?: () => void; compact?: boolean }) {
   const range = timeRange(entry)
   const description = chipDescription(entry)
   const conflictClass = entry.conflictSeverity
     ? ` schedule-chip-conflict schedule-chip-conflict-${entry.conflictSeverity.toLowerCase()}`
     : ''
+  const compactClass = compact ? ' schedule-chip-compact' : ''
+  // Dynamic colour (leave type / personal note) overrides the per-state convention; the
+  // icon + label stay, so colour is never the only signal.
+  const colourStyle = entry.colour
+    ? { background: `${entry.colour}22`, borderColor: entry.colour }
+    : undefined
   const content = (
     <>
       <span className="schedule-chip-icon" aria-hidden="true">
@@ -45,7 +51,8 @@ export function ScheduleChip({ entry, onClick }: { entry: ScheduleEntry; onClick
   return onClick ? (
     <button
       type="button"
-      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}`}
+      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}${compactClass}`}
+      style={colourStyle}
       onClick={onClick}
       title={description}
       aria-label={description}
@@ -53,7 +60,11 @@ export function ScheduleChip({ entry, onClick }: { entry: ScheduleEntry; onClick
       {content}
     </button>
   ) : (
-    <span className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}`} title={description}>
+    <span
+      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}${compactClass}`}
+      style={colourStyle}
+      title={description}
+    >
       {content}
     </span>
   )

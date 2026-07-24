@@ -66,6 +66,9 @@ public enum ScheduleEntryState
     Unavailable,
     Trip,
     TripCancelled,
+
+    /// <summary>Personal calendar note of the employee (self-service only).</summary>
+    Note,
 }
 
 public record ScheduleEntryDto(
@@ -82,7 +85,10 @@ public record ScheduleEntryDto(
     string? VehicleSummary,
     string? StatusLabel,
     ConflictSeverity? ConflictSeverity = null,
-    IReadOnlyList<string>? ConflictNotes = null);
+    IReadOnlyList<string>? ConflictNotes = null,
+    /// <summary>Planning colour: leave-type colour for absences, chosen colour for notes.</summary>
+    string? Colour = null,
+    Guid? NoteId = null);
 
 public record ScheduleDayDto(DateOnly Date, IReadOnlyList<ScheduleEntryDto> Entries);
 

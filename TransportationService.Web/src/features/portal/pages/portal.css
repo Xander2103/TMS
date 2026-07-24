@@ -369,3 +369,38 @@
   font-size: 11px;
   color: var(--text);
 }
+
+/* Personal note dialog + planning header actions */
+.portal-planning-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.portal-note-colours {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.portal-note-colours legend {
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.portal-note-colour {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.portal-note-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  display: inline-block;
+}

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Authentication.Services;
@@ -357,8 +358,150 @@ public class PortalService : IPortalService
             return null;
         }
 
-        return await _shiftService.GetEmployeeScheduleAsync(employeeId, from, to, cancellationToken);
+        var days = await _shiftService.GetEmployeeScheduleAsync(employeeId, from, to, cancellationToken);
+
+        // Personal notes are merged HERE (self-service feed only) so they never leak into the
+        // shared schedule used by planners.
+        var notes = await _dbContext.Set<Entities.PersonalCalendarNote>().AsNoTracking()
+            .Where(n => n.TenantId == _tenantContext.TenantId && n.EmployeeId == employeeId
+                        && n.Date >= from && n.Date <= to)
+            .OrderBy(n => n.StartTime)
+            .ToListAsync(cancellationToken);
+        if (notes.Count == 0)
+        {
+            return days;
+        }
+
+        var notesByDate = notes.ToLookup(n => n.Date);
+        return days
+            .Select(day => notesByDate[day.Date].Any()
+                ? day with
+                {
+                    Entries =
+                    [
+                        .. day.Entries,
+                        .. notesByDate[day.Date].Select(note => new ScheduleEntryDto(
+                            ScheduleEntryState.Note, null, null, null, "Note",
+                            note.Title,
+                            note.AllDay ? null : note.StartTime,
+                            note.AllDay ? null : note.EndTime,
+                            null, null, null, note.Description,
+                            Colour: note.Colour, NoteId: note.Id)),
+                    ],
+                }
+                : day)
+            .ToList();
     }
+
+    public async Task<IReadOnlyList<PersonalCalendarNoteDto>?> ListMyCalendarNotesAsync(
+        DateOnly from, DateOnly to, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+
+        return await _dbContext.Set<Entities.PersonalCalendarNote>().AsNoTracking()
+            .Where(n => n.TenantId == _tenantContext.TenantId && n.EmployeeId == employeeId
+                        && n.Date >= from && n.Date <= to)
+            .OrderBy(n => n.Date).ThenBy(n => n.StartTime)
+            .Select(n => new PersonalCalendarNoteDto(n.Id, n.Title, n.Description, n.Date, n.StartTime, n.EndTime, n.AllDay, n.Colour))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PersonalCalendarNoteDto?> CreateMyCalendarNoteAsync(
+        SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+
+        ValidateNote(request);
+        var note = new Entities.PersonalCalendarNote
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenantContext.TenantId,
+            EmployeeId = employeeId,
+        };
+        ApplyNote(note, request);
+        _dbContext.Add(note);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Map(note);
+    }
+
+    public async Task<PersonalCalendarNoteDto?> UpdateMyCalendarNoteAsync(
+        Guid id, SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return null;
+        }
+
+        // Self-only: another employee's note is simply not found.
+        var note = await _dbContext.Set<Entities.PersonalCalendarNote>()
+            .FirstOrDefaultAsync(n => n.TenantId == _tenantContext.TenantId && n.Id == id && n.EmployeeId == employeeId, cancellationToken);
+        if (note is null)
+        {
+            return null;
+        }
+
+        ValidateNote(request);
+        ApplyNote(note, request);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Map(note);
+    }
+
+    public async Task<bool> DeleteMyCalendarNoteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (await MyEmployeeIdAsync(cancellationToken) is not { } employeeId)
+        {
+            return false;
+        }
+
+        var note = await _dbContext.Set<Entities.PersonalCalendarNote>()
+            .FirstOrDefaultAsync(n => n.TenantId == _tenantContext.TenantId && n.Id == id && n.EmployeeId == employeeId, cancellationToken);
+        if (note is null)
+        {
+            return false;
+        }
+
+        _dbContext.Remove(note);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private static void ValidateNote(SavePersonalCalendarNoteRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Title))
+        {
+            throw new DomainValidationException("title", "De titel is verplicht.");
+        }
+
+        if (!Entities.CalendarNotePalette.IsValid(request.Colour))
+        {
+            throw new DomainValidationException("colour", "Kies een kleur uit het palet.");
+        }
+
+        if (!request.AllDay && request.StartTime is { } start && request.EndTime is { } end && end < start)
+        {
+            throw new DomainValidationException("endTime", "Het einde moet na het begin liggen.");
+        }
+    }
+
+    private static void ApplyNote(Entities.PersonalCalendarNote note, SavePersonalCalendarNoteRequest request)
+    {
+        note.Title = request.Title.Trim();
+        note.Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim();
+        note.Date = request.Date;
+        note.AllDay = request.AllDay;
+        note.StartTime = request.AllDay ? null : request.StartTime;
+        note.EndTime = request.AllDay ? null : request.EndTime;
+        note.Colour = request.Colour;
+    }
+
+    private static PersonalCalendarNoteDto Map(Entities.PersonalCalendarNote n) =>
+        new(n.Id, n.Title, n.Description, n.Date, n.StartTime, n.EndTime, n.AllDay, n.Colour);
 
     private static PortalAbsenceResult Map(AbsenceOperationResult result) => result.Outcome switch
     {

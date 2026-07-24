@@ -11,6 +11,8 @@ import { getAccessToken } from '../../auth/authStorage'
 import { useAuth } from '../../auth/authContextValue'
 import { ScheduleChip, ScheduleLegend } from '../../employee-planning/components/ScheduleChip'
 import { mondayOf, toIsoDate, type ScheduleDay, type ScheduleEntry } from '../../employee-planning/types'
+import { PersonalNoteDialog } from '../components/PersonalNoteDialog'
+import type { PersonalCalendarNote } from '../api/calendarNotesApi'
 import './portal.css'
 
 const DAY_NAMES = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo']
@@ -38,6 +40,8 @@ export function PortalPlanningPage() {
   const [anchor, setAnchor] = useState(() => toIsoDate(mondayOf(new Date())))
   const [loadedDays, setLoadedDays] = useState<{ key: string; days: ScheduleDay[] } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
+  const [noteDialog, setNoteDialog] = useState<{ note: PersonalCalendarNote | null; date: string } | null>(null)
 
   // Visible range per view: week = 7 days from the anchor Monday; month = the anchor's
   // calendar month; list = 14 days.
@@ -48,7 +52,7 @@ export function PortalPlanningPage() {
   const to = view === 'month' ? monthEnd : addDays(anchor, view === 'week' ? 6 : 13)
 
   // Loading is derived from a request key so no setState runs synchronously in the effect.
-  const requestKey = `${from}|${to}`
+  const requestKey = `${from}|${to}|${reloadToken}`
   const days = loadedDays?.key === requestKey ? loadedDays.days : null
 
   useEffect(() => {
@@ -56,7 +60,7 @@ export function PortalPlanningPage() {
     apiClient
       .getJson<ScheduleDay[]>(`/api/me/planning?from=${from}&to=${to}`)
       .then((data) => {
-        if (mounted) setLoadedDays({ key: `${from}|${to}`, days: data })
+        if (mounted) setLoadedDays({ key: `${from}|${to}|${reloadToken}`, days: data })
       })
       .catch(() => {
         if (mounted) setLoadError('Je planning kon niet worden geladen.')
@@ -64,7 +68,7 @@ export function PortalPlanningPage() {
     return () => {
       mounted = false
     }
-  }, [from, to])
+  }, [from, to, reloadToken])
 
   function shift(direction: -1 | 1) {
     if (view === 'month') {
@@ -75,7 +79,23 @@ export function PortalPlanningPage() {
     }
   }
 
-  function chipAction(entry: ScheduleEntry): (() => void) | undefined {
+  function chipAction(entry: ScheduleEntry, date: string): (() => void) | undefined {
+    if (entry.noteId) {
+      return () =>
+        setNoteDialog({
+          date,
+          note: {
+            id: entry.noteId!,
+            title: entry.label,
+            description: entry.statusLabel,
+            date,
+            startTime: entry.startTime,
+            endTime: entry.endTime,
+            allDay: !entry.startTime,
+            colour: entry.colour ?? '#2563eb',
+          },
+        })
+    }
     if (entry.tripId && hasPermission('driver_workflow.view')) {
       return () => navigate(`/my-trips/${entry.tripId}`)
     }
@@ -114,9 +134,12 @@ export function PortalPlanningPage() {
         title="Mijn planning"
         subtitle="Je shifts, ritten, opleidingen en afwezigheden."
         action={
-          <Button variant="secondary" onClick={() => void downloadIcs()}>
-            Agenda-export (.ics)
-          </Button>
+          <div className="portal-planning-actions">
+            <Button onClick={() => setNoteDialog({ note: null, date: today })}>+ Notitie</Button>
+            <Button variant="secondary" onClick={() => void downloadIcs()}>
+              Agenda-export (.ics)
+            </Button>
+          </div>
         }
       />
 
@@ -156,7 +179,7 @@ export function PortalPlanningPage() {
                 <div className="portal-calendar-entries">
                   {day.entries.length === 0 && <span className="portal-planning-free">vrij</span>}
                   {day.entries.map((entry, index) => (
-                    <ScheduleChip key={index} entry={entry} onClick={chipAction(entry)} />
+                    <ScheduleChip key={index} entry={entry} onClick={chipAction(entry, day.date)} />
                   ))}
                 </div>
               </div>
@@ -188,10 +211,9 @@ export function PortalPlanningPage() {
               title={day.entries.map((entry) => entry.label).join(', ') || 'vrij'}
             >
               <span className="portal-month-daynr">{Number(day.date.slice(8, 10))}</span>
+              {/* Compact chips keep the colour language of week/list in the month grid. */}
               {day.entries.slice(0, 2).map((entry, index) => (
-                <span key={index} className="portal-month-entry">
-                  {entry.label}
-                </span>
+                <ScheduleChip key={index} entry={entry} compact />
               ))}
               {day.entries.length > 2 && <span className="portal-month-more">+{day.entries.length - 2}</span>}
             </button>
@@ -212,7 +234,7 @@ export function PortalPlanningPage() {
                 <div className="portal-planning-entries">
                   {day.entries.length === 0 && <span className="portal-planning-free">vrij</span>}
                   {day.entries.map((entry, index) => (
-                    <ScheduleChip key={index} entry={entry} onClick={chipAction(entry)} />
+                    <ScheduleChip key={index} entry={entry} onClick={chipAction(entry, day.date)} />
                   ))}
                 </div>
               </li>
@@ -222,6 +244,18 @@ export function PortalPlanningPage() {
       )}
 
       {days && <ScheduleLegend />}
+
+      {noteDialog && (
+        <PersonalNoteDialog
+          note={noteDialog.note}
+          initialDate={noteDialog.date}
+          onClose={() => setNoteDialog(null)}
+          onSaved={() => {
+            setNoteDialog(null)
+            setReloadToken((t) => t + 1)
+          }}
+        />
+      )}
     </div>
   )
 }

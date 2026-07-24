@@ -55,6 +55,7 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Planning.Entities.ConflictOverride> ConflictOverrides => Set<TransportationService.Api.Modules.Planning.Entities.ConflictOverride>();
     public DbSet<TransportationService.Api.Modules.Operations.Entities.OperationalAlert> OperationalAlerts => Set<TransportationService.Api.Modules.Operations.Entities.OperationalAlert>();
     public DbSet<TransportationService.Api.Modules.Portal.Entities.UserResourceLink> UserResourceLinks => Set<TransportationService.Api.Modules.Portal.Entities.UserResourceLink>();
+    public DbSet<TransportationService.Api.Modules.Portal.Entities.PersonalCalendarNote> PersonalCalendarNotes => Set<TransportationService.Api.Modules.Portal.Entities.PersonalCalendarNote>();
     public DbSet<TransportationService.Api.Modules.Warehousing.Entities.Warehouse> Warehouses => Set<TransportationService.Api.Modules.Warehousing.Entities.Warehouse>();
     public DbSet<TransportationService.Api.Modules.Warehousing.Entities.Dock> Docks => Set<TransportationService.Api.Modules.Warehousing.Entities.Dock>();
     public DbSet<TransportationService.Api.Modules.Warehousing.Entities.DockAppointment> DockAppointments => Set<TransportationService.Api.Modules.Warehousing.Entities.DockAppointment>();

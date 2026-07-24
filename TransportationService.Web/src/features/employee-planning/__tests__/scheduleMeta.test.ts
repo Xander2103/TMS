@@ -12,7 +12,7 @@ import {
 
 describe('schedule state metadata', () => {
   it('has a label and non-colour icon for every state (legend completeness)', () => {
-    expect(SCHEDULE_STATES).toHaveLength(12)
+    expect(SCHEDULE_STATES).toHaveLength(13)
     for (const state of SCHEDULE_STATES) {
       expect(SCHEDULE_STATE_LABELS[state], `label ${state}`).toBeTruthy()
       expect(SCHEDULE_STATE_ICONS[state], `icon ${state}`).toBeTruthy()
@@ -35,6 +35,8 @@ describe('schedule state metadata', () => {
       statusLabel: 'Gepland',
       conflictSeverity: null,
       conflictNotes: null,
+  colour: null,
+  noteId: null,
     }
     expect(chipDescription(entry)).toBe(
       'Rit RIT-0007 · Gepland · 08:00–16:00 · Antwerpen → Rotterdam · V-0001 · 1-ABC-123',

@@ -72,3 +72,12 @@ public static class PortalAliases
 {
     public static IReadOnlyList<EmployeeQualificationDto> NoQualifications { get; } = [];
 }
+
+/// <summary>Personal calendar note of the current employee ("Mijn planning").</summary>
+public record PersonalCalendarNoteDto(
+    Guid Id, string Title, string? Description, DateOnly Date,
+    TimeOnly? StartTime, TimeOnly? EndTime, bool AllDay, string Colour);
+
+public record SavePersonalCalendarNoteRequest(
+    string Title, string? Description, DateOnly Date,
+    TimeOnly? StartTime, TimeOnly? EndTime, bool AllDay, string Colour);

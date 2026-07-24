@@ -30,8 +30,14 @@ public interface IPortalService
 
     Task<PortalOperationResult> ChangeMyPasswordAsync(ChangeMyPasswordRequest request, CancellationToken cancellationToken);
 
-    /// <summary>Own schedule days (shifts + absences merged), for "Mijn planning".</summary>
+    /// <summary>Own schedule days (shifts + absences + personal notes), for "Mijn planning".</summary>
     Task<IReadOnlyList<ScheduleDayDto>?> GetMyPlanningAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken);
+
+    // Personal calendar notes (self-service only; strictly scoped to the own employee).
+    Task<IReadOnlyList<PersonalCalendarNoteDto>?> ListMyCalendarNotesAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken);
+    Task<PersonalCalendarNoteDto?> CreateMyCalendarNoteAsync(SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken);
+    Task<PersonalCalendarNoteDto?> UpdateMyCalendarNoteAsync(Guid id, SavePersonalCalendarNoteRequest request, CancellationToken cancellationToken);
+    Task<bool> DeleteMyCalendarNoteAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>Attach a supporting document to an own, still open absence request.</summary>
     Task<PortalAbsenceResult> AttachMyAbsenceDocumentAsync(

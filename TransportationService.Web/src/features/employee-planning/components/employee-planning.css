@@ -279,3 +279,27 @@ th.ep-today {
 .ep-employee-link:focus-visible {
   color: var(--accent, #aa3bff);
 }
+
+/* Personal calendar note (colour comes from the employee's palette choice inline). */
+.schedule-chip-note {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+
+/* Compact chips for the month grid: same colour language, smaller footprint. */
+.schedule-chip-compact {
+  padding: 1px 6px;
+  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.schedule-chip-compact .schedule-chip-time {
+  display: none;
+}
+
+.schedule-chip-compact .schedule-chip-state {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
