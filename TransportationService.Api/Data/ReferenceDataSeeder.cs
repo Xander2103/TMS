@@ -89,6 +89,79 @@ public static class ReferenceDataSeeder
             cancellationToken);
 
         await SeedServiceOptionsAsync(dbContext, tenantId, cancellationToken);
+        await SeedUnitTypePhysicalDefaultsAsync(dbContext, tenantId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Example physical defaults for well-known seeded unit codes. Pure seed data — logic
+    /// always reads the Unit record, and a unit the tenant already touched (any category,
+    /// behaviour or physical default set) is never overwritten. Idempotent.
+    /// </summary>
+    private static async Task SeedUnitTypePhysicalDefaultsAsync(
+        TransportationDbContext dbContext, Guid tenantId, CancellationToken cancellationToken)
+    {
+        var defaults = new Dictionary<string, (Modules.Reference.Entities.UnitCategory Category,
+            Modules.Reference.Entities.UnitDimensionBehavior Behavior,
+            decimal? LengthCm, decimal? WidthCm, string? Symbol)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["EUROPALLET"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.DefaultButOverridable, 120m, 80m, null),
+            ["BLOCKPALLET"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.DefaultButOverridable, 120m, 100m, null),
+            ["PALLET"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.DefaultButOverridable, null, null, null),
+            ["COLLI"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, null),
+            ["CONTAINER"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, null),
+            ["CRATE"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, null),
+            ["BOX"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, null),
+            ["ROLLCONTAINER"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, null),
+            ["DRUM"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, null),
+            ["PARCEL"] = (Modules.Reference.Entities.UnitCategory.Packaging, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, null),
+            ["PIECE"] = (Modules.Reference.Entities.UnitCategory.Other, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, "st"),
+            ["DOCUMENT"] = (Modules.Reference.Entities.UnitCategory.Other, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, null),
+            ["KG"] = (Modules.Reference.Entities.UnitCategory.Weight, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, "kg"),
+            ["TON"] = (Modules.Reference.Entities.UnitCategory.Weight, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, "t"),
+            ["LOADINGMETER"] = (Modules.Reference.Entities.UnitCategory.Capacity, Modules.Reference.Entities.UnitDimensionBehavior.Variable, null, null, "ldm"),
+        };
+
+        var units = await dbContext.UnitTypes
+            .Where(u => u.TenantId == tenantId)
+            .ToListAsync(cancellationToken);
+
+        var changed = false;
+        foreach (var unit in units)
+        {
+            if (!defaults.TryGetValue(unit.Code, out var d))
+            {
+                continue;
+            }
+
+            var untouched = unit.Category == Modules.Reference.Entities.UnitCategory.Other
+                && unit.DimensionBehavior == Modules.Reference.Entities.UnitDimensionBehavior.Variable
+                && unit.Symbol is null
+                && unit.DefaultLengthCm is null && unit.DefaultWidthCm is null && unit.DefaultHeightCm is null
+                && unit.DefaultWeightKg is null && unit.MaxWeightKg is null && unit.DefaultVolumeM3 is null
+                && unit.DefaultLoadingMeters is null && unit.DefaultPalletPlaces is null;
+            if (!untouched)
+            {
+                continue;
+            }
+
+            if (unit.Category == d.Category && unit.DimensionBehavior == d.Behavior
+                && d.LengthCm is null && d.WidthCm is null && d.Symbol is null)
+            {
+                continue; // nothing to fill
+            }
+
+            unit.Category = d.Category;
+            unit.DimensionBehavior = d.Behavior;
+            unit.DefaultLengthCm = d.LengthCm;
+            unit.DefaultWidthCm = d.WidthCm;
+            unit.Symbol = d.Symbol;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 
     /// <summary>Starter delivery services/supplements; prices are tenant-editable placeholders.</summary>

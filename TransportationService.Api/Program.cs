@@ -201,6 +201,9 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.I
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IIncidentService,
     TransportationService.Api.Modules.Incidents.Services.IncidentService>();
 
+builder.Services.AddScoped<TransportationService.Api.Modules.Reference.Services.IUnitTypeMasterService,
+    TransportationService.Api.Modules.Reference.Services.UnitTypeMasterService>();
+
 // Tarification
 builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IRateCardService,
     TransportationService.Api.Modules.Tarification.Services.RateCardService>();

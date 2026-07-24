@@ -6,6 +6,7 @@ using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Reference.Entities;
+using TransportationService.Api.Modules.Reference.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Reference.Controllers;
@@ -19,13 +20,16 @@ public class UnitTypesController : LookupControllerBase<UnitType>
 {
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
+    private readonly IUnitTypeMasterService _masterService;
 
     public UnitTypesController(ILookupService<UnitType> service, ICurrentUserContext currentUser,
-        IPermissionAuthorizationService authorization, TransportationDbContext dbContext, ITenantContext tenantContext)
+        IPermissionAuthorizationService authorization, TransportationDbContext dbContext, ITenantContext tenantContext,
+        IUnitTypeMasterService masterService)
         : base(service, currentUser, authorization)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
+        _masterService = masterService;
     }
 
     protected override string ViewPermission => PermissionCodes.UnitTypesView;
@@ -59,5 +63,24 @@ public class UnitTypesController : LookupControllerBase<UnitType>
         unit.AllowForPricing = request.AllowForPricing;
         await _dbContext.SaveChangesAsync(cancellationToken);
         return Ok(new UnitTypeSettingsDto(unit.Id, unit.Code, unit.Name, unit.IsActive, unit.SortOrder, unit.AllowForOrderEntry, unit.AllowForPricing));
+    }
+
+    /// <summary>Full unit master list (Stamgegevens → Eenheden).</summary>
+    [HttpGet("master")]
+    [RequirePermission(PermissionCodes.UnitTypesView, PermissionCodes.UnitTypesManage, PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<UnitTypeMasterDto>>> Master(CancellationToken cancellationToken) =>
+        Ok(await _masterService.ListAsync(cancellationToken));
+
+    [HttpPost("master")]
+    [RequirePermission(PermissionCodes.UnitTypesManage, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<UnitTypeMasterDto>> CreateMaster(SaveUnitTypeMasterRequest request, CancellationToken cancellationToken) =>
+        Ok(await _masterService.CreateAsync(request, cancellationToken));
+
+    [HttpPut("{id:guid}/master")]
+    [RequirePermission(PermissionCodes.UnitTypesManage, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<UnitTypeMasterDto>> UpdateMaster(Guid id, SaveUnitTypeMasterRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _masterService.UpdateAsync(id, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
     }
 }
