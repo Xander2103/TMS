@@ -76,6 +76,23 @@ public record SaveCustomerPricingConfigRequest(
 
 public record SaveCustomerOptionPriceRequest(Guid ServiceOptionId, decimal? Value);
 
+// --- Scheduled price adjustments ---
+
+public record PriceAdjustmentValueChange(string Field, decimal OldValue, decimal NewValue);
+
+public record PriceAdjustmentRulePreview(
+    Guid PriceRuleId, string RuleName, DateOnly EffectiveFrom, DateOnly? EffectiveUntil,
+    IReadOnlyList<PriceAdjustmentValueChange> Changes);
+
+/// <summary>Null RuleIds = all adjustable active rules of the customer.</summary>
+public record PreviewPriceAdjustmentRequest(DateOnly EffectiveDate, decimal Percent, IReadOnlyList<Guid>? RuleIds);
+
+public record CreatePriceAdjustmentRequest(DateOnly EffectiveDate, decimal Percent, IReadOnlyList<Guid>? RuleIds, string? Reason);
+
+public record ScheduledPriceAdjustmentDto(
+    Guid Id, Guid CustomerId, DateOnly EffectiveDate, decimal Percent,
+    string Status, string? Reason, int RuleCount, DateTime CreatedAt);
+
 // --- Calculation ---
 
 /// <summary>Physical detail of part of a line (from cargo items) used for billable-quantity rules.</summary>

@@ -12,11 +12,13 @@ public class PricingController : ControllerBase
 {
     private readonly IPricingAdminService _admin;
     private readonly IPricingEngine _engine;
+    private readonly IPriceAdjustmentService _adjustments;
 
-    public PricingController(IPricingAdminService admin, IPricingEngine engine)
+    public PricingController(IPricingAdminService admin, IPricingEngine engine, IPriceAdjustmentService adjustments)
     {
         _admin = admin;
         _engine = engine;
+        _adjustments = adjustments;
     }
 
     // --- Preview (order entry) ---
@@ -149,5 +151,34 @@ public class PricingController : ControllerBase
     {
         var config = await _admin.SaveCustomerConfigAsync(customerId, request, cancellationToken);
         return config is null ? NotFound() : Ok(config);
+    }
+
+    // --- Scheduled price adjustments ---
+
+    [HttpGet("api/customers/{customerId:guid}/price-adjustments")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<ScheduledPriceAdjustmentDto>>> ListPriceAdjustments(
+        Guid customerId, CancellationToken cancellationToken) =>
+        Ok(await _adjustments.ListAsync(customerId, cancellationToken));
+
+    [HttpPost("api/customers/{customerId:guid}/price-adjustments/preview")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<PriceAdjustmentRulePreview>>> PreviewPriceAdjustment(
+        Guid customerId, PreviewPriceAdjustmentRequest request, CancellationToken cancellationToken) =>
+        Ok(await _adjustments.PreviewAsync(customerId, request, cancellationToken));
+
+    [HttpPost("api/customers/{customerId:guid}/price-adjustments")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<ScheduledPriceAdjustmentDto>> CreatePriceAdjustment(
+        Guid customerId, CreatePriceAdjustmentRequest request, CancellationToken cancellationToken) =>
+        Ok(await _adjustments.CreateAsync(customerId, request, cancellationToken));
+
+    [HttpPost("api/customers/{customerId:guid}/price-adjustments/{id:guid}/cancel")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<ScheduledPriceAdjustmentDto>> CancelPriceAdjustment(
+        Guid customerId, Guid id, CancellationToken cancellationToken)
+    {
+        var cancelled = await _adjustments.CancelAsync(customerId, id, cancellationToken);
+        return cancelled is null ? NotFound() : Ok(cancelled);
     }
 }

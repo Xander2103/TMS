@@ -129,6 +129,32 @@ public class CustomerServiceOptionPriceConfiguration : IEntityTypeConfiguration<
     }
 }
 
+public class ScheduledPriceAdjustmentConfiguration : IEntityTypeConfiguration<ScheduledPriceAdjustment>
+{
+    public void Configure(EntityTypeBuilder<ScheduledPriceAdjustment> builder)
+    {
+        builder.ToTable("scheduled_price_adjustments");
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.Percent).HasPrecision(7, 3);
+        builder.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(a => a.Reason).HasMaxLength(1000);
+        builder.HasMany(a => a.Rules).WithOne().HasForeignKey(r => r.AdjustmentId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(a => new { a.TenantId, a.CustomerId, a.EffectiveDate });
+        builder.HasQueryFilter(a => !a.IsDeleted);
+    }
+}
+
+public class ScheduledPriceAdjustmentRuleConfiguration : IEntityTypeConfiguration<ScheduledPriceAdjustmentRule>
+{
+    public void Configure(EntityTypeBuilder<ScheduledPriceAdjustmentRule> builder)
+    {
+        builder.ToTable("scheduled_price_adjustment_rules");
+        builder.HasKey(r => r.Id);
+        builder.HasIndex(r => new { r.TenantId, r.AdjustmentId });
+        builder.HasQueryFilter(r => !r.IsDeleted);
+    }
+}
+
 public class CustomerPreferredUnitConfiguration : IEntityTypeConfiguration<CustomerPreferredUnit>
 {
     public void Configure(EntityTypeBuilder<CustomerPreferredUnit> builder)
