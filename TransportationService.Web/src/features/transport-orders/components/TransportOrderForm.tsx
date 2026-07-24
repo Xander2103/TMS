@@ -1,12 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
+import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
+import { useSectionNavigation } from '../../../components/ui/useSectionNavigation'
 import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerDetail, CustomerListItem } from '../../customers/types'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
+import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LocationSelect } from '../../locations/components/LocationSelect'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
 import type { LocationOption } from '../../locations/types'
@@ -14,6 +17,14 @@ import { useAuth } from '../../auth/authContextValue'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { UNIT_TYPE_LABELS, type PackageUnitType } from '../../packages/types'
 import { computeVolumeM3 } from '../../../utils/volume'
+import {
+  getCustomerPricingConfig,
+  listServiceOptions,
+  previewPrice,
+  type CustomerPricingConfig,
+  type PriceCalculationResult,
+  type ServiceOption,
+} from '../../tarification/api/pricingApi'
 import { STOP_TYPE_LABELS, type StopInput, type TransportOrderDetail, type TransportOrderInput } from '../types'
 import './transport-order-form.css'
 
@@ -119,12 +130,24 @@ interface TransportOrderFormProps {
   onSubmit: (input: TransportOrderInput) => Promise<void>
   onCancel?: () => void
   submitLabel: string
+  /** Documenten section body: create → PreparedOrderDocumentsEditor, edit → OrderDocumentsPanel. */
+  documentsSection?: ReactNode
+  /** True when the documents section saves itself (edit-mode panel). */
+  documentsSectionIsPanel?: boolean
 }
 
-/** Shared create/edit form: order header, cargo fields and the multi-stop editor. */
-export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: TransportOrderFormProps) {
+const SECTION_IDS = ['algemeen', 'route', 'goederen', 'services', 'documenten', 'prijs', 'samenvatting']
+
+/**
+ * Shared create/edit form, structured as internal subnavigation (Algemeen / Route & stops /
+ * Goederen / Services & toeslagen / Documenten / Prijs / Samenvatting). All state is lifted
+ * here, so switching tabs preserves values and never touches the router.
+ */
+export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, documentsSection, documentsSectionIsPanel }: TransportOrderFormProps) {
   const { hasPermission } = useAuth()
   const canCreateLocations = hasPermission('locations.create')
+  const canOverridePrice = hasPermission('orders.override_price')
+  const { activeId, setActive } = useSectionNavigation(SECTION_IDS, 'algemeen')
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   // Inline location creation from a stop's location picker: the promise resolves when the
   // dialog closes, so the SearchableSelect can auto-select the new location.
@@ -228,6 +251,86 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loadedCustomerDetail, setLoadedCustomerDetail] = useState<{ id: string; detail: CustomerDetail } | null>(null)
+
+  // --- Pricing state (spec 7): configured units, service options, live preview, override ---
+  const { options: unitOptions } = useLookupOptions('/api/unit-types')
+  const [serviceOptions, setServiceOptions] = useState<ServiceOption[]>([])
+  const [selectedServiceOptionIds, setSelectedServiceOptionIds] = useState<string[]>(
+    () => (order?.serviceLines ?? []).map((l) => l.serviceOptionId).filter((id): id is string => id !== null),
+  )
+  const [pricingConfig, setPricingConfig] = useState<{ customerId: string; config: CustomerPricingConfig } | null>(null)
+  const [showAllUnits, setShowAllUnits] = useState(false)
+  const [preview, setPreview] = useState<PriceCalculationResult | null>(null)
+  const [priceIsManual, setPriceIsManual] = useState(order?.priceIsManual ?? false)
+  const [priceOverrideReason, setPriceOverrideReason] = useState(order?.priceOverrideReason ?? '')
+
+  useEffect(() => {
+    let mounted = true
+    listServiceOptions()
+      .then((data) => {
+        if (mounted) setServiceOptions(data)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!customerId) return
+    let mounted = true
+    getCustomerPricingConfig(customerId)
+      .then((config) => {
+        if (mounted) setPricingConfig({ customerId, config })
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [customerId])
+
+  const customerConfig = pricingConfig?.customerId === customerId ? pricingConfig.config : null
+  const preferredUnits = customerConfig?.preferredUnits ?? []
+  const preferredCodes = new Set(preferredUnits.map((u) => u.code))
+  const otherUnits = unitOptions.filter((u) => !preferredCodes.has(u.code))
+
+  // Live price preview, debounced on the pricing-relevant inputs.
+  const lastUnloading = [...stops].reverse().find((s) => s.stopType === 'Unloading')
+  const previewKey = JSON.stringify([
+    customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount,
+    lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds,
+  ])
+  useEffect(() => {
+    if (!customerId) {
+      setPreview(null)
+      return
+    }
+    const unitTypeId = unitOptions.find((u) => u.code === quantityUnitCode)?.id ?? null
+    const lines = unitTypeId && quantity !== '' && Number(quantity) > 0
+      ? [{ unitTypeId, quantity: Number(quantity) }]
+      : []
+    if (lines.length === 0 && selectedServiceOptionIds.length === 0) {
+      setPreview(null)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      previewPrice({
+        customerId,
+        date: orderDate || new Date().toISOString().slice(0, 10),
+        lines,
+        deliveryCountryCode: lastUnloading?.countryCode || null,
+        deliveryPostalCode: lastUnloading?.postalCode || null,
+        weightKg: weightKg === '' ? null : Number(weightKg),
+        distanceKm: null,
+        palletCount: palletCount === '' ? null : Number(palletCount),
+        serviceOptionIds: selectedServiceOptionIds,
+      })
+        .then(setPreview)
+        .catch(() => setPreview(null))
+    }, 400)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewKey, unitOptions.length])
 
   useEffect(() => {
     let mounted = true
@@ -341,6 +444,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
       setFormError('Geef een reden op voor het afwijkende dieseltoeslagpercentage.')
       return
     }
+    if (priceIsManual && !priceOverrideReason.trim()) {
+      setActive('prijs')
+      setFormError('Geef een reden op voor de handmatige prijs.')
+      return
+    }
 
     const input: TransportOrderInput = {
       customerId,
@@ -361,6 +469,9 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
       dieselSurchargeOverride,
       dieselSurchargePercentOverride: dieselSurchargeOverride ? numberOrNullFrom(dieselSurchargePercentOverride) : null,
       dieselSurchargeOverrideReason: dieselSurchargeOverride ? dieselSurchargeOverrideReason.trim() || null : null,
+      serviceOptionIds: selectedServiceOptionIds,
+      priceIsManual,
+      priceOverrideReason: priceIsManual ? priceOverrideReason.trim() || null : null,
       stops: stops.map((stop) => ({
         stopType: stop.stopType,
         locationId: stop.locationId || null,
@@ -430,14 +541,8 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
     }
   }
 
-  return (
-    <form className="tof" onSubmit={handleSubmit} noValidate>
-      {formError && (
-        <div className="tof-error" role="alert">
-          {formError}
-        </div>
-      )}
-
+  const algemeenContent = (
+    <>
       <div className="tof-row">
         <FormField label="Klant" htmlFor="to-customer" required>
           <select id="to-customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)} disabled={saving}>
@@ -473,52 +578,6 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
           kunnen geen nieuwe opdrachten voor worden aangemaakt.
         </p>
       )}
-
-      <FormField label="Omschrijving goederen" htmlFor="to-goods" hint="Optioneel — gestructureerde gegevens horen bij de goederenlijnen.">
-        <textarea id="to-goods" rows={2} value={goodsDescription} onChange={(e) => setGoodsDescription(e.target.value)} disabled={saving} maxLength={1000} />
-      </FormField>
-
-      <div className="tof-row tof-row-4">
-        <FormField label="Aantal" htmlFor="to-qty">
-          <input id="to-qty" type="number" min={0} step="0.01" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={saving} />
-        </FormField>
-        <FormField label="Eenheid" htmlFor="to-unit" hint={!quantityUnitCode && quantityUnit ? `Bestaande waarde: ${quantityUnit}` : undefined}>
-          <LookupSelect
-            id="to-unit"
-            basePath="/api/unit-types"
-            managePermission="unit_types.manage"
-            singular="eenheid"
-            valueKey="code"
-            value={quantityUnitCode}
-            onChange={setQuantityUnitCode}
-            disabled={saving}
-            placeholder="— Eenheid —"
-          />
-        </FormField>
-        <FormField label="Gewicht (kg)" htmlFor="to-weight">
-          <input id="to-weight" type="number" min={0} step="0.01" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} disabled={saving} />
-        </FormField>
-        <FormField label="Volume (m³)" htmlFor="to-volume">
-          <input id="to-volume" type="number" min={0} step="0.01" value={volumeM3} onChange={(e) => setVolumeM3(e.target.value)} disabled={saving} />
-        </FormField>
-      </div>
-
-      <div className="tof-row tof-row-4">
-        <FormField label="Paletten" htmlFor="to-pallets">
-          <input id="to-pallets" type="number" min={0} value={palletCount} onChange={(e) => setPalletCount(e.target.value)} disabled={saving} />
-        </FormField>
-        <FormField label="Afgesproken prijs (€)" htmlFor="to-price">
-          <input id="to-price" type="number" min={0} step="0.01" value={agreedPrice} onChange={(e) => setAgreedPrice(e.target.value)} disabled={saving} />
-        </FormField>
-        <label className="tof-checkbox">
-          <input type="checkbox" checked={adrRequired} onChange={(e) => setAdrRequired(e.target.checked)} disabled={saving} />
-          ADR-transport
-        </label>
-        <label className="tof-checkbox">
-          <input type="checkbox" checked={craneRequired} onChange={(e) => setCraneRequired(e.target.checked)} disabled={saving} />
-          Kraan vereist
-        </label>
-      </div>
 
       <div className="tof-row">
         <FormField
@@ -582,7 +641,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
           </div>
         )}
       </details>
+    </>
+  )
 
+  const routeContent = (
+    <>
       <div className="tof-stops-header">
         <h3>Stops</h3>
         <div className="tof-stops-actions">
@@ -741,6 +804,85 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
           </details>
         </fieldset>
       ))}
+    </>
+  )
+
+  const goederenContent = (
+    <>
+      <FormField label="Omschrijving goederen" htmlFor="to-goods" hint="Optioneel — gestructureerde gegevens horen bij de goederenlijnen.">
+        <textarea id="to-goods" rows={2} value={goodsDescription} onChange={(e) => setGoodsDescription(e.target.value)} disabled={saving} maxLength={1000} />
+      </FormField>
+
+      <div className="tof-row tof-row-4">
+        <FormField label="Aantal" htmlFor="to-qty">
+          <input id="to-qty" type="number" min={0} step="0.01" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={saving} />
+        </FormField>
+        <FormField
+          label="Eenheid"
+          htmlFor="to-unit"
+          hint={!quantityUnitCode && quantityUnit ? `Bestaande waarde: ${quantityUnit}` : undefined}
+        >
+          {/* Customer-preferred units first; "Andere eenheden tonen" reveals the full active list. */}
+          <select
+            id="to-unit"
+            value={quantityUnitCode ?? ''}
+            onChange={(e) => setQuantityUnitCode(e.target.value || null)}
+            disabled={saving}
+          >
+            <option value="">— Eenheid —</option>
+            {preferredUnits.length > 0 && (
+              <optgroup label="Gebruikelijk voor deze klant">
+                {preferredUnits.map((unit) => (
+                  <option key={unit.unitTypeId} value={unit.code}>
+                    {unit.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {(preferredUnits.length === 0 || showAllUnits || (quantityUnitCode !== null && !preferredCodes.has(quantityUnitCode))) &&
+              (preferredUnits.length > 0 ? (
+                <optgroup label="Andere eenheden">
+                  {otherUnits.map((unit) => (
+                    <option key={unit.id} value={unit.code}>
+                      {unit.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : (
+                unitOptions.map((unit) => (
+                  <option key={unit.id} value={unit.code}>
+                    {unit.name}
+                  </option>
+                ))
+              ))}
+          </select>
+          {preferredUnits.length > 0 && !showAllUnits && (
+            <button type="button" className="tof-link" onClick={() => setShowAllUnits(true)}>
+              Andere eenheden tonen
+            </button>
+          )}
+        </FormField>
+        <FormField label="Gewicht (kg)" htmlFor="to-weight">
+          <input id="to-weight" type="number" min={0} step="0.01" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} disabled={saving} />
+        </FormField>
+        <FormField label="Volume (m³)" htmlFor="to-volume">
+          <input id="to-volume" type="number" min={0} step="0.01" value={volumeM3} onChange={(e) => setVolumeM3(e.target.value)} disabled={saving} />
+        </FormField>
+      </div>
+
+      <div className="tof-row tof-row-4">
+        <FormField label="Paletten" htmlFor="to-pallets">
+          <input id="to-pallets" type="number" min={0} value={palletCount} onChange={(e) => setPalletCount(e.target.value)} disabled={saving} />
+        </FormField>
+        <label className="tof-checkbox">
+          <input type="checkbox" checked={adrRequired} onChange={(e) => setAdrRequired(e.target.checked)} disabled={saving} />
+          ADR-transport
+        </label>
+        <label className="tof-checkbox">
+          <input type="checkbox" checked={craneRequired} onChange={(e) => setCraneRequired(e.target.checked)} disabled={saving} />
+          Kraan vereist
+        </label>
+      </div>
 
       <div className="tof-stops-header">
         <h3>Goederenlijnen (scanbaar)</h3>
@@ -962,20 +1104,216 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel }: T
         </fieldset>
       ))}
 
+    </>
+  )
+
+  const effectiveOptionPrice = (option: ServiceOption): number => {
+    const customerPrice = customerConfig?.serviceOptions.find((o) => o.serviceOptionId === option.id)?.customerValue
+    return customerPrice ?? option.defaultValue
+  }
+
+  const servicesContent = (
+    <>
+      <p className="ui-form-section-description">
+        Gekozen diensten tellen mee in de prijsberekening en worden bij facturatie aparte factuurlijnen.
+      </p>
+      {serviceOptions.length === 0 && <p className="placeholder-text">Nog geen diensten geconfigureerd.</p>}
+      <div className="tof-service-options">
+        {serviceOptions.map((option) => {
+          const checked = selectedServiceOptionIds.includes(option.id)
+          const isCustomerPrice = customerConfig?.serviceOptions.some(
+            (o) => o.serviceOptionId === option.id && o.customerValue !== null,
+          )
+          return (
+            <label key={option.id} className="tof-checkbox tof-service-option">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={(e) =>
+                  setSelectedServiceOptionIds((ids) =>
+                    e.target.checked ? [...ids, option.id] : ids.filter((id) => id !== option.id),
+                  )
+                }
+                disabled={saving}
+              />
+              <span>
+                {option.name}{' '}
+                <span className="customer-form-muted">
+                  ({option.kind === 'Percent' ? `${effectiveOptionPrice(option)}%` : `€ ${effectiveOptionPrice(option).toFixed(2)}`}
+                  {isCustomerPrice ? ' — klantprijs' : ''})
+                </span>
+              </span>
+            </label>
+          )
+        })}
+      </div>
+    </>
+  )
+
+  const documentenContent = documentsSection ?? (
+    <p className="placeholder-text">Documenten zijn beschikbaar na het aanmaken van de opdracht.</p>
+  )
+
+  const prijsContent = (
+    <>
+      {preview ? (
+        <div className="tof-price-breakdown">
+          <table className="issued-items-table">
+            <thead>
+              <tr>
+                <th>Omschrijving</th>
+                <th>Bron</th>
+                <th className="tof-price-amount">Bedrag</th>
+              </tr>
+            </thead>
+            <tbody>
+              {preview.lines.map((line, index) => (
+                <tr key={index} className={line.informational ? 'tof-price-informational' : undefined}>
+                  <td>{line.label}</td>
+                  <td>{line.source}</td>
+                  <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th>
+                  Berekend totaal
+                  {preview.zoneCode ? ` (zone ${preview.zoneCode})` : ''}
+                </th>
+                <th />
+                <th className="tof-price-amount">€ {preview.total.toFixed(2)}</th>
+              </tr>
+            </tfoot>
+          </table>
+          {preview.requiresManualPrice && (
+            <p className="tof-customer-requirements" role="note">
+              Niet alles kon automatisch geprijsd worden — vul een handmatige prijs in of configureer tarieven.
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="placeholder-text">
+          Vul klant, aantal en eenheid in om de prijs automatisch te berekenen. Zonder geconfigureerde tarieven blijft
+          een handmatige prijs mogelijk.
+        </p>
+      )}
+
+      {canOverridePrice && (
+        <label className="tof-checkbox">
+          <input type="checkbox" checked={priceIsManual} onChange={(e) => setPriceIsManual(e.target.checked)} disabled={saving} />
+          Handmatige prijs (overschrijft de berekende prijs)
+        </label>
+      )}
+      {(priceIsManual || (!preview && !canOverridePrice) || (!preview && canOverridePrice)) && (
+        <div className="tof-row">
+          <FormField
+            label={priceIsManual ? 'Handmatige prijs (€)' : 'Afgesproken prijs (€)'}
+            htmlFor="to-price"
+            hint={priceIsManual ? undefined : 'Gebruikt zolang er geen berekende prijs is.'}
+          >
+            <input id="to-price" type="number" min={0} step="0.01" value={agreedPrice} onChange={(e) => setAgreedPrice(e.target.value)} disabled={saving} />
+          </FormField>
+          {priceIsManual && (
+            <FormField label="Reden" htmlFor="to-price-reason" required hint="Verplicht bij het overschrijven van de berekende prijs.">
+              <input id="to-price-reason" value={priceOverrideReason} onChange={(e) => setPriceOverrideReason(e.target.value)} disabled={saving} maxLength={300} />
+            </FormField>
+          )}
+        </div>
+      )}
+    </>
+  )
+
+  const stopSummary = (kind: StopInput['stopType']) => {
+    const matching = stops.filter((s) => s.stopType === kind)
+    return matching.map((s) => s.city || s.locationName || '—').join(' → ') || '—'
+  }
+
+  const samenvattingContent = (
+    <>
+      <dl className="tof-summary">
+        <div>
+          <dt>Klant</dt>
+          <dd>{customers.find((c) => c.id === customerId)?.name ?? order?.customerName ?? '—'}</dd>
+        </div>
+        <div>
+          <dt>Laden</dt>
+          <dd>{stopSummary('Loading')}</dd>
+        </div>
+        <div>
+          <dt>Lossen</dt>
+          <dd>{stopSummary('Unloading')}</dd>
+        </div>
+        <div>
+          <dt>Goederen</dt>
+          <dd>
+            {quantity || '—'} {unitOptions.find((u) => u.code === quantityUnitCode)?.name ?? quantityUnit ?? ''}
+            {weightKg ? ` · ${weightKg} kg` : ''}
+            {cargoItems.length > 0 ? ` · ${cargoItems.length} goederenlijn(en)` : ''}
+          </dd>
+        </div>
+        <div>
+          <dt>Diensten</dt>
+          <dd>
+            {selectedServiceOptionIds.length > 0
+              ? serviceOptions.filter((o) => selectedServiceOptionIds.includes(o.id)).map((o) => o.name).join(', ')
+              : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt>Prijs</dt>
+          <dd>
+            {priceIsManual
+              ? `€ ${agreedPrice || '0'} (handmatig)`
+              : preview
+                ? `€ ${preview.total.toFixed(2)} (berekend)`
+                : agreedPrice
+                  ? `€ ${agreedPrice}`
+                  : '—'}
+          </dd>
+        </div>
+      </dl>
       <FormField label="Notities" htmlFor="to-notes">
         <textarea id="to-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={saving} maxLength={4000} />
       </FormField>
+    </>
+  )
 
-      <div className="tof-actions">
-        {onCancel && (
-          <Button variant="secondary" onClick={onCancel} disabled={saving}>
-            Annuleren
-          </Button>
-        )}
-        <Button type="submit" disabled={saving}>
-          {saving ? 'Opslaan…' : submitLabel}
-        </Button>
-      </div>
+  const sections: SectionDef[] = [
+    { id: 'algemeen', label: 'Algemeen', render: () => algemeenContent },
+    { id: 'route', label: 'Route & stops', render: () => routeContent },
+    { id: 'goederen', label: 'Goederen', render: () => goederenContent },
+    { id: 'services', label: 'Services & toeslagen', optional: true, render: () => servicesContent },
+    { id: 'documenten', label: 'Documenten', optional: true, panel: documentsSectionIsPanel, render: () => documentenContent },
+    { id: 'prijs', label: 'Prijs', render: () => prijsContent },
+    { id: 'samenvatting', label: 'Samenvatting', render: () => samenvattingContent },
+  ]
+
+  return (
+    <form className="tof" onSubmit={handleSubmit} noValidate>
+      {formError && (
+        <div className="tof-error" role="alert">
+          {formError}
+        </div>
+      )}
+
+      <SectionedForm
+        sections={sections}
+        activeId={activeId}
+        onActiveChange={setActive}
+        actions={
+          <div className="tof-actions">
+            {onCancel && (
+              <Button variant="secondary" onClick={onCancel} disabled={saving}>
+                Annuleren
+              </Button>
+            )}
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Opslaan…' : submitLabel}
+            </Button>
+          </div>
+        }
+      />
 
       {quickCreate && customerId && (
         <LocationQuickCreateDialog

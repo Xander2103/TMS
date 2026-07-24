@@ -190,6 +190,27 @@ export interface TransportOrderDetail {
   dieselSurchargeOverride: boolean
   dieselSurchargePercentOverride: number | null
   dieselSurchargeOverrideReason: string | null
+  /** Engine result at last save; null when nothing could be calculated. */
+  calculatedPrice: number | null
+  priceIsManual: boolean
+  priceOverrideReason: string | null
+  pricingLines: OrderPricingLine[] | null
+  serviceLines: OrderServiceLine[] | null
+}
+
+export interface OrderPricingLine {
+  label: string
+  amount: number
+  source: string
+  informational: boolean
+}
+
+export interface OrderServiceLine {
+  serviceOptionId: string | null
+  name: string
+  kind: 'Percent' | 'Fixed'
+  value: number
+  amount: number
 }
 
 export interface StopInput {
@@ -254,4 +275,9 @@ export interface TransportOrderInput {
   dieselSurchargeOverride: boolean
   dieselSurchargePercentOverride: number | null
   dieselSurchargeOverrideReason: string | null
+  /** Selected delivery services/supplements; priced by the engine and snapshotted. */
+  serviceOptionIds?: string[]
+  /** Explicit authorized override of the calculated price (orders.override_price). */
+  priceIsManual?: boolean
+  priceOverrideReason?: string | null
 }

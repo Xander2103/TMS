@@ -23,6 +23,7 @@ import {
   updateTransportOrder,
 } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
+import { OrderDocumentsPanel } from '../components/OrderDocumentsPanel'
 import { OrderTimelinePanel } from '../components/OrderTimelinePanel'
 import { StopExecutionPlanDialog } from '../components/StopExecutionPlanDialog'
 import { OrderPackagesPanel } from '../../packages/components/OrderPackagesPanel'
@@ -220,6 +221,8 @@ export function TransportOrderDetailPage() {
           order={order}
           submitLabel="Wijzigingen opslaan"
           onCancel={() => setEditing(false)}
+          documentsSection={<OrderDocumentsPanel orderId={order.id} />}
+          documentsSectionIsPanel
           onSubmit={async (input) => {
             const updated = await updateTransportOrder(id, input)
             setOrder(updated)

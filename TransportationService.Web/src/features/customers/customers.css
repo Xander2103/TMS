@@ -1,0 +1,13 @@
+
+.customer-preferred-units {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-bottom: 16px;
+}
+
+.customer-rule-bracket,
+.customer-ratecard-surcharge {
+  grid-template-columns: repeat(4, 1fr) auto;
+  align-items: center;
+}

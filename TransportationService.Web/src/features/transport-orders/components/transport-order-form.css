@@ -190,3 +190,57 @@
   font-size: 14px;
   color: var(--text);
 }
+
+/* --- Sectioned form additions (services, pricing, summary, documents) --- */
+
+.tof-service-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tof-service-option {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.tof-price-breakdown {
+  margin-bottom: 12px;
+}
+
+.tof-price-amount {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tof-price-informational td {
+  color: var(--text, #6b7280);
+  font-style: italic;
+}
+
+.tof-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px 24px;
+  margin: 0 0 16px;
+}
+
+.tof-summary dt {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text, #6b7280);
+}
+
+.tof-summary dd {
+  margin: 2px 0 0;
+  font-weight: 500;
+}
+
+.tof-documents-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}

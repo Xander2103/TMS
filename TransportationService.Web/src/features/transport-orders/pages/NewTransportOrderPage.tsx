@@ -7,6 +7,8 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { useToast } from '../../../components/ui/toastContext'
 import { createTransportOrder, getTransportOrder } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
+import { PreparedOrderDocumentsEditor } from '../components/PreparedOrderDocumentsEditor'
+import { uploadPreparedOrderDocuments, type PreparedOrderDocument } from '../utils/preparedOrderDocs'
 import type { TransportOrderDetail } from '../types'
 
 export function NewTransportOrderPage() {
@@ -14,6 +16,7 @@ export function NewTransportOrderPage() {
   const { showSuccess, showError } = useToast()
   const [searchParams] = useSearchParams()
   const templateId = searchParams.get('template')
+  const [preparedDocs, setPreparedDocs] = useState<PreparedOrderDocument[]>([])
 
   // Template mode: prefill the form with an existing order; the result is still a brand-new
   // draft (new number, new stops) — nothing links back to the source order. Loading is
@@ -61,8 +64,17 @@ export function NewTransportOrderPage() {
         order={template ?? undefined}
         submitLabel="Opdracht aanmaken"
         onCancel={() => navigate('/transport-orders')}
+        documentsSection={<PreparedOrderDocumentsEditor value={preparedDocs} onChange={setPreparedDocs} />}
         onSubmit={async (input) => {
+          // Order FIRST; staged documents upload against the created id (no orphans).
           const created = await createTransportOrder(input)
+          if (preparedDocs.length > 0) {
+            const results = await uploadPreparedOrderDocuments(created.id, preparedDocs)
+            const failed = results.filter((r) => !r.ok)
+            if (failed.length > 0) {
+              showError(`Opdracht aangemaakt, maar ${failed.length} document(en) konden niet worden geüpload. Voeg ze toe via het tabblad Documenten.`)
+            }
+          }
           showSuccess(`Opdracht ${created.orderNumber} aangemaakt.`)
           navigate(`/transport-orders/${created.id}`)
         }}
