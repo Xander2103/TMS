@@ -106,6 +106,7 @@ public class PricingEngine : IPricingEngine
         var subtotal = lines.Where(l => !l.Informational).Sum(l => l.Amount);
 
         // Service options: customer price wins over the default; Percent applies to the base subtotal.
+        var serviceLines = new List<PriceServiceLine>();
         if (request.ServiceOptionIds.Count > 0)
         {
             var optionIds = request.ServiceOptionIds.Distinct().ToList();
@@ -125,6 +126,7 @@ public class PricingEngine : IPricingEngine
                     : decimal.Round(value, 2);
                 lines.Add(new PriceBreakdownLine(option.Name, amount,
                     customerPrices.ContainsKey(option.Id) ? "Klantprijs" : "Standaardtarief"));
+                serviceLines.Add(new PriceServiceLine(option.Id, option.Name, option.Kind, value, amount));
             }
         }
 
@@ -146,7 +148,7 @@ public class PricingEngine : IPricingEngine
         var totalWithInformational = total + lines.Where(l => l.Informational).Sum(l => l.Amount);
         return new PriceCalculationResult(
             lines, decimal.Round(total, 2), decimal.Round(totalWithInformational, 2), "EUR",
-            zone?.Code, zone?.Name, requiresManual);
+            zone?.Code, zone?.Name, requiresManual, serviceLines);
     }
 
     /// <summary>Customer+zone → customer → company+zone → company default.</summary>

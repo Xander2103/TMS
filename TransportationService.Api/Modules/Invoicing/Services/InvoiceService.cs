@@ -257,12 +257,25 @@ public class InvoiceService : IInvoiceService
             Notes = Trim(request.Notes),
         };
 
+        // Snapshotted service lines become separate invoice lines; the base transport line
+        // excludes their amounts (AgreedPrice is the order TOTAL incl. services).
+        var selectedOrderIds = orderDtos.Select(o => o.Id).ToList();
+        var serviceLinesByOrder = selectedOrderIds.Count == 0
+            ? new Dictionary<Guid, List<Modules.Orders.Entities.TransportOrderServiceLine>>()
+            : (await _dbContext.TransportOrderServiceLines.AsNoTracking()
+                .Where(l => l.TenantId == tenantId && selectedOrderIds.Contains(l.TransportOrderId))
+                .ToListAsync(cancellationToken))
+                .GroupBy(l => l.TransportOrderId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
         var sequence = 1;
         foreach (var order in orderDtos)
         {
             var route = order.FirstLoadingCity is not null || order.LastUnloadingCity is not null
                 ? $" ({order.FirstLoadingCity ?? "?"} → {order.LastUnloadingCity ?? "?"})"
                 : string.Empty;
+            var orderServiceLines = serviceLinesByOrder.GetValueOrDefault(order.Id) ?? [];
+            var serviceTotal = orderServiceLines.Sum(l => l.Amount);
             invoice.Lines.Add(new InvoiceLine
             {
                 Id = Guid.NewGuid(),
@@ -271,9 +284,23 @@ public class InvoiceService : IInvoiceService
                 Sequence = sequence++,
                 Description = $"{order.OrderNumber} — {order.GoodsDescription}{route}",
                 Quantity = 1m,
-                UnitPrice = order.AgreedPrice ?? 0m,
+                UnitPrice = (order.AgreedPrice ?? 0m) - serviceTotal,
                 VatRatePercent = vatRate,
             });
+            foreach (var serviceLine in orderServiceLines)
+            {
+                invoice.Lines.Add(new InvoiceLine
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    TransportOrderId = order.Id,
+                    Sequence = sequence++,
+                    Description = $"{order.OrderNumber} — {serviceLine.NameSnapshot}",
+                    Quantity = 1m,
+                    UnitPrice = serviceLine.Amount,
+                    VatRatePercent = vatRate,
+                });
+            }
         }
 
         foreach (var manual in request.ManualLines)

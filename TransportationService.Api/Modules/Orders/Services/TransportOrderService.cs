@@ -3,8 +3,12 @@ using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Identity;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Orders.Dtos;
 using TransportationService.Api.Modules.Orders.Entities;
+using TransportationService.Api.Modules.Tarification.Dtos;
+using TransportationService.Api.Modules.Tarification.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 
@@ -56,17 +60,26 @@ public class TransportOrderService : ITransportOrderService
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
+    private readonly IPricingEngine? _pricingEngine;
+    private readonly ICurrentUserContext? _currentUser;
+    private readonly IPermissionAuthorizationService? _permissionService;
 
     public TransportOrderService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IPricingEngine? pricingEngine = null,
+        ICurrentUserContext? currentUser = null,
+        IPermissionAuthorizationService? permissionService = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _timeProvider = timeProvider;
+        _pricingEngine = pricingEngine;
+        _currentUser = currentUser;
+        _permissionService = permissionService;
     }
 
     private IQueryable<TransportOrder> TenantScoped() =>
@@ -196,6 +209,12 @@ public class TransportOrderService : ITransportOrderService
         // Selling entity: explicit request value else the customer's default entity.
         order.LegalEntityId = await ResolveOrderLegalEntityAsync(request.LegalEntityId, request.CustomerId, cancellationToken);
 
+        if (await ApplyPricingAsync(order, request.AgreedPrice, request.ServiceOptionIds,
+                request.PriceIsManual, request.PriceOverrideReason, cancellationToken) is { } pricingError)
+        {
+            return pricingError;
+        }
+
         _dbContext.Add(order);
         _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems, order.Stops));
         await TenantNumbering.SaveWithClaimedNumberAsync(
@@ -262,7 +281,6 @@ public class TransportOrderService : ITransportOrderService
         order.CraneRequired = request.CraneRequired;
         // Null = unchanged, so older clients that don't send a priority never reset it.
         order.Priority = request.Priority ?? order.Priority;
-        order.AgreedPrice = NonNegative(request.AgreedPrice);
         order.Notes = Trim(request.Notes);
 
         var surchargeBefore = new { order.DieselSurchargeOverride, order.DieselSurchargePercentOverride };
@@ -295,6 +313,12 @@ public class TransportOrderService : ITransportOrderService
             .ToListAsync(cancellationToken);
         _dbContext.RemoveRange(existingCargo);
         _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems, order.Stops));
+
+        if (await ApplyPricingAsync(order, request.AgreedPrice, request.ServiceOptionIds,
+                request.PriceIsManual, request.PriceOverrideReason, cancellationToken) is { } pricingError)
+        {
+            return pricingError;
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -893,6 +917,17 @@ public class TransportOrderService : ITransportOrderService
                 c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference, c.LoadingStopId, c.UnloadingStopId))
             .ToListAsync(cancellationToken);
 
+        var pricingLines = await _dbContext.TransportOrderPricingLines.AsNoTracking()
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
+            .OrderBy(l => l.Sequence)
+            .Select(l => new OrderPricingLineDto(l.Label, l.Amount, l.Source, l.Informational))
+            .ToListAsync(cancellationToken);
+        var serviceLines = await _dbContext.TransportOrderServiceLines.AsNoTracking()
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
+            .OrderBy(l => l.NameSnapshot)
+            .Select(l => new OrderServiceLineDto(l.ServiceOptionId, l.NameSnapshot, l.Kind, l.Value, l.Amount))
+            .ToListAsync(cancellationToken);
+
         return new TransportOrderDetailDto(
             order.Id, order.OrderNumber, order.OrderDate, order.CustomerId, customerName,
             order.CustomerReference, order.Status, order.GoodsDescription,
@@ -904,7 +939,122 @@ public class TransportOrderService : ITransportOrderService
             CorrectiveTransitions.TryGetValue(order.Status, out var corrections) ? corrections : [],
             order.Priority,
             order.DieselSurchargeOverride, order.DieselSurchargePercentOverride, order.DieselSurchargeOverrideReason,
-            order.LegalEntityId, order.QuantityUnitCode);
+            order.LegalEntityId, order.QuantityUnitCode,
+            order.CalculatedPrice, order.PriceIsManual, order.PriceOverrideReason,
+            pricingLines, serviceLines);
+    }
+
+    /// <summary>
+    /// Runs the pricing engine, snapshots the breakdown + service lines on the order and
+    /// determines the effective AgreedPrice:
+    /// manual override (permission + reason) > calculated total > legacy manual entry when
+    /// nothing could be calculated. Snapshots only change on an explicit save, so historical
+    /// orders never move when master-data tariffs change.
+    /// </summary>
+    private async Task<TransportOrderOperationResult?> ApplyPricingAsync(
+        TransportOrder order, decimal? requestedAgreedPrice, IReadOnlyList<Guid>? serviceOptionIds,
+        bool priceIsManual, string? overrideReason, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var existingPricing = await _dbContext.TransportOrderPricingLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
+            .ToListAsync(cancellationToken);
+        _dbContext.RemoveRange(existingPricing);
+        var existingServices = await _dbContext.TransportOrderServiceLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
+            .ToListAsync(cancellationToken);
+        _dbContext.RemoveRange(existingServices);
+
+        PriceCalculationResult? result = null;
+        if (_pricingEngine is not null)
+        {
+            var lines = new List<PriceCalculationLineInput>();
+            if (order.Quantity is { } quantity && quantity > 0 && order.QuantityUnitCode is { } code)
+            {
+                var unitTypeId = await _dbContext.UnitTypes.AsNoTracking()
+                    .Where(u => u.TenantId == tenantId && u.Code == code)
+                    .Select(u => (Guid?)u.Id)
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (unitTypeId is { } uid)
+                {
+                    lines.Add(new PriceCalculationLineInput(uid, quantity));
+                }
+            }
+
+            var delivery = order.Stops
+                .Where(s => !s.IsDeleted && s.StopType == StopType.Unloading)
+                .OrderBy(s => s.Sequence)
+                .LastOrDefault();
+            result = await _pricingEngine.CalculateAsync(new PriceCalculationRequest(
+                order.CustomerId, order.OrderDate, lines,
+                delivery?.CountryCode, delivery?.PostalCode,
+                order.WeightKg, null, order.PalletCount,
+                serviceOptionIds ?? []), cancellationToken);
+        }
+
+        var calculated = result is { RequiresManualPrice: false } && result.Lines.Any(l => !l.Informational)
+            ? result.Total
+            : (decimal?)null;
+        order.CalculatedPrice = calculated;
+
+        if (priceIsManual)
+        {
+            if (string.IsNullOrWhiteSpace(overrideReason))
+            {
+                return TransportOrderOperationResult.Invalid("Een reden is verplicht bij een handmatige prijs.");
+            }
+
+            var userId = _currentUser?.CurrentUserId;
+            var allowed = _permissionService is null
+                || (userId is { } id && await _permissionService.UserHasPermissionAsync(id, PermissionCodes.OrdersOverridePrice, cancellationToken));
+            if (!allowed)
+            {
+                return TransportOrderOperationResult.Invalid("Je hebt geen rechten om de berekende prijs te overschrijven.");
+            }
+
+            order.AgreedPrice = NonNegative(requestedAgreedPrice);
+            order.PriceIsManual = true;
+            order.PriceOverrideReason = overrideReason.Trim();
+        }
+        else if (calculated is { } total)
+        {
+            order.AgreedPrice = total;
+            order.PriceIsManual = false;
+            order.PriceOverrideReason = null;
+        }
+        else
+        {
+            // No pricing configuration → the pre-engine manual entry keeps working unchanged.
+            order.AgreedPrice = NonNegative(requestedAgreedPrice);
+            order.PriceIsManual = false;
+            order.PriceOverrideReason = null;
+        }
+
+        if (result is not null)
+        {
+            var sequence = 0;
+            foreach (var line in result.Lines)
+            {
+                _dbContext.TransportOrderPricingLines.Add(new TransportOrderPricingLine
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
+                    Sequence = sequence++, Label = line.Label, Amount = line.Amount,
+                    Source = line.Source, Informational = line.Informational,
+                });
+            }
+
+            foreach (var serviceLine in result.ServiceLines)
+            {
+                _dbContext.TransportOrderServiceLines.Add(new TransportOrderServiceLine
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
+                    ServiceOptionId = serviceLine.ServiceOptionId, NameSnapshot = serviceLine.Name,
+                    Kind = serviceLine.Kind, Value = serviceLine.Value, Amount = serviceLine.Amount,
+                });
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Uppercases a managed unit code; blank → null (free-text QuantityUnit is the fallback).</summary>

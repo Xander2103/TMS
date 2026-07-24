@@ -220,4 +220,31 @@ public class InvoiceServiceTests
         Assert.Equal("FAC-0001", single.InvoiceNumber);
         Assert.Equal(1754.5m, single.Total);
     }
+
+    [Fact]
+    public async Task Create_OrderWithServiceLines_SplitsThemIntoSeparateInvoiceLines()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // AgreedPrice 1450 is the order TOTAL; 25 of that is the snapshotted service line.
+        h.Db.Context.TransportOrderServiceLines.Add(new TransportOrderServiceLine
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TransportOrderId = h.OrderId,
+            NameSnapshot = "Levering vóór 08:00",
+            Kind = TransportationService.Api.Modules.Tarification.Entities.SurchargeKind.Fixed,
+            Value = 25m, Amount = 25m,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var result = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.Success, result.Outcome);
+        Assert.Equal(2, result.Invoice!.Lines.Count);
+        var baseLine = result.Invoice.Lines.Single(l => l.Description.Contains("20 paletten"));
+        Assert.Equal(1425m, baseLine.UnitPrice); // total minus the service amount
+        var serviceLine = result.Invoice.Lines.Single(l => l.Description.Contains("Levering vóór 08:00"));
+        Assert.Equal(25m, serviceLine.UnitPrice);
+        Assert.Equal(1450m, result.Invoice.Subtotal); // grand total unchanged
+    }
 }

@@ -76,7 +76,21 @@ public record TransportOrderDetailDto(
     decimal? DieselSurchargePercentOverride = null,
     string? DieselSurchargeOverrideReason = null,
     Guid? LegalEntityId = null,
-    string? QuantityUnitCode = null);
+    string? QuantityUnitCode = null,
+    decimal? CalculatedPrice = null,
+    bool PriceIsManual = false,
+    string? PriceOverrideReason = null,
+    IReadOnlyList<OrderPricingLineDto>? PricingLines = null,
+    IReadOnlyList<OrderServiceLineDto>? ServiceLines = null);
+
+/// <summary>Snapshot line of the price calculation stored on the order.</summary>
+public record OrderPricingLineDto(string Label, decimal Amount, string Source, bool Informational);
+
+/// <summary>Selected delivery service/supplement snapshotted on the order.</summary>
+public record OrderServiceLineDto(
+    Guid? ServiceOptionId, string Name,
+    TransportationService.Api.Modules.Tarification.Entities.SurchargeKind Kind,
+    decimal Value, decimal Amount);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
@@ -205,7 +219,10 @@ public record CreateTransportOrderRequest(
     decimal? DieselSurchargePercentOverride = null,
     string? DieselSurchargeOverrideReason = null,
     Guid? LegalEntityId = null,
-    string? QuantityUnitCode = null);
+    string? QuantityUnitCode = null,
+    IReadOnlyList<Guid>? ServiceOptionIds = null,
+    bool PriceIsManual = false,
+    string? PriceOverrideReason = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -228,7 +245,10 @@ public record UpdateTransportOrderRequest(
     decimal? DieselSurchargePercentOverride = null,
     string? DieselSurchargeOverrideReason = null,
     Guid? LegalEntityId = null,
-    string? QuantityUnitCode = null);
+    string? QuantityUnitCode = null,
+    IReadOnlyList<Guid>? ServiceOptionIds = null,
+    bool PriceIsManual = false,
+    string? PriceOverrideReason = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

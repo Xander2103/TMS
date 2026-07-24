@@ -208,6 +208,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Servic
     TransportationService.Api.Modules.Tarification.Services.PricingAdminService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IPricingEngine,
     TransportationService.Api.Modules.Tarification.Services.PricingEngine>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderDocumentService,
+    TransportationService.Api.Modules.Orders.Services.TransportOrderDocumentService>();
 
 // Planning center read models
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IPlanningBoardService,

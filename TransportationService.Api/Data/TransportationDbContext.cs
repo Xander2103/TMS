@@ -38,6 +38,9 @@ public class TransportationDbContext : DbContext
     public DbSet<StopExecution> StopExecutions => Set<StopExecution>();
     public DbSet<StopStatusHistory> StopStatusHistories => Set<StopStatusHistory>();
     public DbSet<CargoItem> CargoItems => Set<CargoItem>();
+    public DbSet<TransportOrderPricingLine> TransportOrderPricingLines => Set<TransportOrderPricingLine>();
+    public DbSet<TransportOrderServiceLine> TransportOrderServiceLines => Set<TransportOrderServiceLine>();
+    public DbSet<TransportOrderDocument> TransportOrderDocuments => Set<TransportOrderDocument>();
     public DbSet<TransportOrderStatusHistory> TransportOrderStatusHistories => Set<TransportOrderStatusHistory>();
     public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException> ExecutionExceptions => Set<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException>();
     public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExceptionPhoto> ExceptionPhotos => Set<TransportationService.Api.Modules.Exceptions.Entities.ExceptionPhoto>();

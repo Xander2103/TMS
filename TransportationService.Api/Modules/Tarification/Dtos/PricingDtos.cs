@@ -68,6 +68,9 @@ public record PriceCalculationRequest(
 
 public record PriceBreakdownLine(string Label, decimal Amount, string Source, bool Informational = false);
 
+/// <summary>A selected service option with its resolved (customer or default) price.</summary>
+public record PriceServiceLine(Guid ServiceOptionId, string Name, SurchargeKind Kind, decimal Value, decimal Amount);
+
 public record PriceCalculationResult(
     IReadOnlyList<PriceBreakdownLine> Lines,
     /// <summary>Calculated total EXCLUDING informational lines (diesel is added at invoicing).</summary>
@@ -76,4 +79,5 @@ public record PriceCalculationResult(
     string Currency,
     string? ZoneCode,
     string? ZoneName,
-    bool RequiresManualPrice);
+    bool RequiresManualPrice,
+    IReadOnlyList<PriceServiceLine> ServiceLines);

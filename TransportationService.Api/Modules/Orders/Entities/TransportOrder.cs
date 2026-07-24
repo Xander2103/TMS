@@ -81,8 +81,20 @@ public class TransportOrder : AuditableTenantEntity
     public bool AdrRequired { get; set; }
     public bool CraneRequired { get; set; }
 
-    /// <summary>Simple agreed price; the real pricing/invoicing engine is Phase 8.</summary>
+    /// <summary>
+    /// The effective order price used by invoicing. Equal to <see cref="CalculatedPrice"/>
+    /// unless a manual override was applied (<see cref="PriceIsManual"/>) or no pricing
+    /// configuration exists (legacy manual entry).
+    /// </summary>
     public decimal? AgreedPrice { get; set; }
+
+    /// <summary>Engine result at last save; null when nothing could be calculated.</summary>
+    public decimal? CalculatedPrice { get; set; }
+
+    /// <summary>True when AgreedPrice was explicitly overridden (orders.override_price).</summary>
+    public bool PriceIsManual { get; set; }
+
+    public string? PriceOverrideReason { get; set; }
 
     // Diesel-surcharge override (customer config is the default). Overriding requires a
     // reason; the inherited value, override, actor and timestamp are audited.
