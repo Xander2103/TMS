@@ -6,18 +6,14 @@ import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
-import { FormActions } from '../../../components/ui/FormActions'
 import { FormField } from '../../../components/ui/FormField'
-import { FormSection } from '../../../components/ui/FormSection'
 import { StatusBadges } from '../../../components/ui/StatusBadges'
 import { TabPanel, Tabs } from '../../../components/ui/Tabs'
-import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { AssignmentSlot } from '../../fleet-assignment/AssignmentSlot'
-import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { DamagePanel } from '../../damage/components/DamagePanel'
@@ -27,32 +23,21 @@ import { TachographPanel } from '../../fleet-compliance/TachographPanel'
 import { LeasingPanel } from '../../fleet-compliance/LeasingPanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
 import { searchDrivers } from '../../drivers/api/driversApi'
-import { computeVolumeM3 } from '../../../utils/volume'
 import { deleteVehicle, getVehicle, setVehicleActive, setVehicleDriver, updateVehicle } from '../api/vehiclesApi'
+import { VehicleForm } from '../components/VehicleForm'
 import {
   EMISSION_CLASS_LABELS,
-  REQUIRED_LICENCE_CODES,
   FUEL_TYPE_LABELS,
   OPERATIONAL_STATUS_LABELS,
   OPERATIONAL_STATUS_TONES,
   OWNERSHIP_TYPE_LABELS,
-  type EmissionClass,
-  type FuelType,
   type VehicleDetail,
   type VehicleInput,
-  type VehicleOperationalStatus,
-  type VehicleOwnershipType,
 } from '../types'
 import './vehicle-form.css'
 
 const TAB_IDS = ['overzicht', 'techniek', 'toewijzing', 'documenten', 'tachograaf', 'leasing', 'onderhoud', 'keuringen', 'schade', 'brandstof', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
-
-function numberOrNull(value: string): number | null {
-  if (value.trim() === '') return null
-  const parsed = Number(value.replace(',', '.'))
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 export function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -65,7 +50,6 @@ export function VehicleDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<VehicleInput | null>(null)
-  const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmActive, setConfirmActive] = useState<null | 'activate' | 'deactivate'>(null)
@@ -138,26 +122,18 @@ export function VehicleDetailPage() {
       notes: vehicle.notes,
       volumeIsManual: vehicle.volumeIsManual,
     })
-    setDirty(false)
     setEditing(true)
   }
 
-  function set<K extends keyof VehicleInput>(key: K, value: VehicleInput[K]) {
-    setForm((f) => (f ? { ...f, [key]: value } : f))
-    setDirty(true)
-  }
-
-  async function saveEdit() {
-    if (!id || !form) return
+  async function saveEdit(values: VehicleInput) {
+    if (!id) return
     setSaving(true)
-    setDirty(false)
     try {
-      const updated = await updateVehicle(id, form)
+      const updated = await updateVehicle(id, values)
       setVehicle(updated)
       setEditing(false)
       showSuccess('Voertuig bijgewerkt.')
     } catch (err) {
-      setDirty(true)
       showError(err instanceof ApiError ? err.message : 'Wijzigingen konden niet worden opgeslagen.')
     } finally {
       setSaving(false)
@@ -227,217 +203,14 @@ export function VehicleDetailPage() {
       </div>
 
       {editing && form ? (
-        <form
-          className="vehicle-form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void saveEdit()
-          }}
-        >
-          <UnsavedChangesGuard when={dirty && !saving} />
-
-          <FormSection title="Status" columns={3} description="Administratief actief en operationele status zijn twee aparte begrippen.">
-            <FormField
-              label="Operationele status"
-              htmlFor="e-status"
-              hint="Beschikbaar / in gebruik / in onderhoud / buiten dienst."
-            >
-              <select id="e-status" value={form.operationalStatus} onChange={(e) => set('operationalStatus', e.target.value as VehicleOperationalStatus)} disabled={saving}>
-                {Object.entries(OPERATIONAL_STATUS_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            {form.operationalStatus !== 'Available' && (
-              <FormField label="Reden" htmlFor="e-status-reason" hint="Waarom is het voertuig niet beschikbaar?">
-                <input id="e-status-reason" value={form.statusReason ?? ''} onChange={(e) => set('statusReason', e.target.value || null)} maxLength={500} disabled={saving} />
-              </FormField>
-            )}
-          </FormSection>
-
-          <FormSection title="Basisgegevens" columns={3}>
-            <FormField label="Kenteken" htmlFor="e-plate" required>
-              <input id="e-plate" value={form.licensePlate} onChange={(e) => set('licensePlate', e.target.value)} disabled={saving} maxLength={20} />
-            </FormField>
-            <FormField label="VIN" htmlFor="e-vin">
-              <input id="e-vin" value={form.vin ?? ''} onChange={(e) => set('vin', e.target.value || null)} disabled={saving} maxLength={50} />
-            </FormField>
-            <FormField label="Categorie" htmlFor="e-category">
-              <LookupSelect
-                id="e-category"
-                basePath="/api/vehicle-categories"
-                managePermission="vehicle_categories.manage"
-                singular="voertuigcategorie"
-                value={form.categoryId}
-                onChange={(v) => set('categoryId', v)}
-                placeholder="— Geen —"
-                disabled={saving}
-              />
-            </FormField>
-            <FormField label="Merk" htmlFor="e-brand">
-              <input id="e-brand" value={form.brand ?? ''} onChange={(e) => set('brand', e.target.value || null)} disabled={saving} maxLength={100} />
-            </FormField>
-            <FormField label="Model" htmlFor="e-model">
-              <input id="e-model" value={form.model ?? ''} onChange={(e) => set('model', e.target.value || null)} disabled={saving} maxLength={100} />
-            </FormField>
-            <FormField label="Bouwjaar" htmlFor="e-year" hint={`Maximaal ${new Date().getFullYear()}.`}>
-              <input
-                id="e-year"
-                type="number"
-                min={1900}
-                max={new Date().getFullYear()}
-                value={form.year ?? ''}
-                onChange={(e) => set('year', e.target.value ? Number(e.target.value) : null)}
-                disabled={saving}
-              />
-            </FormField>
-            <FormField label="Eerste inschrijving" htmlFor="e-firstreg">
-              <input id="e-firstreg" type="date" value={form.firstRegistrationDate ?? ''} onChange={(e) => set('firstRegistrationDate', e.target.value || null)} disabled={saving} />
-            </FormField>
-            <FormField label="Eigendomsvorm" htmlFor="e-ownership">
-              <select id="e-ownership" value={form.ownershipType} onChange={(e) => set('ownershipType', e.target.value as VehicleOwnershipType)} disabled={saving}>
-                {Object.entries(OWNERSHIP_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Kilometerstand" htmlFor="e-odometer">
-              <input id="e-odometer" type="number" min={0} value={form.odometerKm} onChange={(e) => set('odometerKm', Number(e.target.value) || 0)} disabled={saving} />
-            </FormField>
-            <FormField label="Normverbruik (l/100km)" htmlFor="e-consumption" hint="Voor kostenramingen; leeg = standaard uit de tarievenset.">
-              <input
-                id="e-consumption"
-                type="number"
-                min={0}
-                step="0.1"
-                value={form.consumptionLPer100Km ?? ''}
-                onChange={(e) => set('consumptionLPer100Km', e.target.value === '' ? null : Number(e.target.value) || 0)}
-                disabled={saving}
-              />
-            </FormField>
-          </FormSection>
-
-          <FormSection title="Techniek" columns={3}>
-            <FormField label="Brandstof" htmlFor="e-fuel">
-              <select id="e-fuel" value={form.fuelType} onChange={(e) => set('fuelType', e.target.value as FuelType)} disabled={saving}>
-                {Object.entries(FUEL_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Emissieklasse" htmlFor="e-emission">
-              <select id="e-emission" value={form.emissionClass ?? ''} onChange={(e) => set('emissionClass', (e.target.value || null) as EmissionClass | null)} disabled={saving}>
-                <option value="">— Onbekend —</option>
-                {Object.entries(EMISSION_CLASS_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Aantal assen" htmlFor="e-axles" hint="Voor Maut/tolberekening.">
-              <input id="e-axles" type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={saving} />
-            </FormField>
-            <FormField label="Laadmeters" htmlFor="e-ldm">
-              <input id="e-ldm" type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={saving} />
-            </FormField>
-            <FormField label="Vereist rijbewijs" htmlFor="e-licence" hint="Minimaal rijbewijs voor de eligibiliteitscontrole; leeg = geen controle.">
-              <select id="e-licence" value={form.requiredLicenceCode ?? ''} onChange={(e) => set('requiredLicenceCode', e.target.value || null)} disabled={saving}>
-                <option value="">— Geen controle —</option>
-                {REQUIRED_LICENCE_CODES.map((code) => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="MTM (kg)" htmlFor="e-gvw">
-              <input id="e-gvw" inputMode="decimal" value={form.grossVehicleWeightKg ?? ''} onChange={(e) => set('grossVehicleWeightKg', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Laadvermogen (kg)" htmlFor="e-payload">
-              <input id="e-payload" inputMode="decimal" value={form.payloadKg ?? ''} onChange={(e) => set('payloadKg', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Lengte (m)" htmlFor="e-length">
-              <input id="e-length" inputMode="decimal" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Breedte (m)" htmlFor="e-width">
-              <input id="e-width" inputMode="decimal" value={form.widthMeters ?? ''} onChange={(e) => set('widthMeters', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Hoogte (m)" htmlFor="e-height">
-              <input id="e-height" inputMode="decimal" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField
-              label="Volume (m³)"
-              htmlFor="e-volume"
-              hint={form.volumeIsManual ? 'Handmatige waarde; vink uit om opnieuw te berekenen.' : 'Automatisch berekend uit lengte × breedte × hoogte.'}
-            >
-              <input
-                id="e-volume"
-                inputMode="decimal"
-                value={
-                  form.volumeIsManual
-                    ? (form.volumeM3 ?? '')
-                    : (computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters) ?? form.volumeM3 ?? '')
-                }
-                onChange={(e) => set('volumeM3', numberOrNull(e.target.value))}
-                disabled={saving || !form.volumeIsManual}
-              />
-              <label className="vehicle-checkbox">
-                <input
-                  type="checkbox"
-                  checked={form.volumeIsManual}
-                  onChange={(e) => {
-                    set('volumeIsManual', e.target.checked)
-                    if (e.target.checked) {
-                      set('volumeM3', form.volumeM3 ?? computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters))
-                    }
-                  }}
-                  disabled={saving}
-                />
-                <span>Handmatig invullen</span>
-              </label>
-            </FormField>
-            <div className="vehicle-form-equipment form-span-all">
-              <label className="vehicle-checkbox">
-                <input type="checkbox" checked={form.hasCrane} onChange={(e) => set('hasCrane', e.target.checked)} disabled={saving} />
-                <span>Kraan</span>
-              </label>
-              <label className="vehicle-checkbox">
-                <input type="checkbox" checked={form.hasRefrigeration} onChange={(e) => set('hasRefrigeration', e.target.checked)} disabled={saving} />
-                <span>Koeling</span>
-              </label>
-              <label className="vehicle-checkbox">
-                <input type="checkbox" checked={form.hasTailLift} onChange={(e) => set('hasTailLift', e.target.checked)} disabled={saving} />
-                <span>Laadklep</span>
-              </label>
-              <label className="vehicle-checkbox">
-                <input type="checkbox" checked={form.adrSuitable} onChange={(e) => set('adrSuitable', e.target.checked)} disabled={saving} />
-                <span>ADR-geschikt</span>
-              </label>
-            </div>
-          </FormSection>
-
-          <FormSection title="Notities" columns={1}>
-            <FormField label="Interne notities" htmlFor="e-notes" className="form-span-all">
-              <textarea id="e-notes" rows={3} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={saving} maxLength={2000} />
-            </FormField>
-          </FormSection>
-
-          <FormActions dirty={dirty}>
-            <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={saving}>
-              Annuleren
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Opslaan…' : 'Opslaan'}
-            </Button>
-          </FormActions>
-        </form>
+        <VehicleForm
+          mode="edit"
+          initial={{ ...form, fixedDriverId: vehicle.fixedDriverId, currentDriverId: vehicle.currentDriverId }}
+          isSubmitting={saving}
+          onSubmit={saveEdit}
+          onCancel={() => setEditing(false)}
+          documentsSection={<FleetDocumentsPanel ownerType="vehicle" ownerId={vehicle.id} />}
+        />
       ) : (
         <>
           <Tabs

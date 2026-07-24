@@ -1,27 +1,22 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
-import { FormField } from '../../../components/ui/FormField'
-import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { describeApiError } from '../../../api/problemDetails'
-import { computeVolumeM3 } from '../../../utils/volume'
-import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import type { DriverListItem } from '../../drivers/types'
-import { createVehicle } from '../api/vehiclesApi'
+import { PreparedFleetDocumentsEditor } from '../../fleet-documents/components/PreparedFleetDocumentsEditor'
+import { FleetCreateFollowUpDialog } from '../../fleet-documents/components/FleetCreateFollowUpDialog'
 import {
-  EMISSION_CLASS_LABELS,
-  REQUIRED_LICENCE_CODES,
-  FUEL_TYPE_LABELS,
-  OWNERSHIP_TYPE_LABELS,
-  type CreateVehicleInput,
-  type EmissionClass,
-  type FuelType,
-  type VehicleOwnershipType,
-} from '../types'
+  uploadPreparedFleetDocuments,
+  type FleetFollowUpResult,
+  type PreparedFleetDocument,
+} from '../../fleet-documents/utils/preparedFleetDocs'
+import { createVehicle } from '../api/vehiclesApi'
+import { VehicleForm } from '../components/VehicleForm'
+import type { CreateVehicleInput } from '../types'
 import './vehicle-form.css'
 
 const EMPTY: CreateVehicleInput = {
@@ -62,15 +57,12 @@ const EMPTY: CreateVehicleInput = {
 export function NewVehiclePage() {
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
-  const { options: categories } = useLookupOptions('/api/vehicle-categories')
   const [drivers, setDrivers] = useState<DriverListItem[]>([])
-  const [form, setForm] = useState<CreateVehicleInput>(EMPTY)
+  const [preparedDocs, setPreparedDocs] = useState<PreparedFleetDocument[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [yearError, setYearError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-
-  const currentYear = new Date().getFullYear()
-  const autoVolume = computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters)
+  const [followUp, setFollowUp] = useState<{ vehicleId: string; label: string; results: FleetFollowUpResult[] } | null>(null)
+  const [retrying, setRetrying] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -86,27 +78,31 @@ export function NewVehiclePage() {
     }
   }, [showError])
 
-  function set<K extends keyof CreateVehicleInput>(key: K, value: CreateVehicleInput[K]) {
-    setForm((f) => ({ ...f, [key]: value }))
-  }
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
+  async function handleSubmit(values: CreateVehicleInput) {
     setError(null)
-    if (!form.licensePlate.trim()) {
-      setError('Kenteken is verplicht.')
-      return
-    }
-    if (form.year !== null && form.year > currentYear) {
-      setYearError(`Bouwjaar mag niet in de toekomst liggen (maximaal ${currentYear}).`)
-      return
-    }
-    setYearError(null)
     setSubmitting(true)
     try {
-      const vehicle = await createVehicle(form)
-      showSuccess(`Voertuig ${vehicle.internalNumber} aangemaakt.`)
-      navigate(`/vehicles/${vehicle.id}`)
+      // The vehicle is created FIRST; document uploads only run against the created id, so
+      // a failed creation never leaves orphaned document records.
+      const vehicle = await createVehicle(values)
+      const results = preparedDocs.length > 0
+        ? await uploadPreparedFleetDocuments('vehicle', vehicle.id, preparedDocs)
+        : []
+      if (results.every((r) => r.ok)) {
+        showSuccess(`Voertuig ${vehicle.internalNumber} aangemaakt.`)
+        navigate(`/vehicles/${vehicle.id}`)
+        return
+      }
+
+      // Remember created metadata records so a retry only re-uploads the file.
+      setPreparedDocs((docs) =>
+        docs.map((doc) => {
+          const result = results.find((r) => r.key === doc.key)
+          return result?.createdDocumentId ? { ...doc, createdDocumentId: result.createdDocumentId } : doc
+        }),
+      )
+      setFollowUp({ vehicleId: vehicle.id, label: `Voertuig ${vehicle.internalNumber}`, results })
+      setSubmitting(false)
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 409
@@ -117,227 +113,51 @@ export function NewVehiclePage() {
     }
   }
 
+  async function retryFollowUps() {
+    if (!followUp) return
+    setRetrying(true)
+    const failedKeys = new Set(followUp.results.filter((r) => !r.ok).map((r) => r.key))
+    const retryDocs = preparedDocs.filter((doc) => failedKeys.has(doc.key))
+    const retried = await uploadPreparedFleetDocuments('vehicle', followUp.vehicleId, retryDocs)
+    const merged = followUp.results.map((r) => retried.find((n) => n.key === r.key) ?? r)
+    setPreparedDocs((docs) =>
+      docs.map((doc) => {
+        const result = retried.find((r) => r.key === doc.key)
+        return result?.createdDocumentId ? { ...doc, createdDocumentId: result.createdDocumentId } : doc
+      }),
+    )
+    setRetrying(false)
+    if (merged.every((r) => r.ok)) {
+      showSuccess('Alle documenten zijn verwerkt.')
+      navigate(`/vehicles/${followUp.vehicleId}`)
+      return
+    }
+    setFollowUp({ ...followUp, results: merged })
+  }
+
   return (
     <div>
       <Breadcrumbs items={[{ label: 'Voertuigen', to: '/vehicles' }, { label: 'Nieuw' }]} />
       <PageHeader title="Nieuw voertuig" />
-      <form className="vehicle-form" onSubmit={handleSubmit} noValidate>
-        {error && (
-          <div className="vehicle-form-error" role="alert">
-            {error}
-          </div>
-        )}
-
-        <section className="vehicle-form-card">
-          <h2>Basisgegevens</h2>
-          <div className="vehicle-form-grid">
-            <FormField label="Kenteken" htmlFor="v-plate" required>
-              <input id="v-plate" value={form.licensePlate} onChange={(e) => set('licensePlate', e.target.value)} disabled={submitting} />
-            </FormField>
-            <FormField label="Chassisnummer (VIN)" htmlFor="v-vin">
-              <input id="v-vin" value={form.vin ?? ''} onChange={(e) => set('vin', e.target.value || null)} disabled={submitting} />
-            </FormField>
-            <FormField label="Categorie" htmlFor="v-category">
-              <select id="v-category" value={form.categoryId ?? ''} onChange={(e) => set('categoryId', e.target.value || null)} disabled={submitting}>
-                <option value="">— Geen —</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Merk" htmlFor="v-brand">
-              <input id="v-brand" value={form.brand ?? ''} onChange={(e) => set('brand', e.target.value || null)} disabled={submitting} />
-            </FormField>
-            <FormField label="Model" htmlFor="v-model">
-              <input id="v-model" value={form.model ?? ''} onChange={(e) => set('model', e.target.value || null)} disabled={submitting} />
-            </FormField>
-            <FormField label="Bouwjaar" htmlFor="v-year" error={yearError ?? undefined}>
-              <input
-                id="v-year"
-                type="number"
-                min={1900}
-                max={currentYear}
-                value={form.year ?? ''}
-                onChange={(e) => set('year', e.target.value === '' ? null : Number(e.target.value))}
-                aria-invalid={yearError ? 'true' : undefined}
-                disabled={submitting}
-              />
-            </FormField>
-          </div>
-        </section>
-
-        <details className="vehicle-form-card vehicle-form-collapsible">
-          <summary>Capaciteit &amp; afmetingen (optioneel)</summary>
-          <div className="vehicle-form-grid">
-            <FormField label="MTM (kg)" htmlFor="v-gvw" hint="Maximaal toegelaten massa.">
-              <input id="v-gvw" type="number" min={0} value={form.grossVehicleWeightKg ?? ''} onChange={(e) => set('grossVehicleWeightKg', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
-            </FormField>
-            <FormField label="Laadvermogen (kg)" htmlFor="v-payload">
-              <input id="v-payload" type="number" min={0} value={form.payloadKg ?? ''} onChange={(e) => set('payloadKg', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
-            </FormField>
-            <FormField label="Lengte (m)" htmlFor="v-length">
-              <input id="v-length" type="number" min={0} step="0.01" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
-            </FormField>
-            <FormField label="Breedte (m)" htmlFor="v-width">
-              <input id="v-width" type="number" min={0} step="0.01" value={form.widthMeters ?? ''} onChange={(e) => set('widthMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
-            </FormField>
-            <FormField label="Hoogte (m)" htmlFor="v-height">
-              <input id="v-height" type="number" min={0} step="0.01" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', e.target.value === '' ? null : Number(e.target.value))} disabled={submitting} />
-            </FormField>
-            <FormField
-              label="Volume (m³)"
-              htmlFor="v-volume"
-              hint={form.volumeIsManual ? 'Handmatige waarde; vink uit om opnieuw te berekenen.' : 'Automatisch berekend uit lengte × breedte × hoogte.'}
-            >
-              <input
-                id="v-volume"
-                type="number"
-                min={0}
-                step="0.001"
-                value={form.volumeIsManual ? (form.volumeM3 ?? '') : (autoVolume ?? '')}
-                onChange={(e) => set('volumeM3', e.target.value === '' ? null : Number(e.target.value))}
-                disabled={submitting || !form.volumeIsManual}
-              />
-              <label className="vehicle-checkbox">
-                <input
-                  type="checkbox"
-                  checked={form.volumeIsManual}
-                  onChange={(e) => {
-                    set('volumeIsManual', e.target.checked)
-                    if (e.target.checked) set('volumeM3', form.volumeM3 ?? autoVolume)
-                  }}
-                  disabled={submitting}
-                />
-                <span>Handmatig invullen</span>
-              </label>
-            </FormField>
-          </div>
-        </details>
-
-        <section className="vehicle-form-card">
-          <h2>Techniek</h2>
-          <div className="vehicle-form-grid">
-            <FormField label="Brandstof" htmlFor="v-fuel">
-              <select id="v-fuel" value={form.fuelType} onChange={(e) => set('fuelType', e.target.value as FuelType)} disabled={submitting}>
-                {Object.entries(FUEL_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Emissieklasse" htmlFor="v-emission">
-              <select id="v-emission" value={form.emissionClass ?? ''} onChange={(e) => set('emissionClass', (e.target.value || null) as EmissionClass | null)} disabled={submitting}>
-                <option value="">— Onbekend —</option>
-                {Object.entries(EMISSION_CLASS_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Aantal assen" htmlFor="v-axles" hint="Voor Maut/tolberekening.">
-              <input id="v-axles" type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={submitting} />
-            </FormField>
-            <FormField label="Laadmeters" htmlFor="v-ldm">
-              <input id="v-ldm" type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={submitting} />
-            </FormField>
-            <FormField label="Vereist rijbewijs" htmlFor="v-licence" hint="Minimaal rijbewijs voor de eligibiliteitscontrole; leeg = geen controle.">
-              <select id="v-licence" value={form.requiredLicenceCode ?? ''} onChange={(e) => set('requiredLicenceCode', e.target.value || null)} disabled={submitting}>
-                <option value="">— Geen controle —</option>
-                {REQUIRED_LICENCE_CODES.map((code) => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Eigendomsvorm" htmlFor="v-ownership">
-              <select id="v-ownership" value={form.ownershipType} onChange={(e) => set('ownershipType', e.target.value as VehicleOwnershipType)} disabled={submitting}>
-                {Object.entries(OWNERSHIP_TYPE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Kilometerstand" htmlFor="v-odometer">
-              <input id="v-odometer" type="number" min={0} value={form.odometerKm} onChange={(e) => set('odometerKm', Number(e.target.value) || 0)} disabled={submitting} />
-            </FormField>
-            <FormField label="Normverbruik (l/100km)" htmlFor="v-consumption" hint="Voor kostenramingen; leeg = standaard uit de tarievenset.">
-              <input
-                id="v-consumption"
-                type="number"
-                min={0}
-                step="0.1"
-                value={form.consumptionLPer100Km ?? ''}
-                onChange={(e) => set('consumptionLPer100Km', e.target.value === '' ? null : Number(e.target.value) || 0)}
-                disabled={submitting}
-              />
-            </FormField>
-          </div>
-          <div className="vehicle-form-checkboxes">
-            <label className="vehicle-checkbox">
-              <input type="checkbox" checked={form.hasCrane} onChange={(e) => set('hasCrane', e.target.checked)} disabled={submitting} />
-              <span>Kraan</span>
-            </label>
-            <label className="vehicle-checkbox">
-              <input type="checkbox" checked={form.hasRefrigeration} onChange={(e) => set('hasRefrigeration', e.target.checked)} disabled={submitting} />
-              <span>Koeling</span>
-            </label>
-            <label className="vehicle-checkbox">
-              <input type="checkbox" checked={form.hasTailLift} onChange={(e) => set('hasTailLift', e.target.checked)} disabled={submitting} />
-              <span>Laadklep</span>
-            </label>
-            <label className="vehicle-checkbox">
-              <input type="checkbox" checked={form.adrSuitable} onChange={(e) => set('adrSuitable', e.target.checked)} disabled={submitting} />
-              <span>ADR-geschikt</span>
-            </label>
-          </div>
-        </section>
-
-        <section className="vehicle-form-card">
-          <h2>Chauffeur</h2>
-          <div className="vehicle-form-grid">
-            <FormField label="Vaste chauffeur" htmlFor="v-fixed-driver">
-              <select id="v-fixed-driver" value={form.fixedDriverId ?? ''} onChange={(e) => set('fixedDriverId', e.target.value || null)} disabled={submitting}>
-                <option value="">— Geen —</option>
-                {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.fullName} ({d.driverNumber})
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField label="Huidige chauffeur" htmlFor="v-current-driver">
-              <select id="v-current-driver" value={form.currentDriverId ?? ''} onChange={(e) => set('currentDriverId', e.target.value || null)} disabled={submitting}>
-                <option value="">— Geen —</option>
-                {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.fullName} ({d.driverNumber})
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </div>
-        </section>
-
-        <section className="vehicle-form-card">
-          <h2>Notities</h2>
-          <textarea rows={3} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={submitting} />
-        </section>
-
-        <div className="vehicle-form-actions">
-          <Button type="button" variant="secondary" onClick={() => navigate('/vehicles')} disabled={submitting}>
-            Annuleren
-          </Button>
-          <Button type="submit" disabled={submitting}>
-            {submitting ? 'Bezig…' : 'Voertuig aanmaken'}
-          </Button>
-        </div>
-      </form>
+      <VehicleForm
+        mode="create"
+        initial={EMPTY}
+        isSubmitting={submitting}
+        submitError={error}
+        onSubmit={handleSubmit}
+        onCancel={() => navigate('/vehicles')}
+        drivers={drivers}
+        documentsSection={<PreparedFleetDocumentsEditor value={preparedDocs} onChange={setPreparedDocs} />}
+      />
+      {followUp && (
+        <FleetCreateFollowUpDialog
+          entityLabel={followUp.label}
+          results={followUp.results}
+          busy={retrying}
+          onRetry={retryFollowUps}
+          onClose={() => navigate(`/vehicles/${followUp.vehicleId}`)}
+        />
+      )}
     </div>
   )
 }

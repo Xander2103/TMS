@@ -6,44 +6,32 @@ import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
-import { FormActions } from '../../../components/ui/FormActions'
 import { FormField } from '../../../components/ui/FormField'
-import { FormSection } from '../../../components/ui/FormSection'
 import { StatusBadges } from '../../../components/ui/StatusBadges'
 import { TabPanel, Tabs } from '../../../components/ui/Tabs'
-import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
-import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
 import { DamagePanel } from '../../damage/components/DamagePanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
 import { FleetKpiPanel } from '../../fleet-kpi/FleetKpiPanel'
 import { LeasingPanel } from '../../fleet-compliance/LeasingPanel'
-import { computeVolumeM3 } from '../../../utils/volume'
 import { deleteTrailer, getTrailer, setTrailerActive, updateTrailer } from '../api/trailersApi'
+import { TrailerForm } from '../components/TrailerForm'
 import {
   TRAILER_OWNERSHIP_LABELS,
   TRAILER_STATUS_LABELS,
   TRAILER_STATUS_TONES,
   type TrailerDetail,
   type TrailerInput,
-  type TrailerOperationalStatus,
-  type TrailerOwnershipType,
 } from '../types'
 import './trailer-form.css'
 
 const TAB_IDS = ['overzicht', 'techniek', 'documenten', 'leasing', 'onderhoud', 'keuringen', 'schade', 'kpi', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
-
-function numberOrNull(value: string): number | null {
-  if (value.trim() === '') return null
-  const parsed = Number(value.replace(',', '.'))
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 export function TrailerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -56,7 +44,6 @@ export function TrailerDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<TrailerInput | null>(null)
-  const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [confirmActive, setConfirmActive] = useState<null | 'activate' | 'deactivate'>(null)
@@ -114,26 +101,18 @@ export function TrailerDetailPage() {
       notes: trailer.notes,
       volumeIsManual: trailer.volumeIsManual,
     })
-    setDirty(false)
     setEditing(true)
   }
 
-  function set<K extends keyof TrailerInput>(key: K, value: TrailerInput[K]) {
-    setForm((f) => (f ? { ...f, [key]: value } : f))
-    setDirty(true)
-  }
-
-  async function saveEdit() {
-    if (!id || !form) return
+  async function saveEdit(values: TrailerInput) {
+    if (!id) return
     setSaving(true)
-    setDirty(false)
     try {
-      const updated = await updateTrailer(id, form)
+      const updated = await updateTrailer(id, values)
       setTrailer(updated)
       setEditing(false)
       showSuccess('Oplegger bijgewerkt.')
     } catch (err) {
-      setDirty(true)
       showError(err instanceof ApiError ? err.message : 'Wijzigingen konden niet worden opgeslagen.')
     } finally {
       setSaving(false)
@@ -191,159 +170,14 @@ export function TrailerDetailPage() {
       </div>
 
       {editing && form ? (
-        <form
-          className="trailer-form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void saveEdit()
-          }}
-        >
-          <UnsavedChangesGuard when={dirty && !saving} />
-
-          <FormSection title="Status" columns={3} description="Administratief actief en operationele status zijn twee aparte begrippen.">
-            <FormField label="Operationele status" htmlFor="t-status">
-              <select id="t-status" value={form.operationalStatus} onChange={(e) => set('operationalStatus', e.target.value as TrailerOperationalStatus)} disabled={saving}>
-                {Object.entries(TRAILER_STATUS_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            {form.operationalStatus !== 'Available' && (
-              <FormField label="Reden" htmlFor="t-status-reason" hint="Waarom is de oplegger niet beschikbaar?">
-                <input id="t-status-reason" value={form.statusReason ?? ''} onChange={(e) => set('statusReason', e.target.value || null)} maxLength={500} disabled={saving} />
-              </FormField>
-            )}
-          </FormSection>
-
-          <FormSection title="Basisgegevens" columns={3}>
-            <FormField label="Kenteken" htmlFor="t-plate" required>
-              <input id="t-plate" value={form.licensePlate} onChange={(e) => set('licensePlate', e.target.value)} disabled={saving} maxLength={20} />
-            </FormField>
-            <FormField label="VIN" htmlFor="t-vin">
-              <input id="t-vin" value={form.vin ?? ''} onChange={(e) => set('vin', e.target.value || null)} disabled={saving} maxLength={50} />
-            </FormField>
-            <FormField label="Categorie" htmlFor="t-category">
-              <LookupSelect
-                id="t-category"
-                basePath="/api/trailer-categories"
-                managePermission="trailer_categories.manage"
-                singular="opleggercategorie"
-                value={form.categoryId}
-                onChange={(v) => set('categoryId', v)}
-                placeholder="— Geen —"
-                disabled={saving}
-              />
-            </FormField>
-            <FormField label="Merk" htmlFor="t-brand">
-              <input id="t-brand" value={form.brand ?? ''} onChange={(e) => set('brand', e.target.value || null)} disabled={saving} maxLength={100} />
-            </FormField>
-            <FormField label="Model" htmlFor="t-model">
-              <input id="t-model" value={form.model ?? ''} onChange={(e) => set('model', e.target.value || null)} disabled={saving} maxLength={100} />
-            </FormField>
-            <FormField label="Bouwjaar" htmlFor="t-year" hint={`Maximaal ${new Date().getFullYear()}.`}>
-              <input
-                id="t-year"
-                type="number"
-                min={1900}
-                max={new Date().getFullYear()}
-                value={form.year ?? ''}
-                onChange={(e) => set('year', e.target.value ? Number(e.target.value) : null)}
-                disabled={saving}
-              />
-            </FormField>
-            <FormField label="Eerste inschrijving" htmlFor="t-firstreg">
-              <input id="t-firstreg" type="date" value={form.firstRegistrationDate ?? ''} onChange={(e) => set('firstRegistrationDate', e.target.value || null)} disabled={saving} />
-            </FormField>
-            <FormField label="Eigendomsvorm" htmlFor="t-ownership">
-              <select id="t-ownership" value={form.ownershipType} onChange={(e) => set('ownershipType', e.target.value as TrailerOwnershipType)} disabled={saving}>
-                {Object.entries(TRAILER_OWNERSHIP_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          </FormSection>
-
-          <FormSection title="Techniek" columns={3}>
-            <FormField label="Aantal assen" htmlFor="t-axles" hint="Voor Maut/tolberekening.">
-              <input id="t-axles" type="number" min={0} max={12} value={form.axleCount} onChange={(e) => set('axleCount', Number(e.target.value) || 0)} disabled={saving} />
-            </FormField>
-            <FormField label="Laadmeters" htmlFor="t-ldm">
-              <input id="t-ldm" type="number" min={0} step="0.01" value={form.loadingMeters} onChange={(e) => set('loadingMeters', Number(e.target.value) || 0)} disabled={saving} />
-            </FormField>
-            <FormField label="Laadvermogen (kg)" htmlFor="t-capacity">
-              <input id="t-capacity" inputMode="decimal" value={form.capacityKg ?? ''} onChange={(e) => set('capacityKg', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Lengte (m)" htmlFor="t-length">
-              <input id="t-length" inputMode="decimal" value={form.lengthMeters ?? ''} onChange={(e) => set('lengthMeters', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Breedte (m)" htmlFor="t-width">
-              <input id="t-width" inputMode="decimal" value={form.widthMeters ?? ''} onChange={(e) => set('widthMeters', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField label="Hoogte (m)" htmlFor="t-height">
-              <input id="t-height" inputMode="decimal" value={form.heightMeters ?? ''} onChange={(e) => set('heightMeters', numberOrNull(e.target.value))} disabled={saving} />
-            </FormField>
-            <FormField
-              label="Volume (m³)"
-              htmlFor="t-volume"
-              hint={form.volumeIsManual ? 'Handmatige waarde; vink uit om opnieuw te berekenen.' : 'Automatisch berekend uit lengte × breedte × hoogte.'}
-            >
-              <input
-                id="t-volume"
-                inputMode="decimal"
-                value={
-                  form.volumeIsManual
-                    ? (form.volumeM3 ?? '')
-                    : (computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters) ?? form.volumeM3 ?? '')
-                }
-                onChange={(e) => set('volumeM3', numberOrNull(e.target.value))}
-                disabled={saving || !form.volumeIsManual}
-              />
-              <label className="trailer-checkbox">
-                <input
-                  type="checkbox"
-                  checked={form.volumeIsManual}
-                  onChange={(e) => {
-                    set('volumeIsManual', e.target.checked)
-                    if (e.target.checked) {
-                      set('volumeM3', form.volumeM3 ?? computeVolumeM3(form.lengthMeters, form.widthMeters, form.heightMeters))
-                    }
-                  }}
-                  disabled={saving}
-                />
-                <span>Handmatig invullen</span>
-              </label>
-            </FormField>
-            <div className="vehicle-form-equipment form-span-all">
-              <label className="trailer-checkbox">
-                <input type="checkbox" checked={form.hasRefrigeration} onChange={(e) => set('hasRefrigeration', e.target.checked)} disabled={saving} />
-                <span>Koeling</span>
-              </label>
-              <label className="trailer-checkbox">
-                <input type="checkbox" checked={form.adrSuitable} onChange={(e) => set('adrSuitable', e.target.checked)} disabled={saving} />
-                <span>ADR-geschikt</span>
-              </label>
-            </div>
-          </FormSection>
-
-          <FormSection title="Notities" columns={1}>
-            <FormField label="Interne notities" htmlFor="t-notes" className="form-span-all">
-              <textarea id="t-notes" rows={3} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={saving} maxLength={2000} />
-            </FormField>
-          </FormSection>
-
-          <FormActions dirty={dirty}>
-            <Button type="button" variant="secondary" onClick={() => setEditing(false)} disabled={saving}>
-              Annuleren
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? 'Opslaan…' : 'Opslaan'}
-            </Button>
-          </FormActions>
-        </form>
+        <TrailerForm
+          mode="edit"
+          initial={form}
+          isSubmitting={saving}
+          onSubmit={saveEdit}
+          onCancel={() => setEditing(false)}
+          documentsSection={<FleetDocumentsPanel ownerType="trailer" ownerId={trailer.id} />}
+        />
       ) : (
         <>
           <Tabs

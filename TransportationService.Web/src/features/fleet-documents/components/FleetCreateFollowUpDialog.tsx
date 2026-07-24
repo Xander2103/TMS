@@ -1,0 +1,54 @@
+import { Modal } from '../../../components/ui/Modal'
+import { Button } from '../../../components/ui/Button'
+import type { FleetFollowUpResult } from '../utils/preparedFleetDocs'
+
+interface FleetCreateFollowUpDialogProps {
+  /** e.g. "Voertuig VRT-0007" or "Oplegger OPL-0003". */
+  entityLabel: string
+  results: FleetFollowUpResult[]
+  busy: boolean
+  onRetry: () => void
+  onClose: () => void
+}
+
+/**
+ * Shown after vehicle/trailer creation when some prepared documents failed to persist.
+ * The asset IS created (never lost); the failed uploads stay retryable.
+ */
+export function FleetCreateFollowUpDialog({ entityLabel, results, busy, onRetry, onClose }: FleetCreateFollowUpDialogProps) {
+  const failed = results.filter((r) => !r.ok)
+  const succeeded = results.filter((r) => r.ok)
+
+  return (
+    <Modal
+      title="Aangemaakt — documenten deels mislukt"
+      onClose={onClose}
+      busy={busy}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            Sluiten en naar detailpagina
+          </Button>
+          {failed.length > 0 && (
+            <Button onClick={onRetry} disabled={busy}>
+              {busy ? 'Opnieuw proberen…' : `Mislukte opnieuw proberen (${failed.length})`}
+            </Button>
+          )}
+        </>
+      }
+    >
+      <p>
+        {entityLabel} is aangemaakt. {succeeded.length} van {results.length} documenten zijn verwerkt; {failed.length}{' '}
+        mislukt. Je bestanden blijven behouden.
+      </p>
+      <ul className="followup-results">
+        {results.map((r) => (
+          <li key={r.key} className={r.ok ? 'followup-ok' : 'followup-failed'}>
+            <span aria-hidden="true">{r.ok ? '✓' : '✗'}</span> Document: {r.label}
+            {!r.ok && r.error && <span className="ui-form-field-error"> — {r.error}</span>}
+          </li>
+        ))}
+      </ul>
+    </Modal>
+  )
+}
