@@ -62,10 +62,12 @@ public class OrderPricingTests
 
     private static CreateTransportOrderRequest Request(
         Guid customerId, decimal quantity = 3, decimal? agreedPrice = null,
-        IReadOnlyList<Guid>? serviceOptionIds = null, bool priceIsManual = false, string? overrideReason = null) => new(
+        IReadOnlyList<Guid>? serviceOptionIds = null, bool priceIsManual = false, string? overrideReason = null,
+        IReadOnlyList<CargoItemInput>? cargoItems = null) => new(
         customerId, "REF-1", new DateOnly(2026, 7, 24), "Pallets", quantity, null, null, null, null, false, false,
         agreedPrice, null,
         [Stop(StopType.Loading, "Antwerpen"), Stop(StopType.Unloading, "Hasselt", "3500")],
+        cargoItems,
         QuantityUnitCode: "EUROPALLET", ServiceOptionIds: serviceOptionIds,
         PriceIsManual: priceIsManual, PriceOverrideReason: overrideReason);
 
@@ -161,6 +163,93 @@ public class OrderPricingTests
         Assert.Equal(115m, reloaded!.AgreedPrice);
         Assert.Equal(115m, reloaded.CalculatedPrice);
         Assert.Contains(reloaded.PricingLines!, l => l.Amount == 115m);
+    }
+
+    [Fact]
+    public async Task Create_WritesSnapshotHeader()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3), CancellationToken.None);
+
+        var snapshot = created.Order!.PricingSnapshot;
+        Assert.NotNull(snapshot);
+        Assert.Equal(new DateOnly(2026, 7, 24), snapshot!.TariffDate);
+        Assert.Equal("EUR", snapshot.Currency);
+        Assert.Equal(115m, snapshot.CalculatedTotal);
+        Assert.Null(snapshot.OverrideAmount);
+        Assert.Contains("Europallet", snapshot.UnitSummary);
+        Assert.Contains("Pallets klant X", snapshot.Explanation);
+    }
+
+    [Fact]
+    public async Task Override_RecordsUserAndTimestamp_InSnapshot()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        h.Permissions.Codes.Add("orders.override_price");
+
+        var created = await h.Sut.CreateAsync(
+            Request(h.CustomerId, agreedPrice: 99, priceIsManual: true, overrideReason: "Afspraak telefonisch"),
+            CancellationToken.None);
+
+        var snapshot = created.Order!.PricingSnapshot!;
+        Assert.Equal(99m, snapshot.OverrideAmount);
+        Assert.Equal("Afspraak telefonisch", snapshot.OverrideReason);
+        Assert.NotNull(snapshot.OverriddenByUserId);
+        Assert.NotNull(snapshot.OverriddenAtUtc);
+        Assert.Equal(115m, snapshot.CalculatedTotal); // the original calculated amount stays preserved
+    }
+
+    [Fact]
+    public async Task SnapshotHeader_SurvivesLaterTariffChanges()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3), CancellationToken.None);
+
+        var rule = await h.Db.Context.PriceRules.Include(r => r.Brackets).SingleAsync();
+        foreach (var bracket in rule.Brackets)
+        {
+            bracket.Price += 1000m;
+        }
+
+        await h.Db.Context.SaveChangesAsync();
+
+        var reloaded = await h.Sut.GetByIdAsync(created.Order!.Id, CancellationToken.None);
+        Assert.Equal(115m, reloaded!.PricingSnapshot!.CalculatedTotal);
+        Assert.Contains("115", reloaded.PricingSnapshot.Explanation);
+    }
+
+    [Fact]
+    public async Task CargoDimensions_DriveBillableQuantity()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // €45 per pallet; above 125×85 cm a pallet bills as two pallet places.
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            "Palletplaatsen", new DateOnly(2026, 1, 1), null, true, 45m, null, null,
+            OversizeLengthCm: 125m, OversizeWidthCm: 85m, OversizeBillableFactor: 2m), CancellationToken.None);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 1, cargoItems:
+        [
+            new CargoItemInput("Buitenmaat pallet", null, 1, null, null,
+                LengthMeters: 1.6m, WidthMeters: 1.2m, QuantityUnitCode: "EUROPALLET"),
+        ]), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        // 1 physical pallet, 2 billable pallet places → 2 × 45.
+        Assert.Equal(90m, created.Order!.AgreedPrice);
+        var line = created.Order.PricingLines!.Single(l => l.RuleName == "Palletplaatsen");
+        Assert.Equal(1m, line.ActualQuantity);
+        Assert.Equal(2m, line.BillableQuantity);
+        // The physical cargo line still holds ONE pallet.
+        Assert.Equal(1m, (await h.Db.Context.CargoItems.SingleAsync()).ExpectedQuantity);
     }
 
     [Fact]

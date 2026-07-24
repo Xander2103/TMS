@@ -40,6 +40,7 @@ public class TransportationDbContext : DbContext
     public DbSet<CargoItem> CargoItems => Set<CargoItem>();
     public DbSet<TransportOrderPricingLine> TransportOrderPricingLines => Set<TransportOrderPricingLine>();
     public DbSet<TransportOrderServiceLine> TransportOrderServiceLines => Set<TransportOrderServiceLine>();
+    public DbSet<TransportOrderPricingSnapshot> TransportOrderPricingSnapshots => Set<TransportOrderPricingSnapshot>();
     public DbSet<TransportOrderDocument> TransportOrderDocuments => Set<TransportOrderDocument>();
     public DbSet<TransportOrderStatusHistory> TransportOrderStatusHistories => Set<TransportOrderStatusHistory>();
     public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException> ExecutionExceptions => Set<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException>();

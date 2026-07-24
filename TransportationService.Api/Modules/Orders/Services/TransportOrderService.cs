@@ -209,14 +209,15 @@ public class TransportOrderService : ITransportOrderService
         // Selling entity: explicit request value else the customer's default entity.
         order.LegalEntityId = await ResolveOrderLegalEntityAsync(request.LegalEntityId, request.CustomerId, cancellationToken);
 
+        var cargoItems = BuildCargoItems(order.Id, request.CargoItems, order.Stops);
         if (await ApplyPricingAsync(order, request.AgreedPrice, request.ServiceOptionIds,
-                request.PriceIsManual, request.PriceOverrideReason, cancellationToken) is { } pricingError)
+                request.PriceIsManual, request.PriceOverrideReason, cargoItems, cancellationToken) is { } pricingError)
         {
             return pricingError;
         }
 
         _dbContext.Add(order);
-        _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems, order.Stops));
+        _dbContext.AddRange(cargoItems);
         await TenantNumbering.SaveWithClaimedNumberAsync(
             _dbContext, settings,
             () => order.OrderNumber = GenerateOrderNumber(settings),
@@ -312,10 +313,11 @@ public class TransportOrderService : ITransportOrderService
             .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
             .ToListAsync(cancellationToken);
         _dbContext.RemoveRange(existingCargo);
-        _dbContext.AddRange(BuildCargoItems(order.Id, request.CargoItems, order.Stops));
+        var replacementCargo = BuildCargoItems(order.Id, request.CargoItems, order.Stops);
+        _dbContext.AddRange(replacementCargo);
 
         if (await ApplyPricingAsync(order, request.AgreedPrice, request.ServiceOptionIds,
-                request.PriceIsManual, request.PriceOverrideReason, cancellationToken) is { } pricingError)
+                request.PriceIsManual, request.PriceOverrideReason, replacementCargo, cancellationToken) is { } pricingError)
         {
             return pricingError;
         }
@@ -921,8 +923,18 @@ public class TransportOrderService : ITransportOrderService
         var pricingLines = await _dbContext.TransportOrderPricingLines.AsNoTracking()
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .OrderBy(l => l.Sequence)
-            .Select(l => new OrderPricingLineDto(l.Label, l.Amount, l.Source, l.Informational))
+            .Select(l => new OrderPricingLineDto(
+                l.Label, l.Amount, l.Source, l.Informational,
+                l.RuleName, l.AgreementName, l.ActualQuantity, l.BillableQuantity))
             .ToListAsync(cancellationToken);
+        var pricingSnapshot = await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
+            .Where(s => s.TenantId == _tenantContext.TenantId && s.TransportOrderId == order.Id)
+            .Select(s => new OrderPricingSnapshotDto(
+                s.TariffDate, s.Currency, s.ZoneCode, s.ZoneName,
+                s.AgreementNames, s.UnitSummary, s.CalculatedTotal,
+                s.OverrideAmount, s.OverrideReason, s.OverriddenByUserId, s.OverriddenAtUtc,
+                s.Explanation))
+            .FirstOrDefaultAsync(cancellationToken);
         var serviceLines = await _dbContext.TransportOrderServiceLines.AsNoTracking()
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .OrderBy(l => l.NameSnapshot)
@@ -942,7 +954,7 @@ public class TransportOrderService : ITransportOrderService
             order.DieselSurchargeOverride, order.DieselSurchargePercentOverride, order.DieselSurchargeOverrideReason,
             order.LegalEntityId, order.QuantityUnitCode,
             order.CalculatedPrice, order.PriceIsManual, order.PriceOverrideReason,
-            pricingLines, serviceLines);
+            pricingLines, serviceLines, pricingSnapshot);
     }
 
     /// <summary>
@@ -954,7 +966,8 @@ public class TransportOrderService : ITransportOrderService
     /// </summary>
     private async Task<TransportOrderOperationResult?> ApplyPricingAsync(
         TransportOrder order, decimal? requestedAgreedPrice, IReadOnlyList<Guid>? serviceOptionIds,
-        bool priceIsManual, string? overrideReason, CancellationToken cancellationToken)
+        bool priceIsManual, string? overrideReason, IReadOnlyList<CargoItem>? cargoItems,
+        CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
         var existingPricing = await _dbContext.TransportOrderPricingLines
@@ -965,6 +978,10 @@ public class TransportOrderService : ITransportOrderService
             .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
             .ToListAsync(cancellationToken);
         _dbContext.RemoveRange(existingServices);
+        var existingSnapshots = await _dbContext.TransportOrderPricingSnapshots
+            .Where(s => s.TenantId == tenantId && s.TransportOrderId == order.Id)
+            .ToListAsync(cancellationToken);
+        _dbContext.RemoveRange(existingSnapshots);
 
         PriceCalculationResult? result = null;
         if (_pricingEngine is not null)
@@ -978,7 +995,16 @@ public class TransportOrderService : ITransportOrderService
                     .FirstOrDefaultAsync(cancellationToken);
                 if (unitTypeId is { } uid)
                 {
-                    lines.Add(new PriceCalculationLineInput(uid, quantity));
+                    // Cargo lines with the same managed unit describe the physical detail of
+                    // this quantity — dimensions feed billable-quantity contracts (oversize).
+                    var details = (cargoItems ?? [])
+                        .Where(c => !c.IsDeleted && string.Equals(c.QuantityUnitCode, code, StringComparison.OrdinalIgnoreCase))
+                        .Select(c => new PriceCalculationLineDetail(
+                            c.ExpectedQuantity,
+                            c.LengthMeters is { } length ? length * 100m : null,
+                            c.WidthMeters is { } width ? width * 100m : null))
+                        .ToList();
+                    lines.Add(new PriceCalculationLineInput(uid, quantity, details.Count > 0 ? details : null));
                 }
             }
 
@@ -1041,6 +1067,8 @@ public class TransportOrderService : ITransportOrderService
                     Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
                     Sequence = sequence++, Label = line.Label, Amount = line.Amount,
                     Source = line.Source, Informational = line.Informational,
+                    RuleName = line.RuleName, AgreementName = line.AgreementName,
+                    ActualQuantity = line.ActualQuantity, BillableQuantity = line.BillableQuantity,
                 });
             }
 
@@ -1053,6 +1081,30 @@ public class TransportOrderService : ITransportOrderService
                     Kind = serviceLine.Kind, Value = serviceLine.Value, Amount = serviceLine.Amount,
                 });
             }
+
+            var unitLine = result.Lines.FirstOrDefault(l => l.ActualQuantity is not null);
+            var unitSummary = unitLine is null ? null : unitLine.Label;
+            var agreementNames = string.Join("; ", result.Lines
+                .Where(l => l.AgreementName is not null)
+                .Select(l => l.AgreementName!)
+                .Distinct());
+            var explanation = string.Join("\n", result.Lines
+                .Select(l => $"{l.Label}: {l.Amount:0.00} EUR ({l.Source})"));
+            _dbContext.TransportOrderPricingSnapshots.Add(new TransportOrderPricingSnapshot
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
+                TariffDate = result.TariffDate ?? order.OrderDate,
+                Currency = result.Currency,
+                ZoneCode = result.ZoneCode, ZoneName = result.ZoneName,
+                AgreementNames = string.IsNullOrEmpty(agreementNames) ? null : agreementNames,
+                UnitSummary = unitSummary,
+                CalculatedTotal = order.CalculatedPrice,
+                OverrideAmount = order.PriceIsManual ? order.AgreedPrice : null,
+                OverrideReason = order.PriceIsManual ? order.PriceOverrideReason : null,
+                OverriddenByUserId = order.PriceIsManual ? _currentUser?.CurrentUserId : null,
+                OverriddenAtUtc = order.PriceIsManual ? _timeProvider.GetUtcNow().UtcDateTime : null,
+                Explanation = explanation.Length > 4000 ? explanation[..4000] : explanation,
+            });
         }
 
         return null;

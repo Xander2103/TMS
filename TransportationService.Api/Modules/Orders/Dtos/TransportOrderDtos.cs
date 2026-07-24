@@ -81,10 +81,21 @@ public record TransportOrderDetailDto(
     bool PriceIsManual = false,
     string? PriceOverrideReason = null,
     IReadOnlyList<OrderPricingLineDto>? PricingLines = null,
-    IReadOnlyList<OrderServiceLineDto>? ServiceLines = null);
+    IReadOnlyList<OrderServiceLineDto>? ServiceLines = null,
+    OrderPricingSnapshotDto? PricingSnapshot = null);
 
 /// <summary>Snapshot line of the price calculation stored on the order.</summary>
-public record OrderPricingLineDto(string Label, decimal Amount, string Source, bool Informational);
+public record OrderPricingLineDto(
+    string Label, decimal Amount, string Source, bool Informational,
+    string? RuleName = null, string? AgreementName = null,
+    decimal? ActualQuantity = null, decimal? BillableQuantity = null);
+
+/// <summary>Frozen header of the order's pricing snapshot (spec ch. 21).</summary>
+public record OrderPricingSnapshotDto(
+    DateOnly TariffDate, string Currency, string? ZoneCode, string? ZoneName,
+    string? AgreementNames, string? UnitSummary, decimal? CalculatedTotal,
+    decimal? OverrideAmount, string? OverrideReason, Guid? OverriddenByUserId, DateTime? OverriddenAtUtc,
+    string? Explanation);
 
 /// <summary>Selected delivery service/supplement snapshotted on the order.</summary>
 public record OrderServiceLineDto(

@@ -13,9 +13,34 @@ public class TransportOrderPricingLineConfiguration : IEntityTypeConfiguration<T
         builder.Property(l => l.Label).IsRequired().HasMaxLength(300);
         builder.Property(l => l.Source).IsRequired().HasMaxLength(200);
         builder.Property(l => l.Amount).HasPrecision(12, 2);
+        builder.Property(l => l.RuleName).HasMaxLength(200);
+        builder.Property(l => l.AgreementName).HasMaxLength(200);
+        builder.Property(l => l.ActualQuantity).HasPrecision(12, 3);
+        builder.Property(l => l.BillableQuantity).HasPrecision(12, 3);
         builder.HasIndex(l => new { l.TenantId, l.TransportOrderId });
         builder.HasOne<TransportOrder>().WithMany().HasForeignKey(l => l.TransportOrderId).OnDelete(DeleteBehavior.Cascade);
         builder.HasQueryFilter(l => !l.IsDeleted);
+    }
+}
+
+public class TransportOrderPricingSnapshotConfiguration : IEntityTypeConfiguration<TransportOrderPricingSnapshot>
+{
+    public void Configure(EntityTypeBuilder<TransportOrderPricingSnapshot> builder)
+    {
+        builder.ToTable("order_pricing_snapshots");
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Currency).HasMaxLength(3);
+        builder.Property(s => s.ZoneCode).HasMaxLength(30);
+        builder.Property(s => s.ZoneName).HasMaxLength(150);
+        builder.Property(s => s.AgreementNames).HasMaxLength(500);
+        builder.Property(s => s.UnitSummary).HasMaxLength(300);
+        builder.Property(s => s.CalculatedTotal).HasPrecision(12, 2);
+        builder.Property(s => s.OverrideAmount).HasPrecision(12, 2);
+        builder.Property(s => s.OverrideReason).HasMaxLength(500);
+        builder.Property(s => s.Explanation).HasMaxLength(4000);
+        builder.HasIndex(s => new { s.TenantId, s.TransportOrderId }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        builder.HasOne<TransportOrder>().WithMany().HasForeignKey(s => s.TransportOrderId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasQueryFilter(s => !s.IsDeleted);
     }
 }
 
