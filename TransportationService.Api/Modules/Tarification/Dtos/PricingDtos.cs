@@ -78,7 +78,11 @@ public record SaveCustomerOptionPriceRequest(Guid ServiceOptionId, decimal? Valu
 
 // --- Calculation ---
 
-public record PriceCalculationLineInput(Guid UnitTypeId, decimal Quantity);
+/// <summary>Physical detail of part of a line (from cargo items) used for billable-quantity rules.</summary>
+public record PriceCalculationLineDetail(decimal Quantity, decimal? LengthCm, decimal? WidthCm);
+
+public record PriceCalculationLineInput(
+    Guid UnitTypeId, decimal Quantity, IReadOnlyList<PriceCalculationLineDetail>? Details = null);
 
 public record PriceCalculationRequest(
     Guid CustomerId,
@@ -91,7 +95,11 @@ public record PriceCalculationRequest(
     int? PalletCount,
     IReadOnlyList<Guid> ServiceOptionIds);
 
-public record PriceBreakdownLine(string Label, decimal Amount, string Source, bool Informational = false);
+public record PriceBreakdownLine(
+    string Label, decimal Amount, string Source, bool Informational = false,
+    Guid? RuleId = null, string? RuleName = null,
+    Guid? AgreementId = null, string? AgreementName = null,
+    decimal? ActualQuantity = null, decimal? BillableQuantity = null);
 
 /// <summary>A selected service option with its resolved (customer or default) price.</summary>
 public record PriceServiceLine(Guid ServiceOptionId, string Name, SurchargeKind Kind, decimal Value, decimal Amount);
@@ -105,4 +113,10 @@ public record PriceCalculationResult(
     string? ZoneCode,
     string? ZoneName,
     bool RequiresManualPrice,
-    IReadOnlyList<PriceServiceLine> ServiceLines);
+    IReadOnlyList<PriceServiceLine> ServiceLines,
+    /// <summary>The date the tariff was resolved for (normally the order date).</summary>
+    DateOnly? TariffDate = null,
+    /// <summary>Blocking configuration problem (e.g. two equally specific rules). Fix the tariffs.</summary>
+    string? ConfigurationError = null,
+    /// <summary>Diagnostic context shown when no valid tariff was found.</summary>
+    IReadOnlyList<string>? Diagnostics = null);
