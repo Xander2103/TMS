@@ -41,7 +41,7 @@ public class PricingEngineV2Tests
         var tenant = new DevTenantContext(tenantId);
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(null));
         var admin = new PricingAdminService(db.Context, tenant, audit);
-        var engine = new PricingEngine(db.Context, tenant, new RateCardService(db.Context, tenant, audit));
+        var engine = new PricingEngine(db.Context, tenant);
         return new Harness(db, engine, admin, tenantId, customerAId, customerBId, palletUnitId);
     }
 

@@ -25,13 +25,11 @@ public class PricingEngine : IPricingEngine
 {
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
-    private readonly IRateCardService _rateCardService;
 
-    public PricingEngine(TransportationDbContext dbContext, ITenantContext tenantContext, IRateCardService rateCardService)
+    public PricingEngine(TransportationDbContext dbContext, ITenantContext tenantContext)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
-        _rateCardService = rateCardService;
     }
 
     public async Task<PriceCalculationResult> CalculateAsync(PriceCalculationRequest request, CancellationToken cancellationToken)
@@ -220,25 +218,6 @@ public class PricingEngine : IPricingEngine
                     : decimal.Round(surcharge.Value, 2);
                 lines.Add(new PriceBreakdownLine(surcharge.Name, amount, agreement.Name,
                     AgreementId: agreement.Id, AgreementName: agreement.Name));
-            }
-        }
-
-        // Legacy fallback until every rate card is converted: only when nothing matched at all.
-        if (!anyRuleMatched && request.Lines.Count > 0)
-        {
-            try
-            {
-                var quote = await _rateCardService.QuoteAsync(
-                    new QuoteRequest(request.CustomerId, request.Date, request.DistanceKm, request.PalletCount, request.WeightKg),
-                    cancellationToken);
-                lines.Clear();
-                requiresManual = false;
-                configurationError = null;
-                lines.AddRange(quote.Lines.Select(l => new PriceBreakdownLine(l.Label, l.Amount, $"Tarievenkaart: {quote.RateCardName}")));
-            }
-            catch (DomainValidationException)
-            {
-                // No rate card either — the "Ontbrekend" lines above stay and manual pricing is required.
             }
         }
 

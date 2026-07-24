@@ -51,7 +51,7 @@ public class OrderPricingTests
         var currentUser = new DevCurrentUserContext(Guid.NewGuid());
         var audit = new AuditService(db.Context, tenant, currentUser);
         var admin = new PricingAdminService(db.Context, tenant, audit);
-        var engine = new PricingEngine(db.Context, tenant, new RateCardService(db.Context, tenant, audit));
+        var engine = new PricingEngine(db.Context, tenant);
         var permissions = new PermissionSet();
         var sut = new TransportOrderService(db.Context, tenant, audit, new TestClock(Now), engine, currentUser, permissions);
         return new Harness(db, sut, admin, permissions, tenantId, customerId, palletUnitId);

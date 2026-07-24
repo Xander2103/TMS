@@ -21,7 +21,6 @@ import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
 import { CustomerLocationsPanel } from '../components/CustomerLocationsPanel'
 import { CustomerCommunicationPanel } from '../components/CustomerCommunicationPanel'
 import { CustomerBillingPanel } from '../components/CustomerBillingPanel'
-import { CustomerRateCardsPanel } from '../components/CustomerRateCardsPanel'
 import { CustomerUnitPricingPanel } from '../components/CustomerUnitPricingPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
@@ -212,7 +211,6 @@ export function CustomerDetailPage() {
               canViewBilling && id ? (
                 <>
                   <CustomerUnitPricingPanel customerId={id} />
-                  <CustomerRateCardsPanel customerId={id} />
                   <CustomerBillingPanel customerId={id} />
                 </>
               ) : (
@@ -427,7 +425,6 @@ export function CustomerDetailPage() {
           {activeTab === 'billing' && canViewBilling && id && (
             <TabPanel tabId="billing">
               <CustomerUnitPricingPanel customerId={id} />
-              <CustomerRateCardsPanel customerId={id} />
               <CustomerBillingPanel customerId={id} />
             </TabPanel>
           )}

@@ -38,8 +38,7 @@ public class PricingEngineTests
         var tenant = new DevTenantContext(tenantId);
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(null));
         var admin = new PricingAdminService(db.Context, tenant, audit);
-        var rateCards = new RateCardService(db.Context, tenant, audit);
-        var engine = new PricingEngine(db.Context, tenant, rateCards);
+        var engine = new PricingEngine(db.Context, tenant);
         return new Harness(db, engine, admin, tenantId, customerId, palletUnitId, hourUnitId);
     }
 
@@ -205,7 +204,7 @@ public class PricingEngineTests
     }
 
     [Fact]
-    public async Task NoUnitRules_FallsBackToRateCard()
+    public async Task LegacyRateCard_ConvertsOnce_AndKeepsPricing()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
@@ -213,13 +212,51 @@ public class PricingEngineTests
         {
             Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId,
             Name = "Kaart 2026", EffectiveFrom = Today.AddMonths(-1), BaseAmount = 80,
+            PerPalletRate = 8m, PerTonRate = 12m, MinimumAmount = 100m,
+            Surcharges =
+            [
+                new RateSurcharge { Id = Guid.NewGuid(), TenantId = h.TenantId, Name = "ADR", Kind = SurchargeKind.Fixed, Value = 10m },
+            ],
         });
         await h.Db.Context.SaveChangesAsync();
 
-        var result = await h.Engine.CalculateAsync(Request(h, 2), CancellationToken.None);
-        Assert.Equal(80m, result.Total);
+        await RateCardConversionService.ConvertAsync(h.Db.Context);
+        // Idempotent: a second run converts nothing extra.
+        await RateCardConversionService.ConvertAsync(h.Db.Context);
+        Assert.Equal(1, await h.Db.Context.PricingAgreements.CountAsync(a => a.TenantId == h.TenantId));
+
+        // Same order as the legacy quote: 80 base + 3×8 + 1.5×12 = 122 → +10 ADR = 132.
+        var request = new PriceCalculationRequest(h.CustomerId, Today,
+            [new PriceCalculationLineInput(h.PalletUnitId, 3)], "BE", null, 1500m, null, 3, []);
+        var result = await h.Engine.CalculateAsync(request, CancellationToken.None);
+
+        Assert.Equal(132m, result.Total);
         Assert.False(result.RequiresManualPrice);
-        Assert.All(result.Lines, l => Assert.StartsWith("Tarievenkaart:", l.Source));
+        Assert.Contains(result.Lines, l => l.AgreementName == "Kaart 2026");
+        Assert.Contains(result.Lines, l => l.Label == "ADR" && l.Amount == 10m);
+
+        // The legacy card rows are preserved untouched.
+        Assert.Equal(1, await h.Db.Context.RateCards.CountAsync(c => c.TenantId == h.TenantId));
+    }
+
+    [Fact]
+    public async Task LegacyRateCard_Minimum_AppliesAfterConversion()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Db.Context.Set<RateCard>().Add(new RateCard
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId,
+            Name = "Kaart minimum", EffectiveFrom = Today.AddMonths(-1), BaseAmount = 30, MinimumAmount = 90m,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        await RateCardConversionService.ConvertAsync(h.Db.Context);
+
+        var result = await h.Engine.CalculateAsync(Request(h, 2), CancellationToken.None);
+
+        // 30 base → minimum 90 kicks in, explained as a separate line.
+        Assert.Equal(90m, result.Total);
+        Assert.Contains(result.Lines, l => l.Label.StartsWith("Minimumtarief"));
     }
 
     [Fact]

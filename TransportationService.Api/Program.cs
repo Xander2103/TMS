@@ -205,8 +205,6 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Reference.Services.
     TransportationService.Api.Modules.Reference.Services.UnitTypeMasterService>();
 
 // Tarification
-builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IRateCardService,
-    TransportationService.Api.Modules.Tarification.Services.RateCardService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IPricingAdminService,
     TransportationService.Api.Modules.Tarification.Services.PricingAdminService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IPricingEngine,
@@ -421,6 +419,8 @@ if (app.Environment.IsDevelopment())
     // Idempotent every startup: keep the permission catalog in sync and seed starter lookups.
     await PermissionCatalogSeeder.SyncAsync(dbContext);
     await ReferenceDataSeeder.SeedAsync(dbContext);
+    // Legacy rate cards convert once into pricing agreements (idempotent, data preserved).
+    await TransportationService.Api.Modules.Tarification.Services.RateCardConversionService.ConvertAsync(dbContext);
     await DefaultRoleSeeder.SyncAsync(dbContext);
     await LegalEntitySeeder.SeedAsync(dbContext);
     await ExpiryPolicySeeder.SeedAsync(dbContext);

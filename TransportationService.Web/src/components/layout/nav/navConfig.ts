@@ -132,7 +132,6 @@ export function getNavModules(): NavModule[] {
         { label: 'Klantportaal', to: '/customer-portal', permissions: ['customer_portal.view'] },
         { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
         { label: 'Kostentarieven', to: '/cost-rates', permissions: ['trip_costs.view', 'trip_costs.manage'] },
-        { label: 'Verkooptarieven', to: '/rate-cards', permissions: ['tariffs.view', 'tariffs.manage'] },
         { label: 'Prijsinstellingen', to: '/settings/pricing', permissions: ['tariffs.manage'] },
       ],
     },
