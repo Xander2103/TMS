@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 11;
+    public const int CurrentVersion = 12;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -302,6 +302,14 @@ public static class DefaultRoleUpgrades
                 [
                     PermissionCodes.InventoryView,
                 ],
+            }),
+
+        new(12,
+            "Low-stock alerts 2026-07-24: recipients of inventory low-stock notifications.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["hr"] = [PermissionCodes.InventoryLowStockAlerts],
+                ["magazijn"] = [PermissionCodes.InventoryLowStockAlerts],
             }),
     ];
 }

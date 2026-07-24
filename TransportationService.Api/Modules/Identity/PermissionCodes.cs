@@ -40,6 +40,7 @@ public static class PermissionCodes
     public const string InventoryManage = "inventory.manage";
     public const string InventoryAdjust = "inventory.adjust";
     public const string InventoryOverrideNegativeStock = "inventory.override_negative_stock";
+    public const string InventoryLowStockAlerts = "inventory.low_stock_alerts";
 
     public const string PlanningView = "planning.view";
     public const string PlanningCreate = "planning.create";
@@ -334,6 +335,7 @@ public static class PermissionCodes
         (InventoryManage, "inventory", "manage", "Voorraadkenmerken, varianten en attributen beheren"),
         (InventoryAdjust, "inventory", "adjust", "Voorraad toevoegen en corrigeren"),
         (InventoryOverrideNegativeStock, "inventory", "override_negative_stock", "Uitgifte bij onvoldoende voorraad toestaan"),
+        (InventoryLowStockAlerts, "inventory", "low_stock_alerts", "Ontvangt meldingen bij lage voorraad"),
         (PlanningView, "planning", "view", "Planning bekijken"),
         (PlanningCreate, "planning", "create", "Planning aanmaken"),
         (PlanningEdit, "planning", "edit", "Planning bewerken"),

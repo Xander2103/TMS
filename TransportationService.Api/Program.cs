@@ -90,6 +90,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.
     TransportationService.Api.Modules.Employees.Services.IssuedItemService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IInventoryService,
     TransportationService.Api.Modules.Employees.Services.InventoryService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.ILowStockNotifier,
+    TransportationService.Api.Modules.Employees.Services.LowStockNotifier>();
 
 // Qualification file storage
 builder.Services.AddSingleton<IFileStorageService>(

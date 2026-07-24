@@ -95,14 +95,16 @@ public class InventoryService : IInventoryService
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUserContext _currentUser;
     private readonly IAuditService _auditService;
+    private readonly ILowStockNotifier? _lowStockNotifier;
 
     public InventoryService(TransportationDbContext dbContext, ITenantContext tenantContext,
-        ICurrentUserContext currentUser, IAuditService auditService)
+        ICurrentUserContext currentUser, IAuditService auditService, ILowStockNotifier? lowStockNotifier = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUser = currentUser;
         _auditService = auditService;
+        _lowStockNotifier = lowStockNotifier;
     }
 
     // --- Attribute definitions ---
@@ -614,6 +616,11 @@ public class InventoryService : IInventoryService
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(MovementEntity, movement.Id.ToString(), "StockCorrected",
             new { Previous = current }, new { template.Name, variant?.Label, movement.ResultingStock, movement.Reason }, cancellationToken);
+        if (_lowStockNotifier is not null)
+        {
+            await _lowStockNotifier.NotifyIfCrossedAsync(template, variant, current, cancellationToken);
+        }
+
         return await MapMovementAsync(movement, cancellationToken);
     }
 

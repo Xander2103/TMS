@@ -72,10 +72,12 @@ public class IssuedItemService : IIssuedItemService
     private readonly IAuditService _auditService;
     private readonly IInventoryService _inventoryService;
     private readonly IPermissionAuthorizationService _permissionService;
+    private readonly ILowStockNotifier? _lowStockNotifier;
 
     public IssuedItemService(TransportationDbContext dbContext, ITenantContext tenantContext,
         ICurrentUserContext currentUser, IAuditService auditService,
-        IInventoryService inventoryService, IPermissionAuthorizationService permissionService)
+        IInventoryService inventoryService, IPermissionAuthorizationService permissionService,
+        ILowStockNotifier? lowStockNotifier = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -83,6 +85,7 @@ public class IssuedItemService : IIssuedItemService
         _auditService = auditService;
         _inventoryService = inventoryService;
         _permissionService = permissionService;
+        _lowStockNotifier = lowStockNotifier;
     }
 
     public async Task<IReadOnlyList<IssuedItemTemplateDto>> ListTemplatesAsync(bool includeInactive, CancellationToken cancellationToken, Guid? categoryId = null)
@@ -147,8 +150,14 @@ public class IssuedItemService : IIssuedItemService
             }
         }
 
+        var stockBeforeTarget = template.CurrentStock;
         await ApplyStockTargetAsync(template, request, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
+        if (_lowStockNotifier is not null && !template.VariantsEnabled)
+        {
+            await _lowStockNotifier.NotifyIfCrossedAsync(template, null, stockBeforeTarget, cancellationToken);
+        }
+
         await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "Updated", null,
             new { template.Name, template.IsActive }, cancellationToken);
         if (oldStockTracking != template.StockTrackingEnabled)
@@ -250,12 +259,20 @@ public class IssuedItemService : IIssuedItemService
         }
 
         var variant = await ResolveVariantAsync(item, template, request, oldStatus, cancellationToken);
+        var stockBefore = template is { StockTrackingEnabled: true }
+            ? variant?.CurrentStock ?? template.CurrentStock
+            : (int?)null;
         ApplyItemState(item, request);
         await ApplyStockTransitionAsync(item, template, variant, oldStatus, oldQuantity, request, cancellationToken);
 
         // Item + movement + cached stock commit in ONE SaveChanges/transaction: a failed
         // employee-item write can never consume stock.
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (_lowStockNotifier is not null && template is not null && stockBefore is { } previousStock)
+        {
+            await _lowStockNotifier.NotifyIfCrossedAsync(template, variant, previousStock, cancellationToken);
+        }
 
         await _auditService.RecordAsync(ItemEntity, item.Id.ToString(), AuditAction(item.Status), null,
             new { item.EmployeeId, item.NameSnapshot, item.Status, item.VariantSnapshot, request.ReturnDisposition }, cancellationToken);

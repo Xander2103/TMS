@@ -45,6 +45,7 @@ public static class NotificationTypeCatalog
             ["package_departure_override"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
             ["package_completion_override"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
             ["package_returned_depot"] = (NotificationCategory.Execution, NotificationSeverity.Info),
+            ["inventory_low_stock"] = (NotificationCategory.System, NotificationSeverity.Warning),
         };
 
     public static (NotificationCategory Category, NotificationSeverity Severity) Resolve(string type) =>
