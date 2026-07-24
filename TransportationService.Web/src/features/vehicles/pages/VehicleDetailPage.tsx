@@ -16,6 +16,7 @@ import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { AssignmentSlot } from '../../fleet-assignment/AssignmentSlot'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
+import { MaintenancePolicySummary } from '../../maintenance-policies/components/MaintenancePolicySummary'
 import { DamagePanel } from '../../damage/components/DamagePanel'
 import { FuelPanel } from '../../fuel/components/FuelPanel'
 import { FleetKpiPanel } from '../../fleet-kpi/FleetKpiPanel'
@@ -210,6 +211,7 @@ export function VehicleDetailPage() {
           onSubmit={saveEdit}
           onCancel={() => setEditing(false)}
           documentsSection={<FleetDocumentsPanel ownerType="vehicle" ownerId={vehicle.id} />}
+          maintenanceSection={<MaintenancePolicySummary assetKind="Vehicle" assetId={vehicle.id} />}
         />
       ) : (
         <>
@@ -334,6 +336,7 @@ export function VehicleDetailPage() {
           )}
           {tab === 'onderhoud' && id && (
             <TabPanel tabId="onderhoud">
+              <MaintenancePolicySummary assetKind="Vehicle" assetId={id} />
               <MaintenancePanel ownerType="vehicle" ownerId={id} />
             </TabPanel>
           )}

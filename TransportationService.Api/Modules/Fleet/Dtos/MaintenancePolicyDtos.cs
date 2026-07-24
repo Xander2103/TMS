@@ -44,3 +44,16 @@ public enum MaintenancePolicyLevel
     Category,
     CompanyDefault,
 }
+
+/// <summary>Effective rule for one kind, with a human-readable source ("waar komt dit vandaan").</summary>
+public record EffectivePolicyDto(
+    Guid PolicyId,
+    MaintenancePolicyLevel Level,
+    string SourceLabel,
+    int? IntervalMonths,
+    int? IntervalKm,
+    int WarningDays,
+    string? Description);
+
+/// <summary>Both effective rules of one asset; null = no applicable rule configured.</summary>
+public record EffectivePoliciesDto(EffectivePolicyDto? Maintenance, EffectivePolicyDto? Inspection);

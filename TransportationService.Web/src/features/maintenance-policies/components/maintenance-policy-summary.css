@@ -1,0 +1,23 @@
+.policy-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.policy-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.policy-summary-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

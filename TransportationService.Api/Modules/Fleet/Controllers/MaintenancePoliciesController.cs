@@ -24,6 +24,16 @@ public class MaintenancePoliciesController : ControllerBase
         return Ok(await _service.ListAsync(cancellationToken));
     }
 
+    [HttpGet("effective")]
+    [RequirePermission(PermissionCodes.MaintenancePoliciesView, PermissionCodes.MaintenancePoliciesManage,
+        PermissionCodes.VehiclesView, PermissionCodes.TrailersView)]
+    public async Task<ActionResult<EffectivePoliciesDto>> Effective(
+        [FromQuery] Modules.Fleet.Entities.FleetAssetKind assetKind, [FromQuery] Guid assetId, CancellationToken cancellationToken)
+    {
+        var effective = await _service.GetEffectiveAsync(assetKind, assetId, cancellationToken);
+        return effective is null ? NotFound() : Ok(effective);
+    }
+
     [HttpPost]
     [RequirePermission(PermissionCodes.MaintenancePoliciesManage)]
     public async Task<ActionResult<MaintenancePolicyDto>> Create(SaveMaintenancePolicyRequest request, CancellationToken cancellationToken)

@@ -24,6 +24,12 @@ public interface IMaintenancePolicyService
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Effective maintenance + inspection rules of one asset with source labels for the UI.
+    /// Null when the asset does not exist in the tenant.
+    /// </summary>
+    Task<EffectivePoliciesDto?> GetEffectiveAsync(FleetAssetKind assetKind, Guid assetId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Plans the initial maintenance job and inspection for a newly registered asset from the
     /// applicable policies. Idempotent: assets with an open planned job/inspection are skipped,
     /// and nothing is created when a policy lacks the data to compute a due date.
@@ -149,6 +155,85 @@ public class MaintenancePolicyService : IMaintenancePolicyService
         var companyDefault = candidates.FirstOrDefault(p =>
             p.CategoryId is null && p.VehicleId is null && p.TrailerId is null);
         return companyDefault is null ? null : ToResolved(companyDefault, MaintenancePolicyLevel.CompanyDefault);
+    }
+
+    public async Task<EffectivePoliciesDto?> GetEffectiveAsync(
+        FleetAssetKind assetKind, Guid assetId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        Guid? categoryId;
+        string? categoryName = null;
+        if (assetKind == FleetAssetKind.Vehicle)
+        {
+            var vehicle = await _dbContext.Vehicles.AsNoTracking()
+                .Where(v => v.Id == assetId && v.TenantId == tenantId)
+                .Select(v => new { v.CategoryId })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (vehicle is null)
+            {
+                return null;
+            }
+
+            categoryId = vehicle.CategoryId;
+            if (categoryId is { } vCat)
+            {
+                categoryName = await _dbContext.VehicleCategories
+                    .Where(c => c.Id == vCat && c.TenantId == tenantId)
+                    .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken);
+            }
+        }
+        else
+        {
+            var trailer = await _dbContext.Trailers.AsNoTracking()
+                .Where(t => t.Id == assetId && t.TenantId == tenantId)
+                .Select(t => new { t.CategoryId })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (trailer is null)
+            {
+                return null;
+            }
+
+            categoryId = trailer.CategoryId;
+            if (categoryId is { } tCat)
+            {
+                categoryName = await _dbContext.TrailerCategories
+                    .Where(c => c.Id == tCat && c.TenantId == tenantId)
+                    .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken);
+            }
+        }
+
+        var maintenance = await BuildEffectiveAsync(MaintenancePolicyKind.Maintenance, assetKind, assetId, categoryId, categoryName, cancellationToken);
+        var inspection = await BuildEffectiveAsync(MaintenancePolicyKind.Inspection, assetKind, assetId, categoryId, categoryName, cancellationToken);
+        return new EffectivePoliciesDto(maintenance, inspection);
+    }
+
+    private async Task<EffectivePolicyDto?> BuildEffectiveAsync(
+        MaintenancePolicyKind kind, FleetAssetKind assetKind, Guid assetId, Guid? categoryId, string? categoryName,
+        CancellationToken cancellationToken)
+    {
+        var resolved = await ResolveAsync(kind, assetKind, assetId, categoryId, cancellationToken);
+        if (resolved is null)
+        {
+            return null;
+        }
+
+        var description = await TenantScoped().AsNoTracking()
+            .Where(p => p.Id == resolved.PolicyId)
+            .Select(p => p.Description)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var sourceLabel = resolved.Level switch
+        {
+            MaintenancePolicyLevel.Asset => assetKind == FleetAssetKind.Vehicle
+                ? "Specifieke regel voor voertuig"
+                : "Specifieke regel voor oplegger",
+            MaintenancePolicyLevel.Category => $"Overgenomen van categorie {categoryName ?? "—"}",
+            _ => "Bedrijfsstandaard",
+        };
+
+        return new EffectivePolicyDto(
+            resolved.PolicyId, resolved.Level, sourceLabel,
+            resolved.IntervalMonths, resolved.IntervalKm, resolved.WarningDays, description);
     }
 
     public async Task ApplyDefaultsAsync(FleetAssetKind assetKind, Guid assetId, Guid? categoryId, int currentOdometerKm,

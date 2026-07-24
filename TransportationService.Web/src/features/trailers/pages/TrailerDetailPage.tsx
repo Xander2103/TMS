@@ -15,6 +15,7 @@ import { ApiError } from '../../../api/apiClient'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
+import { MaintenancePolicySummary } from '../../maintenance-policies/components/MaintenancePolicySummary'
 import { DamagePanel } from '../../damage/components/DamagePanel'
 import { InspectionsPanel } from '../../inspections/components/InspectionsPanel'
 import { FleetKpiPanel } from '../../fleet-kpi/FleetKpiPanel'
@@ -177,6 +178,7 @@ export function TrailerDetailPage() {
           onSubmit={saveEdit}
           onCancel={() => setEditing(false)}
           documentsSection={<FleetDocumentsPanel ownerType="trailer" ownerId={trailer.id} />}
+          maintenanceSection={<MaintenancePolicySummary assetKind="Trailer" assetId={trailer.id} />}
         />
       ) : (
         <>
@@ -245,6 +247,7 @@ export function TrailerDetailPage() {
           )}
           {tab === 'onderhoud' && id && (
             <TabPanel tabId="onderhoud">
+              <MaintenancePolicySummary assetKind="Trailer" assetId={id} />
               <MaintenancePanel ownerType="trailer" ownerId={id} />
             </TabPanel>
           )}

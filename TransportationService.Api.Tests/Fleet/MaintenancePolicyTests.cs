@@ -126,4 +126,44 @@ public class MaintenancePolicyTests
         await Assert.ThrowsAsync<DomainValidationException>(
             () => h.Sut.CreateAsync(Policy(categoryId: h.CategoryId, vehicleId: h.VehicleId), CancellationToken.None));
     }
+
+    [Fact]
+    public async Task GetEffective_LabelsSource_AndFallsBackAfterOverrideRemoval()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Sut.CreateAsync(Policy(months: 12), CancellationToken.None);
+        await h.Sut.CreateAsync(Policy(months: 6, categoryId: h.CategoryId), CancellationToken.None);
+        await h.Sut.CreateAsync(Policy(kind: MaintenancePolicyKind.Inspection, months: 24), CancellationToken.None);
+        var overridePolicy = await h.Sut.CreateAsync(Policy(months: 3, vehicleId: h.VehicleId), CancellationToken.None);
+
+        var effective = await h.Sut.GetEffectiveAsync(FleetAssetKind.Vehicle, h.VehicleId, CancellationToken.None);
+        Assert.NotNull(effective);
+        Assert.Equal(MaintenancePolicyLevel.Asset, effective!.Maintenance!.Level);
+        Assert.Equal("Specifieke regel voor voertuig", effective.Maintenance.SourceLabel);
+        Assert.Equal(3, effective.Maintenance.IntervalMonths);
+        Assert.Equal(MaintenancePolicyLevel.CompanyDefault, effective.Inspection!.Level);
+        Assert.Equal("Bedrijfsstandaard", effective.Inspection.SourceLabel);
+
+        // "Gebruik opnieuw categorie-/bedrijfsstandaard": removing the override re-inherits.
+        await h.Sut.DeleteAsync(overridePolicy.Id, CancellationToken.None);
+        var inherited = await h.Sut.GetEffectiveAsync(FleetAssetKind.Vehicle, h.VehicleId, CancellationToken.None);
+        Assert.Equal(MaintenancePolicyLevel.Category, inherited!.Maintenance!.Level);
+        Assert.Equal("Overgenomen van categorie Trekker", inherited.Maintenance.SourceLabel);
+        Assert.Equal(6, inherited.Maintenance.IntervalMonths);
+    }
+
+    [Fact]
+    public async Task GetEffective_UnknownOrForeignAsset_ReturnsNull()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        Assert.Null(await h.Sut.GetEffectiveAsync(FleetAssetKind.Vehicle, Guid.NewGuid(), CancellationToken.None))
+;
+        // Same asset id queried from another tenant's context is invisible.
+        var otherTenant = new DevTenantContext(Guid.NewGuid());
+        var otherSut = new MaintenancePolicyService(h.Db.Context, otherTenant,
+            new AuditService(h.Db.Context, otherTenant, new DevCurrentUserContext(null)), new TestClock(Now));
+        Assert.Null(await otherSut.GetEffectiveAsync(FleetAssetKind.Vehicle, h.VehicleId, CancellationToken.None));
+    }
 }

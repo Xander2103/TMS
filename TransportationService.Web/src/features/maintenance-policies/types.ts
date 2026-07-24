@@ -41,6 +41,23 @@ export interface MaintenancePolicyInput {
   isActive: boolean
 }
 
+export type MaintenancePolicyLevel = 'Asset' | 'Category' | 'CompanyDefault'
+
+export interface EffectivePolicy {
+  policyId: string
+  level: MaintenancePolicyLevel
+  sourceLabel: string
+  intervalMonths: number | null
+  intervalKm: number | null
+  warningDays: number
+  description: string | null
+}
+
+export interface EffectivePolicies {
+  maintenance: EffectivePolicy | null
+  inspection: EffectivePolicy | null
+}
+
 /** Human description of which level a rule targets (resolution: asset > category > company). */
 export function policyLevelLabel(policy: MaintenancePolicy): string {
   if (policy.vehicleNumber) return `Voertuig ${policy.vehicleNumber}`
