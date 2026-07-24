@@ -21,7 +21,9 @@ import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
 import { CustomerLocationsPanel } from '../components/CustomerLocationsPanel'
 import { CustomerCommunicationPanel } from '../components/CustomerCommunicationPanel'
 import { CustomerBillingPanel } from '../components/CustomerBillingPanel'
+import { CustomerPriceAdjustmentsPanel } from '../components/CustomerPriceAdjustmentsPanel'
 import { CustomerUnitPricingPanel } from '../components/CustomerUnitPricingPanel'
+import { CustomerUnitsPanel } from '../components/CustomerUnitsPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
 import { VAT_TREATMENT_LABELS } from '../types'
@@ -210,7 +212,9 @@ export function CustomerDetailPage() {
             tarieven:
               canViewBilling && id ? (
                 <>
+                  <CustomerUnitsPanel customerId={id} />
                   <CustomerUnitPricingPanel customerId={id} />
+                  <CustomerPriceAdjustmentsPanel customerId={id} />
                   <CustomerBillingPanel customerId={id} />
                 </>
               ) : (
@@ -424,7 +428,9 @@ export function CustomerDetailPage() {
 
           {activeTab === 'billing' && canViewBilling && id && (
             <TabPanel tabId="billing">
+              <CustomerUnitsPanel customerId={id} />
               <CustomerUnitPricingPanel customerId={id} />
+              <CustomerPriceAdjustmentsPanel customerId={id} />
               <CustomerBillingPanel customerId={id} />
             </TabPanel>
           )}

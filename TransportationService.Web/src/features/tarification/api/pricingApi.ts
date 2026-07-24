@@ -40,9 +40,60 @@ export const updatePricingZone = (id: string, input: PricingZoneInput): Promise<
   apiClient.putJson(`/api/pricing/zones/${id}`, input)
 export const deletePricingZone = (id: string): Promise<void> => apiClient.deleteRequest(`/api/pricing/zones/${id}`)
 
+// --- Pricing agreements (tarievenkaarten) ---
+
+export interface PricingAgreementSurcharge {
+  id: string
+  name: string
+  kind: SurchargeKind
+  value: number
+}
+
+export interface PricingAgreement {
+  id: string
+  customerId: string | null
+  customerName: string | null
+  name: string
+  currency: string
+  effectiveFrom: string
+  effectiveUntil: string | null
+  isActive: boolean
+  minimumAmount: number | null
+  notes: string | null
+  surcharges: PricingAgreementSurcharge[]
+}
+
+export interface PricingAgreementInput {
+  customerId: string | null
+  name: string
+  effectiveFrom: string
+  effectiveUntil: string | null
+  isActive: boolean
+  minimumAmount: number | null
+  notes: string | null
+  surcharges: { name: string; kind: SurchargeKind; value: number }[] | null
+}
+
+export const listPricingAgreements = (customerId?: string): Promise<PricingAgreement[]> =>
+  apiClient.getJson(`/api/pricing/agreements${customerId ? `?customerId=${customerId}` : ''}`)
+export const createPricingAgreement = (input: PricingAgreementInput): Promise<PricingAgreement> =>
+  apiClient.postJson('/api/pricing/agreements', input)
+export const updatePricingAgreement = (id: string, input: PricingAgreementInput): Promise<PricingAgreement> =>
+  apiClient.putJson(`/api/pricing/agreements/${id}`, input)
+export const deletePricingAgreement = (id: string): Promise<void> =>
+  apiClient.deleteRequest(`/api/pricing/agreements/${id}`)
+
 // --- Price rules ---
 
-export type PriceRuleBasis = 'PerUnit' | 'QuantityBracket' | 'WeightBracket' | 'Hourly' | 'Fixed'
+export type PriceRuleBasis =
+  | 'PerUnit'
+  | 'QuantityBracket'
+  | 'WeightBracket'
+  | 'Hourly'
+  | 'Fixed'
+  | 'PerKm'
+  | 'PerPallet'
+  | 'PerTon'
 
 export const PRICE_RULE_BASIS_LABELS: Record<PriceRuleBasis, string> = {
   PerUnit: 'Prijs per eenheid',
@@ -50,6 +101,9 @@ export const PRICE_RULE_BASIS_LABELS: Record<PriceRuleBasis, string> = {
   WeightBracket: 'Staffel op gewicht (kg)',
   Hourly: 'Uurtarief',
   Fixed: 'Vaste prijs',
+  PerKm: 'Kilometertarief',
+  PerPallet: 'Prijs per pallet (order)',
+  PerTon: 'Prijs per ton (order)',
 }
 
 export interface PriceRuleBracket {
@@ -77,6 +131,13 @@ export interface PriceRule {
   unitPrice: number | null
   minimumAmount: number | null
   brackets: PriceRuleBracket[]
+  agreementId: string | null
+  agreementName: string | null
+  priority: number
+  baseAmount: number | null
+  oversizeLengthCm: number | null
+  oversizeWidthCm: number | null
+  oversizeBillableFactor: number | null
 }
 
 export interface PriceRuleBracketInput {
@@ -98,6 +159,12 @@ export interface PriceRuleInput {
   unitPrice: number | null
   minimumAmount: number | null
   brackets: PriceRuleBracketInput[] | null
+  agreementId?: string | null
+  priority?: number
+  baseAmount?: number | null
+  oversizeLengthCm?: number | null
+  oversizeWidthCm?: number | null
+  oversizeBillableFactor?: number | null
 }
 
 export const listPriceRules = (customerId?: string): Promise<PriceRule[]> =>
@@ -226,6 +293,10 @@ export interface PriceBreakdownLine {
   amount: number
   source: string
   informational: boolean
+  ruleName: string | null
+  agreementName: string | null
+  actualQuantity: number | null
+  billableQuantity: number | null
 }
 
 export interface PriceCalculationResult {
@@ -237,7 +308,59 @@ export interface PriceCalculationResult {
   zoneName: string | null
   requiresManualPrice: boolean
   serviceLines: { serviceOptionId: string; name: string; kind: SurchargeKind; value: number; amount: number }[]
+  tariffDate: string | null
+  configurationError: string | null
+  diagnostics: string[] | null
 }
 
 export const previewPrice = (input: PricePreviewInput): Promise<PriceCalculationResult> =>
   apiClient.postJson('/api/pricing/preview', input)
+
+// --- Scheduled price adjustments ---
+
+export interface PriceAdjustmentValueChange {
+  field: string
+  oldValue: number
+  newValue: number
+}
+
+export interface PriceAdjustmentRulePreview {
+  priceRuleId: string
+  ruleName: string
+  effectiveFrom: string
+  effectiveUntil: string | null
+  changes: PriceAdjustmentValueChange[]
+}
+
+export interface ScheduledPriceAdjustment {
+  id: string
+  customerId: string
+  effectiveDate: string
+  percent: number
+  status: 'Gepland' | 'Actief' | 'Geannuleerd'
+  reason: string | null
+  ruleCount: number
+  createdAt: string
+}
+
+export interface PriceAdjustmentInput {
+  effectiveDate: string
+  percent: number
+  ruleIds: string[] | null
+  reason?: string | null
+}
+
+export const listPriceAdjustments = (customerId: string): Promise<ScheduledPriceAdjustment[]> =>
+  apiClient.getJson(`/api/customers/${customerId}/price-adjustments`)
+export const previewPriceAdjustment = (
+  customerId: string,
+  input: Omit<PriceAdjustmentInput, 'reason'>,
+): Promise<PriceAdjustmentRulePreview[]> =>
+  apiClient.postJson(`/api/customers/${customerId}/price-adjustments/preview`, input)
+export const createPriceAdjustment = (
+  customerId: string,
+  input: PriceAdjustmentInput,
+): Promise<ScheduledPriceAdjustment> =>
+  apiClient.postJson(`/api/customers/${customerId}/price-adjustments`, input)
+export const cancelPriceAdjustment = (customerId: string, id: string): Promise<ScheduledPriceAdjustment> =>
+  apiClient.postJson(`/api/customers/${customerId}/price-adjustments/${id}/cancel`, {})

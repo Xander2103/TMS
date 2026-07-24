@@ -10,17 +10,22 @@ import { describeApiError } from '../../../api/problemDetails'
 import {
   PRICE_RULE_BASIS_LABELS,
   createPriceRule,
+  createPricingAgreement,
   deletePriceRule,
+  deletePricingAgreement,
   getCustomerPricingConfig,
   listPriceRules,
+  listPricingAgreements,
   listPricingZones,
   listUnitTypeSettings,
   saveCustomerPricingConfig,
   updatePriceRule,
+  updatePricingAgreement,
   type CustomerPricingConfig,
   type PriceRule,
   type PriceRuleBasis,
   type PriceRuleBracketInput,
+  type PricingAgreement,
   type PricingZone,
   type UnitTypeSettings,
 } from '../../tarification/api/pricingApi'
@@ -35,16 +40,44 @@ interface RuleDraft {
   unitTypeId: string
   basis: PriceRuleBasis
   zoneId: string
+  agreementId: string
   effectiveFrom: string
   effectiveUntil: string
   unitPrice: string
   minimumAmount: string
+  baseAmount: string
+  priority: string
+  oversizeLengthCm: string
+  oversizeWidthCm: string
+  oversizeBillableFactor: string
   brackets: { from: string; to: string; price: string; extra: string }[]
 }
 
+interface AgreementDraft {
+  agreement: PricingAgreement | null
+  name: string
+  effectiveFrom: string
+  effectiveUntil: string
+  minimumAmount: string
+  notes: string
+  surcharges: { name: string; kind: 'Percent' | 'Fixed'; value: string }[]
+}
+
+const today = () => new Date().toISOString().slice(0, 10)
+
+function ruleValueSummary(rule: PriceRule): string {
+  if (rule.brackets.length > 0) return `${rule.brackets.length} staffels`
+  const parts: string[] = []
+  if (rule.baseAmount !== null) parts.push(`basis € ${rule.baseAmount.toFixed(2)}`)
+  if (rule.unitPrice !== null) parts.push(`€ ${rule.unitPrice.toFixed(2)}`)
+  if (rule.minimumAmount !== null) parts.push(`min € ${rule.minimumAmount.toFixed(2)}`)
+  return parts.join(', ') || '—'
+}
+
 /**
- * Customer-specific unit pricing (spec 7): preferred units, parameterized price rules
- * (per-unit / staffel / gewicht / uur / vast, optioneel per zone) and service-option prices.
+ * The customer's commercial tariff overview (spec §13): pricing agreements (tarievenkaarten),
+ * current prices, scheduled future versions and price history, plus service-option prices.
+ * Versioning happens via effective windows — old versions are never overwritten.
  */
 export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPanelProps) {
   const { hasPermission } = useAuth()
@@ -54,12 +87,16 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
 
   const [config, setConfig] = useState<CustomerPricingConfig | null>(null)
   const [rules, setRules] = useState<PriceRule[]>([])
+  const [agreements, setAgreements] = useState<PricingAgreement[]>([])
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [zones, setZones] = useState<PricingZone[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [draft, setDraft] = useState<RuleDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
+  const [agreementDraft, setAgreementDraft] = useState<AgreementDraft | null>(null)
+  const [agreementError, setAgreementError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<PriceRule | null>(null)
+  const [deleteAgreementTarget, setDeleteAgreementTarget] = useState<PricingAgreement | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = useCallback(() => {
@@ -67,12 +104,14 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     Promise.all([
       getCustomerPricingConfig(customerId),
       listPriceRules(customerId),
+      listPricingAgreements(customerId).catch(() => [] as PricingAgreement[]),
       listUnitTypeSettings().catch(() => [] as UnitTypeSettings[]),
       listPricingZones().catch(() => [] as PricingZone[]),
     ])
-      .then(([configData, ruleData, unitData, zoneData]) => {
+      .then(([configData, ruleData, agreementData, unitData, zoneData]) => {
         setConfig(configData)
         setRules(ruleData)
+        setAgreements(agreementData)
         setUnits(unitData)
         setZones(zoneData)
         setLoadError(null)
@@ -88,40 +127,12 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   if (loadError) return <p className="placeholder-text">{loadError}</p>
   if (!config) return <p className="placeholder-text">Prijsafspraken laden…</p>
 
-  const preferredIds = new Set(config.preferredUnits.map((u) => u.unitTypeId))
-
-  async function togglePreferred(unitTypeId: string) {
-    if (!config) return
-    const kept = config.preferredUnits
-      .filter((u) => u.unitTypeId !== unitTypeId)
-      .map((u, index) => ({
-        unitTypeId: u.unitTypeId,
-        sortOrder: index,
-        customerLabel: u.customerLabel,
-        ediCode: u.ediCode,
-        excelCode: u.excelCode,
-        isFavourite: u.isFavourite,
-      }))
-    const next = preferredIds.has(unitTypeId)
-      ? kept
-      : [...kept, {
-          unitTypeId,
-          sortOrder: kept.length,
-          customerLabel: null,
-          ediCode: null,
-          excelCode: null,
-          isFavourite: true,
-        }]
-    try {
-      const saved = await saveCustomerPricingConfig(customerId, {
-        units: next,
-        optionPrices: config.serviceOptions.map((o) => ({ serviceOptionId: o.serviceOptionId, value: o.customerValue })),
-      })
-      setConfig(saved)
-    } catch (err) {
-      showError(describeApiError(err, 'De voorkeurseenheden konden niet worden opgeslagen.').message)
-    }
-  }
+  const now = today()
+  const currentRules = rules.filter(
+    (r) => r.isActive && r.effectiveFrom <= now && (r.effectiveUntil === null || r.effectiveUntil >= now),
+  )
+  const futureRules = rules.filter((r) => r.isActive && r.effectiveFrom > now)
+  const historyRules = rules.filter((r) => !r.isActive || (r.effectiveUntil !== null && r.effectiveUntil < now))
 
   async function saveOptionPrice(serviceOptionId: string, raw: string) {
     if (!config) return
@@ -158,10 +169,16 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             unitTypeId: rule.unitTypeId ?? '',
             basis: rule.basis,
             zoneId: rule.zoneId ?? '',
+            agreementId: rule.agreementId ?? '',
             effectiveFrom: rule.effectiveFrom,
             effectiveUntil: rule.effectiveUntil ?? '',
             unitPrice: rule.unitPrice !== null ? String(rule.unitPrice) : '',
             minimumAmount: rule.minimumAmount !== null ? String(rule.minimumAmount) : '',
+            baseAmount: rule.baseAmount !== null ? String(rule.baseAmount) : '',
+            priority: String(rule.priority),
+            oversizeLengthCm: rule.oversizeLengthCm !== null ? String(rule.oversizeLengthCm) : '',
+            oversizeWidthCm: rule.oversizeWidthCm !== null ? String(rule.oversizeWidthCm) : '',
+            oversizeBillableFactor: rule.oversizeBillableFactor !== null ? String(rule.oversizeBillableFactor) : '',
             brackets: rule.brackets.map((b) => ({
               from: String(b.fromQuantity),
               to: b.toQuantity !== null ? String(b.toQuantity) : '',
@@ -175,10 +192,16 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             unitTypeId: '',
             basis: 'QuantityBracket',
             zoneId: '',
-            effectiveFrom: new Date().toISOString().slice(0, 10),
+            agreementId: '',
+            effectiveFrom: today(),
             effectiveUntil: '',
             unitPrice: '',
             minimumAmount: '',
+            baseAmount: '',
+            priority: '0',
+            oversizeLengthCm: '',
+            oversizeWidthCm: '',
+            oversizeBillableFactor: '',
             brackets: [{ from: '1', to: '', price: '', extra: '' }],
           },
     )
@@ -203,12 +226,18 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         unitTypeId: draft.unitTypeId || null,
         basis: draft.basis,
         zoneId: draft.zoneId || null,
+        agreementId: draft.agreementId || null,
         name: draft.name.trim(),
         effectiveFrom: draft.effectiveFrom,
         effectiveUntil: draft.effectiveUntil || null,
         isActive: true,
         unitPrice: usesBrackets || draft.unitPrice.trim() === '' ? null : Number(draft.unitPrice),
         minimumAmount: draft.minimumAmount.trim() === '' ? null : Number(draft.minimumAmount),
+        baseAmount: draft.baseAmount.trim() === '' ? null : Number(draft.baseAmount),
+        priority: Number(draft.priority) || 0,
+        oversizeLengthCm: draft.oversizeLengthCm.trim() === '' ? null : Number(draft.oversizeLengthCm),
+        oversizeWidthCm: draft.oversizeWidthCm.trim() === '' ? null : Number(draft.oversizeWidthCm),
+        oversizeBillableFactor: draft.oversizeBillableFactor.trim() === '' ? null : Number(draft.oversizeBillableFactor),
         brackets: usesBrackets ? brackets : null,
       }
       if (draft.rule) {
@@ -240,47 +269,170 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     }
   }
 
+  function openAgreementDraft(agreement: PricingAgreement | null) {
+    setAgreementError(null)
+    setAgreementDraft(
+      agreement
+        ? {
+            agreement,
+            name: agreement.name,
+            effectiveFrom: agreement.effectiveFrom,
+            effectiveUntil: agreement.effectiveUntil ?? '',
+            minimumAmount: agreement.minimumAmount !== null ? String(agreement.minimumAmount) : '',
+            notes: agreement.notes ?? '',
+            surcharges: agreement.surcharges.map((s) => ({ name: s.name, kind: s.kind, value: String(s.value) })),
+          }
+        : {
+            agreement: null,
+            name: '',
+            effectiveFrom: today(),
+            effectiveUntil: '',
+            minimumAmount: '',
+            notes: '',
+            surcharges: [],
+          },
+    )
+  }
+
+  async function submitAgreement(event: FormEvent) {
+    event.preventDefault()
+    if (!agreementDraft) return
+    setBusy(true)
+    try {
+      const input = {
+        customerId,
+        name: agreementDraft.name.trim(),
+        effectiveFrom: agreementDraft.effectiveFrom,
+        effectiveUntil: agreementDraft.effectiveUntil || null,
+        isActive: true,
+        minimumAmount: agreementDraft.minimumAmount.trim() === '' ? null : Number(agreementDraft.minimumAmount),
+        notes: agreementDraft.notes.trim() || null,
+        surcharges: agreementDraft.surcharges
+          .filter((s) => s.name.trim() !== '')
+          .map((s) => ({ name: s.name.trim(), kind: s.kind, value: Number(s.value) || 0 })),
+      }
+      if (agreementDraft.agreement) {
+        await updatePricingAgreement(agreementDraft.agreement.id, input)
+        showSuccess('Prijsafspraak bijgewerkt.')
+      } else {
+        await createPricingAgreement(input)
+        showSuccess('Prijsafspraak toegevoegd.')
+      }
+      setAgreementDraft(null)
+      reload()
+    } catch (err) {
+      setAgreementError(describeApiError(err, 'De prijsafspraak kon niet worden opgeslagen.').message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleDeleteAgreement() {
+    if (!deleteAgreementTarget) return
+    const target = deleteAgreementTarget
+    setDeleteAgreementTarget(null)
+    try {
+      await deletePricingAgreement(target.id)
+      showSuccess('Prijsafspraak verwijderd.')
+      reload()
+    } catch (err) {
+      showError(describeApiError(err, 'De prijsafspraak kon niet worden verwijderd.').message)
+    }
+  }
+
   const usesBrackets = draft?.basis === 'QuantityBracket' || draft?.basis === 'WeightBracket'
   const pricingUnits = units.filter((u) => u.isActive && u.allowForPricing)
+
+  const rulesTable = (list: PriceRule[]) => (
+    <table className="issued-items-table">
+      <thead>
+        <tr>
+          <th>Naam</th>
+          <th>Eenheid</th>
+          <th>Berekeningswijze</th>
+          <th>Zone</th>
+          <th>Waarde</th>
+          <th>Prijsafspraak</th>
+          <th>Geldig</th>
+          {canManage && <th aria-label="Acties" />}
+        </tr>
+      </thead>
+      <tbody>
+        {list.map((rule) => (
+          <tr key={rule.id}>
+            <td>{rule.name}</td>
+            <td>{rule.unitTypeName ?? '—'}</td>
+            <td>{PRICE_RULE_BASIS_LABELS[rule.basis]}</td>
+            <td>{rule.zoneName ?? 'Alle'}</td>
+            <td>{ruleValueSummary(rule)}</td>
+            <td>{rule.agreementName ?? '—'}</td>
+            <td>
+              {rule.effectiveFrom}
+              {rule.effectiveUntil ? ` – ${rule.effectiveUntil}` : ' →'}
+              {!rule.isActive && <Badge tone="neutral">Inactief</Badge>}
+            </td>
+            {canManage && (
+              <td className="issued-items-row-actions">
+                <button type="button" className="issued-items-link" onClick={() => openDraft(rule)}>
+                  Bewerken
+                </button>
+                <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(rule)}>
+                  Verwijderen
+                </button>
+              </td>
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
 
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Prijsafspraken per eenheid</h3>
-        {canManage && <Button onClick={() => openDraft(null)}>+ Prijsregel</Button>}
+        <h3>Prijsafspraken (tarievenkaarten)</h3>
+        {canManage && <Button variant="secondary" onClick={() => openAgreementDraft(null)}>+ Prijsafspraak</Button>}
       </div>
-
-      {rules.length === 0 && <p className="placeholder-text">Nog geen prijsregels voor deze klant.</p>}
-      {rules.length > 0 && (
+      {agreements.length === 0 && <p className="placeholder-text">Nog geen prijsafspraken; losse prijsregels blijven mogelijk.</p>}
+      {agreements.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
               <th>Naam</th>
-              <th>Eenheid</th>
-              <th>Soort</th>
-              <th>Zone</th>
               <th>Geldig</th>
+              <th>Minimum</th>
+              <th>Toeslagen</th>
+              <th>Notities</th>
               {canManage && <th aria-label="Acties" />}
             </tr>
           </thead>
           <tbody>
-            {rules.map((rule) => (
-              <tr key={rule.id}>
-                <td>{rule.name}</td>
-                <td>{rule.unitTypeName ?? '—'}</td>
-                <td>{PRICE_RULE_BASIS_LABELS[rule.basis]}</td>
-                <td>{rule.zoneName ?? 'Alle'}</td>
+            {agreements.map((agreement) => (
+              <tr key={agreement.id}>
+                <td>{agreement.name}</td>
                 <td>
-                  {rule.effectiveFrom}
-                  {rule.effectiveUntil ? ` – ${rule.effectiveUntil}` : ' →'}
-                  {!rule.isActive && <Badge tone="neutral">Inactief</Badge>}
+                  {agreement.effectiveFrom}
+                  {agreement.effectiveUntil ? ` – ${agreement.effectiveUntil}` : ' →'}
                 </td>
+                <td>{agreement.minimumAmount !== null ? `€ ${agreement.minimumAmount.toFixed(2)}` : '—'}</td>
+                <td>
+                  {agreement.surcharges.length === 0
+                    ? '—'
+                    : agreement.surcharges
+                        .map((s) => `${s.name} (${s.kind === 'Percent' ? `${s.value}%` : `€ ${s.value.toFixed(2)}`})`)
+                        .join(', ')}
+                </td>
+                <td>{agreement.notes ?? '—'}</td>
                 {canManage && (
                   <td className="issued-items-row-actions">
-                    <button type="button" className="issued-items-link" onClick={() => openDraft(rule)}>
+                    <button type="button" className="issued-items-link" onClick={() => openAgreementDraft(agreement)}>
                       Bewerken
                     </button>
-                    <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(rule)}>
+                    <button
+                      type="button"
+                      className="issued-items-link issued-items-link-danger"
+                      onClick={() => setDeleteAgreementTarget(agreement)}
+                    >
                       Verwijderen
                     </button>
                   </td>
@@ -291,24 +443,26 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         </table>
       )}
 
-      <h4>Gebruikelijke eenheden</h4>
-      <p className="customer-form-muted">
-        Deze eenheden staan bovenaan bij orderinvoer voor deze klant; andere actieve eenheden blijven kiesbaar.
-      </p>
-      <div className="customer-preferred-units">
-        {pricingUnits.map((unit) => (
-          <label key={unit.id} className="tof-checkbox">
-            <input
-              type="checkbox"
-              checked={preferredIds.has(unit.id)}
-              onChange={() => void togglePreferred(unit.id)}
-              disabled={!canManage}
-            />
-            {unit.name}
-          </label>
-        ))}
-        {pricingUnits.length === 0 && <p className="placeholder-text">Geen eenheden beschikbaar voor prijsafspraken.</p>}
+      <div className="customer-panel-header">
+        <h3>Actuele prijzen</h3>
+        {canManage && <Button onClick={() => openDraft(null)}>+ Prijsregel</Button>}
       </div>
+      {currentRules.length === 0 && <p className="placeholder-text">Geen actuele prijsregels voor deze klant.</p>}
+      {currentRules.length > 0 && rulesTable(currentRules)}
+
+      {futureRules.length > 0 && (
+        <>
+          <h4>Toekomstige prijzen</h4>
+          {rulesTable(futureRules)}
+        </>
+      )}
+
+      {historyRules.length > 0 && (
+        <details>
+          <summary>Prijshistoriek ({historyRules.length})</summary>
+          {rulesTable(historyRules)}
+        </details>
+      )}
 
       <h4>Diensten & toeslagen</h4>
       <table className="issued-items-table">
@@ -370,7 +524,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               <FormField label="Naam" htmlFor="pr-name" required>
                 <input id="pr-name" value={draft.name} onChange={(e) => setDraft((d) => (d ? { ...d, name: e.target.value } : d))} maxLength={200} />
               </FormField>
-              <FormField label="Soort" htmlFor="pr-basis">
+              <FormField label="Berekeningswijze" htmlFor="pr-basis">
                 <select id="pr-basis" value={draft.basis} onChange={(e) => setDraft((d) => (d ? { ...d, basis: e.target.value as PriceRuleBasis } : d))}>
                   {Object.entries(PRICE_RULE_BASIS_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>
@@ -381,9 +535,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Eenheid" htmlFor="pr-unit" hint="Alleen een vaste prijs kan zonder eenheid.">
+              <FormField label="Eenheid" htmlFor="pr-unit" hint="Order-brede regels (vast/km/pallet/ton) kunnen zonder eenheid.">
                 <select id="pr-unit" value={draft.unitTypeId} onChange={(e) => setDraft((d) => (d ? { ...d, unitTypeId: e.target.value } : d))}>
-                  <option value="">— Geen (vaste prijs) —</option>
+                  <option value="">— Geen (order-breed) —</option>
                   {pricingUnits.map((unit) => (
                     <option key={unit.id} value={unit.id}>
                       {unit.name}
@@ -403,6 +557,21 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               </FormField>
             </div>
             <div className="issued-items-form-row">
+              <FormField label="Prijsafspraak" htmlFor="pr-agreement" hint="Optioneel: groepeer onder een tarievenkaart.">
+                <select id="pr-agreement" value={draft.agreementId} onChange={(e) => setDraft((d) => (d ? { ...d, agreementId: e.target.value } : d))}>
+                  <option value="">— Losse regel —</option>
+                  {agreements.map((agreement) => (
+                    <option key={agreement.id} value={agreement.id}>
+                      {agreement.name}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+              <FormField label="Prioriteit" htmlFor="pr-priority" hint="Hoger wint bij gelijke specificiteit.">
+                <input id="pr-priority" type="number" value={draft.priority} onChange={(e) => setDraft((d) => (d ? { ...d, priority: e.target.value } : d))} />
+              </FormField>
+            </div>
+            <div className="issued-items-form-row">
               <FormField label="Geldig vanaf" htmlFor="pr-from" required>
                 <input id="pr-from" type="date" value={draft.effectiveFrom} onChange={(e) => setDraft((d) => (d ? { ...d, effectiveFrom: e.target.value } : d))} />
               </FormField>
@@ -413,7 +582,19 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             {!usesBrackets && (
               <div className="issued-items-form-row">
                 <FormField
-                  label={draft.basis === 'Hourly' ? 'Prijs per uur (€)' : draft.basis === 'Fixed' ? 'Vaste prijs (€)' : 'Prijs per eenheid (€)'}
+                  label={
+                    draft.basis === 'Hourly'
+                      ? 'Prijs per uur (€)'
+                      : draft.basis === 'Fixed'
+                        ? 'Vaste prijs (€)'
+                        : draft.basis === 'PerKm'
+                          ? 'Prijs per km (€)'
+                          : draft.basis === 'PerPallet'
+                            ? 'Prijs per pallet (€)'
+                            : draft.basis === 'PerTon'
+                              ? 'Prijs per ton (€)'
+                              : 'Prijs per eenheid (€)'
+                  }
                   htmlFor="pr-price"
                   required
                 >
@@ -447,6 +628,92 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 </Button>
               </fieldset>
             )}
+            <details>
+              <summary>Geavanceerd (basisbedrag & buitenmaat)</summary>
+              <div className="issued-items-form-row">
+                <FormField label="Basisbedrag (€)" htmlFor="pr-base" hint="Wordt bij het berekende bedrag geteld (bv. basiskost vóór km-prijs).">
+                  <input id="pr-base" type="number" step="0.01" value={draft.baseAmount} onChange={(e) => setDraft((d) => (d ? { ...d, baseAmount: e.target.value } : d))} />
+                </FormField>
+              </div>
+              <div className="issued-items-form-row">
+                <FormField label="Buitenmaat vanaf lengte (cm)" htmlFor="pr-ovl">
+                  <input id="pr-ovl" type="number" step="0.01" value={draft.oversizeLengthCm} onChange={(e) => setDraft((d) => (d ? { ...d, oversizeLengthCm: e.target.value } : d))} />
+                </FormField>
+                <FormField label="Buitenmaat vanaf breedte (cm)" htmlFor="pr-ovw">
+                  <input id="pr-ovw" type="number" step="0.01" value={draft.oversizeWidthCm} onChange={(e) => setDraft((d) => (d ? { ...d, oversizeWidthCm: e.target.value } : d))} />
+                </FormField>
+                <FormField label="Telt als (factureerbare eenheden)" htmlFor="pr-ovf" hint="Bv. 2: een buitenmaat-pallet telt als 2 palletplaatsen.">
+                  <input id="pr-ovf" type="number" step="0.5" value={draft.oversizeBillableFactor} onChange={(e) => setDraft((d) => (d ? { ...d, oversizeBillableFactor: e.target.value } : d))} />
+                </FormField>
+              </div>
+            </details>
+          </form>
+        </Modal>
+      )}
+
+      {agreementDraft && (
+        <Modal
+          title={agreementDraft.agreement ? `Prijsafspraak bewerken — ${agreementDraft.agreement.name}` : 'Prijsafspraak toevoegen'}
+          onClose={() => setAgreementDraft(null)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setAgreementDraft(null)} disabled={busy}>
+                Annuleren
+              </Button>
+              <Button type="submit" form="pricing-agreement-form" disabled={busy}>
+                Opslaan
+              </Button>
+            </>
+          }
+        >
+          <form id="pricing-agreement-form" className="issued-items-form" onSubmit={submitAgreement} noValidate>
+            {agreementError && (
+              <div className="issued-items-form-error" role="alert">
+                {agreementError}
+              </div>
+            )}
+            <div className="issued-items-form-row">
+              <FormField label="Naam" htmlFor="pa-name" required hint='Bv. "Distributie België 2026-Q4".'>
+                <input id="pa-name" value={agreementDraft.name} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, name: e.target.value } : d))} maxLength={200} />
+              </FormField>
+              <FormField label="Minimum per order (€)" htmlFor="pa-min">
+                <input id="pa-min" type="number" step="0.01" value={agreementDraft.minimumAmount} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, minimumAmount: e.target.value } : d))} />
+              </FormField>
+            </div>
+            <div className="issued-items-form-row">
+              <FormField label="Geldig vanaf" htmlFor="pa-from" required>
+                <input id="pa-from" type="date" value={agreementDraft.effectiveFrom} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, effectiveFrom: e.target.value } : d))} />
+              </FormField>
+              <FormField label="Geldig tot" htmlFor="pa-until" hint="Leeg = onbeperkt.">
+                <input id="pa-until" type="date" value={agreementDraft.effectiveUntil} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, effectiveUntil: e.target.value } : d))} />
+              </FormField>
+            </div>
+            <FormField label="Interne notities" htmlFor="pa-notes" hint="Bv. commerciële achtergrond van de afspraak.">
+              <input id="pa-notes" value={agreementDraft.notes} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, notes: e.target.value } : d))} maxLength={2000} />
+            </FormField>
+            <fieldset className="issued-items-generate-dimension">
+              <legend>Automatische toeslagen</legend>
+              {agreementDraft.surcharges.map((surcharge, index) => (
+                <div key={index} className="issued-items-form-row customer-rule-bracket">
+                  <input aria-label={`Toeslag ${index + 1} naam`} placeholder="naam" value={surcharge.name}
+                    onChange={(e) => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.map((s, i) => (i === index ? { ...s, name: e.target.value } : s)) } : d))} />
+                  <select aria-label={`Toeslag ${index + 1} soort`} value={surcharge.kind}
+                    onChange={(e) => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.map((s, i) => (i === index ? { ...s, kind: e.target.value as 'Percent' | 'Fixed' } : s)) } : d))}>
+                    <option value="Percent">Percentage</option>
+                    <option value="Fixed">Vast bedrag</option>
+                  </select>
+                  <input aria-label={`Toeslag ${index + 1} waarde`} type="number" step="0.01" placeholder="waarde" value={surcharge.value}
+                    onChange={(e) => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.map((s, i) => (i === index ? { ...s, value: e.target.value } : s)) } : d))} />
+                  <Button variant="ghost" onClick={() => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.filter((_, i) => i !== index) } : d))}>
+                    Verwijderen
+                  </Button>
+                </div>
+              ))}
+              <Button variant="secondary" onClick={() => setAgreementDraft((d) => (d ? { ...d, surcharges: [...d.surcharges, { name: '', kind: 'Percent', value: '' }] } : d))}>
+                + Toeslag
+              </Button>
+            </fieldset>
           </form>
         </Modal>
       )}
@@ -459,6 +726,17 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {deleteAgreementTarget && (
+        <ConfirmDialog
+          title="Prijsafspraak verwijderen"
+          message={`Weet je zeker dat je "${deleteAgreementTarget.name}" wilt verwijderen? Dit kan alleen als er geen tariefregels meer aan hangen.`}
+          confirmLabel="Verwijderen"
+          destructive
+          onConfirm={handleDeleteAgreement}
+          onCancel={() => setDeleteAgreementTarget(null)}
         />
       )}
     </section>
