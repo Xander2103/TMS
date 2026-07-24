@@ -87,6 +87,47 @@ public static class ReferenceDataSeeder
         await SeedIfEmptyAsync<ContractType>(dbContext, tenantId,
             [("VAST", "Vast contract"), ("BEP", "Bepaalde duur"), ("UITZ", "Uitzendkracht"), ("ZELF", "Zelfstandig")],
             cancellationToken);
+
+        await SeedServiceOptionsAsync(dbContext, tenantId, cancellationToken);
+    }
+
+    /// <summary>Starter delivery services/supplements; prices are tenant-editable placeholders.</summary>
+    private static async Task SeedServiceOptionsAsync(
+        TransportationDbContext dbContext, Guid tenantId, CancellationToken cancellationToken)
+    {
+        if (await dbContext.ServiceOptions.AnyAsync(o => o.TenantId == tenantId, cancellationToken))
+        {
+            return;
+        }
+
+        (string Code, string Name, decimal Value)[] options =
+        [
+            ("VOOR8", "Levering vóór 08:00", 25m),
+            ("VOOR10", "Levering vóór 10:00", 15m),
+            ("LAADKLEP", "Laadklep", 10m),
+            ("KRAAN", "Kraanlossing", 75m),
+            ("ADR", "ADR-transport", 50m),
+            ("WACHTTIJD", "Wachttijd (per uur)", 45m),
+            ("EXTRASTOP", "Extra stop", 20m),
+            ("ZATERDAG", "Zaterdaglevering", 40m),
+        ];
+        var order = 0;
+        foreach (var (code, name, value) in options)
+        {
+            dbContext.ServiceOptions.Add(new Modules.Tarification.Entities.ServiceOption
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Code = code,
+                Name = name,
+                Kind = Modules.Tarification.Entities.SurchargeKind.Fixed,
+                DefaultValue = value,
+                IsActive = true,
+                SortOrder = order++,
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private static async Task SeedMissingAsync<TEntity>(

@@ -1,0 +1,534 @@
+using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
+using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Tarification.Dtos;
+using TransportationService.Api.Modules.Tarification.Entities;
+using TransportationService.Api.Modules.Tenancy.Services;
+
+namespace TransportationService.Api.Modules.Tarification.Services;
+
+public interface IPricingAdminService
+{
+    Task<IReadOnlyList<PricingZoneDto>> ListZonesAsync(CancellationToken cancellationToken);
+    Task<PricingZoneDto> CreateZoneAsync(SavePricingZoneRequest request, CancellationToken cancellationToken);
+    Task<PricingZoneDto?> UpdateZoneAsync(Guid id, SavePricingZoneRequest request, CancellationToken cancellationToken);
+    Task<bool> DeleteZoneAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<PriceRuleDto>> ListRulesAsync(Guid? customerId, CancellationToken cancellationToken);
+    Task<PriceRuleDto> CreateRuleAsync(SavePriceRuleRequest request, CancellationToken cancellationToken);
+    Task<PriceRuleDto?> UpdateRuleAsync(Guid id, SavePriceRuleRequest request, CancellationToken cancellationToken);
+    Task<bool> DeleteRuleAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<ServiceOptionDto>> ListServiceOptionsAsync(bool includeInactive, CancellationToken cancellationToken);
+    Task<ServiceOptionDto> CreateServiceOptionAsync(SaveServiceOptionRequest request, CancellationToken cancellationToken);
+    Task<ServiceOptionDto?> UpdateServiceOptionAsync(Guid id, SaveServiceOptionRequest request, CancellationToken cancellationToken);
+    Task<bool> DeleteServiceOptionAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<CustomerPricingConfigDto?> GetCustomerConfigAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<CustomerPricingConfigDto?> SaveCustomerConfigAsync(Guid customerId, SaveCustomerPricingConfigRequest request, CancellationToken cancellationToken);
+}
+
+public class PricingAdminService : IPricingAdminService
+{
+    private readonly TransportationDbContext _dbContext;
+    private readonly ITenantContext _tenantContext;
+    private readonly IAuditService _auditService;
+
+    public PricingAdminService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    {
+        _dbContext = dbContext;
+        _tenantContext = tenantContext;
+        _auditService = auditService;
+    }
+
+    private Guid TenantId => _tenantContext.TenantId;
+
+    // --- Zones ---
+
+    public async Task<IReadOnlyList<PricingZoneDto>> ListZonesAsync(CancellationToken cancellationToken)
+    {
+        var zones = await _dbContext.PricingZones.AsNoTracking()
+            .Include(z => z.Areas)
+            .Where(z => z.TenantId == TenantId)
+            .OrderBy(z => z.SortOrder).ThenBy(z => z.Code)
+            .ToListAsync(cancellationToken);
+        return zones.Select(MapZone).ToList();
+    }
+
+    public async Task<PricingZoneDto> CreateZoneAsync(SavePricingZoneRequest request, CancellationToken cancellationToken)
+    {
+        ValidateZone(request);
+        await EnsureZoneCodeFreeAsync(request.Code, null, cancellationToken);
+
+        var zone = new PricingZone { Id = Guid.NewGuid(), TenantId = TenantId };
+        ApplyZone(zone, request);
+        _dbContext.PricingZones.Add(zone);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PricingZone", zone.Id.ToString(), "Created", null, new { zone.Code, zone.Name }, cancellationToken);
+        return MapZone(zone);
+    }
+
+    public async Task<PricingZoneDto?> UpdateZoneAsync(Guid id, SavePricingZoneRequest request, CancellationToken cancellationToken)
+    {
+        var zone = await _dbContext.PricingZones.Include(z => z.Areas)
+            .FirstOrDefaultAsync(z => z.TenantId == TenantId && z.Id == id, cancellationToken);
+        if (zone is null)
+        {
+            return null;
+        }
+
+        ValidateZone(request);
+        await EnsureZoneCodeFreeAsync(request.Code, id, cancellationToken);
+
+        _dbContext.PricingZoneAreas.RemoveRange(zone.Areas);
+        zone.Areas.Clear();
+        ApplyZone(zone, request);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PricingZone", zone.Id.ToString(), "Updated", null, new { zone.Code, zone.Name }, cancellationToken);
+        return MapZone(zone);
+    }
+
+    public async Task<bool> DeleteZoneAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var zone = await _dbContext.PricingZones.FirstOrDefaultAsync(z => z.TenantId == TenantId && z.Id == id, cancellationToken);
+        if (zone is null)
+        {
+            return false;
+        }
+
+        var inUse = await _dbContext.PriceRules.AnyAsync(r => r.TenantId == TenantId && r.ZoneId == id, cancellationToken);
+        if (inUse)
+        {
+            throw new DomainValidationException("Deze zone wordt gebruikt door prijsregels. Verwijder of wijzig die eerst.");
+        }
+
+        _dbContext.Remove(zone);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PricingZone", zone.Id.ToString(), "Deleted", new { zone.Code }, null, cancellationToken);
+        return true;
+    }
+
+    // --- Price rules ---
+
+    public async Task<IReadOnlyList<PriceRuleDto>> ListRulesAsync(Guid? customerId, CancellationToken cancellationToken)
+    {
+        var rules = await _dbContext.PriceRules.AsNoTracking()
+            .Include(r => r.Brackets)
+            .Where(r => r.TenantId == TenantId)
+            .Where(r => customerId == null ? r.CustomerId == null : r.CustomerId == customerId)
+            .OrderBy(r => r.Name)
+            .ToListAsync(cancellationToken);
+        return await MapRulesAsync(rules, cancellationToken);
+    }
+
+    public async Task<PriceRuleDto> CreateRuleAsync(SavePriceRuleRequest request, CancellationToken cancellationToken)
+    {
+        await ValidateRuleAsync(request, cancellationToken);
+        var rule = new PriceRule { Id = Guid.NewGuid(), TenantId = TenantId };
+        ApplyRule(rule, request);
+        _dbContext.PriceRules.Add(rule);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PriceRule", rule.Id.ToString(), "Created", null,
+            new { rule.Name, rule.Basis, rule.CustomerId, rule.UnitTypeId }, cancellationToken);
+        return (await MapRulesAsync([rule], cancellationToken))[0];
+    }
+
+    public async Task<PriceRuleDto?> UpdateRuleAsync(Guid id, SavePriceRuleRequest request, CancellationToken cancellationToken)
+    {
+        var rule = await _dbContext.PriceRules.Include(r => r.Brackets)
+            .FirstOrDefaultAsync(r => r.TenantId == TenantId && r.Id == id, cancellationToken);
+        if (rule is null)
+        {
+            return null;
+        }
+
+        await ValidateRuleAsync(request, cancellationToken);
+        _dbContext.PriceRuleBrackets.RemoveRange(rule.Brackets);
+        rule.Brackets.Clear();
+        ApplyRule(rule, request);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PriceRule", rule.Id.ToString(), "Updated", null, new { rule.Name, rule.Basis }, cancellationToken);
+        return (await MapRulesAsync([rule], cancellationToken))[0];
+    }
+
+    public async Task<bool> DeleteRuleAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var rule = await _dbContext.PriceRules.FirstOrDefaultAsync(r => r.TenantId == TenantId && r.Id == id, cancellationToken);
+        if (rule is null)
+        {
+            return false;
+        }
+
+        _dbContext.Remove(rule);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PriceRule", rule.Id.ToString(), "Deleted", new { rule.Name }, null, cancellationToken);
+        return true;
+    }
+
+    // --- Service options ---
+
+    public async Task<IReadOnlyList<ServiceOptionDto>> ListServiceOptionsAsync(bool includeInactive, CancellationToken cancellationToken)
+    {
+        return await _dbContext.ServiceOptions.AsNoTracking()
+            .Where(o => o.TenantId == TenantId && (includeInactive || o.IsActive))
+            .OrderBy(o => o.SortOrder).ThenBy(o => o.Name)
+            .Select(o => new ServiceOptionDto(o.Id, o.Code, o.Name, o.Kind, o.DefaultValue, o.IsActive, o.SortOrder))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<ServiceOptionDto> CreateServiceOptionAsync(SaveServiceOptionRequest request, CancellationToken cancellationToken)
+    {
+        ValidateOption(request);
+        var duplicate = await _dbContext.ServiceOptions.AnyAsync(
+            o => o.TenantId == TenantId && o.Code == request.Code.Trim().ToUpperInvariant(), cancellationToken);
+        if (duplicate)
+        {
+            throw new DomainValidationException("code", $"Er bestaat al een dienst met code '{request.Code}'.");
+        }
+
+        var option = new ServiceOption { Id = Guid.NewGuid(), TenantId = TenantId };
+        ApplyOption(option, request);
+        _dbContext.ServiceOptions.Add(option);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Created", null, new { option.Code, option.Name }, cancellationToken);
+        return new ServiceOptionDto(option.Id, option.Code, option.Name, option.Kind, option.DefaultValue, option.IsActive, option.SortOrder);
+    }
+
+    public async Task<ServiceOptionDto?> UpdateServiceOptionAsync(Guid id, SaveServiceOptionRequest request, CancellationToken cancellationToken)
+    {
+        var option = await _dbContext.ServiceOptions.FirstOrDefaultAsync(o => o.TenantId == TenantId && o.Id == id, cancellationToken);
+        if (option is null)
+        {
+            return null;
+        }
+
+        ValidateOption(request);
+        ApplyOption(option, request);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Updated", null, new { option.Code, option.Name }, cancellationToken);
+        return new ServiceOptionDto(option.Id, option.Code, option.Name, option.Kind, option.DefaultValue, option.IsActive, option.SortOrder);
+    }
+
+    public async Task<bool> DeleteServiceOptionAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var option = await _dbContext.ServiceOptions.FirstOrDefaultAsync(o => o.TenantId == TenantId && o.Id == id, cancellationToken);
+        if (option is null)
+        {
+            return false;
+        }
+
+        _dbContext.Remove(option);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Deleted", new { option.Code }, null, cancellationToken);
+        return true;
+    }
+
+    // --- Customer pricing configuration ---
+
+    public async Task<CustomerPricingConfigDto?> GetCustomerConfigAsync(Guid customerId, CancellationToken cancellationToken)
+    {
+        if (!await _dbContext.Customers.AnyAsync(c => c.TenantId == TenantId && c.Id == customerId, cancellationToken))
+        {
+            return null;
+        }
+
+        var preferred = await _dbContext.CustomerPreferredUnits.AsNoTracking()
+            .Where(u => u.TenantId == TenantId && u.CustomerId == customerId)
+            .OrderBy(u => u.SortOrder)
+            .Join(_dbContext.UnitTypes.Where(t => t.TenantId == TenantId),
+                pu => pu.UnitTypeId, ut => ut.Id,
+                (pu, ut) => new CustomerPreferredUnitDto(ut.Id, ut.Code, ut.Name, pu.SortOrder))
+            .ToListAsync(cancellationToken);
+
+        var options = await _dbContext.ServiceOptions.AsNoTracking()
+            .Where(o => o.TenantId == TenantId && o.IsActive)
+            .OrderBy(o => o.SortOrder).ThenBy(o => o.Name)
+            .ToListAsync(cancellationToken);
+        var customerPrices = await _dbContext.CustomerServiceOptionPrices.AsNoTracking()
+            .Where(p => p.TenantId == TenantId && p.CustomerId == customerId)
+            .ToDictionaryAsync(p => p.ServiceOptionId, p => p.Value, cancellationToken);
+
+        var optionDtos = options
+            .Select(o => new CustomerServiceOptionPriceDto(
+                o.Id, o.Name, o.Kind, o.DefaultValue,
+                customerPrices.TryGetValue(o.Id, out var value) ? value : null))
+            .ToList();
+
+        return new CustomerPricingConfigDto(preferred, optionDtos);
+    }
+
+    public async Task<CustomerPricingConfigDto?> SaveCustomerConfigAsync(
+        Guid customerId, SaveCustomerPricingConfigRequest request, CancellationToken cancellationToken)
+    {
+        if (!await _dbContext.Customers.AnyAsync(c => c.TenantId == TenantId && c.Id == customerId, cancellationToken))
+        {
+            return null;
+        }
+
+        var unitIds = request.PreferredUnitTypeIds.Distinct().ToList();
+        var knownUnits = await _dbContext.UnitTypes
+            .CountAsync(u => u.TenantId == TenantId && unitIds.Contains(u.Id), cancellationToken);
+        if (knownUnits != unitIds.Count)
+        {
+            throw new DomainValidationException("preferredUnitTypeIds", "Eén of meer eenheden bestaan niet.");
+        }
+
+        var existingPreferred = await _dbContext.CustomerPreferredUnits
+            .Where(u => u.TenantId == TenantId && u.CustomerId == customerId)
+            .ToListAsync(cancellationToken);
+        _dbContext.CustomerPreferredUnits.RemoveRange(existingPreferred.Where(u => !unitIds.Contains(u.UnitTypeId)));
+        for (var index = 0; index < unitIds.Count; index++)
+        {
+            var unitTypeId = unitIds[index];
+            var row = existingPreferred.FirstOrDefault(u => u.UnitTypeId == unitTypeId);
+            if (row is null)
+            {
+                _dbContext.CustomerPreferredUnits.Add(new CustomerPreferredUnit
+                {
+                    Id = Guid.NewGuid(), TenantId = TenantId, CustomerId = customerId,
+                    UnitTypeId = unitTypeId, SortOrder = index,
+                });
+            }
+            else
+            {
+                row.SortOrder = index;
+            }
+        }
+
+        var existingPrices = await _dbContext.CustomerServiceOptionPrices
+            .Where(p => p.TenantId == TenantId && p.CustomerId == customerId)
+            .ToListAsync(cancellationToken);
+        foreach (var priceRequest in request.OptionPrices)
+        {
+            var row = existingPrices.FirstOrDefault(p => p.ServiceOptionId == priceRequest.ServiceOptionId);
+            if (priceRequest.Value is null)
+            {
+                if (row is not null)
+                {
+                    _dbContext.Remove(row); // back to the default price
+                }
+
+                continue;
+            }
+
+            if (row is null)
+            {
+                _dbContext.CustomerServiceOptionPrices.Add(new CustomerServiceOptionPrice
+                {
+                    Id = Guid.NewGuid(), TenantId = TenantId, CustomerId = customerId,
+                    ServiceOptionId = priceRequest.ServiceOptionId, Value = priceRequest.Value.Value,
+                });
+            }
+            else
+            {
+                row.Value = priceRequest.Value.Value;
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("CustomerPricingConfig", customerId.ToString(), "Updated", null,
+            new { PreferredUnits = unitIds.Count, OptionPrices = request.OptionPrices.Count }, cancellationToken);
+        return await GetCustomerConfigAsync(customerId, cancellationToken);
+    }
+
+    // --- Helpers ---
+
+    private static void ValidateZone(SavePricingZoneRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new DomainValidationException("code", "Code en naam zijn verplicht.");
+        }
+
+        foreach (var area in request.Areas)
+        {
+            if (string.IsNullOrWhiteSpace(area.PostalCodeFrom) || string.IsNullOrWhiteSpace(area.PostalCodeTo))
+            {
+                throw new DomainValidationException("areas", "Elke postcodereeks heeft een van- en tot-waarde nodig.");
+            }
+
+            if (int.TryParse(area.PostalCodeFrom, out var from) && int.TryParse(area.PostalCodeTo, out var to) && from > to)
+            {
+                throw new DomainValidationException("areas", "De van-postcode moet vóór de tot-postcode liggen.");
+            }
+        }
+    }
+
+    private async Task EnsureZoneCodeFreeAsync(string code, Guid? exceptId, CancellationToken cancellationToken)
+    {
+        var normalized = code.Trim().ToUpperInvariant();
+        var duplicate = await _dbContext.PricingZones.AnyAsync(
+            z => z.TenantId == TenantId && z.Code == normalized && z.Id != exceptId, cancellationToken);
+        if (duplicate)
+        {
+            throw new DomainValidationException("code", $"Er bestaat al een zone met code '{normalized}'.");
+        }
+    }
+
+    private void ApplyZone(PricingZone zone, SavePricingZoneRequest request)
+    {
+        zone.Code = request.Code.Trim().ToUpperInvariant();
+        zone.Name = request.Name.Trim();
+        zone.IsActive = request.IsActive;
+        zone.SortOrder = request.SortOrder;
+        foreach (var area in request.Areas)
+        {
+            zone.Areas.Add(new PricingZoneArea
+            {
+                Id = Guid.NewGuid(),
+                TenantId = TenantId,
+                ZoneId = zone.Id,
+                CountryCode = area.CountryCode.Trim().ToUpperInvariant(),
+                PostalCodeFrom = area.PostalCodeFrom.Trim(),
+                PostalCodeTo = area.PostalCodeTo.Trim(),
+            });
+        }
+    }
+
+    private async Task ValidateRuleAsync(SavePriceRuleRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new DomainValidationException("name", "De naam is verplicht.");
+        }
+
+        if (request.UnitTypeId is null && request.Basis != PriceRuleBasis.Fixed)
+        {
+            throw new DomainValidationException("unitTypeId", "Kies een eenheid (alleen een vaste prijs kan zonder).");
+        }
+
+        var usesBrackets = request.Basis is PriceRuleBasis.QuantityBracket or PriceRuleBasis.WeightBracket;
+        if (usesBrackets)
+        {
+            var brackets = request.Brackets ?? [];
+            if (brackets.Count == 0)
+            {
+                throw new DomainValidationException("brackets", "Een staffelregel heeft minstens één staffel nodig.");
+            }
+
+            var ordered = brackets.OrderBy(b => b.FromQuantity).ToList();
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                var bracket = ordered[i];
+                if (bracket.ToQuantity is { } to && to < bracket.FromQuantity)
+                {
+                    throw new DomainValidationException("brackets", "Een staffel eindigt niet vóór hij begint.");
+                }
+
+                if (i > 0)
+                {
+                    var previous = ordered[i - 1];
+                    if (previous.ToQuantity is null || bracket.FromQuantity <= previous.ToQuantity)
+                    {
+                        throw new DomainValidationException("brackets", "Staffels mogen elkaar niet overlappen.");
+                    }
+                }
+            }
+        }
+        else if (request.UnitPrice is null)
+        {
+            throw new DomainValidationException("unitPrice", "Geef een prijs op.");
+        }
+
+        var tenantId = TenantId;
+        if (request.CustomerId is { } customerId
+            && !await _dbContext.Customers.AnyAsync(c => c.Id == customerId && c.TenantId == tenantId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("klant");
+        }
+
+        if (request.UnitTypeId is { } unitTypeId
+            && !await _dbContext.UnitTypes.AnyAsync(u => u.Id == unitTypeId && u.TenantId == tenantId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("eenheid");
+        }
+
+        if (request.ZoneId is { } zoneId
+            && !await _dbContext.PricingZones.AnyAsync(z => z.Id == zoneId && z.TenantId == tenantId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("zone");
+        }
+    }
+
+    private void ApplyRule(PriceRule rule, SavePriceRuleRequest request)
+    {
+        rule.CustomerId = request.CustomerId;
+        rule.UnitTypeId = request.UnitTypeId;
+        rule.Basis = request.Basis;
+        rule.ZoneId = request.ZoneId;
+        rule.Name = request.Name.Trim();
+        rule.EffectiveFrom = request.EffectiveFrom;
+        rule.EffectiveUntil = request.EffectiveUntil;
+        rule.IsActive = request.IsActive;
+        rule.UnitPrice = request.UnitPrice;
+        rule.MinimumAmount = request.MinimumAmount;
+        foreach (var bracket in request.Brackets ?? [])
+        {
+            rule.Brackets.Add(new PriceRuleBracket
+            {
+                Id = Guid.NewGuid(),
+                TenantId = TenantId,
+                PriceRuleId = rule.Id,
+                FromQuantity = bracket.FromQuantity,
+                ToQuantity = bracket.ToQuantity,
+                Price = bracket.Price,
+                PricePerExtraUnit = bracket.PricePerExtraUnit,
+            });
+        }
+    }
+
+    private static void ValidateOption(SaveServiceOptionRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new DomainValidationException("code", "Code en naam zijn verplicht.");
+        }
+    }
+
+    private void ApplyOption(ServiceOption option, SaveServiceOptionRequest request)
+    {
+        option.Code = request.Code.Trim().ToUpperInvariant();
+        option.Name = request.Name.Trim();
+        option.Kind = request.Kind;
+        option.DefaultValue = request.DefaultValue;
+        option.IsActive = request.IsActive;
+        option.SortOrder = request.SortOrder;
+    }
+
+    private async Task<IReadOnlyList<PriceRuleDto>> MapRulesAsync(IReadOnlyList<PriceRule> rules, CancellationToken cancellationToken)
+    {
+        var tenantId = TenantId;
+        var customerIds = rules.Where(r => r.CustomerId.HasValue).Select(r => r.CustomerId!.Value).Distinct().ToList();
+        var unitIds = rules.Where(r => r.UnitTypeId.HasValue).Select(r => r.UnitTypeId!.Value).Distinct().ToList();
+        var zoneIds = rules.Where(r => r.ZoneId.HasValue).Select(r => r.ZoneId!.Value).Distinct().ToList();
+
+        var customers = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && customerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        var units = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == tenantId && unitIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
+        var zones = await _dbContext.PricingZones.AsNoTracking()
+            .Where(z => z.TenantId == tenantId && zoneIds.Contains(z.Id))
+            .ToDictionaryAsync(z => z.Id, z => z.Name, cancellationToken);
+
+        return rules.Select(rule => new PriceRuleDto(
+            rule.Id, rule.CustomerId,
+            rule.CustomerId is { } cid ? customers.GetValueOrDefault(cid) : null,
+            rule.UnitTypeId,
+            rule.UnitTypeId is { } uid ? units.GetValueOrDefault(uid) : null,
+            rule.Basis, rule.ZoneId,
+            rule.ZoneId is { } zid ? zones.GetValueOrDefault(zid) : null,
+            rule.Name, rule.Currency, rule.EffectiveFrom, rule.EffectiveUntil, rule.IsActive,
+            rule.UnitPrice, rule.MinimumAmount,
+            rule.Brackets.OrderBy(b => b.FromQuantity)
+                .Select(b => new PriceRuleBracketDto(b.Id, b.FromQuantity, b.ToQuantity, b.Price, b.PricePerExtraUnit))
+                .ToList()))
+            .ToList();
+    }
+
+    private static PricingZoneDto MapZone(PricingZone zone) => new(
+        zone.Id, zone.Code, zone.Name, zone.IsActive, zone.SortOrder,
+        zone.Areas.Select(a => new PricingZoneAreaDto(a.Id, a.CountryCode, a.PostalCodeFrom, a.PostalCodeTo)).ToList());
+}

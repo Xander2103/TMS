@@ -9,4 +9,9 @@ namespace TransportationService.Api.Modules.Reference.Entities;
 /// </summary>
 public class UnitType : LookupEntity
 {
+    /// <summary>Selectable as "Eenheid" during order entry.</summary>
+    public bool AllowForOrderEntry { get; set; } = true;
+
+    /// <summary>Usable as the unit of a price rule / customer price agreement.</summary>
+    public bool AllowForPricing { get; set; } = true;
 }

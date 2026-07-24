@@ -204,6 +204,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.
 // Tarification
 builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IRateCardService,
     TransportationService.Api.Modules.Tarification.Services.RateCardService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IPricingAdminService,
+    TransportationService.Api.Modules.Tarification.Services.PricingAdminService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IPricingEngine,
+    TransportationService.Api.Modules.Tarification.Services.PricingEngine>();
 
 // Planning center read models
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IPlanningBoardService,

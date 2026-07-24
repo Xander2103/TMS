@@ -180,6 +180,13 @@ public class TransportationDbContext : DbContext
     public DbSet<Nationality> Nationalities => Set<Nationality>();
     public DbSet<ContractType> ContractTypes => Set<ContractType>();
     public DbSet<TransportationService.Api.Modules.Reference.Entities.UnitType> UnitTypes => Set<TransportationService.Api.Modules.Reference.Entities.UnitType>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingZone> PricingZones => Set<TransportationService.Api.Modules.Tarification.Entities.PricingZone>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingZoneArea> PricingZoneAreas => Set<TransportationService.Api.Modules.Tarification.Entities.PricingZoneArea>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.PriceRule> PriceRules => Set<TransportationService.Api.Modules.Tarification.Entities.PriceRule>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.PriceRuleBracket> PriceRuleBrackets => Set<TransportationService.Api.Modules.Tarification.Entities.PriceRuleBracket>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.ServiceOption> ServiceOptions => Set<TransportationService.Api.Modules.Tarification.Entities.ServiceOption>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.CustomerServiceOptionPrice> CustomerServiceOptionPrices => Set<TransportationService.Api.Modules.Tarification.Entities.CustomerServiceOptionPrice>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.CustomerPreferredUnit> CustomerPreferredUnits => Set<TransportationService.Api.Modules.Tarification.Entities.CustomerPreferredUnit>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
