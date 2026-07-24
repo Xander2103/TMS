@@ -43,9 +43,46 @@ public class PriceRuleConfiguration : IEntityTypeConfiguration<PriceRule>
         builder.Property(r => r.Basis).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.UnitPrice).HasPrecision(12, 4);
         builder.Property(r => r.MinimumAmount).HasPrecision(12, 2);
+        builder.Property(r => r.BaseAmount).HasPrecision(12, 2);
+        builder.Property(r => r.OversizeLengthCm).HasPrecision(10, 2);
+        builder.Property(r => r.OversizeWidthCm).HasPrecision(10, 2);
+        builder.Property(r => r.OversizeBillableFactor).HasPrecision(8, 2);
         builder.HasMany(r => r.Brackets).WithOne().HasForeignKey(b => b.PriceRuleId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(r => r.Agreement).WithMany().HasForeignKey(r => r.AgreementId).OnDelete(DeleteBehavior.SetNull);
         builder.HasIndex(r => new { r.TenantId, r.CustomerId, r.UnitTypeId, r.EffectiveFrom });
+        builder.HasIndex(r => new { r.TenantId, r.AgreementId });
         builder.HasQueryFilter(r => !r.IsDeleted);
+    }
+}
+
+public class PricingAgreementConfiguration : IEntityTypeConfiguration<PricingAgreement>
+{
+    public void Configure(EntityTypeBuilder<PricingAgreement> builder)
+    {
+        builder.ToTable("pricing_agreements");
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.Name).IsRequired().HasMaxLength(200);
+        builder.Property(a => a.Currency).HasMaxLength(3);
+        builder.Property(a => a.MinimumAmount).HasPrecision(12, 2);
+        builder.Property(a => a.Notes).HasMaxLength(2000);
+        builder.HasMany(a => a.Surcharges).WithOne().HasForeignKey(s => s.AgreementId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(a => new { a.TenantId, a.CustomerId, a.EffectiveFrom });
+        builder.HasIndex(a => new { a.TenantId, a.LegacyRateCardId });
+        builder.HasQueryFilter(a => !a.IsDeleted);
+    }
+}
+
+public class PricingAgreementSurchargeConfiguration : IEntityTypeConfiguration<PricingAgreementSurcharge>
+{
+    public void Configure(EntityTypeBuilder<PricingAgreementSurcharge> builder)
+    {
+        builder.ToTable("pricing_agreement_surcharges");
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Name).IsRequired().HasMaxLength(200);
+        builder.Property(s => s.Kind).HasConversion<string>().HasMaxLength(20);
+        builder.Property(s => s.Value).HasPrecision(12, 2);
+        builder.HasIndex(s => new { s.TenantId, s.AgreementId });
+        builder.HasQueryFilter(s => !s.IsDeleted);
     }
 }
 

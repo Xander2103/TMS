@@ -53,6 +53,34 @@ public class PricingController : ControllerBase
     public async Task<IActionResult> DeleteZone(Guid id, CancellationToken cancellationToken) =>
         await _admin.DeleteZoneAsync(id, cancellationToken) ? NoContent() : NotFound();
 
+    // --- Pricing agreements (rate cards) ---
+
+    [HttpGet("api/pricing/agreements")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<PricingAgreementDto>>> ListAgreements(
+        [FromQuery] Guid? customerId, CancellationToken cancellationToken) =>
+        Ok(await _admin.ListAgreementsAsync(customerId, cancellationToken));
+
+    [HttpPost("api/pricing/agreements")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<PricingAgreementDto>> CreateAgreement(
+        SavePricingAgreementRequest request, CancellationToken cancellationToken) =>
+        Ok(await _admin.CreateAgreementAsync(request, cancellationToken));
+
+    [HttpPut("api/pricing/agreements/{id:guid}")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<PricingAgreementDto>> UpdateAgreement(
+        Guid id, SavePricingAgreementRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _admin.UpdateAgreementAsync(id, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("api/pricing/agreements/{id:guid}")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<IActionResult> DeleteAgreement(Guid id, CancellationToken cancellationToken) =>
+        await _admin.DeleteAgreementAsync(id, cancellationToken) ? NoContent() : NotFound();
+
     // --- Price rules ---
 
     [HttpGet("api/pricing/rules")]

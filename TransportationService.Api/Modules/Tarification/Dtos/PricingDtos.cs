@@ -12,6 +12,21 @@ public record SavePricingZoneAreaRequest(string CountryCode, string PostalCodeFr
 
 public record SavePricingZoneRequest(string Code, string Name, bool IsActive, int SortOrder, IReadOnlyList<SavePricingZoneAreaRequest> Areas);
 
+// --- Pricing agreements (rate cards) ---
+
+public record PricingAgreementSurchargeDto(Guid Id, string Name, SurchargeKind Kind, decimal Value);
+
+public record PricingAgreementDto(
+    Guid Id, Guid? CustomerId, string? CustomerName, string Name, string Currency,
+    DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
+    decimal? MinimumAmount, string? Notes, IReadOnlyList<PricingAgreementSurchargeDto> Surcharges);
+
+public record SavePricingAgreementSurchargeRequest(string Name, SurchargeKind Kind, decimal Value);
+
+public record SavePricingAgreementRequest(
+    Guid? CustomerId, string Name, DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
+    decimal? MinimumAmount, string? Notes, IReadOnlyList<SavePricingAgreementSurchargeRequest>? Surcharges);
+
 // --- Price rules ---
 
 public record PriceRuleBracketDto(Guid Id, decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit);
@@ -20,14 +35,18 @@ public record PriceRuleDto(
     Guid Id, Guid? CustomerId, string? CustomerName, Guid? UnitTypeId, string? UnitTypeName,
     PriceRuleBasis Basis, Guid? ZoneId, string? ZoneName,
     string Name, string Currency, DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
-    decimal? UnitPrice, decimal? MinimumAmount, IReadOnlyList<PriceRuleBracketDto> Brackets);
+    decimal? UnitPrice, decimal? MinimumAmount, IReadOnlyList<PriceRuleBracketDto> Brackets,
+    Guid? AgreementId = null, string? AgreementName = null, int Priority = 0, decimal? BaseAmount = null,
+    decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null);
 
 public record SavePriceRuleBracketRequest(decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit);
 
 public record SavePriceRuleRequest(
     Guid? CustomerId, Guid? UnitTypeId, PriceRuleBasis Basis, Guid? ZoneId,
     string Name, DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
-    decimal? UnitPrice, decimal? MinimumAmount, IReadOnlyList<SavePriceRuleBracketRequest>? Brackets);
+    decimal? UnitPrice, decimal? MinimumAmount, IReadOnlyList<SavePriceRuleBracketRequest>? Brackets,
+    Guid? AgreementId = null, int Priority = 0, decimal? BaseAmount = null,
+    decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null);
 
 // --- Service options ---
 

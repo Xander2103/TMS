@@ -18,6 +18,15 @@ public enum PriceRuleBasis
 
     /// <summary>Flat amount per order, independent of quantity.</summary>
     Fixed,
+
+    /// <summary>Order-measure rule: BaseAmount + UnitPrice × order distance (km). UnitTypeId null.</summary>
+    PerKm,
+
+    /// <summary>Order-measure rule: UnitPrice × order pallet count. UnitTypeId null.</summary>
+    PerPallet,
+
+    /// <summary>Order-measure rule: UnitPrice × order weight in tonnes (WeightKg / 1000). UnitTypeId null.</summary>
+    PerTon,
 }
 
 /// <summary>
@@ -48,6 +57,22 @@ public class PriceRule : AuditableTenantEntity
     public decimal? UnitPrice { get; set; }
 
     public decimal? MinimumAmount { get; set; }
+
+    /// <summary>Optional grouping into a named commercial agreement (rate card).</summary>
+    public Guid? AgreementId { get; set; }
+    public PricingAgreement? Agreement { get; set; }
+
+    /// <summary>Explicit tie-breaker between equally specific rules; higher wins. Default 0.</summary>
+    public int Priority { get; set; }
+
+    /// <summary>Added on top of the computed amount (e.g. base cost before the per-km price).</summary>
+    public decimal? BaseAmount { get; set; }
+
+    // Billable-quantity contract (spec ch. 11): an item exceeding a threshold counts as
+    // OversizeBillableFactor billable units. The physical order quantity never changes.
+    public decimal? OversizeLengthCm { get; set; }
+    public decimal? OversizeWidthCm { get; set; }
+    public decimal? OversizeBillableFactor { get; set; }
 
     public List<PriceRuleBracket> Brackets { get; set; } = new();
 }
