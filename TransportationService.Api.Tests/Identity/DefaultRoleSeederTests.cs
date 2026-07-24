@@ -201,7 +201,7 @@ public class DefaultRoleSeederTests
         var plannerAfter = (await CodesOfAsync(db, planner.Id)).ToHashSet();
         Assert.True(plannerBefore.IsSubsetOf(plannerAfter), "no permission may ever be removed");
         Assert.Equal(
-            new[] { PermissionCodes.EmployeePlanningConflictOverride, PermissionCodes.TripCostsView }
+            new[] { PermissionCodes.EmployeePlanningConflictOverride, PermissionCodes.TripCostsView, PermissionCodes.OrdersOverridePrice }
                 .Concat(Version3Codes).OrderBy(c => c),
             plannerAfter.Except(plannerBefore).OrderBy(c => c));
 

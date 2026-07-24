@@ -301,19 +301,16 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds,
   ])
   useEffect(() => {
-    if (!customerId) {
-      setPreview(null)
-      return
-    }
     const unitTypeId = unitOptions.find((u) => u.code === quantityUnitCode)?.id ?? null
     const lines = unitTypeId && quantity !== '' && Number(quantity) > 0
       ? [{ unitTypeId, quantity: Number(quantity) }]
       : []
-    if (lines.length === 0 && selectedServiceOptionIds.length === 0) {
-      setPreview(null)
-      return
-    }
+    const shouldPreview = Boolean(customerId) && (lines.length > 0 || selectedServiceOptionIds.length > 0)
     const timer = window.setTimeout(() => {
+      if (!shouldPreview) {
+        setPreview(null)
+        return
+      }
       previewPrice({
         customerId,
         date: orderDate || new Date().toISOString().slice(0, 10),
@@ -327,7 +324,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       })
         .then(setPreview)
         .catch(() => setPreview(null))
-    }, 400)
+    }, shouldPreview ? 400 : 0)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previewKey, unitOptions.length])
