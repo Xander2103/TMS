@@ -237,11 +237,13 @@ public class EdiService : IEdiService
                 return;
             }
 
+            var cargoItems = await ResolveCargoUnitsAsync(customerId, order.CargoItems, cancellationToken);
+
             var result = await _orderService.CreateAsync(new CreateTransportOrderRequest(
                 customerId, order.CustomerReference, null, order.GoodsDescription,
                 null, null, null, null, null, false, false, null,
                 $"EDI-bericht van {partner.Name} ({order.ExternalOrderId})",
-                stops, order.CargoItems), cancellationToken);
+                stops, cargoItems), cancellationToken);
 
             if (result.Outcome != TransportOrderOperationOutcome.Success)
             {
@@ -266,6 +268,57 @@ public class EdiService : IEdiService
             Fail(message, exception.Message, errors);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Maps raw external unit strings onto managed unit codes: the customer's configured
+    /// EDI code wins, then a direct match on the global unit code. Unresolvable units keep
+    /// only the free-text QuantityUnit so the order still imports.
+    /// </summary>
+    private async Task<IReadOnlyList<CargoItemInput>> ResolveCargoUnitsAsync(
+        Guid customerId, IReadOnlyList<CargoItemInput> items, CancellationToken cancellationToken)
+    {
+        if (!items.Any(i => !string.IsNullOrWhiteSpace(i.QuantityUnit)))
+        {
+            return items;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var customerUnits = await _dbContext.CustomerPreferredUnits.AsNoTracking()
+            .Where(u => u.TenantId == tenantId && u.CustomerId == customerId && u.EdiCode != null)
+            .Join(_dbContext.UnitTypes.Where(t => t.TenantId == tenantId),
+                pu => pu.UnitTypeId, ut => ut.Id,
+                (pu, ut) => new { pu.EdiCode, ut.Code })
+            .ToListAsync(cancellationToken);
+        var byEdiCode = customerUnits
+            .GroupBy(u => u.EdiCode!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Code, StringComparer.OrdinalIgnoreCase);
+        var globalCodes = (await _dbContext.UnitTypes.AsNoTracking()
+                .Where(t => t.TenantId == tenantId)
+                .Select(t => t.Code)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return items.Select(item =>
+        {
+            var raw = item.QuantityUnit?.Trim();
+            if (string.IsNullOrEmpty(raw))
+            {
+                return item;
+            }
+
+            string? resolved = null;
+            if (byEdiCode.TryGetValue(raw, out var viaCustomer))
+            {
+                resolved = viaCustomer;
+            }
+            else if (globalCodes.TryGetValue(raw, out var viaGlobal))
+            {
+                resolved = viaGlobal;
+            }
+
+            return resolved is null ? item : item with { QuantityUnitCode = resolved };
+        }).ToList();
     }
 
     private void Fail(EdiMessage message, string error, IReadOnlyList<string> validationErrors)
@@ -360,7 +413,9 @@ public class EdiService : IEdiService
                                    && quantityElement.TryGetDecimal(out var parsed)
                         ? parsed
                         : 1;
-                    cargo.Add(new CargoItemInput(description, ReadString(item, "barcode"), quantity, null, null));
+                    // The raw external unit code lands in QuantityUnit; it is resolved to a
+                    // managed unit code (customer EDI mapping first) once the customer is known.
+                    cargo.Add(new CargoItemInput(description, ReadString(item, "barcode"), quantity, ReadString(item, "unit"), null));
                 }
             }
 

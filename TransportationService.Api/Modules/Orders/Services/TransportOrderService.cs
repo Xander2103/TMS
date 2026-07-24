@@ -801,6 +801,7 @@ public class TransportOrderService : ITransportOrderService
                 Barcode = Trim(input.Barcode),
                 ExpectedQuantity = input.ExpectedQuantity,
                 QuantityUnit = Trim(input.QuantityUnit),
+                QuantityUnitCode = NormalizeUnitCode(input.QuantityUnitCode),
                 Notes = Trim(input.Notes),
                 UnitType = input.UnitType,
                 UnitTypeLabel = Trim(input.UnitTypeLabel),

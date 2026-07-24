@@ -156,7 +156,8 @@ public record CargoItemInput(
     bool Stackable = true,
     string? Reference = null,
     int? LoadingStopIndex = null,
-    int? UnloadingStopIndex = null);
+    int? UnloadingStopIndex = null,
+    string? QuantityUnitCode = null);
 
 public record TransportOrderStopInput(
     StopType StopType,

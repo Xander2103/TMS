@@ -98,6 +98,9 @@ public class CustomerPreferredUnitConfiguration : IEntityTypeConfiguration<Custo
     {
         builder.ToTable("customer_preferred_units");
         builder.HasKey(u => u.Id);
+        builder.Property(u => u.CustomerLabel).HasMaxLength(150);
+        builder.Property(u => u.EdiCode).HasMaxLength(50);
+        builder.Property(u => u.ExcelCode).HasMaxLength(50);
         builder.HasIndex(u => new { u.TenantId, u.CustomerId, u.UnitTypeId }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasQueryFilter(u => !u.IsDeleted);
     }

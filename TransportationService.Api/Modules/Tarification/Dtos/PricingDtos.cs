@@ -37,7 +37,9 @@ public record SaveServiceOptionRequest(string Code, string Name, SurchargeKind K
 
 // --- Customer pricing configuration ---
 
-public record CustomerPreferredUnitDto(Guid UnitTypeId, string Code, string Name, int SortOrder);
+public record CustomerPreferredUnitDto(
+    Guid UnitTypeId, string Code, string Name, int SortOrder,
+    string? CustomerLabel, string? EdiCode, string? ExcelCode, bool IsFavourite);
 
 public record CustomerServiceOptionPriceDto(Guid ServiceOptionId, string Name, SurchargeKind Kind, decimal DefaultValue, decimal? CustomerValue);
 
@@ -45,8 +47,12 @@ public record CustomerPricingConfigDto(
     IReadOnlyList<CustomerPreferredUnitDto> PreferredUnits,
     IReadOnlyList<CustomerServiceOptionPriceDto> ServiceOptions);
 
+/// <summary>One configured customer unit; refers to the global unit, never copies it.</summary>
+public record SaveCustomerUnitRequest(
+    Guid UnitTypeId, int SortOrder, string? CustomerLabel, string? EdiCode, string? ExcelCode, bool IsFavourite);
+
 public record SaveCustomerPricingConfigRequest(
-    IReadOnlyList<Guid> PreferredUnitTypeIds,
+    IReadOnlyList<SaveCustomerUnitRequest> Units,
     IReadOnlyList<SaveCustomerOptionPriceRequest> OptionPrices);
 
 public record SaveCustomerOptionPriceRequest(Guid ServiceOptionId, decimal? Value);

@@ -92,12 +92,29 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
 
   async function togglePreferred(unitTypeId: string) {
     if (!config) return
+    const kept = config.preferredUnits
+      .filter((u) => u.unitTypeId !== unitTypeId)
+      .map((u, index) => ({
+        unitTypeId: u.unitTypeId,
+        sortOrder: index,
+        customerLabel: u.customerLabel,
+        ediCode: u.ediCode,
+        excelCode: u.excelCode,
+        isFavourite: u.isFavourite,
+      }))
     const next = preferredIds.has(unitTypeId)
-      ? config.preferredUnits.filter((u) => u.unitTypeId !== unitTypeId).map((u) => u.unitTypeId)
-      : [...config.preferredUnits.map((u) => u.unitTypeId), unitTypeId]
+      ? kept
+      : [...kept, {
+          unitTypeId,
+          sortOrder: kept.length,
+          customerLabel: null,
+          ediCode: null,
+          excelCode: null,
+          isFavourite: true,
+        }]
     try {
       const saved = await saveCustomerPricingConfig(customerId, {
-        preferredUnitTypeIds: next,
+        units: next,
         optionPrices: config.serviceOptions.map((o) => ({ serviceOptionId: o.serviceOptionId, value: o.customerValue })),
       })
       setConfig(saved)
@@ -111,7 +128,14 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     const value = raw.trim() === '' ? null : Number(raw)
     try {
       const saved = await saveCustomerPricingConfig(customerId, {
-        preferredUnitTypeIds: config.preferredUnits.map((u) => u.unitTypeId),
+        units: config.preferredUnits.map((u) => ({
+          unitTypeId: u.unitTypeId,
+          sortOrder: u.sortOrder,
+          customerLabel: u.customerLabel,
+          ediCode: u.ediCode,
+          excelCode: u.excelCode,
+          isFavourite: u.isFavourite,
+        })),
         optionPrices: config.serviceOptions.map((o) => ({
           serviceOptionId: o.serviceOptionId,
           value: o.serviceOptionId === serviceOptionId ? value : o.customerValue,

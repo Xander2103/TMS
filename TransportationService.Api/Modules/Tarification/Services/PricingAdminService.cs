@@ -235,10 +235,12 @@ public class PricingAdminService : IPricingAdminService
 
         var preferred = await _dbContext.CustomerPreferredUnits.AsNoTracking()
             .Where(u => u.TenantId == TenantId && u.CustomerId == customerId)
-            .OrderBy(u => u.SortOrder)
+            .OrderByDescending(u => u.IsFavourite).ThenBy(u => u.SortOrder)
             .Join(_dbContext.UnitTypes.Where(t => t.TenantId == TenantId),
                 pu => pu.UnitTypeId, ut => ut.Id,
-                (pu, ut) => new CustomerPreferredUnitDto(ut.Id, ut.Code, ut.Name, pu.SortOrder))
+                (pu, ut) => new CustomerPreferredUnitDto(
+                    ut.Id, ut.Code, ut.Name, pu.SortOrder,
+                    pu.CustomerLabel, pu.EdiCode, pu.ExcelCode, pu.IsFavourite))
             .ToListAsync(cancellationToken);
 
         var options = await _dbContext.ServiceOptions.AsNoTracking()
@@ -266,34 +268,50 @@ public class PricingAdminService : IPricingAdminService
             return null;
         }
 
-        var unitIds = request.PreferredUnitTypeIds.Distinct().ToList();
+        var units = request.Units;
+        var unitIds = units.Select(u => u.UnitTypeId).Distinct().ToList();
+        if (unitIds.Count != units.Count)
+        {
+            throw new DomainValidationException("units", "Eén eenheid mag maar één keer geconfigureerd worden.");
+        }
+
         var knownUnits = await _dbContext.UnitTypes
             .CountAsync(u => u.TenantId == TenantId && unitIds.Contains(u.Id), cancellationToken);
         if (knownUnits != unitIds.Count)
         {
-            throw new DomainValidationException("preferredUnitTypeIds", "Eén of meer eenheden bestaan niet.");
+            throw new DomainValidationException("units", "Eén of meer eenheden bestaan niet.");
+        }
+
+        foreach (var unit in units)
+        {
+            if (unit.CustomerLabel is { Length: > 150 } || unit.EdiCode is { Length: > 50 } || unit.ExcelCode is { Length: > 50 })
+            {
+                throw new DomainValidationException("units", "Klantbenaming of externe code is te lang.");
+            }
         }
 
         var existingPreferred = await _dbContext.CustomerPreferredUnits
             .Where(u => u.TenantId == TenantId && u.CustomerId == customerId)
             .ToListAsync(cancellationToken);
         _dbContext.CustomerPreferredUnits.RemoveRange(existingPreferred.Where(u => !unitIds.Contains(u.UnitTypeId)));
-        for (var index = 0; index < unitIds.Count; index++)
+        foreach (var unit in units)
         {
-            var unitTypeId = unitIds[index];
-            var row = existingPreferred.FirstOrDefault(u => u.UnitTypeId == unitTypeId);
+            var row = existingPreferred.FirstOrDefault(u => u.UnitTypeId == unit.UnitTypeId);
             if (row is null)
             {
-                _dbContext.CustomerPreferredUnits.Add(new CustomerPreferredUnit
+                row = new CustomerPreferredUnit
                 {
                     Id = Guid.NewGuid(), TenantId = TenantId, CustomerId = customerId,
-                    UnitTypeId = unitTypeId, SortOrder = index,
-                });
+                    UnitTypeId = unit.UnitTypeId,
+                };
+                _dbContext.CustomerPreferredUnits.Add(row);
             }
-            else
-            {
-                row.SortOrder = index;
-            }
+
+            row.SortOrder = unit.SortOrder;
+            row.CustomerLabel = Clean(unit.CustomerLabel);
+            row.EdiCode = Clean(unit.EdiCode);
+            row.ExcelCode = Clean(unit.ExcelCode);
+            row.IsFavourite = unit.IsFavourite;
         }
 
         var existingPrices = await _dbContext.CustomerServiceOptionPrices
@@ -333,6 +351,8 @@ public class PricingAdminService : IPricingAdminService
     }
 
     // --- Helpers ---
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static void ValidateZone(SavePricingZoneRequest request)
     {

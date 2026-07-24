@@ -28,10 +28,27 @@ public class CustomerServiceOptionPrice : AuditableTenantEntity
     public decimal Value { get; set; }
 }
 
-/// <summary>Units a customer commonly uses; shown first during order entry for that customer.</summary>
+/// <summary>
+/// Customer-specific configuration of a global unit: which units the customer commonly uses
+/// (shown first during order entry), how the customer names them and which external EDI/Excel
+/// codes map onto them. The global unit is never duplicated per customer — this row only
+/// carries the customer-specific presentation and mapping.
+/// </summary>
 public class CustomerPreferredUnit : AuditableTenantEntity
 {
     public Guid CustomerId { get; set; }
     public Guid UnitTypeId { get; set; }
     public int SortOrder { get; set; }
+
+    /// <summary>Customer-facing label override (e.g. "EURO PAL"); null = global unit name.</summary>
+    public string? CustomerLabel { get; set; }
+
+    /// <summary>External unit code used in this customer's EDI messages (e.g. "EPAL").</summary>
+    public string? EdiCode { get; set; }
+
+    /// <summary>External unit code used in this customer's Excel/import files.</summary>
+    public string? ExcelCode { get; set; }
+
+    /// <summary>Favourites float to the very top of the order-entry unit selector.</summary>
+    public bool IsFavourite { get; set; } = true;
 }

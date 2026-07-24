@@ -144,6 +144,10 @@ export interface CustomerPreferredUnit {
   code: string
   name: string
   sortOrder: number
+  customerLabel: string | null
+  ediCode: string | null
+  excelCode: string | null
+  isFavourite: boolean
 }
 
 export interface CustomerServiceOptionPrice {
@@ -159,8 +163,17 @@ export interface CustomerPricingConfig {
   serviceOptions: CustomerServiceOptionPrice[]
 }
 
+export interface CustomerUnitInput {
+  unitTypeId: string
+  sortOrder: number
+  customerLabel: string | null
+  ediCode: string | null
+  excelCode: string | null
+  isFavourite: boolean
+}
+
 export interface CustomerPricingConfigInput {
-  preferredUnitTypeIds: string[]
+  units: CustomerUnitInput[]
   optionPrices: { serviceOptionId: string; value: number | null }[]
 }
 
