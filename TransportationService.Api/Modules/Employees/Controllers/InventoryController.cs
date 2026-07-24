@@ -108,6 +108,15 @@ public class InventoryController : ControllerBase
         return variant is null ? NotFound() : Ok(variant);
     }
 
+    [HttpPost("api/issued-item-templates/{id:guid}/variants/generate")]
+    [RequirePermission(PermissionCodes.InventoryManage, PermissionCodes.IssuedItemsManageTemplates)]
+    public async Task<ActionResult<IssuedItemTemplateDetailDto>> GenerateVariants(
+        Guid id, GenerateVariantsRequest request, CancellationToken cancellationToken)
+    {
+        var detail = await _service.GenerateVariantsAsync(id, request, cancellationToken);
+        return detail is null ? NotFound() : Ok(detail);
+    }
+
     [HttpPut("api/issued-item-templates/{id:guid}/variants/{variantId:guid}")]
     [RequirePermission(PermissionCodes.InventoryManage, PermissionCodes.IssuedItemsManageTemplates)]
     public async Task<ActionResult<IssuedItemVariantDto>> UpdateVariant(

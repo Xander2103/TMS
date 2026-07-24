@@ -87,6 +87,22 @@
   margin: 0;
   font-size: 13px;
   color: var(--text, #374151);
+  font-weight: normal;
+}
+
+.issued-items-generate-dimension {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.issued-items-generate-dimension legend {
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 4px;
 }
 
 .issued-items-checkbox {

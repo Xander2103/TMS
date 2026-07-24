@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { TabPanel, Tabs, type TabItem } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
@@ -16,6 +17,7 @@ import {
   createAttributeDefinition,
   createVariant,
   deleteVariant,
+  generateVariants,
   getTemplateDetail,
   listAttributeDefinitions,
   listCurrentHolders,
@@ -49,6 +51,16 @@ interface StockDialogState {
   notes: string
 }
 
+type DetailTab = 'algemeen' | 'voorraad' | 'varianten' | 'houders' | 'bewegingen'
+
+/** Aliases keep older deep links (e.g. notification LinkPaths) working. */
+const TAB_ALIASES: Record<string, DetailTab> = {
+  stock: 'voorraad',
+  variants: 'varianten',
+  holders: 'houders',
+  movements: 'bewegingen',
+}
+
 /** Detail/edit page of one issued-item template: configuration, attributes, variants, stock. */
 export function IssuedItemTemplateDetailPage() {
   const { id = '' } = useParams()
@@ -73,7 +85,10 @@ export function IssuedItemTemplateDetailPage() {
   const [variantDeleteTarget, setVariantDeleteTarget] = useState<IssuedItemVariant | null>(null)
   const [stockDialog, setStockDialog] = useState<StockDialogState | null>(null)
   const [stockError, setStockError] = useState<string | null>(null)
+  const [generateDialog, setGenerateDialog] = useState<Record<string, string[]> | null>(null)
+  const [generateError, setGenerateError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const reload = useCallback(() => setReloadToken((t) => t + 1), [])
 
@@ -254,6 +269,21 @@ export function IssuedItemTemplateDetailPage() {
     if (ok) setStockDialog(null)
   }
 
+  async function handleGenerateSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!generateDialog || !detail) return
+    const dimensions = detail.attributes.map((attribute) => ({
+      attributeDefinitionId: attribute.id,
+      optionIds: generateDialog[attribute.id] ?? [],
+    }))
+    if (dimensions.some((d) => d.optionIds.length === 0)) {
+      setGenerateError('Kies per attribuut minstens één waarde.')
+      return
+    }
+    const ok = await run(() => generateVariants(id, dimensions), 'Varianten gegenereerd.', setGenerateError)
+    if (ok) setGenerateDialog(null)
+  }
+
   if (loadError) {
     return <p className="placeholder-text">{loadError}</p>
   }
@@ -263,6 +293,24 @@ export function IssuedItemTemplateDetailPage() {
   }
 
   const template = detail.template
+
+  const tabs: TabItem[] = [
+    { id: 'algemeen', label: 'Algemeen' },
+    ...(template.stockTrackingEnabled && !template.variantsEnabled ? [{ id: 'voorraad', label: 'Voorraad' }] : []),
+    ...(template.stockTrackingEnabled && template.variantsEnabled
+      ? [{ id: 'varianten', label: 'Varianten & voorraad', badge: detail.variants.length || undefined }]
+      : []),
+    { id: 'houders', label: 'Huidige houders', badge: visibleHolders?.length || undefined },
+    ...(template.stockTrackingEnabled ? [{ id: 'bewegingen', label: 'Voorraadhistoriek' }] : []),
+  ]
+  const rawTab = searchParams.get('tab') ?? 'algemeen'
+  const requestedTab = (TAB_ALIASES[rawTab] ?? rawTab) as DetailTab
+  const activeTab: DetailTab = tabs.some((t) => t.id === requestedTab) ? requestedTab : 'algemeen'
+  const setActiveTab = (tabId: string) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', tabId)
+    setSearchParams(next, { replace: true })
+  }
 
   return (
     <div>
@@ -281,6 +329,10 @@ export function IssuedItemTemplateDetailPage() {
         }
       />
 
+      <Tabs tabs={tabs} activeId={activeTab} onChange={setActiveTab} />
+
+      {activeTab === 'algemeen' && (
+      <TabPanel tabId="algemeen">
       <section className="issued-items-card">
         <h2>Instellingen</h2>
         <dl className="issued-items-summary">
@@ -330,8 +382,11 @@ export function IssuedItemTemplateDetailPage() {
           )}
         </dl>
       </section>
+      </TabPanel>
+      )}
 
-      {template.stockTrackingEnabled && template.variantsEnabled && (
+      {activeTab === 'varianten' && (
+      <TabPanel tabId="varianten">
         <section className="issued-items-card">
           <div className="issued-items-card-header">
             <h2>Attributen</h2>
@@ -403,19 +458,35 @@ export function IssuedItemTemplateDetailPage() {
             </div>
           ))}
         </section>
-      )}
 
-      {template.stockTrackingEnabled && template.variantsEnabled && (
         <section className="issued-items-card">
           <div className="issued-items-card-header">
-            <h2>Varianten & voorraad</h2>
+            <h2>
+              Varianten & voorraad{' '}
+              <span className="issued-items-computed-stock">— totale voorraad: {template.totalAvailable} (berekend)</span>
+            </h2>
             {canManageInventory && (
-              <Button onClick={() => openVariantEditor(null)} disabled={busy || detail.attributes.length === 0}>
-                Variant toevoegen
-              </Button>
+              <div className="issued-items-card-actions">
+                <Button
+                  onClick={() => {
+                    setGenerateError(null)
+                    setGenerateDialog({})
+                  }}
+                  disabled={busy || detail.attributes.length === 0}
+                >
+                  Varianten genereren
+                </Button>
+                <Button variant="secondary" onClick={() => openVariantEditor(null)} disabled={busy || detail.attributes.length === 0}>
+                  Variant toevoegen
+                </Button>
+              </div>
             )}
           </div>
-          {detail.variants.length === 0 && <p className="placeholder-text">Nog geen varianten.</p>}
+          {detail.variants.length === 0 && (
+            <p className="placeholder-text">
+              Nog geen varianten. Kies "Varianten genereren" om alle combinaties (bv. maat × kleur) in één keer aan te maken.
+            </p>
+          )}
           {detail.variants.length > 0 && (
             <table className="issued-items-table">
               <thead>
@@ -493,9 +564,11 @@ export function IssuedItemTemplateDetailPage() {
             </table>
           )}
         </section>
+      </TabPanel>
       )}
 
-      {template.stockTrackingEnabled && !template.variantsEnabled && (
+      {activeTab === 'voorraad' && (
+      <TabPanel tabId="voorraad">
         <section className="issued-items-card">
           <div className="issued-items-card-header">
             <h2>Voorraad</h2>
@@ -527,10 +600,15 @@ export function IssuedItemTemplateDetailPage() {
             {template.currentStock}
             {template.unit ? ` ${template.unit}` : ''} beschikbaar {template.lowStock && <Badge tone="warning">Lage voorraad</Badge>}
           </p>
+          {template.lowStockThreshold !== null && (
+            <p className="issued-items-computed-stock">Lage-voorraadgrens: {template.lowStockThreshold}</p>
+          )}
         </section>
+      </TabPanel>
       )}
 
-      {template.stockTrackingEnabled && (
+      {activeTab === 'bewegingen' && (
+      <TabPanel tabId="bewegingen">
         <section className="issued-items-card">
           <h2>Voorraadhistoriek</h2>
           {visibleMovements === null && <p className="placeholder-text">Laden…</p>}
@@ -564,8 +642,11 @@ export function IssuedItemTemplateDetailPage() {
             </table>
           )}
         </section>
+      </TabPanel>
       )}
 
+      {activeTab === 'houders' && (
+      <TabPanel tabId="houders">
       <section className="issued-items-card">
         <h2>Huidige houders</h2>
         {!stockTracked && (
@@ -600,6 +681,8 @@ export function IssuedItemTemplateDetailPage() {
           </table>
         )}
       </section>
+      </TabPanel>
+      )}
 
       {templateEditorOpen && (
         <TemplateFormModal
@@ -795,6 +878,69 @@ export function IssuedItemTemplateDetailPage() {
                 />
               </FormField>
             )}
+          </form>
+        </Modal>
+      )}
+
+      {generateDialog && (
+        <Modal
+          title="Varianten genereren"
+          onClose={() => setGenerateDialog(null)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setGenerateDialog(null)} disabled={busy}>
+                Annuleren
+              </Button>
+              <Button type="submit" form="generate-variants-form" disabled={busy}>
+                Genereren
+              </Button>
+            </>
+          }
+        >
+          <form id="generate-variants-form" className="issued-items-form" onSubmit={handleGenerateSubmit} noValidate>
+            {generateError && (
+              <div className="issued-items-form-error" role="alert">
+                {generateError}
+              </div>
+            )}
+            <p className="customer-form-muted">
+              Kies per attribuut de gewenste waarden; elke combinatie wordt één variant met eigen voorraad. Bestaande
+              combinaties blijven ongewijzigd.
+            </p>
+            {detail.attributes.map((attribute) => (
+              <fieldset key={attribute.id} className="issued-items-generate-dimension">
+                <legend>{attribute.name}</legend>
+                {attribute.options.filter((o) => o.isActive).map((option) => {
+                  const selected = generateDialog[attribute.id] ?? []
+                  const checked = selected.includes(option.id)
+                  return (
+                    <label key={option.id} className="issued-items-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) =>
+                          setGenerateDialog((s) =>
+                            s
+                              ? {
+                                  ...s,
+                                  [attribute.id]: e.target.checked
+                                    ? [...selected, option.id]
+                                    : selected.filter((v) => v !== option.id),
+                                }
+                              : s,
+                          )
+                        }
+                      />
+                      <span>{option.value}</span>
+                    </label>
+                  )
+                })}
+                {attribute.options.filter((o) => o.isActive).length === 0 && (
+                  <p className="customer-form-muted">Voeg eerst waarden toe bij het attribuut.</p>
+                )}
+              </fieldset>
+            ))}
           </form>
         </Modal>
       )}

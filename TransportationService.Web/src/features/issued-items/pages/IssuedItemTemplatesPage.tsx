@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
@@ -20,6 +20,7 @@ type StockFilter = 'all' | 'managed' | 'unmanaged' | 'low'
 /** Settings page to manage issued-item ("Bedrijfsmiddelen") templates and their stock state. */
 export function IssuedItemTemplatesPage() {
   const { showSuccess, showError } = useToast()
+  const navigate = useNavigate()
   const [templates, setTemplates] = useState<IssuedItemTemplate[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
@@ -201,9 +202,14 @@ export function IssuedItemTemplatesPage() {
         <TemplateFormModal
           editing={editing}
           onClose={() => setEditorOpen(false)}
-          onSaved={() => {
+          onSaved={(saved) => {
             showSuccess(editing ? 'Sjabloon bijgewerkt.' : 'Sjabloon toegevoegd.')
             setEditorOpen(false)
+            // A brand-new variant template needs its variants configured — take the user there.
+            if (!editing && saved.variantsEnabled) {
+              navigate(`/settings/issued-item-templates/${saved.id}?tab=varianten`)
+              return
+            }
             setReloadToken((t) => t + 1)
           }}
         />

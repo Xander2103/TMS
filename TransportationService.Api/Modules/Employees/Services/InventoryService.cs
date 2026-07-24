@@ -28,6 +28,10 @@ public record SaveVariantValueRequest(Guid AttributeDefinitionId, Guid? Attribut
 
 public record SaveVariantRequest(IReadOnlyList<SaveVariantValueRequest> Values, bool IsActive, int SortOrder, int? InitialStock);
 
+public record GenerateVariantsDimension(Guid AttributeDefinitionId, IReadOnlyList<Guid> OptionIds);
+
+public record GenerateVariantsRequest(IReadOnlyList<GenerateVariantsDimension> Dimensions);
+
 public record StockMovementDto(
     Guid Id, Guid TemplateId, Guid? VariantId, string? VariantLabel, StockMovementType MovementType,
     int Quantity, int ResultingStock, string? Reason, string? Notes,
@@ -61,6 +65,7 @@ public interface IInventoryService
     Task<IssuedItemTemplateDetailDto?> GetTemplateDetailAsync(Guid templateId, CancellationToken cancellationToken);
     Task<IssuedItemTemplateDetailDto?> SetTemplateAttributesAsync(Guid templateId, IReadOnlyList<Guid> attributeDefinitionIds, CancellationToken cancellationToken);
     Task<IssuedItemVariantDto?> CreateVariantAsync(Guid templateId, SaveVariantRequest request, CancellationToken cancellationToken);
+    Task<IssuedItemTemplateDetailDto?> GenerateVariantsAsync(Guid templateId, GenerateVariantsRequest request, CancellationToken cancellationToken);
     Task<IssuedItemVariantDto?> UpdateVariantAsync(Guid templateId, Guid variantId, SaveVariantRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteVariantAsync(Guid templateId, Guid variantId, CancellationToken cancellationToken);
 
@@ -364,6 +369,125 @@ public class InventoryService : IInventoryService
         await _auditService.RecordAsync(VariantEntity, variant.Id.ToString(), "Created",
             null, new { template.Name, variant.Label }, cancellationToken);
         return Map(variant, values.Select(MapValue).ToList());
+    }
+
+    /// <summary>
+    /// Bulk-creates the cartesian product of the selected attribute options as variants
+    /// (stock 0), skipping combinations that already exist so re-running with a broader
+    /// selection only adds the missing ones. Also (re)pins the template's attribute set to
+    /// the given dimensions, in order.
+    /// </summary>
+    public async Task<IssuedItemTemplateDetailDto?> GenerateVariantsAsync(
+        Guid templateId, GenerateVariantsRequest request, CancellationToken cancellationToken)
+    {
+        var template = await FindTemplateAsync(templateId, cancellationToken);
+        if (template is null)
+        {
+            return null;
+        }
+
+        if (!template.VariantsEnabled)
+        {
+            throw new DomainValidationException("Dit sjabloon gebruikt geen varianten.");
+        }
+
+        if (request.Dimensions.Count == 0 || request.Dimensions.Any(d => d.OptionIds.Count == 0))
+        {
+            throw new DomainValidationException("dimensions", "Kies per attribuut minstens één waarde.");
+        }
+
+        var comboCount = request.Dimensions.Aggregate(1, (acc, d) => acc * d.OptionIds.Count);
+        if (comboCount > 500)
+        {
+            throw new DomainValidationException("dimensions", "Te veel combinaties (max. 500). Beperk de selectie.");
+        }
+
+        // Pin the template's attributes to the chosen dimensions (guards against orphaning
+        // values of attributes still used by existing variants).
+        await SetTemplateAttributesAsync(templateId, request.Dimensions.Select(d => d.AttributeDefinitionId).ToList(), cancellationToken);
+
+        // Validate the selected options up front so a bad id fails the whole request.
+        var optionsByDefinition = new Dictionary<Guid, List<IssuedItemAttributeOption>>();
+        foreach (var dimension in request.Dimensions)
+        {
+            var optionIds = dimension.OptionIds.Distinct().ToList();
+            var options = await _dbContext.IssuedItemAttributeOptions
+                .Where(o => o.TenantId == _tenantContext.TenantId
+                            && o.AttributeDefinitionId == dimension.AttributeDefinitionId
+                            && optionIds.Contains(o.Id))
+                .ToListAsync(cancellationToken);
+            if (options.Count != optionIds.Count)
+            {
+                throw new DomainValidationException("dimensions", "Eén of meer gekozen waarden bestaan niet.");
+            }
+
+            optionsByDefinition[dimension.AttributeDefinitionId] = optionIds
+                .Select(id => options.First(o => o.Id == id))
+                .ToList();
+        }
+
+        var existingLabels = (await _dbContext.IssuedItemVariants
+                .Where(v => v.TenantId == _tenantContext.TenantId && v.TemplateId == templateId)
+                .Select(v => v.Label)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var sortOrder = existingLabels.Count;
+
+        // Cartesian product in dimension order; each combo becomes one concrete variant.
+        var combos = new List<List<IssuedItemAttributeOption>> { new() };
+        foreach (var dimension in request.Dimensions)
+        {
+            combos = combos
+                .SelectMany(prefix => optionsByDefinition[dimension.AttributeDefinitionId]
+                    .Select(option => new List<IssuedItemAttributeOption>(prefix) { option }))
+                .ToList();
+        }
+
+        var definitionNames = await _dbContext.IssuedItemAttributeDefinitions
+            .Where(d => d.TenantId == _tenantContext.TenantId
+                        && request.Dimensions.Select(x => x.AttributeDefinitionId).Contains(d.Id))
+            .ToDictionaryAsync(d => d.Id, d => d.Name, cancellationToken);
+
+        var created = 0;
+        foreach (var combo in combos)
+        {
+            var label = string.Join(" / ", combo.Select(o => o.Value));
+            if (!existingLabels.Add(label))
+            {
+                continue;
+            }
+
+            var variant = new IssuedItemVariant
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                TemplateId = templateId,
+                Label = label,
+                IsActive = true,
+                SortOrder = sortOrder++,
+            };
+            _dbContext.IssuedItemVariants.Add(variant);
+            foreach (var option in combo)
+            {
+                _dbContext.IssuedItemVariantValues.Add(new IssuedItemVariantValue
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = _tenantContext.TenantId,
+                    VariantId = variant.Id,
+                    AttributeDefinitionId = option.AttributeDefinitionId,
+                    AttributeNameSnapshot = definitionNames.GetValueOrDefault(option.AttributeDefinitionId, ""),
+                    AttributeOptionId = option.Id,
+                    Value = option.Value,
+                });
+            }
+
+            created++;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync(TemplateEntity, templateId.ToString(), "VariantsGenerated",
+            null, new { template.Name, Created = created, Total = existingLabels.Count }, cancellationToken);
+        return await BuildDetailAsync(template, cancellationToken);
     }
 
     public async Task<IssuedItemVariantDto?> UpdateVariantAsync(

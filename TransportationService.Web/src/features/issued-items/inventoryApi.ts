@@ -169,6 +169,19 @@ export function deleteVariant(templateId: string, variantId: string): Promise<vo
   return apiClient.deleteRequest(`/api/issued-item-templates/${templateId}/variants/${variantId}`)
 }
 
+export interface GenerateVariantsDimension {
+  attributeDefinitionId: string
+  optionIds: string[]
+}
+
+/** Bulk-creates the cartesian product of the selected options; existing combinations are kept. */
+export function generateVariants(templateId: string, dimensions: GenerateVariantsDimension[]): Promise<IssuedItemTemplateDetail> {
+  return apiClient.postJson<IssuedItemTemplateDetail, { dimensions: GenerateVariantsDimension[] }>(
+    `/api/issued-item-templates/${templateId}/variants/generate`,
+    { dimensions },
+  )
+}
+
 // ---- Stock ----
 
 export function receiveStock(templateId: string, input: { variantId: string | null; quantity: number; notes: string | null }): Promise<StockMovement> {
