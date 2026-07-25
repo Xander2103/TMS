@@ -41,6 +41,8 @@ interface VariantEditorState {
   values: Record<string, { optionId: string; customValue: string }>
   isActive: boolean
   initialStock: string
+  /** Free label for templates without linked attributes ("Small", "maat 43"). */
+  label: string
 }
 
 interface StockDialogState {
@@ -214,7 +216,7 @@ export function IssuedItemTemplateDetailPage() {
       }
     }
     setVariantError(null)
-    setVariantEditor({ variant, values, isActive: variant?.isActive ?? true, initialStock: '' })
+    setVariantEditor({ variant, values, isActive: variant?.isActive ?? true, initialStock: '', label: variant?.label ?? '' })
   }
 
   async function handleVariantSubmit(event: FormEvent) {
@@ -234,6 +236,7 @@ export function IssuedItemTemplateDetailPage() {
       isActive: variantEditor.isActive,
       sortOrder: variantEditor.variant?.sortOrder ?? detail.variants.length,
       initialStock,
+      label: variantEditor.label.trim() || null,
     }
     const ok = await run(
       () => (variantEditor.variant ? updateVariant(id, variantEditor.variant.id, input) : createVariant(id, input)),
@@ -418,7 +421,8 @@ export function IssuedItemTemplateDetailPage() {
           </div>
           {detail.attributes.length === 0 && (
             <p className="placeholder-text">
-              Nog geen attributen gekoppeld. Koppel bv. Maat, Kleur of Model om varianten te kunnen aanmaken.
+              Geen attributen gekoppeld: varianten krijgen een vrije naam (bv. Small, maat 43). Koppel bv. Maat of
+              Kleur wanneer je combinaties wilt genereren.
             </p>
           )}
           {detail.attributes.map((attribute) => (
@@ -476,8 +480,8 @@ export function IssuedItemTemplateDetailPage() {
                 >
                   Varianten genereren
                 </Button>
-                <Button variant="secondary" onClick={() => openVariantEditor(null)} disabled={busy || detail.attributes.length === 0}>
-                  Variant toevoegen
+                <Button variant="secondary" onClick={() => openVariantEditor(null)} disabled={busy}>
+                  + Variant toevoegen
                 </Button>
               </div>
             )}
@@ -757,6 +761,16 @@ export function IssuedItemTemplateDetailPage() {
               <div className="issued-items-form-error" role="alert">
                 {variantError}
               </div>
+            )}
+            {detail.attributes.length === 0 && (
+              <FormField label="Variantnaam / uitvoering" htmlFor="var-label" required hint="Bv. Small, maat 43, zwart.">
+                <input
+                  id="var-label"
+                  value={variantEditor.label}
+                  maxLength={150}
+                  onChange={(e) => setVariantEditor((s) => (s ? { ...s, label: e.target.value } : s))}
+                />
+              </FormField>
             )}
             {detail.attributes.map((attribute) => {
               const draft = variantEditor.values[attribute.id] ?? { optionId: '', customValue: '' }

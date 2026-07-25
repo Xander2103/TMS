@@ -22,11 +22,17 @@ public record IssuedItemVariantValueDto(Guid AttributeDefinitionId, string Attri
 
 public record IssuedItemVariantDto(
     Guid Id, string Label, int CurrentStock, bool IsActive, int SortOrder,
-    IReadOnlyList<IssuedItemVariantValueDto> Values);
+    IReadOnlyList<IssuedItemVariantValueDto> Values, int? LowStockThreshold = null);
 
 public record SaveVariantValueRequest(Guid AttributeDefinitionId, Guid? AttributeOptionId, string? CustomValue);
 
-public record SaveVariantRequest(IReadOnlyList<SaveVariantValueRequest> Values, bool IsActive, int SortOrder, int? InitialStock);
+/// <summary>
+/// Label is used for label-only variants (templates without linked attributes, e.g. "Small",
+/// "maat 43"); when attributes are linked the label is generated from Values instead.
+/// </summary>
+public record SaveVariantRequest(
+    IReadOnlyList<SaveVariantValueRequest> Values, bool IsActive, int SortOrder, int? InitialStock,
+    string? Label = null, int? LowStockThreshold = null);
 
 public record GenerateVariantsDimension(Guid AttributeDefinitionId, IReadOnlyList<Guid> OptionIds);
 
@@ -332,7 +338,7 @@ public class InventoryService : IInventoryService
             throw new DomainValidationException("Dit sjabloon gebruikt geen varianten.");
         }
 
-        var (label, values) = await ResolveVariantValuesAsync(templateId, request.Values, cancellationToken);
+        var (label, values) = await ResolveLabelAndValuesAsync(templateId, request, cancellationToken);
 
         var duplicate = await _dbContext.IssuedItemVariants.AnyAsync(
             v => v.TenantId == _tenantContext.TenantId && v.TemplateId == templateId && v.Label == label, cancellationToken);
@@ -349,6 +355,7 @@ public class InventoryService : IInventoryService
             Label = label,
             IsActive = request.IsActive,
             SortOrder = request.SortOrder,
+            LowStockThreshold = NonNegativeOrNull(request.LowStockThreshold),
         };
         _dbContext.IssuedItemVariants.Add(variant);
         foreach (var value in values)
@@ -502,7 +509,7 @@ public class InventoryService : IInventoryService
             return null;
         }
 
-        var (label, values) = await ResolveVariantValuesAsync(templateId, request.Values, cancellationToken);
+        var (label, values) = await ResolveLabelAndValuesAsync(templateId, request, cancellationToken);
         var duplicate = await _dbContext.IssuedItemVariants.AnyAsync(
             v => v.TenantId == _tenantContext.TenantId && v.TemplateId == templateId && v.Label == label && v.Id != variantId,
             cancellationToken);
@@ -525,6 +532,7 @@ public class InventoryService : IInventoryService
         variant.Label = label;
         variant.IsActive = request.IsActive;
         variant.SortOrder = request.SortOrder;
+        variant.LowStockThreshold = NonNegativeOrNull(request.LowStockThreshold);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         if (!request.IsActive)
@@ -744,6 +752,32 @@ public class InventoryService : IInventoryService
             orderedDefinitions, variantDtos);
     }
 
+    private static int? NonNegativeOrNull(int? value) => value is { } v ? Math.Max(0, v) : null;
+
+    /// <summary>
+    /// Templates without linked attributes use free variant labels ("Small", "maat 43",
+    /// "zwart"); templates with attributes keep the generated attribute-combination label.
+    /// </summary>
+    private async Task<(string Label, List<IssuedItemVariantValue> Values)> ResolveLabelAndValuesAsync(
+        Guid templateId, SaveVariantRequest request, CancellationToken cancellationToken)
+    {
+        var hasAttributes = await _dbContext.IssuedItemTemplateAttributes
+            .AnyAsync(a => a.TenantId == _tenantContext.TenantId && a.TemplateId == templateId, cancellationToken);
+        if (!hasAttributes)
+        {
+            var label = request.Label?.Trim();
+            if (string.IsNullOrEmpty(label))
+            {
+                throw new DomainValidationException("label",
+                    "Geef een variantnaam of uitvoering op (bv. Small, maat 43, zwart).");
+            }
+
+            return (label, []);
+        }
+
+        return await ResolveVariantValuesAsync(templateId, request.Values, cancellationToken);
+    }
+
     private async Task<(string Label, List<IssuedItemVariantValue> Values)> ResolveVariantValuesAsync(
         Guid templateId, IReadOnlyList<SaveVariantValueRequest> requested, CancellationToken cancellationToken)
     {
@@ -925,7 +959,7 @@ public class InventoryService : IInventoryService
     private static IssuedItemAttributeOptionDto Map(IssuedItemAttributeOption o) => new(o.Id, o.Value, o.SortOrder, o.IsActive);
 
     private static IssuedItemVariantDto Map(IssuedItemVariant v, IReadOnlyList<IssuedItemVariantValueDto> values) =>
-        new(v.Id, v.Label, v.CurrentStock, v.IsActive, v.SortOrder, values);
+        new(v.Id, v.Label, v.CurrentStock, v.IsActive, v.SortOrder, values, v.LowStockThreshold);
 
     private static IssuedItemVariantValueDto MapValue(IssuedItemVariantValue v) =>
         new(v.AttributeDefinitionId, v.AttributeNameSnapshot, v.AttributeOptionId, v.Value);

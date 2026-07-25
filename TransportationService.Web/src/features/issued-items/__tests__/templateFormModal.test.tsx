@@ -20,7 +20,16 @@ vi.mock('../../master-data/components/LookupSelect', () => ({
   ),
 }))
 
-const api = vi.hoisted(() => ({ create: vi.fn() }))
+const api = vi.hoisted(() => ({ create: vi.fn(), createVariant: vi.fn() }))
+
+vi.mock('../inventoryApi', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../inventoryApi')>()
+  return {
+    ...original,
+    createVariant: api.createVariant,
+    getTemplateDetail: vi.fn(),
+  }
+})
 
 vi.mock('../issuedItemsApi', async (importOriginal) => {
   const original = await importOriginal<typeof import('../issuedItemsApi')>()
@@ -109,9 +118,39 @@ describe('TemplateFormModal', () => {
     expect(screen.getByLabelText('Voorraad')).toBeInTheDocument()
     expect(screen.getByLabelText('Lage-voorraadgrens')).toBeInTheDocument()
 
-    // Enabling variants replaces the field with the computed-sum explanation.
-    await userEvent.click(screen.getByLabelText('Varianten (maat/uitvoering) — voorraad per variant'))
-    expect(screen.queryByLabelText('Voorraad')).not.toBeInTheDocument()
-    expect(screen.getByText(/som van alle varianten/)).toBeInTheDocument()
+    // Enabling variants replaces the field with the direct variant editor.
+    await userEvent.click(screen.getByLabelText('Varianten gebruiken (maat/uitvoering) — voorraad per variant'))
+    expect(screen.queryByLabelText('Voorraad', { selector: '#tpl-stock' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Variant toevoegen' })).toBeInTheDocument()
+  })
+
+  it('creates the entered variants (with stock) right after the template', async () => {
+    permissions.value = new Set()
+    api.create.mockResolvedValue({ id: 't-1' })
+    api.createVariant.mockResolvedValue({ id: 'v-1' })
+    renderModal()
+
+    await userEvent.click(screen.getByLabelText('Voorraadbeheer'))
+    await userEvent.click(screen.getByLabelText('Varianten gebruiken (maat/uitvoering) — voorraad per variant'))
+
+    // Explicit "+ Variant toevoegen" flow: Small 10, then Medium 15.
+    await userEvent.type(screen.getByLabelText(/Variantnaam/), 'Small')
+    await userEvent.type(screen.getByLabelText('Voorraad', { selector: '#tpl-variant-stock' }), '10')
+    await userEvent.click(screen.getByRole('button', { name: '+ Variant toevoegen' }))
+    await userEvent.type(screen.getByLabelText(/Variantnaam/), 'Medium')
+    await userEvent.type(screen.getByLabelText('Voorraad', { selector: '#tpl-variant-stock' }), '15')
+    await userEvent.click(screen.getByRole('button', { name: '+ Variant toevoegen' }))
+
+    // The template total is shown as a computed, read-only sum.
+    expect(screen.getByText(/Totale voorraad: 25/)).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText(/^Naam/), 'Werkshirt')
+    await userEvent.selectOptions(screen.getByTestId('category-select'), 'cat-kleding')
+    await userEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    expect(api.create).toHaveBeenCalled()
+    expect(api.createVariant).toHaveBeenCalledTimes(2)
+    expect(api.createVariant).toHaveBeenNthCalledWith(1, 't-1', expect.objectContaining({ label: 'Small', initialStock: 10 }))
+    expect(api.createVariant).toHaveBeenNthCalledWith(2, 't-1', expect.objectContaining({ label: 'Medium', initialStock: 15 }))
   })
 })

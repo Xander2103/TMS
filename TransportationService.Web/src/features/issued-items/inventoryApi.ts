@@ -46,6 +46,7 @@ export interface IssuedItemVariant {
   isActive: boolean
   sortOrder: number
   values: IssuedItemVariantValue[]
+  lowStockThreshold: number | null
 }
 
 export interface VariantValueInput {
@@ -59,6 +60,9 @@ export interface VariantInput {
   isActive: boolean
   sortOrder: number
   initialStock: number | null
+  /** Free variant label for templates without linked attributes ("Small", "maat 43"). */
+  label?: string | null
+  lowStockThreshold?: number | null
 }
 
 export type StockMovementType =

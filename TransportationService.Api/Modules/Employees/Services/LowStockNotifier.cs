@@ -37,7 +37,8 @@ public class LowStockNotifier : ILowStockNotifier
     public async Task NotifyIfCrossedAsync(
         IssuedItemTemplate template, IssuedItemVariant? variant, int previousQuantity, CancellationToken cancellationToken)
     {
-        if (!template.StockTrackingEnabled || template.LowStockThreshold is not { } threshold)
+        // A variant's own threshold wins; the template threshold is the fallback.
+        if (!template.StockTrackingEnabled || (variant?.LowStockThreshold ?? template.LowStockThreshold) is not { } threshold)
         {
             return;
         }

@@ -12,7 +12,10 @@ public class IssuedItemVariant : AuditableTenantEntity
 {
     public Guid TemplateId { get; set; }
 
-    /// <summary>Display label generated from the attribute values, e.g. "M / Zwart".</summary>
+    /// <summary>
+    /// Display label. Generated from the attribute values ("M / Zwart") when the template
+    /// uses attributes; entered directly ("Small", "maat 43") for label-only variants.
+    /// </summary>
     public string Label { get; set; } = string.Empty;
 
     /// <summary>Cached aggregate of the variant's stock movements.</summary>
@@ -20,6 +23,9 @@ public class IssuedItemVariant : AuditableTenantEntity
 
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
+
+    /// <summary>Optional variant-specific low-stock threshold; null = template threshold.</summary>
+    public int? LowStockThreshold { get; set; }
 
     /// <summary>Optimistic-concurrency token; rotated on every stock mutation.</summary>
     public Guid Version { get; set; } = Guid.NewGuid();

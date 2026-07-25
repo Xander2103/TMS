@@ -14,7 +14,15 @@ import {
   type IssuedItemTemplateInput,
   type InventoryUnitOption,
 } from './issuedItemsApi'
+import { createVariant } from './inventoryApi'
+import { TemplateVariantsEditor } from './TemplateVariantsEditor'
 import './issued-items.css'
+
+interface PendingVariant {
+  label: string
+  stock: string
+  threshold: string
+}
 
 function emptyTemplateForm(): IssuedItemTemplateInput {
   return {
@@ -87,6 +95,10 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
   const canManageCategories = hasPermission('inventory.manage')
   const canManageUnits = hasPermission('unit_types.manage') || hasPermission('tariffs.manage')
   const [unitOptions, setUnitOptions] = useState<InventoryUnitOption[]>([])
+  // Create mode: variants entered here are created (with their initial-stock movements)
+  // right after the template itself.
+  const [pendingVariants, setPendingVariants] = useState<PendingVariant[]>([])
+  const [pendingDraft, setPendingDraft] = useState<PendingVariant>({ label: '', stock: '', threshold: '' })
 
   useEffect(() => {
     let mounted = true
@@ -124,12 +136,37 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
       const saved = editing
         ? await updateIssuedItemTemplate(editing.id, form)
         : await createIssuedItemTemplate(form)
+      if (!editing && form.variantsEnabled) {
+        // Each row becomes a real variant with an auditable initial-stock movement.
+        for (const [index, pending] of pendingVariants.entries()) {
+          await createVariant(saved.id, {
+            values: [],
+            isActive: true,
+            sortOrder: index,
+            initialStock: pending.stock.trim() === '' ? null : Math.max(0, Number(pending.stock) || 0),
+            label: pending.label.trim(),
+            lowStockThreshold: pending.threshold.trim() === '' ? null : Math.max(0, Number(pending.threshold) || 0),
+          })
+        }
+      }
       onSaved(saved)
     } catch (err) {
       setFormError(describeApiError(err, 'Het sjabloon kon niet worden opgeslagen.').message)
     } finally {
       setSaving(false)
     }
+  }
+
+  function addPendingVariant() {
+    const label = pendingDraft.label.trim()
+    if (!label) {
+      setFormError('Geef een variantnaam of uitvoering op (bv. Small, maat 43).')
+      return
+    }
+
+    setFormError(null)
+    setPendingVariants((rows) => [...rows, { ...pendingDraft, label }])
+    setPendingDraft({ label: '', stock: '', threshold: '' })
   }
 
   return (
@@ -238,13 +275,92 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
           <div className="issued-items-stock-config">
             <label className="issued-items-checkbox">
               <input type="checkbox" checked={form.variantsEnabled} onChange={(e) => set('variantsEnabled', e.target.checked)} disabled={saving} />
-              <span>Varianten (maat/uitvoering) — voorraad per variant</span>
+              <span>Varianten gebruiken (maat/uitvoering) — voorraad per variant</span>
             </label>
+            {form.variantsEnabled && editing?.variantsEnabled && (
+              <TemplateVariantsEditor templateId={editing.id} unit={form.unit} />
+            )}
+            {form.variantsEnabled && editing && !editing.variantsEnabled && (
+              <p className="customer-form-muted">
+                Varianten worden actief na het opslaan; daarna beheer je ze hier of op de detailpagina.
+              </p>
+            )}
+            {form.variantsEnabled && !editing && (
+              <div className="issued-items-stock-config">
+                {pendingVariants.length > 0 && (
+                  <table className="issued-items-table">
+                    <thead>
+                      <tr>
+                        <th>Variantnaam / uitvoering</th>
+                        <th>Voorraad</th>
+                        <th>Lage-voorraadgrens</th>
+                        <th aria-label="Acties" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingVariants.map((variant, index) => (
+                        <tr key={index}>
+                          <td>{variant.label}</td>
+                          <td>{variant.stock || '0'}</td>
+                          <td>{variant.threshold || '—'}</td>
+                          <td className="issued-items-row-actions">
+                            <button
+                              type="button"
+                              className="issued-items-link issued-items-link-danger"
+                              onClick={() => setPendingVariants((rows) => rows.filter((_, i) => i !== index))}
+                            >
+                              Verwijderen
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                <p className="issued-items-computed-stock">
+                  Totale voorraad: {pendingVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)} (berekende som van de varianten)
+                </p>
+                <div className="issued-items-form-row">
+                  <FormField label="Variantnaam / uitvoering" htmlFor="tpl-variant-label" hint="Bv. Small, maat 43, zwart.">
+                    <input
+                      id="tpl-variant-label"
+                      value={pendingDraft.label}
+                      maxLength={150}
+                      disabled={saving}
+                      onChange={(e) => setPendingDraft((d) => ({ ...d, label: e.target.value }))}
+                    />
+                  </FormField>
+                  <FormField label="Voorraad" htmlFor="tpl-variant-stock">
+                    <input
+                      id="tpl-variant-stock"
+                      type="number"
+                      min={0}
+                      value={pendingDraft.stock}
+                      disabled={saving}
+                      onChange={(e) => setPendingDraft((d) => ({ ...d, stock: e.target.value }))}
+                    />
+                  </FormField>
+                  <FormField label="Lage-voorraadgrens" htmlFor="tpl-variant-threshold" hint="Leeg = sjabloongrens.">
+                    <input
+                      id="tpl-variant-threshold"
+                      type="number"
+                      min={0}
+                      value={pendingDraft.threshold}
+                      disabled={saving}
+                      onChange={(e) => setPendingDraft((d) => ({ ...d, threshold: e.target.value }))}
+                    />
+                  </FormField>
+                  <Button variant="secondary" onClick={addPendingVariant} disabled={saving}>
+                    + Variant toevoegen
+                  </Button>
+                </div>
+              </div>
+            )}
             <label className="issued-items-checkbox">
               <input type="checkbox" checked={form.allowNegativeStock} onChange={(e) => set('allowNegativeStock', e.target.checked)} disabled={saving} />
               <span>Negatieve voorraad toestaan</span>
             </label>
-            {!form.variantsEnabled ? (
+            {!form.variantsEnabled && (
               <FormField
                 label="Voorraad"
                 htmlFor="tpl-stock"
@@ -258,10 +374,6 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
                   disabled={saving}
                 />
               </FormField>
-            ) : (
-              <p className="issued-items-computed-stock">
-                Totale voorraad: {editing?.totalAvailable ?? 0} (som van alle varianten — beheer voorraad per variant op de detailpagina)
-              </p>
             )}
             {stockChanged && (
               <FormField label="Reden voor correctie" htmlFor="tpl-stock-reason" required hint="Verplicht bij het aanpassen van bestaande voorraad.">
