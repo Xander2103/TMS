@@ -102,6 +102,8 @@ function makeRule(overrides: Partial<PriceRule> = {}): PriceRule {
     oversizeLengthCm: null,
     oversizeWidthCm: null,
     oversizeBillableFactor: null,
+    minimumQuantity: null,
+    quantityRoundingStep: null,
     ...overrides,
   }
 }

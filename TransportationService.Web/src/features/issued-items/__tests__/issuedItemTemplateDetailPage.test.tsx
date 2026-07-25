@@ -79,6 +79,7 @@ function makeDetail(overrides?: Partial<IssuedItemTemplateDetail['template']>): 
         isActive: true,
         sortOrder: 0,
         values: [{ attributeDefinitionId: 'attr-maat', attributeName: 'Maat', attributeOptionId: 'opt-46', value: '46' }],
+        lowStockThreshold: null,
       },
       {
         id: 'v-2',
@@ -87,6 +88,7 @@ function makeDetail(overrides?: Partial<IssuedItemTemplateDetail['template']>): 
         isActive: true,
         sortOrder: 1,
         values: [{ attributeDefinitionId: 'attr-maat', attributeName: 'Maat', attributeOptionId: 'opt-48', value: '48' }],
+        lowStockThreshold: null,
       },
     ],
   }

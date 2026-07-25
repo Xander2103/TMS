@@ -40,6 +40,7 @@ function makeUnit(overrides: Partial<UnitTypeMaster> = {}): UnitTypeMaster {
     sortOrder: 0,
     allowForOrderEntry: true,
     allowForPricing: true,
+    allowForInventory: false,
     category: 'Packaging',
     decimals: 0,
     symbol: null,

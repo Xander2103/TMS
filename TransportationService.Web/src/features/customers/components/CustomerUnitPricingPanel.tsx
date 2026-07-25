@@ -8,6 +8,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import { formatServiceValue } from '../../tarification/serviceValueFormat'
+import type { SurchargeKind } from '../../tarification/types'
 import {
   PRICE_RULE_BASIS_LABELS,
   PRIMARY_BASIS_LABELS,
@@ -68,7 +69,7 @@ interface AgreementDraft {
   effectiveUntil: string
   minimumAmount: string
   notes: string
-  surcharges: { name: string; kind: 'Percent' | 'Fixed'; value: string }[]
+  surcharges: { name: string; kind: SurchargeKind; value: string }[]
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
