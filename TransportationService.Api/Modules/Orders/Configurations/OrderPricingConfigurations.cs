@@ -54,6 +54,8 @@ public class TransportOrderServiceLineConfiguration : IEntityTypeConfiguration<T
         builder.Property(l => l.Kind).HasConversion<string>().HasMaxLength(20);
         builder.Property(l => l.Value).HasPrecision(12, 2);
         builder.Property(l => l.Amount).HasPrecision(12, 2);
+        builder.Property(l => l.Quantity).HasPrecision(12, 3);
+        builder.Property(l => l.InvoiceDescriptionSnapshot).HasMaxLength(300);
         builder.HasIndex(l => new { l.TenantId, l.TransportOrderId });
         builder.HasOne<TransportOrder>().WithMany().HasForeignKey(l => l.TransportOrderId).OnDelete(DeleteBehavior.Cascade);
         builder.HasQueryFilter(l => !l.IsDeleted);

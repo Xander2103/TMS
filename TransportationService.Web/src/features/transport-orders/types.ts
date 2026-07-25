@@ -203,14 +203,19 @@ export interface OrderPricingLine {
   amount: number
   source: string
   informational: boolean
+  ruleName?: string | null
+  agreementName?: string | null
+  actualQuantity?: number | null
+  billableQuantity?: number | null
 }
 
 export interface OrderServiceLine {
   serviceOptionId: string | null
   name: string
-  kind: 'Percent' | 'Fixed'
+  kind: 'Percent' | 'Fixed' | 'PerHour' | 'PerStop'
   value: number
   amount: number
+  quantity?: number | null
 }
 
 export interface StopInput {
@@ -277,6 +282,8 @@ export interface TransportOrderInput {
   dieselSurchargeOverrideReason: string | null
   /** Selected delivery services/supplements; priced by the engine and snapshotted. */
   serviceOptionIds?: string[]
+  /** Preferred over serviceOptionIds: selections incl. quantities (per-hour/per-stop services). */
+  services?: { serviceOptionId: string; quantity: number | null }[]
   /** Explicit authorized override of the calculated price (orders.override_price). */
   priceIsManual?: boolean
   priceOverrideReason?: string | null

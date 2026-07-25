@@ -377,6 +377,7 @@ export interface PricePreviewInput {
   distanceKm: number | null
   palletCount: number | null
   serviceOptionIds: string[]
+  services?: { serviceOptionId: string; quantity: number | null }[]
 }
 
 export interface PriceBreakdownLine {

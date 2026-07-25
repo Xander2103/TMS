@@ -144,6 +144,42 @@ public class CustomerServiceOverrideTests
     }
 
     [Fact]
+    public async Task QuantityBasedServices_MultiplyByEnteredQuantity()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var wachttijd = await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "WACHT", "Wachttijd", SurchargeKind.PerHour, 45m, true, 1), CancellationToken.None);
+        var extraStop = await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "STOP", "Extra stop", SurchargeKind.PerStop, 20m, true, 2), CancellationToken.None);
+
+        var request = new PriceCalculationRequest(h.CustomerId, Today,
+            [new PriceCalculationLineInput(h.PalletUnitId, 2)], "BE", null, null, null, null, [],
+            Services:
+            [
+                new PriceServiceInput(wachttijd.Id, 3m),
+                new PriceServiceInput(extraStop.Id, 2m),
+                new PriceServiceInput(h.Voor10Id),
+            ]);
+        var result = await h.Engine.CalculateAsync(request, CancellationToken.None);
+
+        // 70 base + 3 × 45 + 2 × 20 + 15 = 260.
+        Assert.Equal(260m, result.Total);
+        Assert.Contains(result.Lines, l => l.Label == "Wachttijd (3 uur)" && l.Amount == 135m);
+        Assert.Contains(result.Lines, l => l.Label == "Extra stop (2 stops)" && l.Amount == 40m);
+        var wachtLine = result.ServiceLines.Single(s => s.ServiceOptionId == wachttijd.Id);
+        Assert.Equal(3m, wachtLine.Quantity);
+
+        // Without a quantity the service explains itself instead of charging.
+        var withoutQuantity = await h.Engine.CalculateAsync(request with
+        {
+            Services = [new PriceServiceInput(wachttijd.Id)],
+        }, CancellationToken.None);
+        Assert.Equal(70m, withoutQuantity.Total);
+        Assert.Contains(withoutQuantity.Lines, l => l.Label.Contains("geef het aantal uur op") && l.Informational);
+    }
+
+    [Fact]
     public async Task CustomerMinimum_LiftsTheServiceAmount()
     {
         var h = await SeedAsync();

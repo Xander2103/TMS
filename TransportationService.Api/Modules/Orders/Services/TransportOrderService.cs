@@ -210,7 +210,7 @@ public class TransportOrderService : ITransportOrderService
         order.LegalEntityId = await ResolveOrderLegalEntityAsync(request.LegalEntityId, request.CustomerId, cancellationToken);
 
         var cargoItems = BuildCargoItems(order.Id, request.CargoItems, order.Stops);
-        if (await ApplyPricingAsync(order, request.AgreedPrice, request.ServiceOptionIds,
+        if (await ApplyPricingAsync(order, request.AgreedPrice, ResolveServiceSelections(request.Services, request.ServiceOptionIds),
                 request.PriceIsManual, request.PriceOverrideReason, cargoItems, cancellationToken) is { } pricingError)
         {
             return pricingError;
@@ -316,7 +316,7 @@ public class TransportOrderService : ITransportOrderService
         var replacementCargo = BuildCargoItems(order.Id, request.CargoItems, order.Stops);
         _dbContext.AddRange(replacementCargo);
 
-        if (await ApplyPricingAsync(order, request.AgreedPrice, request.ServiceOptionIds,
+        if (await ApplyPricingAsync(order, request.AgreedPrice, ResolveServiceSelections(request.Services, request.ServiceOptionIds),
                 request.PriceIsManual, request.PriceOverrideReason, replacementCargo, cancellationToken) is { } pricingError)
         {
             return pricingError;
@@ -938,7 +938,7 @@ public class TransportOrderService : ITransportOrderService
         var serviceLines = await _dbContext.TransportOrderServiceLines.AsNoTracking()
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .OrderBy(l => l.NameSnapshot)
-            .Select(l => new OrderServiceLineDto(l.ServiceOptionId, l.NameSnapshot, l.Kind, l.Value, l.Amount))
+            .Select(l => new OrderServiceLineDto(l.ServiceOptionId, l.NameSnapshot, l.Kind, l.Value, l.Amount, l.Quantity))
             .ToListAsync(cancellationToken);
 
         return new TransportOrderDetailDto(
@@ -964,8 +964,15 @@ public class TransportOrderService : ITransportOrderService
     /// nothing could be calculated. Snapshots only change on an explicit save, so historical
     /// orders never move when master-data tariffs change.
     /// </summary>
+    /// <summary>Newer quantity-aware selections win; the plain id list stays supported.</summary>
+    private static IReadOnlyList<PriceServiceInput> ResolveServiceSelections(
+        IReadOnlyList<OrderServiceInput>? services, IReadOnlyList<Guid>? serviceOptionIds) =>
+        services is { Count: > 0 }
+            ? services.Select(s => new PriceServiceInput(s.ServiceOptionId, s.Quantity)).ToList()
+            : (serviceOptionIds ?? []).Select(id => new PriceServiceInput(id)).ToList();
+
     private async Task<TransportOrderOperationResult?> ApplyPricingAsync(
-        TransportOrder order, decimal? requestedAgreedPrice, IReadOnlyList<Guid>? serviceOptionIds,
+        TransportOrder order, decimal? requestedAgreedPrice, IReadOnlyList<PriceServiceInput> serviceSelections,
         bool priceIsManual, string? overrideReason, IReadOnlyList<CargoItem>? cargoItems,
         CancellationToken cancellationToken)
     {
@@ -1016,7 +1023,7 @@ public class TransportOrderService : ITransportOrderService
                 order.CustomerId, order.OrderDate, lines,
                 delivery?.CountryCode, delivery?.PostalCode,
                 order.WeightKg, null, order.PalletCount,
-                serviceOptionIds ?? []), cancellationToken);
+                [], Services: serviceSelections), cancellationToken);
         }
 
         var calculated = result is { RequiresManualPrice: false } && result.Lines.Any(l => !l.Informational)
@@ -1079,6 +1086,8 @@ public class TransportOrderService : ITransportOrderService
                     Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
                     ServiceOptionId = serviceLine.ServiceOptionId, NameSnapshot = serviceLine.Name,
                     Kind = serviceLine.Kind, Value = serviceLine.Value, Amount = serviceLine.Amount,
+                    Quantity = serviceLine.Quantity,
+                    InvoiceDescriptionSnapshot = serviceLine.InvoiceLabel,
                 });
             }
 

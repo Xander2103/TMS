@@ -289,13 +289,18 @@ public class InvoiceService : IInvoiceService
             });
             foreach (var serviceLine in orderServiceLines)
             {
+                // The frozen effective invoice description wins (customer override > global > name).
+                var description = serviceLine.InvoiceDescriptionSnapshot ?? serviceLine.NameSnapshot;
+                var quantitySuffix = serviceLine.Quantity is { } serviceQuantity
+                    ? $" ({serviceQuantity:0.##} {(serviceLine.Kind == Modules.Tarification.Entities.SurchargeKind.PerHour ? "uur" : "stops")})"
+                    : string.Empty;
                 invoice.Lines.Add(new InvoiceLine
                 {
                     Id = Guid.NewGuid(),
                     TenantId = tenantId,
                     TransportOrderId = order.Id,
                     Sequence = sequence++,
-                    Description = $"{order.OrderNumber} — {serviceLine.NameSnapshot}",
+                    Description = $"{order.OrderNumber} — {description}{quantitySuffix}",
                     Quantity = 1m,
                     UnitPrice = serviceLine.Amount,
                     VatRatePercent = vatRate,

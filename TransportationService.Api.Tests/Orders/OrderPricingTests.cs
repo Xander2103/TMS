@@ -269,4 +269,49 @@ public class OrderPricingTests
         Assert.Equal("Levering vóór 08:00", serviceLine.Name);
         Assert.Equal(25m, serviceLine.Amount);
     }
+
+    [Fact]
+    public async Task HourlyService_WithQuantity_IsSnapshottedWithQuantityAndInvoiceDescription()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        var wachttijd = await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "WACHT", "Wachttijd", SurchargeKind.PerHour, 45, true, 0,
+            InvoiceDescription: "Wachturen chauffeur"), CancellationToken.None);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3) with
+        {
+            Services = [new OrderServiceInput(wachttijd.Id, 3m)],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Equal(250m, created.Order!.AgreedPrice); // 115 + 3 × 45
+        var serviceLine = Assert.Single(created.Order.ServiceLines!);
+        Assert.Equal(3m, serviceLine.Quantity);
+        Assert.Equal(135m, serviceLine.Amount);
+
+        // The frozen effective invoice description travels with the snapshot.
+        var stored = await h.Db.Context.TransportOrderServiceLines.SingleAsync();
+        Assert.Equal("Wachturen chauffeur", stored.InvoiceDescriptionSnapshot);
+        Assert.Equal(3m, stored.Quantity);
+    }
+
+    [Fact]
+    public async Task CustomerDisabledService_IsNeverCharged_OnTheOrder()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        var voor8 = await h.Admin.CreateServiceOptionAsync(
+            new SaveServiceOptionRequest("VOOR8", "Levering vóór 08:00", SurchargeKind.Fixed, 25, true, 0), CancellationToken.None);
+        await h.Admin.SaveCustomerConfigAsync(h.CustomerId, new SaveCustomerPricingConfigRequest(
+            [], [new SaveCustomerOptionPriceRequest(voor8.Id, null, Disabled: true)]), CancellationToken.None);
+
+        var created = await h.Sut.CreateAsync(
+            Request(h.CustomerId, quantity: 3, serviceOptionIds: [voor8.Id]), CancellationToken.None);
+
+        Assert.Equal(115m, created.Order!.AgreedPrice); // base only; disabled service ignored
+        Assert.Empty(created.Order.ServiceLines!);
+    }
 }

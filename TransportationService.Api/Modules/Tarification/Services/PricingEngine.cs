@@ -227,9 +227,15 @@ public class PricingEngine : IPricingEngine
         // Percent applies to the base subtotal. Customer overrides are date-aware and can
         // disable a globally available service for this customer.
         var serviceLines = new List<PriceServiceLine>();
-        if (request.ServiceOptionIds.Count > 0)
+        var selections = request.Services is { Count: > 0 }
+            ? request.Services
+            : request.ServiceOptionIds.Select(id => new PriceServiceInput(id)).ToList();
+        if (selections.Count > 0)
         {
-            var optionIds = request.ServiceOptionIds.Distinct().ToList();
+            var quantities = selections
+                .GroupBy(s => s.ServiceOptionId)
+                .ToDictionary(g => g.Key, g => g.First().Quantity);
+            var optionIds = quantities.Keys.ToList();
             var options = await _dbContext.ServiceOptions.AsNoTracking()
                 .Where(o => o.TenantId == tenantId && optionIds.Contains(o.Id) && o.IsActive)
                 .OrderBy(o => o.SortOrder).ThenBy(o => o.Name)
@@ -253,25 +259,42 @@ public class PricingEngine : IPricingEngine
 
                 var value = over?.Value ?? option.DefaultValue;
                 var source = over?.Value is not null ? "Klanttarief" : "Algemene standaard";
+                var invoiceLabel = over?.InvoiceDescription ?? option.InvoiceDescription;
+                decimal amount;
+                decimal? quantity = null;
+                string label = option.Name;
                 if (option.Kind is SurchargeKind.PerHour or SurchargeKind.PerStop)
                 {
-                    // Quantity-based services need an entered quantity (hours / stops).
-                    var unitLabel = option.Kind == SurchargeKind.PerHour ? "uur" : "stop";
-                    lines.Add(new PriceBreakdownLine(
-                        $"{option.Name}: geef het aantal {unitLabel} op", 0m, source, Informational: true));
-                    continue;
+                    var unitLabel = option.Kind == SurchargeKind.PerHour ? "uur" : "stops";
+                    if (quantities.GetValueOrDefault(option.Id) is not { } enteredQuantity || enteredQuantity <= 0)
+                    {
+                        // Quantity-based services need an entered quantity (hours / stops).
+                        lines.Add(new PriceBreakdownLine(
+                            $"{option.Name}: geef het aantal {(option.Kind == SurchargeKind.PerHour ? "uur" : "stop")} op",
+                            0m, source, Informational: true));
+                        continue;
+                    }
+
+                    quantity = enteredQuantity;
+                    amount = decimal.Round(value * enteredQuantity, 2);
+                    label = $"{option.Name} ({enteredQuantity:0.##} {unitLabel})";
+                }
+                else if (option.Kind == SurchargeKind.Percent)
+                {
+                    amount = decimal.Round(subtotalBeforeServices * value / 100m, 2);
+                }
+                else
+                {
+                    amount = decimal.Round(value, 2);
                 }
 
-                var amount = option.Kind == SurchargeKind.Percent
-                    ? decimal.Round(subtotalBeforeServices * value / 100m, 2)
-                    : decimal.Round(value, 2);
                 if (over?.MinimumAmount is { } serviceMinimum && amount < serviceMinimum)
                 {
                     amount = serviceMinimum;
                 }
 
-                lines.Add(new PriceBreakdownLine(option.Name, amount, source));
-                serviceLines.Add(new PriceServiceLine(option.Id, option.Name, option.Kind, value, amount));
+                lines.Add(new PriceBreakdownLine(label, amount, source));
+                serviceLines.Add(new PriceServiceLine(option.Id, option.Name, option.Kind, value, amount, quantity, invoiceLabel, source));
             }
         }
 

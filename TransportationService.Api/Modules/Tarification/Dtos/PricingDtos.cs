@@ -116,6 +116,9 @@ public record PriceCalculationLineDetail(decimal Quantity, decimal? LengthCm, de
 public record PriceCalculationLineInput(
     Guid UnitTypeId, decimal Quantity, IReadOnlyList<PriceCalculationLineDetail>? Details = null);
 
+/// <summary>A selected service with its entered quantity (hours / stops) where applicable.</summary>
+public record PriceServiceInput(Guid ServiceOptionId, decimal? Quantity = null);
+
 public record PriceCalculationRequest(
     Guid CustomerId,
     DateOnly Date,
@@ -125,7 +128,9 @@ public record PriceCalculationRequest(
     decimal? WeightKg,
     decimal? DistanceKm,
     int? PalletCount,
-    IReadOnlyList<Guid> ServiceOptionIds);
+    IReadOnlyList<Guid> ServiceOptionIds,
+    /// <summary>Preferred over ServiceOptionIds when present: selections incl. quantities.</summary>
+    IReadOnlyList<PriceServiceInput>? Services = null);
 
 public record PriceBreakdownLine(
     string Label, decimal Amount, string Source, bool Informational = false,
@@ -134,7 +139,9 @@ public record PriceBreakdownLine(
     decimal? ActualQuantity = null, decimal? BillableQuantity = null);
 
 /// <summary>A selected service option with its resolved (customer or default) price.</summary>
-public record PriceServiceLine(Guid ServiceOptionId, string Name, SurchargeKind Kind, decimal Value, decimal Amount);
+public record PriceServiceLine(
+    Guid ServiceOptionId, string Name, SurchargeKind Kind, decimal Value, decimal Amount,
+    decimal? Quantity = null, string? InvoiceLabel = null, string Source = "Algemene standaard");
 
 public record PriceCalculationResult(
     IReadOnlyList<PriceBreakdownLine> Lines,

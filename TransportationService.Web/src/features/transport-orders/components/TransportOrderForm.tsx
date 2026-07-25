@@ -26,6 +26,7 @@ import {
   type ServiceOption,
   type UnitTypeMaster,
 } from '../../tarification/api/pricingApi'
+import { formatServiceValue } from '../../tarification/serviceValueFormat'
 import { UnitSelect } from './UnitSelect'
 import { STOP_TYPE_LABELS, type StopInput, type TransportOrderDetail, type TransportOrderInput } from '../types'
 import './transport-order-form.css'
@@ -260,6 +261,14 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   const [selectedServiceOptionIds, setSelectedServiceOptionIds] = useState<string[]>(
     () => (order?.serviceLines ?? []).map((l) => l.serviceOptionId).filter((id): id is string => id !== null),
   )
+  // Entered quantities for per-hour/per-stop services, keyed by service option id.
+  const [serviceQuantities, setServiceQuantities] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (order?.serviceLines ?? [])
+        .filter((l) => l.serviceOptionId !== null && l.quantity !== null && l.quantity !== undefined)
+        .map((l) => [l.serviceOptionId as string, String(l.quantity)]),
+    ),
+  )
   const [pricingConfig, setPricingConfig] = useState<{ customerId: string; config: CustomerPricingConfig } | null>(null)
   const [unitMaster, setUnitMaster] = useState<UnitTypeMaster[]>([])
   const [preview, setPreview] = useState<PriceCalculationResult | null>(null)
@@ -268,7 +277,8 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
 
   useEffect(() => {
     let mounted = true
-    listServiceOptions()
+    // Only active services that are selectable during order entry (spec §20).
+    listServiceOptions(false, true)
       .then((data) => {
         if (mounted) setServiceOptions(data)
       })
@@ -299,12 +309,24 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
 
   const customerConfig = pricingConfig?.customerId === customerId ? pricingConfig.config : null
   const preferredUnits = customerConfig?.preferredUnits ?? []
+  const customerServiceById = new Map(
+    (customerConfig?.serviceOptions ?? []).map((o) => [o.serviceOptionId, o]),
+  )
+  // Effective services for this order: globally selectable minus customer-disabled ones.
+  const availableServiceOptions = serviceOptions.filter(
+    (o) => customerServiceById.get(o.id)?.disabled !== true,
+  )
+  const serviceSelections = () =>
+    selectedServiceOptionIds.map((id) => ({
+      serviceOptionId: id,
+      quantity: serviceQuantities[id]?.trim() ? Number(serviceQuantities[id]) : null,
+    }))
 
   // Live price preview, debounced on the pricing-relevant inputs.
   const lastUnloading = [...stops].reverse().find((s) => s.stopType === 'Unloading')
   const previewKey = JSON.stringify([
     customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount,
-    lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds,
+    lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds, serviceQuantities,
   ])
   useEffect(() => {
     const unitTypeId = unitOptions.find((u) => u.code === quantityUnitCode)?.id ?? null
@@ -327,6 +349,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         distanceKm: null,
         palletCount: palletCount === '' ? null : Number(palletCount),
         serviceOptionIds: selectedServiceOptionIds,
+        services: serviceSelections(),
       })
         .then(setPreview)
         .catch(() => setPreview(null))
@@ -510,6 +533,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       dieselSurchargePercentOverride: dieselSurchargeOverride ? numberOrNullFrom(dieselSurchargePercentOverride) : null,
       dieselSurchargeOverrideReason: dieselSurchargeOverride ? dieselSurchargeOverrideReason.trim() || null : null,
       serviceOptionIds: selectedServiceOptionIds,
+      services: serviceSelections(),
       priceIsManual,
       priceOverrideReason: priceIsManual ? priceOverrideReason.trim() || null : null,
       stops: stops.map((stop) => ({
@@ -1119,42 +1143,67 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   )
 
   const effectiveOptionPrice = (option: ServiceOption): number => {
-    const customerPrice = customerConfig?.serviceOptions.find((o) => o.serviceOptionId === option.id)?.customerValue
-    return customerPrice ?? option.defaultValue
+    const customerService = customerServiceById.get(option.id)
+    return customerService?.effectiveValue ?? customerService?.customerValue ?? option.defaultValue
   }
 
   const servicesContent = (
     <>
       <p className="ui-form-section-description">
-        Gekozen diensten tellen mee in de prijsberekening en worden bij facturatie aparte factuurlijnen.
+        Gekozen diensten tellen mee in de prijsberekening en worden bij facturatie aparte factuurlijnen. De effectieve
+        prijs komt uit de klantenfiche (klanttarief) of de algemene standaard.
       </p>
-      {serviceOptions.length === 0 && <p className="placeholder-text">Nog geen diensten geconfigureerd.</p>}
+      {availableServiceOptions.length === 0 && <p className="placeholder-text">Geen diensten beschikbaar voor deze klant.</p>}
       <div className="tof-service-options">
-        {serviceOptions.map((option) => {
+        {availableServiceOptions.map((option) => {
           const checked = selectedServiceOptionIds.includes(option.id)
-          const isCustomerPrice = customerConfig?.serviceOptions.some(
-            (o) => o.serviceOptionId === option.id && o.customerValue !== null,
-          )
+          const source = customerServiceById.get(option.id)?.source ?? 'Algemene standaard'
+          const needsQuantity = option.kind === 'PerHour' || option.kind === 'PerStop'
           return (
-            <label key={option.id} className="tof-checkbox tof-service-option">
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={(e) =>
-                  setSelectedServiceOptionIds((ids) =>
-                    e.target.checked ? [...ids, option.id] : ids.filter((id) => id !== option.id),
-                  )
-                }
-                disabled={saving}
-              />
-              <span>
-                {option.name}{' '}
-                <span className="customer-form-muted">
-                  ({option.kind === 'Percent' ? `${effectiveOptionPrice(option)}%` : `€ ${effectiveOptionPrice(option).toFixed(2)}`}
-                  {isCustomerPrice ? ' — klantprijs' : ''})
+            <div key={option.id} className="tof-service-option">
+              <label className="tof-checkbox">
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => {
+                    const on = e.target.checked
+                    setSelectedServiceOptionIds((ids) =>
+                      on ? [...ids, option.id] : ids.filter((id) => id !== option.id),
+                    )
+                    if (on && option.kind === 'PerStop' && !serviceQuantities[option.id]) {
+                      // Sensible default: every unloading stop beyond the first is an extra stop.
+                      const extraStops = Math.max(0, stops.filter((s) => s.stopType === 'Unloading').length - 1)
+                      if (extraStops > 0) {
+                        setServiceQuantities((q) => ({ ...q, [option.id]: String(extraStops) }))
+                      }
+                    }
+                  }}
+                  disabled={saving}
+                />
+                <span>
+                  {option.name}{' '}
+                  <span className="customer-form-muted">
+                    ({formatServiceValue(option.kind, effectiveOptionPrice(option))} — {source})
+                  </span>
                 </span>
-              </span>
-            </label>
+              </label>
+              {checked && needsQuantity && (
+                <FormField
+                  label={option.kind === 'PerHour' ? `Aantal uur — ${option.name}` : `Aantal stops — ${option.name}`}
+                  htmlFor={`svc-qty-${option.id}`}
+                >
+                  <input
+                    id={`svc-qty-${option.id}`}
+                    type="number"
+                    min={0}
+                    step={option.kind === 'PerHour' ? 0.25 : 1}
+                    value={serviceQuantities[option.id] ?? ''}
+                    onChange={(e) => setServiceQuantities((q) => ({ ...q, [option.id]: e.target.value }))}
+                    disabled={saving}
+                  />
+                </FormField>
+              )}
+            </div>
           )
         })}
       </div>

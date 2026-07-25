@@ -101,7 +101,10 @@ public record OrderPricingSnapshotDto(
 public record OrderServiceLineDto(
     Guid? ServiceOptionId, string Name,
     TransportationService.Api.Modules.Tarification.Entities.SurchargeKind Kind,
-    decimal Value, decimal Amount);
+    decimal Value, decimal Amount, decimal? Quantity = null);
+
+/// <summary>A selected service with the entered quantity (hours / stops) where applicable.</summary>
+public record OrderServiceInput(Guid ServiceOptionId, decimal? Quantity = null);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
@@ -234,7 +237,9 @@ public record CreateTransportOrderRequest(
     string? QuantityUnitCode = null,
     IReadOnlyList<Guid>? ServiceOptionIds = null,
     bool PriceIsManual = false,
-    string? PriceOverrideReason = null);
+    string? PriceOverrideReason = null,
+    /// <summary>Preferred over ServiceOptionIds when present: selections incl. quantities.</summary>
+    IReadOnlyList<OrderServiceInput>? Services = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -260,7 +265,9 @@ public record UpdateTransportOrderRequest(
     string? QuantityUnitCode = null,
     IReadOnlyList<Guid>? ServiceOptionIds = null,
     bool PriceIsManual = false,
-    string? PriceOverrideReason = null);
+    string? PriceOverrideReason = null,
+    /// <summary>Preferred over ServiceOptionIds when present: selections incl. quantities.</summary>
+    IReadOnlyList<OrderServiceInput>? Services = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

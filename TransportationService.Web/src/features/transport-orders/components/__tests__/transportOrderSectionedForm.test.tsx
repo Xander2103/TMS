@@ -48,7 +48,14 @@ vi.mock('../../../tarification/api/pricingApi', async () => {
     ...actual,
     listServiceOptions: () =>
       Promise.resolve([
-        { id: 'opt-8', code: 'VOOR8', name: 'Levering vóór 08:00', kind: 'Fixed', defaultValue: 25, isActive: true, sortOrder: 0 },
+        {
+          id: 'opt-8', code: 'VOOR8', name: 'Levering vóór 08:00', kind: 'Fixed', defaultValue: 25,
+          isActive: true, sortOrder: 0, description: null, invoiceDescription: null, selectableInOrders: true,
+        },
+        {
+          id: 'opt-wacht', code: 'WACHT', name: 'Wachttijd', kind: 'PerHour', defaultValue: 45,
+          isActive: true, sortOrder: 1, description: null, invoiceDescription: null, selectableInOrders: true,
+        },
       ]),
     getCustomerPricingConfig: () =>
       Promise.resolve({
@@ -132,6 +139,27 @@ describe('TransportOrderForm sections + pricing', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Andere eenheden tonen' }))
     expect(unitSelect.querySelector('optgroup[label="Andere eenheden"]')).toBeTruthy()
     expect(unitSelect.querySelectorAll('option').length).toBeGreaterThan(2)
+  })
+
+  it('shows effective service prices with their source and asks a quantity for hourly services', async () => {
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Services/ }))
+
+    // Prices come from the API (global default / customer tariff) — never hardcoded here.
+    expect(await screen.findByText(/€ 25\.00 — Algemene standaard/)).toBeInTheDocument()
+    expect(screen.getByText(/€ 45\.00\/uur — Algemene standaard/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Wachttijd/ }))
+    const quantityInput = await screen.findByLabelText('Aantal uur — Wachttijd')
+    await userEvent.type(quantityInput, '3')
+
+    await waitFor(() => expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      services: expect.arrayContaining([
+        expect.objectContaining({ serviceOptionId: 'opt-wacht', quantity: 3 }),
+      ]),
+    })), { timeout: 3000 })
   })
 
   it('shows the customer label with a favourite star in the unit selector', async () => {
