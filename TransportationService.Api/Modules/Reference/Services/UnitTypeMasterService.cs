@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Data;
@@ -11,7 +11,7 @@ namespace TransportationService.Api.Modules.Reference.Services;
 /// <summary>Full unit master record (Stamgegevens → Eenheden).</summary>
 public record UnitTypeMasterDto(
     Guid Id, string Code, string Name, string? Description, bool IsActive, int SortOrder,
-    bool AllowForOrderEntry, bool AllowForPricing,
+    bool AllowForOrderEntry, bool AllowForPricing, bool AllowForInventory,
     UnitCategory Category, int Decimals, string? Symbol,
     UnitDimensionBehavior DimensionBehavior,
     decimal? DefaultLengthCm, decimal? DefaultWidthCm, decimal? DefaultHeightCm,
@@ -20,7 +20,7 @@ public record UnitTypeMasterDto(
 
 public record SaveUnitTypeMasterRequest(
     string Code, string Name, string? Description, bool IsActive, int SortOrder,
-    bool AllowForOrderEntry, bool AllowForPricing,
+    bool AllowForOrderEntry, bool AllowForPricing, bool AllowForInventory,
     UnitCategory Category, int Decimals, string? Symbol,
     UnitDimensionBehavior DimensionBehavior,
     decimal? DefaultLengthCm, decimal? DefaultWidthCm, decimal? DefaultHeightCm,
@@ -146,6 +146,7 @@ public partial class UnitTypeMasterService : IUnitTypeMasterService
         unit.SortOrder = request.SortOrder;
         unit.AllowForOrderEntry = request.AllowForOrderEntry;
         unit.AllowForPricing = request.AllowForPricing;
+        unit.AllowForInventory = request.AllowForInventory;
         unit.Category = request.Category;
         unit.Decimals = request.Decimals;
         unit.Symbol = string.IsNullOrWhiteSpace(request.Symbol) ? null : request.Symbol.Trim();
@@ -162,7 +163,7 @@ public partial class UnitTypeMasterService : IUnitTypeMasterService
 
     private static UnitTypeMasterDto ToDto(UnitType u) => new(
         u.Id, u.Code, u.Name, u.Description, u.IsActive, u.SortOrder,
-        u.AllowForOrderEntry, u.AllowForPricing,
+        u.AllowForOrderEntry, u.AllowForPricing, u.AllowForInventory,
         u.Category, u.Decimals, u.Symbol, u.DimensionBehavior,
         u.DefaultLengthCm, u.DefaultWidthCm, u.DefaultHeightCm,
         u.DefaultWeightKg, u.MaxWeightKg, u.DefaultVolumeM3,

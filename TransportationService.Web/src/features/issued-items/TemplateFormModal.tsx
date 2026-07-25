@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { FormField } from '../../components/ui/FormField'
@@ -8,9 +8,11 @@ import { useAuth } from '../auth/authContextValue'
 import { LookupSelect } from '../master-data/components/LookupSelect'
 import {
   createIssuedItemTemplate,
+  listInventoryUnitOptions,
   updateIssuedItemTemplate,
   type IssuedItemTemplate,
   type IssuedItemTemplateInput,
+  type InventoryUnitOption,
 } from './issuedItemsApi'
 import './issued-items.css'
 
@@ -83,6 +85,20 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const canManageCategories = hasPermission('inventory.manage')
+  const canManageUnits = hasPermission('unit_types.manage') || hasPermission('tariffs.manage')
+  const [unitOptions, setUnitOptions] = useState<InventoryUnitOption[]>([])
+
+  useEffect(() => {
+    let mounted = true
+    listInventoryUnitOptions()
+      .then((data) => {
+        if (mounted) setUnitOptions(data)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [])
   // Reference value for detecting a stock change on an existing template (ledger correction).
   const loadedStock = editing && editing.stockTrackingEnabled && !editing.variantsEnabled ? editing.currentStock : null
   const stockChanged = form.stockTrackingEnabled && !form.variantsEnabled
@@ -275,8 +291,25 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Eenheid" htmlFor="tpl-unit" hint="bv. stuks / paar / set">
-                <input id="tpl-unit" value={form.unit ?? ''} onChange={(e) => set('unit', e.target.value || null)} disabled={saving} maxLength={30} />
+              <FormField label="Eenheid" htmlFor="tpl-unit" hint="Voorraadeenheid uit de stamgegevens.">
+                {/* Managed dropdown (spec: no free text); a legacy free-text value stays selectable. */}
+                <select id="tpl-unit" value={form.unit ?? ''} onChange={(e) => set('unit', e.target.value || null)} disabled={saving}>
+                  <option value="">— Eenheid —</option>
+                  {form.unit && !unitOptions.some((u) => u.name === form.unit) && (
+                    <option value={form.unit}>Bestaande waarde: {form.unit}</option>
+                  )}
+                  {unitOptions.map((unit) => (
+                    <option key={unit.id} value={unit.name}>
+                      {unit.name}
+                      {unit.symbol ? ` (${unit.symbol})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {canManageUnits && (
+                  <Link className="issued-items-manage-link" to="/master-data/eenheden">
+                    + Eenheden beheren
+                  </Link>
+                )}
               </FormField>
               <FormField label="Opslaglocatie" htmlFor="tpl-storage">
                 <input id="tpl-storage" value={form.storageLocation ?? ''} onChange={(e) => set('storageLocation', e.target.value || null)} disabled={saving} maxLength={150} />

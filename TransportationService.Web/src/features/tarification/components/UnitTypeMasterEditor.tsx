@@ -37,6 +37,7 @@ interface UnitDraft {
   defaultPalletPlaces: string
   allowForOrderEntry: boolean
   allowForPricing: boolean
+  allowForInventory: boolean
   isActive: boolean
   sortOrder: string
 }
@@ -107,6 +108,7 @@ export function UnitTypeMasterEditor() {
             defaultPalletPlaces: unit.defaultPalletPlaces !== null ? String(unit.defaultPalletPlaces) : '',
             allowForOrderEntry: unit.allowForOrderEntry,
             allowForPricing: unit.allowForPricing,
+            allowForInventory: unit.allowForInventory,
             isActive: unit.isActive,
             sortOrder: String(unit.sortOrder),
           }
@@ -129,6 +131,7 @@ export function UnitTypeMasterEditor() {
             defaultPalletPlaces: '',
             allowForOrderEntry: true,
             allowForPricing: true,
+            allowForInventory: false,
             isActive: true,
             sortOrder: String((units ?? []).length),
           },
@@ -149,6 +152,7 @@ export function UnitTypeMasterEditor() {
         sortOrder: Number(draft.sortOrder) || 0,
         allowForOrderEntry: draft.allowForOrderEntry,
         allowForPricing: draft.allowForPricing,
+        allowForInventory: draft.allowForInventory,
         category: draft.category,
         decimals: Number(draft.decimals) || 0,
         symbol: draft.symbol.trim() || null,
@@ -352,6 +356,10 @@ export function UnitTypeMasterEditor() {
               <label className="tof-checkbox">
                 <input type="checkbox" checked={draft.allowForPricing} onChange={(e) => setDraft((d) => (d ? { ...d, allowForPricing: e.target.checked } : d))} />
                 Bruikbaar als tariefeenheid
+              </label>
+              <label className="tof-checkbox">
+                <input type="checkbox" checked={draft.allowForInventory} onChange={(e) => setDraft((d) => (d ? { ...d, allowForInventory: e.target.checked } : d))} />
+                Bruikbaar als voorraadeenheid
               </label>
               <label className="tof-checkbox">
                 <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />

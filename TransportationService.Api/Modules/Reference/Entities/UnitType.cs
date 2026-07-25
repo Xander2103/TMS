@@ -13,6 +13,7 @@ public enum UnitCategory
     Time = 5,
     Distance = 6,
     Commercial = 7,
+    Inventory = 8,
 }
 
 /// <summary>How the unit's default dimensions behave during order entry.</summary>
@@ -43,6 +44,9 @@ public class UnitType : LookupEntity
 
     /// <summary>Usable as the unit of a price rule / customer price agreement.</summary>
     public bool AllowForPricing { get; set; } = true;
+
+    /// <summary>Selectable as stock unit ("Voorraadeenheid") on inventory templates.</summary>
+    public bool AllowForInventory { get; set; }
 
     public UnitCategory Category { get; set; } = UnitCategory.Other;
 

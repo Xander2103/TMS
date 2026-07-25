@@ -87,4 +87,20 @@ public class UnitTypesController : LookupControllerBase<UnitType>
         var updated = await _masterService.UpdateAsync(id, request, cancellationToken);
         return updated is null ? NotFound() : Ok(updated);
     }
+
+    /// <summary>Active stock units for the inventory-template "Voorraadeenheid" dropdown.</summary>
+    [HttpGet("inventory-options")]
+    [RequirePermission(PermissionCodes.IssuedItemsManageTemplates, PermissionCodes.InventoryView, PermissionCodes.InventoryManage,
+        PermissionCodes.UnitTypesView, PermissionCodes.UnitTypesManage)]
+    public async Task<ActionResult<IReadOnlyList<InventoryUnitOptionDto>>> InventoryOptions(CancellationToken cancellationToken)
+    {
+        var units = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == _tenantContext.TenantId && u.IsActive && u.AllowForInventory)
+            .OrderBy(u => u.SortOrder).ThenBy(u => u.Name)
+            .Select(u => new InventoryUnitOptionDto(u.Id, u.Code, u.Name, u.Symbol))
+            .ToListAsync(cancellationToken);
+        return Ok(units);
+    }
 }
+
+public record InventoryUnitOptionDto(Guid Id, string Code, string Name, string? Symbol);

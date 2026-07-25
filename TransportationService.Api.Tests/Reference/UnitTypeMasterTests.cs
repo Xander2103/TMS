@@ -29,7 +29,7 @@ public class UnitTypeMasterTests
         decimal? lengthCm = 120m, decimal? widthCm = 100m,
         UnitDimensionBehavior behavior = UnitDimensionBehavior.DefaultButOverridable,
         UnitCategory category = UnitCategory.Packaging, int decimals = 0) => new(
-        code, name, null, true, 5, true, true, category, decimals, null, behavior,
+        code, name, null, true, 5, true, true, false, category, decimals, null, behavior,
         lengthCm, widthCm, null, null, null, null, null, null);
 
     [Fact]
@@ -160,6 +160,44 @@ public class UnitTypeMasterTests
             .Where(l => l.TenantId == tenantId && l.EntityType == "UnitType" && l.EntityId == created.Id.ToString())
             .ToListAsync();
         Assert.Contains(log, l => l.Action == "Created");
+    }
+
+    [Fact]
+    public async Task Seeder_AddsStockUnits_ForInventoryUsage()
+    {
+        var db = new SqliteTestDbContext();
+        using var _ = db;
+        var tenantId = Guid.NewGuid();
+        db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = DateTime.UtcNow });
+        await db.Context.SaveChangesAsync();
+
+        await ReferenceDataSeeder.SeedAsync(db.Context);
+        // Idempotent: a second run adds nothing extra.
+        await ReferenceDataSeeder.SeedAsync(db.Context);
+
+        var units = await db.Context.UnitTypes.Where(u => u.TenantId == tenantId).ToListAsync();
+        foreach (var code in new[] { "PAAR", "SET", "ROL", "LITER", "METER" })
+        {
+            var unit = Assert.Single(units, u => u.Code == code);
+            Assert.True(unit.AllowForInventory);
+            Assert.False(unit.AllowForOrderEntry);
+            Assert.False(unit.AllowForPricing);
+            Assert.Equal(UnitCategory.Inventory, unit.Category);
+        }
+    }
+
+    [Fact]
+    public async Task Master_PersistsInventoryUsageFlag()
+    {
+        var (db, service, _) = CreateService();
+        using var _1 = db;
+
+        var created = await service.CreateAsync(Request("DOOS", "Doos") with { AllowForInventory = true }, CancellationToken.None);
+        Assert.True(created.AllowForInventory);
+
+        var updated = await service.UpdateAsync(created.Id,
+            Request("DOOS", "Doos") with { AllowForInventory = false }, CancellationToken.None);
+        Assert.False(updated!.AllowForInventory);
     }
 
     [Fact]

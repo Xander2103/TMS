@@ -102,7 +102,7 @@ export function PreparedIssuedItemsEditor({ value, onChange, templates, isLoadin
             )}
             {selectedVariant && selectedVariant.currentStock < item.quantity && (
               <p className="issued-items-stock-preview issued-items-stock-preview-warning" role="status">
-                Onvoldoende voorraad voor {item.quantity} stuks (beschikbaar: {selectedVariant.currentStock}).
+                Onvoldoende voorraad voor aantal {item.quantity} (beschikbaar: {selectedVariant.currentStock}).
               </p>
             )}
             <FormField label="Aantal" htmlFor={`pi-qty-${item.key}`}>

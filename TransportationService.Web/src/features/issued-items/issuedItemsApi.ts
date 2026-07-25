@@ -113,6 +113,18 @@ export interface EmployeeIssuedItemInput {
   overrideReason?: string | null
 }
 
+// ---- Stock units (managed master data for the "Voorraadeenheid" dropdown) ----
+export interface InventoryUnitOption {
+  id: string
+  code: string
+  name: string
+  symbol: string | null
+}
+
+export function listInventoryUnitOptions(): Promise<InventoryUnitOption[]> {
+  return apiClient.getJson<InventoryUnitOption[]>('/api/unit-types/inventory-options')
+}
+
 // ---- Templates ----
 export function listIssuedItemTemplates(includeInactive = false): Promise<IssuedItemTemplate[]> {
   const query = includeInactive ? '?includeInactive=true' : ''

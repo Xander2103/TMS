@@ -263,7 +263,16 @@ export interface UnitTypeSettings {
   allowForPricing: boolean
 }
 
-export type UnitCategory = 'Other' | 'Packaging' | 'Weight' | 'Volume' | 'Capacity' | 'Time' | 'Distance' | 'Commercial'
+export type UnitCategory =
+  | 'Other'
+  | 'Packaging'
+  | 'Weight'
+  | 'Volume'
+  | 'Capacity'
+  | 'Time'
+  | 'Distance'
+  | 'Commercial'
+  | 'Inventory'
 
 export type UnitDimensionBehavior = 'Variable' | 'DefaultButOverridable' | 'Fixed'
 
@@ -275,6 +284,7 @@ export const UNIT_CATEGORY_LABELS: Record<UnitCategory, string> = {
   Time: 'Tijd',
   Distance: 'Afstand',
   Commercial: 'Commercieel',
+  Inventory: 'Voorraad',
   Other: 'Overig',
 }
 
@@ -293,6 +303,7 @@ export interface UnitTypeMaster {
   sortOrder: number
   allowForOrderEntry: boolean
   allowForPricing: boolean
+  allowForInventory: boolean
   category: UnitCategory
   decimals: number
   symbol: string | null

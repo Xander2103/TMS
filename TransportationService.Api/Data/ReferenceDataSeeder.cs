@@ -90,6 +90,55 @@ public static class ReferenceDataSeeder
 
         await SeedServiceOptionsAsync(dbContext, tenantId, cancellationToken);
         await SeedUnitTypePhysicalDefaultsAsync(dbContext, tenantId, cancellationToken);
+        await SeedInventoryUnitsAsync(dbContext, tenantId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Stock units for inventory templates (add-if-missing by code, so existing tenants get
+    /// them too). Order-entry/pricing usage stays off; admins can widen usage in master data.
+    /// </summary>
+    private static async Task SeedInventoryUnitsAsync(
+        TransportationDbContext dbContext, Guid tenantId, CancellationToken cancellationToken)
+    {
+        (string Code, string Name)[] stockUnits =
+        [
+            ("PAAR", "Paar"), ("SET", "Set"), ("ROL", "Rol"), ("LITER", "Liter"), ("METER", "Meter"),
+        ];
+        var existing = (await dbContext.UnitTypes
+                .Where(u => u.TenantId == tenantId)
+                .Select(u => u.Code)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var added = false;
+        var sortOrder = existing.Count;
+        foreach (var (code, name) in stockUnits)
+        {
+            if (existing.Contains(code))
+            {
+                continue;
+            }
+
+            dbContext.UnitTypes.Add(new Modules.Reference.Entities.UnitType
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Code = code,
+                Name = name,
+                IsActive = true,
+                SortOrder = sortOrder++,
+                Category = Modules.Reference.Entities.UnitCategory.Inventory,
+                AllowForInventory = true,
+                AllowForOrderEntry = false,
+                AllowForPricing = false,
+            });
+            added = true;
+        }
+
+        if (added)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 
     /// <summary>

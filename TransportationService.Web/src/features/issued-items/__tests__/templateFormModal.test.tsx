@@ -20,6 +20,23 @@ vi.mock('../../master-data/components/LookupSelect', () => ({
   ),
 }))
 
+const api = vi.hoisted(() => ({ create: vi.fn() }))
+
+vi.mock('../issuedItemsApi', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../issuedItemsApi')>()
+  return {
+    ...original,
+    listInventoryUnitOptions: () =>
+      Promise.resolve([
+        { id: 'u-stuk', code: 'PIECE', name: 'Stuks', symbol: 'st' },
+        { id: 'u-paar', code: 'PAAR', name: 'Paar', symbol: null },
+        { id: 'u-doos', code: 'BOX', name: 'Doos', symbol: null },
+      ]),
+    createIssuedItemTemplate: api.create,
+    updateIssuedItemTemplate: vi.fn(),
+  }
+})
+
 function renderModal() {
   return render(
     <MemoryRouter>
@@ -51,6 +68,37 @@ describe('TemplateFormModal', () => {
 
     expect(screen.getByLabelText('Volgorde in lijst')).toBeInTheDocument()
     expect(screen.queryByLabelText('Minimumvoorraad')).not.toBeInTheDocument()
+  })
+
+  it('offers the stock unit as a managed dropdown, not free text', async () => {
+    permissions.value = new Set(['unit_types.manage'])
+    renderModal()
+
+    await userEvent.click(screen.getByLabelText('Voorraadbeheer'))
+    const unitSelect = await screen.findByLabelText('Eenheid')
+    expect(unitSelect.tagName).toBe('SELECT')
+    expect(await screen.findByRole('option', { name: 'Paar' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Doos' })).toBeInTheDocument()
+
+    // Managed master data stays one click away for authorized users.
+    expect(screen.getByRole('link', { name: '+ Eenheden beheren' })).toHaveAttribute('href', '/master-data/eenheden')
+  })
+
+  it('hides the unit manage action without permission and persists the chosen unit', async () => {
+    permissions.value = new Set()
+    api.create.mockResolvedValue({ id: 't-1' })
+    renderModal()
+
+    await userEvent.click(screen.getByLabelText('Voorraadbeheer'))
+    await screen.findByRole('option', { name: 'Paar' })
+    expect(screen.queryByRole('link', { name: '+ Eenheden beheren' })).not.toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText(/^Naam/), 'Veiligheidsschoenen')
+    await userEvent.selectOptions(screen.getByTestId('category-select'), 'cat-kleding')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'Paar')
+    await userEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ unit: 'Paar' }))
   })
 
   it('shows a real Voorraad field when stock tracking is on without variants', async () => {
