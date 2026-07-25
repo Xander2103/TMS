@@ -113,8 +113,9 @@ public class PricingController : ControllerBase
     [HttpGet("api/service-options")]
     [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage, PermissionCodes.OrdersCreate, PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
     public async Task<ActionResult<IReadOnlyList<ServiceOptionDto>>> ListServiceOptions(
-        [FromQuery] bool includeInactive = false, CancellationToken cancellationToken = default) =>
-        Ok(await _admin.ListServiceOptionsAsync(includeInactive, cancellationToken));
+        [FromQuery] bool includeInactive = false, [FromQuery] bool forOrderEntry = false,
+        CancellationToken cancellationToken = default) =>
+        Ok(await _admin.ListServiceOptionsAsync(includeInactive, forOrderEntry, cancellationToken));
 
     [HttpPost("api/service-options")]
     [RequirePermission(PermissionCodes.TariffsManage)]

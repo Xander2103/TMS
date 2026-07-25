@@ -111,6 +111,8 @@ public class ServiceOptionConfiguration : IEntityTypeConfiguration<ServiceOption
         builder.Property(o => o.Name).IsRequired().HasMaxLength(200);
         builder.Property(o => o.Kind).HasConversion<string>().HasMaxLength(20);
         builder.Property(o => o.DefaultValue).HasPrecision(12, 2);
+        builder.Property(o => o.Description).HasMaxLength(1000);
+        builder.Property(o => o.InvoiceDescription).HasMaxLength(300);
         builder.HasIndex(o => new { o.TenantId, o.Code }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasQueryFilter(o => !o.IsDeleted);
     }

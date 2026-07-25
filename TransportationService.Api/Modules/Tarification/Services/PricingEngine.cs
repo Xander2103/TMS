@@ -239,11 +239,20 @@ public class PricingEngine : IPricingEngine
             foreach (var option in options)
             {
                 var value = customerPrices.GetValueOrDefault(option.Id, option.DefaultValue);
+                var source = customerPrices.ContainsKey(option.Id) ? "Klanttarief" : "Algemene standaard";
+                if (option.Kind is SurchargeKind.PerHour or SurchargeKind.PerStop)
+                {
+                    // Quantity-based services need an entered quantity (hours / stops).
+                    var unitLabel = option.Kind == SurchargeKind.PerHour ? "uur" : "stop";
+                    lines.Add(new PriceBreakdownLine(
+                        $"{option.Name}: geef het aantal {unitLabel} op", 0m, source, Informational: true));
+                    continue;
+                }
+
                 var amount = option.Kind == SurchargeKind.Percent
                     ? decimal.Round(subtotalBeforeServices * value / 100m, 2)
                     : decimal.Round(value, 2);
-                lines.Add(new PriceBreakdownLine(option.Name, amount,
-                    customerPrices.ContainsKey(option.Id) ? "Klantprijs" : "Standaardtarief"));
+                lines.Add(new PriceBreakdownLine(option.Name, amount, source));
                 serviceLines.Add(new PriceServiceLine(option.Id, option.Name, option.Kind, value, amount));
             }
         }

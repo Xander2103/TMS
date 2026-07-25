@@ -33,8 +33,17 @@ public class RateCard : AuditableTenantEntity
 
 public enum SurchargeKind
 {
+    /// <summary>Percentage of the applicable base subtotal.</summary>
     Percent,
+
+    /// <summary>Flat amount per order.</summary>
     Fixed,
+
+    /// <summary>Amount × entered hours (e.g. Wachttijd €45/uur). Service options only.</summary>
+    PerHour,
+
+    /// <summary>Amount × number of (extra) stops (e.g. Extra stop €20). Service options only.</summary>
+    PerStop,
 }
 
 /// <summary>A named surcharge on a rate card (e.g. fuel %, ADR fixed fee).</summary>

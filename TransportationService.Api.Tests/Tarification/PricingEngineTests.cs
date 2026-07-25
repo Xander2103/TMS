@@ -178,8 +178,8 @@ public class PricingEngineTests
 
         // 2×50 = 100 base + 25 fixed + 5% of 100.
         Assert.Equal(130m, result.Total);
-        Assert.Contains(result.Lines, l => l.Label == "Levering vóór 08:00" && l.Amount == 25m && l.Source == "Standaardtarief");
-        Assert.Contains(result.Lines, l => l.Label == "Brandstoftoeslag" && l.Amount == 5m && l.Source == "Klantprijs");
+        Assert.Contains(result.Lines, l => l.Label == "Levering vóór 08:00" && l.Amount == 25m && l.Source == "Algemene standaard");
+        Assert.Contains(result.Lines, l => l.Label == "Brandstoftoeslag" && l.Amount == 5m && l.Source == "Klanttarief");
     }
 
     [Fact]

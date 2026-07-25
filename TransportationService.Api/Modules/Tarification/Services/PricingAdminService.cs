@@ -25,7 +25,7 @@ public interface IPricingAdminService
     Task<PriceRuleDto?> UpdateRuleAsync(Guid id, SavePriceRuleRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteRuleAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<ServiceOptionDto>> ListServiceOptionsAsync(bool includeInactive, CancellationToken cancellationToken);
+    Task<IReadOnlyList<ServiceOptionDto>> ListServiceOptionsAsync(bool includeInactive, bool forOrderEntry, CancellationToken cancellationToken);
     Task<ServiceOptionDto> CreateServiceOptionAsync(SaveServiceOptionRequest request, CancellationToken cancellationToken);
     Task<ServiceOptionDto?> UpdateServiceOptionAsync(Guid id, SaveServiceOptionRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteServiceOptionAsync(Guid id, CancellationToken cancellationToken);
@@ -204,6 +204,12 @@ public class PricingAdminService : IPricingAdminService
             {
                 throw new DomainValidationException("surcharges", "Elke toeslag heeft een naam nodig.");
             }
+
+            if (surcharge.Kind is not (SurchargeKind.Percent or SurchargeKind.Fixed))
+            {
+                throw new DomainValidationException("surcharges",
+                    "Een automatische toeslag op een prijsafspraak is een percentage of een vast bedrag.");
+            }
         }
 
         if (request.CustomerId is { } customerId
@@ -318,12 +324,16 @@ public class PricingAdminService : IPricingAdminService
 
     // --- Service options ---
 
-    public async Task<IReadOnlyList<ServiceOptionDto>> ListServiceOptionsAsync(bool includeInactive, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ServiceOptionDto>> ListServiceOptionsAsync(
+        bool includeInactive, bool forOrderEntry, CancellationToken cancellationToken)
     {
         return await _dbContext.ServiceOptions.AsNoTracking()
             .Where(o => o.TenantId == TenantId && (includeInactive || o.IsActive))
+            .Where(o => !forOrderEntry || o.SelectableInOrders)
             .OrderBy(o => o.SortOrder).ThenBy(o => o.Name)
-            .Select(o => new ServiceOptionDto(o.Id, o.Code, o.Name, o.Kind, o.DefaultValue, o.IsActive, o.SortOrder))
+            .Select(o => new ServiceOptionDto(
+                o.Id, o.Code, o.Name, o.Kind, o.DefaultValue, o.IsActive, o.SortOrder,
+                o.Description, o.InvoiceDescription, o.SelectableInOrders))
             .ToListAsync(cancellationToken);
     }
 
@@ -341,8 +351,8 @@ public class PricingAdminService : IPricingAdminService
         ApplyOption(option, request);
         _dbContext.ServiceOptions.Add(option);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Created", null, new { option.Code, option.Name }, cancellationToken);
-        return new ServiceOptionDto(option.Id, option.Code, option.Name, option.Kind, option.DefaultValue, option.IsActive, option.SortOrder);
+        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Created", null, new { option.Code, option.Name, option.Kind }, cancellationToken);
+        return MapOption(option);
     }
 
     public async Task<ServiceOptionDto?> UpdateServiceOptionAsync(Guid id, SaveServiceOptionRequest request, CancellationToken cancellationToken)
@@ -356,8 +366,8 @@ public class PricingAdminService : IPricingAdminService
         ValidateOption(request);
         ApplyOption(option, request);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Updated", null, new { option.Code, option.Name }, cancellationToken);
-        return new ServiceOptionDto(option.Id, option.Code, option.Name, option.Kind, option.DefaultValue, option.IsActive, option.SortOrder);
+        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Updated", null, new { option.Code, option.Name, option.Kind }, cancellationToken);
+        return MapOption(option);
     }
 
     public async Task<bool> DeleteServiceOptionAsync(Guid id, CancellationToken cancellationToken)
@@ -711,6 +721,11 @@ public class PricingAdminService : IPricingAdminService
         {
             throw new DomainValidationException("code", "Code en naam zijn verplicht.");
         }
+
+        if (request.DefaultValue < 0)
+        {
+            throw new DomainValidationException("defaultValue", "De standaardprijs mag niet negatief zijn.");
+        }
     }
 
     private void ApplyOption(ServiceOption option, SaveServiceOptionRequest request)
@@ -721,7 +736,14 @@ public class PricingAdminService : IPricingAdminService
         option.DefaultValue = request.DefaultValue;
         option.IsActive = request.IsActive;
         option.SortOrder = request.SortOrder;
+        option.Description = Clean(request.Description);
+        option.InvoiceDescription = Clean(request.InvoiceDescription);
+        option.SelectableInOrders = request.SelectableInOrders;
     }
+
+    private static ServiceOptionDto MapOption(ServiceOption option) => new(
+        option.Id, option.Code, option.Name, option.Kind, option.DefaultValue, option.IsActive, option.SortOrder,
+        option.Description, option.InvoiceDescription, option.SelectableInOrders);
 
     private async Task<IReadOnlyList<PriceRuleDto>> MapRulesAsync(IReadOnlyList<PriceRule> rules, CancellationToken cancellationToken)
     {

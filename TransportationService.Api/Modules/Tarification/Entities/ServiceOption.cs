@@ -12,12 +12,21 @@ public class ServiceOption : AuditableTenantEntity
     public string Code { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>Percent of the base subtotal or a fixed amount.</summary>
+    /// <summary>Explicit pricing method: fixed amount, percent, per hour or per stop.</summary>
     public SurchargeKind Kind { get; set; } = SurchargeKind.Fixed;
 
     public decimal DefaultValue { get; set; }
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
+
+    /// <summary>Internal description for admins.</summary>
+    public string? Description { get; set; }
+
+    /// <summary>Overrides the name on invoice lines when set.</summary>
+    public string? InvoiceDescription { get; set; }
+
+    /// <summary>Off = configured for invoicing only, never offered during order entry.</summary>
+    public bool SelectableInOrders { get; set; } = true;
 }
 
 /// <summary>Customer-specific price for a service option (overrides the default value).</summary>

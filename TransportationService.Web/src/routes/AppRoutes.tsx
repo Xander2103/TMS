@@ -108,6 +108,7 @@ const NewEmployeePage = lazyPage(() => import('../features/employees/pages/NewEm
 const EmployeeDetailPage = lazyPage(() => import('../features/employees/pages/EmployeeDetailPage'), 'EmployeeDetailPage')
 const LookupPage = lazyPage(() => import('../features/master-data/pages/LookupPage'), 'LookupPage')
 const UnitTypesPage = lazyPage(() => import('../features/master-data/pages/UnitTypesPage'), 'UnitTypesPage')
+const ServiceOptionsPage = lazyPage(() => import('../features/master-data/pages/ServiceOptionsPage'), 'ServiceOptionsPage')
 const ReportsPage = lazyPage(() => import('../features/reports/pages/ReportsPage'), 'ReportsPage')
 const ReportViewerPage = lazyPage(() => import('../features/reports/pages/ReportViewerPage'), 'ReportViewerPage')
 const DossiersPage = lazyPage(() => import('../features/dossiers/pages/DossiersPage'), 'DossiersPage')
@@ -226,6 +227,7 @@ const router = createBrowserRouter(
             element={<Navigate to={`/master-data/${LOOKUP_RESOURCES[0].slug}`} replace />}
           />
           <Route path="/master-data/eenheden" element={<UnitTypesPage />} />
+          <Route path="/master-data/services" element={<ServiceOptionsPage />} />
           <Route path="/master-data/:resource" element={<LookupPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/legal-entities" element={<LegalEntitiesPage />} />

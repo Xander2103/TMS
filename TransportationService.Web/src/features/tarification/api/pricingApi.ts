@@ -185,6 +185,9 @@ export interface ServiceOption {
   defaultValue: number
   isActive: boolean
   sortOrder: number
+  description: string | null
+  invoiceDescription: string | null
+  selectableInOrders: boolean
 }
 
 export interface ServiceOptionInput {
@@ -194,10 +197,18 @@ export interface ServiceOptionInput {
   defaultValue: number
   isActive: boolean
   sortOrder: number
+  description?: string | null
+  invoiceDescription?: string | null
+  selectableInOrders?: boolean
 }
 
-export const listServiceOptions = (includeInactive = false): Promise<ServiceOption[]> =>
-  apiClient.getJson(`/api/service-options${includeInactive ? '?includeInactive=true' : ''}`)
+export const listServiceOptions = (includeInactive = false, forOrderEntry = false): Promise<ServiceOption[]> => {
+  const params = new URLSearchParams()
+  if (includeInactive) params.set('includeInactive', 'true')
+  if (forOrderEntry) params.set('forOrderEntry', 'true')
+  const query = params.toString()
+  return apiClient.getJson(`/api/service-options${query ? `?${query}` : ''}`)
+}
 export const createServiceOption = (input: ServiceOptionInput): Promise<ServiceOption> =>
   apiClient.postJson('/api/service-options', input)
 export const updateServiceOption = (id: string, input: ServiceOptionInput): Promise<ServiceOption> =>

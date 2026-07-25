@@ -1,6 +1,8 @@
-export type SurchargeKind = 'Percent' | 'Fixed'
+export type SurchargeKind = 'Percent' | 'Fixed' | 'PerHour' | 'PerStop'
 
 export const SURCHARGE_KIND_LABELS: Record<SurchargeKind, string> = {
-  Percent: 'Percentage',
   Fixed: 'Vast bedrag',
+  Percent: 'Percentage',
+  PerHour: 'Per uur',
+  PerStop: 'Per stop',
 }

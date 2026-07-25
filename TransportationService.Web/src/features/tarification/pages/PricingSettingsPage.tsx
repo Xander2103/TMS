@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+﻿import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
-import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
@@ -10,19 +9,14 @@ import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
-import { SURCHARGE_KIND_LABELS, type SurchargeKind } from '../types'
 import {
   createPricingZone,
-  createServiceOption,
   deletePricingZone,
-  deleteServiceOption,
   listPricingZones,
-  listServiceOptions,
   updatePricingZone,
-  updateServiceOption,
   type PricingZone,
-  type ServiceOption,
 } from '../api/pricingApi'
+import { ServiceOptionsEditor } from '../components/ServiceOptionsEditor'
 import { UnitTypeMasterEditor } from '../components/UnitTypeMasterEditor'
 
 type TabId = 'zones' | 'diensten' | 'eenheden'
@@ -32,15 +26,6 @@ interface ZoneDraft {
   code: string
   name: string
   areas: { countryCode: string; from: string; to: string }[]
-}
-
-interface OptionDraft {
-  option: ServiceOption | null
-  code: string
-  name: string
-  kind: SurchargeKind
-  defaultValue: string
-  isActive: boolean
 }
 
 /**
@@ -55,21 +40,17 @@ export function PricingSettingsPage() {
 
   const [tab, setTab] = useState<TabId>('zones')
   const [zones, setZones] = useState<PricingZone[]>([])
-  const [options, setOptions] = useState<ServiceOption[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [zoneDraft, setZoneDraft] = useState<ZoneDraft | null>(null)
-  const [optionDraft, setOptionDraft] = useState<OptionDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
   const [deleteZone, setDeleteZone] = useState<PricingZone | null>(null)
-  const [deleteOption, setDeleteOption] = useState<ServiceOption | null>(null)
   const [busy, setBusy] = useState(false)
 
   const reload = useCallback(() => {
-    Promise.all([listPricingZones(), listServiceOptions(true)])
-      .then(([zoneData, optionData]) => {
+    listPricingZones()
+      .then((zoneData) => {
         setZones(zoneData)
-        setOptions(optionData)
         setLoadError(null)
       })
       .catch(() => setLoadError('De prijsinstellingen konden niet worden geladen.'))
@@ -109,35 +90,6 @@ export function PricingSettingsPage() {
     }
   }
 
-  async function submitOption(event: FormEvent) {
-    event.preventDefault()
-    if (!optionDraft) return
-    setBusy(true)
-    try {
-      const input = {
-        code: optionDraft.code.trim(),
-        name: optionDraft.name.trim(),
-        kind: optionDraft.kind,
-        defaultValue: Number(optionDraft.defaultValue) || 0,
-        isActive: optionDraft.isActive,
-        sortOrder: optionDraft.option?.sortOrder ?? options.length,
-      }
-      if (optionDraft.option) {
-        await updateServiceOption(optionDraft.option.id, input)
-        showSuccess('Dienst bijgewerkt.')
-      } else {
-        await createServiceOption(input)
-        showSuccess('Dienst toegevoegd.')
-      }
-      setOptionDraft(null)
-      reload()
-    } catch (err) {
-      setDraftError(describeApiError(err, 'De dienst kon niet worden opgeslagen.').message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
   if (loadError) return <p className="placeholder-text">{loadError}</p>
 
   return (
@@ -150,7 +102,7 @@ export function PricingSettingsPage() {
       <Tabs
         tabs={[
           { id: 'zones', label: 'Zones', badge: zones.length || undefined },
-          { id: 'diensten', label: 'Diensten & toeslagen', badge: options.length || undefined },
+          { id: 'diensten', label: 'Diensten & toeslagen' },
           { id: 'eenheden', label: 'Eenheden' },
         ]}
         activeId={tab}
@@ -215,60 +167,8 @@ export function PricingSettingsPage() {
 
       {tab === 'diensten' && (
         <TabPanel tabId="diensten">
-          {canManage && (
-            <div className="tof-documents-toolbar">
-              <Button onClick={() => { setDraftError(null); setOptionDraft({ option: null, code: '', name: '', kind: 'Fixed', defaultValue: '0', isActive: true }) }}>
-                + Dienst
-              </Button>
-            </div>
-          )}
-          <table className="issued-items-table">
-            <thead>
-              <tr>
-                <th>Naam</th>
-                <th>Soort</th>
-                <th>Standaardprijs</th>
-                <th>Status</th>
-                {canManage && <th aria-label="Acties" />}
-              </tr>
-            </thead>
-            <tbody>
-              {options.map((option) => (
-                <tr key={option.id}>
-                  <td>{option.name}</td>
-                  <td>{SURCHARGE_KIND_LABELS[option.kind]}</td>
-                  <td>{option.kind === 'Percent' ? `${option.defaultValue}%` : `€ ${option.defaultValue.toFixed(2)}`}</td>
-                  <td>
-                    <Badge tone={option.isActive ? 'success' : 'neutral'}>{option.isActive ? 'Actief' : 'Inactief'}</Badge>
-                  </td>
-                  {canManage && (
-                    <td className="issued-items-row-actions">
-                      <button
-                        type="button"
-                        className="issued-items-link"
-                        onClick={() => {
-                          setDraftError(null)
-                          setOptionDraft({
-                            option,
-                            code: option.code,
-                            name: option.name,
-                            kind: option.kind,
-                            defaultValue: String(option.defaultValue),
-                            isActive: option.isActive,
-                          })
-                        }}
-                      >
-                        Bewerken
-                      </button>
-                      <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteOption(option)}>
-                        Verwijderen
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Same editor as Stamgegevens → Services & toeslagen: one source of truth. */}
+          <ServiceOptionsEditor />
         </TabPanel>
       )}
 
@@ -332,58 +232,6 @@ export function PricingSettingsPage() {
         </Modal>
       )}
 
-      {optionDraft && (
-        <Modal
-          title={optionDraft.option ? `Dienst bewerken — ${optionDraft.option.name}` : 'Dienst toevoegen'}
-          onClose={() => setOptionDraft(null)}
-          busy={busy}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setOptionDraft(null)} disabled={busy}>
-                Annuleren
-              </Button>
-              <Button type="submit" form="option-form" disabled={busy}>
-                Opslaan
-              </Button>
-            </>
-          }
-        >
-          <form id="option-form" className="issued-items-form" onSubmit={submitOption} noValidate>
-            {draftError && (
-              <div className="issued-items-form-error" role="alert">
-                {draftError}
-              </div>
-            )}
-            <div className="issued-items-form-row">
-              <FormField label="Code" htmlFor="opt-code" required hint="bv. VOOR8">
-                <input id="opt-code" value={optionDraft.code} onChange={(e) => setOptionDraft((d) => (d ? { ...d, code: e.target.value } : d))} maxLength={50} />
-              </FormField>
-              <FormField label="Naam" htmlFor="opt-name" required>
-                <input id="opt-name" value={optionDraft.name} onChange={(e) => setOptionDraft((d) => (d ? { ...d, name: e.target.value } : d))} maxLength={200} />
-              </FormField>
-            </div>
-            <div className="issued-items-form-row">
-              <FormField label="Soort" htmlFor="opt-kind">
-                <select id="opt-kind" value={optionDraft.kind} onChange={(e) => setOptionDraft((d) => (d ? { ...d, kind: e.target.value as SurchargeKind } : d))}>
-                  {Object.entries(SURCHARGE_KIND_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-              <FormField label={optionDraft.kind === 'Percent' ? 'Standaard (%)' : 'Standaardprijs (€)'} htmlFor="opt-value">
-                <input id="opt-value" type="number" step="0.01" value={optionDraft.defaultValue} onChange={(e) => setOptionDraft((d) => (d ? { ...d, defaultValue: e.target.value } : d))} />
-              </FormField>
-            </div>
-            <label className="tof-checkbox">
-              <input type="checkbox" checked={optionDraft.isActive} onChange={(e) => setOptionDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />
-              Actief
-            </label>
-          </form>
-        </Modal>
-      )}
-
       {deleteZone && (
         <ConfirmDialog
           title="Zone verwijderen"
@@ -402,27 +250,6 @@ export function PricingSettingsPage() {
             }
           }}
           onCancel={() => setDeleteZone(null)}
-        />
-      )}
-
-      {deleteOption && (
-        <ConfirmDialog
-          title="Dienst verwijderen"
-          message={`Weet je zeker dat je "${deleteOption.name}" wilt verwijderen? Bestaande orders behouden hun snapshot.`}
-          confirmLabel="Verwijderen"
-          destructive
-          onConfirm={async () => {
-            const target = deleteOption
-            setDeleteOption(null)
-            try {
-              await deleteServiceOption(target.id)
-              showSuccess('Dienst verwijderd.')
-              reload()
-            } catch (err) {
-              showError(describeApiError(err, 'De dienst kon niet worden verwijderd.').message)
-            }
-          }}
-          onCancel={() => setDeleteOption(null)}
         />
       )}
     </div>

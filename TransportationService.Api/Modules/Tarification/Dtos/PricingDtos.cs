@@ -50,9 +50,13 @@ public record SavePriceRuleRequest(
 
 // --- Service options ---
 
-public record ServiceOptionDto(Guid Id, string Code, string Name, SurchargeKind Kind, decimal DefaultValue, bool IsActive, int SortOrder);
+public record ServiceOptionDto(
+    Guid Id, string Code, string Name, SurchargeKind Kind, decimal DefaultValue, bool IsActive, int SortOrder,
+    string? Description = null, string? InvoiceDescription = null, bool SelectableInOrders = true);
 
-public record SaveServiceOptionRequest(string Code, string Name, SurchargeKind Kind, decimal DefaultValue, bool IsActive, int SortOrder);
+public record SaveServiceOptionRequest(
+    string Code, string Name, SurchargeKind Kind, decimal DefaultValue, bool IsActive, int SortOrder,
+    string? Description = null, string? InvoiceDescription = null, bool SelectableInOrders = true);
 
 // --- Customer pricing configuration ---
 
