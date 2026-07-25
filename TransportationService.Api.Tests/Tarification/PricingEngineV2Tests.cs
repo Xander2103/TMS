@@ -215,6 +215,106 @@ public class PricingEngineV2Tests
     }
 
     [Fact]
+    public async Task VolumeAndLoadingMeterBases_PriceFromOrderMeasures()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.PerVolume, null, "Volumetarief",
+            Today.AddMonths(-1), null, true, 12.5m, null, null), CancellationToken.None);
+
+        var request = new PriceCalculationRequest(h.CustomerAId, Today,
+            [new PriceCalculationLineInput(h.PalletUnitId, 3)], "BE", null, null, null, null, [],
+            VolumeM3: 4.32m);
+        var result = await h.Engine.CalculateAsync(request, CancellationToken.None);
+
+        // 4.32 m³ × 12.50 = 54.
+        Assert.Equal(54m, result.Total);
+        Assert.Contains(result.Lines, l => l.Label.Contains("4,32 m³") || l.Label.Contains("4.32 m³"));
+    }
+
+    [Fact]
+    public async Task ProgressiveStopPricing_UsesBrackets()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // 1e stop €65, 2e €105 cumulatief, volgende €30 per extra stop.
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.PerStop, null, "Stoptarief",
+            Today.AddMonths(-1), null, true, null, null,
+            [
+                new SavePriceRuleBracketRequest(1, 1, 65m, null),
+                new SavePriceRuleBracketRequest(2, null, 105m, 30m),
+            ]), CancellationToken.None);
+
+        var request = new PriceCalculationRequest(h.CustomerAId, Today,
+            [new PriceCalculationLineInput(h.PalletUnitId, 3)], "BE", null, null, null, null, [],
+            StopCount: 3);
+        var result = await h.Engine.CalculateAsync(request, CancellationToken.None);
+
+        // 105 + 1 × 30 = 135 for three stops.
+        Assert.Equal(135m, result.Total);
+        Assert.False(result.RequiresManualPrice);
+    }
+
+    [Fact]
+    public async Task Hourly_RoundsUpPerStartedInterval_AndAppliesMinimumDuration()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var hourUnitId = Guid.NewGuid();
+        h.Db.Context.UnitTypes.Add(new UnitType { Id = hourUnitId, TenantId = h.TenantId, Code = "UUR", Name = "Uur", IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+        // €72/uur, minimum 3 uur, afronden per begonnen kwartier (spec §13).
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, hourUnitId, PriceRuleBasis.Hourly, null, "Uurtarief",
+            Today.AddMonths(-1), null, true, 72m, null, null,
+            MinimumQuantity: 3m, QuantityRoundingStep: 0.25m), CancellationToken.None);
+
+        PriceCalculationRequest HourRequest(decimal hours) => new(h.CustomerAId, Today,
+            [new PriceCalculationLineInput(hourUnitId, hours)], "BE", null, null, null, null, []);
+
+        // 2u10 → rounds up to 2.25 → minimum 3 → 3 × 72.
+        Assert.Equal(216m, (await h.Engine.CalculateAsync(HourRequest(2.17m), CancellationToken.None)).Total);
+        // 3u40 → rounds up to 3.75 → 3.75 × 72 = 270.
+        Assert.Equal(270m, (await h.Engine.CalculateAsync(HourRequest(3.7m), CancellationToken.None)).Total);
+    }
+
+    [Fact]
+    public async Task StandaloneRules_NeverSumAcrossBases()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Two equally specific standalone order-level rules with DIFFERENT bases: the engine
+        // must refuse to sum them (spec §18) and flag the configuration instead.
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.PerKm, null, "Kilometertarief",
+            Today.AddMonths(-1), null, true, 1.2m, null, null), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.Fixed, null, "Forfait",
+            Today.AddMonths(-1), null, true, 350m, null, null), CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(
+            Request(h, 3, distanceKm: 100m), CancellationToken.None);
+
+        Assert.True(result.RequiresManualPrice);
+        Assert.NotNull(result.ConfigurationError);
+        Assert.Contains("Kilometertarief", result.ConfigurationError);
+        Assert.Contains("Forfait", result.ConfigurationError);
+
+        // Priority resolves the choice deterministically — one basis, no sum.
+        var rules = await h.Admin.ListRulesAsync(h.CustomerAId, CancellationToken.None);
+        var forfait = rules.Single(r => r.Name == "Forfait");
+        await h.Admin.UpdateRuleAsync(forfait.Id, new SavePriceRuleRequest(
+            h.CustomerAId, null, PriceRuleBasis.Fixed, null, "Forfait",
+            Today.AddMonths(-1), null, true, 350m, null, null, Priority: 10), CancellationToken.None);
+
+        var resolved = await h.Engine.CalculateAsync(Request(h, 3, distanceKm: 100m), CancellationToken.None);
+        Assert.Equal(350m, resolved.Total);
+        Assert.Null(resolved.ConfigurationError);
+    }
+
+    [Fact]
     public async Task EffectiveWindows_VersionPricesByTariffDate()
     {
         var h = await SeedAsync();

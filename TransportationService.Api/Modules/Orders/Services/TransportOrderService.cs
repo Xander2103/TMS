@@ -1015,15 +1015,18 @@ public class TransportOrderService : ITransportOrderService
                 }
             }
 
-            var delivery = order.Stops
+            var unloadingStops = order.Stops
                 .Where(s => !s.IsDeleted && s.StopType == StopType.Unloading)
                 .OrderBy(s => s.Sequence)
-                .LastOrDefault();
+                .ToList();
+            var delivery = unloadingStops.LastOrDefault();
             result = await _pricingEngine.CalculateAsync(new PriceCalculationRequest(
                 order.CustomerId, order.OrderDate, lines,
                 delivery?.CountryCode, delivery?.PostalCode,
                 order.WeightKg, null, order.PalletCount,
-                [], Services: serviceSelections), cancellationToken);
+                [], Services: serviceSelections,
+                VolumeM3: order.VolumeM3,
+                StopCount: unloadingStops.Count > 0 ? unloadingStops.Count : null), cancellationToken);
         }
 
         var calculated = result is { RequiresManualPrice: false } && result.Lines.Any(l => !l.Informational)

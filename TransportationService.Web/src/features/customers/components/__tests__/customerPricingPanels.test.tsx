@@ -304,6 +304,40 @@ describe('CustomerUnitPricingPanel', () => {
     expect(screen.getByText('Historisch gunstig contract')).toBeInTheDocument()
   })
 
+  it('shows only the fields of the selected primary pricing basis', async () => {
+    const user = userEvent.setup()
+    state.units = [
+      { id: 'unit-pallet', code: 'EUROPALLET', name: 'Europallet', isActive: true, sortOrder: 0, allowForOrderEntry: true, allowForPricing: true },
+    ]
+    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+
+    await user.click(await screen.findByRole('button', { name: '+ Prijsregel' }))
+    const dialog = await screen.findByRole('dialog')
+
+    // Default: Per eenheid with staffels — unit select + brackets, no hourly fields.
+    expect(within(dialog).getByLabelText(/Prijsbasis/)).toHaveValue('unit')
+    expect(within(dialog).getByLabelText(/^Eenheid/)).toBeInTheDocument()
+    expect(within(dialog).getByText('Staffels (aantal)')).toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(/Minimum aantal uur/)).not.toBeInTheDocument()
+
+    // Per uur: hourly fields appear, staffels disappear, unit select stays (tijd-eenheid).
+    await user.selectOptions(within(dialog).getByLabelText(/Prijsbasis/), 'Hourly')
+    expect(within(dialog).getByLabelText(/Minimum aantal uur/)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/Afrondingsstap/)).toBeInTheDocument()
+    expect(within(dialog).queryByText('Staffels (aantal)')).not.toBeInTheDocument()
+
+    // Forfait: fixed price only — no unit, no staffels, no hourly fields.
+    await user.selectOptions(within(dialog).getByLabelText(/Prijsbasis/), 'Fixed')
+    expect(within(dialog).getByLabelText(/Vaste prijs/)).toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(/^Eenheid/)).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(/Minimum aantal uur/)).not.toBeInTheDocument()
+
+    // Per kilometer: km price + basisbedrag.
+    await user.selectOptions(within(dialog).getByLabelText(/Prijsbasis/), 'PerKm')
+    expect(within(dialog).getByLabelText(/Prijs per km/)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(/Basisbedrag/)).toBeInTheDocument()
+  })
+
   it('hides management actions without tariffs.manage', async () => {
     auth.permissions = new Set(['tariffs.view'])
     render(<CustomerUnitPricingPanel customerId="cust-1" />)

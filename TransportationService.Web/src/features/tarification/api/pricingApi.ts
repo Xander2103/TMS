@@ -94,16 +94,44 @@ export type PriceRuleBasis =
   | 'PerKm'
   | 'PerPallet'
   | 'PerTon'
+  | 'PerLoadingMeter'
+  | 'PerVolume'
+  | 'PerStop'
 
 export const PRICE_RULE_BASIS_LABELS: Record<PriceRuleBasis, string> = {
-  PerUnit: 'Prijs per eenheid',
-  QuantityBracket: 'Staffel op aantal',
-  WeightBracket: 'Staffel op gewicht (kg)',
-  Hourly: 'Uurtarief',
-  Fixed: 'Vaste prijs',
-  PerKm: 'Kilometertarief',
-  PerPallet: 'Prijs per pallet (order)',
-  PerTon: 'Prijs per ton (order)',
+  PerUnit: 'Per eenheid (prijs per stuk)',
+  QuantityBracket: 'Per eenheid (staffel op aantal)',
+  WeightBracket: 'Volgens gewicht',
+  Hourly: 'Per uur',
+  PerKm: 'Per kilometer',
+  PerLoadingMeter: 'Per laadmeter',
+  PerVolume: 'Per volume',
+  PerStop: 'Per stop',
+  Fixed: 'Forfait / vaste prijs',
+  PerPallet: 'Per pallet (order)',
+  PerTon: 'Per ton (order)',
+}
+
+/** The primary pricing bases offered in the rule editor (spec §10) — an OR choice. */
+export type PrimaryPricingBasis =
+  | 'unit'
+  | 'WeightBracket'
+  | 'Hourly'
+  | 'PerKm'
+  | 'PerLoadingMeter'
+  | 'PerVolume'
+  | 'PerStop'
+  | 'Fixed'
+
+export const PRIMARY_BASIS_LABELS: Record<PrimaryPricingBasis, string> = {
+  unit: 'Per eenheid',
+  WeightBracket: 'Volgens gewicht',
+  Hourly: 'Per uur',
+  PerKm: 'Per kilometer',
+  PerLoadingMeter: 'Per laadmeter',
+  PerVolume: 'Per volume',
+  PerStop: 'Per stop',
+  Fixed: 'Forfait / vaste prijs',
 }
 
 export interface PriceRuleBracket {
@@ -138,6 +166,8 @@ export interface PriceRule {
   oversizeLengthCm: number | null
   oversizeWidthCm: number | null
   oversizeBillableFactor: number | null
+  minimumQuantity: number | null
+  quantityRoundingStep: number | null
 }
 
 export interface PriceRuleBracketInput {
@@ -165,6 +195,8 @@ export interface PriceRuleInput {
   oversizeLengthCm?: number | null
   oversizeWidthCm?: number | null
   oversizeBillableFactor?: number | null
+  minimumQuantity?: number | null
+  quantityRoundingStep?: number | null
 }
 
 export const listPriceRules = (customerId?: string): Promise<PriceRule[]> =>

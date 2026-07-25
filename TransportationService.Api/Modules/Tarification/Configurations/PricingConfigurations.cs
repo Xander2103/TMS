@@ -44,6 +44,8 @@ public class PriceRuleConfiguration : IEntityTypeConfiguration<PriceRule>
         builder.Property(r => r.UnitPrice).HasPrecision(12, 4);
         builder.Property(r => r.MinimumAmount).HasPrecision(12, 2);
         builder.Property(r => r.BaseAmount).HasPrecision(12, 2);
+        builder.Property(r => r.MinimumQuantity).HasPrecision(12, 3);
+        builder.Property(r => r.QuantityRoundingStep).HasPrecision(8, 3);
         builder.Property(r => r.OversizeLengthCm).HasPrecision(10, 2);
         builder.Property(r => r.OversizeWidthCm).HasPrecision(10, 2);
         builder.Property(r => r.OversizeBillableFactor).HasPrecision(8, 2);

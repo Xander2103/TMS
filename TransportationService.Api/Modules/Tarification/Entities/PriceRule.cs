@@ -27,6 +27,18 @@ public enum PriceRuleBasis
 
     /// <summary>Order-measure rule: UnitPrice × order weight in tonnes (WeightKg / 1000). UnitTypeId null.</summary>
     PerTon,
+
+    /// <summary>Order-measure rule: BaseAmount + UnitPrice × loading meters. UnitTypeId null.</summary>
+    PerLoadingMeter,
+
+    /// <summary>Order-measure rule: BaseAmount + UnitPrice × order volume (m³). UnitTypeId null.</summary>
+    PerVolume,
+
+    /// <summary>
+    /// Order-measure rule over the number of stops: linear (UnitPrice × stops) or progressive
+    /// via brackets (1e stop €65, 2e €40, volgende €30). UnitTypeId null.
+    /// </summary>
+    PerStop,
 }
 
 /// <summary>
@@ -67,6 +79,12 @@ public class PriceRule : AuditableTenantEntity
 
     /// <summary>Added on top of the computed amount (e.g. base cost before the per-km price).</summary>
     public decimal? BaseAmount { get; set; }
+
+    /// <summary>Hourly: minimum billable quantity (e.g. minimum 3 uur).</summary>
+    public decimal? MinimumQuantity { get; set; }
+
+    /// <summary>Hourly: quantity rounds UP to this step (e.g. 0.25 = per started 15 minutes).</summary>
+    public decimal? QuantityRoundingStep { get; set; }
 
     // Billable-quantity contract (spec ch. 11): an item exceeding a threshold counts as
     // OversizeBillableFactor billable units. The physical order quantity never changes.

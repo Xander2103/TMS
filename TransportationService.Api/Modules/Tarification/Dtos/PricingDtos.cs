@@ -37,7 +37,8 @@ public record PriceRuleDto(
     string Name, string Currency, DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
     decimal? UnitPrice, decimal? MinimumAmount, IReadOnlyList<PriceRuleBracketDto> Brackets,
     Guid? AgreementId = null, string? AgreementName = null, int Priority = 0, decimal? BaseAmount = null,
-    decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null);
+    decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null,
+    decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null);
 
 public record SavePriceRuleBracketRequest(decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit);
 
@@ -46,7 +47,8 @@ public record SavePriceRuleRequest(
     string Name, DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
     decimal? UnitPrice, decimal? MinimumAmount, IReadOnlyList<SavePriceRuleBracketRequest>? Brackets,
     Guid? AgreementId = null, int Priority = 0, decimal? BaseAmount = null,
-    decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null);
+    decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null,
+    decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null);
 
 // --- Service options ---
 
@@ -130,7 +132,10 @@ public record PriceCalculationRequest(
     int? PalletCount,
     IReadOnlyList<Guid> ServiceOptionIds,
     /// <summary>Preferred over ServiceOptionIds when present: selections incl. quantities.</summary>
-    IReadOnlyList<PriceServiceInput>? Services = null);
+    IReadOnlyList<PriceServiceInput>? Services = null,
+    decimal? VolumeM3 = null,
+    decimal? LoadingMeters = null,
+    int? StopCount = null);
 
 public record PriceBreakdownLine(
     string Label, decimal Amount, string Source, bool Informational = false,

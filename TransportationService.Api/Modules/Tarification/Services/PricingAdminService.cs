@@ -596,10 +596,16 @@ public class PricingAdminService : IPricingAdminService
         }
 
         var orderMeasureBasis = request.Basis
-            is PriceRuleBasis.Fixed or PriceRuleBasis.PerKm or PriceRuleBasis.PerPallet or PriceRuleBasis.PerTon;
+            is PriceRuleBasis.Fixed or PriceRuleBasis.PerKm or PriceRuleBasis.PerPallet or PriceRuleBasis.PerTon
+            or PriceRuleBasis.PerLoadingMeter or PriceRuleBasis.PerVolume or PriceRuleBasis.PerStop;
         if (request.UnitTypeId is null && !orderMeasureBasis && request.Basis != PriceRuleBasis.WeightBracket)
         {
             throw new DomainValidationException("unitTypeId", "Kies een eenheid (alleen order-brede regels kunnen zonder).");
+        }
+
+        if (request.MinimumQuantity is < 0 || request.QuantityRoundingStep is < 0)
+        {
+            throw new DomainValidationException("minimumQuantity", "Minimumduur en afrondingsstap mogen niet negatief zijn.");
         }
 
         if (request.Priority is < -1000 or > 1000)
@@ -635,15 +641,15 @@ public class PricingAdminService : IPricingAdminService
         }
 
         var usesBrackets = request.Basis is PriceRuleBasis.QuantityBracket or PriceRuleBasis.WeightBracket;
-        if (usesBrackets)
+        var providedBrackets = request.Brackets ?? [];
+        if (usesBrackets && providedBrackets.Count == 0)
         {
-            var brackets = request.Brackets ?? [];
-            if (brackets.Count == 0)
-            {
-                throw new DomainValidationException("brackets", "Een staffelregel heeft minstens één staffel nodig.");
-            }
+            throw new DomainValidationException("brackets", "Een staffelregel heeft minstens één staffel nodig.");
+        }
 
-            var ordered = brackets.OrderBy(b => b.FromQuantity).ToList();
+        if (providedBrackets.Count > 0)
+        {
+            var ordered = providedBrackets.OrderBy(b => b.FromQuantity).ToList();
             for (var i = 0; i < ordered.Count; i++)
             {
                 var bracket = ordered[i];
@@ -662,7 +668,7 @@ public class PricingAdminService : IPricingAdminService
                 }
             }
         }
-        else if (request.UnitPrice is null)
+        else if (!usesBrackets && request.UnitPrice is null)
         {
             throw new DomainValidationException("unitPrice", "Geef een prijs op.");
         }
@@ -719,6 +725,8 @@ public class PricingAdminService : IPricingAdminService
         rule.AgreementId = request.AgreementId;
         rule.Priority = request.Priority;
         rule.BaseAmount = request.BaseAmount;
+        rule.MinimumQuantity = request.MinimumQuantity;
+        rule.QuantityRoundingStep = request.QuantityRoundingStep;
         rule.OversizeLengthCm = request.OversizeLengthCm;
         rule.OversizeWidthCm = request.OversizeWidthCm;
         rule.OversizeBillableFactor = request.OversizeBillableFactor;
@@ -803,7 +811,8 @@ public class PricingAdminService : IPricingAdminService
             rule.AgreementId,
             rule.AgreementId is { } aid ? agreements.GetValueOrDefault(aid) : null,
             rule.Priority, rule.BaseAmount,
-            rule.OversizeLengthCm, rule.OversizeWidthCm, rule.OversizeBillableFactor))
+            rule.OversizeLengthCm, rule.OversizeWidthCm, rule.OversizeBillableFactor,
+            rule.MinimumQuantity, rule.QuantityRoundingStep))
             .ToList();
     }
 

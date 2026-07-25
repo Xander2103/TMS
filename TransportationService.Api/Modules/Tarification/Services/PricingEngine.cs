@@ -121,6 +121,7 @@ public class PricingEngine : IPricingEngine
             .Where(r => r.UnitTypeId == null
                         && r.Basis is PriceRuleBasis.Fixed or PriceRuleBasis.PerKm or PriceRuleBasis.PerPallet
                             or PriceRuleBasis.PerTon or PriceRuleBasis.WeightBracket
+                            or PriceRuleBasis.PerLoadingMeter or PriceRuleBasis.PerVolume or PriceRuleBasis.PerStop
                         && (r.ZoneId == null || (zone is not null && r.ZoneId == zone.Id)))
             .ToList();
 
@@ -166,23 +167,20 @@ public class PricingEngine : IPricingEngine
             }
             else
             {
-                foreach (var basisGroup in orderLevelRules.Where(r => r.AgreementId is null).GroupBy(r => r.Basis))
+                // One primary pricing basis (spec §10/18): standalone order-level rules never
+                // sum across bases — the single most specific rule wins, an exact tie blocks.
+                var (rule, conflicts) = SelectRule(orderLevelRules.Where(r => r.AgreementId is null).ToList());
+                if (conflicts is not null)
                 {
-                    var (rule, conflicts) = SelectRule(basisGroup.ToList());
-                    if (conflicts is not null)
-                    {
-                        configurationError = $"Conflicterende tariefregels: "
-                            + string.Join(" én ", conflicts.Select(c => $"'{c.Name}'"))
-                            + ". Corrigeer de tarieven (geldigheid, zone of prioriteit).";
-                        lines.Add(new PriceBreakdownLine(configurationError, 0m, "Configuratiefout"));
-                        requiresManual = true;
-                        continue;
-                    }
-
-                    if (rule is not null)
-                    {
-                        producedAmount |= AddOrderLevelLine(lines, rule, request);
-                    }
+                    configurationError = "Conflicterende tariefregels: "
+                        + string.Join(" én ", conflicts.Select(c => $"'{c.Name}'"))
+                        + ". Kies één prijsbasis of onderscheid ze met prioriteit.";
+                    lines.Add(new PriceBreakdownLine(configurationError, 0m, "Configuratiefout"));
+                    requiresManual = true;
+                }
+                else if (rule is not null)
+                {
+                    producedAmount |= AddOrderLevelLine(lines, rule, request);
                 }
             }
 
@@ -354,6 +352,19 @@ public class PricingEngine : IPricingEngine
             PriceRuleBasis.WeightBracket => request.WeightKg is { } w && BracketAmount(rule, w) is { } bracketAmount
                 ? ((rule.BaseAmount ?? 0m) + bracketAmount, $"{rule.Name} ({w:0.#} kg)", null)
                 : (0m, rule.Name, "geen gewicht of staffel"),
+            PriceRuleBasis.PerLoadingMeter => request.LoadingMeters is { } ldm
+                ? ((rule.BaseAmount ?? 0m) + (rule.UnitPrice ?? 0m) * ldm, $"{rule.Name} ({ldm:0.##} ldm)", null)
+                : (0m, rule.Name, "geen laadmeters gekend"),
+            PriceRuleBasis.PerVolume => request.VolumeM3 is { } volume
+                ? ((rule.BaseAmount ?? 0m) + (rule.UnitPrice ?? 0m) * volume, $"{rule.Name} ({volume:0.##} m³)", null)
+                : (0m, rule.Name, "geen volume gekend"),
+            PriceRuleBasis.PerStop => request.StopCount is { } stops
+                ? rule.Brackets.Count > 0
+                    ? BracketAmount(rule, stops) is { } stopAmount
+                        ? ((rule.BaseAmount ?? 0m) + stopAmount, $"{rule.Name} ({stops} stops)", null)
+                        : (0m, rule.Name, "geen staffel voor dit aantal stops")
+                    : ((rule.BaseAmount ?? 0m) + (rule.UnitPrice ?? 0m) * stops, $"{rule.Name} ({stops} stops)", null)
+                : (0m, rule.Name, "geen stops gekend"),
             _ => (0m, rule.Name, "niet ondersteund"),
         };
 
@@ -429,6 +440,21 @@ public class PricingEngine : IPricingEngine
 
     private static decimal? ComputeRuleAmount(PriceRule rule, decimal billableQuantity, PriceCalculationRequest request)
     {
+        // Hourly quantity pipeline (spec §13): round UP to the configured step (per started
+        // interval), then apply the minimum billable duration.
+        if (rule.Basis == PriceRuleBasis.Hourly)
+        {
+            if (rule.QuantityRoundingStep is { } step && step > 0)
+            {
+                billableQuantity = Math.Ceiling(billableQuantity / step) * step;
+            }
+
+            if (rule.MinimumQuantity is { } minimumQuantity && billableQuantity < minimumQuantity)
+            {
+                billableQuantity = minimumQuantity;
+            }
+        }
+
         decimal? computed = rule.Basis switch
         {
             PriceRuleBasis.PerUnit or PriceRuleBasis.Hourly =>

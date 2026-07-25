@@ -245,6 +245,8 @@ public class PriceAdjustmentService : IPriceAdjustmentService
             AgreementId = source.AgreementId,
             Priority = source.Priority,
             BaseAmount = Adjust(source.BaseAmount, percent),
+            MinimumQuantity = source.MinimumQuantity,
+            QuantityRoundingStep = source.QuantityRoundingStep,
             OversizeLengthCm = source.OversizeLengthCm,
             OversizeWidthCm = source.OversizeWidthCm,
             OversizeBillableFactor = source.OversizeBillableFactor,

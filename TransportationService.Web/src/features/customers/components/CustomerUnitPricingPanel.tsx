@@ -10,6 +10,7 @@ import { describeApiError } from '../../../api/problemDetails'
 import { formatServiceValue } from '../../tarification/serviceValueFormat'
 import {
   PRICE_RULE_BASIS_LABELS,
+  PRIMARY_BASIS_LABELS,
   createPriceRule,
   createPricingAgreement,
   deletePriceRule,
@@ -48,11 +49,17 @@ interface RuleDraft {
   minimumAmount: string
   baseAmount: string
   priority: string
+  minimumQuantity: string
+  quantityRoundingStep: string
   oversizeLengthCm: string
   oversizeWidthCm: string
   oversizeBillableFactor: string
   brackets: { from: string; to: string; price: string; extra: string }[]
 }
+
+/** Maps a stored basis onto the editor's primary "Prijsbasis" choice (spec §10). */
+const toPrimarySelectValue = (basis: PriceRuleBasis): string =>
+  basis === 'PerUnit' || basis === 'QuantityBracket' ? 'unit' : basis
 
 interface AgreementDraft {
   agreement: PricingAgreement | null
@@ -204,6 +211,8 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             minimumAmount: rule.minimumAmount !== null ? String(rule.minimumAmount) : '',
             baseAmount: rule.baseAmount !== null ? String(rule.baseAmount) : '',
             priority: String(rule.priority),
+            minimumQuantity: rule.minimumQuantity !== null ? String(rule.minimumQuantity) : '',
+            quantityRoundingStep: rule.quantityRoundingStep !== null ? String(rule.quantityRoundingStep) : '',
             oversizeLengthCm: rule.oversizeLengthCm !== null ? String(rule.oversizeLengthCm) : '',
             oversizeWidthCm: rule.oversizeWidthCm !== null ? String(rule.oversizeWidthCm) : '',
             oversizeBillableFactor: rule.oversizeBillableFactor !== null ? String(rule.oversizeBillableFactor) : '',
@@ -227,6 +236,8 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             minimumAmount: '',
             baseAmount: '',
             priority: '0',
+            minimumQuantity: '',
+            quantityRoundingStep: '',
             oversizeLengthCm: '',
             oversizeWidthCm: '',
             oversizeBillableFactor: '',
@@ -238,7 +249,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   async function submitDraft(event: FormEvent) {
     event.preventDefault()
     if (!draft) return
-    const usesBrackets = draft.basis === 'QuantityBracket' || draft.basis === 'WeightBracket'
+    const usesBrackets = draft.basis === 'QuantityBracket' || draft.basis === 'WeightBracket' || draft.basis === 'PerStop'
     const brackets: PriceRuleBracketInput[] = draft.brackets
       .filter((b) => b.from.trim() !== '')
       .map((b) => ({
@@ -247,11 +258,12 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         price: Number(b.price) || 0,
         pricePerExtraUnit: b.extra.trim() === '' ? null : Number(b.extra),
       }))
+    const unitBound = draft.basis === 'PerUnit' || draft.basis === 'QuantityBracket' || draft.basis === 'Hourly'
     setBusy(true)
     try {
       const input = {
         customerId,
-        unitTypeId: draft.unitTypeId || null,
+        unitTypeId: unitBound ? draft.unitTypeId || null : draft.rule?.unitTypeId ?? null,
         basis: draft.basis,
         zoneId: draft.zoneId || null,
         agreementId: draft.agreementId || null,
@@ -259,14 +271,16 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         effectiveFrom: draft.effectiveFrom,
         effectiveUntil: draft.effectiveUntil || null,
         isActive: true,
-        unitPrice: usesBrackets || draft.unitPrice.trim() === '' ? null : Number(draft.unitPrice),
+        unitPrice: draft.unitPrice.trim() === '' ? null : Number(draft.unitPrice),
         minimumAmount: draft.minimumAmount.trim() === '' ? null : Number(draft.minimumAmount),
         baseAmount: draft.baseAmount.trim() === '' ? null : Number(draft.baseAmount),
         priority: Number(draft.priority) || 0,
+        minimumQuantity: draft.basis === 'Hourly' && draft.minimumQuantity.trim() !== '' ? Number(draft.minimumQuantity) : null,
+        quantityRoundingStep: draft.basis === 'Hourly' && draft.quantityRoundingStep.trim() !== '' ? Number(draft.quantityRoundingStep) : null,
         oversizeLengthCm: draft.oversizeLengthCm.trim() === '' ? null : Number(draft.oversizeLengthCm),
         oversizeWidthCm: draft.oversizeWidthCm.trim() === '' ? null : Number(draft.oversizeWidthCm),
         oversizeBillableFactor: draft.oversizeBillableFactor.trim() === '' ? null : Number(draft.oversizeBillableFactor),
-        brackets: usesBrackets ? brackets : null,
+        brackets: usesBrackets && brackets.length > 0 ? brackets : null,
       }
       if (draft.rule) {
         await updatePriceRule(draft.rule.id, input)
@@ -368,8 +382,19 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     }
   }
 
-  const usesBrackets = draft?.basis === 'QuantityBracket' || draft?.basis === 'WeightBracket'
+  const usesBrackets = draft?.basis === 'QuantityBracket' || draft?.basis === 'WeightBracket' || draft?.basis === 'PerStop'
   const pricingUnits = units.filter((u) => u.isActive && u.allowForPricing)
+  const priceLabelByBasis: Partial<Record<PriceRuleBasis, string>> = {
+    PerUnit: 'Prijs per eenheid (€)',
+    Hourly: 'Uurtarief (€)',
+    Fixed: 'Vaste prijs (€)',
+    PerKm: 'Prijs per km (€)',
+    PerLoadingMeter: 'Prijs per laadmeter (€)',
+    PerVolume: 'Prijs per m³ (€)',
+    PerStop: 'Prijs per stop (€) — leeg bij staffels',
+    PerPallet: 'Prijs per pallet (€)',
+    PerTon: 'Prijs per ton (€)',
+  }
 
   const rulesTable = (list: PriceRule[]) => (
     <table className="issued-items-table">
@@ -626,27 +651,57 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               <FormField label="Naam" htmlFor="pr-name" required>
                 <input id="pr-name" value={draft.name} onChange={(e) => setDraft((d) => (d ? { ...d, name: e.target.value } : d))} maxLength={200} />
               </FormField>
-              <FormField label="Berekeningswijze" htmlFor="pr-basis">
-                <select id="pr-basis" value={draft.basis} onChange={(e) => setDraft((d) => (d ? { ...d, basis: e.target.value as PriceRuleBasis } : d))}>
-                  {Object.entries(PRICE_RULE_BASIS_LABELS).map(([value, label]) => (
+              <FormField label="Prijsbasis" htmlFor="pr-basis" hint="Eén primaire berekeningsbasis; toeslagen komen apart.">
+                <select
+                  id="pr-basis"
+                  value={toPrimarySelectValue(draft.basis)}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setDraft((d) => (d ? { ...d, basis: value === 'unit' ? 'QuantityBracket' : (value as PriceRuleBasis) } : d))
+                  }}
+                >
+                  {Object.entries(PRIMARY_BASIS_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>
                       {label}
                     </option>
                   ))}
+                  {(draft.basis === 'PerPallet' || draft.basis === 'PerTon') && (
+                    <option value={draft.basis}>{PRICE_RULE_BASIS_LABELS[draft.basis]}</option>
+                  )}
                 </select>
               </FormField>
             </div>
+            {(draft.basis === 'PerUnit' || draft.basis === 'QuantityBracket') && (
+              <div className="issued-items-form-row">
+                <FormField label="Berekeningswijze" htmlFor="pr-method">
+                  <select
+                    id="pr-method"
+                    value={draft.basis}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, basis: e.target.value as PriceRuleBasis } : d))}
+                  >
+                    <option value="QuantityBracket">Vaste prijs per aantal (staffel)</option>
+                    <option value="PerUnit">Prijs per eenheid</option>
+                  </select>
+                </FormField>
+              </div>
+            )}
             <div className="issued-items-form-row">
-              <FormField label="Eenheid" htmlFor="pr-unit" hint="Order-brede regels (vast/km/pallet/ton) kunnen zonder eenheid.">
-                <select id="pr-unit" value={draft.unitTypeId} onChange={(e) => setDraft((d) => (d ? { ...d, unitTypeId: e.target.value } : d))}>
-                  <option value="">— Geen (order-breed) —</option>
-                  {pricingUnits.map((unit) => (
-                    <option key={unit.id} value={unit.id}>
-                      {unit.name}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
+              {(draft.basis === 'PerUnit' || draft.basis === 'QuantityBracket' || draft.basis === 'Hourly') && (
+                <FormField
+                  label="Eenheid"
+                  htmlFor="pr-unit"
+                  hint={draft.basis === 'Hourly' ? 'Kies de tijd-eenheid (bv. Uur).' : 'De eenheid waarop deze prijs geldt.'}
+                >
+                  <select id="pr-unit" value={draft.unitTypeId} onChange={(e) => setDraft((d) => (d ? { ...d, unitTypeId: e.target.value } : d))}>
+                    <option value="">— Kies eenheid —</option>
+                    {pricingUnits.map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              )}
               <FormField label="Zone" htmlFor="pr-zone" hint="Leeg = alle bestemmingen.">
                 <select id="pr-zone" value={draft.zoneId} onChange={(e) => setDraft((d) => (d ? { ...d, zoneId: e.target.value } : d))}>
                   <option value="">— Alle —</option>
@@ -681,24 +736,12 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 <input id="pr-until" type="date" value={draft.effectiveUntil} onChange={(e) => setDraft((d) => (d ? { ...d, effectiveUntil: e.target.value } : d))} />
               </FormField>
             </div>
-            {!usesBrackets && (
+            {(!usesBrackets || draft.basis === 'PerStop') && (
               <div className="issued-items-form-row">
                 <FormField
-                  label={
-                    draft.basis === 'Hourly'
-                      ? 'Prijs per uur (€)'
-                      : draft.basis === 'Fixed'
-                        ? 'Vaste prijs (€)'
-                        : draft.basis === 'PerKm'
-                          ? 'Prijs per km (€)'
-                          : draft.basis === 'PerPallet'
-                            ? 'Prijs per pallet (€)'
-                            : draft.basis === 'PerTon'
-                              ? 'Prijs per ton (€)'
-                              : 'Prijs per eenheid (€)'
-                  }
+                  label={priceLabelByBasis[draft.basis] ?? 'Prijs per eenheid (€)'}
                   htmlFor="pr-price"
-                  required
+                  required={draft.basis !== 'PerStop'}
                 >
                   <input id="pr-price" type="number" step="0.01" value={draft.unitPrice} onChange={(e) => setDraft((d) => (d ? { ...d, unitPrice: e.target.value } : d))} />
                 </FormField>
@@ -707,9 +750,32 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 </FormField>
               </div>
             )}
+            {draft.basis === 'Hourly' && (
+              <div className="issued-items-form-row">
+                <FormField label="Minimum aantal uur" htmlFor="pr-minq" hint="Bv. 3: minder wordt als 3 uur gefactureerd.">
+                  <input id="pr-minq" type="number" step="0.25" value={draft.minimumQuantity} onChange={(e) => setDraft((d) => (d ? { ...d, minimumQuantity: e.target.value } : d))} />
+                </FormField>
+                <FormField label="Afrondingsstap (uur)" htmlFor="pr-step" hint="Bv. 0,25 = per begonnen kwartier.">
+                  <input id="pr-step" type="number" step="0.05" value={draft.quantityRoundingStep} onChange={(e) => setDraft((d) => (d ? { ...d, quantityRoundingStep: e.target.value } : d))} />
+                </FormField>
+              </div>
+            )}
+            {(draft.basis === 'PerKm' || draft.basis === 'PerLoadingMeter' || draft.basis === 'PerVolume' || draft.basis === 'PerStop') && (
+              <div className="issued-items-form-row">
+                <FormField label="Basisbedrag (€)" htmlFor="pr-base-inline" hint="Vaste basiskost vóór de variabele prijs.">
+                  <input id="pr-base-inline" type="number" step="0.01" value={draft.baseAmount} onChange={(e) => setDraft((d) => (d ? { ...d, baseAmount: e.target.value } : d))} />
+                </FormField>
+              </div>
+            )}
             {usesBrackets && (
               <fieldset className="issued-items-generate-dimension">
-                <legend>{draft.basis === 'WeightBracket' ? 'Staffels (kg)' : 'Staffels (aantal)'}</legend>
+                <legend>
+                  {draft.basis === 'WeightBracket'
+                    ? 'Staffels (kg)'
+                    : draft.basis === 'PerStop'
+                      ? 'Progressieve stops (optioneel: 1e/2e/volgende stop)'
+                      : 'Staffels (aantal)'}
+                </legend>
                 {draft.brackets.map((bracket, index) => (
                   <div key={index} className="issued-items-form-row customer-rule-bracket">
                     <input aria-label={`Staffel ${index + 1} van`} type="number" step="0.01" placeholder="van" value={bracket.from}
@@ -730,10 +796,11 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 </Button>
               </fieldset>
             )}
+            {(draft.basis === 'PerUnit' || draft.basis === 'QuantityBracket') && (
             <details>
               <summary>Geavanceerd (basisbedrag & buitenmaat)</summary>
               <div className="issued-items-form-row">
-                <FormField label="Basisbedrag (€)" htmlFor="pr-base" hint="Wordt bij het berekende bedrag geteld (bv. basiskost vóór km-prijs).">
+                <FormField label="Basisbedrag (€)" htmlFor="pr-base" hint="Wordt bij het berekende bedrag geteld.">
                   <input id="pr-base" type="number" step="0.01" value={draft.baseAmount} onChange={(e) => setDraft((d) => (d ? { ...d, baseAmount: e.target.value } : d))} />
                 </FormField>
               </div>
@@ -749,6 +816,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 </FormField>
               </div>
             </details>
+            )}
           </form>
         </Modal>
       )}
