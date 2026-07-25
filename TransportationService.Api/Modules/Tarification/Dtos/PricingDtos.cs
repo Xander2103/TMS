@@ -64,7 +64,15 @@ public record CustomerPreferredUnitDto(
     Guid UnitTypeId, string Code, string Name, int SortOrder,
     string? CustomerLabel, string? EdiCode, string? ExcelCode, bool IsFavourite);
 
-public record CustomerServiceOptionPriceDto(Guid ServiceOptionId, string Name, SurchargeKind Kind, decimal DefaultValue, decimal? CustomerValue);
+/// <summary>
+/// One service as the customer sees it: the global default, the optional override, the
+/// resulting effective value and where it came from ("Klanttarief" / "Algemene standaard").
+/// </summary>
+public record CustomerServiceOptionPriceDto(
+    Guid ServiceOptionId, string Name, SurchargeKind Kind, decimal DefaultValue, decimal? CustomerValue,
+    bool Disabled = false, decimal? MinimumAmount = null, string? InvoiceDescription = null,
+    DateOnly? EffectiveFrom = null, DateOnly? EffectiveUntil = null,
+    decimal EffectiveValue = 0, string Source = "Algemene standaard");
 
 public record CustomerPricingConfigDto(
     IReadOnlyList<CustomerPreferredUnitDto> PreferredUnits,
@@ -78,7 +86,10 @@ public record SaveCustomerPricingConfigRequest(
     IReadOnlyList<SaveCustomerUnitRequest> Units,
     IReadOnlyList<SaveCustomerOptionPriceRequest> OptionPrices);
 
-public record SaveCustomerOptionPriceRequest(Guid ServiceOptionId, decimal? Value);
+public record SaveCustomerOptionPriceRequest(
+    Guid ServiceOptionId, decimal? Value,
+    bool Disabled = false, decimal? MinimumAmount = null, string? InvoiceDescription = null,
+    DateOnly? EffectiveFrom = null, DateOnly? EffectiveUntil = null);
 
 // --- Scheduled price adjustments ---
 

@@ -167,6 +167,101 @@ describe('CustomerUnitsPanel', () => {
   })
 })
 
+describe('CustomerUnitPricingPanel — service overrides', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['tariffs.view', 'tariffs.manage'])
+    state.rules = []
+    state.agreements = []
+    state.units = []
+    state.config = {
+      preferredUnits: [],
+      serviceOptions: [
+        {
+          serviceOptionId: 'svc-10',
+          name: 'Levering vóór 10:00',
+          kind: 'Fixed',
+          defaultValue: 15,
+          customerValue: 10,
+          disabled: false,
+          minimumAmount: null,
+          invoiceDescription: null,
+          effectiveFrom: null,
+          effectiveUntil: null,
+          effectiveValue: 10,
+          source: 'Klanttarief',
+        },
+        {
+          serviceOptionId: 'svc-klep',
+          name: 'Laadklep',
+          kind: 'Fixed',
+          defaultValue: 20,
+          customerValue: null,
+          disabled: true,
+          minimumAmount: null,
+          invoiceDescription: null,
+          effectiveFrom: null,
+          effectiveUntil: null,
+          effectiveValue: 20,
+          source: 'Klanttarief',
+        },
+        {
+          serviceOptionId: 'svc-wacht',
+          name: 'Wachttijd',
+          kind: 'PerHour',
+          defaultValue: 45,
+          customerValue: null,
+          disabled: false,
+          minimumAmount: null,
+          invoiceDescription: null,
+          effectiveFrom: null,
+          effectiveUntil: null,
+          effectiveValue: 45,
+          source: 'Algemene standaard',
+        },
+      ],
+    }
+    state.saveConfig.mockResolvedValue(state.config)
+  })
+
+  it('shows global vs override vs effective price with source and visible warnings', async () => {
+    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+
+    await screen.findByText('Diensten & toeslagen')
+    // Table-wide warning is always visible, not a tooltip.
+    expect(screen.getByText('Let op: wanneer u hier een waarde invult, wordt de algemene standaardregel voor deze klant overschreven.')).toBeInTheDocument()
+    // Overridden service: global €15, override input 10, effective €10, source Klanttarief.
+    expect(screen.getByText('€ 15.00')).toBeInTheDocument()
+    expect(screen.getByLabelText('Klantoverride voor Levering vóór 10:00')).toHaveValue(10)
+    expect(screen.getByText('€ 10.00')).toBeInTheDocument()
+    expect(screen.getAllByText('Klanttarief').length).toBeGreaterThan(0)
+    expect(screen.getByText(/deze klantprijs overschrijft.*€ 15\.00/)).toBeInTheDocument()
+    // Disabled service warning + effective state.
+    expect(screen.getByText('Let op: deze service is algemeen beschikbaar, maar wordt voor deze klant uitgeschakeld.')).toBeInTheDocument()
+    expect(screen.getByText('Uitgeschakeld')).toBeInTheDocument()
+    // Inherited hourly service shows the global value and source.
+    expect(screen.getAllByText('€ 45.00/uur').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Algemene standaard').length).toBeGreaterThan(0)
+  })
+
+  it('resets an override back to the global value', async () => {
+    const user = userEvent.setup()
+    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+
+    await screen.findByText('Diensten & toeslagen')
+    const resetButtons = screen.getAllByRole('button', { name: 'Algemene waarde opnieuw gebruiken' })
+    await user.click(resetButtons[0])
+
+    await waitFor(() => expect(state.saveConfig).toHaveBeenCalled())
+    const payload = state.saveConfig.mock.calls[0][1]
+    const reset = payload.optionPrices.find((o: { serviceOptionId: string }) => o.serviceOptionId === 'svc-10')
+    expect(reset).toEqual(expect.objectContaining({ value: null, disabled: false }))
+    // Other services keep their configuration untouched.
+    const klep = payload.optionPrices.find((o: { serviceOptionId: string }) => o.serviceOptionId === 'svc-klep')
+    expect(klep).toEqual(expect.objectContaining({ disabled: true }))
+  })
+})
+
 describe('CustomerUnitPricingPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()

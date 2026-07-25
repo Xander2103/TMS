@@ -7,6 +7,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
+import { formatServiceValue } from '../../tarification/serviceValueFormat'
 import {
   PRICE_RULE_BASIS_LABELS,
   createPriceRule,
@@ -134,9 +135,12 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   const futureRules = rules.filter((r) => r.isActive && r.effectiveFrom > now)
   const historyRules = rules.filter((r) => !r.isActive || (r.effectiveUntil !== null && r.effectiveUntil < now))
 
-  async function saveOptionPrice(serviceOptionId: string, raw: string) {
+  async function saveServiceOverride(
+    serviceOptionId: string,
+    patch: Partial<{ value: number | null; disabled: boolean; effectiveFrom: string | null; effectiveUntil: string | null }>,
+    reset = false,
+  ) {
     if (!config) return
-    const value = raw.trim() === '' ? null : Number(raw)
     try {
       const saved = await saveCustomerPricingConfig(customerId, {
         units: config.preferredUnits.map((u) => ({
@@ -147,15 +151,39 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
           excelCode: u.excelCode,
           isFavourite: u.isFavourite,
         })),
-        optionPrices: config.serviceOptions.map((o) => ({
-          serviceOptionId: o.serviceOptionId,
-          value: o.serviceOptionId === serviceOptionId ? value : o.customerValue,
-        })),
+        optionPrices: config.serviceOptions.map((o) => {
+          if (o.serviceOptionId !== serviceOptionId) {
+            return {
+              serviceOptionId: o.serviceOptionId,
+              value: o.customerValue,
+              disabled: o.disabled,
+              minimumAmount: o.minimumAmount,
+              invoiceDescription: o.invoiceDescription,
+              effectiveFrom: o.effectiveFrom,
+              effectiveUntil: o.effectiveUntil,
+            }
+          }
+
+          if (reset) {
+            // "Algemene waarde opnieuw gebruiken": drop the whole override row.
+            return { serviceOptionId: o.serviceOptionId, value: null, disabled: false }
+          }
+
+          return {
+            serviceOptionId: o.serviceOptionId,
+            value: patch.value !== undefined ? patch.value : o.customerValue,
+            disabled: patch.disabled !== undefined ? patch.disabled : o.disabled,
+            minimumAmount: o.minimumAmount,
+            invoiceDescription: o.invoiceDescription,
+            effectiveFrom: patch.effectiveFrom !== undefined ? patch.effectiveFrom : o.effectiveFrom,
+            effectiveUntil: patch.effectiveUntil !== undefined ? patch.effectiveUntil : o.effectiveUntil,
+          }
+        }),
       })
       setConfig(saved)
-      showSuccess('Klantprijs opgeslagen.')
+      showSuccess(reset ? 'Algemene waarde wordt opnieuw gebruikt.' : 'Klantoverride opgeslagen.')
     } catch (err) {
-      showError(describeApiError(err, 'De klantprijs kon niet worden opgeslagen.').message)
+      showError(describeApiError(err, 'De klantoverride kon niet worden opgeslagen.').message)
     }
   }
 
@@ -465,36 +493,110 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
       )}
 
       <h4>Diensten & toeslagen</h4>
+      <p className="customer-form-muted">
+        Let op: wanneer u hier een waarde invult, wordt de algemene standaardregel voor deze klant overschreven.
+      </p>
       <table className="issued-items-table">
         <thead>
           <tr>
             <th>Dienst</th>
-            <th>Standaard</th>
-            <th>Klantprijs</th>
+            <th>Algemene prijs</th>
+            <th>Klantoverride</th>
+            <th>Geldig</th>
+            <th>Effectieve prijs</th>
+            <th>Bron</th>
+            {canManage && <th aria-label="Acties" />}
           </tr>
         </thead>
         <tbody>
-          {config.serviceOptions.map((option) => (
-            <tr key={option.serviceOptionId}>
-              <td>{option.name}</td>
-              <td>{option.kind === 'Percent' ? `${option.defaultValue}%` : `€ ${option.defaultValue.toFixed(2)}`}</td>
-              <td>
-                <input
-                  aria-label={`Klantprijs voor ${option.name}`}
-                  type="number"
-                  step="0.01"
-                  defaultValue={option.customerValue ?? ''}
-                  placeholder="standaard"
-                  disabled={!canManage}
-                  onBlur={(e) => {
-                    const raw = e.target.value
-                    const current = option.customerValue === null ? '' : String(option.customerValue)
-                    if (raw !== current) void saveOptionPrice(option.serviceOptionId, raw)
-                  }}
-                />
-              </td>
-            </tr>
-          ))}
+          {config.serviceOptions.map((option) => {
+            const hasOverride = option.customerValue !== null || option.disabled
+              || option.effectiveFrom !== null || option.effectiveUntil !== null
+            return (
+              <tr key={option.serviceOptionId}>
+                <td>
+                  {option.name}
+                  {option.customerValue !== null && !option.disabled && (
+                    <div className="customer-form-muted" role="note">
+                      Let op: deze klantprijs overschrijft
+                      {option.effectiveFrom ? ' vanaf de ingestelde datum' : ''} de algemene prijs van{' '}
+                      {formatServiceValue(option.kind, option.defaultValue)}.
+                    </div>
+                  )}
+                  {option.disabled && (
+                    <div className="customer-form-muted" role="note">
+                      Let op: deze service is algemeen beschikbaar, maar wordt voor deze klant uitgeschakeld.
+                    </div>
+                  )}
+                </td>
+                <td>{formatServiceValue(option.kind, option.defaultValue)}</td>
+                <td>
+                  <input
+                    aria-label={`Klantoverride voor ${option.name}`}
+                    type="number"
+                    step="0.01"
+                    defaultValue={option.customerValue ?? ''}
+                    placeholder="geen override"
+                    disabled={!canManage || option.disabled}
+                    onBlur={(e) => {
+                      const raw = e.target.value
+                      const current = option.customerValue === null ? '' : String(option.customerValue)
+                      if (raw !== current) {
+                        void saveServiceOverride(option.serviceOptionId, { value: raw.trim() === '' ? null : Number(raw) })
+                      }
+                    }}
+                  />
+                  {canManage && (
+                    <label className="tof-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={option.disabled}
+                        onChange={(e) => void saveServiceOverride(option.serviceOptionId, { disabled: e.target.checked })}
+                      />
+                      Uitschakelen voor deze klant
+                    </label>
+                  )}
+                </td>
+                <td>
+                  <input
+                    aria-label={`Override geldig vanaf voor ${option.name}`}
+                    type="date"
+                    defaultValue={option.effectiveFrom ?? ''}
+                    disabled={!canManage || !hasOverride}
+                    onBlur={(e) => {
+                      const value = e.target.value || null
+                      if (value !== option.effectiveFrom) void saveServiceOverride(option.serviceOptionId, { effectiveFrom: value })
+                    }}
+                  />
+                  <input
+                    aria-label={`Override geldig tot voor ${option.name}`}
+                    type="date"
+                    defaultValue={option.effectiveUntil ?? ''}
+                    disabled={!canManage || !hasOverride}
+                    onBlur={(e) => {
+                      const value = e.target.value || null
+                      if (value !== option.effectiveUntil) void saveServiceOverride(option.serviceOptionId, { effectiveUntil: value })
+                    }}
+                  />
+                </td>
+                <td>{option.disabled ? 'Uitgeschakeld' : formatServiceValue(option.kind, option.effectiveValue)}</td>
+                <td>{option.source}</td>
+                {canManage && (
+                  <td className="issued-items-row-actions">
+                    {hasOverride && (
+                      <button
+                        type="button"
+                        className="issued-items-link"
+                        onClick={() => void saveServiceOverride(option.serviceOptionId, {}, true)}
+                      >
+                        Algemene waarde opnieuw gebruiken
+                      </button>
+                    )}
+                  </td>
+                )}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
 

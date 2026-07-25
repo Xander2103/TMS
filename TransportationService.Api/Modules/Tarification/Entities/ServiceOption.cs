@@ -29,12 +29,30 @@ public class ServiceOption : AuditableTenantEntity
     public bool SelectableInOrders { get; set; } = true;
 }
 
-/// <summary>Customer-specific price for a service option (overrides the default value).</summary>
+/// <summary>
+/// Customer-specific override of a global service option (spec §7): a different value, a
+/// customer minimum, an own invoice description, an effective window, or disabling the
+/// service for this customer entirely. No row (or an empty row) = the global default applies.
+/// </summary>
 public class CustomerServiceOptionPrice : AuditableTenantEntity
 {
     public Guid CustomerId { get; set; }
     public Guid ServiceOptionId { get; set; }
-    public decimal Value { get; set; }
+
+    /// <summary>Override value; null = inherit the global default value.</summary>
+    public decimal? Value { get; set; }
+
+    /// <summary>The service is globally available but switched off for this customer.</summary>
+    public bool Disabled { get; set; }
+
+    /// <summary>Customer-specific minimum on the computed service amount.</summary>
+    public decimal? MinimumAmount { get; set; }
+
+    /// <summary>Customer-specific invoice-line description.</summary>
+    public string? InvoiceDescription { get; set; }
+
+    public DateOnly? EffectiveFrom { get; set; }
+    public DateOnly? EffectiveUntil { get; set; }
 }
 
 /// <summary>

@@ -125,6 +125,8 @@ public class CustomerServiceOptionPriceConfiguration : IEntityTypeConfiguration<
         builder.ToTable("customer_service_option_prices");
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Value).HasPrecision(12, 2);
+        builder.Property(p => p.MinimumAmount).HasPrecision(12, 2);
+        builder.Property(p => p.InvoiceDescription).HasMaxLength(300);
         builder.HasIndex(p => new { p.TenantId, p.CustomerId, p.ServiceOptionId }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasOne<ServiceOption>().WithMany().HasForeignKey(p => p.ServiceOptionId).OnDelete(DeleteBehavior.Cascade);
         builder.HasQueryFilter(p => !p.IsDeleted);

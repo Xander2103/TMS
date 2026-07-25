@@ -223,7 +223,9 @@ public class PricingEngine : IPricingEngine
 
         var subtotalBeforeServices = lines.Where(l => !l.Informational).Sum(l => l.Amount);
 
-        // Service options: customer price wins over the default; Percent applies to the base subtotal.
+        // Service options: order-level override > customer override > global default (§19);
+        // Percent applies to the base subtotal. Customer overrides are date-aware and can
+        // disable a globally available service for this customer.
         var serviceLines = new List<PriceServiceLine>();
         if (request.ServiceOptionIds.Count > 0)
         {
@@ -232,14 +234,25 @@ public class PricingEngine : IPricingEngine
                 .Where(o => o.TenantId == tenantId && optionIds.Contains(o.Id) && o.IsActive)
                 .OrderBy(o => o.SortOrder).ThenBy(o => o.Name)
                 .ToListAsync(cancellationToken);
-            var customerPrices = await _dbContext.CustomerServiceOptionPrices.AsNoTracking()
-                .Where(p => p.TenantId == tenantId && p.CustomerId == request.CustomerId && optionIds.Contains(p.ServiceOptionId))
-                .ToDictionaryAsync(p => p.ServiceOptionId, p => p.Value, cancellationToken);
+            var overrides = (await _dbContext.CustomerServiceOptionPrices.AsNoTracking()
+                    .Where(p => p.TenantId == tenantId && p.CustomerId == request.CustomerId && optionIds.Contains(p.ServiceOptionId))
+                    .ToListAsync(cancellationToken))
+                .Where(p => (p.EffectiveFrom is null || p.EffectiveFrom <= request.Date)
+                            && (p.EffectiveUntil is null || p.EffectiveUntil >= request.Date))
+                .ToDictionary(p => p.ServiceOptionId);
 
             foreach (var option in options)
             {
-                var value = customerPrices.GetValueOrDefault(option.Id, option.DefaultValue);
-                var source = customerPrices.ContainsKey(option.Id) ? "Klanttarief" : "Algemene standaard";
+                var over = overrides.GetValueOrDefault(option.Id);
+                if (over?.Disabled == true)
+                {
+                    lines.Add(new PriceBreakdownLine(
+                        $"{option.Name}: uitgeschakeld voor deze klant", 0m, "Klanttarief", Informational: true));
+                    continue;
+                }
+
+                var value = over?.Value ?? option.DefaultValue;
+                var source = over?.Value is not null ? "Klanttarief" : "Algemene standaard";
                 if (option.Kind is SurchargeKind.PerHour or SurchargeKind.PerStop)
                 {
                     // Quantity-based services need an entered quantity (hours / stops).
@@ -252,6 +265,11 @@ public class PricingEngine : IPricingEngine
                 var amount = option.Kind == SurchargeKind.Percent
                     ? decimal.Round(subtotalBeforeServices * value / 100m, 2)
                     : decimal.Round(value, 2);
+                if (over?.MinimumAmount is { } serviceMinimum && amount < serviceMinimum)
+                {
+                    amount = serviceMinimum;
+                }
+
                 lines.Add(new PriceBreakdownLine(option.Name, amount, source));
                 serviceLines.Add(new PriceServiceLine(option.Id, option.Name, option.Kind, value, amount));
             }

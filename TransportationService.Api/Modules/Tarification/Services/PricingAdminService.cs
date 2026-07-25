@@ -407,14 +407,28 @@ public class PricingAdminService : IPricingAdminService
             .Where(o => o.TenantId == TenantId && o.IsActive)
             .OrderBy(o => o.SortOrder).ThenBy(o => o.Name)
             .ToListAsync(cancellationToken);
-        var customerPrices = await _dbContext.CustomerServiceOptionPrices.AsNoTracking()
+        var overrides = await _dbContext.CustomerServiceOptionPrices.AsNoTracking()
             .Where(p => p.TenantId == TenantId && p.CustomerId == customerId)
-            .ToDictionaryAsync(p => p.ServiceOptionId, p => p.Value, cancellationToken);
+            .ToDictionaryAsync(p => p.ServiceOptionId, cancellationToken);
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var optionDtos = options
-            .Select(o => new CustomerServiceOptionPriceDto(
-                o.Id, o.Name, o.Kind, o.DefaultValue,
-                customerPrices.TryGetValue(o.Id, out var value) ? value : null))
+            .Select(o =>
+            {
+                var over = overrides.GetValueOrDefault(o.Id);
+                var overrideActiveToday = over is not null
+                    && (over.EffectiveFrom is null || over.EffectiveFrom <= today)
+                    && (over.EffectiveUntil is null || over.EffectiveUntil >= today);
+                var effectiveValue = overrideActiveToday && over!.Value is { } v ? v : o.DefaultValue;
+                var source = overrideActiveToday && (over!.Value is not null || over.Disabled)
+                    ? "Klanttarief"
+                    : "Algemene standaard";
+                return new CustomerServiceOptionPriceDto(
+                    o.Id, o.Name, o.Kind, o.DefaultValue, over?.Value,
+                    over?.Disabled ?? false, over?.MinimumAmount, over?.InvoiceDescription,
+                    over?.EffectiveFrom, over?.EffectiveUntil,
+                    effectiveValue, source);
+            })
             .ToList();
 
         return new CustomerPricingConfigDto(preferred, optionDtos);
@@ -480,11 +494,15 @@ public class PricingAdminService : IPricingAdminService
         foreach (var priceRequest in request.OptionPrices)
         {
             var row = existingPrices.FirstOrDefault(p => p.ServiceOptionId == priceRequest.ServiceOptionId);
-            if (priceRequest.Value is null)
+            var isOverride = priceRequest.Value is not null || priceRequest.Disabled
+                             || priceRequest.MinimumAmount is not null
+                             || !string.IsNullOrWhiteSpace(priceRequest.InvoiceDescription)
+                             || priceRequest.EffectiveFrom is not null || priceRequest.EffectiveUntil is not null;
+            if (!isOverride)
             {
                 if (row is not null)
                 {
-                    _dbContext.Remove(row); // back to the default price
+                    _dbContext.Remove(row); // "Algemene waarde opnieuw gebruiken"
                 }
 
                 continue;
@@ -492,16 +510,20 @@ public class PricingAdminService : IPricingAdminService
 
             if (row is null)
             {
-                _dbContext.CustomerServiceOptionPrices.Add(new CustomerServiceOptionPrice
+                row = new CustomerServiceOptionPrice
                 {
                     Id = Guid.NewGuid(), TenantId = TenantId, CustomerId = customerId,
-                    ServiceOptionId = priceRequest.ServiceOptionId, Value = priceRequest.Value.Value,
-                });
+                    ServiceOptionId = priceRequest.ServiceOptionId,
+                };
+                _dbContext.CustomerServiceOptionPrices.Add(row);
             }
-            else
-            {
-                row.Value = priceRequest.Value.Value;
-            }
+
+            row.Value = priceRequest.Value;
+            row.Disabled = priceRequest.Disabled;
+            row.MinimumAmount = priceRequest.MinimumAmount;
+            row.InvoiceDescription = Clean(priceRequest.InvoiceDescription);
+            row.EffectiveFrom = priceRequest.EffectiveFrom;
+            row.EffectiveUntil = priceRequest.EffectiveUntil;
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);

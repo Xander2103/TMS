@@ -234,6 +234,13 @@ export interface CustomerServiceOptionPrice {
   kind: SurchargeKind
   defaultValue: number
   customerValue: number | null
+  disabled: boolean
+  minimumAmount: number | null
+  invoiceDescription: string | null
+  effectiveFrom: string | null
+  effectiveUntil: string | null
+  effectiveValue: number
+  source: 'Klanttarief' | 'Algemene standaard'
 }
 
 export interface CustomerPricingConfig {
@@ -250,9 +257,19 @@ export interface CustomerUnitInput {
   isFavourite: boolean
 }
 
+export interface CustomerOptionPriceInput {
+  serviceOptionId: string
+  value: number | null
+  disabled?: boolean
+  minimumAmount?: number | null
+  invoiceDescription?: string | null
+  effectiveFrom?: string | null
+  effectiveUntil?: string | null
+}
+
 export interface CustomerPricingConfigInput {
   units: CustomerUnitInput[]
-  optionPrices: { serviceOptionId: string; value: number | null }[]
+  optionPrices: CustomerOptionPriceInput[]
 }
 
 export const getCustomerPricingConfig = (customerId: string): Promise<CustomerPricingConfig> =>
