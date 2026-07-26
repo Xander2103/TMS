@@ -16,6 +16,7 @@ import {
   createPricingAgreement,
   deletePriceRule,
   deletePricingAgreement,
+  getAgreementAssignments,
   getCustomerPricingConfig,
   listPriceRules,
   listPricingAgreements,
@@ -29,6 +30,7 @@ import {
   type PriceRuleBasis,
   type PriceRuleBracketInput,
   type PricingAgreement,
+  type PricingAssignment,
   type PricingZone,
   type UnitTypeSettings,
 } from '../../tarification/api/pricingApi'
@@ -68,8 +70,27 @@ interface AgreementDraft {
   effectiveFrom: string
   effectiveUntil: string
   minimumAmount: string
+  maximumAmount: string
   notes: string
+  isShared: boolean
   surcharges: { name: string; kind: SurchargeKind; value: string }[]
+}
+
+/** A shared (reusable) rate table this customer is assigned to, with its adjustment. */
+interface AssignedSharedAgreement {
+  agreement: PricingAgreement
+  assignment: PricingAssignment
+}
+
+function assignmentAdjustmentLabel(assignment: PricingAssignment): string {
+  const parts: string[] = []
+  if (assignment.percentAdjustment !== null) {
+    parts.push(`${assignment.percentAdjustment > 0 ? '+' : ''}${assignment.percentAdjustment}%`)
+  }
+  if (assignment.fixedAdjustment !== null) {
+    parts.push(`${assignment.fixedAdjustment > 0 ? '+' : ''}€ ${assignment.fixedAdjustment.toFixed(2)}`)
+  }
+  return parts.length > 0 ? parts.join(', ') : 'geen aanpassing'
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -97,6 +118,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   const [config, setConfig] = useState<CustomerPricingConfig | null>(null)
   const [rules, setRules] = useState<PriceRule[]>([])
   const [agreements, setAgreements] = useState<PricingAgreement[]>([])
+  const [sharedAssigned, setSharedAssigned] = useState<AssignedSharedAgreement[]>([])
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [zones, setZones] = useState<PricingZone[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -114,16 +136,31 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
       getCustomerPricingConfig(customerId),
       listPriceRules(customerId),
       listPricingAgreements(customerId).catch(() => [] as PricingAgreement[]),
+      // Company-wide + shared tables (CustomerId null); shared ones need an assignment check below.
+      listPricingAgreements().catch(() => [] as PricingAgreement[]),
       listUnitTypeSettings().catch(() => [] as UnitTypeSettings[]),
       listPricingZones().catch(() => [] as PricingZone[]),
     ])
-      .then(([configData, ruleData, agreementData, unitData, zoneData]) => {
+      .then(async ([configData, ruleData, agreementData, companyWideData, unitData, zoneData]) => {
         setConfig(configData)
         setRules(ruleData)
         setAgreements(agreementData)
         setUnits(unitData)
         setZones(zoneData)
         setLoadError(null)
+
+        const sharedTables = companyWideData.filter((a) => a.isShared)
+        const assignmentLists = await Promise.all(
+          sharedTables.map((a) => getAgreementAssignments(a.id).catch(() => [] as PricingAssignment[])),
+        )
+        setSharedAssigned(
+          sharedTables
+            .map((agreement, index) => {
+              const assignment = assignmentLists[index].find((a) => a.customerId === customerId)
+              return assignment ? { agreement, assignment } : null
+            })
+            .filter((x): x is AssignedSharedAgreement => x !== null),
+        )
       })
       .catch(() => setLoadError('De prijsafspraken konden niet worden geladen.'))
   }, [customerId, canView])
@@ -322,7 +359,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             effectiveFrom: agreement.effectiveFrom,
             effectiveUntil: agreement.effectiveUntil ?? '',
             minimumAmount: agreement.minimumAmount !== null ? String(agreement.minimumAmount) : '',
+            maximumAmount: agreement.maximumAmount !== null ? String(agreement.maximumAmount) : '',
             notes: agreement.notes ?? '',
+            isShared: agreement.isShared,
             surcharges: agreement.surcharges.map((s) => ({ name: s.name, kind: s.kind, value: String(s.value) })),
           }
         : {
@@ -331,7 +370,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             effectiveFrom: today(),
             effectiveUntil: '',
             minimumAmount: '',
+            maximumAmount: '',
             notes: '',
+            isShared: false,
             surcharges: [],
           },
     )
@@ -343,12 +384,15 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     setBusy(true)
     try {
       const input = {
-        customerId,
+        // A reusable table is never tied to one customer — checking the box detaches it.
+        customerId: agreementDraft.isShared ? null : customerId,
         name: agreementDraft.name.trim(),
         effectiveFrom: agreementDraft.effectiveFrom,
         effectiveUntil: agreementDraft.effectiveUntil || null,
         isActive: true,
         minimumAmount: agreementDraft.minimumAmount.trim() === '' ? null : Number(agreementDraft.minimumAmount),
+        maximumAmount: agreementDraft.maximumAmount.trim() === '' ? null : Number(agreementDraft.maximumAmount),
+        isShared: agreementDraft.isShared,
         notes: agreementDraft.notes.trim() || null,
         surcharges: agreementDraft.surcharges
           .filter((s) => s.name.trim() !== '')
@@ -447,8 +491,10 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         <h3>Prijsafspraken (tarievenkaarten)</h3>
         {canManage && <Button variant="secondary" onClick={() => openAgreementDraft(null)}>+ Prijsafspraak</Button>}
       </div>
-      {agreements.length === 0 && <p className="placeholder-text">Nog geen prijsafspraken; losse prijsregels blijven mogelijk.</p>}
-      {agreements.length > 0 && (
+      {agreements.length === 0 && sharedAssigned.length === 0 && (
+        <p className="placeholder-text">Nog geen prijsafspraken; losse prijsregels blijven mogelijk.</p>
+      )}
+      {(agreements.length > 0 || sharedAssigned.length > 0) && (
         <table className="issued-items-table">
           <thead>
             <tr>
@@ -461,6 +507,21 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             </tr>
           </thead>
           <tbody>
+            {sharedAssigned.map(({ agreement, assignment }) => (
+              <tr key={`shared-${agreement.id}`}>
+                <td>
+                  {agreement.name} <Badge tone="info">Gedeelde tabel</Badge>
+                </td>
+                <td>
+                  {agreement.effectiveFrom}
+                  {agreement.effectiveUntil ? ` – ${agreement.effectiveUntil}` : ' →'}
+                </td>
+                <td>{agreement.minimumAmount !== null ? `€ ${agreement.minimumAmount.toFixed(2)}` : '—'}</td>
+                <td>{assignmentAdjustmentLabel(assignment)}</td>
+                <td>{agreement.notes ?? '—'}</td>
+                {canManage && <td className="issued-items-row-actions">—</td>}
+              </tr>
+            ))}
             {agreements.map((agreement) => (
               <tr key={agreement.id}>
                 <td>{agreement.name}</td>
@@ -851,6 +912,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               <FormField label="Minimum per order (€)" htmlFor="pa-min">
                 <input id="pa-min" type="number" step="0.01" value={agreementDraft.minimumAmount} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, minimumAmount: e.target.value } : d))} />
               </FormField>
+              <FormField label="Maximumtarief per order (€)" htmlFor="pa-max" hint="Optioneel: bovengrens na het minimum.">
+                <input id="pa-max" type="number" step="0.01" value={agreementDraft.maximumAmount} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, maximumAmount: e.target.value } : d))} />
+              </FormField>
             </div>
             <div className="issued-items-form-row">
               <FormField label="Geldig vanaf" htmlFor="pa-from" required>
@@ -860,6 +924,16 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 <input id="pa-until" type="date" value={agreementDraft.effectiveUntil} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, effectiveUntil: e.target.value } : d))} />
               </FormField>
             </div>
+            {!agreementDraft.agreement && (
+              <label className="tof-checkbox">
+                <input
+                  type="checkbox"
+                  checked={agreementDraft.isShared}
+                  onChange={(e) => setAgreementDraft((d) => (d ? { ...d, isShared: e.target.checked } : d))}
+                />
+                Herbruikbare tabel (koppelbaar aan meerdere klanten) — niet gekoppeld aan deze klant; koppel klanten nadien via klantkoppelingen.
+              </label>
+            )}
             <FormField label="Interne notities" htmlFor="pa-notes" hint="Bv. commerciële achtergrond van de afspraak.">
               <input id="pa-notes" value={agreementDraft.notes} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, notes: e.target.value } : d))} maxLength={2000} />
             </FormField>

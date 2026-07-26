@@ -66,11 +66,28 @@ public class PricingAgreementConfiguration : IEntityTypeConfiguration<PricingAgr
         builder.Property(a => a.Name).IsRequired().HasMaxLength(200);
         builder.Property(a => a.Currency).HasMaxLength(3);
         builder.Property(a => a.MinimumAmount).HasPrecision(12, 2);
+        builder.Property(a => a.MaximumAmount).HasPrecision(12, 2);
         builder.Property(a => a.Notes).HasMaxLength(2000);
         builder.HasMany(a => a.Surcharges).WithOne().HasForeignKey(s => s.AgreementId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(a => a.Assignments).WithOne(x => x.Agreement).HasForeignKey(x => x.AgreementId).OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(a => new { a.TenantId, a.CustomerId, a.EffectiveFrom });
         builder.HasIndex(a => new { a.TenantId, a.LegacyRateCardId });
         builder.HasQueryFilter(a => !a.IsDeleted);
+    }
+}
+
+public class PricingAgreementAssignmentConfiguration : IEntityTypeConfiguration<PricingAgreementAssignment>
+{
+    public void Configure(EntityTypeBuilder<PricingAgreementAssignment> builder)
+    {
+        builder.ToTable("pricing_agreement_assignments");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.PercentAdjustment).HasPrecision(7, 3);
+        builder.Property(x => x.FixedAdjustment).HasPrecision(12, 2);
+        builder.Property(x => x.Notes).HasMaxLength(2000);
+        builder.HasIndex(x => new { x.TenantId, x.AgreementId });
+        builder.HasIndex(x => new { x.TenantId, x.CustomerId });
+        builder.HasQueryFilter(x => !x.IsDeleted);
     }
 }
 

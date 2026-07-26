@@ -46,6 +46,16 @@ public class PricingEngine : IPricingEngine
             .Where(u => u.TenantId == tenantId && unitTypeIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
 
+        // This customer's assignments to shared rate tables, active on the tariff date. A shared
+        // agreement (IsShared) never applies on its own — only through a matching assignment here.
+        var assignmentByAgreementId = (await _dbContext.PricingAgreementAssignments.AsNoTracking()
+                .Where(a => a.TenantId == tenantId && a.CustomerId == request.CustomerId
+                            && (a.EffectiveFrom == null || a.EffectiveFrom <= request.Date)
+                            && (a.EffectiveUntil == null || a.EffectiveUntil >= request.Date))
+                .ToListAsync(cancellationToken))
+            .GroupBy(a => a.AgreementId)
+            .ToDictionary(g => g.Key, g => g.First());
+
         var candidateRules = await _dbContext.PriceRules.AsNoTracking()
             .Include(r => r.Brackets)
             .Include(r => r.Agreement!.Surcharges)
@@ -55,12 +65,15 @@ public class PricingEngine : IPricingEngine
                         && (r.EffectiveUntil == null || r.EffectiveUntil >= request.Date))
             .ToListAsync(cancellationToken);
 
-        // A rule inside an agreement only applies while its agreement applies.
+        // A rule inside an agreement only applies while its agreement applies. A shared
+        // agreement additionally requires an active assignment for this customer.
         candidateRules = candidateRules
             .Where(r => r.AgreementId is null || (r.Agreement is { IsActive: true } agreement
                         && agreement.EffectiveFrom <= request.Date
                         && (agreement.EffectiveUntil is null || agreement.EffectiveUntil >= request.Date)
-                        && (agreement.CustomerId is null || agreement.CustomerId == request.CustomerId)))
+                        && (agreement.IsShared
+                            ? assignmentByAgreementId.ContainsKey(agreement.Id)
+                            : (agreement.CustomerId is null || agreement.CustomerId == request.CustomerId))))
             .ToList();
 
         // --- Unit lines: pick the most specific rule per line ---------------------------------
@@ -72,7 +85,7 @@ public class PricingEngine : IPricingEngine
             var forUnit = candidateRules
                 .Where(r => r.UnitTypeId == line.UnitTypeId && (r.ZoneId == null || (zone is not null && r.ZoneId == zone.Id)))
                 .ToList();
-            var (rule, conflicts) = SelectRule(forUnit);
+            var (rule, conflicts) = SelectRule(forUnit, RuleTier);
             if (conflicts is not null)
             {
                 configurationError = $"Conflicterende tariefregels voor {unitName}: "
@@ -147,8 +160,8 @@ public class PricingEngine : IPricingEngine
                 .ToList();
             if (agreements.Count > 0)
             {
-                var bestSpecificity = agreements.Max(a => a.CustomerId is null ? 0 : 1);
-                var best = agreements.Where(a => (a.CustomerId is null ? 0 : 1) == bestSpecificity).ToList();
+                var bestSpecificity = agreements.Max(AgreementTier);
+                var best = agreements.Where(a => AgreementTier(a) == bestSpecificity).ToList();
                 if (best.Count > 1)
                 {
                     configurationError = "Conflicterende prijsafspraken: "
@@ -169,7 +182,7 @@ public class PricingEngine : IPricingEngine
             {
                 // One primary pricing basis (spec §10/18): standalone order-level rules never
                 // sum across bases — the single most specific rule wins, an exact tie blocks.
-                var (rule, conflicts) = SelectRule(orderLevelRules.Where(r => r.AgreementId is null).ToList());
+                var (rule, conflicts) = SelectRule(orderLevelRules.Where(r => r.AgreementId is null).ToList(), RuleTier);
                 if (conflicts is not null)
                 {
                     configurationError = "Conflicterende tariefregels: "
@@ -202,11 +215,41 @@ public class PricingEngine : IPricingEngine
                      .ToList())
         {
             var subtotal = lines.Where(l => !l.Informational && l.AgreementId == agreement.Id).Sum(l => l.Amount);
+
+            // Per-customer adjustment on a shared table (spec: reusable rate tables), before the
+            // minimum top-up: a percentage discount/markup on the table's own lines, then a fixed
+            // amount on top of the order.
+            if (agreement.IsShared && assignmentByAgreementId.TryGetValue(agreement.Id, out var assignment))
+            {
+                if (assignment.PercentAdjustment is { } percent)
+                {
+                    var percentAmount = decimal.Round(subtotal * percent / 100m, 2);
+                    lines.Add(new PriceBreakdownLine($"Klantafspraak {percent:+0.##;-0.##}%", percentAmount,
+                        agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name));
+                    subtotal += percentAmount;
+                }
+
+                if (assignment.FixedAdjustment is { } fixedAdjustment)
+                {
+                    var fixedAmount = decimal.Round(fixedAdjustment, 2);
+                    lines.Add(new PriceBreakdownLine("Klantafspraak vast bedrag", fixedAmount,
+                        agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name));
+                    subtotal += fixedAmount;
+                }
+            }
+
             if (agreement.MinimumAmount is { } minimum && subtotal < minimum)
             {
                 lines.Add(new PriceBreakdownLine($"Minimumtarief {agreement.Name}", decimal.Round(minimum - subtotal, 2),
                     agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name));
                 subtotal = minimum;
+            }
+
+            if (agreement.MaximumAmount is { } maximum && subtotal > maximum)
+            {
+                lines.Add(new PriceBreakdownLine($"Maximumtarief {agreement.Name}", decimal.Round(maximum - subtotal, 2),
+                    agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name));
+                subtotal = maximum;
             }
 
             foreach (var surcharge in agreement.Surcharges.OrderBy(s => s.Name))
@@ -390,23 +433,40 @@ public class PricingEngine : IPricingEngine
     }
 
     /// <summary>
-    /// Deterministic precedence: customer-specific beats company-wide (weight 4), zone-bound
-    /// beats zone-less (weight 2), then explicit Priority. Two rules left in an exact tie are
-    /// a configuration error — never an arbitrary pick.
+    /// Deterministic precedence: tier (private beats assigned beats company default, weight 4),
+    /// zone-bound beats zone-less (weight 2), then explicit Priority. Two rules left in an exact
+    /// tie are a configuration error — never an arbitrary pick.
     /// </summary>
-    private static (PriceRule? Rule, List<PriceRule>? Conflicts) SelectRule(IReadOnlyList<PriceRule> candidates)
+    private static (PriceRule? Rule, List<PriceRule>? Conflicts) SelectRule(
+        IReadOnlyList<PriceRule> candidates, Func<PriceRule, int> tier)
     {
         if (candidates.Count == 0)
         {
             return (null, null);
         }
 
-        static int Score(PriceRule rule) => (rule.CustomerId is not null ? 4 : 0) + (rule.ZoneId is not null ? 2 : 0);
+        int Score(PriceRule rule) => tier(rule) * 4 + (rule.ZoneId is not null ? 2 : 0);
 
         var ordered = candidates.OrderByDescending(Score).ThenByDescending(r => r.Priority).ToList();
         var top = ordered.Where(r => Score(r) == Score(ordered[0]) && r.Priority == ordered[0].Priority).ToList();
         return top.Count > 1 ? (null, top) : (ordered[0], null);
     }
+
+    /// <summary>
+    /// Specificity tier of a rule: private (own customer rule, or grouped under a customer-owned
+    /// agreement) = 2; grouped under a shared agreement (candidateRules already guarantees an
+    /// active assignment exists whenever such a rule is present) = 1; company default = 0.
+    /// </summary>
+    private static int RuleTier(PriceRule rule) =>
+        rule.CustomerId is not null || rule.Agreement?.CustomerId is not null ? 2
+        : rule.Agreement is { IsShared: true } ? 1
+        : 0;
+
+    /// <summary>Same tier semantics as <see cref="RuleTier"/>, applied to an agreement directly.</summary>
+    private static int AgreementTier(PricingAgreement agreement) =>
+        agreement.CustomerId is not null ? 2
+        : agreement.IsShared ? 1
+        : 0;
 
     /// <summary>
     /// Spec ch. 11: the billable quantity may differ from the physical quantity (an oversized

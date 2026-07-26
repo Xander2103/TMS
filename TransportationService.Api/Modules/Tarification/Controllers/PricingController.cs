@@ -83,6 +83,26 @@ public class PricingController : ControllerBase
     public async Task<IActionResult> DeleteAgreement(Guid id, CancellationToken cancellationToken) =>
         await _admin.DeleteAgreementAsync(id, cancellationToken) ? NoContent() : NotFound();
 
+    // --- Pricing agreement assignments (shared tables → customers) ---
+
+    [HttpGet("api/pricing/agreements/{id:guid}/assignments")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<PricingAgreementAssignmentDto>>> ListAssignments(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var assignments = await _admin.ListAssignmentsAsync(id, cancellationToken);
+        return assignments is null ? NotFound() : Ok(assignments);
+    }
+
+    [HttpPut("api/pricing/agreements/{id:guid}/assignments")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<PricingAgreementAssignmentDto>>> SaveAssignments(
+        Guid id, IReadOnlyList<SavePricingAssignmentRequest> request, CancellationToken cancellationToken)
+    {
+        var assignments = await _admin.SaveAssignmentsAsync(id, request, cancellationToken);
+        return assignments is null ? NotFound() : Ok(assignments);
+    }
+
     // --- Price rules ---
 
     [HttpGet("api/pricing/rules")]

@@ -19,13 +19,33 @@ public record PricingAgreementSurchargeDto(Guid Id, string Name, SurchargeKind K
 public record PricingAgreementDto(
     Guid Id, Guid? CustomerId, string? CustomerName, string Name, string Currency,
     DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
-    decimal? MinimumAmount, string? Notes, IReadOnlyList<PricingAgreementSurchargeDto> Surcharges);
+    decimal? MinimumAmount, string? Notes, IReadOnlyList<PricingAgreementSurchargeDto> Surcharges,
+    /// <summary>True = reusable rate table (never applies directly; see assignments).</summary>
+    bool IsShared = false,
+    /// <summary>Cap on the agreement subtotal per order, applied after the minimum.</summary>
+    decimal? MaximumAmount = null,
+    /// <summary>Count of customer assignments active today (0 for non-shared agreements).</summary>
+    int CustomerCount = 0,
+    /// <summary>Names of the customers currently assigned; populated on the list endpoint.</summary>
+    IReadOnlyList<string>? CustomerNames = null);
 
 public record SavePricingAgreementSurchargeRequest(string Name, SurchargeKind Kind, decimal Value);
 
 public record SavePricingAgreementRequest(
     Guid? CustomerId, string Name, DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
-    decimal? MinimumAmount, string? Notes, IReadOnlyList<SavePricingAgreementSurchargeRequest>? Surcharges);
+    decimal? MinimumAmount, string? Notes, IReadOnlyList<SavePricingAgreementSurchargeRequest>? Surcharges,
+    bool IsShared = false, decimal? MaximumAmount = null);
+
+// --- Pricing agreement assignments (shared tables → customers) ---
+
+public record PricingAgreementAssignmentDto(
+    Guid Id, Guid CustomerId, string CustomerName,
+    decimal? PercentAdjustment, decimal? FixedAdjustment,
+    DateOnly? EffectiveFrom, DateOnly? EffectiveUntil, string? Notes);
+
+public record SavePricingAssignmentRequest(
+    Guid CustomerId, decimal? PercentAdjustment, decimal? FixedAdjustment,
+    DateOnly? EffectiveFrom, DateOnly? EffectiveUntil, string? Notes);
 
 // --- Price rules ---
 

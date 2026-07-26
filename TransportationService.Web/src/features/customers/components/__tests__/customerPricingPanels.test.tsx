@@ -8,6 +8,7 @@ import type {
   CustomerPricingConfig,
   PriceRule,
   PricingAgreement,
+  PricingAssignment,
   ScheduledPriceAdjustment,
   UnitTypeSettings,
 } from '../../../tarification/api/pricingApi'
@@ -27,6 +28,7 @@ const state = vi.hoisted(() => ({
   agreements: [] as PricingAgreement[],
   adjustments: [] as ScheduledPriceAdjustment[],
   units: [] as UnitTypeSettings[],
+  assignmentsByAgreement: {} as Record<string, PricingAssignment[]>,
   saveConfig: vi.fn(),
   previewAdjustment: vi.fn(),
   createAdjustment: vi.fn(),
@@ -39,7 +41,15 @@ vi.mock('../../../tarification/api/pricingApi', async (importOriginal) => {
     ...original,
     getCustomerPricingConfig: () => Promise.resolve(state.config),
     listPriceRules: () => Promise.resolve(state.rules),
-    listPricingAgreements: () => Promise.resolve(state.agreements),
+    // Mirrors the backend filter: with a customerId, only that customer's own agreements;
+    // without one, the company-wide + shared (CustomerId null) agreements.
+    listPricingAgreements: (customerId?: string) =>
+      Promise.resolve(
+        customerId
+          ? state.agreements.filter((a) => a.customerId === customerId)
+          : state.agreements.filter((a) => a.customerId === null),
+      ),
+    getAgreementAssignments: (agreementId: string) => Promise.resolve(state.assignmentsByAgreement[agreementId] ?? []),
     listPriceAdjustments: () => Promise.resolve(state.adjustments),
     listUnitTypeSettings: () => Promise.resolve(state.units),
     listPricingZones: () => Promise.resolve([]),
@@ -53,6 +63,7 @@ vi.mock('../../../tarification/api/pricingApi', async (importOriginal) => {
     createPricingAgreement: vi.fn(),
     updatePricingAgreement: vi.fn(),
     deletePricingAgreement: vi.fn(),
+    saveAgreementAssignments: vi.fn(),
   }
 })
 
@@ -270,6 +281,7 @@ describe('CustomerUnitPricingPanel', () => {
     auth.permissions = new Set(['tariffs.view', 'tariffs.manage'])
     state.config = makeConfig()
     state.units = []
+    state.assignmentsByAgreement = {}
     state.agreements = [
       {
         id: 'agr-1',
@@ -283,6 +295,10 @@ describe('CustomerUnitPricingPanel', () => {
         minimumAmount: 60,
         notes: 'Historisch gunstig contract',
         surcharges: [{ id: 's1', name: 'Duurtoeslag', kind: 'Percent', value: 5 }],
+        isShared: false,
+        maximumAmount: null,
+        customerCount: 0,
+        customerNames: null,
       },
     ]
     state.rules = [
@@ -304,6 +320,47 @@ describe('CustomerUnitPricingPanel', () => {
     expect(screen.getByText('€ 60.00')).toBeInTheDocument()
     expect(screen.getByText('Duurtoeslag (5%)')).toBeInTheDocument()
     expect(screen.getByText('Historisch gunstig contract')).toBeInTheDocument()
+  })
+
+  it('shows a shared table assigned to this customer with a badge and its adjustment', async () => {
+    state.agreements = [
+      ...state.agreements,
+      {
+        id: 'agr-shared',
+        customerId: null,
+        customerName: null,
+        name: 'Distributie België 2026',
+        currency: 'EUR',
+        effectiveFrom: '2026-01-01',
+        effectiveUntil: null,
+        isActive: true,
+        minimumAmount: null,
+        notes: null,
+        surcharges: [],
+        isShared: true,
+        maximumAmount: null,
+        customerCount: 1,
+        customerNames: ['Acme'],
+      },
+    ]
+    state.assignmentsByAgreement['agr-shared'] = [
+      {
+        id: 'assign-1',
+        customerId: 'cust-1',
+        customerName: 'Acme',
+        percentAdjustment: -5,
+        fixedAdjustment: null,
+        effectiveFrom: null,
+        effectiveUntil: null,
+        notes: null,
+      },
+    ]
+
+    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+
+    expect(await screen.findByText('Distributie België 2026')).toBeInTheDocument()
+    expect(screen.getByText('Gedeelde tabel')).toBeInTheDocument()
+    expect(screen.getByText('-5%')).toBeInTheDocument()
   })
 
   it('shows only the fields of the selected primary pricing basis', async () => {

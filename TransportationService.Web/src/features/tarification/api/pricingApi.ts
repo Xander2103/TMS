@@ -61,6 +61,14 @@ export interface PricingAgreement {
   minimumAmount: number | null
   notes: string | null
   surcharges: PricingAgreementSurcharge[]
+  /** True = reusable rate table; never applies directly, only through assignments. */
+  isShared: boolean
+  /** Cap on the agreement subtotal per order, applied after the minimum. */
+  maximumAmount: number | null
+  /** Count of customer assignments active today (0 for non-shared agreements). */
+  customerCount: number
+  /** Names of the customers currently assigned; populated on the list endpoint. */
+  customerNames: string[] | null
 }
 
 export interface PricingAgreementInput {
@@ -72,6 +80,8 @@ export interface PricingAgreementInput {
   minimumAmount: number | null
   notes: string | null
   surcharges: { name: string; kind: SurchargeKind; value: number }[] | null
+  isShared?: boolean
+  maximumAmount?: number | null
 }
 
 export const listPricingAgreements = (customerId?: string): Promise<PricingAgreement[]> =>
@@ -82,6 +92,35 @@ export const updatePricingAgreement = (id: string, input: PricingAgreementInput)
   apiClient.putJson(`/api/pricing/agreements/${id}`, input)
 export const deletePricingAgreement = (id: string): Promise<void> =>
   apiClient.deleteRequest(`/api/pricing/agreements/${id}`)
+
+// --- Pricing agreement assignments (shared tables → customers) ---
+
+export interface PricingAssignment {
+  id: string
+  customerId: string
+  customerName: string
+  percentAdjustment: number | null
+  fixedAdjustment: number | null
+  effectiveFrom: string | null
+  effectiveUntil: string | null
+  notes: string | null
+}
+
+export interface PricingAssignmentInput {
+  customerId: string
+  percentAdjustment: number | null
+  fixedAdjustment: number | null
+  effectiveFrom: string | null
+  effectiveUntil: string | null
+  notes: string | null
+}
+
+export const getAgreementAssignments = (agreementId: string): Promise<PricingAssignment[]> =>
+  apiClient.getJson(`/api/pricing/agreements/${agreementId}/assignments`)
+export const saveAgreementAssignments = (
+  agreementId: string,
+  rows: PricingAssignmentInput[],
+): Promise<PricingAssignment[]> => apiClient.putJson(`/api/pricing/agreements/${agreementId}/assignments`, rows)
 
 // --- Price rules ---
 

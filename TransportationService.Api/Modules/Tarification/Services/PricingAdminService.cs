@@ -20,6 +20,10 @@ public interface IPricingAdminService
     Task<PricingAgreementDto?> UpdateAgreementAsync(Guid id, SavePricingAgreementRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteAgreementAsync(Guid id, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<PricingAgreementAssignmentDto>?> ListAssignmentsAsync(Guid agreementId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<PricingAgreementAssignmentDto>?> SaveAssignmentsAsync(
+        Guid agreementId, IReadOnlyList<SavePricingAssignmentRequest> requests, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<PriceRuleDto>> ListRulesAsync(Guid? customerId, CancellationToken cancellationToken);
     Task<PriceRuleDto> CreateRuleAsync(SavePriceRuleRequest request, CancellationToken cancellationToken);
     Task<PriceRuleDto?> UpdateRuleAsync(Guid id, SavePriceRuleRequest request, CancellationToken cancellationToken);
@@ -198,6 +202,22 @@ public class PricingAdminService : IPricingAdminService
             throw new DomainValidationException("minimumAmount", "Het minimumbedrag mag niet negatief zijn.");
         }
 
+        if (request.MaximumAmount is < 0)
+        {
+            throw new DomainValidationException("maximumAmount", "Het maximumbedrag mag niet negatief zijn.");
+        }
+
+        if (request.MaximumAmount is { } maximum && request.MinimumAmount is { } minimum && maximum < minimum)
+        {
+            throw new DomainValidationException("maximumAmount", "Het maximumbedrag moet minstens het minimumbedrag zijn.");
+        }
+
+        if (request.IsShared && request.CustomerId is not null)
+        {
+            throw new DomainValidationException("isShared",
+                "Een herbruikbare tabel is niet gekoppeld aan één klant; koppel klanten via de klantkoppelingen.");
+        }
+
         foreach (var surcharge in request.Surcharges ?? [])
         {
             if (string.IsNullOrWhiteSpace(surcharge.Name))
@@ -227,6 +247,8 @@ public class PricingAdminService : IPricingAdminService
         agreement.EffectiveUntil = request.EffectiveUntil;
         agreement.IsActive = request.IsActive;
         agreement.MinimumAmount = request.MinimumAmount;
+        agreement.MaximumAmount = request.MaximumAmount;
+        agreement.IsShared = request.IsShared;
         agreement.Notes = Clean(request.Notes);
         foreach (var surcharge in request.Surcharges ?? [])
         {
@@ -249,19 +271,169 @@ public class PricingAdminService : IPricingAdminService
     private async Task<IReadOnlyList<PricingAgreementDto>> MapAgreementsAsync(
         IReadOnlyList<PricingAgreement> agreements, CancellationToken cancellationToken)
     {
+        var tenantId = TenantId;
         var customerIds = agreements.Where(a => a.CustomerId.HasValue).Select(a => a.CustomerId!.Value).Distinct().ToList();
         var customers = await _dbContext.Customers.AsNoTracking()
-            .Where(c => c.TenantId == TenantId && customerIds.Contains(c.Id))
+            .Where(c => c.TenantId == tenantId && customerIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
 
-        return agreements.Select(a => new PricingAgreementDto(
-            a.Id, a.CustomerId,
-            a.CustomerId is { } cid ? customers.GetValueOrDefault(cid) : null,
-            a.Name, a.Currency, a.EffectiveFrom, a.EffectiveUntil, a.IsActive,
-            a.MinimumAmount, a.Notes,
-            a.Surcharges.OrderBy(s => s.Name)
-                .Select(s => new PricingAgreementSurchargeDto(s.Id, s.Name, s.Kind, s.Value))
-                .ToList()))
+        // Two extra, batched queries for the whole list — never per-agreement — to attach the
+        // "assigned today" customer count/names to shared tables without N+1.
+        var agreementIds = agreements.Select(a => a.Id).ToList();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var activeAssignments = await _dbContext.PricingAgreementAssignments.AsNoTracking()
+            .Where(x => x.TenantId == tenantId && agreementIds.Contains(x.AgreementId)
+                        && (x.EffectiveFrom == null || x.EffectiveFrom <= today)
+                        && (x.EffectiveUntil == null || x.EffectiveUntil >= today))
+            .ToListAsync(cancellationToken);
+        var assignedCustomerIds = activeAssignments.Select(x => x.CustomerId).Distinct().ToList();
+        var assignedCustomerNames = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && assignedCustomerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        var namesByAgreement = activeAssignments
+            .GroupBy(x => x.AgreementId)
+            .ToDictionary(g => g.Key, g => g.Select(x => assignedCustomerNames.GetValueOrDefault(x.CustomerId, "?")).OrderBy(n => n).ToList());
+
+        return agreements.Select(a =>
+        {
+            var names = namesByAgreement.GetValueOrDefault(a.Id);
+            return new PricingAgreementDto(
+                a.Id, a.CustomerId,
+                a.CustomerId is { } cid ? customers.GetValueOrDefault(cid) : null,
+                a.Name, a.Currency, a.EffectiveFrom, a.EffectiveUntil, a.IsActive,
+                a.MinimumAmount, a.Notes,
+                a.Surcharges.OrderBy(s => s.Name)
+                    .Select(s => new PricingAgreementSurchargeDto(s.Id, s.Name, s.Kind, s.Value))
+                    .ToList(),
+                a.IsShared, a.MaximumAmount, names?.Count ?? 0, names);
+        }).ToList();
+    }
+
+    // --- Pricing agreement assignments (shared tables → customers) ---
+
+    public async Task<IReadOnlyList<PricingAgreementAssignmentDto>?> ListAssignmentsAsync(
+        Guid agreementId, CancellationToken cancellationToken)
+    {
+        var agreement = await _dbContext.PricingAgreements.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == agreementId, cancellationToken);
+        if (agreement is null)
+        {
+            return null;
+        }
+
+        var assignments = await _dbContext.PricingAgreementAssignments.AsNoTracking()
+            .Where(x => x.TenantId == TenantId && x.AgreementId == agreementId)
+            .ToListAsync(cancellationToken);
+        return await MapAssignmentsAsync(assignments, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PricingAgreementAssignmentDto>?> SaveAssignmentsAsync(
+        Guid agreementId, IReadOnlyList<SavePricingAssignmentRequest> requests, CancellationToken cancellationToken)
+    {
+        var tenantId = TenantId;
+        var agreement = await _dbContext.PricingAgreements
+            .FirstOrDefaultAsync(a => a.TenantId == tenantId && a.Id == agreementId, cancellationToken);
+        if (agreement is null)
+        {
+            return null;
+        }
+
+        if (!agreement.IsShared)
+        {
+            throw new DomainValidationException("agreementId",
+                "Klantkoppelingen zijn alleen mogelijk op herbruikbare tabellen.");
+        }
+
+        foreach (var request in requests)
+        {
+            if (request.PercentAdjustment is < -100 or > 100)
+            {
+                throw new DomainValidationException("percentAdjustment", "De aanpassing moet tussen -100% en 100% liggen.");
+            }
+
+            if (request.EffectiveFrom is { } from && request.EffectiveUntil is { } until && until < from)
+            {
+                throw new DomainValidationException("effectiveUntil", "De einddatum ligt vóór de begindatum.");
+            }
+
+            if (!await _dbContext.Customers.AnyAsync(c => c.TenantId == tenantId && c.Id == request.CustomerId, cancellationToken))
+            {
+                throw new InvalidTenantReferenceException("klant");
+            }
+        }
+
+        foreach (var group in requests.GroupBy(r => r.CustomerId))
+        {
+            var windows = group.ToList();
+            for (var i = 0; i < windows.Count; i++)
+            {
+                for (var j = i + 1; j < windows.Count; j++)
+                {
+                    if (WindowsOverlap(windows[i], windows[j]))
+                    {
+                        throw new DomainValidationException("assignments",
+                            "Deze klant heeft al een actieve koppeling in deze periode.");
+                    }
+                }
+            }
+        }
+
+        var existing = await _dbContext.PricingAgreementAssignments
+            .Where(x => x.TenantId == tenantId && x.AgreementId == agreementId)
+            .ToListAsync(cancellationToken);
+        var oldSnapshot = existing
+            .Select(x => new { x.CustomerId, x.PercentAdjustment, x.FixedAdjustment, x.EffectiveFrom, x.EffectiveUntil })
+            .ToList();
+        _dbContext.PricingAgreementAssignments.RemoveRange(existing);
+        foreach (var request in requests)
+        {
+            _dbContext.PricingAgreementAssignments.Add(new PricingAgreementAssignment
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                AgreementId = agreementId,
+                CustomerId = request.CustomerId,
+                PercentAdjustment = request.PercentAdjustment,
+                FixedAdjustment = request.FixedAdjustment,
+                EffectiveFrom = request.EffectiveFrom,
+                EffectiveUntil = request.EffectiveUntil,
+                Notes = Clean(request.Notes),
+            });
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PricingAgreementAssignment", agreementId.ToString(), "saved",
+            oldSnapshot, requests, cancellationToken);
+
+        var saved = await _dbContext.PricingAgreementAssignments.AsNoTracking()
+            .Where(x => x.TenantId == tenantId && x.AgreementId == agreementId)
+            .ToListAsync(cancellationToken);
+        return await MapAssignmentsAsync(saved, cancellationToken);
+    }
+
+    /// <summary>Null-open windows treated as -/+ infinity; overlap = the two ranges intersect.</summary>
+    private static bool WindowsOverlap(SavePricingAssignmentRequest a, SavePricingAssignmentRequest b)
+    {
+        var aFrom = a.EffectiveFrom ?? DateOnly.MinValue;
+        var aTo = a.EffectiveUntil ?? DateOnly.MaxValue;
+        var bFrom = b.EffectiveFrom ?? DateOnly.MinValue;
+        var bTo = b.EffectiveUntil ?? DateOnly.MaxValue;
+        return aFrom <= bTo && bFrom <= aTo;
+    }
+
+    private async Task<IReadOnlyList<PricingAgreementAssignmentDto>> MapAssignmentsAsync(
+        IReadOnlyList<PricingAgreementAssignment> assignments, CancellationToken cancellationToken)
+    {
+        var tenantId = TenantId;
+        var customerIds = assignments.Select(x => x.CustomerId).Distinct().ToList();
+        var customers = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && customerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        return assignments
+            .Select(x => new PricingAgreementAssignmentDto(
+                x.Id, x.CustomerId, customers.GetValueOrDefault(x.CustomerId, "?"),
+                x.PercentAdjustment, x.FixedAdjustment, x.EffectiveFrom, x.EffectiveUntil, x.Notes))
+            .OrderBy(x => x.CustomerName)
             .ToList();
     }
 
