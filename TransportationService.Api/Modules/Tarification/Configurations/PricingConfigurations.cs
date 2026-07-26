@@ -70,9 +70,30 @@ public class PricingAgreementConfiguration : IEntityTypeConfiguration<PricingAgr
         builder.Property(a => a.Notes).HasMaxLength(2000);
         builder.HasMany(a => a.Surcharges).WithOne().HasForeignKey(s => s.AgreementId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(a => a.Assignments).WithOne(x => x.Agreement).HasForeignKey(x => x.AgreementId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(a => a.Modifiers).WithOne().HasForeignKey(m => m.AgreementId).OnDelete(DeleteBehavior.Cascade);
+        // Self-referencing derivation FK: Restrict, never Cascade — deleting a base table that
+        // other tables derive from must be blocked (enforced in PricingAdminService), not silently
+        // cascade-delete the derived tables.
+        builder.HasOne(a => a.BaseAgreement).WithMany().HasForeignKey(a => a.BaseAgreementId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(a => new { a.TenantId, a.CustomerId, a.EffectiveFrom });
         builder.HasIndex(a => new { a.TenantId, a.LegacyRateCardId });
+        builder.HasIndex(a => new { a.TenantId, a.BaseAgreementId });
         builder.HasQueryFilter(a => !a.IsDeleted);
+    }
+}
+
+public class PricingAgreementModifierConfiguration : IEntityTypeConfiguration<PricingAgreementModifier>
+{
+    public void Configure(EntityTypeBuilder<PricingAgreementModifier> builder)
+    {
+        builder.ToTable("pricing_agreement_modifiers");
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.Name).IsRequired().HasMaxLength(200);
+        builder.Property(m => m.CountryCode).HasMaxLength(2);
+        builder.Property(m => m.Percent).HasPrecision(7, 3);
+        builder.Property(m => m.FixedAmount).HasPrecision(12, 2);
+        builder.HasIndex(m => new { m.TenantId, m.AgreementId });
+        builder.HasQueryFilter(m => !m.IsDeleted);
     }
 }
 

@@ -30,6 +30,7 @@ import {
   type PriceRuleBasis,
   type PriceRuleBracketInput,
   type PricingAgreement,
+  type PricingAgreementModifierInput,
   type PricingAssignment,
   type PricingZone,
   type UnitTypeSettings,
@@ -64,6 +65,14 @@ interface RuleDraft {
 const toPrimarySelectValue = (basis: PriceRuleBasis): string =>
   basis === 'PerUnit' || basis === 'QuantityBracket' ? 'unit' : basis
 
+interface ModifierDraft {
+  name: string
+  countryCode: string
+  zoneId: string
+  mode: 'Percent' | 'Fixed'
+  value: string
+}
+
 interface AgreementDraft {
   agreement: PricingAgreement | null
   name: string
@@ -74,6 +83,9 @@ interface AgreementDraft {
   notes: string
   isShared: boolean
   surcharges: { name: string; kind: SurchargeKind; value: string }[]
+  /** Set => this table is derived from another (shared/general) table; see spec §9. */
+  baseAgreementId: string
+  modifiers: ModifierDraft[]
 }
 
 /** A shared (reusable) rate table this customer is assigned to, with its adjustment. */
@@ -94,6 +106,15 @@ function assignmentAdjustmentLabel(assignment: PricingAssignment): string {
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
+
+/** Swaps the item at `from` with its neighbour at `to`; out-of-range is a no-op (edge buttons). */
+function moveItem<T>(list: T[], from: number, to: number): T[] {
+  if (to < 0 || to >= list.length) return list
+  const next = [...list]
+  const [item] = next.splice(from, 1)
+  next.splice(to, 0, item)
+  return next
+}
 
 function ruleValueSummary(rule: PriceRule): string {
   if (rule.brackets.length > 0) return `${rule.brackets.length} staffels`
@@ -119,6 +140,8 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   const [rules, setRules] = useState<PriceRule[]>([])
   const [agreements, setAgreements] = useState<PricingAgreement[]>([])
   const [sharedAssigned, setSharedAssigned] = useState<AssignedSharedAgreement[]>([])
+  // Company-wide/shared tables (CustomerId null) — the only valid "Afgeleid van" (base table) picks.
+  const [baseTableOptions, setBaseTableOptions] = useState<PricingAgreement[]>([])
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [zones, setZones] = useState<PricingZone[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -145,6 +168,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         setConfig(configData)
         setRules(ruleData)
         setAgreements(agreementData)
+        setBaseTableOptions(companyWideData)
         setUnits(unitData)
         setZones(zoneData)
         setLoadError(null)
@@ -363,6 +387,14 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             notes: agreement.notes ?? '',
             isShared: agreement.isShared,
             surcharges: agreement.surcharges.map((s) => ({ name: s.name, kind: s.kind, value: String(s.value) })),
+            baseAgreementId: agreement.baseAgreementId ?? '',
+            modifiers: agreement.modifiers.map((m) => ({
+              name: m.name,
+              countryCode: m.countryCode ?? '',
+              zoneId: m.zoneId ?? '',
+              mode: m.fixedAmount !== null ? 'Fixed' : 'Percent',
+              value: String(m.fixedAmount !== null ? m.fixedAmount : (m.percent ?? '')),
+            })),
           }
         : {
             agreement: null,
@@ -374,6 +406,8 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             notes: '',
             isShared: false,
             surcharges: [],
+            baseAgreementId: '',
+            modifiers: [],
           },
     )
   }
@@ -397,6 +431,19 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         surcharges: agreementDraft.surcharges
           .filter((s) => s.name.trim() !== '')
           .map((s) => ({ name: s.name.trim(), kind: s.kind, value: Number(s.value) || 0 })),
+        baseAgreementId: agreementDraft.baseAgreementId || null,
+        modifiers: agreementDraft.baseAgreementId
+          ? agreementDraft.modifiers
+              .filter((m) => m.name.trim() !== '')
+              .map((m, index): PricingAgreementModifierInput => ({
+                sequence: index + 1,
+                name: m.name.trim(),
+                countryCode: m.countryCode.trim() || null,
+                zoneId: m.zoneId || null,
+                percent: m.mode === 'Percent' ? Number(m.value) || 0 : null,
+                fixedAmount: m.mode === 'Fixed' ? Number(m.value) || 0 : null,
+              }))
+          : null,
       }
       if (agreementDraft.agreement) {
         await updatePricingAgreement(agreementDraft.agreement.id, input)
@@ -524,7 +571,12 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             ))}
             {agreements.map((agreement) => (
               <tr key={agreement.id}>
-                <td>{agreement.name}</td>
+                <td>
+                  {agreement.name}
+                  {agreement.baseAgreementId && (
+                    <Badge tone="info">Afgeleid van {agreement.baseAgreementName ?? '—'}</Badge>
+                  )}
+                </td>
                 <td>
                   {agreement.effectiveFrom}
                   {agreement.effectiveUntil ? ` – ${agreement.effectiveUntil}` : ' →'}
@@ -776,10 +828,14 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Prijsafspraak" htmlFor="pr-agreement" hint="Optioneel: groepeer onder een tarievenkaart.">
+              <FormField
+                label="Prijsafspraak"
+                htmlFor="pr-agreement"
+                hint="Optioneel: groepeer onder een tarievenkaart. Afgeleide tabellen kunnen geen eigen regels hebben."
+              >
                 <select id="pr-agreement" value={draft.agreementId} onChange={(e) => setDraft((d) => (d ? { ...d, agreementId: e.target.value } : d))}>
                   <option value="">— Losse regel —</option>
-                  {agreements.map((agreement) => (
+                  {agreements.filter((agreement) => !agreement.baseAgreementId).map((agreement) => (
                     <option key={agreement.id} value={agreement.id}>
                       {agreement.name}
                     </option>
@@ -937,6 +993,151 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             <FormField label="Interne notities" htmlFor="pa-notes" hint="Bv. commerciële achtergrond van de afspraak.">
               <input id="pa-notes" value={agreementDraft.notes} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, notes: e.target.value } : d))} maxLength={2000} />
             </FormField>
+            <fieldset className="issued-items-generate-dimension">
+              <legend>Afgeleid van</legend>
+              <FormField
+                label="Basistabel"
+                htmlFor="pa-base"
+                hint="Optioneel: hergebruik de prijsregels van een gedeelde of algemene tabel, met eigen aanpassingen (bv. Nederland +30%)."
+              >
+                <select
+                  id="pa-base"
+                  value={agreementDraft.baseAgreementId}
+                  onChange={(e) => setAgreementDraft((d) => (d ? { ...d, baseAgreementId: e.target.value } : d))}
+                >
+                  <option value="">— Geen (eigen prijsregels) —</option>
+                  {baseTableOptions
+                    .filter((a) => a.id !== agreementDraft.agreement?.id)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name}
+                      </option>
+                    ))}
+                </select>
+              </FormField>
+              {agreementDraft.baseAgreementId && (
+                <>
+                  <p className="customer-form-muted" role="note">
+                    Deze tabel gebruikt de prijsregels van{' '}
+                    {baseTableOptions.find((a) => a.id === agreementDraft.baseAgreementId)?.name ?? '—'}; eigen regels zijn
+                    uitgeschakeld.
+                  </p>
+                  {agreementDraft.modifiers.map((modifier, index) => (
+                    <div key={index} className="issued-items-form-row customer-rule-bracket">
+                      <input
+                        aria-label={`Aanpassing ${index + 1} naam`}
+                        placeholder="naam (bv. Nederland +30%)"
+                        value={modifier.name}
+                        onChange={(e) =>
+                          setAgreementDraft((d) =>
+                            d ? { ...d, modifiers: d.modifiers.map((m, i) => (i === index ? { ...m, name: e.target.value } : m)) } : d,
+                          )
+                        }
+                      />
+                      <input
+                        aria-label={`Aanpassing ${index + 1} land`}
+                        placeholder="land (bv. NL)"
+                        maxLength={2}
+                        value={modifier.countryCode}
+                        onChange={(e) =>
+                          setAgreementDraft((d) =>
+                            d
+                              ? {
+                                  ...d,
+                                  modifiers: d.modifiers.map((m, i) =>
+                                    i === index ? { ...m, countryCode: e.target.value.toUpperCase() } : m,
+                                  ),
+                                }
+                              : d,
+                          )
+                        }
+                      />
+                      <select
+                        aria-label={`Aanpassing ${index + 1} zone`}
+                        value={modifier.zoneId}
+                        onChange={(e) =>
+                          setAgreementDraft((d) =>
+                            d ? { ...d, modifiers: d.modifiers.map((m, i) => (i === index ? { ...m, zoneId: e.target.value } : m)) } : d,
+                          )
+                        }
+                      >
+                        <option value="">— Alle zones —</option>
+                        {zones.map((zone) => (
+                          <option key={zone.id} value={zone.id}>
+                            {zone.code} — {zone.name}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        aria-label={`Aanpassing ${index + 1} soort`}
+                        value={modifier.mode}
+                        onChange={(e) =>
+                          setAgreementDraft((d) =>
+                            d
+                              ? {
+                                  ...d,
+                                  modifiers: d.modifiers.map((m, i) =>
+                                    i === index ? { ...m, mode: e.target.value as 'Percent' | 'Fixed' } : m,
+                                  ),
+                                }
+                              : d,
+                          )
+                        }
+                      >
+                        <option value="Percent">Percentage</option>
+                        <option value="Fixed">Vast bedrag</option>
+                      </select>
+                      <input
+                        aria-label={`Aanpassing ${index + 1} waarde`}
+                        type="number"
+                        step="0.01"
+                        placeholder="waarde"
+                        value={modifier.value}
+                        onChange={(e) =>
+                          setAgreementDraft((d) =>
+                            d ? { ...d, modifiers: d.modifiers.map((m, i) => (i === index ? { ...m, value: e.target.value } : m)) } : d,
+                          )
+                        }
+                      />
+                      <Button
+                        variant="ghost"
+                        aria-label={`Aanpassing ${index + 1} omhoog`}
+                        disabled={index === 0}
+                        onClick={() => setAgreementDraft((d) => (d ? { ...d, modifiers: moveItem(d.modifiers, index, index - 1) } : d))}
+                      >
+                        ↑
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        aria-label={`Aanpassing ${index + 1} omlaag`}
+                        disabled={index === agreementDraft.modifiers.length - 1}
+                        onClick={() => setAgreementDraft((d) => (d ? { ...d, modifiers: moveItem(d.modifiers, index, index + 1) } : d))}
+                      >
+                        ↓
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => setAgreementDraft((d) => (d ? { ...d, modifiers: d.modifiers.filter((_, i) => i !== index) } : d))}
+                      >
+                        Verwijderen
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      setAgreementDraft((d) =>
+                        d
+                          ? { ...d, modifiers: [...d.modifiers, { name: '', countryCode: '', zoneId: '', mode: 'Percent', value: '' }] }
+                          : d,
+                      )
+                    }
+                  >
+                    + Aanpassing
+                  </Button>
+                </>
+              )}
+            </fieldset>
             <fieldset className="issued-items-generate-dimension">
               <legend>Automatische toeslagen</legend>
               {agreementDraft.surcharges.map((surcharge, index) => (

@@ -56,25 +56,78 @@ public class PricingEngine : IPricingEngine
             .GroupBy(a => a.AgreementId)
             .ToDictionary(g => g.Key, g => g.First());
 
+        // All agreements active + within their window on the tariff date (both plain and derived
+        // tables) — loaded once, with their own Surcharges/Modifiers, so derived tables carry
+        // their OWN post-processing config even though their rules live on their base-chain root.
+        var allAgreements = await _dbContext.PricingAgreements.AsNoTracking()
+            .Include(a => a.Surcharges)
+            .Include(a => a.Modifiers)
+            .Where(a => a.TenantId == tenantId && a.IsActive
+                        && a.EffectiveFrom <= request.Date
+                        && (a.EffectiveUntil == null || a.EffectiveUntil >= request.Date))
+            .ToListAsync(cancellationToken);
+        var agreementsById = allAgreements.ToDictionary(a => a.Id);
+
+        bool IsApplicable(PricingAgreement agreement) =>
+            agreement.IsShared
+                ? assignmentByAgreementId.ContainsKey(agreement.Id)
+                : (agreement.CustomerId is null || agreement.CustomerId == request.CustomerId);
+
+        var applicableAgreements = allAgreements.Where(IsApplicable).ToList();
+
+        // Resolve each applicable agreement's rule source: itself, or — for a derived table
+        // (spec §9) — its base-chain root, following BaseAgreementId up to 3 hops with a
+        // visited-set cycle guard. A cycle in already-saved data (validation normally prevents
+        // it) is a blocking configuration error, never a hang.
+        var rootIdByAgreementId = new Dictionary<Guid, Guid>();
+        foreach (var agreement in applicableAgreements)
+        {
+            if (agreement.BaseAgreementId is null)
+            {
+                rootIdByAgreementId[agreement.Id] = agreement.Id;
+                continue;
+            }
+
+            var (rootId, cycle, chainNames) = ResolveBaseChainRoot(agreement, agreementsById);
+            if (cycle)
+            {
+                configurationError ??= "Circulaire verwijzing tussen tarieventabellen: " + string.Join(" → ", chainNames);
+                requiresManual = true;
+                continue;
+            }
+
+            if (rootId is not null)
+            {
+                rootIdByAgreementId[agreement.Id] = rootId.Value;
+            }
+        }
+
         var candidateRules = await _dbContext.PriceRules.AsNoTracking()
             .Include(r => r.Brackets)
-            .Include(r => r.Agreement!.Surcharges)
             .Where(r => r.TenantId == tenantId && r.IsActive
                         && (r.CustomerId == null || r.CustomerId == request.CustomerId)
                         && r.EffectiveFrom <= request.Date
                         && (r.EffectiveUntil == null || r.EffectiveUntil >= request.Date))
             .ToListAsync(cancellationToken);
+        var rulesByAgreementId = candidateRules.Where(r => r.AgreementId is not null)
+            .ToLookup(r => r.AgreementId!.Value);
+        var standaloneRules = candidateRules.Where(r => r.AgreementId is null).ToList();
 
-        // A rule inside an agreement only applies while its agreement applies. A shared
-        // agreement additionally requires an active assignment for this customer.
-        candidateRules = candidateRules
-            .Where(r => r.AgreementId is null || (r.Agreement is { IsActive: true } agreement
-                        && agreement.EffectiveFrom <= request.Date
-                        && (agreement.EffectiveUntil is null || agreement.EffectiveUntil >= request.Date)
-                        && (agreement.IsShared
-                            ? assignmentByAgreementId.ContainsKey(agreement.Id)
-                            : (agreement.CustomerId is null || agreement.CustomerId == request.CustomerId))))
-            .ToList();
+        // One candidate per (rule, engaging agreement) pair — the same physical rule can be
+        // reachable through more than one applicable agreement (e.g. its own root table AND a
+        // derived table assigned to this customer); each engagement scores/attributes separately.
+        var allCandidates = new List<RuleCandidate>();
+        allCandidates.AddRange(standaloneRules.Select(r => new RuleCandidate(r, r.CustomerId is not null ? 2 : 0, null)));
+        foreach (var agreement in applicableAgreements)
+        {
+            if (!rootIdByAgreementId.TryGetValue(agreement.Id, out var rootId))
+            {
+                continue;
+            }
+
+            var tier = AgreementTier(agreement);
+            allCandidates.AddRange(rulesByAgreementId[rootId].Select(r => new RuleCandidate(r, tier, agreement)));
+        }
 
         // --- Unit lines: pick the most specific rule per line ---------------------------------
         var anyRuleMatched = false;
@@ -82,21 +135,21 @@ public class PricingEngine : IPricingEngine
         foreach (var line in request.Lines)
         {
             var unitName = unitNames.GetValueOrDefault(line.UnitTypeId, "eenheid");
-            var forUnit = candidateRules
-                .Where(r => r.UnitTypeId == line.UnitTypeId && (r.ZoneId == null || (zone is not null && r.ZoneId == zone.Id)))
+            var forUnit = allCandidates
+                .Where(c => c.Rule.UnitTypeId == line.UnitTypeId && (c.Rule.ZoneId == null || (zone is not null && c.Rule.ZoneId == zone.Id)))
                 .ToList();
-            var (rule, conflicts) = SelectRule(forUnit, RuleTier);
+            var (candidate, conflicts) = SelectRule(forUnit);
             if (conflicts is not null)
             {
                 configurationError = $"Conflicterende tariefregels voor {unitName}: "
-                    + string.Join(" én ", conflicts.Select(c => $"'{c.Name}'"))
+                    + string.Join(" én ", conflicts.Select(c => $"'{c.Rule.Name}'"))
                     + ". Corrigeer de tarieven (geldigheid, zone of prioriteit).";
                 lines.Add(new PriceBreakdownLine(configurationError, 0m, "Configuratiefout"));
                 requiresManual = true;
                 continue;
             }
 
-            if (rule is null)
+            if (candidate is null)
             {
                 lines.Add(new PriceBreakdownLine($"Geen tarief geconfigureerd voor {unitName}", 0m, "Ontbrekend"));
                 requiresManual = true;
@@ -104,9 +157,11 @@ public class PricingEngine : IPricingEngine
             }
 
             anyRuleMatched = true;
-            if (rule.Agreement is { } lineAgreement)
+            var rule = candidate.Rule;
+            var engagedAgreement = candidate.EngagedAgreement;
+            if (engagedAgreement is not null)
             {
-                engagedAgreements.TryAdd(lineAgreement.Id, lineAgreement);
+                engagedAgreements.TryAdd(engagedAgreement.Id, engagedAgreement);
             }
 
             var billable = BillableQuantity(rule, line);
@@ -125,37 +180,37 @@ public class PricingEngine : IPricingEngine
                 $"{line.Quantity:0.##} × {unitName}{zoneSuffix}{billableSuffix}",
                 decimal.Round(amount.Value, 2), rule.Name,
                 RuleId: rule.Id, RuleName: rule.Name,
-                AgreementId: rule.AgreementId, AgreementName: rule.Agreement?.Name,
+                AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name,
                 ActualQuantity: line.Quantity, BillableQuantity: billable));
         }
 
         // --- Order-level rules (no unit): forfaits, km/pallet/ton components ------------------
-        var orderLevelRules = candidateRules
-            .Where(r => r.UnitTypeId == null
-                        && r.Basis is PriceRuleBasis.Fixed or PriceRuleBasis.PerKm or PriceRuleBasis.PerPallet
+        var orderLevelCandidates = allCandidates
+            .Where(c => c.Rule.UnitTypeId == null
+                        && c.Rule.Basis is PriceRuleBasis.Fixed or PriceRuleBasis.PerKm or PriceRuleBasis.PerPallet
                             or PriceRuleBasis.PerTon or PriceRuleBasis.WeightBracket
                             or PriceRuleBasis.PerLoadingMeter or PriceRuleBasis.PerVolume or PriceRuleBasis.PerStop
-                        && (r.ZoneId == null || (zone is not null && r.ZoneId == zone.Id)))
+                        && (c.Rule.ZoneId == null || (zone is not null && c.Rule.ZoneId == zone.Id)))
             .ToList();
 
         if (anyRuleMatched)
         {
             // Component model: an agreement engaged by a matched unit rule also contributes
             // its order-level components (base cost, km price, ...).
-            foreach (var rule in orderLevelRules.Where(r => r.AgreementId is { } aid && engagedAgreements.ContainsKey(aid)))
+            foreach (var candidate in orderLevelCandidates.Where(c => c.EngagedAgreement is { } a && engagedAgreements.ContainsKey(a.Id)))
             {
-                AddOrderLevelLine(lines, rule, request);
+                AddOrderLevelLine(lines, candidate.Rule, request, candidate.EngagedAgreement);
             }
         }
-        else if (orderLevelRules.Count > 0)
+        else if (orderLevelCandidates.Count > 0)
         {
             // No unit line priced: an order-level tariff (converted rate card or forfait) is
             // the price. The most specific applicable agreement wins; standalone rules only
             // apply when no agreement-grouped order tariff exists.
             var producedAmount = false;
-            var agreements = orderLevelRules
-                .Where(r => r.Agreement is not null)
-                .Select(r => r.Agreement!)
+            var agreements = orderLevelCandidates
+                .Where(c => c.EngagedAgreement is not null)
+                .Select(c => c.EngagedAgreement!)
                 .DistinctBy(a => a.Id)
                 .ToList();
             if (agreements.Count > 0)
@@ -172,9 +227,9 @@ public class PricingEngine : IPricingEngine
                 }
                 else
                 {
-                    foreach (var rule in orderLevelRules.Where(r => r.AgreementId == best[0].Id))
+                    foreach (var candidate in orderLevelCandidates.Where(c => c.EngagedAgreement?.Id == best[0].Id))
                     {
-                        producedAmount |= AddOrderLevelLine(lines, rule, request);
+                        producedAmount |= AddOrderLevelLine(lines, candidate.Rule, request, candidate.EngagedAgreement);
                     }
                 }
             }
@@ -182,18 +237,18 @@ public class PricingEngine : IPricingEngine
             {
                 // One primary pricing basis (spec §10/18): standalone order-level rules never
                 // sum across bases — the single most specific rule wins, an exact tie blocks.
-                var (rule, conflicts) = SelectRule(orderLevelRules.Where(r => r.AgreementId is null).ToList(), RuleTier);
+                var (candidate, conflicts) = SelectRule(orderLevelCandidates.Where(c => c.EngagedAgreement is null).ToList());
                 if (conflicts is not null)
                 {
                     configurationError = "Conflicterende tariefregels: "
-                        + string.Join(" én ", conflicts.Select(c => $"'{c.Name}'"))
+                        + string.Join(" én ", conflicts.Select(c => $"'{c.Rule.Name}'"))
                         + ". Kies één prijsbasis of onderscheid ze met prioriteit.";
                     lines.Add(new PriceBreakdownLine(configurationError, 0m, "Configuratiefout"));
                     requiresManual = true;
                 }
-                else if (rule is not null)
+                else if (candidate is not null)
                 {
-                    producedAmount |= AddOrderLevelLine(lines, rule, request);
+                    producedAmount |= AddOrderLevelLine(lines, candidate.Rule, request, candidate.EngagedAgreement);
                 }
             }
 
@@ -206,15 +261,43 @@ public class PricingEngine : IPricingEngine
             }
         }
 
-        // --- Agreement post-processing: minimum + automatic surcharges ------------------------
+        // --- Agreement post-processing: derivation modifiers, adjustment, minimum/maximum, surcharges ---
+        // Driven by which agreements actually produced a breakdown line — not just `engagedAgreements`
+        // (unit-line engagement only), since an order-level-only tariff (no unit rule matched) also
+        // engages its agreement's minimum/maximum/surcharges/modifiers.
         foreach (var agreement in lines
                      .Where(l => !l.Informational && l.AgreementId is not null)
                      .Select(l => l.AgreementId!.Value)
                      .Distinct()
-                     .Select(id => candidateRules.Select(r => r.Agreement).First(a => a?.Id == id)!)
+                     .Select(id => agreementsById.GetValueOrDefault(id))
+                     .Where(a => a is not null)
+                     .Select(a => a!)
                      .ToList())
         {
             var subtotal = lines.Where(l => !l.Informational && l.AgreementId == agreement.Id).Sum(l => l.Amount);
+
+            // Derived table (spec §9): stack its own modifiers, ascending Sequence, on the running
+            // subtotal (base lines + previously applied modifiers) BEFORE the assignment adjustment.
+            if (agreement.BaseAgreementId is not null)
+            {
+                var deliveryCountry = NormalizeCountryCode(request.DeliveryCountryCode);
+                foreach (var modifier in agreement.Modifiers.OrderBy(m => m.Sequence))
+                {
+                    var countryMatches = modifier.CountryCode is null || modifier.CountryCode == deliveryCountry;
+                    var zoneMatches = modifier.ZoneId is null || (zone is not null && modifier.ZoneId == zone.Id);
+                    if (!countryMatches || !zoneMatches)
+                    {
+                        continue;
+                    }
+
+                    var modifierAmount = modifier.Percent is { } percent
+                        ? decimal.Round(subtotal * percent / 100m, 2)
+                        : decimal.Round(modifier.FixedAmount ?? 0m, 2);
+                    lines.Add(new PriceBreakdownLine(modifier.Name, modifierAmount, agreement.Name,
+                        AgreementId: agreement.Id, AgreementName: agreement.Name));
+                    subtotal += modifierAmount;
+                }
+            }
 
             // Per-customer adjustment on a shared table (spec: reusable rate tables), before the
             // minimum top-up: a percentage discount/markup on the table's own lines, then a fixed
@@ -377,7 +460,8 @@ public class PricingEngine : IPricingEngine
     }
 
     /// <summary>Returns true when the rule produced an amount line (false = informational skip).</summary>
-    private static bool AddOrderLevelLine(List<PriceBreakdownLine> lines, PriceRule rule, PriceCalculationRequest request)
+    private static bool AddOrderLevelLine(
+        List<PriceBreakdownLine> lines, PriceRule rule, PriceCalculationRequest request, PricingAgreement? engagedAgreement)
     {
         var (amount, label, missing) = rule.Basis switch
         {
@@ -414,9 +498,9 @@ public class PricingEngine : IPricingEngine
         if (missing is not null)
         {
             lines.Add(new PriceBreakdownLine($"{rule.Name}: overgeslagen ({missing})", 0m,
-                rule.Agreement?.Name ?? rule.Name, Informational: true,
+                engagedAgreement?.Name ?? rule.Name, Informational: true,
                 RuleId: rule.Id, RuleName: rule.Name,
-                AgreementId: rule.AgreementId, AgreementName: rule.Agreement?.Name));
+                AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name));
             return false;
         }
 
@@ -426,47 +510,82 @@ public class PricingEngine : IPricingEngine
         }
 
         lines.Add(new PriceBreakdownLine(label, decimal.Round(amount, 2),
-            rule.Agreement?.Name ?? rule.Name,
+            engagedAgreement?.Name ?? rule.Name,
             RuleId: rule.Id, RuleName: rule.Name,
-            AgreementId: rule.AgreementId, AgreementName: rule.Agreement?.Name));
+            AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name));
         return true;
     }
 
     /// <summary>
-    /// Deterministic precedence: tier (private beats assigned beats company default, weight 4),
-    /// zone-bound beats zone-less (weight 2), then explicit Priority. Two rules left in an exact
-    /// tie are a configuration error — never an arbitrary pick.
+    /// A rule as reachable through one engaging context: either a standalone rule (no agreement)
+    /// or a rule grouped under an applicable agreement — which, for a derived agreement (spec §9),
+    /// is the agreement the customer is actually engaged with even though the rule physically
+    /// lives on its base-chain root. Tier is the ENGAGING context's specificity, so the same rule
+    /// can appear more than once (e.g. via its own root table AND via a derived table) with a
+    /// different tier/attribution each time.
     /// </summary>
-    private static (PriceRule? Rule, List<PriceRule>? Conflicts) SelectRule(
-        IReadOnlyList<PriceRule> candidates, Func<PriceRule, int> tier)
+    private sealed record RuleCandidate(PriceRule Rule, int Tier, PricingAgreement? EngagedAgreement);
+
+    /// <summary>
+    /// Deterministic precedence: tier (private beats assigned beats company default, weight 4),
+    /// zone-bound beats zone-less (weight 2), then explicit Priority. Two candidates left in an
+    /// exact tie are a configuration error — never an arbitrary pick.
+    /// </summary>
+    private static (RuleCandidate? Candidate, List<RuleCandidate>? Conflicts) SelectRule(IReadOnlyList<RuleCandidate> candidates)
     {
         if (candidates.Count == 0)
         {
             return (null, null);
         }
 
-        int Score(PriceRule rule) => tier(rule) * 4 + (rule.ZoneId is not null ? 2 : 0);
+        int Score(RuleCandidate candidate) => candidate.Tier * 4 + (candidate.Rule.ZoneId is not null ? 2 : 0);
 
-        var ordered = candidates.OrderByDescending(Score).ThenByDescending(r => r.Priority).ToList();
-        var top = ordered.Where(r => Score(r) == Score(ordered[0]) && r.Priority == ordered[0].Priority).ToList();
+        var ordered = candidates.OrderByDescending(Score).ThenByDescending(c => c.Rule.Priority).ToList();
+        var top = ordered.Where(c => Score(c) == Score(ordered[0]) && c.Rule.Priority == ordered[0].Rule.Priority).ToList();
         return top.Count > 1 ? (null, top) : (ordered[0], null);
     }
 
-    /// <summary>
-    /// Specificity tier of a rule: private (own customer rule, or grouped under a customer-owned
-    /// agreement) = 2; grouped under a shared agreement (candidateRules already guarantees an
-    /// active assignment exists whenever such a rule is present) = 1; company default = 0.
-    /// </summary>
-    private static int RuleTier(PriceRule rule) =>
-        rule.CustomerId is not null || rule.Agreement?.CustomerId is not null ? 2
-        : rule.Agreement is { IsShared: true } ? 1
-        : 0;
-
-    /// <summary>Same tier semantics as <see cref="RuleTier"/>, applied to an agreement directly.</summary>
+    /// <summary>Specificity tier of an agreement: private = 2, shared (assigned) = 1, company default = 0.</summary>
     private static int AgreementTier(PricingAgreement agreement) =>
         agreement.CustomerId is not null ? 2
         : agreement.IsShared ? 1
         : 0;
+
+    /// <summary>
+    /// Follows a derived agreement's BaseAgreementId chain up to its root (max 3 hops, tenant-
+    /// filtered via the pre-loaded, active+windowed <paramref name="agreementsById"/> map). Returns
+    /// the root id, or Cycle=true with the visited chain's names when the chain revisits a node
+    /// (bad data that bypassed save-time validation) — never loops indefinitely.
+    /// </summary>
+    private static (Guid? RootId, bool Cycle, List<string> ChainNames) ResolveBaseChainRoot(
+        PricingAgreement agreement, IReadOnlyDictionary<Guid, PricingAgreement> agreementsById)
+    {
+        var chainNames = new List<string> { agreement.Name };
+        var visited = new HashSet<Guid> { agreement.Id };
+        var current = agreement;
+        var depth = 0;
+        while (current.BaseAgreementId is { } baseId)
+        {
+            if (!agreementsById.TryGetValue(baseId, out var next))
+            {
+                // Base not active/in window at this date (or missing) — no rules resolved, not a cycle.
+                return (null, false, chainNames);
+            }
+
+            chainNames.Add(next.Name);
+            if (!visited.Add(baseId) || ++depth > 3)
+            {
+                return (null, true, chainNames);
+            }
+
+            current = next;
+        }
+
+        return (current.Id, false, chainNames);
+    }
+
+    private static string? NormalizeCountryCode(string? code) =>
+        string.IsNullOrWhiteSpace(code) ? null : code.Trim().ToUpperInvariant();
 
     /// <summary>
     /// Spec ch. 11: the billable quantity may differ from the physical quantity (an oversized

@@ -195,6 +195,7 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreement> PricingAgreements => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreement>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementSurcharge> PricingAgreementSurcharges => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementSurcharge>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementAssignment> PricingAgreementAssignments => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementAssignment>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementModifier> PricingAgreementModifiers => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementModifier>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.ScheduledPriceAdjustment> ScheduledPriceAdjustments => Set<TransportationService.Api.Modules.Tarification.Entities.ScheduledPriceAdjustment>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.ScheduledPriceAdjustmentRule> ScheduledPriceAdjustmentRules => Set<TransportationService.Api.Modules.Tarification.Entities.ScheduledPriceAdjustmentRule>();
 

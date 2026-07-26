@@ -124,6 +124,7 @@ public class PricingAdminService : IPricingAdminService
     {
         var agreements = await _dbContext.PricingAgreements.AsNoTracking()
             .Include(a => a.Surcharges)
+            .Include(a => a.Modifiers)
             .Where(a => a.TenantId == TenantId)
             .Where(a => customerId == null ? a.CustomerId == null : a.CustomerId == customerId)
             .OrderByDescending(a => a.EffectiveFrom).ThenBy(a => a.Name)
@@ -133,7 +134,7 @@ public class PricingAdminService : IPricingAdminService
 
     public async Task<PricingAgreementDto> CreateAgreementAsync(SavePricingAgreementRequest request, CancellationToken cancellationToken)
     {
-        await ValidateAgreementAsync(request, cancellationToken);
+        await ValidateAgreementAsync(request, null, cancellationToken);
         var agreement = new PricingAgreement { Id = Guid.NewGuid(), TenantId = TenantId };
         ApplyAgreement(agreement, request);
         _dbContext.PricingAgreements.Add(agreement);
@@ -145,17 +146,19 @@ public class PricingAdminService : IPricingAdminService
 
     public async Task<PricingAgreementDto?> UpdateAgreementAsync(Guid id, SavePricingAgreementRequest request, CancellationToken cancellationToken)
     {
-        var agreement = await _dbContext.PricingAgreements.Include(a => a.Surcharges)
+        var agreement = await _dbContext.PricingAgreements.Include(a => a.Surcharges).Include(a => a.Modifiers)
             .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == id, cancellationToken);
         if (agreement is null)
         {
             return null;
         }
 
-        await ValidateAgreementAsync(request, cancellationToken);
-        // Surcharges are replaced wholesale; the agreement is the aggregate root.
+        await ValidateAgreementAsync(request, id, cancellationToken);
+        // Surcharges/modifiers are replaced wholesale; the agreement is the aggregate root.
         _dbContext.RemoveRange(agreement.Surcharges);
         agreement.Surcharges = [];
+        _dbContext.RemoveRange(agreement.Modifiers);
+        agreement.Modifiers = [];
         ApplyAgreement(agreement, request);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("PricingAgreement", agreement.Id.ToString(), "Updated", null,
@@ -179,13 +182,60 @@ public class PricingAdminService : IPricingAdminService
                 "Deze prijsafspraak bevat nog tariefregels. Verwijder of verplaats die eerst.");
         }
 
+        var dependentNames = await _dbContext.PricingAgreements.AsNoTracking()
+            .Where(a => a.TenantId == TenantId && a.BaseAgreementId == id)
+            .Select(a => a.Name)
+            .ToListAsync(cancellationToken);
+        if (dependentNames.Count > 0)
+        {
+            throw new DomainValidationException(
+                "Deze tabel is de basis voor " + string.Join(", ", dependentNames.Select(n => $"'{n}'"))
+                + ". Verwijder eerst de afgeleide tabellen.");
+        }
+
         _dbContext.Remove(agreement);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("PricingAgreement", agreement.Id.ToString(), "Deleted", new { agreement.Name }, null, cancellationToken);
         return true;
     }
 
-    private async Task ValidateAgreementAsync(SavePricingAgreementRequest request, CancellationToken cancellationToken)
+    /// <summary>
+    /// Walks the proposed base-chain from <paramref name="baseAgreementId"/> upward: revisiting the
+    /// agreement being saved (<paramref name="agreementId"/>, null for a new agreement) or any node
+    /// already seen is a cycle; a chain longer than 3 hops from the saved agreement is too deep.
+    /// </summary>
+    private async Task ValidateDerivationChainAsync(Guid? agreementId, Guid baseAgreementId, CancellationToken cancellationToken)
+    {
+        var visited = new HashSet<Guid>();
+        Guid? current = baseAgreementId;
+        var hops = 1;
+        while (current is not null)
+        {
+            if (current == agreementId || !visited.Add(current.Value))
+            {
+                throw new DomainValidationException("baseAgreementId", "Circulaire verwijzing tussen tarieventabellen.");
+            }
+
+            if (hops > 3)
+            {
+                throw new DomainValidationException("baseAgreementId", "Maximale afleidingsdiepte (3) overschreden.");
+            }
+
+            var next = await _dbContext.PricingAgreements.AsNoTracking()
+                .Where(a => a.TenantId == TenantId && a.Id == current.Value)
+                .Select(a => (Guid?)a.BaseAgreementId)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (next is null)
+            {
+                break;
+            }
+
+            hops++;
+            current = next;
+        }
+    }
+
+    private async Task ValidateAgreementAsync(SavePricingAgreementRequest request, Guid? agreementId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
@@ -237,6 +287,53 @@ public class PricingAdminService : IPricingAdminService
         {
             throw new InvalidTenantReferenceException("klant");
         }
+
+        foreach (var modifier in request.Modifiers ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(modifier.Name))
+            {
+                throw new DomainValidationException("modifiers", "Elke aanpassing heeft een naam nodig.");
+            }
+
+            if ((modifier.Percent is null) == (modifier.FixedAmount is null))
+            {
+                throw new DomainValidationException("modifiers", "Kies per regel een percentage óf een vast bedrag.");
+            }
+        }
+
+        if (request.BaseAgreementId is { } baseAgreementId)
+        {
+            // A derived table has no rules of its own — reject converting a table that already
+            // carries rules, and reject targeting one that is itself already derived's own rules
+            // (that half is enforced in ValidateRuleAsync, on rule creation).
+            var hasOwnRules = agreementId is { } existingId
+                && await _dbContext.PriceRules.AnyAsync(r => r.TenantId == TenantId && r.AgreementId == existingId, cancellationToken);
+            if (hasOwnRules)
+            {
+                throw new DomainValidationException("baseAgreementId",
+                    "Deze tabel heeft eigen prijsregels en kan niet afgeleid worden.");
+            }
+
+            var baseAgreement = await _dbContext.PricingAgreements.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == baseAgreementId, cancellationToken);
+            if (baseAgreement is null)
+            {
+                throw new InvalidTenantReferenceException("basistabel");
+            }
+
+            // A shared/company-default derived table on a private base would leak that customer's
+            // prices to everyone the derived table applies to.
+            if (request.CustomerId is null && baseAgreement.CustomerId is not null)
+            {
+                throw new DomainValidationException("baseAgreementId", "Basistabel moet een gedeelde of algemene tabel zijn.");
+            }
+
+            await ValidateDerivationChainAsync(agreementId, baseAgreementId, cancellationToken);
+        }
+        else if (request.Modifiers is { Count: > 0 })
+        {
+            throw new DomainValidationException("modifiers", "Aanpassingen zijn alleen mogelijk op een afgeleide tabel.");
+        }
     }
 
     private void ApplyAgreement(PricingAgreement agreement, SavePricingAgreementRequest request)
@@ -250,6 +347,7 @@ public class PricingAdminService : IPricingAdminService
         agreement.MaximumAmount = request.MaximumAmount;
         agreement.IsShared = request.IsShared;
         agreement.Notes = Clean(request.Notes);
+        agreement.BaseAgreementId = request.BaseAgreementId;
         foreach (var surcharge in request.Surcharges ?? [])
         {
             var entity = new PricingAgreementSurcharge
@@ -264,6 +362,24 @@ public class PricingAdminService : IPricingAdminService
             agreement.Surcharges.Add(entity);
             // Client-set Guid keys reached via a navigation are otherwise tracked as
             // existing (Modified) — mark them Added explicitly.
+            _dbContext.Entry(entity).State = Microsoft.EntityFrameworkCore.EntityState.Added;
+        }
+
+        foreach (var modifier in request.Modifiers ?? [])
+        {
+            var entity = new PricingAgreementModifier
+            {
+                Id = Guid.NewGuid(),
+                TenantId = TenantId,
+                AgreementId = agreement.Id,
+                Sequence = modifier.Sequence,
+                Name = modifier.Name.Trim(),
+                CountryCode = string.IsNullOrWhiteSpace(modifier.CountryCode) ? null : modifier.CountryCode.Trim().ToUpperInvariant(),
+                ZoneId = modifier.ZoneId,
+                Percent = modifier.Percent,
+                FixedAmount = modifier.FixedAmount,
+            };
+            agreement.Modifiers.Add(entity);
             _dbContext.Entry(entity).State = Microsoft.EntityFrameworkCore.EntityState.Added;
         }
     }
@@ -294,6 +410,16 @@ public class PricingAdminService : IPricingAdminService
             .GroupBy(x => x.AgreementId)
             .ToDictionary(g => g.Key, g => g.Select(x => assignedCustomerNames.GetValueOrDefault(x.CustomerId, "?")).OrderBy(n => n).ToList());
 
+        var baseAgreementIds = agreements.Where(a => a.BaseAgreementId.HasValue).Select(a => a.BaseAgreementId!.Value).Distinct().ToList();
+        var baseAgreementNames = await _dbContext.PricingAgreements.AsNoTracking()
+            .Where(a => a.TenantId == tenantId && baseAgreementIds.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, a => a.Name, cancellationToken);
+        var modifierZoneIds = agreements.SelectMany(a => a.Modifiers)
+            .Where(m => m.ZoneId.HasValue).Select(m => m.ZoneId!.Value).Distinct().ToList();
+        var zoneNames = await _dbContext.PricingZones.AsNoTracking()
+            .Where(z => z.TenantId == tenantId && modifierZoneIds.Contains(z.Id))
+            .ToDictionaryAsync(z => z.Id, z => z.Name, cancellationToken);
+
         return agreements.Select(a =>
         {
             var names = namesByAgreement.GetValueOrDefault(a.Id);
@@ -305,7 +431,15 @@ public class PricingAdminService : IPricingAdminService
                 a.Surcharges.OrderBy(s => s.Name)
                     .Select(s => new PricingAgreementSurchargeDto(s.Id, s.Name, s.Kind, s.Value))
                     .ToList(),
-                a.IsShared, a.MaximumAmount, names?.Count ?? 0, names);
+                a.IsShared, a.MaximumAmount, names?.Count ?? 0, names,
+                a.BaseAgreementId,
+                a.BaseAgreementId is { } bid ? baseAgreementNames.GetValueOrDefault(bid) : null,
+                a.Modifiers.OrderBy(m => m.Sequence)
+                    .Select(m => new PricingAgreementModifierDto(
+                        m.Id, m.Sequence, m.Name, m.CountryCode, m.ZoneId,
+                        m.ZoneId is { } zid ? zoneNames.GetValueOrDefault(zid) : null,
+                        m.Percent, m.FixedAmount))
+                    .ToList());
         }).ToList();
     }
 
@@ -878,6 +1012,12 @@ public class PricingAdminService : IPricingAdminService
             {
                 throw new DomainValidationException("agreementId",
                     "De regel hoort bij een andere klant dan de prijsafspraak.");
+            }
+
+            // A derived table has no rules of its own — it reuses its base-chain root's rules.
+            if (agreement.BaseAgreementId is not null)
+            {
+                throw new DomainValidationException("agreementId", "Een afgeleide tabel kan geen eigen prijsregels hebben.");
             }
         }
     }

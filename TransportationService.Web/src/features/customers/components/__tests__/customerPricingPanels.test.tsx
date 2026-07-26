@@ -33,6 +33,7 @@ const state = vi.hoisted(() => ({
   previewAdjustment: vi.fn(),
   createAdjustment: vi.fn(),
   cancelAdjustment: vi.fn(),
+  updateAgreement: vi.fn(),
 }))
 
 vi.mock('../../../tarification/api/pricingApi', async (importOriginal) => {
@@ -61,7 +62,7 @@ vi.mock('../../../tarification/api/pricingApi', async (importOriginal) => {
     updatePriceRule: vi.fn(),
     deletePriceRule: vi.fn(),
     createPricingAgreement: vi.fn(),
-    updatePricingAgreement: vi.fn(),
+    updatePricingAgreement: state.updateAgreement,
     deletePricingAgreement: vi.fn(),
     saveAgreementAssignments: vi.fn(),
   }
@@ -82,6 +83,30 @@ function makeConfig(): CustomerPricingConfig {
       },
     ],
     serviceOptions: [],
+  }
+}
+
+function makeAgreement(overrides: Partial<PricingAgreement> = {}): PricingAgreement {
+  return {
+    id: 'agr-1',
+    customerId: 'cust-1',
+    customerName: 'Acme',
+    name: 'Distributie 2026',
+    currency: 'EUR',
+    effectiveFrom: '2026-01-01',
+    effectiveUntil: null,
+    isActive: true,
+    minimumAmount: 60,
+    notes: 'Historisch gunstig contract',
+    surcharges: [{ id: 's1', name: 'Duurtoeslag', kind: 'Percent', value: 5 }],
+    isShared: false,
+    maximumAmount: null,
+    customerCount: 0,
+    customerNames: null,
+    baseAgreementId: null,
+    baseAgreementName: null,
+    modifiers: [],
+    ...overrides,
   }
 }
 
@@ -282,25 +307,7 @@ describe('CustomerUnitPricingPanel', () => {
     state.config = makeConfig()
     state.units = []
     state.assignmentsByAgreement = {}
-    state.agreements = [
-      {
-        id: 'agr-1',
-        customerId: 'cust-1',
-        customerName: 'Acme',
-        name: 'Distributie 2026',
-        currency: 'EUR',
-        effectiveFrom: '2026-01-01',
-        effectiveUntil: null,
-        isActive: true,
-        minimumAmount: 60,
-        notes: 'Historisch gunstig contract',
-        surcharges: [{ id: 's1', name: 'Duurtoeslag', kind: 'Percent', value: 5 }],
-        isShared: false,
-        maximumAmount: null,
-        customerCount: 0,
-        customerNames: null,
-      },
-    ]
+    state.agreements = [makeAgreement()]
     state.rules = [
       makeRule(),
       makeRule({ id: 'rule-2', name: 'Europallet Brussel (+4%)', effectiveFrom: '2099-10-01' }),
@@ -325,23 +332,18 @@ describe('CustomerUnitPricingPanel', () => {
   it('shows a shared table assigned to this customer with a badge and its adjustment', async () => {
     state.agreements = [
       ...state.agreements,
-      {
+      makeAgreement({
         id: 'agr-shared',
         customerId: null,
         customerName: null,
         name: 'Distributie België 2026',
-        currency: 'EUR',
-        effectiveFrom: '2026-01-01',
-        effectiveUntil: null,
-        isActive: true,
         minimumAmount: null,
         notes: null,
         surcharges: [],
         isShared: true,
-        maximumAmount: null,
         customerCount: 1,
         customerNames: ['Acme'],
-      },
+      }),
     ]
     state.assignmentsByAgreement['agr-shared'] = [
       {
@@ -361,6 +363,59 @@ describe('CustomerUnitPricingPanel', () => {
     expect(await screen.findByText('Distributie België 2026')).toBeInTheDocument()
     expect(screen.getByText('Gedeelde tabel')).toBeInTheDocument()
     expect(screen.getByText('-5%')).toBeInTheDocument()
+  })
+
+  it('shows a derived table with its base and modifiers, and saves the derivation section', async () => {
+    const user = userEvent.setup()
+    state.agreements = [
+      makeAgreement({
+        id: 'agr-base',
+        customerId: null,
+        customerName: null,
+        name: 'Distributie België',
+        minimumAmount: null,
+        notes: null,
+        surcharges: [],
+        isShared: true,
+      }),
+      makeAgreement({
+        id: 'agr-nl',
+        name: 'NL Distributie',
+        minimumAmount: null,
+        notes: null,
+        surcharges: [],
+        baseAgreementId: 'agr-base',
+        baseAgreementName: 'Distributie België',
+        modifiers: [
+          { id: 'mod-1', sequence: 1, name: 'Nederland +30%', countryCode: 'NL', zoneId: null, zoneName: null, percent: 30, fixedAmount: null },
+        ],
+      }),
+    ]
+    state.updateAgreement.mockResolvedValue(state.agreements[1])
+
+    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+
+    expect(await screen.findByText('Afgeleid van Distributie België')).toBeInTheDocument()
+
+    const nlRow = screen.getByText('NL Distributie').closest('tr')!
+    await user.click(within(nlRow).getByRole('button', { name: 'Bewerken' }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(within(dialog).getByText(/Deze tabel gebruikt de prijsregels van Distributie België/)).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Basistabel')).toHaveValue('agr-base')
+    expect(within(dialog).getByLabelText('Aanpassing 1 naam')).toHaveValue('Nederland +30%')
+    expect(within(dialog).getByLabelText('Aanpassing 1 land')).toHaveValue('NL')
+
+    await user.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+
+    await waitFor(() => expect(state.updateAgreement).toHaveBeenCalled())
+    const [, payload] = state.updateAgreement.mock.calls[0]
+    expect(payload).toEqual(expect.objectContaining({
+      baseAgreementId: 'agr-base',
+      modifiers: [
+        expect.objectContaining({ sequence: 1, name: 'Nederland +30%', countryCode: 'NL', zoneId: null, percent: 30, fixedAmount: null }),
+      ],
+    }))
   })
 
   it('shows only the fields of the selected primary pricing basis', async () => {

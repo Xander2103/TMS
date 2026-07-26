@@ -16,6 +16,11 @@ public record SavePricingZoneRequest(string Code, string Name, bool IsActive, in
 
 public record PricingAgreementSurchargeDto(Guid Id, string Name, SurchargeKind Kind, decimal Value);
 
+/// <summary>One stacking step of a derived agreement (spec §9: "NL = BE +30%").</summary>
+public record PricingAgreementModifierDto(
+    Guid Id, int Sequence, string Name, string? CountryCode, Guid? ZoneId, string? ZoneName,
+    decimal? Percent, decimal? FixedAmount);
+
 public record PricingAgreementDto(
     Guid Id, Guid? CustomerId, string? CustomerName, string Name, string Currency,
     DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
@@ -27,14 +32,22 @@ public record PricingAgreementDto(
     /// <summary>Count of customer assignments active today (0 for non-shared agreements).</summary>
     int CustomerCount = 0,
     /// <summary>Names of the customers currently assigned; populated on the list endpoint.</summary>
-    IReadOnlyList<string>? CustomerNames = null);
+    IReadOnlyList<string>? CustomerNames = null,
+    /// <summary>Set => this is a derived table; it reuses the base-chain root's rules.</summary>
+    Guid? BaseAgreementId = null,
+    string? BaseAgreementName = null,
+    IReadOnlyList<PricingAgreementModifierDto>? Modifiers = null);
 
 public record SavePricingAgreementSurchargeRequest(string Name, SurchargeKind Kind, decimal Value);
+
+public record SavePricingAgreementModifierRequest(
+    int Sequence, string Name, string? CountryCode, Guid? ZoneId, decimal? Percent, decimal? FixedAmount);
 
 public record SavePricingAgreementRequest(
     Guid? CustomerId, string Name, DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
     decimal? MinimumAmount, string? Notes, IReadOnlyList<SavePricingAgreementSurchargeRequest>? Surcharges,
-    bool IsShared = false, decimal? MaximumAmount = null);
+    bool IsShared = false, decimal? MaximumAmount = null,
+    Guid? BaseAgreementId = null, IReadOnlyList<SavePricingAgreementModifierRequest>? Modifiers = null);
 
 // --- Pricing agreement assignments (shared tables → customers) ---
 

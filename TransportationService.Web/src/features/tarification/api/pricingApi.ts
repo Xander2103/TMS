@@ -49,6 +49,27 @@ export interface PricingAgreementSurcharge {
   value: number
 }
 
+/** One stacking step of a derived agreement (spec §9: "NL = BE +30%"). */
+export interface PricingAgreementModifier {
+  id: string
+  sequence: number
+  name: string
+  countryCode: string | null
+  zoneId: string | null
+  zoneName: string | null
+  percent: number | null
+  fixedAmount: number | null
+}
+
+export interface PricingAgreementModifierInput {
+  sequence: number
+  name: string
+  countryCode: string | null
+  zoneId: string | null
+  percent: number | null
+  fixedAmount: number | null
+}
+
 export interface PricingAgreement {
   id: string
   customerId: string | null
@@ -69,6 +90,10 @@ export interface PricingAgreement {
   customerCount: number
   /** Names of the customers currently assigned; populated on the list endpoint. */
   customerNames: string[] | null
+  /** Set => this is a derived table; it reuses the base-chain root's rules. */
+  baseAgreementId: string | null
+  baseAgreementName: string | null
+  modifiers: PricingAgreementModifier[]
 }
 
 export interface PricingAgreementInput {
@@ -82,6 +107,8 @@ export interface PricingAgreementInput {
   surcharges: { name: string; kind: SurchargeKind; value: number }[] | null
   isShared?: boolean
   maximumAmount?: number | null
+  baseAgreementId?: string | null
+  modifiers?: PricingAgreementModifierInput[] | null
 }
 
 export const listPricingAgreements = (customerId?: string): Promise<PricingAgreement[]> =>
