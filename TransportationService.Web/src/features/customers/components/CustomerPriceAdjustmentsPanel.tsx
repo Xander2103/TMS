@@ -7,6 +7,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
+import { adjustmentSummary, formatEuro } from '../../tarification/adjustmentFormat'
 import {
   cancelPriceAdjustment,
   createPriceAdjustment,
@@ -30,8 +31,6 @@ interface WizardState {
   reason: string
   preview: PriceAdjustmentRulePreview[] | null
 }
-
-const euro = (value: number) => `€ ${value.toFixed(2)}`
 
 /**
  * Scheduled future price changes (spec §12/14): plan +/-% now, preview every affected value,
@@ -159,10 +158,7 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
             {adjustments.map((adjustment) => (
               <tr key={adjustment.id}>
                 <td>{adjustment.effectiveDate}</td>
-                <td>
-                  {adjustment.percent > 0 ? '+' : ''}
-                  {adjustment.percent}%
-                </td>
+                <td>{adjustmentSummary(adjustment)}</td>
                 <td>{adjustment.ruleCount}</td>
                 <td>{adjustment.reason ?? '—'}</td>
                 <td>
@@ -292,7 +288,7 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
                           <tr key={change.field}>
                             <td>{change.field}</td>
                             <td>
-                              {euro(change.oldValue)} → {euro(change.newValue)}
+                              {formatEuro(change.oldValue)} → {formatEuro(change.newValue)}
                             </td>
                           </tr>
                         ))}
@@ -309,7 +305,7 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
       {cancelTarget && (
         <ConfirmDialog
           title="Prijsaanpassing annuleren"
-          message={`De geplande aanpassing van ${cancelTarget.percent > 0 ? '+' : ''}${cancelTarget.percent}% per ${cancelTarget.effectiveDate} wordt geannuleerd; de huidige tarieven blijven gelden.`}
+          message={`De geplande aanpassing van ${adjustmentSummary(cancelTarget)} per ${cancelTarget.effectiveDate} wordt geannuleerd; de huidige tarieven blijven gelden.`}
           confirmLabel="Annuleren bevestigen"
           destructive
           onConfirm={handleCancel}

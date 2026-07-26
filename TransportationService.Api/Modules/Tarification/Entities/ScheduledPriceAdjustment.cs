@@ -20,11 +20,28 @@ public enum ScheduledAdjustmentStatus
 /// </summary>
 public class ScheduledPriceAdjustment : AuditableTenantEntity
 {
-    public Guid CustomerId { get; set; }
+    /// <summary>Customer-scoped adjustment; exactly one of CustomerId/AgreementId is set.</summary>
+    public Guid? CustomerId { get; set; }
+
+    /// <summary>Agreement-scoped adjustment (applies to every rule with this AgreementId).</summary>
+    public Guid? AgreementId { get; set; }
+
     public DateOnly EffectiveDate { get; set; }
 
-    /// <summary>Signed percentage: +4.00 = increase, -2.50 = decrease.</summary>
-    public decimal Percent { get; set; }
+    /// <summary>Signed percentage: +4.00 = increase, -2.50 = decrease. XOR with AmountDelta.</summary>
+    public decimal? Percent { get; set; }
+
+    /// <summary>Fixed signed amount added to every adjustable value. XOR with Percent.</summary>
+    public decimal? AmountDelta { get; set; }
+
+    /// <summary>Optional post-adjustment rounding: null | 0.01 | 0.05 | 0.10.</summary>
+    public decimal? RoundingStep { get; set; }
+
+    /// <summary>Comma-joined <see cref="PriceRuleBasis"/> names; null = every basis.</summary>
+    public string? BasisFilter { get; set; }
+
+    /// <summary>Restricts the adjustment to rules for this unit; null = every unit.</summary>
+    public Guid? UnitTypeIdFilter { get; set; }
 
     public ScheduledAdjustmentStatus Status { get; set; } = ScheduledAdjustmentStatus.Scheduled;
     public string? Reason { get; set; }

@@ -113,12 +113,30 @@ export interface PricingAgreementInput {
 
 export const listPricingAgreements = (customerId?: string): Promise<PricingAgreement[]> =>
   apiClient.getJson(`/api/pricing/agreements${customerId ? `?customerId=${customerId}` : ''}`)
+/** Every agreement of the tenant regardless of customer — the "Tarieventabellen" overview. */
+export const listAllPricingAgreements = (): Promise<PricingAgreement[]> =>
+  apiClient.getJson('/api/pricing/agreements?all=true')
+export const getPricingAgreement = (id: string): Promise<PricingAgreement> =>
+  apiClient.getJson(`/api/pricing/agreements/${id}`)
 export const createPricingAgreement = (input: PricingAgreementInput): Promise<PricingAgreement> =>
   apiClient.postJson('/api/pricing/agreements', input)
 export const updatePricingAgreement = (id: string, input: PricingAgreementInput): Promise<PricingAgreement> =>
   apiClient.putJson(`/api/pricing/agreements/${id}`, input)
 export const deletePricingAgreement = (id: string): Promise<void> =>
   apiClient.deleteRequest(`/api/pricing/agreements/${id}`)
+
+/** Duplicates an agreement as a new version; assignments are deliberately NOT copied. */
+export interface DuplicateAgreementInput {
+  name: string
+  effectiveFrom: string
+  closeSource: boolean
+  percent?: number | null
+  amountDelta?: number | null
+  roundingStep?: number | null
+}
+
+export const duplicateAgreement = (agreementId: string, input: DuplicateAgreementInput): Promise<PricingAgreement> =>
+  apiClient.postJson(`/api/pricing/agreements/${agreementId}/duplicate`, input)
 
 // --- Pricing agreement assignments (shared tables → customers) ---
 
@@ -287,6 +305,9 @@ export interface PriceRuleInput {
 
 export const listPriceRules = (customerId?: string): Promise<PriceRule[]> =>
   apiClient.getJson(`/api/pricing/rules${customerId ? `?customerId=${customerId}` : ''}`)
+/** Rules belonging to exactly this agreement (used by the rate-table grid editor). */
+export const listPriceRulesByAgreement = (agreementId: string): Promise<PriceRule[]> =>
+  apiClient.getJson(`/api/pricing/rules?agreementId=${agreementId}`)
 export const createPriceRule = (input: PriceRuleInput): Promise<PriceRule> =>
   apiClient.postJson('/api/pricing/rules', input)
 export const updatePriceRule = (id: string, input: PriceRuleInput): Promise<PriceRule> =>
@@ -542,11 +563,23 @@ export interface PriceAdjustmentRulePreview {
   changes: PriceAdjustmentValueChange[]
 }
 
+/** Comma-joined basis names used to restrict a bulk adjustment (v2); null/undefined = every basis. */
+export type AdjustmentBasisFilter = string | null
+
 export interface ScheduledPriceAdjustment {
   id: string
-  customerId: string
+  /** Customer-scoped adjustment; exactly one of customerId/agreementId is set. */
+  customerId: string | null
+  agreementId: string | null
   effectiveDate: string
-  percent: number
+  /** Signed percentage; XOR with amountDelta. */
+  percent: number | null
+  /** Fixed signed €-amount; XOR with percent. */
+  amountDelta: number | null
+  /** Optional post-adjustment rounding: null | 0.01 | 0.05 | 0.10. */
+  roundingStep: number | null
+  basisFilter: AdjustmentBasisFilter
+  unitTypeIdFilter: string | null
   status: 'Gepland' | 'Actief' | 'Geannuleerd'
   reason: string | null
   ruleCount: number
@@ -555,8 +588,13 @@ export interface ScheduledPriceAdjustment {
 
 export interface PriceAdjustmentInput {
   effectiveDate: string
-  percent: number
+  /** Exactly one of percent/amountDelta must be set. */
+  percent: number | null
   ruleIds: string[] | null
+  amountDelta?: number | null
+  roundingStep?: number | null
+  basisFilter?: AdjustmentBasisFilter
+  unitTypeIdFilter?: string | null
   reason?: string | null
 }
 
@@ -574,3 +612,20 @@ export const createPriceAdjustment = (
   apiClient.postJson(`/api/customers/${customerId}/price-adjustments`, input)
 export const cancelPriceAdjustment = (customerId: string, id: string): Promise<ScheduledPriceAdjustment> =>
   apiClient.postJson(`/api/customers/${customerId}/price-adjustments/${id}/cancel`, {})
+
+// --- Scheduled price adjustments (agreement-scoped, v2) ---
+
+export const listAgreementAdjustments = (agreementId: string): Promise<ScheduledPriceAdjustment[]> =>
+  apiClient.getJson(`/api/pricing/agreements/${agreementId}/price-adjustments`)
+export const previewAgreementAdjustment = (
+  agreementId: string,
+  input: Omit<PriceAdjustmentInput, 'reason'>,
+): Promise<PriceAdjustmentRulePreview[]> =>
+  apiClient.postJson(`/api/pricing/agreements/${agreementId}/price-adjustments/preview`, input)
+export const createAgreementAdjustment = (
+  agreementId: string,
+  input: PriceAdjustmentInput,
+): Promise<ScheduledPriceAdjustment> =>
+  apiClient.postJson(`/api/pricing/agreements/${agreementId}/price-adjustments`, input)
+export const cancelAgreementAdjustment = (agreementId: string, id: string): Promise<ScheduledPriceAdjustment> =>
+  apiClient.postJson(`/api/pricing/agreements/${agreementId}/price-adjustments/${id}/cancel`, {})

@@ -246,4 +246,149 @@ public class PriceAdjustmentTests
         Assert.Null(await foreignSut.CancelAsync(h.CustomerId,
             (await h.Sut.ListAsync(h.CustomerId, CancellationToken.None))[0].Id, CancellationToken.None));
     }
+
+    // --- v2: agreement scope, AmountDelta, RoundingStep, basis/unit filters ---
+
+    [Fact]
+    public async Task AgreementScope_PlusFourPercent_PreviewAndConfirm_MirrorsCustomerFlow()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerId, "Distributie 2026", new DateOnly(2026, 1, 1), null, true, null, null, null), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.QuantityBracket, null,
+            "Europallet Brussel", new DateOnly(2026, 1, 1), null, true, null, null,
+            [
+                new SavePriceRuleBracketRequest(1, 1, 45m, null),
+                new SavePriceRuleBracketRequest(2, null, 70m, null),
+            ],
+            agreement.Id), CancellationToken.None);
+
+        var preview = await h.Sut.PreviewForAgreementAsync(agreement.Id,
+            new PreviewPriceAdjustmentRequest(October, 4m, null), CancellationToken.None);
+        var previewedRule = Assert.Single(preview);
+        Assert.Contains(previewedRule.Changes, c => c.OldValue == 45m && c.NewValue == 46.80m);
+        Assert.Contains(previewedRule.Changes, c => c.OldValue == 70m && c.NewValue == 72.80m);
+
+        var created = await h.Sut.CreateForAgreementAsync(agreement.Id,
+            new CreatePriceAdjustmentRequest(October, 4m, null, "Jaarlijkse indexatie"), CancellationToken.None);
+        Assert.Equal("Gepland", created.Status);
+        Assert.Equal(1, created.RuleCount);
+
+        var rules = await h.Db.Context.PriceRules
+            .Where(r => r.TenantId == h.TenantId && r.Name == "Europallet Brussel")
+            .OrderBy(r => r.EffectiveFrom).ToListAsync();
+        Assert.Equal(2, rules.Count);
+        Assert.Equal(new DateOnly(2026, 9, 30), rules[0].EffectiveUntil);
+        Assert.Equal(October, rules[1].EffectiveFrom);
+
+        Assert.Contains(await h.Db.Context.AuditLogs.ToListAsync(),
+            l => l.EntityType == "ScheduledPriceAdjustment" && l.Action == "Created");
+    }
+
+    [Fact]
+    public async Task Create_AmountDeltaWithBasisFilter_OnlyAdjustsMatchingBasisRules()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.HourUnitId, PriceRuleBasis.Hourly, null,
+            "Uurtarief", new DateOnly(2026, 1, 1), null, true, 95m, null, null), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            "Palletprijs", new DateOnly(2026, 1, 1), null, true, 12m, null, null), CancellationToken.None);
+
+        var created = await h.Sut.CreateAsync(h.CustomerId,
+            new CreatePriceAdjustmentRequest(October, null, null, null, AmountDelta: 5m, BasisFilter: "Hourly"),
+            CancellationToken.None);
+
+        Assert.Equal(1, created.RuleCount);
+        var hourly = await h.Db.Context.PriceRules
+            .Where(r => r.TenantId == h.TenantId && r.Name == "Uurtarief")
+            .OrderBy(r => r.EffectiveFrom).ToListAsync();
+        Assert.Equal(2, hourly.Count);
+        Assert.Equal(100m, hourly[1].UnitPrice);
+        // The PerUnit rule sits outside the basis filter and keeps its single version.
+        Assert.Equal(1, await h.Db.Context.PriceRules.CountAsync(r => r.TenantId == h.TenantId && r.Name == "Palletprijs"));
+    }
+
+    [Fact]
+    public async Task Preview_RoundingStep_RoundsToNearestStepAwayFromZero()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.HourUnitId, PriceRuleBasis.Hourly, null,
+            "Uurtarief", new DateOnly(2026, 1, 1), null, true, 47.75m, null, null), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            "Palletprijs", new DateOnly(2026, 1, 1), null, true, 45m, null, null), CancellationToken.None);
+
+        // -2% on 47.75 → 46.795, which rounds up (away from zero) to the nearest 0,05 → 46.80.
+        var decreasePreview = await h.Sut.PreviewAsync(h.CustomerId,
+            new PreviewPriceAdjustmentRequest(October, -2m, null, RoundingStep: 0.05m), CancellationToken.None);
+        var hourlyChange = decreasePreview.Single(p => p.RuleName == "Uurtarief");
+        Assert.Contains(hourlyChange.Changes, c => c.OldValue == 47.75m && c.NewValue == 46.80m);
+
+        // 45 × 1.04 = 46.80 exactly: already a multiple of 0,05 and stays put.
+        var increasePreview = await h.Sut.PreviewAsync(h.CustomerId,
+            new PreviewPriceAdjustmentRequest(October, 4m, null, RoundingStep: 0.05m), CancellationToken.None);
+        var palletChange = increasePreview.Single(p => p.RuleName == "Palletprijs");
+        Assert.Contains(palletChange.Changes, c => c.OldValue == 45m && c.NewValue == 46.80m);
+    }
+
+    [Fact]
+    public async Task Create_AmountDelta_ProducingNegative_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            "Palletprijs", new DateOnly(2026, 1, 1), null, true, 3m, null, null), CancellationToken.None);
+
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Sut.CreateAsync(h.CustomerId,
+            new CreatePriceAdjustmentRequest(October, null, null, null, AmountDelta: -10m), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Validation_RequiresExactlyOnePercentOrAmountDelta_AndValidRoundingStep()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedSpecExampleRulesAsync(h);
+
+        // Neither Percent nor AmountDelta set.
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Sut.PreviewAsync(h.CustomerId,
+            new PreviewPriceAdjustmentRequest(October, null, null), CancellationToken.None));
+        // Both set.
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Sut.PreviewAsync(h.CustomerId,
+            new PreviewPriceAdjustmentRequest(October, 4m, null, AmountDelta: 5m), CancellationToken.None));
+        // Invalid rounding step.
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Sut.PreviewAsync(h.CustomerId,
+            new PreviewPriceAdjustmentRequest(October, 4m, null, RoundingStep: 0.02m), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AgreementScope_Cancel_RestoresWindows()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerId, "Distributie 2026", new DateOnly(2026, 1, 1), null, true, null, null, null), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.HourUnitId, PriceRuleBasis.Hourly, null,
+            "Uurtarief", new DateOnly(2026, 1, 1), null, true, 72m, null, null, agreement.Id), CancellationToken.None);
+
+        var created = await h.Sut.CreateForAgreementAsync(agreement.Id,
+            new CreatePriceAdjustmentRequest(October, 4m, null, null), CancellationToken.None);
+
+        var cancelled = await h.Sut.CancelForAgreementAsync(agreement.Id, created.Id, CancellationToken.None);
+
+        Assert.Equal("Geannuleerd", cancelled!.Status);
+        var rules = await h.Db.Context.PriceRules
+            .Where(r => r.TenantId == h.TenantId && r.Name == "Uurtarief").ToListAsync();
+        var restored = Assert.Single(rules);
+        Assert.Null(restored.EffectiveUntil);
+    }
 }

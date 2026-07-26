@@ -185,10 +185,14 @@ public class ScheduledPriceAdjustmentConfiguration : IEntityTypeConfiguration<Sc
         builder.ToTable("scheduled_price_adjustments");
         builder.HasKey(a => a.Id);
         builder.Property(a => a.Percent).HasPrecision(7, 3);
+        builder.Property(a => a.AmountDelta).HasPrecision(12, 2);
+        builder.Property(a => a.RoundingStep).HasPrecision(4, 2);
+        builder.Property(a => a.BasisFilter).HasMaxLength(300);
         builder.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(a => a.Reason).HasMaxLength(1000);
         builder.HasMany(a => a.Rules).WithOne().HasForeignKey(r => r.AdjustmentId).OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(a => new { a.TenantId, a.CustomerId, a.EffectiveDate });
+        builder.HasIndex(a => new { a.TenantId, a.AgreementId, a.EffectiveDate });
         builder.HasQueryFilter(a => !a.IsDeleted);
     }
 }

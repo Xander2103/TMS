@@ -60,8 +60,16 @@ public class PricingController : ControllerBase
     [HttpGet("api/pricing/agreements")]
     [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
     public async Task<ActionResult<IReadOnlyList<PricingAgreementDto>>> ListAgreements(
-        [FromQuery] Guid? customerId, CancellationToken cancellationToken) =>
-        Ok(await _admin.ListAgreementsAsync(customerId, cancellationToken));
+        [FromQuery] Guid? customerId, [FromQuery] bool all, CancellationToken cancellationToken) =>
+        Ok(await _admin.ListAgreementsAsync(customerId, cancellationToken, all));
+
+    [HttpGet("api/pricing/agreements/{id:guid}")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<PricingAgreementDto>> GetAgreement(Guid id, CancellationToken cancellationToken)
+    {
+        var agreement = await _admin.GetAgreementAsync(id, cancellationToken);
+        return agreement is null ? NotFound() : Ok(agreement);
+    }
 
     [HttpPost("api/pricing/agreements")]
     [RequirePermission(PermissionCodes.TariffsManage)]
@@ -82,6 +90,20 @@ public class PricingController : ControllerBase
     [RequirePermission(PermissionCodes.TariffsManage)]
     public async Task<IActionResult> DeleteAgreement(Guid id, CancellationToken cancellationToken) =>
         await _admin.DeleteAgreementAsync(id, cancellationToken) ? NoContent() : NotFound();
+
+    /// <summary>
+    /// Duplicates an agreement as a new version: copies rules/brackets/surcharges/modifiers with a
+    /// new effective window (optionally adjusted). Assignments are NOT copied — the new version
+    /// must be linked to customers explicitly via the assignments endpoint.
+    /// </summary>
+    [HttpPost("api/pricing/agreements/{id:guid}/duplicate")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<PricingAgreementDto>> DuplicateAgreement(
+        Guid id, DuplicateAgreementRequest request, CancellationToken cancellationToken)
+    {
+        var duplicated = await _admin.DuplicateAgreementAsync(id, request, cancellationToken);
+        return duplicated is null ? NotFound() : Ok(duplicated);
+    }
 
     // --- Pricing agreement assignments (shared tables → customers) ---
 
@@ -107,8 +129,9 @@ public class PricingController : ControllerBase
 
     [HttpGet("api/pricing/rules")]
     [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
-    public async Task<ActionResult<IReadOnlyList<PriceRuleDto>>> ListRules([FromQuery] Guid? customerId, CancellationToken cancellationToken) =>
-        Ok(await _admin.ListRulesAsync(customerId, cancellationToken));
+    public async Task<ActionResult<IReadOnlyList<PriceRuleDto>>> ListRules(
+        [FromQuery] Guid? customerId, [FromQuery] Guid? agreementId, CancellationToken cancellationToken) =>
+        Ok(await _admin.ListRulesAsync(customerId, cancellationToken, agreementId));
 
     [HttpPost("api/pricing/rules")]
     [RequirePermission(PermissionCodes.TariffsManage)]
@@ -200,6 +223,35 @@ public class PricingController : ControllerBase
         Guid customerId, Guid id, CancellationToken cancellationToken)
     {
         var cancelled = await _adjustments.CancelAsync(customerId, id, cancellationToken);
+        return cancelled is null ? NotFound() : Ok(cancelled);
+    }
+
+    // --- Scheduled price adjustments (agreement-scoped) ---
+
+    [HttpGet("api/pricing/agreements/{id:guid}/price-adjustments")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<ScheduledPriceAdjustmentDto>>> ListAgreementPriceAdjustments(
+        Guid id, CancellationToken cancellationToken) =>
+        Ok(await _adjustments.ListForAgreementAsync(id, cancellationToken));
+
+    [HttpPost("api/pricing/agreements/{id:guid}/price-adjustments/preview")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<PriceAdjustmentRulePreview>>> PreviewAgreementPriceAdjustment(
+        Guid id, PreviewPriceAdjustmentRequest request, CancellationToken cancellationToken) =>
+        Ok(await _adjustments.PreviewForAgreementAsync(id, request, cancellationToken));
+
+    [HttpPost("api/pricing/agreements/{id:guid}/price-adjustments")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<ScheduledPriceAdjustmentDto>> CreateAgreementPriceAdjustment(
+        Guid id, CreatePriceAdjustmentRequest request, CancellationToken cancellationToken) =>
+        Ok(await _adjustments.CreateForAgreementAsync(id, request, cancellationToken));
+
+    [HttpPost("api/pricing/agreements/{id:guid}/price-adjustments/{adjustmentId:guid}/cancel")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<ScheduledPriceAdjustmentDto>> CancelAgreementPriceAdjustment(
+        Guid id, Guid adjustmentId, CancellationToken cancellationToken)
+    {
+        var cancelled = await _adjustments.CancelForAgreementAsync(id, adjustmentId, cancellationToken);
         return cancelled is null ? NotFound() : Ok(cancelled);
     }
 }

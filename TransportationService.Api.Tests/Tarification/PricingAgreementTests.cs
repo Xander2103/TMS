@@ -67,6 +67,39 @@ public class PricingAgreementTests
     }
 
     [Fact]
+    public async Task GetAgreementAsync_ReturnsSingleAgreement_OrNullWhenMissingOrForeignTenant()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Admin.CreateAgreementAsync(Agreement(h.CustomerId), CancellationToken.None);
+
+        var fetched = await h.Admin.GetAgreementAsync(created.Id, CancellationToken.None);
+        Assert.NotNull(fetched);
+        Assert.Equal(created.Name, fetched!.Name);
+
+        Assert.Null(await h.Admin.GetAgreementAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ListAgreementsAsync_IncludeAll_ReturnsEveryAgreementRegardlessOfCustomer()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateAgreementAsync(Agreement(h.CustomerId, "Klant A tabel"), CancellationToken.None);
+        await h.Admin.CreateAgreementAsync(Agreement(null, "Algemene tabel") with { IsShared = true }, CancellationToken.None);
+
+        // Without includeAll, an unspecified customerId only returns the company-wide/shared ones.
+        var companyWide = await h.Admin.ListAgreementsAsync(null, CancellationToken.None);
+        Assert.Single(companyWide);
+        Assert.Equal("Algemene tabel", companyWide[0].Name);
+
+        var all = await h.Admin.ListAgreementsAsync(null, CancellationToken.None, includeAll: true);
+        Assert.Equal(2, all.Count);
+        Assert.Contains(all, a => a.Name == "Klant A tabel");
+        Assert.Contains(all, a => a.Name == "Algemene tabel");
+    }
+
+    [Fact]
     public async Task Agreement_Validation()
     {
         var h = await SeedAsync();
@@ -100,6 +133,24 @@ public class PricingAgreementTests
         Assert.Equal(5, rule.Priority);
         Assert.Equal(10m, rule.BaseAmount);
         Assert.Equal(2m, rule.OversizeBillableFactor);
+    }
+
+    [Fact]
+    public async Task ListRulesAsync_AgreementIdFilter_ReturnsOnlyThatAgreementsRules_RegardlessOfCustomerFilter()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementX = await h.Admin.CreateAgreementAsync(Agreement(h.CustomerId, "Tabel X"), CancellationToken.None);
+        var agreementY = await h.Admin.CreateAgreementAsync(Agreement(h.CustomerId, "Tabel Y"), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            "Regel X", Today.AddMonths(-1), null, true, 10m, null, null, AgreementId: agreementX.Id), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            "Regel Y", Today.AddMonths(-1), null, true, 20m, null, null, AgreementId: agreementY.Id), CancellationToken.None);
+
+        var forX = await h.Admin.ListRulesAsync(h.CustomerId, CancellationToken.None, agreementId: agreementX.Id);
+        Assert.Equal("Regel X", Assert.Single(forX).Name);
     }
 
     [Fact]

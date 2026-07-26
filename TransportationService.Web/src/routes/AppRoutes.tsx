@@ -87,6 +87,8 @@ const JobFunctionMappingsPage = lazyPage(() => import('../features/roles/pages/J
 const InboxPage = lazyPage(() => import('../features/inbox/pages/InboxPage'), 'InboxPage')
 const CostRatesPage = lazyPage(() => import('../features/trip-costing/pages/CostRatesPage'), 'CostRatesPage')
 const PricingSettingsPage = lazyPage(() => import('../features/tarification/pages/PricingSettingsPage'), 'PricingSettingsPage')
+const PricingTablesPage = lazyPage(() => import('../features/tarification/pages/PricingTablesPage'), 'PricingTablesPage')
+const PricingTableDetailPage = lazyPage(() => import('../features/tarification/pages/PricingTableDetailPage'), 'PricingTableDetailPage')
 const KpiDashboardPage = lazyPage(() => import('../features/kpi/pages/KpiDashboardPage'), 'KpiDashboardPage')
 const KpiTripsPage = lazyPage(() => import('../features/kpi/pages/KpiTripsPage'), 'KpiTripsPage')
 const LocationsPage = lazyPage(() => import('../features/locations/pages/LocationsPage'), 'LocationsPage')
@@ -203,6 +205,8 @@ const router = createBrowserRouter(
           <Route path="/customer-portal/orders/:id" element={<CustomerPortalOrderDetailPage />} />
           <Route path="/cost-rates" element={<CostRatesPage />} />
           <Route path="/settings/pricing" element={<PricingSettingsPage />} />
+          <Route path="/pricing/tables" element={<PricingTablesPage />} />
+          <Route path="/pricing/tables/:id" element={<PricingTableDetailPage />} />
           <Route path="/kpi" element={<KpiDashboardPage />} />
           <Route path="/kpi/trips" element={<KpiTripsPage />} />
           <Route path="/reports" element={<ReportsPage />} />

@@ -510,8 +510,13 @@ describe('CustomerPriceAdjustmentsPanel', () => {
       {
         id: 'adj-1',
         customerId: 'cust-1',
+        agreementId: null,
         effectiveDate: '2099-10-01',
         percent: 4,
+        amountDelta: null,
+        roundingStep: null,
+        basisFilter: null,
+        unitTypeIdFilter: null,
         status: 'Gepland',
         reason: 'Indexatie',
         ruleCount: 3,

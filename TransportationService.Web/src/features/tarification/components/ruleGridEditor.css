@@ -1,0 +1,50 @@
+.rule-grid-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.rule-grid-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 1400px;
+  font-size: 0.85rem;
+}
+
+.rule-grid-table th,
+.rule-grid-table td {
+  padding: 0.3rem 0.4rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.rule-grid-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  text-align: left;
+  z-index: 1;
+}
+
+.rule-grid-table input,
+.rule-grid-table select {
+  width: 100%;
+  min-width: 5.5rem;
+  box-sizing: border-box;
+}
+
+.rule-grid-bracket-row {
+  background: var(--code-bg);
+}
+
+.rule-grid-toggle {
+  border: none;
+  background: none;
+  cursor: pointer;
+  margin-right: 0.25rem;
+  padding: 0 0.15rem;
+}
+
+.rule-grid-cell-invalid {
+  outline: 2px solid var(--danger);
+  outline-offset: -1px;
+}

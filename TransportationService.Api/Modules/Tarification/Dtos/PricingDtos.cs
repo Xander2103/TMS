@@ -144,14 +144,38 @@ public record PriceAdjustmentRulePreview(
     Guid PriceRuleId, string RuleName, DateOnly EffectiveFrom, DateOnly? EffectiveUntil,
     IReadOnlyList<PriceAdjustmentValueChange> Changes);
 
-/// <summary>Null RuleIds = all adjustable active rules of the customer.</summary>
-public record PreviewPriceAdjustmentRequest(DateOnly EffectiveDate, decimal Percent, IReadOnlyList<Guid>? RuleIds);
+/// <summary>
+/// Null RuleIds = all adjustable active rules in scope (customer or agreement). Exactly one of
+/// Percent/AmountDelta must be set. BasisFilter/UnitTypeIdFilter narrow the affected rules further.
+/// </summary>
+public record PreviewPriceAdjustmentRequest(
+    DateOnly EffectiveDate, decimal? Percent, IReadOnlyList<Guid>? RuleIds,
+    decimal? AmountDelta = null, decimal? RoundingStep = null,
+    string? BasisFilter = null, Guid? UnitTypeIdFilter = null);
 
-public record CreatePriceAdjustmentRequest(DateOnly EffectiveDate, decimal Percent, IReadOnlyList<Guid>? RuleIds, string? Reason);
+public record CreatePriceAdjustmentRequest(
+    DateOnly EffectiveDate, decimal? Percent, IReadOnlyList<Guid>? RuleIds, string? Reason,
+    decimal? AmountDelta = null, decimal? RoundingStep = null,
+    string? BasisFilter = null, Guid? UnitTypeIdFilter = null);
 
 public record ScheduledPriceAdjustmentDto(
-    Guid Id, Guid CustomerId, DateOnly EffectiveDate, decimal Percent,
-    string Status, string? Reason, int RuleCount, DateTime CreatedAt);
+    Guid Id, Guid? CustomerId, DateOnly EffectiveDate, decimal? Percent,
+    string Status, string? Reason, int RuleCount, DateTime CreatedAt,
+    Guid? AgreementId = null, decimal? AmountDelta = null, decimal? RoundingStep = null,
+    string? BasisFilter = null, Guid? UnitTypeIdFilter = null);
+
+// --- Agreement duplication (new version) ---
+
+/// <summary>
+/// Copies an agreement's rules (incl. brackets/surcharges/modifiers/BaseAgreementId) into a new
+/// version with its own effective window. Assignments are deliberately NOT copied — the new
+/// version must be linked to customers explicitly (see PricingAdminService.DuplicateAgreementAsync).
+/// Percent XOR AmountDelta (+ optional RoundingStep) is applied to the copied rules using the same
+/// math as the scheduled price adjustments.
+/// </summary>
+public record DuplicateAgreementRequest(
+    string Name, DateOnly EffectiveFrom, bool CloseSource,
+    decimal? Percent = null, decimal? AmountDelta = null, decimal? RoundingStep = null);
 
 // --- Calculation ---
 

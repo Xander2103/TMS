@@ -15,16 +15,20 @@ public interface IPricingAdminService
     Task<PricingZoneDto?> UpdateZoneAsync(Guid id, SavePricingZoneRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteZoneAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<PricingAgreementDto>> ListAgreementsAsync(Guid? customerId, CancellationToken cancellationToken);
+    /// <summary>includeAll => every agreement of the tenant regardless of CustomerId (the "Tarieventabellen" overview); otherwise customerId filters as before (null = company-wide/shared only).</summary>
+    Task<IReadOnlyList<PricingAgreementDto>> ListAgreementsAsync(Guid? customerId, CancellationToken cancellationToken, bool includeAll = false);
+    Task<PricingAgreementDto?> GetAgreementAsync(Guid id, CancellationToken cancellationToken);
     Task<PricingAgreementDto> CreateAgreementAsync(SavePricingAgreementRequest request, CancellationToken cancellationToken);
     Task<PricingAgreementDto?> UpdateAgreementAsync(Guid id, SavePricingAgreementRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteAgreementAsync(Guid id, CancellationToken cancellationToken);
+    Task<PricingAgreementDto?> DuplicateAgreementAsync(Guid id, DuplicateAgreementRequest request, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<PricingAgreementAssignmentDto>?> ListAssignmentsAsync(Guid agreementId, CancellationToken cancellationToken);
     Task<IReadOnlyList<PricingAgreementAssignmentDto>?> SaveAssignmentsAsync(
         Guid agreementId, IReadOnlyList<SavePricingAssignmentRequest> requests, CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<PriceRuleDto>> ListRulesAsync(Guid? customerId, CancellationToken cancellationToken);
+    /// <summary>agreementId (when set) filters precisely to that agreement's own rules, taking priority over customerId.</summary>
+    Task<IReadOnlyList<PriceRuleDto>> ListRulesAsync(Guid? customerId, CancellationToken cancellationToken, Guid? agreementId = null);
     Task<PriceRuleDto> CreateRuleAsync(SavePriceRuleRequest request, CancellationToken cancellationToken);
     Task<PriceRuleDto?> UpdateRuleAsync(Guid id, SavePriceRuleRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteRuleAsync(Guid id, CancellationToken cancellationToken);
@@ -120,16 +124,28 @@ public class PricingAdminService : IPricingAdminService
 
     // --- Pricing agreements (rate cards) ---
 
-    public async Task<IReadOnlyList<PricingAgreementDto>> ListAgreementsAsync(Guid? customerId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<PricingAgreementDto>> ListAgreementsAsync(
+        Guid? customerId, CancellationToken cancellationToken, bool includeAll = false)
     {
-        var agreements = await _dbContext.PricingAgreements.AsNoTracking()
+        var query = _dbContext.PricingAgreements.AsNoTracking()
             .Include(a => a.Surcharges)
             .Include(a => a.Modifiers)
-            .Where(a => a.TenantId == TenantId)
-            .Where(a => customerId == null ? a.CustomerId == null : a.CustomerId == customerId)
-            .OrderByDescending(a => a.EffectiveFrom).ThenBy(a => a.Name)
-            .ToListAsync(cancellationToken);
+            .Where(a => a.TenantId == TenantId);
+        if (!includeAll)
+        {
+            query = query.Where(a => customerId == null ? a.CustomerId == null : a.CustomerId == customerId);
+        }
+
+        var agreements = await query.OrderByDescending(a => a.EffectiveFrom).ThenBy(a => a.Name).ToListAsync(cancellationToken);
         return await MapAgreementsAsync(agreements, cancellationToken);
+    }
+
+    public async Task<PricingAgreementDto?> GetAgreementAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var agreement = await _dbContext.PricingAgreements.AsNoTracking()
+            .Include(a => a.Surcharges).Include(a => a.Modifiers)
+            .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == id, cancellationToken);
+        return agreement is null ? null : (await MapAgreementsAsync([agreement], cancellationToken))[0];
     }
 
     public async Task<PricingAgreementDto> CreateAgreementAsync(SavePricingAgreementRequest request, CancellationToken cancellationToken)
@@ -197,6 +213,162 @@ public class PricingAdminService : IPricingAdminService
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("PricingAgreement", agreement.Id.ToString(), "Deleted", new { agreement.Name }, null, cancellationToken);
         return true;
+    }
+
+    /// <summary>
+    /// Creates a new version of an agreement: copies its rules (incl. brackets), surcharges,
+    /// modifiers and BaseAgreementId with a new effective window, optionally applying a percent
+    /// or fixed-amount adjustment (same math as scheduled price adjustments) to the copied rules.
+    /// Assignments are deliberately NOT copied — a shared table's new version must be linked to
+    /// customers explicitly via the assignments endpoint, so nothing silently re-applies pricing.
+    /// </summary>
+    public async Task<PricingAgreementDto?> DuplicateAgreementAsync(
+        Guid id, DuplicateAgreementRequest request, CancellationToken cancellationToken)
+    {
+        var source = await _dbContext.PricingAgreements
+            .Include(a => a.Surcharges).Include(a => a.Modifiers)
+            .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == id, cancellationToken);
+        if (source is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new DomainValidationException("name", "De naam is verplicht.");
+        }
+
+        if (request.Percent is not null && request.AmountDelta is not null)
+        {
+            throw new DomainValidationException("percent", "Kies precies één: een percentage of een vast bedrag.");
+        }
+
+        if (request.RoundingStep is { } step && step != 0.01m && step != 0.05m && step != 0.10m)
+        {
+            throw new DomainValidationException("roundingStep", "Kies geen afronding, of 0,01, 0,05 of 0,10.");
+        }
+
+        if (request.CloseSource && request.EffectiveFrom <= source.EffectiveFrom)
+        {
+            throw new DomainValidationException("effectiveFrom",
+                "De ingangsdatum van de nieuwe versie moet na de startdatum van de huidige versie liggen.");
+        }
+
+        var tenantId = TenantId;
+        var sourceRules = await _dbContext.PriceRules.Include(r => r.Brackets)
+            .Where(r => r.TenantId == tenantId && r.AgreementId == id)
+            .ToListAsync(cancellationToken);
+
+        var newAgreement = new PricingAgreement
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            CustomerId = source.CustomerId,
+            Name = request.Name.Trim(),
+            Currency = source.Currency,
+            EffectiveFrom = request.EffectiveFrom,
+            EffectiveUntil = null,
+            IsActive = true,
+            MinimumAmount = source.MinimumAmount,
+            MaximumAmount = source.MaximumAmount,
+            IsShared = source.IsShared,
+            Notes = source.Notes,
+            BaseAgreementId = source.BaseAgreementId,
+        };
+        _dbContext.PricingAgreements.Add(newAgreement);
+
+        foreach (var surcharge in source.Surcharges)
+        {
+            var copy = new PricingAgreementSurcharge
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, AgreementId = newAgreement.Id,
+                Name = surcharge.Name, Kind = surcharge.Kind, Value = surcharge.Value,
+            };
+            newAgreement.Surcharges.Add(copy);
+            _dbContext.Entry(copy).State = Microsoft.EntityFrameworkCore.EntityState.Added;
+        }
+
+        foreach (var modifier in source.Modifiers)
+        {
+            var copy = new PricingAgreementModifier
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, AgreementId = newAgreement.Id,
+                Sequence = modifier.Sequence, Name = modifier.Name, CountryCode = modifier.CountryCode,
+                ZoneId = modifier.ZoneId, Percent = modifier.Percent, FixedAmount = modifier.FixedAmount,
+            };
+            newAgreement.Modifiers.Add(copy);
+            _dbContext.Entry(copy).State = Microsoft.EntityFrameworkCore.EntityState.Added;
+        }
+
+        var dayBeforeNew = request.EffectiveFrom.AddDays(-1);
+        foreach (var sourceRule in sourceRules)
+        {
+            decimal? AdjustValue(decimal? value) =>
+                request.Percent is null && request.AmountDelta is null
+                    ? value
+                    : PriceAdjustmentMath.Adjust(value, request.Percent, request.AmountDelta, request.RoundingStep, sourceRule.Name);
+
+            var clone = new PriceRule
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                CustomerId = sourceRule.CustomerId,
+                UnitTypeId = sourceRule.UnitTypeId,
+                Basis = sourceRule.Basis,
+                ZoneId = sourceRule.ZoneId,
+                Name = sourceRule.Name,
+                Currency = sourceRule.Currency,
+                EffectiveFrom = request.EffectiveFrom,
+                EffectiveUntil = null,
+                IsActive = true,
+                UnitPrice = AdjustValue(sourceRule.UnitPrice),
+                MinimumAmount = AdjustValue(sourceRule.MinimumAmount),
+                MaximumAmount = AdjustValue(sourceRule.MaximumAmount),
+                AgreementId = newAgreement.Id,
+                Priority = sourceRule.Priority,
+                BaseAmount = AdjustValue(sourceRule.BaseAmount),
+                MinimumQuantity = sourceRule.MinimumQuantity,
+                QuantityRoundingStep = sourceRule.QuantityRoundingStep,
+                BracketMode = sourceRule.BracketMode,
+                OversizeLengthCm = sourceRule.OversizeLengthCm,
+                OversizeWidthCm = sourceRule.OversizeWidthCm,
+                OversizeBillableFactor = sourceRule.OversizeBillableFactor,
+            };
+            _dbContext.PriceRules.Add(clone);
+
+            foreach (var bracket in sourceRule.Brackets)
+            {
+                _dbContext.PriceRuleBrackets.Add(new PriceRuleBracket
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = tenantId,
+                    PriceRuleId = clone.Id,
+                    FromQuantity = bracket.FromQuantity,
+                    ToQuantity = bracket.ToQuantity,
+                    Price = AdjustValue(bracket.Price)!.Value,
+                    PricePerExtraUnit = AdjustValue(bracket.PricePerExtraUnit),
+                    WeightToKg = bracket.WeightToKg,
+                    VolumeToM3 = bracket.VolumeToM3,
+                    LoadingMetersTo = bracket.LoadingMetersTo,
+                });
+            }
+
+            if (request.CloseSource && (sourceRule.EffectiveUntil is null || sourceRule.EffectiveUntil > dayBeforeNew))
+            {
+                sourceRule.EffectiveUntil = dayBeforeNew;
+            }
+        }
+
+        if (request.CloseSource)
+        {
+            source.EffectiveUntil = dayBeforeNew;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PricingAgreement", newAgreement.Id.ToString(), "duplicated", null,
+            new { SourceAgreementId = id, newAgreement.Name, newAgreement.EffectiveFrom, request.CloseSource, RuleCount = sourceRules.Count },
+            cancellationToken);
+        return (await MapAgreementsAsync([newAgreement], cancellationToken))[0];
     }
 
     /// <summary>
@@ -573,14 +745,13 @@ public class PricingAdminService : IPricingAdminService
 
     // --- Price rules ---
 
-    public async Task<IReadOnlyList<PriceRuleDto>> ListRulesAsync(Guid? customerId, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<PriceRuleDto>> ListRulesAsync(Guid? customerId, CancellationToken cancellationToken, Guid? agreementId = null)
     {
-        var rules = await _dbContext.PriceRules.AsNoTracking()
-            .Include(r => r.Brackets)
-            .Where(r => r.TenantId == TenantId)
-            .Where(r => customerId == null ? r.CustomerId == null : r.CustomerId == customerId)
-            .OrderBy(r => r.Name)
-            .ToListAsync(cancellationToken);
+        var query = _dbContext.PriceRules.AsNoTracking().Include(r => r.Brackets).Where(r => r.TenantId == TenantId);
+        query = agreementId is { } aid
+            ? query.Where(r => r.AgreementId == aid)
+            : query.Where(r => customerId == null ? r.CustomerId == null : r.CustomerId == customerId);
+        var rules = await query.OrderBy(r => r.Name).ToListAsync(cancellationToken);
         return await MapRulesAsync(rules, cancellationToken);
     }
 

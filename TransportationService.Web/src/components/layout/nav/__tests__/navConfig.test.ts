@@ -4,11 +4,21 @@ import { getNavModules } from '../navConfig'
 describe('getNavModules', () => {
   const modules = getNavModules()
 
-  it('returns the ten modules in business order', () => {
+  it('returns the eleven modules in business order', () => {
     expect(modules.map((m) => m.id)).toEqual([
-      'portaal', 'dashboard', 'transport', 'magazijn', 'klanten',
+      'portaal', 'dashboard', 'transport', 'magazijn', 'klanten', 'prijzen',
       'personeel', 'vloot', 'communicatie', 'beheer', 'stamgegevens',
     ])
+  })
+
+  it('moves Prijsinstellingen from Klanten to the new Prijzen module, alongside Tarieventabellen', () => {
+    const klanten = modules.find((m) => m.id === 'klanten')!
+    expect(klanten.items!.map((i) => i.to)).not.toContain('/settings/pricing')
+
+    const prijzen = modules.find((m) => m.id === 'prijzen')!
+    const byRoute = new Map(prijzen.items!.map((i) => [i.to, i.label]))
+    expect(byRoute.get('/pricing/tables')).toBe('Tarieventabellen')
+    expect(byRoute.get('/settings/pricing')).toBe('Prijsinstellingen')
   })
 
   it('flags the portal module as employee-only', () => {

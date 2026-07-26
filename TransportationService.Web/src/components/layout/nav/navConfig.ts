@@ -1,5 +1,5 @@
 import {
-  ClipboardList, Contact, CircleUser, Database, LayoutDashboard,
+  BadgeEuro, ClipboardList, Contact, CircleUser, Database, LayoutDashboard,
   MessageSquare, Settings, Truck, UsersRound, Warehouse, type LucideIcon,
 } from 'lucide-react'
 import { LOOKUP_RESOURCES, type LookupGroup } from '../../../features/master-data/lookupRegistry'
@@ -134,6 +134,14 @@ export function getNavModules(): NavModule[] {
         { label: 'Klantportaal', to: '/customer-portal', permissions: ['customer_portal.view'] },
         { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
         { label: 'Kostentarieven', to: '/cost-rates', permissions: ['trip_costs.view', 'trip_costs.manage'] },
+      ],
+    },
+    {
+      id: 'prijzen',
+      label: 'Prijzen',
+      icon: BadgeEuro,
+      items: [
+        { label: 'Tarieventabellen', to: '/pricing/tables', permissions: ['tariffs.view', 'tariffs.manage'] },
         { label: 'Prijsinstellingen', to: '/settings/pricing', permissions: ['tariffs.manage'] },
       ],
     },
