@@ -34,6 +34,7 @@ const state = vi.hoisted(() => ({
   createAdjustment: vi.fn(),
   cancelAdjustment: vi.fn(),
   updateAgreement: vi.fn(),
+  createRule: vi.fn(),
 }))
 
 vi.mock('../../../tarification/api/pricingApi', async (importOriginal) => {
@@ -58,7 +59,7 @@ vi.mock('../../../tarification/api/pricingApi', async (importOriginal) => {
     previewPriceAdjustment: state.previewAdjustment,
     createPriceAdjustment: state.createAdjustment,
     cancelPriceAdjustment: state.cancelAdjustment,
-    createPriceRule: vi.fn(),
+    createPriceRule: state.createRule,
     updatePriceRule: vi.fn(),
     deletePriceRule: vi.fn(),
     createPricingAgreement: vi.fn(),
@@ -128,8 +129,8 @@ function makeRule(overrides: Partial<PriceRule> = {}): PriceRule {
     unitPrice: null,
     minimumAmount: null,
     brackets: [
-      { id: 'b1', fromQuantity: 1, toQuantity: 1, price: 45, pricePerExtraUnit: null },
-      { id: 'b2', fromQuantity: 2, toQuantity: null, price: 70, pricePerExtraUnit: 20 },
+      { id: 'b1', fromQuantity: 1, toQuantity: 1, price: 45, pricePerExtraUnit: null, weightToKg: null, volumeToM3: null, loadingMetersTo: null },
+      { id: 'b2', fromQuantity: 2, toQuantity: null, price: 70, pricePerExtraUnit: 20, weightToKg: null, volumeToM3: null, loadingMetersTo: null },
     ],
     agreementId: 'agr-1',
     agreementName: 'Distributie 2026',
@@ -140,6 +141,8 @@ function makeRule(overrides: Partial<PriceRule> = {}): PriceRule {
     oversizeBillableFactor: null,
     minimumQuantity: null,
     quantityRoundingStep: null,
+    maximumAmount: null,
+    bracketMode: 'Absolute',
     ...overrides,
   }
 }
@@ -313,6 +316,7 @@ describe('CustomerUnitPricingPanel', () => {
       makeRule({ id: 'rule-2', name: 'Europallet Brussel (+4%)', effectiveFrom: '2099-10-01' }),
       makeRule({ id: 'rule-3', name: 'Europallet Brussel 2025', effectiveFrom: '2025-01-01', effectiveUntil: '2025-12-31' }),
     ]
+    state.createRule.mockResolvedValue(makeRule())
   })
 
   it('groups rules into current, future and history and shows the agreement', async () => {
@@ -450,6 +454,41 @@ describe('CustomerUnitPricingPanel', () => {
     await user.selectOptions(within(dialog).getByLabelText(/Prijsbasis/), 'PerKm')
     expect(within(dialog).getByLabelText(/Prijs per km/)).toBeInTheDocument()
     expect(within(dialog).getByLabelText(/Basisbedrag/)).toBeInTheDocument()
+  })
+
+  it('bracket mode select renders and round-trips; dimension columns appear when toggled', async () => {
+    const user = userEvent.setup()
+    state.units = [
+      { id: 'unit-pallet', code: 'EUROPALLET', name: 'Europallet', isActive: true, sortOrder: 0, allowForOrderEntry: true, allowForPricing: true },
+    ]
+    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+
+    await user.click(await screen.findByRole('button', { name: '+ Prijsregel' }))
+    const dialog = await screen.findByRole('dialog')
+
+    // Default QuantityBracket basis shows the calculation-mode select, defaulting to Absoluut.
+    const modeSelect = within(dialog).getByLabelText('Berekeningswijze staffel')
+    expect(modeSelect).toHaveValue('Absolute')
+
+    // Dimension columns are hidden until toggled.
+    expect(within(dialog).queryByLabelText('Staffel 1 gewicht tot (kg)')).not.toBeInTheDocument()
+    await user.click(within(dialog).getByLabelText('Extra dimensies (gewicht/volume/ldm per staffel)'))
+    expect(within(dialog).getByLabelText('Staffel 1 gewicht tot (kg)')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Staffel 1 volume tot (m³)')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Staffel 1 ldm tot')).toBeInTheDocument()
+
+    // Round-trip: selecting PerNextUnit and saving sends it through in the payload.
+    await user.selectOptions(modeSelect, 'PerNextUnit')
+    expect(modeSelect).toHaveValue('PerNextUnit')
+
+    await user.type(within(dialog).getByLabelText(/^Naam/), 'Progressief')
+    await user.type(within(dialog).getByLabelText('Staffel 1 van'), '1')
+    await user.type(within(dialog).getByLabelText('Staffel 1 prijs'), '60')
+    await user.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+
+    await waitFor(() => expect(state.createRule).toHaveBeenCalled())
+    const payload = state.createRule.mock.calls[0][0]
+    expect(payload).toEqual(expect.objectContaining({ bracketMode: 'PerNextUnit' }))
   })
 
   it('hides management actions without tariffs.manage', async () => {

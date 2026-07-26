@@ -43,6 +43,8 @@ public class PriceRuleConfiguration : IEntityTypeConfiguration<PriceRule>
         builder.Property(r => r.Basis).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.UnitPrice).HasPrecision(12, 4);
         builder.Property(r => r.MinimumAmount).HasPrecision(12, 2);
+        builder.Property(r => r.MaximumAmount).HasPrecision(12, 2);
+        builder.Property(r => r.BracketMode).HasConversion<string>().HasMaxLength(20).HasDefaultValue(BracketSelectionMode.Absolute);
         builder.Property(r => r.BaseAmount).HasPrecision(12, 2);
         builder.Property(r => r.MinimumQuantity).HasPrecision(12, 3);
         builder.Property(r => r.QuantityRoundingStep).HasPrecision(8, 3);
@@ -136,6 +138,9 @@ public class PriceRuleBracketConfiguration : IEntityTypeConfiguration<PriceRuleB
         builder.Property(b => b.ToQuantity).HasPrecision(12, 3);
         builder.Property(b => b.Price).HasPrecision(12, 2);
         builder.Property(b => b.PricePerExtraUnit).HasPrecision(12, 4);
+        builder.Property(b => b.WeightToKg).HasPrecision(10, 2);
+        builder.Property(b => b.VolumeToM3).HasPrecision(10, 2);
+        builder.Property(b => b.LoadingMetersTo).HasPrecision(10, 2);
         builder.HasIndex(b => new { b.TenantId, b.PriceRuleId });
         builder.HasQueryFilter(b => !b.IsDeleted);
     }

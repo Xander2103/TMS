@@ -476,7 +476,7 @@ public class PricingEngine : IPricingEngine
             PriceRuleBasis.PerTon => request.WeightKg is { } weight
                 ? ((rule.BaseAmount ?? 0m) + (rule.UnitPrice ?? 0m) * (weight / 1000m), $"{rule.Name} ({weight / 1000m:0.##} ton)", null)
                 : (0m, rule.Name, "geen gewicht gekend"),
-            PriceRuleBasis.WeightBracket => request.WeightKg is { } w && BracketAmount(rule, w) is { } bracketAmount
+            PriceRuleBasis.WeightBracket => request.WeightKg is { } w && BracketAmount(rule, w, request) is { } bracketAmount
                 ? ((rule.BaseAmount ?? 0m) + bracketAmount, $"{rule.Name} ({w:0.#} kg)", null)
                 : (0m, rule.Name, "geen gewicht of staffel"),
             PriceRuleBasis.PerLoadingMeter => request.LoadingMeters is { } ldm
@@ -487,7 +487,7 @@ public class PricingEngine : IPricingEngine
                 : (0m, rule.Name, "geen volume gekend"),
             PriceRuleBasis.PerStop => request.StopCount is { } stops
                 ? rule.Brackets.Count > 0
-                    ? BracketAmount(rule, stops) is { } stopAmount
+                    ? BracketAmount(rule, stops, request) is { } stopAmount
                         ? ((rule.BaseAmount ?? 0m) + stopAmount, $"{rule.Name} ({stops} stops)", null)
                         : (0m, rule.Name, "geen staffel voor dit aantal stops")
                     : ((rule.BaseAmount ?? 0m) + (rule.UnitPrice ?? 0m) * stops, $"{rule.Name} ({stops} stops)", null)
@@ -507,6 +507,11 @@ public class PricingEngine : IPricingEngine
         if (rule.MinimumAmount is { } minimum && amount < minimum)
         {
             amount = minimum;
+        }
+
+        if (rule.MaximumAmount is { } maximum && amount > maximum)
+        {
+            amount = maximum;
         }
 
         lines.Add(new PriceBreakdownLine(label, decimal.Round(amount, 2),
@@ -639,8 +644,8 @@ public class PricingEngine : IPricingEngine
             PriceRuleBasis.PerUnit or PriceRuleBasis.Hourly =>
                 rule.UnitPrice is { } rate ? rate * billableQuantity : null,
             PriceRuleBasis.Fixed => rule.UnitPrice,
-            PriceRuleBasis.QuantityBracket => BracketAmount(rule, billableQuantity),
-            PriceRuleBasis.WeightBracket => request.WeightKg is { } weight ? BracketAmount(rule, weight) : null,
+            PriceRuleBasis.QuantityBracket => BracketAmount(rule, billableQuantity, request),
+            PriceRuleBasis.WeightBracket => request.WeightKg is { } weight ? BracketAmount(rule, weight, request) : null,
             PriceRuleBasis.PerKm => request.DistanceKm is { } km && rule.UnitPrice is { } kmRate ? kmRate * km : null,
             PriceRuleBasis.PerPallet => request.PalletCount is { } pallets && rule.UnitPrice is { } palletRate ? palletRate * pallets : null,
             PriceRuleBasis.PerTon => request.WeightKg is { } kg && rule.UnitPrice is { } tonRate ? tonRate * (kg / 1000m) : null,
@@ -657,15 +662,46 @@ public class PricingEngine : IPricingEngine
             amount = minimum;
         }
 
+        if (rule.MaximumAmount is { } maximum && amount > maximum)
+        {
+            amount = maximum;
+        }
+
         return amount;
     }
 
-    private static decimal? BracketAmount(PriceRule rule, decimal value)
+    /// <summary>
+    /// A bracket row matches when the quantity range holds AND every cap the row fills (weight/
+    /// volume/loading-meters) holds too — a filled cap with a MISSING request measure never
+    /// matches (the row demands a dimension the order doesn't know). Among matches, the TIGHTEST
+    /// wins: highest FromQuantity first (existing "last bracket" behaviour), then the smallest
+    /// filled caps (nulls sort last) — so a carrier's "kg tot / cbm tot / ldm tot" table picks the
+    /// narrowest row whose caps still hold.
+    /// </summary>
+    private static PriceRuleBracket? FindMatchingBracket(PriceRule rule, decimal value, PriceCalculationRequest request)
     {
-        var bracket = rule.Brackets
-            .Where(b => value >= b.FromQuantity && (b.ToQuantity is null || value <= b.ToQuantity))
-            .OrderBy(b => b.FromQuantity)
-            .LastOrDefault();
+        bool CapHolds(decimal? cap, decimal? measure) => cap is null || (measure is not null && measure <= cap);
+
+        return rule.Brackets
+            .Where(b => value >= b.FromQuantity && (b.ToQuantity is null || value <= b.ToQuantity)
+                        && CapHolds(b.WeightToKg, request.WeightKg)
+                        && CapHolds(b.VolumeToM3, request.VolumeM3)
+                        && CapHolds(b.LoadingMetersTo, request.LoadingMeters))
+            .OrderByDescending(b => b.FromQuantity)
+            .ThenBy(b => b.WeightToKg ?? decimal.MaxValue)
+            .ThenBy(b => b.VolumeToM3 ?? decimal.MaxValue)
+            .ThenBy(b => b.LoadingMetersTo ?? decimal.MaxValue)
+            .FirstOrDefault();
+    }
+
+    private static decimal? BracketAmount(PriceRule rule, decimal value, PriceCalculationRequest request)
+    {
+        if (rule.BracketMode == BracketSelectionMode.PerNextUnit)
+        {
+            return PerNextUnitBracketAmount(rule, value, request);
+        }
+
+        var bracket = FindMatchingBracket(rule, value, request);
         if (bracket is null)
         {
             return null;
@@ -678,6 +714,43 @@ public class PricingEngine : IPricingEngine
         }
 
         return amount;
+    }
+
+    /// <summary>
+    /// Progressive per-piece pricing (e.g. "1e stuk €60, 2e €55, 3e €50, 4e en verder €45"): the
+    /// amount is the sum of the bracket price containing each whole unit index 1..floor(qty), plus
+    /// the fractional remainder billed at the bracket containing ceil(qty). A unit index with no
+    /// matching bracket blocks the whole calculation (null → "Geen staffel voor …").
+    /// </summary>
+    private static decimal? PerNextUnitBracketAmount(PriceRule rule, decimal quantity, PriceCalculationRequest request)
+    {
+        var wholeUnits = (int)Math.Floor(quantity);
+        var fraction = quantity - wholeUnits;
+        var total = 0m;
+
+        for (var i = 1; i <= wholeUnits; i++)
+        {
+            var bracket = FindMatchingBracket(rule, i, request);
+            if (bracket is null)
+            {
+                return null;
+            }
+
+            total += bracket.Price;
+        }
+
+        if (fraction > 0)
+        {
+            var bracket = FindMatchingBracket(rule, Math.Ceiling(quantity), request);
+            if (bracket is null)
+            {
+                return null;
+            }
+
+            total += fraction * bracket.Price;
+        }
+
+        return total;
     }
 
     private async Task<List<string>> BuildDiagnosticsAsync(

@@ -206,6 +206,18 @@ export interface PriceRuleBracket {
   toQuantity: number | null
   price: number
   pricePerExtraUnit: number | null
+  /** Row matches only when the order's own weight/volume/loading-meters is known and within the cap. */
+  weightToKg: number | null
+  volumeToM3: number | null
+  loadingMetersTo: number | null
+}
+
+/** QuantityBracket only: Absolute (single bracket price) or PerNextUnit (sum per piece). */
+export type BracketSelectionMode = 'Absolute' | 'PerNextUnit'
+
+export const BRACKET_SELECTION_MODE_LABELS: Record<BracketSelectionMode, string> = {
+  Absolute: 'Absoluut (prijs van de staffel)',
+  PerNextUnit: 'Per volgende eenheid (som per stuk)',
 }
 
 export interface PriceRule {
@@ -234,6 +246,9 @@ export interface PriceRule {
   oversizeBillableFactor: number | null
   minimumQuantity: number | null
   quantityRoundingStep: number | null
+  /** Cap on the rule amount, applied after minimumAmount. */
+  maximumAmount: number | null
+  bracketMode: BracketSelectionMode
 }
 
 export interface PriceRuleBracketInput {
@@ -241,6 +256,9 @@ export interface PriceRuleBracketInput {
   toQuantity: number | null
   price: number
   pricePerExtraUnit: number | null
+  weightToKg: number | null
+  volumeToM3: number | null
+  loadingMetersTo: number | null
 }
 
 export interface PriceRuleInput {
@@ -263,6 +281,8 @@ export interface PriceRuleInput {
   oversizeBillableFactor?: number | null
   minimumQuantity?: number | null
   quantityRoundingStep?: number | null
+  maximumAmount?: number | null
+  bracketMode?: BracketSelectionMode
 }
 
 export const listPriceRules = (customerId?: string): Promise<PriceRule[]> =>

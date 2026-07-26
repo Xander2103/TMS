@@ -10,6 +10,7 @@ import { describeApiError } from '../../../api/problemDetails'
 import { formatServiceValue } from '../../tarification/serviceValueFormat'
 import type { SurchargeKind } from '../../tarification/types'
 import {
+  BRACKET_SELECTION_MODE_LABELS,
   PRICE_RULE_BASIS_LABELS,
   PRIMARY_BASIS_LABELS,
   createPriceRule,
@@ -25,6 +26,7 @@ import {
   saveCustomerPricingConfig,
   updatePriceRule,
   updatePricingAgreement,
+  type BracketSelectionMode,
   type CustomerPricingConfig,
   type PriceRule,
   type PriceRuleBasis,
@@ -51,6 +53,7 @@ interface RuleDraft {
   effectiveUntil: string
   unitPrice: string
   minimumAmount: string
+  maximumAmount: string
   baseAmount: string
   priority: string
   minimumQuantity: string
@@ -58,7 +61,19 @@ interface RuleDraft {
   oversizeLengthCm: string
   oversizeWidthCm: string
   oversizeBillableFactor: string
-  brackets: { from: string; to: string; price: string; extra: string }[]
+  /** QuantityBracket only: how the brackets combine into an amount. */
+  bracketMode: BracketSelectionMode
+  /** User-toggled visibility of the weight/volume/ldm columns (also shown when a row has a value). */
+  showBracketDimensions: boolean
+  brackets: {
+    from: string
+    to: string
+    price: string
+    extra: string
+    weightToKg: string
+    volumeToM3: string
+    loadingMetersTo: string
+  }[]
 }
 
 /** Maps a stored basis onto the editor's primary "Prijsbasis" choice (spec §10). */
@@ -271,6 +286,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             effectiveUntil: rule.effectiveUntil ?? '',
             unitPrice: rule.unitPrice !== null ? String(rule.unitPrice) : '',
             minimumAmount: rule.minimumAmount !== null ? String(rule.minimumAmount) : '',
+            maximumAmount: rule.maximumAmount !== null ? String(rule.maximumAmount) : '',
             baseAmount: rule.baseAmount !== null ? String(rule.baseAmount) : '',
             priority: String(rule.priority),
             minimumQuantity: rule.minimumQuantity !== null ? String(rule.minimumQuantity) : '',
@@ -278,11 +294,18 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             oversizeLengthCm: rule.oversizeLengthCm !== null ? String(rule.oversizeLengthCm) : '',
             oversizeWidthCm: rule.oversizeWidthCm !== null ? String(rule.oversizeWidthCm) : '',
             oversizeBillableFactor: rule.oversizeBillableFactor !== null ? String(rule.oversizeBillableFactor) : '',
+            bracketMode: rule.bracketMode,
+            showBracketDimensions: rule.brackets.some(
+              (b) => b.weightToKg !== null || b.volumeToM3 !== null || b.loadingMetersTo !== null,
+            ),
             brackets: rule.brackets.map((b) => ({
               from: String(b.fromQuantity),
               to: b.toQuantity !== null ? String(b.toQuantity) : '',
               price: String(b.price),
               extra: b.pricePerExtraUnit !== null ? String(b.pricePerExtraUnit) : '',
+              weightToKg: b.weightToKg !== null ? String(b.weightToKg) : '',
+              volumeToM3: b.volumeToM3 !== null ? String(b.volumeToM3) : '',
+              loadingMetersTo: b.loadingMetersTo !== null ? String(b.loadingMetersTo) : '',
             })),
           }
         : {
@@ -296,6 +319,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             effectiveUntil: '',
             unitPrice: '',
             minimumAmount: '',
+            maximumAmount: '',
             baseAmount: '',
             priority: '0',
             minimumQuantity: '',
@@ -303,7 +327,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             oversizeLengthCm: '',
             oversizeWidthCm: '',
             oversizeBillableFactor: '',
-            brackets: [{ from: '1', to: '', price: '', extra: '' }],
+            bracketMode: 'Absolute',
+            showBracketDimensions: false,
+            brackets: [{ from: '1', to: '', price: '', extra: '', weightToKg: '', volumeToM3: '', loadingMetersTo: '' }],
           },
     )
   }
@@ -319,6 +345,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         toQuantity: b.to.trim() === '' ? null : Number(b.to),
         price: Number(b.price) || 0,
         pricePerExtraUnit: b.extra.trim() === '' ? null : Number(b.extra),
+        weightToKg: b.weightToKg.trim() === '' ? null : Number(b.weightToKg),
+        volumeToM3: b.volumeToM3.trim() === '' ? null : Number(b.volumeToM3),
+        loadingMetersTo: b.loadingMetersTo.trim() === '' ? null : Number(b.loadingMetersTo),
       }))
     const unitBound = draft.basis === 'PerUnit' || draft.basis === 'QuantityBracket' || draft.basis === 'Hourly'
     setBusy(true)
@@ -335,6 +364,8 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         isActive: true,
         unitPrice: draft.unitPrice.trim() === '' ? null : Number(draft.unitPrice),
         minimumAmount: draft.minimumAmount.trim() === '' ? null : Number(draft.minimumAmount),
+        maximumAmount: draft.maximumAmount.trim() === '' ? null : Number(draft.maximumAmount),
+        bracketMode: draft.basis === 'QuantityBracket' ? draft.bracketMode : 'Absolute',
         baseAmount: draft.baseAmount.trim() === '' ? null : Number(draft.baseAmount),
         priority: Number(draft.priority) || 0,
         minimumQuantity: draft.basis === 'Hourly' && draft.minimumQuantity.trim() !== '' ? Number(draft.minimumQuantity) : null,
@@ -475,6 +506,11 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   }
 
   const usesBrackets = draft?.basis === 'QuantityBracket' || draft?.basis === 'WeightBracket' || draft?.basis === 'PerStop'
+  // Keep the simple tables clean: the dimension columns only appear once toggled on, or already
+  // hold a value (e.g. reopening a carrier-table rule that uses them).
+  const showBracketDimensions =
+    !!draft?.showBracketDimensions ||
+    (draft?.brackets.some((b) => b.weightToKg.trim() !== '' || b.volumeToM3.trim() !== '' || b.loadingMetersTo.trim() !== '') ?? false)
   const pricingUnits = units.filter((u) => u.isActive && u.allowForPricing)
   const priceLabelByBasis: Partial<Record<PriceRuleBasis, string>> = {
     PerUnit: 'Prijs per eenheid (€)',
@@ -866,6 +902,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 <FormField label="Minimumbedrag (€)" htmlFor="pr-min">
                   <input id="pr-min" type="number" step="0.01" value={draft.minimumAmount} onChange={(e) => setDraft((d) => (d ? { ...d, minimumAmount: e.target.value } : d))} />
                 </FormField>
+                <FormField label="Maximumtarief (€)" htmlFor="pr-max" hint="Optioneel: bovengrens na het minimum.">
+                  <input id="pr-max" type="number" step="0.01" value={draft.maximumAmount} onChange={(e) => setDraft((d) => (d ? { ...d, maximumAmount: e.target.value } : d))} />
+                </FormField>
               </div>
             )}
             {draft.basis === 'Hourly' && (
@@ -894,6 +933,33 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                       ? 'Progressieve stops (optioneel: 1e/2e/volgende stop)'
                       : 'Staffels (aantal)'}
                 </legend>
+                {draft.basis === 'QuantityBracket' && (
+                  <FormField
+                    label="Berekeningswijze staffel"
+                    htmlFor="pr-bracket-mode"
+                    hint="Per volgende eenheid telt de staffelprijs van elk stuk apart op (progressief)."
+                  >
+                    <select
+                      id="pr-bracket-mode"
+                      value={draft.bracketMode}
+                      onChange={(e) => setDraft((d) => (d ? { ...d, bracketMode: e.target.value as BracketSelectionMode } : d))}
+                    >
+                      {Object.entries(BRACKET_SELECTION_MODE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                )}
+                <label className="tof-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={showBracketDimensions}
+                    onChange={(e) => setDraft((d) => (d ? { ...d, showBracketDimensions: e.target.checked } : d))}
+                  />
+                  Extra dimensies (gewicht/volume/ldm per staffel)
+                </label>
                 {draft.brackets.map((bracket, index) => (
                   <div key={index} className="issued-items-form-row customer-rule-bracket">
                     <input aria-label={`Staffel ${index + 1} van`} type="number" step="0.01" placeholder="van" value={bracket.from}
@@ -904,12 +970,37 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                       onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, price: e.target.value } : b)) } : d))} />
                     <input aria-label={`Staffel ${index + 1} extra per eenheid`} type="number" step="0.01" placeholder="€/extra (open staffel)" value={bracket.extra}
                       onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, extra: e.target.value } : b)) } : d))} />
+                    {showBracketDimensions && (
+                      <>
+                        <input aria-label={`Staffel ${index + 1} gewicht tot (kg)`} type="number" step="0.01" placeholder="gewicht tot (kg)" value={bracket.weightToKg}
+                          onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, weightToKg: e.target.value } : b)) } : d))} />
+                        <input aria-label={`Staffel ${index + 1} volume tot (m³)`} type="number" step="0.01" placeholder="volume tot (m³)" value={bracket.volumeToM3}
+                          onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, volumeToM3: e.target.value } : b)) } : d))} />
+                        <input aria-label={`Staffel ${index + 1} ldm tot`} type="number" step="0.01" placeholder="ldm tot" value={bracket.loadingMetersTo}
+                          onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, loadingMetersTo: e.target.value } : b)) } : d))} />
+                      </>
+                    )}
                     <Button variant="ghost" onClick={() => setDraft((d) => (d ? { ...d, brackets: d.brackets.filter((_, i) => i !== index) } : d))}>
                       Verwijderen
                     </Button>
                   </div>
                 ))}
-                <Button variant="secondary" onClick={() => setDraft((d) => (d ? { ...d, brackets: [...d.brackets, { from: '', to: '', price: '', extra: '' }] } : d))}>
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    setDraft((d) =>
+                      d
+                        ? {
+                            ...d,
+                            brackets: [
+                              ...d.brackets,
+                              { from: '', to: '', price: '', extra: '', weightToKg: '', volumeToM3: '', loadingMetersTo: '' },
+                            ],
+                          }
+                        : d,
+                    )
+                  }
+                >
                   + Staffel
                 </Button>
               </fieldset>

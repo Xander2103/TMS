@@ -62,7 +62,10 @@ public record SavePricingAssignmentRequest(
 
 // --- Price rules ---
 
-public record PriceRuleBracketDto(Guid Id, decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit);
+public record PriceRuleBracketDto(
+    Guid Id, decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit,
+    /// <summary>Row matches only when the order's own weight/volume/loading-meters is known and within the cap.</summary>
+    decimal? WeightToKg = null, decimal? VolumeToM3 = null, decimal? LoadingMetersTo = null);
 
 public record PriceRuleDto(
     Guid Id, Guid? CustomerId, string? CustomerName, Guid? UnitTypeId, string? UnitTypeName,
@@ -71,9 +74,15 @@ public record PriceRuleDto(
     decimal? UnitPrice, decimal? MinimumAmount, IReadOnlyList<PriceRuleBracketDto> Brackets,
     Guid? AgreementId = null, string? AgreementName = null, int Priority = 0, decimal? BaseAmount = null,
     decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null,
-    decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null);
+    decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null,
+    /// <summary>Cap on the rule amount, applied after MinimumAmount.</summary>
+    decimal? MaximumAmount = null,
+    /// <summary>QuantityBracket only: Absolute (bracket price) or PerNextUnit (sum per piece).</summary>
+    BracketSelectionMode BracketMode = BracketSelectionMode.Absolute);
 
-public record SavePriceRuleBracketRequest(decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit);
+public record SavePriceRuleBracketRequest(
+    decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit,
+    decimal? WeightToKg = null, decimal? VolumeToM3 = null, decimal? LoadingMetersTo = null);
 
 public record SavePriceRuleRequest(
     Guid? CustomerId, Guid? UnitTypeId, PriceRuleBasis Basis, Guid? ZoneId,
@@ -81,7 +90,8 @@ public record SavePriceRuleRequest(
     decimal? UnitPrice, decimal? MinimumAmount, IReadOnlyList<SavePriceRuleBracketRequest>? Brackets,
     Guid? AgreementId = null, int Priority = 0, decimal? BaseAmount = null,
     decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null,
-    decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null);
+    decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null,
+    decimal? MaximumAmount = null, BracketSelectionMode BracketMode = BracketSelectionMode.Absolute);
 
 // --- Service options ---
 

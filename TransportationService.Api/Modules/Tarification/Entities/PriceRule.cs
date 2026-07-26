@@ -42,6 +42,18 @@ public enum PriceRuleBasis
 }
 
 /// <summary>
+/// How a QuantityBracket rule turns brackets into an amount: Absolute takes the single bracket
+/// price that contains the quantity (existing behaviour); PerNextUnit sums the price of the
+/// bracket containing each unit index 1..qty (progressive per-piece pricing, e.g. "1e stuk €60,
+/// 2e €55, 3e €50, 4e en verder €45").
+/// </summary>
+public enum BracketSelectionMode
+{
+    Absolute = 0,
+    PerNextUnit = 1,
+}
+
+/// <summary>
 /// A parameterized price agreement: for a customer (or company-wide when CustomerId is null),
 /// a unit, an optional delivery zone and an effective window. The order pricing engine picks
 /// the most specific active rule (customer+zone → customer → company+zone → company).
@@ -69,6 +81,12 @@ public class PriceRule : AuditableTenantEntity
     public decimal? UnitPrice { get; set; }
 
     public decimal? MinimumAmount { get; set; }
+
+    /// <summary>Caps the computed amount AFTER the MinimumAmount floor is applied.</summary>
+    public decimal? MaximumAmount { get; set; }
+
+    /// <summary>QuantityBracket only: how the brackets combine into an amount.</summary>
+    public BracketSelectionMode BracketMode { get; set; } = BracketSelectionMode.Absolute;
 
     /// <summary>Optional grouping into a named commercial agreement (rate card).</summary>
     public Guid? AgreementId { get; set; }
@@ -107,4 +125,11 @@ public class PriceRuleBracket : AuditableTenantEntity
 
     /// <summary>Open-ended brackets: extra amount per unit above FromQuantity.</summary>
     public decimal? PricePerExtraUnit { get; set; }
+
+    // Multidimensional carrier-table caps (spec: "kg tot / cbm tot / ldm tot / prijs"). A filled
+    // cap only matches when the order's own measure is known AND within the cap; null = no
+    // constraint on that dimension. See PricingEngine.BracketAmount for the matching/tightness rules.
+    public decimal? WeightToKg { get; set; }
+    public decimal? VolumeToM3 { get; set; }
+    public decimal? LoadingMetersTo { get; set; }
 }

@@ -924,6 +924,16 @@ public class PricingAdminService : IPricingAdminService
             throw new DomainValidationException("baseAmount", "Het basisbedrag mag niet negatief zijn.");
         }
 
+        if (request.MaximumAmount is <= 0)
+        {
+            throw new DomainValidationException("maximumAmount", "Het maximumtarief moet groter zijn dan nul.");
+        }
+
+        if (request.MinimumAmount is { } ruleMinimum && request.MaximumAmount is { } ruleMaximum && ruleMinimum > ruleMaximum)
+        {
+            throw new DomainValidationException("maximumAmount", "Minimumtarief kan niet hoger zijn dan het maximumtarief.");
+        }
+
         var hasOversize = request.OversizeLengthCm is not null || request.OversizeWidthCm is not null
                           || request.OversizeBillableFactor is not null;
         if (hasOversize)
@@ -955,22 +965,62 @@ public class PricingAdminService : IPricingAdminService
 
         if (providedBrackets.Count > 0)
         {
-            var ordered = providedBrackets.OrderBy(b => b.FromQuantity).ToList();
-            for (var i = 0; i < ordered.Count; i++)
+            foreach (var bracket in providedBrackets)
             {
-                var bracket = ordered[i];
                 if (bracket.ToQuantity is { } to && to < bracket.FromQuantity)
                 {
                     throw new DomainValidationException("brackets", "Een staffel eindigt niet vóór hij begint.");
                 }
 
-                if (i > 0)
+                if (bracket.WeightToKg is <= 0 || bracket.VolumeToM3 is <= 0 || bracket.LoadingMetersTo is <= 0)
                 {
-                    var previous = ordered[i - 1];
-                    if (previous.ToQuantity is null || bracket.FromQuantity <= previous.ToQuantity)
+                    throw new DomainValidationException("brackets", "Een staffelgrens (kg/m³/ldm) moet groter zijn dan nul.");
+                }
+            }
+
+            // Two rows conflict only when BOTH their quantity ranges overlap AND they carry
+            // identical dimension caps — a carrier table legitimately has several rows sharing a
+            // quantity band (even "0 tot oneindig"), distinguished only by weight/volume/ldm caps.
+            static bool QuantityOverlaps(SavePriceRuleBracketRequest a, SavePriceRuleBracketRequest b)
+            {
+                var aTo = a.ToQuantity ?? decimal.MaxValue;
+                var bTo = b.ToQuantity ?? decimal.MaxValue;
+                return a.FromQuantity <= bTo && b.FromQuantity <= aTo;
+            }
+
+            static bool SameCaps(SavePriceRuleBracketRequest a, SavePriceRuleBracketRequest b) =>
+                a.WeightToKg == b.WeightToKg && a.VolumeToM3 == b.VolumeToM3 && a.LoadingMetersTo == b.LoadingMetersTo;
+
+            for (var i = 0; i < providedBrackets.Count; i++)
+            {
+                for (var j = i + 1; j < providedBrackets.Count; j++)
+                {
+                    if (QuantityOverlaps(providedBrackets[i], providedBrackets[j]) && SameCaps(providedBrackets[i], providedBrackets[j]))
                     {
                         throw new DomainValidationException("brackets", "Staffels mogen elkaar niet overlappen.");
                     }
+                }
+            }
+
+            if (request.BracketMode == BracketSelectionMode.PerNextUnit)
+            {
+                if (request.Basis != PriceRuleBasis.QuantityBracket)
+                {
+                    throw new DomainValidationException("bracketMode",
+                        "Prijs per volgende eenheid is alleen mogelijk bij een staffel op aantal.");
+                }
+
+                var ordered = providedBrackets.OrderBy(b => b.FromQuantity).ToList();
+                var gapless = ordered[0].FromQuantity == 1;
+                for (var i = 1; gapless && i < ordered.Count; i++)
+                {
+                    gapless = ordered[i - 1].ToQuantity is { } previousTo && ordered[i].FromQuantity == previousTo + 1;
+                }
+
+                if (!gapless)
+                {
+                    throw new DomainValidationException("brackets",
+                        "Bij prijs per volgende eenheid moeten de staffels aansluiten vanaf 1.");
                 }
             }
         }
@@ -1034,6 +1084,8 @@ public class PricingAdminService : IPricingAdminService
         rule.IsActive = request.IsActive;
         rule.UnitPrice = request.UnitPrice;
         rule.MinimumAmount = request.MinimumAmount;
+        rule.MaximumAmount = request.MaximumAmount;
+        rule.BracketMode = request.BracketMode;
         rule.AgreementId = request.AgreementId;
         rule.Priority = request.Priority;
         rule.BaseAmount = request.BaseAmount;
@@ -1053,6 +1105,9 @@ public class PricingAdminService : IPricingAdminService
                 ToQuantity = bracket.ToQuantity,
                 Price = bracket.Price,
                 PricePerExtraUnit = bracket.PricePerExtraUnit,
+                WeightToKg = bracket.WeightToKg,
+                VolumeToM3 = bracket.VolumeToM3,
+                LoadingMetersTo = bracket.LoadingMetersTo,
             });
         }
     }
@@ -1118,13 +1173,16 @@ public class PricingAdminService : IPricingAdminService
             rule.Name, rule.Currency, rule.EffectiveFrom, rule.EffectiveUntil, rule.IsActive,
             rule.UnitPrice, rule.MinimumAmount,
             rule.Brackets.OrderBy(b => b.FromQuantity)
-                .Select(b => new PriceRuleBracketDto(b.Id, b.FromQuantity, b.ToQuantity, b.Price, b.PricePerExtraUnit))
+                .Select(b => new PriceRuleBracketDto(
+                    b.Id, b.FromQuantity, b.ToQuantity, b.Price, b.PricePerExtraUnit,
+                    b.WeightToKg, b.VolumeToM3, b.LoadingMetersTo))
                 .ToList(),
             rule.AgreementId,
             rule.AgreementId is { } aid ? agreements.GetValueOrDefault(aid) : null,
             rule.Priority, rule.BaseAmount,
             rule.OversizeLengthCm, rule.OversizeWidthCm, rule.OversizeBillableFactor,
-            rule.MinimumQuantity, rule.QuantityRoundingStep))
+            rule.MinimumQuantity, rule.QuantityRoundingStep,
+            rule.MaximumAmount, rule.BracketMode))
             .ToList();
     }
 
