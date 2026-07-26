@@ -93,6 +93,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
   const [rowErrors, setRowErrors] = useState<Record<string, FieldErrors>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<PriceRule | null>(null)
+  const [bracketDeleteTarget, setBracketDeleteTarget] = useState<{ rule: PriceRule; index: number } | null>(null)
 
   const reload = useCallback(() => {
     Promise.all([
@@ -151,6 +152,13 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
       return
     }
     void saveRule(rule, { brackets })
+  }
+
+  function handleConfirmRemoveBracket() {
+    if (!bracketDeleteTarget) return
+    const { rule, index } = bracketDeleteTarget
+    setBracketDeleteTarget(null)
+    removeBracket(rule, index)
   }
 
   async function addRule() {
@@ -540,7 +548,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                               <button
                                 type="button"
                                 className="issued-items-link issued-items-link-danger"
-                                onClick={() => removeBracket(rule, index)}
+                                onClick={() => setBracketDeleteTarget({ rule, index })}
                               >
                                 Verwijderen
                               </button>
@@ -573,6 +581,17 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {bracketDeleteTarget && (
+        <ConfirmDialog
+          title="Staffelrij verwijderen"
+          message={`Weet je zeker dat je staffel ${bracketDeleteTarget.index + 1} van "${bracketDeleteTarget.rule.name}" wilt verwijderen?`}
+          confirmLabel="Verwijderen"
+          destructive
+          onConfirm={handleConfirmRemoveBracket}
+          onCancel={() => setBracketDeleteTarget(null)}
         />
       )}
     </div>

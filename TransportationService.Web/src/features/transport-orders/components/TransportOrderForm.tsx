@@ -313,9 +313,15 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   const customerServiceById = new Map(
     (customerConfig?.serviceOptions ?? []).map((o) => [o.serviceOptionId, o]),
   )
-  // Effective services for this order: globally selectable minus customer-disabled ones.
+  // Options currently rendered as read-only "Automatisch" rows (from the live preview) must not
+  // also appear as a manually-selectable checkbox below — that would duplicate the row.
+  const autoAppliedServiceOptionIds = new Set(
+    (preview?.serviceLines ?? []).filter((line) => line.autoApplied).map((line) => line.serviceOptionId),
+  )
+  // Effective services for this order: globally selectable minus customer-disabled ones minus
+  // ones already shown as auto-applied.
   const availableServiceOptions = serviceOptions.filter(
-    (o) => customerServiceById.get(o.id)?.disabled !== true,
+    (o) => customerServiceById.get(o.id)?.disabled !== true && !autoAppliedServiceOptionIds.has(o.id),
   )
   const serviceSelections = () =>
     selectedServiceOptionIds.map((id) => ({

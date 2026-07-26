@@ -132,6 +132,31 @@ describe('RuleGridEditor', () => {
     await waitFor(() => expect(state.deleteRule).toHaveBeenCalledWith('rule-1'))
   })
 
+  it('asks for confirmation before removing a bracket row', async () => {
+    const user = userEvent.setup()
+    render(<RuleGridEditor agreementId="agr-1" agreementCustomerId={null} canManage />)
+
+    await screen.findByLabelText('Naam voor Palletstaffel')
+    // Order of "Verwijderen" buttons: rule-1 (no brackets), rule-2, then its 2 bracket rows.
+    const deleteButtons = screen.getAllByRole('button', { name: 'Verwijderen' })
+    expect(deleteButtons).toHaveLength(4)
+    await user.click(deleteButtons[2])
+
+    // Immediate deletion must not happen — a confirm dialog is required first.
+    expect(state.updateRule).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole('dialog', { name: 'Staffelrij verwijderen' })
+    await user.click(within(dialog).getByRole('button', { name: 'Verwijderen' }))
+
+    await waitFor(() =>
+      expect(state.updateRule).toHaveBeenCalledWith(
+        'rule-2',
+        expect.objectContaining({ brackets: expect.arrayContaining([expect.objectContaining({ price: 70 })]) }),
+      ),
+    )
+    const [, patch] = state.updateRule.mock.calls[0] as [string, { brackets: unknown[] }]
+    expect(patch.brackets).toHaveLength(1)
+  })
+
   it('disables every input without tariffs.manage', async () => {
     render(<RuleGridEditor agreementId="agr-1" agreementCustomerId={null} canManage={false} />)
 

@@ -286,4 +286,47 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(checkbox.checked).toBe(true)
     expect(checkbox).toBeDisabled()
   })
+
+  it('does not duplicate a service option that is both selectable and currently auto-applied', async () => {
+    // "Levering vóór 08:00" (opt-8) is a normal selectable option in listServiceOptions, but the
+    // preview reports it as auto-applied for this customer/order — it must render only once, as
+    // the read-only "Automatisch" row, not also as a manual checkbox.
+    previewSpy.mockResolvedValueOnce({
+      lines: [
+        { label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false },
+        { label: 'Levering vóór 08:00', amount: 25, source: 'Automatisch (contract)', informational: false },
+      ],
+      total: 170,
+      totalWithInformational: 170,
+      currency: 'EUR',
+      zoneCode: 'Z3',
+      zoneName: 'Zone 3',
+      requiresManualPrice: false,
+      serviceLines: [
+        {
+          serviceOptionId: 'opt-8', name: 'Levering vóór 08:00', kind: 'Fixed', value: 25, amount: 25,
+          quantity: null, autoApplied: true,
+        },
+      ],
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    // Wait for the debounced preview to resolve and mark the option as auto-applied — until then
+    // the plain (pre-preview) selectable row is still showing, same text but not yet deduped.
+    await waitFor(() => expect(screen.getByText('Automatisch')).toBeInTheDocument(), { timeout: 3000 })
+    expect(screen.getAllByText(/Levering vóór 08:00/)).toHaveLength(1)
+    const row = screen.getByText(/Levering vóór 08:00/).closest('.tof-service-option') as HTMLElement
+    expect(within(row).getByText('Automatisch')).toBeInTheDocument()
+    const checkbox = within(row).getByRole('checkbox') as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+    expect(checkbox).toBeDisabled()
+    // The still-manual option (Wachttijd) keeps rendering normally alongside it.
+    expect(screen.getByRole('checkbox', { name: /Wachttijd/ })).not.toBeDisabled()
+  })
 })
