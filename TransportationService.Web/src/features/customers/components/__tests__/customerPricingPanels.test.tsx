@@ -231,6 +231,8 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
           effectiveUntil: null,
           effectiveValue: 10,
           source: 'Klanttarief',
+          autoApplyOverride: null,
+          effectiveAutoApply: false,
         },
         {
           serviceOptionId: 'svc-klep',
@@ -245,6 +247,8 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
           effectiveUntil: null,
           effectiveValue: 20,
           source: 'Klanttarief',
+          autoApplyOverride: null,
+          effectiveAutoApply: false,
         },
         {
           serviceOptionId: 'svc-wacht',
@@ -259,6 +263,24 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
           effectiveUntil: null,
           effectiveValue: 45,
           source: 'Algemene standaard',
+          autoApplyOverride: null,
+          effectiveAutoApply: false,
+        },
+        {
+          serviceOptionId: 'svc-pick',
+          name: 'Picking',
+          kind: 'PerUnit',
+          defaultValue: 1.25,
+          customerValue: null,
+          disabled: false,
+          minimumAmount: null,
+          invoiceDescription: null,
+          effectiveFrom: null,
+          effectiveUntil: null,
+          effectiveValue: 1.25,
+          source: 'Algemene standaard',
+          autoApplyOverride: null,
+          effectiveAutoApply: true,
         },
       ],
     }
@@ -300,6 +322,24 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
     // Other services keep their configuration untouched.
     const klep = payload.optionPrices.find((o: { serviceOptionId: string }) => o.serviceOptionId === 'svc-klep')
     expect(klep).toEqual(expect.objectContaining({ disabled: true }))
+  })
+
+  it('shows the auto-apply tri-state and saves an override', async () => {
+    const user = userEvent.setup()
+    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+
+    await screen.findByText('Diensten & toeslagen')
+    const autoSelect = screen.getByLabelText('Automatisch toepassen voor Picking')
+    // Inherits the global AutoApply (true) with no override yet.
+    expect(autoSelect).toHaveValue('inherit')
+    expect(screen.getByText('Standaard (aan)')).toBeInTheDocument()
+
+    await user.selectOptions(autoSelect, 'off')
+
+    await waitFor(() => expect(state.saveConfig).toHaveBeenCalled())
+    const payload = state.saveConfig.mock.calls[0][1]
+    const picking = payload.optionPrices.find((o: { serviceOptionId: string }) => o.serviceOptionId === 'svc-pick')
+    expect(picking).toEqual(expect.objectContaining({ autoApplyOverride: false }))
   })
 })
 

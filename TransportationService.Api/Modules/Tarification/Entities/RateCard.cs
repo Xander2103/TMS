@@ -44,6 +44,28 @@ public enum SurchargeKind
 
     /// <summary>Amount × number of (extra) stops (e.g. Extra stop €20). Service options only.</summary>
     PerStop,
+
+    /// <summary>Amount × quantity of a specific managed unit on the order (e.g. Picking €1,25/colli,
+    /// PAL UIT €4,50/pallet). Service options only; requires ServiceOption.UnitTypeId.</summary>
+    PerUnit = 4,
+
+    /// <summary>Amount × number of (non-deleted) cargo/order lines (e.g. Administratie €3/orderlijn). Service options only.</summary>
+    PerOrderLine = 5,
+
+    /// <summary>Amount × the order's total weight in kg. Service options only.</summary>
+    PerKg = 6,
+
+    /// <summary>Amount × the order's total volume in m³. Service options only.</summary>
+    PerM3 = 7,
+
+    /// <summary>Amount × the order's loading meters. Service options only.</summary>
+    PerLdm = 8,
+
+    /// <summary>Amount × an entered number of days (e.g. opslag per dag). Service options only.</summary>
+    PerDay = 9,
+
+    /// <summary>Amount × an entered number of pallet-days (e.g. palletopslag). Service options only.</summary>
+    PerPalletDay = 10,
 }
 
 /// <summary>A named surcharge on a rate card (e.g. fuel %, ADR fixed fee).</summary>

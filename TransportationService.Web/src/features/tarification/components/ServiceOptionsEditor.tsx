@@ -13,8 +13,10 @@ import {
   createServiceOption,
   deleteServiceOption,
   listServiceOptions,
+  listUnitTypeSettings,
   updateServiceOption,
   type ServiceOption,
+  type UnitTypeSettings,
 } from '../api/pricingApi'
 
 interface OptionDraft {
@@ -27,6 +29,22 @@ interface OptionDraft {
   invoiceDescription: string
   selectableInOrders: boolean
   isActive: boolean
+  unitTypeId: string
+  autoApply: boolean
+  onlyForAdr: boolean
+}
+
+const VALUE_LABEL_BY_KIND: Partial<Record<SurchargeKind, string>> = {
+  Percent: 'Standaard (%)',
+  PerHour: 'Standaardprijs per uur (€)',
+  PerStop: 'Standaardprijs per stop (€)',
+  PerUnit: 'Standaardprijs per eenheid (€)',
+  PerOrderLine: 'Standaardprijs per orderlijn (€)',
+  PerKg: 'Standaardprijs per kg (€)',
+  PerM3: 'Standaardprijs per m³ (€)',
+  PerLdm: 'Standaardprijs per laadmeter (€)',
+  PerDay: 'Standaardprijs per dag (€)',
+  PerPalletDay: 'Standaardprijs per pallet/dag (€)',
 }
 
 /**
@@ -41,6 +59,7 @@ export function ServiceOptionsEditor() {
   const canManage = hasPermission('tariffs.manage')
 
   const [options, setOptions] = useState<ServiceOption[] | null>(null)
+  const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [draft, setDraft] = useState<OptionDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
@@ -55,6 +74,9 @@ export function ServiceOptionsEditor() {
         setLoadError(null)
       })
       .catch(() => setLoadError('De diensten konden niet worden geladen.'))
+    listUnitTypeSettings()
+      .then(setUnits)
+      .catch(() => {})
   }, [canView])
 
   useEffect(() => {
@@ -79,6 +101,9 @@ export function ServiceOptionsEditor() {
             invoiceDescription: option.invoiceDescription ?? '',
             selectableInOrders: option.selectableInOrders,
             isActive: option.isActive,
+            unitTypeId: option.unitTypeId ?? '',
+            autoApply: option.autoApply,
+            onlyForAdr: option.onlyForAdr,
           }
         : {
             option: null,
@@ -90,6 +115,9 @@ export function ServiceOptionsEditor() {
             invoiceDescription: '',
             selectableInOrders: true,
             isActive: true,
+            unitTypeId: '',
+            autoApply: false,
+            onlyForAdr: false,
           },
     )
   }
@@ -109,6 +137,9 @@ export function ServiceOptionsEditor() {
         description: draft.description.trim() || null,
         invoiceDescription: draft.invoiceDescription.trim() || null,
         selectableInOrders: draft.selectableInOrders,
+        unitTypeId: draft.kind === 'PerUnit' ? draft.unitTypeId || null : null,
+        autoApply: draft.autoApply,
+        onlyForAdr: draft.onlyForAdr,
       }
       if (draft.option) {
         await updateServiceOption(draft.option.id, input)
@@ -126,14 +157,8 @@ export function ServiceOptionsEditor() {
     }
   }
 
-  const valueLabel =
-    draft?.kind === 'Percent'
-      ? 'Standaard (%)'
-      : draft?.kind === 'PerHour'
-        ? 'Standaardprijs per uur (€)'
-        : draft?.kind === 'PerStop'
-          ? 'Standaardprijs per stop (€)'
-          : 'Standaardprijs (€)'
+  const valueLabel = draft ? (VALUE_LABEL_BY_KIND[draft.kind] ?? 'Standaardprijs (€)') : 'Standaardprijs (€)'
+  const activeUnits = units.filter((u) => u.isActive)
 
   return (
     <div>
@@ -161,7 +186,11 @@ export function ServiceOptionsEditor() {
                 {option.description && <div className="customer-form-muted">{option.description}</div>}
               </td>
               <td>{SURCHARGE_KIND_LABELS[option.kind]}</td>
-              <td>{formatServiceValue(option.kind, option.defaultValue)}</td>
+              <td>
+                {formatServiceValue(option.kind, option.defaultValue, option.unitTypeName)}
+                {option.autoApply && <Badge tone="info">Automatisch</Badge>}
+                {option.onlyForAdr && <Badge tone="warning">Alleen bij ADR</Badge>}
+              </td>
               <td>{option.selectableInOrders ? 'Ja' : 'Nee'}</td>
               <td>
                 <Badge tone={option.isActive ? 'success' : 'neutral'}>{option.isActive ? 'Actief' : 'Inactief'}</Badge>
@@ -212,7 +241,7 @@ export function ServiceOptionsEditor() {
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Berekeningswijze" htmlFor="opt-kind" hint="Vast bedrag, percentage, per uur of per stop.">
+              <FormField label="Berekeningswijze" htmlFor="opt-kind" hint="Vast bedrag, percentage, per uur/stop, per eenheid/orderlijn, per kg/m³/laadmeter of per dag/pallet-dag.">
                 <select id="opt-kind" value={draft.kind} onChange={(e) => setDraft((d) => (d ? { ...d, kind: e.target.value as SurchargeKind } : d))}>
                   {Object.entries(SURCHARGE_KIND_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>
@@ -225,6 +254,18 @@ export function ServiceOptionsEditor() {
                 <input id="opt-value" type="number" step="0.01" value={draft.defaultValue} onChange={(e) => setDraft((d) => (d ? { ...d, defaultValue: e.target.value } : d))} />
               </FormField>
             </div>
+            {draft.kind === 'PerUnit' && (
+              <FormField label="Eenheid" htmlFor="opt-unit" required hint="De eenheid waarvan het aantal op de order deze service telt (bv. Colli, Pallet).">
+                <select id="opt-unit" value={draft.unitTypeId} onChange={(e) => setDraft((d) => (d ? { ...d, unitTypeId: e.target.value } : d))}>
+                  <option value="">— Kies eenheid —</option>
+                  {activeUnits.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {unit.name}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+            )}
             <FormField label="Omschrijving (intern)" htmlFor="opt-desc">
               <input id="opt-desc" value={draft.description} onChange={(e) => setDraft((d) => (d ? { ...d, description: e.target.value } : d))} maxLength={1000} />
             </FormField>
@@ -234,6 +275,14 @@ export function ServiceOptionsEditor() {
             <label className="tof-checkbox">
               <input type="checkbox" checked={draft.selectableInOrders} onChange={(e) => setDraft((d) => (d ? { ...d, selectableInOrders: e.target.checked } : d))} />
               Selecteerbaar in transportorders
+            </label>
+            <label className="tof-checkbox">
+              <input type="checkbox" checked={draft.autoApply} onChange={(e) => setDraft((d) => (d ? { ...d, autoApply: e.target.checked } : d))} />
+              Automatisch toepassen (contractdienst, geen selectie nodig)
+            </label>
+            <label className="tof-checkbox">
+              <input type="checkbox" checked={draft.onlyForAdr} onChange={(e) => setDraft((d) => (d ? { ...d, onlyForAdr: e.target.checked } : d))} />
+              Alleen bij ADR
             </label>
             <label className="tof-checkbox">
               <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />

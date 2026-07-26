@@ -27,6 +27,16 @@ public class ServiceOption : AuditableTenantEntity
 
     /// <summary>Off = configured for invoicing only, never offered during order entry.</summary>
     public bool SelectableInOrders { get; set; } = true;
+
+    /// <summary>Kind == PerUnit only: which managed unit this service counts (e.g. Colli, Pallet).</summary>
+    public Guid? UnitTypeId { get; set; }
+
+    /// <summary>The engine adds this service automatically, quantified from the order, without the
+    /// customer/planner selecting it (a contract service, e.g. Picking, PAL UIT).</summary>
+    public bool AutoApply { get; set; }
+
+    /// <summary>Only charged/auto-applied when the order requires ADR; otherwise informational.</summary>
+    public bool OnlyForAdr { get; set; }
 }
 
 /// <summary>
@@ -53,6 +63,9 @@ public class CustomerServiceOptionPrice : AuditableTenantEntity
 
     public DateOnly? EffectiveFrom { get; set; }
     public DateOnly? EffectiveUntil { get; set; }
+
+    /// <summary>Overrides the global ServiceOption.AutoApply for this customer; null = inherit.</summary>
+    public bool? AutoApplyOverride { get; set; }
 }
 
 /// <summary>

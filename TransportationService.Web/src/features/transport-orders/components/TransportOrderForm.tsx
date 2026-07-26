@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError } from '../../../api/apiClient'
+import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
@@ -327,13 +328,15 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   const previewKey = JSON.stringify([
     customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount,
     lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds, serviceQuantities,
+    adrRequired, cargoItems.length,
   ])
   useEffect(() => {
     const unitTypeId = unitOptions.find((u) => u.code === quantityUnitCode)?.id ?? null
     const lines = unitTypeId && quantity !== '' && Number(quantity) > 0
       ? [{ unitTypeId, quantity: Number(quantity) }]
       : []
-    const shouldPreview = Boolean(customerId) && (lines.length > 0 || selectedServiceOptionIds.length > 0)
+    const shouldPreview = Boolean(customerId)
+      && (lines.length > 0 || selectedServiceOptionIds.length > 0 || cargoItems.length > 0 || adrRequired)
     const timer = window.setTimeout(() => {
       if (!shouldPreview) {
         setPreview(null)
@@ -350,6 +353,8 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         palletCount: palletCount === '' ? null : Number(palletCount),
         serviceOptionIds: selectedServiceOptionIds,
         services: serviceSelections(),
+        adrRequired,
+        cargoLineCount: cargoItems.length > 0 ? cargoItems.length : null,
       })
         .then(setPreview)
         .catch(() => setPreview(null))
@@ -1147,12 +1152,35 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     return customerService?.effectiveValue ?? customerService?.customerValue ?? option.defaultValue
   }
 
+  // Auto-applied (contract) services from the live preview: the engine added them without a
+  // manual selection, quantified from the order itself — shown read-only, never uncheckable here
+  // (disabling happens via the customer's service configuration, not on the order).
+  const autoAppliedServiceLines = (preview?.serviceLines ?? []).filter((line) => line.autoApplied)
+
   const servicesContent = (
     <>
       <p className="ui-form-section-description">
         Gekozen diensten tellen mee in de prijsberekening en worden bij facturatie aparte factuurlijnen. De effectieve
         prijs komt uit de klantenfiche (klanttarief) of de algemene standaard.
       </p>
+      {autoAppliedServiceLines.length > 0 && (
+        <div className="tof-service-options">
+          {autoAppliedServiceLines.map((line) => (
+            <div key={line.serviceOptionId} className="tof-service-option">
+              <label className="tof-checkbox">
+                <input type="checkbox" checked readOnly disabled />
+                <span>
+                  {line.name} <Badge tone="info">Automatisch</Badge>{' '}
+                  <span className="customer-form-muted">
+                    ({formatServiceValue(line.kind, line.value)}
+                    {line.quantity != null ? ` × ${line.quantity}` : ''} = € {line.amount.toFixed(2)})
+                  </span>
+                </span>
+              </label>
+            </div>
+          ))}
+        </div>
+      )}
       {availableServiceOptions.length === 0 && <p className="placeholder-text">Geen diensten beschikbaar voor deze klant.</p>}
       <div className="tof-service-options">
         {availableServiceOptions.map((option) => {

@@ -804,19 +804,17 @@ public class PricingAdminService : IPricingAdminService
     public async Task<IReadOnlyList<ServiceOptionDto>> ListServiceOptionsAsync(
         bool includeInactive, bool forOrderEntry, CancellationToken cancellationToken)
     {
-        return await _dbContext.ServiceOptions.AsNoTracking()
+        var options = await _dbContext.ServiceOptions.AsNoTracking()
             .Where(o => o.TenantId == TenantId && (includeInactive || o.IsActive))
             .Where(o => !forOrderEntry || o.SelectableInOrders)
             .OrderBy(o => o.SortOrder).ThenBy(o => o.Name)
-            .Select(o => new ServiceOptionDto(
-                o.Id, o.Code, o.Name, o.Kind, o.DefaultValue, o.IsActive, o.SortOrder,
-                o.Description, o.InvoiceDescription, o.SelectableInOrders))
             .ToListAsync(cancellationToken);
+        return await MapOptionsAsync(options, cancellationToken);
     }
 
     public async Task<ServiceOptionDto> CreateServiceOptionAsync(SaveServiceOptionRequest request, CancellationToken cancellationToken)
     {
-        ValidateOption(request);
+        await ValidateOptionAsync(request, cancellationToken);
         var duplicate = await _dbContext.ServiceOptions.AnyAsync(
             o => o.TenantId == TenantId && o.Code == request.Code.Trim().ToUpperInvariant(), cancellationToken);
         if (duplicate)
@@ -829,7 +827,7 @@ public class PricingAdminService : IPricingAdminService
         _dbContext.ServiceOptions.Add(option);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Created", null, new { option.Code, option.Name, option.Kind }, cancellationToken);
-        return MapOption(option);
+        return await MapOptionAsync(option, cancellationToken);
     }
 
     public async Task<ServiceOptionDto?> UpdateServiceOptionAsync(Guid id, SaveServiceOptionRequest request, CancellationToken cancellationToken)
@@ -840,11 +838,11 @@ public class PricingAdminService : IPricingAdminService
             return null;
         }
 
-        ValidateOption(request);
+        await ValidateOptionAsync(request, cancellationToken);
         ApplyOption(option, request);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Updated", null, new { option.Code, option.Name, option.Kind }, cancellationToken);
-        return MapOption(option);
+        return await MapOptionAsync(option, cancellationToken);
     }
 
     public async Task<bool> DeleteServiceOptionAsync(Guid id, CancellationToken cancellationToken)
@@ -900,11 +898,12 @@ public class PricingAdminService : IPricingAdminService
                 var source = overrideActiveToday && (over!.Value is not null || over.Disabled)
                     ? "Klanttarief"
                     : "Algemene standaard";
+                var effectiveAutoApply = (overrideActiveToday ? over!.AutoApplyOverride : null) ?? o.AutoApply;
                 return new CustomerServiceOptionPriceDto(
                     o.Id, o.Name, o.Kind, o.DefaultValue, over?.Value,
                     over?.Disabled ?? false, over?.MinimumAmount, over?.InvoiceDescription,
                     over?.EffectiveFrom, over?.EffectiveUntil,
-                    effectiveValue, source);
+                    effectiveValue, source, over?.AutoApplyOverride, effectiveAutoApply);
             })
             .ToList();
 
@@ -974,7 +973,8 @@ public class PricingAdminService : IPricingAdminService
             var isOverride = priceRequest.Value is not null || priceRequest.Disabled
                              || priceRequest.MinimumAmount is not null
                              || !string.IsNullOrWhiteSpace(priceRequest.InvoiceDescription)
-                             || priceRequest.EffectiveFrom is not null || priceRequest.EffectiveUntil is not null;
+                             || priceRequest.EffectiveFrom is not null || priceRequest.EffectiveUntil is not null
+                             || priceRequest.AutoApplyOverride is not null;
             if (!isOverride)
             {
                 if (row is not null)
@@ -1001,6 +1001,7 @@ public class PricingAdminService : IPricingAdminService
             row.InvoiceDescription = Clean(priceRequest.InvoiceDescription);
             row.EffectiveFrom = priceRequest.EffectiveFrom;
             row.EffectiveUntil = priceRequest.EffectiveUntil;
+            row.AutoApplyOverride = priceRequest.AutoApplyOverride;
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -1283,7 +1284,7 @@ public class PricingAdminService : IPricingAdminService
         }
     }
 
-    private static void ValidateOption(SaveServiceOptionRequest request)
+    private async Task ValidateOptionAsync(SaveServiceOptionRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
         {
@@ -1293,6 +1294,24 @@ public class PricingAdminService : IPricingAdminService
         if (request.DefaultValue < 0)
         {
             throw new DomainValidationException("defaultValue", "De standaardprijs mag niet negatief zijn.");
+        }
+
+        if (request.Kind == SurchargeKind.PerUnit)
+        {
+            if (request.UnitTypeId is null)
+            {
+                throw new DomainValidationException("unitTypeId", "Kies de eenheid waarop deze service telt.");
+            }
+
+            if (!await _dbContext.UnitTypes.AnyAsync(
+                    u => u.TenantId == TenantId && u.Id == request.UnitTypeId && u.IsActive, cancellationToken))
+            {
+                throw new InvalidTenantReferenceException("eenheid");
+            }
+        }
+        else if (request.UnitTypeId is not null)
+        {
+            throw new DomainValidationException("unitTypeId", "Een eenheid is alleen van toepassing bij 'per eenheid'.");
         }
     }
 
@@ -1307,11 +1326,27 @@ public class PricingAdminService : IPricingAdminService
         option.Description = Clean(request.Description);
         option.InvoiceDescription = Clean(request.InvoiceDescription);
         option.SelectableInOrders = request.SelectableInOrders;
+        option.UnitTypeId = request.Kind == SurchargeKind.PerUnit ? request.UnitTypeId : null;
+        option.AutoApply = request.AutoApply;
+        option.OnlyForAdr = request.OnlyForAdr;
     }
 
-    private static ServiceOptionDto MapOption(ServiceOption option) => new(
-        option.Id, option.Code, option.Name, option.Kind, option.DefaultValue, option.IsActive, option.SortOrder,
-        option.Description, option.InvoiceDescription, option.SelectableInOrders);
+    private async Task<ServiceOptionDto> MapOptionAsync(ServiceOption option, CancellationToken cancellationToken) =>
+        (await MapOptionsAsync([option], cancellationToken))[0];
+
+    private async Task<IReadOnlyList<ServiceOptionDto>> MapOptionsAsync(
+        IReadOnlyList<ServiceOption> options, CancellationToken cancellationToken)
+    {
+        var unitIds = options.Where(o => o.UnitTypeId.HasValue).Select(o => o.UnitTypeId!.Value).Distinct().ToList();
+        var unitNames = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == TenantId && unitIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
+        return options.Select(o => new ServiceOptionDto(
+            o.Id, o.Code, o.Name, o.Kind, o.DefaultValue, o.IsActive, o.SortOrder,
+            o.Description, o.InvoiceDescription, o.SelectableInOrders,
+            o.UnitTypeId, o.UnitTypeId is { } uid ? unitNames.GetValueOrDefault(uid) : null,
+            o.AutoApply, o.OnlyForAdr)).ToList();
+    }
 
     private async Task<IReadOnlyList<PriceRuleDto>> MapRulesAsync(IReadOnlyList<PriceRule> rules, CancellationToken cancellationToken)
     {

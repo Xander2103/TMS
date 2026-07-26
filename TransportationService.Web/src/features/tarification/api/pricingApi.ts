@@ -327,6 +327,13 @@ export interface ServiceOption {
   description: string | null
   invoiceDescription: string | null
   selectableInOrders: boolean
+  /** Kind === 'PerUnit' only: which managed unit this service counts. */
+  unitTypeId: string | null
+  unitTypeName: string | null
+  /** The engine adds this service automatically (contract service), quantified from the order. */
+  autoApply: boolean
+  /** Only charged/auto-applied when the order requires ADR. */
+  onlyForAdr: boolean
 }
 
 export interface ServiceOptionInput {
@@ -339,6 +346,9 @@ export interface ServiceOptionInput {
   description?: string | null
   invoiceDescription?: string | null
   selectableInOrders?: boolean
+  unitTypeId?: string | null
+  autoApply?: boolean
+  onlyForAdr?: boolean
 }
 
 export const listServiceOptions = (includeInactive = false, forOrderEntry = false): Promise<ServiceOption[]> => {
@@ -380,6 +390,10 @@ export interface CustomerServiceOptionPrice {
   effectiveUntil: string | null
   effectiveValue: number
   source: 'Klanttarief' | 'Algemene standaard'
+  /** Override of the global auto-apply behaviour for this customer; null = inherit. */
+  autoApplyOverride: boolean | null
+  /** The effective auto-apply behaviour today, after applying the override. */
+  effectiveAutoApply: boolean
 }
 
 export interface CustomerPricingConfig {
@@ -404,6 +418,7 @@ export interface CustomerOptionPriceInput {
   invoiceDescription?: string | null
   effectiveFrom?: string | null
   effectiveUntil?: string | null
+  autoApplyOverride?: boolean | null
 }
 
 export interface CustomerPricingConfigInput {
@@ -517,6 +532,10 @@ export interface PricePreviewInput {
   palletCount: number | null
   serviceOptionIds: string[]
   services?: { serviceOptionId: string; quantity: number | null }[]
+  /** Drives OnlyForAdr service options. */
+  adrRequired?: boolean | null
+  /** Drives PerOrderLine service options; null = unknown. */
+  cargoLineCount?: number | null
 }
 
 export interface PriceBreakdownLine {
@@ -530,6 +549,17 @@ export interface PriceBreakdownLine {
   billableQuantity: number | null
 }
 
+export interface PricePreviewServiceLine {
+  serviceOptionId: string
+  name: string
+  kind: SurchargeKind
+  value: number
+  amount: number
+  quantity?: number | null
+  /** True when the engine added this line automatically (contract service) — not selected by the user. */
+  autoApplied?: boolean
+}
+
 export interface PriceCalculationResult {
   lines: PriceBreakdownLine[]
   total: number
@@ -538,7 +568,7 @@ export interface PriceCalculationResult {
   zoneCode: string | null
   zoneName: string | null
   requiresManualPrice: boolean
-  serviceLines: { serviceOptionId: string; name: string; kind: SurchargeKind; value: number; amount: number }[]
+  serviceLines: PricePreviewServiceLine[]
   tariffDate: string | null
   configurationError: string | null
   diagnostics: string[] | null

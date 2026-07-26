@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { TransportOrderForm } from '../TransportOrderForm'
@@ -250,5 +250,40 @@ describe('TransportOrderForm sections + pricing', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
     await waitFor(() => expect(screen.getByText(/Levering vóór 08:00/)).toBeInTheDocument())
     expect(screen.getByText(/€ 25.00/)).toBeInTheDocument()
+  })
+
+  it('shows an auto-applied (contract) service as a read-only checked row with an Automatisch badge', async () => {
+    previewSpy.mockResolvedValueOnce({
+      lines: [
+        { label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false },
+        { label: 'Picking (3 colli)', amount: 3.75, source: 'Automatisch (contract)', informational: false },
+      ],
+      total: 148.75,
+      totalWithInformational: 148.75,
+      currency: 'EUR',
+      zoneCode: 'Z3',
+      zoneName: 'Zone 3',
+      requiresManualPrice: false,
+      serviceLines: [
+        {
+          serviceOptionId: 'opt-pick', name: 'Picking', kind: 'PerUnit', value: 1.25, amount: 3.75,
+          quantity: 3, autoApplied: true,
+        },
+      ],
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    await waitFor(() => expect(screen.getByText('Picking')).toBeInTheDocument())
+    expect(screen.getByText('Automatisch')).toBeInTheDocument()
+    const row = screen.getByText('Picking').closest('.tof-service-option') as HTMLElement
+    const checkbox = within(row).getByRole('checkbox') as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+    expect(checkbox).toBeDisabled()
   })
 })

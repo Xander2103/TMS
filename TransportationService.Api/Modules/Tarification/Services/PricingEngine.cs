@@ -347,79 +347,197 @@ public class PricingEngine : IPricingEngine
 
         var subtotalBeforeServices = lines.Where(l => !l.Informational).Sum(l => l.Amount);
 
-        // Service options: order-level override > customer override > global default (§19);
-        // Percent applies to the base subtotal. Customer overrides are date-aware and can
-        // disable a globally available service for this customer.
+        // Service options: explicitly selected ∪ auto-applied (contract) options. Percent applies
+        // to the base subtotal. Customer overrides are date-aware and can disable a globally
+        // available service, or override its auto-apply behaviour, for this customer.
         var serviceLines = new List<PriceServiceLine>();
         var selections = request.Services is { Count: > 0 }
             ? request.Services
             : request.ServiceOptionIds.Select(id => new PriceServiceInput(id)).ToList();
-        if (selections.Count > 0)
-        {
-            var quantities = selections
-                .GroupBy(s => s.ServiceOptionId)
-                .ToDictionary(g => g.Key, g => g.First().Quantity);
-            var optionIds = quantities.Keys.ToList();
-            var options = await _dbContext.ServiceOptions.AsNoTracking()
-                .Where(o => o.TenantId == tenantId && optionIds.Contains(o.Id) && o.IsActive)
-                .OrderBy(o => o.SortOrder).ThenBy(o => o.Name)
-                .ToListAsync(cancellationToken);
-            var overrides = (await _dbContext.CustomerServiceOptionPrices.AsNoTracking()
-                    .Where(p => p.TenantId == tenantId && p.CustomerId == request.CustomerId && optionIds.Contains(p.ServiceOptionId))
-                    .ToListAsync(cancellationToken))
-                .Where(p => (p.EffectiveFrom is null || p.EffectiveFrom <= request.Date)
-                            && (p.EffectiveUntil is null || p.EffectiveUntil >= request.Date))
-                .ToDictionary(p => p.ServiceOptionId);
+        var quantities = selections
+            .GroupBy(s => s.ServiceOptionId)
+            .ToDictionary(g => g.Key, g => g.First().Quantity);
+        var selectedIds = quantities.Keys.ToHashSet();
 
-            foreach (var option in options)
+        var allOptions = await _dbContext.ServiceOptions.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && o.IsActive)
+            .OrderBy(o => o.SortOrder).ThenBy(o => o.Name)
+            .ToListAsync(cancellationToken);
+        var allOptionIds = allOptions.Select(o => o.Id).ToList();
+        var overrides = (await _dbContext.CustomerServiceOptionPrices.AsNoTracking()
+                .Where(p => p.TenantId == tenantId && p.CustomerId == request.CustomerId && allOptionIds.Contains(p.ServiceOptionId))
+                .ToListAsync(cancellationToken))
+            .Where(p => (p.EffectiveFrom is null || p.EffectiveFrom <= request.Date)
+                        && (p.EffectiveUntil is null || p.EffectiveUntil >= request.Date))
+            .ToDictionary(p => p.ServiceOptionId);
+
+        var serviceUnitTypeIds = allOptions.Where(o => o.UnitTypeId is not null).Select(o => o.UnitTypeId!.Value).Distinct().ToList();
+        var serviceUnitNames = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == tenantId && serviceUnitTypeIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
+
+        foreach (var option in allOptions)
+        {
+            var over = overrides.GetValueOrDefault(option.Id);
+            var isSelected = selectedIds.Contains(option.Id);
+
+            // Auto-apply: a contract service the engine adds without the user selecting it —
+            // active, effectively auto (customer override wins), not disabled for this customer,
+            // and (when ADR-only) the order is actually ADR.
+            var effectiveAutoApply = over?.AutoApplyOverride ?? option.AutoApply;
+            var autoEligible = effectiveAutoApply && over?.Disabled != true
+                                && (!option.OnlyForAdr || request.AdrRequired == true);
+            var isAutoApplied = !isSelected && autoEligible;
+            if (!isSelected && !isAutoApplied)
             {
-                var over = overrides.GetValueOrDefault(option.Id);
-                if (over?.Disabled == true)
+                continue;
+            }
+
+            if (over?.Disabled == true)
+            {
+                lines.Add(new PriceBreakdownLine(
+                    $"{option.Name}: uitgeschakeld voor deze klant", 0m, "Klanttarief", Informational: true));
+                continue;
+            }
+
+            if (option.OnlyForAdr && request.AdrRequired != true)
+            {
+                // Never reached via the auto-apply path (excluded from autoEligible above) — this
+                // is an explicit selection that simply doesn't apply to a non-ADR order.
+                lines.Add(new PriceBreakdownLine(
+                    $"{option.Name}: alleen van toepassing bij ADR", 0m, "Voorwaarde", Informational: true));
+                continue;
+            }
+
+            var value = over?.Value ?? option.DefaultValue;
+            var source = isAutoApplied
+                ? (over?.Value is not null ? "Automatisch (klanttarief)" : "Automatisch (contract)")
+                : (over?.Value is not null ? "Klanttarief" : "Algemene standaard");
+            var invoiceLabel = over?.InvoiceDescription ?? option.InvoiceDescription;
+            var enteredQuantity = quantities.GetValueOrDefault(option.Id);
+            decimal amount;
+            decimal? quantity = null;
+            string label = option.Name;
+
+            if (option.Kind is SurchargeKind.PerHour or SurchargeKind.PerStop)
+            {
+                var unitLabel = option.Kind == SurchargeKind.PerHour ? "uur" : "stops";
+                if (enteredQuantity is not { } hourStopQty || hourStopQty <= 0)
                 {
+                    // Quantity-based services need an entered quantity (hours / stops).
                     lines.Add(new PriceBreakdownLine(
-                        $"{option.Name}: uitgeschakeld voor deze klant", 0m, "Klanttarief", Informational: true));
+                        $"{option.Name}: geef het aantal {(option.Kind == SurchargeKind.PerHour ? "uur" : "stop")} op",
+                        0m, source, Informational: true));
                     continue;
                 }
 
-                var value = over?.Value ?? option.DefaultValue;
-                var source = over?.Value is not null ? "Klanttarief" : "Algemene standaard";
-                var invoiceLabel = over?.InvoiceDescription ?? option.InvoiceDescription;
-                decimal amount;
-                decimal? quantity = null;
-                string label = option.Name;
-                if (option.Kind is SurchargeKind.PerHour or SurchargeKind.PerStop)
-                {
-                    var unitLabel = option.Kind == SurchargeKind.PerHour ? "uur" : "stops";
-                    if (quantities.GetValueOrDefault(option.Id) is not { } enteredQuantity || enteredQuantity <= 0)
-                    {
-                        // Quantity-based services need an entered quantity (hours / stops).
-                        lines.Add(new PriceBreakdownLine(
-                            $"{option.Name}: geef het aantal {(option.Kind == SurchargeKind.PerHour ? "uur" : "stop")} op",
-                            0m, source, Informational: true));
-                        continue;
-                    }
-
-                    quantity = enteredQuantity;
-                    amount = decimal.Round(value * enteredQuantity, 2);
-                    label = $"{option.Name} ({enteredQuantity:0.##} {unitLabel})";
-                }
-                else if (option.Kind == SurchargeKind.Percent)
-                {
-                    amount = decimal.Round(subtotalBeforeServices * value / 100m, 2);
-                }
-                else
-                {
-                    amount = decimal.Round(value, 2);
-                }
-
-                if (over?.MinimumAmount is { } serviceMinimum && amount < serviceMinimum)
-                {
-                    amount = serviceMinimum;
-                }
-
-                lines.Add(new PriceBreakdownLine(label, amount, source));
-                serviceLines.Add(new PriceServiceLine(option.Id, option.Name, option.Kind, value, amount, quantity, invoiceLabel, source));
+                quantity = hourStopQty;
+                amount = decimal.Round(value * hourStopQty, 2);
+                label = $"{option.Name} ({hourStopQty:0.##} {unitLabel})";
             }
+            else if (option.Kind == SurchargeKind.Percent)
+            {
+                amount = decimal.Round(subtotalBeforeServices * value / 100m, 2);
+            }
+            else if (option.Kind == SurchargeKind.PerUnit)
+            {
+                // Entered quantity always wins; otherwise derived from the matching order line(s).
+                var derived = option.UnitTypeId is { } unitTypeId
+                    ? request.Lines.Where(l => l.UnitTypeId == unitTypeId).Sum(l => l.Quantity)
+                    : 0m;
+                var qty = enteredQuantity is { } q1 && q1 > 0 ? q1 : derived;
+                var unitName = option.UnitTypeId is { } uid ? serviceUnitNames.GetValueOrDefault(uid, "eenheid") : "eenheid";
+                if (qty <= 0)
+                {
+                    lines.Add(new PriceBreakdownLine(
+                        $"{option.Name}: geen {unitName} op deze order", 0m, source, Informational: true));
+                    continue;
+                }
+
+                quantity = qty;
+                amount = decimal.Round(value * qty, 2);
+                label = $"{option.Name} ({qty:0.##} {unitName})";
+            }
+            else if (option.Kind == SurchargeKind.PerOrderLine)
+            {
+                var qty = enteredQuantity is { } q2 && q2 > 0 ? q2 : (decimal?)request.CargoLineCount;
+                if (qty is null)
+                {
+                    lines.Add(new PriceBreakdownLine(
+                        $"{option.Name}: aantal orderlijnen onbekend", 0m, source, Informational: true));
+                    continue;
+                }
+
+                quantity = qty;
+                amount = decimal.Round(value * qty.Value, 2);
+                label = $"{option.Name} ({qty.Value:0.##} orderlijnen)";
+            }
+            else if (option.Kind == SurchargeKind.PerKg)
+            {
+                var qty = enteredQuantity is { } q3 && q3 > 0 ? q3 : request.WeightKg;
+                if (qty is null)
+                {
+                    lines.Add(new PriceBreakdownLine($"{option.Name}: geen gewicht gekend", 0m, source, Informational: true));
+                    continue;
+                }
+
+                quantity = qty;
+                amount = decimal.Round(value * qty.Value, 2);
+                label = $"{option.Name} ({qty.Value:0.##} kg)";
+            }
+            else if (option.Kind == SurchargeKind.PerM3)
+            {
+                var qty = enteredQuantity is { } q4 && q4 > 0 ? q4 : request.VolumeM3;
+                if (qty is null)
+                {
+                    lines.Add(new PriceBreakdownLine($"{option.Name}: geen volume gekend", 0m, source, Informational: true));
+                    continue;
+                }
+
+                quantity = qty;
+                amount = decimal.Round(value * qty.Value, 2);
+                label = $"{option.Name} ({qty.Value:0.##} m³)";
+            }
+            else if (option.Kind == SurchargeKind.PerLdm)
+            {
+                var qty = enteredQuantity is { } q5 && q5 > 0 ? q5 : request.LoadingMeters;
+                if (qty is null)
+                {
+                    lines.Add(new PriceBreakdownLine($"{option.Name}: geen laadmeters gekend", 0m, source, Informational: true));
+                    continue;
+                }
+
+                quantity = qty;
+                amount = decimal.Round(value * qty.Value, 2);
+                label = $"{option.Name} ({qty.Value:0.##} ldm)";
+            }
+            else if (option.Kind is SurchargeKind.PerDay or SurchargeKind.PerPalletDay)
+            {
+                var dayWord = option.Kind == SurchargeKind.PerDay ? "dagen" : "pallet-dagen";
+                if (enteredQuantity is not { } dayQty || dayQty <= 0)
+                {
+                    lines.Add(new PriceBreakdownLine(
+                        $"{option.Name}: geef het aantal {dayWord} op", 0m, source, Informational: true));
+                    continue;
+                }
+
+                quantity = dayQty;
+                amount = decimal.Round(value * dayQty, 2);
+                label = $"{option.Name} ({dayQty:0.##} {dayWord})";
+            }
+            else
+            {
+                amount = decimal.Round(value, 2);
+            }
+
+            if (over?.MinimumAmount is { } serviceMinimum && amount < serviceMinimum)
+            {
+                amount = serviceMinimum;
+            }
+
+            lines.Add(new PriceBreakdownLine(label, amount, source));
+            serviceLines.Add(new PriceServiceLine(
+                option.Id, option.Name, option.Kind, value, amount, quantity, invoiceLabel, source, isAutoApplied));
         }
 
         var total = lines.Where(l => !l.Informational).Sum(l => l.Amount);

@@ -97,11 +97,18 @@ public record SavePriceRuleRequest(
 
 public record ServiceOptionDto(
     Guid Id, string Code, string Name, SurchargeKind Kind, decimal DefaultValue, bool IsActive, int SortOrder,
-    string? Description = null, string? InvoiceDescription = null, bool SelectableInOrders = true);
+    string? Description = null, string? InvoiceDescription = null, bool SelectableInOrders = true,
+    /// <summary>Kind == PerUnit only: which managed unit this service counts.</summary>
+    Guid? UnitTypeId = null, string? UnitTypeName = null,
+    /// <summary>The engine adds this service automatically (contract service), quantified from the order.</summary>
+    bool AutoApply = false,
+    /// <summary>Only charged/auto-applied when the order requires ADR.</summary>
+    bool OnlyForAdr = false);
 
 public record SaveServiceOptionRequest(
     string Code, string Name, SurchargeKind Kind, decimal DefaultValue, bool IsActive, int SortOrder,
-    string? Description = null, string? InvoiceDescription = null, bool SelectableInOrders = true);
+    string? Description = null, string? InvoiceDescription = null, bool SelectableInOrders = true,
+    Guid? UnitTypeId = null, bool AutoApply = false, bool OnlyForAdr = false);
 
 // --- Customer pricing configuration ---
 
@@ -117,7 +124,11 @@ public record CustomerServiceOptionPriceDto(
     Guid ServiceOptionId, string Name, SurchargeKind Kind, decimal DefaultValue, decimal? CustomerValue,
     bool Disabled = false, decimal? MinimumAmount = null, string? InvoiceDescription = null,
     DateOnly? EffectiveFrom = null, DateOnly? EffectiveUntil = null,
-    decimal EffectiveValue = 0, string Source = "Algemene standaard");
+    decimal EffectiveValue = 0, string Source = "Algemene standaard",
+    /// <summary>Override of the global AutoApply for this customer; null = inherit.</summary>
+    bool? AutoApplyOverride = null,
+    /// <summary>The effective auto-apply behaviour today, after applying the override.</summary>
+    bool EffectiveAutoApply = false);
 
 public record CustomerPricingConfigDto(
     IReadOnlyList<CustomerPreferredUnitDto> PreferredUnits,
@@ -134,7 +145,8 @@ public record SaveCustomerPricingConfigRequest(
 public record SaveCustomerOptionPriceRequest(
     Guid ServiceOptionId, decimal? Value,
     bool Disabled = false, decimal? MinimumAmount = null, string? InvoiceDescription = null,
-    DateOnly? EffectiveFrom = null, DateOnly? EffectiveUntil = null);
+    DateOnly? EffectiveFrom = null, DateOnly? EffectiveUntil = null,
+    bool? AutoApplyOverride = null);
 
 // --- Scheduled price adjustments ---
 
@@ -202,7 +214,11 @@ public record PriceCalculationRequest(
     IReadOnlyList<PriceServiceInput>? Services = null,
     decimal? VolumeM3 = null,
     decimal? LoadingMeters = null,
-    int? StopCount = null);
+    int? StopCount = null,
+    /// <summary>Whether the order requires ADR handling; drives OnlyForAdr service options.</summary>
+    bool? AdrRequired = null,
+    /// <summary>Number of (non-deleted) cargo/order lines; drives PerOrderLine service options. Null = unknown.</summary>
+    int? CargoLineCount = null);
 
 public record PriceBreakdownLine(
     string Label, decimal Amount, string Source, bool Informational = false,
@@ -210,10 +226,12 @@ public record PriceBreakdownLine(
     Guid? AgreementId = null, string? AgreementName = null,
     decimal? ActualQuantity = null, decimal? BillableQuantity = null);
 
-/// <summary>A selected service option with its resolved (customer or default) price.</summary>
+/// <summary>A selected (or auto-applied) service option with its resolved (customer or default) price.</summary>
 public record PriceServiceLine(
     Guid ServiceOptionId, string Name, SurchargeKind Kind, decimal Value, decimal Amount,
-    decimal? Quantity = null, string? InvoiceLabel = null, string Source = "Algemene standaard");
+    decimal? Quantity = null, string? InvoiceLabel = null, string Source = "Algemene standaard",
+    /// <summary>True when the engine added this line automatically (contract service) — not selected by the user.</summary>
+    bool AutoApplied = false);
 
 public record PriceCalculationResult(
     IReadOnlyList<PriceBreakdownLine> Lines,

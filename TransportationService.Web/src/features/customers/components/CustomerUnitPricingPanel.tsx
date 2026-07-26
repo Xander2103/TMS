@@ -221,7 +221,13 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
 
   async function saveServiceOverride(
     serviceOptionId: string,
-    patch: Partial<{ value: number | null; disabled: boolean; effectiveFrom: string | null; effectiveUntil: string | null }>,
+    patch: Partial<{
+      value: number | null
+      disabled: boolean
+      effectiveFrom: string | null
+      effectiveUntil: string | null
+      autoApplyOverride: boolean | null
+    }>,
     reset = false,
   ) {
     if (!config) return
@@ -245,12 +251,13 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               invoiceDescription: o.invoiceDescription,
               effectiveFrom: o.effectiveFrom,
               effectiveUntil: o.effectiveUntil,
+              autoApplyOverride: o.autoApplyOverride,
             }
           }
 
           if (reset) {
             // "Algemene waarde opnieuw gebruiken": drop the whole override row.
-            return { serviceOptionId: o.serviceOptionId, value: null, disabled: false }
+            return { serviceOptionId: o.serviceOptionId, value: null, disabled: false, autoApplyOverride: null }
           }
 
           return {
@@ -261,6 +268,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             invoiceDescription: o.invoiceDescription,
             effectiveFrom: patch.effectiveFrom !== undefined ? patch.effectiveFrom : o.effectiveFrom,
             effectiveUntil: patch.effectiveUntil !== undefined ? patch.effectiveUntil : o.effectiveUntil,
+            autoApplyOverride: patch.autoApplyOverride !== undefined ? patch.autoApplyOverride : o.autoApplyOverride,
           }
         }),
       })
@@ -680,6 +688,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             <th>Geldig</th>
             <th>Effectieve prijs</th>
             <th>Bron</th>
+            <th>Automatisch toepassen</th>
             {canManage && <th aria-label="Acties" />}
           </tr>
         </thead>
@@ -756,6 +765,23 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 </td>
                 <td>{option.disabled ? 'Uitgeschakeld' : formatServiceValue(option.kind, option.effectiveValue)}</td>
                 <td>{option.source}</td>
+                <td>
+                  <select
+                    aria-label={`Automatisch toepassen voor ${option.name}`}
+                    value={option.autoApplyOverride === null ? 'inherit' : option.autoApplyOverride ? 'on' : 'off'}
+                    disabled={!canManage}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      void saveServiceOverride(option.serviceOptionId, {
+                        autoApplyOverride: value === 'inherit' ? null : value === 'on',
+                      })
+                    }}
+                  >
+                    <option value="inherit">Standaard ({option.effectiveAutoApply ? 'aan' : 'uit'})</option>
+                    <option value="on">Aan</option>
+                    <option value="off">Uit</option>
+                  </select>
+                </td>
                 {canManage && (
                   <td className="issued-items-row-actions">
                     {hasOverride && (

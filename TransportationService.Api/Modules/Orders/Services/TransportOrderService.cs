@@ -1026,7 +1026,9 @@ public class TransportOrderService : ITransportOrderService
                 order.WeightKg, null, order.PalletCount,
                 [], Services: serviceSelections,
                 VolumeM3: order.VolumeM3,
-                StopCount: unloadingStops.Count > 0 ? unloadingStops.Count : null), cancellationToken);
+                StopCount: unloadingStops.Count > 0 ? unloadingStops.Count : null,
+                AdrRequired: order.AdrRequired,
+                CargoLineCount: cargoItems?.Count(c => !c.IsDeleted)), cancellationToken);
         }
 
         var calculated = result is { RequiresManualPrice: false } && result.Lines.Any(l => !l.Informational)

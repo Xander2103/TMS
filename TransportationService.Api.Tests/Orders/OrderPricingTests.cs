@@ -298,6 +298,31 @@ public class OrderPricingTests
     }
 
     [Fact]
+    public async Task AutoAppliedService_BecomesATransportOrderServiceLine()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "PICK", "Picking", SurchargeKind.PerUnit, 1.25m, true, 0,
+            UnitTypeId: h.PalletUnitId, AutoApply: true), CancellationToken.None);
+
+        // Never selected — the engine adds it automatically, quantified from the order's pallet quantity.
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var serviceLine = Assert.Single(created.Order!.ServiceLines!);
+        Assert.Equal("Picking", serviceLine.Name);
+        Assert.Equal(3.75m, serviceLine.Amount); // 3 pallets × €1.25
+        Assert.Equal(3m, serviceLine.Quantity);
+        Assert.Equal(118.75m, created.Order.AgreedPrice); // 115 base + 3.75 auto-applied service
+
+        var stored = await h.Db.Context.TransportOrderServiceLines.SingleAsync();
+        Assert.Equal(3m, stored.Quantity);
+        Assert.Equal("Picking", stored.NameSnapshot);
+    }
+
+    [Fact]
     public async Task CustomerDisabledService_IsNeverCharged_OnTheOrder()
     {
         var h = await SeedAsync();
