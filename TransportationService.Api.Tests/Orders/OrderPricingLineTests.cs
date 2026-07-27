@@ -408,6 +408,62 @@ public class OrderPricingLineTests
         Assert.NotEqual(500m, overridden.Order.PricingSnapshot!.LinesTotal);
     }
 
+    // --- Critical fix: AgreedPrice must follow LinesTotal whenever ANY countable line survives,
+    // not only when a Manual line exists ------------------------------------------------------
+
+    [Fact]
+    public async Task RequiresManualPrice_WithSurvivingAdjustedLine_AgreedPrice_FollowsLinesTotal_NotStaleRequestedPrice()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // A QuantityBracket rule that matches quantity 8 today (bracket 1-10 = flat 100) plus an
+        // auto-applied per-pallet service — both become countable Auto lines on creation.
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.QuantityBracket, null,
+            "Pallets staffel", new DateOnly(2026, 1, 1), null, true, null, null,
+            [new SavePriceRuleBracketRequest(1m, 10m, 100m, null)]), CancellationToken.None);
+        await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "PICK", "Picking", SurchargeKind.PerUnit, 1.25m, true, 0,
+            UnitTypeId: h.PalletUnitId, AutoApply: true), CancellationToken.None);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 8), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Equal(100m, RuleLine(created.Order!).Amount);
+        Assert.Equal(10m, ServiceLine(created.Order!).Amount); // 8 × 1.25
+        Assert.Equal(110m, created.Order!.AgreedPrice);
+
+        // The service line gets manually adjusted (survives future recalcs by LineKey, becomes AutoAdjusted).
+        var serviceLine = ServiceLine(created.Order);
+        var adjusted = await h.Sut.SaveOrderPriceLinesAsync(
+            created.Order.Id,
+            [new SaveOrderPriceLineRequest(serviceLine.LineKey, serviceLine.Label, null, null, 999m, "Onderhandelde toeslag")],
+            CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, adjusted.Outcome);
+        Assert.Equal(OrderPriceLineKind.AutoAdjusted, ServiceLine(adjusted.Order!).Kind);
+        Assert.Equal(1099m, adjusted.Order!.AgreedPrice); // 100 (rule) + 999 (adjusted service)
+
+        // Now the rule's bracket is narrowed so quantity 8 no longer matches any bracket — the
+        // engine returns RequiresManualPrice for this recalculation, while the AutoAdjusted
+        // service line (a countable line) still survives the merge unchanged.
+        var bracket = await h.Db.Context.PriceRuleBrackets.SingleAsync();
+        bracket.ToQuantity = 5m;
+        await h.Db.Context.SaveChangesAsync();
+
+        var recalculated = await h.Sut.RecalculateOrderPricingAsync(created.Order.Id, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, recalculated.Outcome);
+        var brokenRuleLine = RuleLine(recalculated.Order!);
+        Assert.Equal(0m, brokenRuleLine.Amount); // "Geen staffel voor …" — zero, but still a countable Auto line
+        var survivedService = ServiceLine(recalculated.Order!);
+        Assert.Equal(OrderPriceLineKind.AutoAdjusted, survivedService.Kind);
+        Assert.Equal(999m, survivedService.Amount);
+        // AgreedPrice must equal LinesTotal (0 + 999), NEVER the stale pre-recalculation requested
+        // price (1099) that ApplyPricingAsync received as `requestedAgreedPrice`.
+        Assert.Equal(999m, recalculated.Order!.PricingSnapshot!.LinesTotal);
+        Assert.Equal(999m, recalculated.Order.AgreedPrice);
+        Assert.NotEqual(1099m, recalculated.Order.AgreedPrice);
+    }
+
     // --- Tenant isolation on every new endpoint --------------------------------------------------
 
     [Fact]

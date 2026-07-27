@@ -201,6 +201,23 @@ describe('TransportOrderDetailPage pricing lines', () => {
     await waitFor(() => expect(api.setOrderPricingStatus).toHaveBeenCalledWith('order-1', 'Locked'))
   })
 
+  it('hides the recalculate action without orders.edit/orders.manage, shows it once granted', async () => {
+    auth.permissions = new Set(['orders.view', 'orders.override_price'])
+    const { rerender } = renderPage()
+    await screen.findByText('Basisregel')
+    expect(screen.queryByRole('button', { name: 'Herberekenen' })).not.toBeInTheDocument()
+
+    auth.permissions = new Set(['orders.view', 'orders.override_price', 'orders.edit'])
+    rerender(
+      <MemoryRouter initialEntries={['/transport-orders/order-1']}>
+        <Routes>
+          <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await screen.findByRole('button', { name: 'Herberekenen' })
+  })
+
   it('warns before recalculating when the price was already reviewed', async () => {
     api.getTransportOrder.mockResolvedValue(
       baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, status: 'Reviewed' } }),

@@ -472,7 +472,7 @@ export function TransportOrderDetailPage() {
                     Ontgrendel
                   </Button>
                 )}
-                {!pricingLocked && (
+                {canEditPricingStatus && !pricingLocked && (
                   <Button variant="secondary" onClick={handleRecalculateClick} disabled={pricingBusy}>
                     Herberekenen
                   </Button>

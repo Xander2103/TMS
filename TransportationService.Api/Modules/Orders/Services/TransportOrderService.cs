@@ -1071,7 +1071,8 @@ public class TransportOrderService : ITransportOrderService
 
     /// <summary>Kinds whose (non-informational) amount counts towards LinesTotal/AgreedPrice.</summary>
     private static bool CountsTowardsLinesTotal(TransportOrderPricingLine line) =>
-        !line.Informational && line.Kind is OrderPriceLineKind.Auto or OrderPriceLineKind.AutoAdjusted or OrderPriceLineKind.Manual;
+        !line.IsDeleted && !line.Informational
+        && line.Kind is OrderPriceLineKind.Auto or OrderPriceLineKind.AutoAdjusted or OrderPriceLineKind.Manual;
 
     /// <summary>
     /// Runs the pricing engine, MERGES the result into the existing persisted lines (spec ch.
@@ -1259,7 +1260,15 @@ public class TransportOrderService : ITransportOrderService
         }
 
         var linesTotal = decimal.Round(mergedLines.Where(CountsTowardsLinesTotal).Sum(l => l.Amount), 2);
-        var hasManualLines = mergedLines.Any(l => l.Kind == OrderPriceLineKind.Manual && !l.Informational);
+        // A user-touched line (Manual, or AutoAdjusted surviving a merge — spec ch. 24-26) can hold
+        // a real amount that a bare "nothing configured"/"no bracket for this quantity" diagnostic
+        // Auto placeholder (amount 0, engine-generated, never touched by anyone) never can. Only the
+        // former must force LinesTotal to win over a stale requestedAgreedPrice when the engine
+        // itself came back empty-handed (RequiresManualPrice) — otherwise an order with NO usable
+        // pricing configuration at all (only "Geen tarief geconfigureerd" placeholders) must keep
+        // falling back to the legacy manual entry below, exactly as before this fix.
+        var hasUserTouchedLines = mergedLines.Any(l =>
+            !l.Informational && l.Kind is OrderPriceLineKind.Manual or OrderPriceLineKind.AutoAdjusted);
 
         if (priceIsManual)
         {
@@ -1268,7 +1277,7 @@ public class TransportOrderService : ITransportOrderService
             order.PriceIsManual = true;
             order.PriceOverrideReason = overrideReason!.Trim();
         }
-        else if (calculated is not null || hasManualLines)
+        else if (calculated is not null || hasUserTouchedLines)
         {
             // LinesTotal reflects manual adjustments (spec ch. 24-26) — it is the calculated
             // total when nothing was ever adjusted, so this is a strict generalisation of the
@@ -1424,16 +1433,30 @@ public class TransportOrderService : ITransportOrderService
         return !previousExplicit.SetEquals(requestedSet);
     }
 
-    /// <summary>Recomputes LinesTotal/AgreedPrice from the currently tracked (incl. not-yet-saved) pricing lines.</summary>
+    /// <summary>
+    /// Recomputes LinesTotal/AgreedPrice for ALL of the order's current pricing lines — queried
+    /// fresh (never just "whatever happens to already be tracked" on this DbContext instance,
+    /// which a caller touching only ONE line, e.g. <see cref="ConfirmOrderPriceLineAsync"/>, would
+    /// under-count). The query already merges in any pending in-memory edits via EF's identity map
+    /// and respects the soft-delete filter, so a just-obsoleted line never lingers in the total. A
+    /// brand-new free/manual line Added earlier in the SAME call (not yet saved, so invisible to a
+    /// plain query) is picked up separately from the change tracker.
+    /// </summary>
     private async Task RecomputeLinesTotalAndAgreedPriceAsync(TransportOrder order, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
-        var trackedLines = _dbContext.ChangeTracker.Entries<TransportOrderPricingLine>()
-            .Where(e => e.State != EntityState.Deleted
+        var persistedLines = await _dbContext.TransportOrderPricingLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
+            .ToListAsync(cancellationToken);
+        var pendingNewLines = _dbContext.ChangeTracker.Entries<TransportOrderPricingLine>()
+            .Where(e => e.State == EntityState.Added
                         && e.Entity.TenantId == tenantId && e.Entity.TransportOrderId == order.Id)
-            .Select(e => e.Entity)
+            .Select(e => e.Entity);
+        var currentLines = persistedLines
+            .Where(l => _dbContext.Entry(l).State != EntityState.Deleted)
+            .Concat(pendingNewLines)
             .ToList();
-        var linesTotal = decimal.Round(trackedLines.Where(CountsTowardsLinesTotal).Sum(l => l.Amount), 2);
+        var linesTotal = decimal.Round(currentLines.Where(CountsTowardsLinesTotal).Sum(l => l.Amount), 2);
 
         var snapshot = await _dbContext.TransportOrderPricingSnapshots
             .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == order.Id, cancellationToken);

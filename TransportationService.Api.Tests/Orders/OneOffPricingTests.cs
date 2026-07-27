@@ -221,6 +221,37 @@ public class OneOffPricingTests
         Assert.Equal(487.50m, reloaded.TotalWithProposed);
     }
 
+    /// <summary>§6 item 8: a Proposed line is excluded from LinesTotal/AgreedPrice until confirmed, then both increase by exactly its amount.</summary>
+    [Fact]
+    public async Task ConfirmOrderPriceLine_FlipsProposedToAuto_IncreasesLinesTotalAndAgreedPriceByItsAmount()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(
+            OneOffRequest(h.CustomerId, 450m, includedCombined: 60, extraHourlyRate: 75m),
+            CancellationToken.None);
+        await SeedStopExecutionsAsync(h, created.Order!.Id, loadingMinutes: 45, unloadingMinutes: 45);
+        var reloaded = await RepriceAsync(h, created.Order.Id);
+
+        var proposed = Assert.Single(reloaded.PricingLines!, l => l.Proposed);
+        Assert.Equal(OrderPriceLineKind.Proposed, proposed.Kind);
+        Assert.Equal(37.50m, proposed.Amount);
+        // Not yet counted: LinesTotal/AgreedPrice still just the base one-off amount.
+        Assert.Equal(450m, reloaded.PricingSnapshot!.LinesTotal);
+        Assert.Equal(450m, reloaded.AgreedPrice);
+
+        var confirmed = await h.Sut.ConfirmOrderPriceLineAsync(created.Order.Id, proposed.Id!.Value, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, confirmed.Outcome);
+        var confirmedLine = Assert.Single(confirmed.Order!.PricingLines!, l => l.LineKey == proposed.LineKey);
+        Assert.Equal(OrderPriceLineKind.Auto, confirmedLine.Kind);
+        Assert.False(confirmedLine.Proposed);
+        Assert.Equal(37.50m, confirmedLine.Amount); // unchanged by the confirm
+        Assert.Equal(487.50m, confirmed.Order.PricingSnapshot!.LinesTotal); // +37.50
+        Assert.Equal(487.50m, confirmed.Order.AgreedPrice); // +37.50
+    }
+
     [Fact]
     public async Task OneOff_NoStopExecutions_ProducesNoExtraTimeLines()
     {
@@ -459,6 +490,45 @@ public class OneOffPricingTests
         var proposed = result.Lines.Where(l => l.Proposed).ToList();
         var proposedLine = Assert.Single(proposed); // never two proposed lines for the same measured minutes
         Assert.Equal(37.50m, proposedLine.Amount); // (90 - 60) min / 60 × 75 (private agreement's rate, not the shared one's 50)
+    }
+
+    /// <summary>Two PRIVATE (same-tier) agreements both configuring included time is a blocking configuration error, never a double proposal.</summary>
+    [Fact]
+    public async Task TwoEngagedAgreements_WithIncludedTime_AtTheSameTier_IsConfigurationError_NoDoubleProposal()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var containerUnitId = Guid.NewGuid();
+        h.Db.Context.UnitTypes.Add(new UnitType { Id = containerUnitId, TenantId = h.TenantId, Code = "CONTAINER", Name = "Container", IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+
+        // Both private (tier 2) — an exact tie, unlike the private-vs-shared case above.
+        var firstAgreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerId, "Contract A", new DateOnly(2026, 1, 1), null, true,
+            null, null, null, IncludedCombinedMinutes: 60, ExtraHourlyRate: 75m), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null, "Pallets A", new DateOnly(2026, 1, 1), null, true,
+            30m, null, null, AgreementId: firstAgreement.Id), CancellationToken.None);
+
+        var secondAgreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerId, "Contract B", new DateOnly(2026, 1, 1), null, true,
+            null, null, null, IncludedCombinedMinutes: 30, ExtraHourlyRate: 50m), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, containerUnitId, PriceRuleBasis.PerUnit, null, "Containers B", new DateOnly(2026, 1, 1), null, true,
+            50m, null, null, AgreementId: secondAgreement.Id), CancellationToken.None);
+
+        var engine = new PricingEngine(h.Db.Context, new DevTenantContext(h.TenantId));
+        var result = await engine.CalculateAsync(new PriceCalculationRequest(
+            h.CustomerId, new DateOnly(2026, 7, 26),
+            [new PriceCalculationLineInput(h.PalletUnitId, 3), new PriceCalculationLineInput(containerUnitId, 1)],
+            "BE", "3500", null, null, null, [],
+            ActualLoadingMinutes: 45m, ActualUnloadingMinutes: 45m), CancellationToken.None);
+
+        Assert.True(result.RequiresManualPrice);
+        Assert.NotNull(result.ConfigurationError);
+        Assert.Contains("Meerdere prijsafspraken met inbegrepen tijd", result.ConfigurationError);
+        Assert.DoesNotContain(result.Lines, l => l.Proposed); // never a proposal from either side of the tie
+        Assert.Contains(result.Lines, l => l.Source == "Configuratiefout" && l.Amount == 0m);
     }
 
     /// <summary>Loading AND unloading both exceeding the allowance with no configured rate emits ONE informational line, not two.</summary>
