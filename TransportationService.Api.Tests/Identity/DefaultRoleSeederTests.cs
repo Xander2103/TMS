@@ -327,9 +327,8 @@ public class DefaultRoleSeederTests
 
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(14, DefaultRoleUpgrades.CurrentVersion);
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
-        Assert.Equal(14, state.AppliedVersion);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         var planner = roles.Single(r => r.TemplateCode == "planner");
@@ -343,6 +342,31 @@ public class DefaultRoleSeederTests
         foreach (var other in others)
         {
             Assert.DoesNotContain(PermissionCodes.OrdersLockPrice, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version15_GrantsTariffsImport_ToManagementBoekhoudingOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        Assert.Equal(15, DefaultRoleUpgrades.CurrentVersion);
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(15, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var boekhouding = roles.Single(r => r.TemplateCode == "boekhouding");
+        var others = roles.Where(r => r.TemplateCode is not ("management" or "boekhouding")).ToList();
+
+        Assert.Contains(PermissionCodes.TariffsImport, await CodesOfAsync(db, management.Id));
+        Assert.Contains(PermissionCodes.TariffsImport, await CodesOfAsync(db, boekhouding.Id));
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.TariffsImport, await CodesOfAsync(db, other.Id));
         }
     }
 

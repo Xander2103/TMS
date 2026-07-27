@@ -1,21 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
+import { Button } from '../../../components/ui/Button'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Tabs, TabPanel } from '../../../components/ui/Tabs'
+import { useToast } from '../../../components/ui/toastContext'
+import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { AGREEMENT_STATUS_TONE, agreementSamenstelling, agreementStatus } from '../agreementStatus'
 import { getPricingAgreement, type PricingAgreement } from '../api/pricingApi'
+import { downloadAgreementExport } from '../api/pricingImportApi'
 import { AgreementAdjustmentsPanel } from '../components/AgreementAdjustmentsPanel'
 import { AgreementAssignmentsPanel } from '../components/AgreementAssignmentsPanel'
 import { AgreementDerivationPanel } from '../components/AgreementDerivationPanel'
 import { AgreementSurchargesPanel } from '../components/AgreementSurchargesPanel'
 import { AgreementVersionsPanel } from '../components/AgreementVersionsPanel'
 import { CombinedDiscountsPanel } from '../components/CombinedDiscountsPanel'
+import { PricingImportDialog } from '../components/PricingImportDialog'
 import { RuleGridEditor } from '../components/RuleGridEditor'
 import './../components/pricingTableDetail.css'
 
@@ -29,13 +34,20 @@ type TabId = 'regels' | 'klanten' | 'afleiding' | 'toeslagen' | 'kortingen' | 'a
 export function PricingTableDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { hasPermission } = useAuth()
+  const { showSuccess, showError } = useToast()
   const canView = hasPermission('tariffs.view') || hasPermission('tariffs.manage')
   const canManage = hasPermission('tariffs.manage')
+  const canImport = hasPermission('tariffs.import') || canManage
 
   const [agreement, setAgreement] = useState<PricingAgreement | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('regels')
+  // The "Excel-import" wizard card creates an empty table and lands here with ?import=1 so the
+  // import dialog opens immediately on the fresh table. Computed once at mount (not in an
+  // effect) — closing the dialog strips the param so a later refresh won't reopen it.
+  const [importOpen, setImportOpen] = useState(() => searchParams.get('import') === '1' && canImport)
 
   const reload = useCallback(() => {
     if (!id) return
@@ -50,6 +62,23 @@ export function PricingTableDetailPage() {
   useEffect(() => {
     reload()
   }, [reload])
+
+  function closeImportDialog() {
+    setImportOpen(false)
+    if (searchParams.has('import')) {
+      searchParams.delete('import')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }
+
+  async function handleExport() {
+    if (!agreement) return
+    try {
+      await downloadAgreementExport(agreement.id, agreement.name)
+    } catch (err) {
+      showError(describeApiError(err, 'De tabel kon niet worden geëxporteerd.').message)
+    }
+  }
 
   if (!canView) return <ErrorState message="Je hebt geen rechten om tarieventabellen te bekijken." />
   if (loadError) return <ErrorState message={loadError} />
@@ -80,7 +109,36 @@ export function PricingTableDetailPage() {
             <Badge tone="neutral">{agreementSamenstelling(agreement)}</Badge>
           </span>
         }
+        action={
+          <div className="pricing-table-header-actions">
+            <Button variant="secondary" onClick={() => void handleExport()}>
+              Exporteren
+            </Button>
+            {canImport && (
+              <Button variant="secondary" onClick={() => setImportOpen(true)}>
+                Importeren
+              </Button>
+            )}
+          </div>
+        }
       />
+
+      {importOpen && (
+        <PricingImportDialog
+          agreementId={id}
+          agreementName={agreement.name}
+          onClose={closeImportDialog}
+          onImported={(result) => {
+            showSuccess(`Import klaar: ${result.added} toegevoegd, ${result.updated} gewijzigd, ${result.removed} verwijderd.`)
+            closeImportDialog()
+            if (result.agreementId !== id) {
+              navigate(`/pricing/tables/${result.agreementId}`)
+            } else {
+              reload()
+            }
+          }}
+        />
+      )}
 
       {agreement.customerCount > 0 && (
         <div className="pricing-table-warning" role="alert">

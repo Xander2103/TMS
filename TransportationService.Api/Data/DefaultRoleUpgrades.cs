@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 14;
+    public const int CurrentVersion = 15;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -327,6 +327,14 @@ public static class DefaultRoleUpgrades
                 ["planner"] = [PermissionCodes.OrdersLockPrice],
                 ["management"] = [PermissionCodes.OrdersLockPrice],
                 ["boekhouding"] = [PermissionCodes.OrdersLockPrice],
+            }),
+
+        new(15,
+            "Rate-table Excel export/import 2026-07-27: validated round-trip import of tarieventabellen.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["management"] = [PermissionCodes.TariffsImport],
+                ["boekhouding"] = [PermissionCodes.TariffsImport],
             }),
     ];
 }

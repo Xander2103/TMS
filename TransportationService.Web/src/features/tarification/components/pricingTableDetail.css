@@ -15,3 +15,8 @@
   flex-wrap: wrap;
   margin-top: 0.25rem;
 }
+
+.pricing-table-header-actions {
+  display: flex;
+  gap: 0.5rem;
+}

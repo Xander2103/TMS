@@ -206,6 +206,7 @@ public static class PermissionCodes
     // --- Tariffs (customer rate cards) ---
     public const string TariffsView = "tariffs.view";
     public const string TariffsManage = "tariffs.manage";
+    public const string TariffsImport = "tariffs.import";
 
     // --- Reporting centre (catalog access; each report keeps its own permission) ---
     public const string ReportsView = "reports.view";
@@ -447,6 +448,7 @@ public static class PermissionCodes
         (IncidentsManage, "incidents", "manage", "Incidenten registreren en afhandelen"),
         (TariffsView, "tariffs", "view", "Tarievenkaarten bekijken en prijzen berekenen"),
         (TariffsManage, "tariffs", "manage", "Tarievenkaarten beheren"),
+        (TariffsImport, "tariffs", "import", "Tarieventabellen exporteren/importeren via Excel"),
         (ReportsView, "reports", "view", "Rapportcentrum openen"),
         (CustomerPortalView, "customer_portal", "view", "Klantportaal: eigen opdrachten bekijken"),
         (CustomerPortalSubmitOrders, "customer_portal", "submit_orders", "Klantportaal: opdrachten indienen"),

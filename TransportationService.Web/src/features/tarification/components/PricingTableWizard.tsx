@@ -21,7 +21,8 @@ import './pricingWizard.css'
 
 interface PricingTableWizardProps {
   onClose: () => void
-  onCreated: (agreementId: string) => void
+  /** openImport = true when the "Excel-import" card was chosen: the caller should open the import dialog on the new (empty) table. */
+  onCreated: (agreementId: string, openImport?: boolean) => void
 }
 
 type TemplateId =
@@ -34,6 +35,7 @@ type TemplateId =
   | 'fixed'
   | 'combined'
   | 'blank'
+  | 'excel-import'
 
 interface TemplateCard {
   id: TemplateId
@@ -51,6 +53,7 @@ const TEMPLATE_CARDS: TemplateCard[] = [
   { id: 'fixed', label: 'Vaste prijs', description: 'Eén vast bedrag per order.' },
   { id: 'combined', label: 'Gecombineerd', description: 'Meerdere berekeningswijzen door elkaar; regels zelf toevoegen.' },
   { id: 'blank', label: 'Leeg starten', description: 'Geen regels; zelf opbouwen.' },
+  { id: 'excel-import', label: 'Excel-import', description: 'Maak een lege tabel aan en importeer de regels meteen uit een Excel-bestand.' },
 ]
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -164,6 +167,9 @@ async function createSkeletonRules(
       return
     case 'combined':
     case 'blank':
+    case 'excel-import':
+      // No skeleton rules — 'excel-import' opens the import dialog on the fresh, empty table
+      // instead (see PricingTableWizard.submit / PricingTableDetailPage's ?import=1 handling).
       return
   }
 }
@@ -225,7 +231,7 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
       })
 
       await createSkeletonRules(agreement.id, agreement.customerId, template, effectiveFrom, units, zones, showError)
-      onCreated(agreement.id)
+      onCreated(agreement.id, template === 'excel-import')
     } catch (err) {
       setError(describeApiError(err, 'De tarieventabel kon niet worden aangemaakt.').message)
     } finally {
@@ -270,15 +276,6 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
                 <span>{card.description}</span>
               </button>
             ))}
-            <button
-              type="button"
-              className="pricing-wizard-card"
-              disabled
-              title="Beschikbaar na de import-fase"
-            >
-              <strong>Excel-import</strong>
-              <span>Beschikbaar na de import-fase.</span>
-            </button>
           </div>
         </>
       )}

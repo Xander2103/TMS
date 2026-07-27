@@ -211,6 +211,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Servic
     TransportationService.Api.Modules.Tarification.Services.PricingEngine>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IPriceAdjustmentService,
     TransportationService.Api.Modules.Tarification.Services.PriceAdjustmentService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Tarification.Services.IPricingExcelService,
+    TransportationService.Api.Modules.Tarification.Services.PricingExcelService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderDocumentService,
     TransportationService.Api.Modules.Orders.Services.TransportOrderDocumentService>();
 

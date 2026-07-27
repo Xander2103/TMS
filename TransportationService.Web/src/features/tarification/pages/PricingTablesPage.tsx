@@ -85,9 +85,9 @@ export function PricingTablesPage() {
       {showWizard && (
         <PricingTableWizard
           onClose={() => setShowWizard(false)}
-          onCreated={(id) => {
+          onCreated={(id, openImport) => {
             setShowWizard(false)
-            navigate(`/pricing/tables/${id}`)
+            navigate(openImport ? `/pricing/tables/${id}?import=1` : `/pricing/tables/${id}`)
           }}
         />
       )}

@@ -23,6 +23,17 @@ public interface IPricingAdminService
     Task<bool> DeleteAgreementAsync(Guid id, CancellationToken cancellationToken);
     Task<PricingAgreementDto?> DuplicateAgreementAsync(Guid id, DuplicateAgreementRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Same duplication as <see cref="DuplicateAgreementAsync"/>, but prepares the copy WITHOUT
+    /// saving or auditing — used by the Excel import "new version" mode, which must apply the
+    /// file's changes to the copy's rules and persist everything (duplicate + import) in one
+    /// SaveChanges/transaction so an invalid import never leaves a bare duplicate behind. Callers
+    /// own the transaction, the SaveChangesAsync call and the audit entry. The returned map is
+    /// source PriceRule.Id → copied PriceRule.Id, for translating the file's RegelId column.
+    /// </summary>
+    Task<(PricingAgreement NewAgreement, IReadOnlyDictionary<Guid, Guid> RuleIdMap)?> PrepareAgreementDuplicateAsync(
+        Guid id, DuplicateAgreementRequest request, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<PricingAgreementAssignmentDto>?> ListAssignmentsAsync(Guid agreementId, CancellationToken cancellationToken);
     Task<IReadOnlyList<PricingAgreementAssignmentDto>?> SaveAssignmentsAsync(
         Guid agreementId, IReadOnlyList<SavePricingAssignmentRequest> requests, CancellationToken cancellationToken);
@@ -231,6 +242,23 @@ public class PricingAdminService : IPricingAdminService
     public async Task<PricingAgreementDto?> DuplicateAgreementAsync(
         Guid id, DuplicateAgreementRequest request, CancellationToken cancellationToken)
     {
+        var prepared = await PrepareAgreementDuplicateAsync(id, request, cancellationToken);
+        if (prepared is null)
+        {
+            return null;
+        }
+
+        var (newAgreement, ruleIdMap) = prepared.Value;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PricingAgreement", newAgreement.Id.ToString(), "duplicated", null,
+            new { SourceAgreementId = id, newAgreement.Name, newAgreement.EffectiveFrom, request.CloseSource, RuleCount = ruleIdMap.Count },
+            cancellationToken);
+        return (await MapAgreementsAsync([newAgreement], cancellationToken))[0];
+    }
+
+    public async Task<(PricingAgreement NewAgreement, IReadOnlyDictionary<Guid, Guid> RuleIdMap)?> PrepareAgreementDuplicateAsync(
+        Guid id, DuplicateAgreementRequest request, CancellationToken cancellationToken)
+    {
         var source = await _dbContext.PricingAgreements
             .Include(a => a.Surcharges).Include(a => a.Modifiers)
             .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == id, cancellationToken);
@@ -307,6 +335,7 @@ public class PricingAdminService : IPricingAdminService
         }
 
         var dayBeforeNew = request.EffectiveFrom.AddDays(-1);
+        var ruleIdMap = new Dictionary<Guid, Guid>();
         foreach (var sourceRule in sourceRules)
         {
             decimal? AdjustValue(decimal? value) =>
@@ -341,6 +370,7 @@ public class PricingAdminService : IPricingAdminService
                 OversizeBillableFactor = sourceRule.OversizeBillableFactor,
             };
             _dbContext.PriceRules.Add(clone);
+            ruleIdMap[sourceRule.Id] = clone.Id;
 
             foreach (var bracket in sourceRule.Brackets)
             {
@@ -370,11 +400,7 @@ public class PricingAdminService : IPricingAdminService
             source.EffectiveUntil = dayBeforeNew;
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("PricingAgreement", newAgreement.Id.ToString(), "duplicated", null,
-            new { SourceAgreementId = id, newAgreement.Name, newAgreement.EffectiveFrom, request.CloseSource, RuleCount = sourceRules.Count },
-            cancellationToken);
-        return (await MapAgreementsAsync([newAgreement], cancellationToken))[0];
+        return (newAgreement, ruleIdMap);
     }
 
     /// <summary>
