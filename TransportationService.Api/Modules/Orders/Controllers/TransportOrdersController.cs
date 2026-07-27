@@ -237,6 +237,45 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>Manual line-level corrections/removals/free additions (spec ch. 24-26).</summary>
+    [HttpPut("{id:guid}/pricing/lines")]
+    [RequirePermission(PermissionCodes.OrdersOverridePrice, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> SaveOrderPriceLines(
+        Guid id, IReadOnlyList<SaveOrderPriceLineRequest> request, CancellationToken cancellationToken)
+    {
+        var result = await _service.SaveOrderPriceLinesAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Explicit re-run of the pricing engine; refused while the price is Locked/Invoiced.</summary>
+    [HttpPost("{id:guid}/pricing/recalculate")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> RecalculateOrderPricing(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _service.RecalculateOrderPricingAsync(id, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Pricing status transition; fine-grained permission per transition is enforced service-side.</summary>
+    [HttpPost("{id:guid}/pricing/status")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> SetOrderPricingStatus(
+        Guid id, SetOrderPricingStatusRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.SetOrderPricingStatusAsync(id, request.Status, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Confirms an unconfirmed (VOORSTEL) extra-time line so it counts towards the price.</summary>
+    [HttpPost("{id:guid}/pricing/lines/{lineId:guid}/confirm")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ConfirmOrderPriceLine(
+        Guid id, Guid lineId, CancellationToken cancellationToken)
+    {
+        var result = await _service.ConfirmOrderPriceLineAsync(id, lineId, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     [HttpDelete("{id:guid}")]
     [RequirePermission(PermissionCodes.OrdersDelete, PermissionCodes.OrdersManage)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

@@ -1,6 +1,7 @@
 import { apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
 import type {
+  OrderPricingStatus,
   OrderPriority,
   StopExecutionPlanInput,
   TransportOrderDetail,
@@ -120,4 +121,43 @@ export interface OrderTimelineEvent {
 
 export function getTransportOrderTimeline(id: string): Promise<OrderTimelineEvent[]> {
   return apiClient.getJson<OrderTimelineEvent[]>(`/api/transport-orders/${id}/timeline`)
+}
+
+/**
+ * One line-level manual correction/removal/free addition (spec ch. 24-26). LineKey null targets a
+ * new free Manual line; otherwise targets an existing Auto/AutoAdjusted/Manual line by its stable
+ * merge key. Remove keeps the row for audit (Auto/AutoAdjusted → Amount 0) except a Manual line,
+ * which is hard-deleted.
+ */
+export interface SaveOrderPriceLineInput {
+  lineKey: string | null
+  label: string
+  quantity: number | null
+  unitPrice: number | null
+  amount: number | null
+  adjustReason: string | null
+  remove?: boolean
+}
+
+export function saveOrderPriceLines(orderId: string, lines: SaveOrderPriceLineInput[]): Promise<TransportOrderDetail> {
+  return apiClient.putJson<TransportOrderDetail, SaveOrderPriceLineInput[]>(
+    `/api/transport-orders/${orderId}/pricing/lines`, lines)
+}
+
+/** Explicit re-run of the pricing engine (merge-on-recalc); refused while Locked/Invoiced. */
+export function recalculateOrderPricing(orderId: string): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, Record<string, never>>(
+    `/api/transport-orders/${orderId}/pricing/recalculate`, {})
+}
+
+/** Pricing status transition (Draft/Reviewed/Locked); Invoiced is set only by invoicing. */
+export function setOrderPricingStatus(orderId: string, status: OrderPricingStatus): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, { status: OrderPricingStatus }>(
+    `/api/transport-orders/${orderId}/pricing/status`, { status })
+}
+
+/** Confirms an unconfirmed (VOORSTEL) extra-time line so it counts towards LinesTotal/AgreedPrice. */
+export function confirmOrderPriceLine(orderId: string, lineId: string): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, Record<string, never>>(
+    `/api/transport-orders/${orderId}/pricing/lines/${lineId}/confirm`, {})
 }

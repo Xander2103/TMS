@@ -108,6 +108,33 @@
   margin-top: 20px;
 }
 
+.to-price-status-actions {
+  margin-bottom: 12px;
+}
+
+.to-price-original {
+  font-size: 13px;
+  color: var(--text);
+  margin-top: 2px;
+}
+
+.to-price-line-actions {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.to-calc-explanation {
+  white-space: pre-wrap;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
 @media (max-width: 640px) {
   .to-filters {
     flex-direction: column;

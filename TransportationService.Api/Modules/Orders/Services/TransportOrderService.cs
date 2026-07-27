@@ -1000,7 +1000,9 @@ public class TransportOrderService : ITransportOrderService
             .OrderBy(l => l.Sequence)
             .Select(l => new OrderPricingLineDto(
                 l.Label, l.Amount, l.Source, l.Informational,
-                l.RuleName, l.AgreementName, l.ActualQuantity, l.BillableQuantity, l.Proposed))
+                l.RuleName, l.AgreementName, l.ActualQuantity, l.BillableQuantity, l.Proposed,
+                l.Id, l.Kind, l.Quantity, l.UnitPrice, l.OriginalQuantity, l.OriginalUnitPrice, l.OriginalAmount,
+                l.AdjustReason, l.LineKey))
             .ToListAsync(cancellationToken);
         // Recomputed from the persisted lines (never separately snapshotted) so it can never drift
         // from CalculatedPrice/pricingLines — a proposed extra-time charge is never invoiceable on its own.
@@ -1013,7 +1015,7 @@ public class TransportOrderService : ITransportOrderService
                 s.TariffDate, s.Currency, s.ZoneCode, s.ZoneName,
                 s.AgreementNames, s.UnitSummary, s.CalculatedTotal,
                 s.OverrideAmount, s.OverrideReason, s.OverriddenByUserId, s.OverriddenAtUtc,
-                s.Explanation))
+                s.Explanation, s.Status, s.LinesTotal))
             .FirstOrDefaultAsync(cancellationToken);
         var serviceLines = await _dbContext.TransportOrderServiceLines.AsNoTracking()
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
@@ -1054,24 +1056,65 @@ public class TransportOrderService : ITransportOrderService
             ? services.Select(s => new PriceServiceInput(s.ServiceOptionId, s.Quantity)).ToList()
             : (serviceOptionIds ?? []).Select(id => new PriceServiceInput(id)).ToList();
 
+    /// <summary>Shared Dutch message for every endpoint that refuses to touch a Locked/Invoiced price.</summary>
+    private const string PricingLockedMessage = "De prijs van deze order is vergrendeld. Ontgrendel eerst om te herberekenen.";
+
+    /// <summary>Allowed pricing-status transitions; Invoiced is reachable only via invoice generation.</summary>
+    private static readonly IReadOnlyDictionary<OrderPricingStatus, OrderPricingStatus[]> PricingStatusTransitions =
+        new Dictionary<OrderPricingStatus, OrderPricingStatus[]>
+        {
+            [OrderPricingStatus.Draft] = [OrderPricingStatus.Reviewed, OrderPricingStatus.Locked],
+            [OrderPricingStatus.Reviewed] = [OrderPricingStatus.Draft, OrderPricingStatus.Locked],
+            [OrderPricingStatus.Locked] = [OrderPricingStatus.Reviewed],
+            [OrderPricingStatus.Invoiced] = [],
+        };
+
+    /// <summary>Kinds whose (non-informational) amount counts towards LinesTotal/AgreedPrice.</summary>
+    private static bool CountsTowardsLinesTotal(TransportOrderPricingLine line) =>
+        !line.Informational && line.Kind is OrderPriceLineKind.Auto or OrderPriceLineKind.AutoAdjusted or OrderPriceLineKind.Manual;
+
+    /// <summary>
+    /// Runs the pricing engine, MERGES the result into the existing persisted lines (spec ch.
+    /// 24-26: never delete-all-rewrite — Manual lines are preserved verbatim, AutoAdjusted lines
+    /// keep the user's values and refresh their Original* baseline, orphaned adjustments become
+    /// Manual) and determines the effective AgreedPrice: manual whole-order override > LinesTotal
+    /// (when any qualifying line exists) > legacy manual entry. A Locked/Invoiced snapshot skips
+    /// recalculation entirely; an attempt to change pricing-relevant inputs while locked is refused.
+    /// </summary>
     private async Task<TransportOrderOperationResult?> ApplyPricingAsync(
         TransportOrder order, decimal? requestedAgreedPrice, IReadOnlyList<PriceServiceInput> serviceSelections,
         bool priceIsManual, string? overrideReason, IReadOnlyList<CargoItem>? cargoItems,
         CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
-        var existingPricing = await _dbContext.TransportOrderPricingLines
+
+        var existingSnapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == order.Id, cancellationToken);
+
+        if (existingSnapshot is { Status: OrderPricingStatus.Locked or OrderPricingStatus.Invoiced })
+        {
+            if (await PricingInputsChangedAsync(order, requestedAgreedPrice, priceIsManual, overrideReason, serviceSelections, cancellationToken))
+            {
+                throw new Common.DomainValidationException(PricingLockedMessage);
+            }
+
+            // Non-pricing edits (notes, stops, ...) proceed without touching any pricing row.
+            return null;
+        }
+
+        // Read-only for now — no removal/insertion yet. A priceIsManual permission/reason failure
+        // below must be able to bail out WITHOUT leaving any newly-added pricing rows dangling in
+        // the change tracker (they would reference an order that, on Create, never gets added).
+        var existingLines = await _dbContext.TransportOrderPricingLines
             .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
             .ToListAsync(cancellationToken);
-        _dbContext.RemoveRange(existingPricing);
+        var manualLines = existingLines.Where(l => l.Kind == OrderPriceLineKind.Manual).OrderBy(l => l.Sequence).ToList();
+        var autoAdjustedLines = existingLines.Where(l => l.Kind == OrderPriceLineKind.AutoAdjusted).ToList();
+        var obsoleteLines = existingLines.Where(l => l.Kind is OrderPriceLineKind.Auto or OrderPriceLineKind.Proposed).ToList();
+
         var existingServices = await _dbContext.TransportOrderServiceLines
             .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
             .ToListAsync(cancellationToken);
-        _dbContext.RemoveRange(existingServices);
-        var existingSnapshots = await _dbContext.TransportOrderPricingSnapshots
-            .Where(s => s.TenantId == tenantId && s.TransportOrderId == order.Id)
-            .ToListAsync(cancellationToken);
-        _dbContext.RemoveRange(existingSnapshots);
 
         PriceCalculationResult? result = null;
         if (_pricingEngine is not null)
@@ -1128,6 +1171,8 @@ public class TransportOrderService : ITransportOrderService
             : (decimal?)null;
         order.CalculatedPrice = calculated;
 
+        // Validate the whole-order manual override BEFORE mutating anything: a failure here must
+        // return without touching the change tracker (no dangling Added/Removed pricing rows).
         if (priceIsManual)
         {
             if (string.IsNullOrWhiteSpace(overrideReason))
@@ -1142,53 +1187,119 @@ public class TransportOrderService : ITransportOrderService
             {
                 return TransportOrderOperationResult.Invalid("Je hebt geen rechten om de berekende prijs te overschrijven.");
             }
+        }
 
+        _dbContext.RemoveRange(obsoleteLines);
+        _dbContext.RemoveRange(existingServices);
+
+        // --- Merge fresh engine lines into the surviving Manual/AutoAdjusted lines ------------
+        var mergedLines = new List<TransportOrderPricingLine>();
+        var sequence = 0;
+        var consumedAdjustedIds = new HashSet<Guid>();
+        foreach (var line in result?.Lines ?? [])
+        {
+            var matchedAdjusted = line.LineKey is not null
+                ? autoAdjustedLines.FirstOrDefault(a => a.LineKey == line.LineKey && !consumedAdjustedIds.Contains(a.Id))
+                : null;
+            if (matchedAdjusted is not null)
+            {
+                consumedAdjustedIds.Add(matchedAdjusted.Id);
+                matchedAdjusted.Sequence = sequence++;
+                matchedAdjusted.Source = line.Source;
+                matchedAdjusted.RuleName = line.RuleName;
+                matchedAdjusted.AgreementName = line.AgreementName;
+                matchedAdjusted.ActualQuantity = line.ActualQuantity;
+                matchedAdjusted.RuleId = line.RuleId;
+                matchedAdjusted.ServiceOptionId = line.ServiceOptionId;
+                // The user's own Label/Quantity/UnitPrice/Amount/AdjustReason/AdjustedBy/At stay;
+                // only the engine-derived baseline (Original*) refreshes to the fresh calculation.
+                matchedAdjusted.OriginalQuantity = line.BillableQuantity ?? line.ActualQuantity;
+                matchedAdjusted.OriginalUnitPrice = DeriveUnitPrice(line.LineKey, line.Amount, line.BillableQuantity);
+                matchedAdjusted.OriginalAmount = decimal.Round(line.Amount, 2);
+                mergedLines.Add(matchedAdjusted);
+                continue;
+            }
+
+            var kind = line.Proposed ? OrderPriceLineKind.Proposed : OrderPriceLineKind.Auto;
+            mergedLines.Add(new TransportOrderPricingLine
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
+                Sequence = sequence++, Label = line.Label, Amount = decimal.Round(line.Amount, 2),
+                Source = line.Source, Informational = line.Informational,
+                RuleName = line.RuleName, AgreementName = line.AgreementName,
+                ActualQuantity = line.ActualQuantity, BillableQuantity = line.BillableQuantity,
+                Proposed = line.Proposed, Kind = kind,
+                Quantity = line.BillableQuantity,
+                UnitPrice = DeriveUnitPrice(line.LineKey, line.Amount, line.BillableQuantity),
+                RuleId = line.RuleId, ServiceOptionId = line.ServiceOptionId, LineKey = line.LineKey,
+            });
+        }
+
+        // Orphaned adjustments (their engine source disappeared, e.g. a deleted rule): nothing
+        // silently disappears — keep the row, convert it to a free Manual line.
+        foreach (var orphan in autoAdjustedLines.Where(a => !consumedAdjustedIds.Contains(a.Id)))
+        {
+            orphan.Kind = OrderPriceLineKind.Manual;
+            orphan.Sequence = sequence++;
+            mergedLines.Add(orphan);
+        }
+
+        foreach (var manual in manualLines)
+        {
+            manual.Sequence = sequence++;
+            mergedLines.Add(manual);
+        }
+
+        foreach (var line in mergedLines)
+        {
+            if (_dbContext.Entry(line).State == EntityState.Detached)
+            {
+                _dbContext.TransportOrderPricingLines.Add(line);
+            }
+        }
+
+        var linesTotal = decimal.Round(mergedLines.Where(CountsTowardsLinesTotal).Sum(l => l.Amount), 2);
+        var hasManualLines = mergedLines.Any(l => l.Kind == OrderPriceLineKind.Manual && !l.Informational);
+
+        if (priceIsManual)
+        {
+            // Already validated above.
             order.AgreedPrice = NonNegative(requestedAgreedPrice);
             order.PriceIsManual = true;
-            order.PriceOverrideReason = overrideReason.Trim();
+            order.PriceOverrideReason = overrideReason!.Trim();
         }
-        else if (calculated is { } total)
+        else if (calculated is not null || hasManualLines)
         {
-            order.AgreedPrice = total;
+            // LinesTotal reflects manual adjustments (spec ch. 24-26) — it is the calculated
+            // total when nothing was ever adjusted, so this is a strict generalisation of the
+            // previous "calculated total wins" behaviour.
+            order.AgreedPrice = linesTotal;
             order.PriceIsManual = false;
             order.PriceOverrideReason = null;
         }
         else
         {
-            // No pricing configuration → the pre-engine manual entry keeps working unchanged.
+            // No usable pricing configuration and no manual line either → the pre-engine manual
+            // entry keeps working unchanged.
             order.AgreedPrice = NonNegative(requestedAgreedPrice);
             order.PriceIsManual = false;
             order.PriceOverrideReason = null;
         }
 
+        foreach (var serviceLine in result?.ServiceLines ?? [])
+        {
+            _dbContext.TransportOrderServiceLines.Add(new TransportOrderServiceLine
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
+                ServiceOptionId = serviceLine.ServiceOptionId, NameSnapshot = serviceLine.Name,
+                Kind = serviceLine.Kind, Value = serviceLine.Value, Amount = serviceLine.Amount,
+                Quantity = serviceLine.Quantity,
+                InvoiceDescriptionSnapshot = serviceLine.InvoiceLabel,
+            });
+        }
+
         if (result is not null)
         {
-            var sequence = 0;
-            foreach (var line in result.Lines)
-            {
-                _dbContext.TransportOrderPricingLines.Add(new TransportOrderPricingLine
-                {
-                    Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
-                    Sequence = sequence++, Label = line.Label, Amount = line.Amount,
-                    Source = line.Source, Informational = line.Informational,
-                    RuleName = line.RuleName, AgreementName = line.AgreementName,
-                    ActualQuantity = line.ActualQuantity, BillableQuantity = line.BillableQuantity,
-                    Proposed = line.Proposed,
-                });
-            }
-
-            foreach (var serviceLine in result.ServiceLines)
-            {
-                _dbContext.TransportOrderServiceLines.Add(new TransportOrderServiceLine
-                {
-                    Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
-                    ServiceOptionId = serviceLine.ServiceOptionId, NameSnapshot = serviceLine.Name,
-                    Kind = serviceLine.Kind, Value = serviceLine.Value, Amount = serviceLine.Amount,
-                    Quantity = serviceLine.Quantity,
-                    InvoiceDescriptionSnapshot = serviceLine.InvoiceLabel,
-                });
-            }
-
             var unitLine = result.Lines.FirstOrDefault(l => l.ActualQuantity is not null);
             var unitSummary = unitLine is null ? null : unitLine.Label;
             var agreementNames = string.Join("; ", result.Lines
@@ -1197,24 +1308,435 @@ public class TransportOrderService : ITransportOrderService
                 .Distinct());
             var explanation = string.Join("\n", result.Lines
                 .Select(l => $"{l.Label}: {l.Amount:0.00} EUR ({l.Source})"));
-            _dbContext.TransportOrderPricingSnapshots.Add(new TransportOrderPricingSnapshot
+
+            var snapshot = existingSnapshot;
+            if (snapshot is null)
             {
-                Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
-                TariffDate = result.TariffDate ?? order.OrderDate,
-                Currency = result.Currency,
-                ZoneCode = result.ZoneCode, ZoneName = result.ZoneName,
-                AgreementNames = string.IsNullOrEmpty(agreementNames) ? null : agreementNames,
-                UnitSummary = unitSummary,
-                CalculatedTotal = order.CalculatedPrice,
-                OverrideAmount = order.PriceIsManual ? order.AgreedPrice : null,
-                OverrideReason = order.PriceIsManual ? order.PriceOverrideReason : null,
-                OverriddenByUserId = order.PriceIsManual ? _currentUser?.CurrentUserId : null,
-                OverriddenAtUtc = order.PriceIsManual ? _timeProvider.GetUtcNow().UtcDateTime : null,
-                Explanation = explanation.Length > 4000 ? explanation[..4000] : explanation,
-            });
+                snapshot = new TransportOrderPricingSnapshot
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
+                    Status = OrderPricingStatus.Draft,
+                };
+                _dbContext.TransportOrderPricingSnapshots.Add(snapshot);
+            }
+
+            snapshot.TariffDate = result.TariffDate ?? order.OrderDate;
+            snapshot.Currency = result.Currency;
+            snapshot.ZoneCode = result.ZoneCode;
+            snapshot.ZoneName = result.ZoneName;
+            snapshot.AgreementNames = string.IsNullOrEmpty(agreementNames) ? null : agreementNames;
+            snapshot.UnitSummary = unitSummary;
+            snapshot.CalculatedTotal = order.CalculatedPrice;
+            snapshot.OverrideAmount = order.PriceIsManual ? order.AgreedPrice : null;
+            snapshot.OverrideReason = order.PriceIsManual ? order.PriceOverrideReason : null;
+            snapshot.OverriddenByUserId = order.PriceIsManual ? _currentUser?.CurrentUserId : null;
+            snapshot.OverriddenAtUtc = order.PriceIsManual ? _timeProvider.GetUtcNow().UtcDateTime : null;
+            snapshot.Explanation = explanation.Length > 4000 ? explanation[..4000] : explanation;
+            snapshot.LinesTotal = linesTotal;
+            // Status is deliberately left untouched — a save never resets Draft/Reviewed.
         }
 
         return null;
+    }
+
+    /// <summary>Derives a display unit price (amount / quantity) only where that is a real per-unit rate — never invented for bracket/base-amount rule lines.</summary>
+    private static decimal? DeriveUnitPrice(string? lineKey, decimal amount, decimal? billableQuantity) =>
+        lineKey is not null && lineKey.StartsWith("service:", StringComparison.Ordinal) && billableQuantity is { } q && q != 0
+            ? decimal.Round(amount / q, 4)
+            : null;
+
+    /// <summary>
+    /// Whether the caller is attempting to change a pricing-relevant input while the snapshot is
+    /// Locked/Invoiced (spec ch. 24-26 status gate). One-off fields are already mutated onto
+    /// <paramref name="order"/> by the time this runs, so they are compared against EF's tracked
+    /// OriginalValues; priceIsManual/AgreedPrice/reason are compared against the order's current
+    /// (not-yet-overwritten) stored values.
+    /// </summary>
+    private async Task<bool> PricingInputsChangedAsync(
+        TransportOrder order, decimal? requestedAgreedPrice, bool priceIsManual, string? overrideReason,
+        IReadOnlyList<PriceServiceInput> serviceSelections, CancellationToken cancellationToken)
+    {
+        if (priceIsManual != order.PriceIsManual)
+        {
+            return true;
+        }
+
+        if (priceIsManual
+            && (NonNegative(requestedAgreedPrice) != order.AgreedPrice || (overrideReason?.Trim() ?? "") != (order.PriceOverrideReason ?? "")))
+        {
+            return true;
+        }
+
+        var entry = _dbContext.Entry(order);
+        bool OneOffChanged(string propertyName) => !Equals(entry.OriginalValues[propertyName], entry.CurrentValues[propertyName]);
+        if (OneOffChanged(nameof(TransportOrder.PricingSource))
+            || OneOffChanged(nameof(TransportOrder.OneOffFixedAmount))
+            || OneOffChanged(nameof(TransportOrder.OneOffIncludedLoadingMinutes))
+            || OneOffChanged(nameof(TransportOrder.OneOffIncludedUnloadingMinutes))
+            || OneOffChanged(nameof(TransportOrder.OneOffIncludedCombinedMinutes))
+            || OneOffChanged(nameof(TransportOrder.OneOffExtraHourlyRate))
+            || OneOffChanged(nameof(TransportOrder.OneOffNotes)))
+        {
+            return true;
+        }
+
+        var storedServices = await _dbContext.TransportOrderServiceLines
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
+            .ToListAsync(cancellationToken);
+        return await ServiceSelectionsChangedAsync(order.CustomerId, order.OrderDate, storedServices, serviceSelections, cancellationToken);
+    }
+
+    /// <summary>
+    /// Compares the requested service selections against the PREVIOUSLY EXPLICIT (i.e. excluding
+    /// currently auto-apply-eligible) persisted service lines, so an auto-applied contract service
+    /// never makes an unrelated edit look like a "pricing change" while the price is locked.
+    /// </summary>
+    private async Task<bool> ServiceSelectionsChangedAsync(
+        Guid customerId, DateOnly date, IReadOnlyList<TransportOrderServiceLine> stored,
+        IReadOnlyList<PriceServiceInput> requested, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var optionIds = stored.Where(s => s.ServiceOptionId is not null).Select(s => s.ServiceOptionId!.Value).Distinct().ToList();
+        if (optionIds.Count == 0)
+        {
+            return requested.Count > 0;
+        }
+
+        var autoApplyByOption = await _dbContext.ServiceOptions.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && optionIds.Contains(o.Id))
+            .ToDictionaryAsync(o => o.Id, o => o.AutoApply, cancellationToken);
+        var overridesByOption = (await _dbContext.CustomerServiceOptionPrices.AsNoTracking()
+                .Where(p => p.TenantId == tenantId && p.CustomerId == customerId && optionIds.Contains(p.ServiceOptionId))
+                .ToListAsync(cancellationToken))
+            .Where(p => (p.EffectiveFrom is null || p.EffectiveFrom <= date) && (p.EffectiveUntil is null || p.EffectiveUntil >= date))
+            .ToDictionary(p => p.ServiceOptionId);
+
+        bool IsAutoApplied(Guid optionId) =>
+            overridesByOption.TryGetValue(optionId, out var over)
+                ? over.AutoApplyOverride ?? autoApplyByOption.GetValueOrDefault(optionId)
+                : autoApplyByOption.GetValueOrDefault(optionId);
+
+        var previousExplicit = stored
+            .Where(s => s.ServiceOptionId is { } id && !IsAutoApplied(id))
+            .Select(s => (s.ServiceOptionId!.Value, s.Quantity))
+            .ToHashSet();
+        var requestedSet = requested.Select(s => (s.ServiceOptionId, s.Quantity)).ToHashSet();
+        return !previousExplicit.SetEquals(requestedSet);
+    }
+
+    /// <summary>Recomputes LinesTotal/AgreedPrice from the currently tracked (incl. not-yet-saved) pricing lines.</summary>
+    private async Task RecomputeLinesTotalAndAgreedPriceAsync(TransportOrder order, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var trackedLines = _dbContext.ChangeTracker.Entries<TransportOrderPricingLine>()
+            .Where(e => e.State != EntityState.Deleted
+                        && e.Entity.TenantId == tenantId && e.Entity.TransportOrderId == order.Id)
+            .Select(e => e.Entity)
+            .ToList();
+        var linesTotal = decimal.Round(trackedLines.Where(CountsTowardsLinesTotal).Sum(l => l.Amount), 2);
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == order.Id, cancellationToken);
+        if (snapshot is not null)
+        {
+            snapshot.LinesTotal = linesTotal;
+        }
+
+        if (!order.PriceIsManual)
+        {
+            order.AgreedPrice = linesTotal;
+        }
+    }
+
+    /// <summary>
+    /// Line-level manual corrections/removals/free additions (spec ch. 24-26). Blocked while the
+    /// pricing status is Locked/Invoiced.
+    /// </summary>
+    public async Task<TransportOrderOperationResult> SaveOrderPriceLinesAsync(
+        Guid orderId, IReadOnlyList<SaveOrderPriceLineRequest> requests, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await TenantScoped().Include(o => o.Stops).FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == orderId, cancellationToken);
+        if (snapshot is { Status: OrderPricingStatus.Locked or OrderPricingStatus.Invoiced })
+        {
+            return TransportOrderOperationResult.Invalid(PricingLockedMessage);
+        }
+
+        var existingLines = await _dbContext.TransportOrderPricingLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == orderId)
+            .ToListAsync(cancellationToken);
+        var byKey = existingLines.Where(l => l.LineKey is not null).ToLookup(l => l.LineKey!);
+        var maxSequence = existingLines.Count == 0 ? 0 : existingLines.Max(l => l.Sequence);
+
+        var auditBefore = new List<object>();
+        var auditAfter = new List<object>();
+
+        foreach (var request in requests)
+        {
+            if (request.LineKey is null)
+            {
+                if (string.IsNullOrWhiteSpace(request.Label))
+                {
+                    return TransportOrderOperationResult.Invalid("Een omschrijving is verplicht voor een vrije regel.");
+                }
+
+                var amount = ResolveAmount(request.Quantity, request.UnitPrice, request.Amount);
+                if (amount is null)
+                {
+                    return TransportOrderOperationResult.Invalid("Geef een bedrag op, of een aantal en eenheidsprijs.");
+                }
+
+                var newLine = new TransportOrderPricingLine
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = orderId,
+                    Sequence = ++maxSequence, Label = request.Label.Trim(), Amount = decimal.Round(amount.Value, 2),
+                    Source = "Manueel", Kind = OrderPriceLineKind.Manual,
+                    Quantity = request.Quantity, UnitPrice = request.UnitPrice,
+                    AdjustReason = Trim(request.AdjustReason),
+                    AdjustedByUserId = _currentUser?.CurrentUserId, AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime,
+                    LineKey = $"manual:{Guid.NewGuid()}",
+                };
+                _dbContext.TransportOrderPricingLines.Add(newLine);
+                auditBefore.Add(new { key = (string?)null, label = (string?)null, amount = (decimal?)null });
+                auditAfter.Add(new { key = newLine.LineKey, label = newLine.Label, amount = newLine.Amount });
+                continue;
+            }
+
+            var existing = byKey[request.LineKey].FirstOrDefault();
+            if (existing is null)
+            {
+                return TransportOrderOperationResult.Invalid("De opgegeven prijsregel bestaat niet meer; herbereken de prijs.");
+            }
+
+            if (request.Remove)
+            {
+                auditBefore.Add(new { key = existing.LineKey, label = existing.Label, amount = existing.Amount });
+                if (existing.Kind == OrderPriceLineKind.Manual)
+                {
+                    _dbContext.Remove(existing);
+                    auditAfter.Add(new { key = existing.LineKey, removed = true });
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(request.AdjustReason))
+                {
+                    return TransportOrderOperationResult.Invalid("Geef een reden op voor de aanpassing.");
+                }
+
+                CaptureOriginalIfFirstAdjustment(existing);
+                existing.Kind = OrderPriceLineKind.AutoAdjusted;
+                existing.Amount = 0m;
+                existing.AdjustReason = request.AdjustReason.Trim();
+                existing.AdjustedByUserId = _currentUser?.CurrentUserId;
+                existing.AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
+                auditAfter.Add(new { key = existing.LineKey, label = existing.Label, amount = existing.Amount });
+                continue;
+            }
+
+            auditBefore.Add(new { key = existing.LineKey, label = existing.Label, amount = existing.Amount });
+
+            if (existing.Kind != OrderPriceLineKind.Manual && string.IsNullOrWhiteSpace(request.AdjustReason))
+            {
+                return TransportOrderOperationResult.Invalid("Geef een reden op voor de aanpassing.");
+            }
+
+            if (existing.Kind != OrderPriceLineKind.Manual)
+            {
+                CaptureOriginalIfFirstAdjustment(existing);
+                existing.Kind = OrderPriceLineKind.AutoAdjusted;
+            }
+
+            var effectiveQuantity = request.Quantity ?? existing.Quantity;
+            var effectiveUnitPrice = request.UnitPrice ?? existing.UnitPrice;
+            var newAmount = request.Amount ?? ResolveAmount(effectiveQuantity, effectiveUnitPrice, null);
+            if (newAmount is null)
+            {
+                return TransportOrderOperationResult.Invalid("Geef een bedrag op, of een aantal en eenheidsprijs.");
+            }
+
+            existing.Quantity = effectiveQuantity;
+            existing.UnitPrice = effectiveUnitPrice;
+            existing.Amount = decimal.Round(newAmount.Value, 2);
+            if (!string.IsNullOrWhiteSpace(request.Label))
+            {
+                existing.Label = request.Label.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.AdjustReason))
+            {
+                existing.AdjustReason = request.AdjustReason.Trim();
+            }
+
+            existing.AdjustedByUserId = _currentUser?.CurrentUserId;
+            existing.AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
+            auditAfter.Add(new { key = existing.LineKey, label = existing.Label, amount = existing.Amount });
+        }
+
+        await RecomputeLinesTotalAndAgreedPriceAsync(order, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "lines_adjusted", auditBefore, auditAfter, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    /// <summary>Amount = explicit Amount, else Round(quantity × unitPrice, 2), else null (never invented).</summary>
+    private static decimal? ResolveAmount(decimal? quantity, decimal? unitPrice, decimal? amount) =>
+        amount ?? (quantity is { } q && unitPrice is { } p ? decimal.Round(q * p, 2) : (decimal?)null);
+
+    /// <summary>Snapshots Quantity/UnitPrice/Amount into Original* the first time a line is adjusted; a second edit never overwrites the engine baseline.</summary>
+    private static void CaptureOriginalIfFirstAdjustment(TransportOrderPricingLine line)
+    {
+        if (line.Kind != OrderPriceLineKind.AutoAdjusted)
+        {
+            line.OriginalQuantity = line.Quantity;
+            line.OriginalUnitPrice = line.UnitPrice;
+            line.OriginalAmount = line.Amount;
+        }
+    }
+
+    /// <summary>Explicit re-run of the pricing engine (merge-on-recalc). Blocked while Locked/Invoiced.</summary>
+    public async Task<TransportOrderOperationResult> RecalculateOrderPricingAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await TenantScoped().Include(o => o.Stops).FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == orderId, cancellationToken);
+        if (snapshot is { Status: OrderPricingStatus.Locked or OrderPricingStatus.Invoiced })
+        {
+            return TransportOrderOperationResult.Invalid(PricingLockedMessage);
+        }
+
+        var cargoItems = await _dbContext.CargoItems
+            .Where(c => c.TenantId == tenantId && c.TransportOrderId == orderId && !c.IsDeleted)
+            .ToListAsync(cancellationToken);
+        var existingServiceLines = await _dbContext.TransportOrderServiceLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == orderId)
+            .ToListAsync(cancellationToken);
+        var serviceSelections = existingServiceLines
+            .Where(l => l.ServiceOptionId is not null)
+            .Select(l => new PriceServiceInput(l.ServiceOptionId!.Value, l.Quantity))
+            .ToList();
+
+        var pricingError = await ApplyPricingAsync(
+            order, order.AgreedPrice, serviceSelections, order.PriceIsManual, order.PriceOverrideReason, cargoItems, cancellationToken);
+        if (pricingError is not null)
+        {
+            return pricingError;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "recalculated", null,
+            new { order.AgreedPrice, order.CalculatedPrice }, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    /// <summary>Pricing status transition (Draft/Reviewed/Locked); Invoiced is set only by invoice generation.</summary>
+    public async Task<TransportOrderOperationResult> SetOrderPricingStatusAsync(
+        Guid orderId, OrderPricingStatus target, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await TenantScoped().Include(o => o.Stops).FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == orderId, cancellationToken);
+        if (snapshot is null)
+        {
+            return TransportOrderOperationResult.Invalid("Er is nog geen prijsberekening voor deze order.");
+        }
+
+        if (target == OrderPricingStatus.Invoiced)
+        {
+            return TransportOrderOperationResult.Invalid("Facturatiestatus wordt door facturatie gezet.");
+        }
+
+        if (snapshot.Status == OrderPricingStatus.Invoiced)
+        {
+            return TransportOrderOperationResult.Invalid("De status van een gefactureerde prijs kan niet meer wijzigen.");
+        }
+
+        if (!PricingStatusTransitions[snapshot.Status].Contains(target))
+        {
+            return TransportOrderOperationResult.InvalidState($"Prijsstatus '{snapshot.Status}' kan niet naar '{target}'.");
+        }
+
+        // Touching Locked in either direction (lock or unlock) requires the dedicated permission;
+        // the Draft<->Reviewed pair only needs the ordinary edit permission.
+        var requiresLockPermission = target == OrderPricingStatus.Locked || snapshot.Status == OrderPricingStatus.Locked;
+        var userId = _currentUser?.CurrentUserId;
+        var allowed = _permissionService is null
+            || (userId is { } uid
+                && (await _permissionService.UserHasPermissionAsync(
+                        uid, requiresLockPermission ? PermissionCodes.OrdersLockPrice : PermissionCodes.OrdersEdit, cancellationToken)
+                    || await _permissionService.UserHasPermissionAsync(uid, PermissionCodes.OrdersManage, cancellationToken)));
+        if (!allowed)
+        {
+            return TransportOrderOperationResult.Invalid("Je hebt geen rechten voor deze statuswijziging.");
+        }
+
+        var before = new { snapshot.Status };
+        snapshot.Status = target;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "status_changed", before, new { snapshot.Status }, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    /// <summary>Confirms an unconfirmed (Proposed) extra-time line so it counts in LinesTotal/AgreedPrice.</summary>
+    public async Task<TransportOrderOperationResult> ConfirmOrderPriceLineAsync(
+        Guid orderId, Guid lineId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await TenantScoped().Include(o => o.Stops).FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == orderId, cancellationToken);
+        if (snapshot is { Status: OrderPricingStatus.Locked or OrderPricingStatus.Invoiced })
+        {
+            return TransportOrderOperationResult.Invalid(PricingLockedMessage);
+        }
+
+        var line = await _dbContext.TransportOrderPricingLines
+            .FirstOrDefaultAsync(l => l.TenantId == tenantId && l.TransportOrderId == orderId && l.Id == lineId, cancellationToken);
+        if (line is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        if (line.Kind != OrderPriceLineKind.Proposed)
+        {
+            return TransportOrderOperationResult.Invalid("Alleen een voorstel kan worden bevestigd.");
+        }
+
+        line.Kind = OrderPriceLineKind.Auto;
+        line.Proposed = false;
+
+        await RecomputeLinesTotalAndAgreedPriceAsync(order, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "line_confirmed",
+            new { line.Id, line.Label }, new { line.Amount }, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
 
     /// <summary>
@@ -1234,8 +1756,13 @@ public class TransportOrderService : ITransportOrderService
         }
 
         var stopIds = stopTypeById.Keys.ToList();
+        // Carried-over review item: a Failed or Skipped execution still gets CompletedAt/DepartedAt
+        // stamped by the driver workflow, but that dwell time was never actually billable work —
+        // exclude both statuses from the actual-minutes sums that feed extra-time proposals.
         var executions = await _dbContext.Set<Modules.Planning.Entities.StopExecution>().AsNoTracking()
-            .Where(e => e.TenantId == tenantId && stopIds.Contains(e.TransportOrderStopId) && e.ArrivedAt != null)
+            .Where(e => e.TenantId == tenantId && stopIds.Contains(e.TransportOrderStopId) && e.ArrivedAt != null
+                        && e.Status != Modules.Planning.Entities.StopExecutionStatus.Failed
+                        && e.Status != Modules.Planning.Entities.StopExecutionStatus.Skipped)
             .Select(e => new { e.TransportOrderStopId, e.ArrivedAt, e.CompletedAt, e.DepartedAt })
             .ToListAsync(cancellationToken);
 

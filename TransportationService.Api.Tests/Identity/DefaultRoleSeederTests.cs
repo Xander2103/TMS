@@ -201,7 +201,11 @@ public class DefaultRoleSeederTests
         var plannerAfter = (await CodesOfAsync(db, planner.Id)).ToHashSet();
         Assert.True(plannerBefore.IsSubsetOf(plannerAfter), "no permission may ever be removed");
         Assert.Equal(
-            new[] { PermissionCodes.EmployeePlanningConflictOverride, PermissionCodes.TripCostsView, PermissionCodes.OrdersOverridePrice }
+            new[]
+            {
+                PermissionCodes.EmployeePlanningConflictOverride, PermissionCodes.TripCostsView,
+                PermissionCodes.OrdersOverridePrice, PermissionCodes.OrdersLockPrice,
+            }
                 .Concat(Version3Codes).OrderBy(c => c),
             plannerAfter.Except(plannerBefore).OrderBy(c => c));
 
@@ -313,6 +317,33 @@ public class DefaultRoleSeederTests
         Assert.DoesNotContain(PermissionCodes.TripCostsView, await CodesOfAsync(db, planner.Id));
         Assert.Equal(DefaultRoleUpgrades.CurrentVersion,
             (await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId)).AppliedVersion);
+    }
+
+    [Fact]
+    public async Task Version14_GrantsOrdersLockPrice_ToPlannerManagementBoekhoudingOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        Assert.Equal(14, DefaultRoleUpgrades.CurrentVersion);
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(14, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var planner = roles.Single(r => r.TemplateCode == "planner");
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var boekhouding = roles.Single(r => r.TemplateCode == "boekhouding");
+        var others = roles.Where(r => r.TemplateCode is not ("planner" or "management" or "boekhouding")).ToList();
+
+        Assert.Contains(PermissionCodes.OrdersLockPrice, await CodesOfAsync(db, planner.Id));
+        Assert.Contains(PermissionCodes.OrdersLockPrice, await CodesOfAsync(db, management.Id));
+        Assert.Contains(PermissionCodes.OrdersLockPrice, await CodesOfAsync(db, boekhouding.Id));
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.OrdersLockPrice, await CodesOfAsync(db, other.Id));
+        }
     }
 
     [Fact]

@@ -100,14 +100,39 @@ public record OrderPricingLineDto(
     string? RuleName = null, string? AgreementName = null,
     decimal? ActualQuantity = null, decimal? BillableQuantity = null,
     /// <summary>An unconfirmed extra-time charge (spec Phase 6): excluded from AgreedPrice, shown as a proposal.</summary>
-    bool Proposed = false);
+    bool Proposed = false,
+    /// <summary>Persisted line id; needed to target the confirm endpoint on a VOORSTEL line.</summary>
+    Guid? Id = null,
+    /// <summary>Manual-editing lifecycle (spec ch. 24-26): Auto/AutoAdjusted/Manual/Proposed.</summary>
+    OrderPriceLineKind Kind = OrderPriceLineKind.Auto,
+    decimal? Quantity = null, decimal? UnitPrice = null,
+    decimal? OriginalQuantity = null, decimal? OriginalUnitPrice = null, decimal? OriginalAmount = null,
+    string? AdjustReason = null,
+    string? LineKey = null);
 
 /// <summary>Frozen header of the order's pricing snapshot (spec ch. 21).</summary>
 public record OrderPricingSnapshotDto(
     DateOnly TariffDate, string Currency, string? ZoneCode, string? ZoneName,
     string? AgreementNames, string? UnitSummary, decimal? CalculatedTotal,
     decimal? OverrideAmount, string? OverrideReason, Guid? OverriddenByUserId, DateTime? OverriddenAtUtc,
-    string? Explanation);
+    string? Explanation,
+    /// <summary>Draft → Reviewed → Locked → Invoiced (spec ch. 24-26); preserved across recalculations.</summary>
+    OrderPricingStatus Status = OrderPricingStatus.Draft,
+    /// <summary>Sum of Auto/AutoAdjusted/Manual non-informational line amounts.</summary>
+    decimal? LinesTotal = null);
+
+/// <summary>
+/// One line-level manual correction/addition (spec ch. 24-26). LineKey null = free manual line;
+/// otherwise targets an existing Auto/AutoAdjusted/Manual line by its stable merge key.
+/// Remove keeps the row for audit (Auto/AutoAdjusted → Amount 0) except a Manual line, which is
+/// hard-deleted.
+/// </summary>
+public record SaveOrderPriceLineRequest(
+    string? LineKey, string Label, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
+    string? AdjustReason, bool Remove = false);
+
+/// <summary>Body for the pricing status transition endpoint (spec ch. 24-26).</summary>
+public record SetOrderPricingStatusRequest(OrderPricingStatus Status);
 
 /// <summary>Selected delivery service/supplement snapshotted on the order.</summary>
 public record OrderServiceLineDto(

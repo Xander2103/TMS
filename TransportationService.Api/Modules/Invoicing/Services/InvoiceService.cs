@@ -333,6 +333,20 @@ public class InvoiceService : IInvoiceService
             order.Status = TransportOrderStatus.Invoiced;
         }
 
+        // Order pricing status lifecycle (spec ch. 24-26): invoice generation is the only path
+        // that reaches Invoiced. No error when an order carries no pricing snapshot at all.
+        if (orders.Count > 0)
+        {
+            var invoicedOrderIds = orders.Select(o => o.Id).ToList();
+            var pricingSnapshots = await _dbContext.TransportOrderPricingSnapshots
+                .Where(s => s.TenantId == tenantId && invoicedOrderIds.Contains(s.TransportOrderId))
+                .ToListAsync(cancellationToken);
+            foreach (var pricingSnapshot in pricingSnapshots)
+            {
+                pricingSnapshot.Status = Modules.Orders.Entities.OrderPricingStatus.Invoiced;
+            }
+        }
+
         // Diesel surcharge: customer config (order overrides respected) → separate lines.
         var surchargeConfig = await _dbContext.CustomerDieselSurcharges
             .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.CustomerId == request.CustomerId, cancellationToken);

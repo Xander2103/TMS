@@ -355,6 +355,129 @@ public class OneOffPricingTests
         Assert.DoesNotContain(reloaded.PricingLines!, l => l.Proposed);
     }
 
+    // --- Carried-over Phase 6 review items (mandatory in Phase 7, spec ch. 24-26 §8) -----------
+
+    /// <summary>A Failed execution still gets CompletedAt stamped but never counts as billable dwell time.</summary>
+    [Fact]
+    public async Task FailedStopExecution_NeverCountsAsActualDwellTime_ProducesNoExtraTimeProposal()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(
+            OneOffRequest(h.CustomerId, 450m, includedLoading: 30, includedUnloading: 30, extraHourlyRate: 75m),
+            CancellationToken.None);
+        var order = await h.Db.Context.TransportOrders.Include(o => o.Stops).SingleAsync(o => o.Id == created.Order!.Id);
+        var loadStop = order.Stops.Single(s => s.StopType == StopType.Loading);
+
+        var tripId = Guid.NewGuid();
+        h.Db.Context.Trips.Add(new Trip
+        {
+            Id = tripId, TenantId = h.TenantId, TripNumber = "RIT-0002", TripDate = new DateOnly(2026, 7, 26),
+            Status = TripStatus.InProgress,
+        });
+        var arrived = new DateTime(2026, 7, 26, 8, 0, 0, DateTimeKind.Utc);
+        h.Db.Context.StopExecutions.Add(new StopExecution
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = tripId, TransportOrderStopId = loadStop.Id,
+            Status = StopExecutionStatus.Failed, ArrivedAt = arrived, CompletedAt = arrived.AddMinutes(240),
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var reloaded = await RepriceAsync(h, created.Order!.Id);
+
+        Assert.DoesNotContain(reloaded.PricingLines!, l => l.Proposed);
+        Assert.Equal(450m, reloaded.AgreedPrice);
+    }
+
+    /// <summary>A Skipped execution is excluded the same way as Failed.</summary>
+    [Fact]
+    public async Task SkippedStopExecution_NeverCountsAsActualDwellTime()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(
+            OneOffRequest(h.CustomerId, 450m, includedLoading: 30, includedUnloading: 30, extraHourlyRate: 75m),
+            CancellationToken.None);
+        var order = await h.Db.Context.TransportOrders.Include(o => o.Stops).SingleAsync(o => o.Id == created.Order!.Id);
+        var loadStop = order.Stops.Single(s => s.StopType == StopType.Loading);
+
+        var tripId = Guid.NewGuid();
+        h.Db.Context.Trips.Add(new Trip
+        {
+            Id = tripId, TenantId = h.TenantId, TripNumber = "RIT-0003", TripDate = new DateOnly(2026, 7, 26),
+            Status = TripStatus.InProgress,
+        });
+        var arrived = new DateTime(2026, 7, 26, 8, 0, 0, DateTimeKind.Utc);
+        h.Db.Context.StopExecutions.Add(new StopExecution
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = tripId, TransportOrderStopId = loadStop.Id,
+            Status = StopExecutionStatus.Skipped, ArrivedAt = arrived, DepartedAt = arrived.AddMinutes(120),
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var reloaded = await RepriceAsync(h, created.Order!.Id);
+
+        Assert.DoesNotContain(reloaded.PricingLines!, l => l.Proposed);
+    }
+
+    /// <summary>Two engaged agreements both configuring included time must never double-count/double-propose; the most specific one wins.</summary>
+    [Fact]
+    public async Task TwoEngagedAgreements_WithIncludedTime_OnlyTheMostSpecificApplies()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var containerUnitId = Guid.NewGuid();
+        h.Db.Context.UnitTypes.Add(new UnitType { Id = containerUnitId, TenantId = h.TenantId, Code = "CONTAINER", Name = "Container", IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+
+        // Private agreement (tier 2) — must win over the shared/assigned one (tier 1).
+        var privateAgreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerId, "Privé contract", new DateOnly(2026, 1, 1), null, true,
+            null, null, null, IncludedCombinedMinutes: 60, ExtraHourlyRate: 75m), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null, "Pallets privé", new DateOnly(2026, 1, 1), null, true,
+            30m, null, null, AgreementId: privateAgreement.Id), CancellationToken.None);
+
+        var sharedAgreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            null, "Gedeelde tabel", new DateOnly(2026, 1, 1), null, true,
+            null, null, null, IsShared: true, IncludedCombinedMinutes: 30, ExtraHourlyRate: 50m), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            null, containerUnitId, PriceRuleBasis.PerUnit, null, "Containers gedeeld", new DateOnly(2026, 1, 1), null, true,
+            50m, null, null, AgreementId: sharedAgreement.Id), CancellationToken.None);
+        await h.Admin.SaveAssignmentsAsync(sharedAgreement.Id,
+            [new SavePricingAssignmentRequest(h.CustomerId, null, null, null, null, null)], CancellationToken.None);
+
+        var engine = new PricingEngine(h.Db.Context, new DevTenantContext(h.TenantId));
+        var result = await engine.CalculateAsync(new PriceCalculationRequest(
+            h.CustomerId, new DateOnly(2026, 7, 26),
+            [new PriceCalculationLineInput(h.PalletUnitId, 3), new PriceCalculationLineInput(containerUnitId, 1)],
+            "BE", "3500", null, null, null, [],
+            ActualLoadingMinutes: 45m, ActualUnloadingMinutes: 45m), CancellationToken.None);
+
+        var proposed = result.Lines.Where(l => l.Proposed).ToList();
+        var proposedLine = Assert.Single(proposed); // never two proposed lines for the same measured minutes
+        Assert.Equal(37.50m, proposedLine.Amount); // (90 - 60) min / 60 × 75 (private agreement's rate, not the shared one's 50)
+    }
+
+    /// <summary>Loading AND unloading both exceeding the allowance with no configured rate emits ONE informational line, not two.</summary>
+    [Fact]
+    public async Task BothActivitiesExceedAllowance_NoRateConfigured_EmitsOneInformationalLine()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(
+            OneOffRequest(h.CustomerId, 450m, includedLoading: 30, includedUnloading: 30, extraHourlyRate: null),
+            CancellationToken.None);
+        await SeedStopExecutionsAsync(h, created.Order!.Id, loadingMinutes: 60, unloadingMinutes: 90);
+        var reloaded = await RepriceAsync(h, created.Order.Id);
+
+        var informational = reloaded.PricingLines!.Where(l => l.Informational && l.Source == "Extra tijd").ToList();
+        Assert.Single(informational);
+    }
+
     // --- Contract mode: engaged agreement with included time (helper reused) ------------------
 
     [Fact]

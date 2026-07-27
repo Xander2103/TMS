@@ -187,6 +187,8 @@ public static class PermissionCodes
     /// <summary>Umbrella: every order action (checked as an any-of alternative on order endpoints).</summary>
     public const string OrdersManage = "orders.manage";
     public const string OrdersOverridePrice = "orders.override_price";
+    /// <summary>Locks/unlocks the pricing status of an order (spec ch. 24-26), blocking further recalculation.</summary>
+    public const string OrdersLockPrice = "orders.lock_price";
 
     // --- Dashboard (company overview) ---
     public const string DashboardView = "dashboard.view";
@@ -435,6 +437,7 @@ public static class PermissionCodes
         (OrdersAssign, "orders", "assign", "Transportopdrachten aan ritten koppelen"),
         (OrdersExport, "orders", "export", "Transportopdrachten exporteren"),
         (OrdersOverridePrice, "orders", "override_price", "Berekende orderprijs handmatig overschrijven"),
+        (OrdersLockPrice, "orders", "lock_price", "Prijs van transportopdrachten vergrendelen en ontgrendelen"),
         (OrdersManage, "orders", "manage", "Volledig beheer van transportopdrachten"),
         (DashboardView, "dashboard", "view", "Bedrijfsdashboard bekijken"),
         (MessagesSend, "messages", "send", "Interne berichten versturen"),

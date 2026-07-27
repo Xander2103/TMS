@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
@@ -67,6 +68,42 @@ public class InvoiceServiceTests
         Assert.Equal(304.5m, result.Invoice.VatAmount);
         Assert.Equal(1754.5m, result.Invoice.Total);
         Assert.Equal(TransportOrderStatus.Invoiced, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
+    }
+
+    /// <summary>Spec ch. 24-26: invoice generation is the only path that sets a pricing snapshot to Invoiced.</summary>
+    [Fact]
+    public async Task Create_SetsOrderPricingSnapshotStatus_ToInvoiced()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var snapshotId = Guid.NewGuid();
+        h.Db.Context.TransportOrderPricingSnapshots.Add(new TransportationService.Api.Modules.Orders.Entities.TransportOrderPricingSnapshot
+        {
+            Id = snapshotId, TenantId = h.TenantId, TransportOrderId = h.OrderId,
+            TariffDate = new DateOnly(2026, 7, 10), Currency = "EUR",
+            Status = TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Locked,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var result = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.Success, result.Outcome);
+        var snapshot = await h.Db.Context.TransportOrderPricingSnapshots.SingleAsync(s => s.Id == snapshotId);
+        Assert.Equal(TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Invoiced, snapshot.Status);
+    }
+
+    /// <summary>No pricing snapshot at all must never error the invoice generation.</summary>
+    [Fact]
+    public async Task Create_WithoutPricingSnapshot_DoesNotError()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.Success, result.Outcome);
     }
 
     [Fact]

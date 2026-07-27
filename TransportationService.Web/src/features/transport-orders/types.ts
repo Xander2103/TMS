@@ -198,6 +198,7 @@ export interface TransportOrderDetail {
   priceOverrideReason: string | null
   pricingLines: OrderPricingLine[] | null
   serviceLines: OrderServiceLine[] | null
+  pricingSnapshot: OrderPricingSnapshot | null
   /** Contract (default) or OneOff (Phase 6): this order carries its own price agreement. */
   pricingSource: OrderPricingSource
   oneOffFixedAmount: number | null
@@ -210,7 +211,43 @@ export interface TransportOrderDetail {
   totalWithProposed: number | null
 }
 
+/** Manual-editing lifecycle of a pricing line (spec ch. 24-26). */
+export type OrderPriceLineKind = 'Auto' | 'AutoAdjusted' | 'Manual' | 'Proposed'
+
+export const ORDER_PRICE_LINE_KIND_LABELS: Record<OrderPriceLineKind, string> = {
+  Auto: 'AUTO',
+  AutoAdjusted: 'AANGEPAST',
+  Manual: 'MANUEEL',
+  Proposed: 'VOORSTEL',
+}
+
+export const ORDER_PRICE_LINE_KIND_TONE: Record<OrderPriceLineKind, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
+  Auto: 'neutral',
+  AutoAdjusted: 'warning',
+  Manual: 'info',
+  Proposed: 'warning',
+}
+
+/** Draft → Reviewed → Locked → Invoiced (spec ch. 24-26); Invoiced is set only by invoicing. */
+export type OrderPricingStatus = 'Draft' | 'Reviewed' | 'Locked' | 'Invoiced'
+
+export const ORDER_PRICING_STATUS_LABELS: Record<OrderPricingStatus, string> = {
+  Draft: 'Concept',
+  Reviewed: 'Gecontroleerd',
+  Locked: 'Vergrendeld',
+  Invoiced: 'Gefactureerd',
+}
+
+export const ORDER_PRICING_STATUS_TONE: Record<OrderPricingStatus, 'neutral' | 'info' | 'warning' | 'success'> = {
+  Draft: 'neutral',
+  Reviewed: 'info',
+  Locked: 'warning',
+  Invoiced: 'success',
+}
+
 export interface OrderPricingLine {
+  /** Persisted line id; needed to target the confirm endpoint on a VOORSTEL line. */
+  id?: string | null
   label: string
   amount: number
   source: string
@@ -221,6 +258,33 @@ export interface OrderPricingLine {
   billableQuantity?: number | null
   /** An unconfirmed extra-time charge (Phase 6): excluded from AgreedPrice, shown as a proposal ("VOORSTEL"). */
   proposed?: boolean
+  kind: OrderPriceLineKind
+  quantity?: number | null
+  unitPrice?: number | null
+  originalQuantity?: number | null
+  originalUnitPrice?: number | null
+  originalAmount?: number | null
+  adjustReason?: string | null
+  /** Stable merge key ("rule:{id}", "service:{id}", "manual:{guid}", ...); null only for a brand-new free line. */
+  lineKey?: string | null
+}
+
+/** Frozen header of the order's pricing snapshot (spec ch. 21, extended ch. 24-26). */
+export interface OrderPricingSnapshot {
+  tariffDate: string
+  currency: string
+  zoneCode: string | null
+  zoneName: string | null
+  agreementNames: string | null
+  unitSummary: string | null
+  calculatedTotal: number | null
+  overrideAmount: number | null
+  overrideReason: string | null
+  overriddenByUserId: string | null
+  overriddenAtUtc: string | null
+  explanation: string | null
+  status: OrderPricingStatus
+  linesTotal: number | null
 }
 
 export interface OrderServiceLine {

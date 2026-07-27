@@ -45,4 +45,22 @@ public interface ITransportOrderService
     /// <summary>Inline priority change; allowed in every non-final status, audited.</summary>
     Task<TransportOrderOperationResult> ChangePriorityAsync(
         Guid id, OrderPriority priority, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Applies manual corrections/removals/free additions to the persisted pricing lines (spec
+    /// ch. 24-26). Blocked while the pricing status is Locked/Invoiced.
+    /// </summary>
+    Task<TransportOrderOperationResult> SaveOrderPriceLinesAsync(
+        Guid orderId, IReadOnlyList<SaveOrderPriceLineRequest> requests, CancellationToken cancellationToken);
+
+    /// <summary>Explicit re-run of the pricing engine (merge-on-recalc). Blocked while Locked/Invoiced.</summary>
+    Task<TransportOrderOperationResult> RecalculateOrderPricingAsync(Guid orderId, CancellationToken cancellationToken);
+
+    /// <summary>Pricing status transition (Draft/Reviewed/Locked); Invoiced is set only by invoicing.</summary>
+    Task<TransportOrderOperationResult> SetOrderPricingStatusAsync(
+        Guid orderId, OrderPricingStatus target, CancellationToken cancellationToken);
+
+    /// <summary>Confirms an unconfirmed (Proposed) extra-time line so it counts in LinesTotal/AgreedPrice.</summary>
+    Task<TransportOrderOperationResult> ConfirmOrderPriceLineAsync(
+        Guid orderId, Guid lineId, CancellationToken cancellationToken);
 }

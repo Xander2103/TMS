@@ -58,7 +58,7 @@ public class PricingEngine : IPricingEngine
                 source = $"Eenmalig — {notes}";
             }
 
-            lines.Add(new PriceBreakdownLine("Eenmalige prijsafspraak", decimal.Round(oneOff.FixedAmount, 2), source));
+            lines.Add(new PriceBreakdownLine("Eenmalige prijsafspraak", decimal.Round(oneOff.FixedAmount, 2), source, LineKey: "oneoff"));
             lines.AddRange(ComputeExtraTimeLines(
                 oneOff.IncludedLoadingMinutes, oneOff.IncludedUnloadingMinutes, oneOff.IncludedCombinedMinutes,
                 oneOff.ExtraHourlyRate, request.ActualLoadingMinutes, request.ActualUnloadingMinutes));
@@ -196,7 +196,7 @@ public class PricingEngine : IPricingEngine
             if (amount is null)
             {
                 lines.Add(new PriceBreakdownLine($"Geen staffel voor {billable:0.##} × {unitName}", 0m, rule.Name,
-                    RuleId: rule.Id, RuleName: rule.Name));
+                    RuleId: rule.Id, RuleName: rule.Name, LineKey: RuleLineKey(rule.Id)));
                 requiresManual = true;
                 continue;
             }
@@ -208,7 +208,7 @@ public class PricingEngine : IPricingEngine
                 decimal.Round(amount.Value, 2), rule.Name,
                 RuleId: rule.Id, RuleName: rule.Name,
                 AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name,
-                ActualQuantity: line.Quantity, BillableQuantity: billable));
+                ActualQuantity: line.Quantity, BillableQuantity: billable, LineKey: RuleLineKey(rule.Id)));
         }
 
         // --- Order-level rules (no unit): forfaits, km/pallet/ton components ------------------
@@ -292,14 +292,47 @@ public class PricingEngine : IPricingEngine
         // Driven by which agreements actually produced a breakdown line — not just `engagedAgreements`
         // (unit-line engagement only), since an order-level-only tariff (no unit rule matched) also
         // engages its agreement's minimum/maximum/surcharges/modifiers.
-        foreach (var agreement in lines
-                     .Where(l => !l.Informational && l.AgreementId is not null)
-                     .Select(l => l.AgreementId!.Value)
-                     .Distinct()
-                     .Select(id => agreementsById.GetValueOrDefault(id))
-                     .Where(a => a is not null)
-                     .Select(a => a!)
-                     .ToList())
+        var engagedAgreementsWithLines = lines
+            .Where(l => !l.Informational && l.AgreementId is not null)
+            .Select(l => l.AgreementId!.Value)
+            .Distinct()
+            .Select(id => agreementsById.GetValueOrDefault(id))
+            .Where(a => a is not null)
+            .Select(a => a!)
+            .ToList();
+
+        // Multi-agreement included time (carried-over review item): at most ONE engaged agreement
+        // may apply its included-time allowance against the same order actuals — otherwise two
+        // configured agreements would double-charge/double-propose the same measured minutes.
+        // The most specific tier wins; an exact tie is a blocking configuration error.
+        var includedTimeAgreements = engagedAgreementsWithLines
+            .Where(a => a.IncludedLoadingMinutes is not null || a.IncludedUnloadingMinutes is not null
+                        || a.IncludedCombinedMinutes is not null)
+            .ToList();
+        Guid? extraTimeAgreementId = null;
+        if (includedTimeAgreements.Count == 1)
+        {
+            extraTimeAgreementId = includedTimeAgreements[0].Id;
+        }
+        else if (includedTimeAgreements.Count > 1)
+        {
+            var bestTier = includedTimeAgreements.Max(AgreementTier);
+            var best = includedTimeAgreements.Where(a => AgreementTier(a) == bestTier).ToList();
+            if (best.Count == 1)
+            {
+                extraTimeAgreementId = best[0].Id;
+            }
+            else
+            {
+                configurationError ??= "Meerdere prijsafspraken met inbegrepen tijd op hetzelfde niveau: "
+                    + string.Join(" én ", best.Select(a => $"'{a.Name}'"))
+                    + ". Ken inbegrepen tijd slechts op één afspraak toe.";
+                lines.Add(new PriceBreakdownLine(configurationError, 0m, "Configuratiefout"));
+                requiresManual = true;
+            }
+        }
+
+        foreach (var agreement in engagedAgreementsWithLines)
         {
             var subtotal = lines.Where(l => !l.Informational && l.AgreementId == agreement.Id).Sum(l => l.Amount);
 
@@ -321,7 +354,8 @@ public class PricingEngine : IPricingEngine
                         ? decimal.Round(subtotal * percent / 100m, 2)
                         : decimal.Round(modifier.FixedAmount ?? 0m, 2);
                     lines.Add(new PriceBreakdownLine(modifier.Name, modifierAmount, agreement.Name,
-                        AgreementId: agreement.Id, AgreementName: agreement.Name));
+                        AgreementId: agreement.Id, AgreementName: agreement.Name,
+                        LineKey: AgreementLineKey(agreement.Id, $"modifier:{modifier.Id}")));
                     subtotal += modifierAmount;
                 }
             }
@@ -335,7 +369,8 @@ public class PricingEngine : IPricingEngine
                 {
                     var percentAmount = decimal.Round(subtotal * percent / 100m, 2);
                     lines.Add(new PriceBreakdownLine($"Klantafspraak {percent:+0.##;-0.##}%", percentAmount,
-                        agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name));
+                        agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name,
+                        LineKey: AgreementLineKey(agreement.Id, "assignpct")));
                     subtotal += percentAmount;
                 }
 
@@ -343,7 +378,8 @@ public class PricingEngine : IPricingEngine
                 {
                     var fixedAmount = decimal.Round(fixedAdjustment, 2);
                     lines.Add(new PriceBreakdownLine("Klantafspraak vast bedrag", fixedAmount,
-                        agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name));
+                        agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name,
+                        LineKey: AgreementLineKey(agreement.Id, "assignfix")));
                     subtotal += fixedAmount;
                 }
             }
@@ -351,14 +387,16 @@ public class PricingEngine : IPricingEngine
             if (agreement.MinimumAmount is { } minimum && subtotal < minimum)
             {
                 lines.Add(new PriceBreakdownLine($"Minimumtarief {agreement.Name}", decimal.Round(minimum - subtotal, 2),
-                    agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name));
+                    agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name,
+                    LineKey: AgreementLineKey(agreement.Id, "min")));
                 subtotal = minimum;
             }
 
             if (agreement.MaximumAmount is { } maximum && subtotal > maximum)
             {
                 lines.Add(new PriceBreakdownLine($"Maximumtarief {agreement.Name}", decimal.Round(maximum - subtotal, 2),
-                    agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name));
+                    agreement.Name, AgreementId: agreement.Id, AgreementName: agreement.Name,
+                    LineKey: AgreementLineKey(agreement.Id, "max")));
                 subtotal = maximum;
             }
 
@@ -368,13 +406,14 @@ public class PricingEngine : IPricingEngine
                     ? decimal.Round(subtotal * surcharge.Value / 100m, 2)
                     : decimal.Round(surcharge.Value, 2);
                 lines.Add(new PriceBreakdownLine(surcharge.Name, amount, agreement.Name,
-                    AgreementId: agreement.Id, AgreementName: agreement.Name));
+                    AgreementId: agreement.Id, AgreementName: agreement.Name,
+                    LineKey: AgreementLineKey(agreement.Id, $"surcharge:{surcharge.Name}")));
             }
 
-            // Included loading/unloading time (spec Phase 6): an engaged agreement with any
-            // included-time field set gets the same extra-time proposal as one-off orders.
-            if (agreement.IncludedLoadingMinutes is not null || agreement.IncludedUnloadingMinutes is not null
-                || agreement.IncludedCombinedMinutes is not null)
+            // Included loading/unloading time (spec Phase 6): only the single winning agreement
+            // (see extraTimeAgreementId above) gets the extra-time proposal — never more than one,
+            // to avoid double-counting the same measured minutes.
+            if (agreement.Id == extraTimeAgreementId)
             {
                 lines.AddRange(ComputeExtraTimeLines(
                     agreement.IncludedLoadingMinutes, agreement.IncludedUnloadingMinutes, agreement.IncludedCombinedMinutes,
@@ -384,6 +423,10 @@ public class PricingEngine : IPricingEngine
 
         return await FinalizeAsync(request, lines, requiresManual, configurationError, zone, unitNames, cancellationToken);
     }
+
+    private static string RuleLineKey(Guid ruleId) => $"rule:{ruleId}";
+
+    private static string AgreementLineKey(Guid agreementId, string discriminator) => $"agreement:{agreementId}:{discriminator}";
 
     /// <summary>
     /// Shared tail of the calculation: service options, informational diesel line, no-tariff
@@ -585,7 +628,10 @@ public class PricingEngine : IPricingEngine
                 amount = serviceMinimum;
             }
 
-            lines.Add(new PriceBreakdownLine(label, amount, source));
+            // Quantity round-trips as both Actual/BillableQuantity so the order-side merge can
+            // derive a stable per-unit price (amount / quantity) for a simple qty × rate service.
+            lines.Add(new PriceBreakdownLine(label, amount, source,
+                ActualQuantity: quantity, BillableQuantity: quantity, LineKey: $"service:{option.Id}", ServiceOptionId: option.Id));
             serviceLines.Add(new PriceServiceLine(
                 option.Id, option.Name, option.Kind, value, amount, quantity, invoiceLabel, source, isAutoApplied));
         }
@@ -602,7 +648,7 @@ public class PricingEngine : IPricingEngine
         {
             lines.Add(new PriceBreakdownLine(
                 $"Dieseltoeslag {diesel.Percent:0.##}% (wordt bij facturatie toegevoegd)",
-                decimal.Round(total * diesel.Percent / 100m, 2), "Dieseltoeslag", Informational: true));
+                decimal.Round(total * diesel.Percent / 100m, 2), "Dieseltoeslag", Informational: true, LineKey: "diesel"));
         }
 
         // Never a silent €0: explain what was searched for when no valid tariff exists.
@@ -657,7 +703,7 @@ public class PricingEngine : IPricingEngine
             if (extra > 0)
             {
                 AddExtraTimeLine(lines,
-                    $"Extra laad-/lostijd: {actualTotal:0.##} min (inbegrepen {combined} min)", extra, extraHourlyRate);
+                    $"Extra laad-/lostijd: {actualTotal:0.##} min (inbegrepen {combined} min)", extra, extraHourlyRate, "combined");
             }
 
             return lines;
@@ -669,7 +715,7 @@ public class PricingEngine : IPricingEngine
             if (extra > 0)
             {
                 AddExtraTimeLine(lines,
-                    $"Extra laadtijd: {actualLoading:0.##} min (inbegrepen {includedLoading} min)", extra, extraHourlyRate);
+                    $"Extra laadtijd: {actualLoading:0.##} min (inbegrepen {includedLoading} min)", extra, extraHourlyRate, "loading");
             }
         }
 
@@ -679,23 +725,33 @@ public class PricingEngine : IPricingEngine
             if (extra > 0)
             {
                 AddExtraTimeLine(lines,
-                    $"Extra lostijd: {actualUnloading:0.##} min (inbegrepen {includedUnloading} min)", extra, extraHourlyRate);
+                    $"Extra lostijd: {actualUnloading:0.##} min (inbegrepen {includedUnloading} min)", extra, extraHourlyRate, "unloading");
             }
         }
 
         return lines;
     }
 
-    private static void AddExtraTimeLine(List<PriceBreakdownLine> lines, string label, decimal extraMinutes, decimal? rate)
+    private const string MissingExtraTimeRateLabel = "Extra tijd: geef het uurtarief voor extra tijd op";
+
+    private static void AddExtraTimeLine(
+        List<PriceBreakdownLine> lines, string label, decimal extraMinutes, decimal? rate, string discriminator)
     {
         if (rate is null)
         {
-            lines.Add(new PriceBreakdownLine(
-                "Extra tijd: geef het uurtarief voor extra tijd op", 0m, "Extra tijd", Informational: true));
+            // Carried-over review item: loading AND unloading can both be missing a rate in the
+            // same calculation — emit the informational prompt once, not once per activity.
+            if (lines.Any(l => l.Label == MissingExtraTimeRateLabel))
+            {
+                return;
+            }
+
+            lines.Add(new PriceBreakdownLine(MissingExtraTimeRateLabel, 0m, "Extra tijd", Informational: true));
             return;
         }
 
-        lines.Add(new PriceBreakdownLine(label, decimal.Round(extraMinutes / 60m * rate.Value, 2), "Extra tijd", Proposed: true));
+        lines.Add(new PriceBreakdownLine(label, decimal.Round(extraMinutes / 60m * rate.Value, 2), "Extra tijd",
+            Proposed: true, LineKey: $"extratime:{discriminator}"));
     }
 
     /// <summary>Returns true when the rule produced an amount line (false = informational skip).</summary>
@@ -739,7 +795,7 @@ public class PricingEngine : IPricingEngine
             lines.Add(new PriceBreakdownLine($"{rule.Name}: overgeslagen ({missing})", 0m,
                 engagedAgreement?.Name ?? rule.Name, Informational: true,
                 RuleId: rule.Id, RuleName: rule.Name,
-                AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name));
+                AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name, LineKey: RuleLineKey(rule.Id)));
             return false;
         }
 
@@ -756,7 +812,7 @@ public class PricingEngine : IPricingEngine
         lines.Add(new PriceBreakdownLine(label, decimal.Round(amount, 2),
             engagedAgreement?.Name ?? rule.Name,
             RuleId: rule.Id, RuleName: rule.Name,
-            AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name));
+            AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name, LineKey: RuleLineKey(rule.Id)));
         return true;
     }
 

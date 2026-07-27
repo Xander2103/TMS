@@ -17,10 +17,15 @@ import { ApiError } from '../../../api/apiClient'
 import {
   cancelTransportOrder,
   changeTransportOrderStatus,
+  confirmOrderPriceLine,
   correctTransportOrderStatus,
   deleteTransportOrder,
   getTransportOrder,
+  recalculateOrderPricing,
+  saveOrderPriceLines,
+  setOrderPricingStatus,
   updateTransportOrder,
+  type SaveOrderPriceLineInput,
 } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
 import { OrderDocumentsPanel } from '../components/OrderDocumentsPanel'
@@ -31,10 +36,16 @@ import { UNIT_TYPE_LABELS } from '../../packages/types'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CustomerPackagesSummary } from '../../packages/components/CustomerPackagesSummary'
 import {
+  ORDER_PRICE_LINE_KIND_LABELS,
+  ORDER_PRICE_LINE_KIND_TONE,
+  ORDER_PRICING_STATUS_LABELS,
+  ORDER_PRICING_STATUS_TONE,
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
   ORDER_TRANSITION_LABELS,
   STOP_TYPE_LABELS,
+  type OrderPricingLine,
+  type OrderPricingStatus,
   type TransportOrderDetail,
   type TransportOrderStatus,
   type TransportOrderStop,
@@ -71,6 +82,24 @@ export function TransportOrderDetailPage() {
   const [correctTarget, setCorrectTarget] = useState<TransportOrderStatus | ''>('')
   const [correctReason, setCorrectReason] = useState('')
   const [planStop, setPlanStop] = useState<TransportOrderStop | null>(null)
+
+  // --- Pricing lines / status (spec ch. 24-26) --------------------------------------------
+  const [editLine, setEditLine] = useState<OrderPricingLine | null>(null)
+  const [editQuantity, setEditQuantity] = useState('')
+  const [editUnitPrice, setEditUnitPrice] = useState('')
+  const [editAmount, setEditAmount] = useState('')
+  const [editReason, setEditReason] = useState('')
+  const [removeLine, setRemoveLine] = useState<OrderPricingLine | null>(null)
+  const [removeReason, setRemoveReason] = useState('')
+  const [addLineOpen, setAddLineOpen] = useState(false)
+  const [addLabel, setAddLabel] = useState('')
+  const [addQuantity, setAddQuantity] = useState('')
+  const [addUnitPrice, setAddUnitPrice] = useState('')
+  const [addAmount, setAddAmount] = useState('')
+  const [addReason, setAddReason] = useState('')
+  const [calcDetailsOpen, setCalcDetailsOpen] = useState(false)
+  const [recalcConfirmOpen, setRecalcConfirmOpen] = useState(false)
+  const [pricingBusy, setPricingBusy] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -160,6 +189,142 @@ export function TransportOrderDetailPage() {
     }
   }
 
+  function parseNum(value: string): number | null {
+    if (!value.trim()) return null
+    const n = Number(value)
+    return Number.isFinite(n) ? n : null
+  }
+
+  async function submitPriceLine(payload: SaveOrderPriceLineInput) {
+    if (!order) return
+    setPricingBusy(true)
+    try {
+      const updated = await saveOrderPriceLines(order.id, [payload])
+      setOrder(updated)
+      showSuccess('Prijsregel bijgewerkt.')
+      setEditLine(null)
+      setRemoveLine(null)
+      setRemoveReason('')
+      setAddLineOpen(false)
+      setAddLabel('')
+      setAddQuantity('')
+      setAddUnitPrice('')
+      setAddAmount('')
+      setAddReason('')
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De prijsregel kon niet worden opgeslagen.')
+    } finally {
+      setPricingBusy(false)
+    }
+  }
+
+  function openEditLine(line: OrderPricingLine) {
+    setEditLine(line)
+    setEditQuantity(line.quantity != null ? String(line.quantity) : '')
+    setEditUnitPrice(line.unitPrice != null ? String(line.unitPrice) : '')
+    setEditAmount('')
+    setEditReason('')
+  }
+
+  async function handleSaveEditLine() {
+    if (!editLine) return
+    if (!editReason.trim()) {
+      showError('Een reden is verplicht bij het aanpassen van een prijsregel.')
+      return
+    }
+    await submitPriceLine({
+      lineKey: editLine.lineKey ?? null,
+      label: editLine.label,
+      quantity: parseNum(editQuantity),
+      unitPrice: parseNum(editUnitPrice),
+      amount: parseNum(editAmount),
+      adjustReason: editReason.trim(),
+    })
+  }
+
+  async function handleRemoveLine() {
+    if (!removeLine) return
+    if (removeLine.kind !== 'Manual' && !removeReason.trim()) {
+      showError('Een reden is verplicht bij het verwijderen van een berekende prijsregel.')
+      return
+    }
+    await submitPriceLine({
+      lineKey: removeLine.lineKey ?? null,
+      label: removeLine.label,
+      quantity: null,
+      unitPrice: null,
+      amount: null,
+      adjustReason: removeReason.trim() || null,
+      remove: true,
+    })
+  }
+
+  async function handleAddLine() {
+    if (!addLabel.trim()) {
+      showError('Een omschrijving is verplicht voor een vrije regel.')
+      return
+    }
+    await submitPriceLine({
+      lineKey: null,
+      label: addLabel.trim(),
+      quantity: parseNum(addQuantity),
+      unitPrice: parseNum(addUnitPrice),
+      amount: parseNum(addAmount),
+      adjustReason: addReason.trim() || null,
+    })
+  }
+
+  async function handleConfirmLine(line: OrderPricingLine) {
+    if (!order || !line.id) return
+    setPricingBusy(true)
+    try {
+      const updated = await confirmOrderPriceLine(order.id, line.id)
+      setOrder(updated)
+      showSuccess('Voorstel bevestigd.')
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'Het voorstel kon niet worden bevestigd.')
+    } finally {
+      setPricingBusy(false)
+    }
+  }
+
+  async function handleRecalculate() {
+    if (!order) return
+    setPricingBusy(true)
+    try {
+      const updated = await recalculateOrderPricing(order.id)
+      setOrder(updated)
+      showSuccess('Prijs herberekend.')
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De prijs kon niet worden herberekend.')
+    } finally {
+      setPricingBusy(false)
+      setRecalcConfirmOpen(false)
+    }
+  }
+
+  function handleRecalculateClick() {
+    if (order?.pricingSnapshot?.status === 'Reviewed') {
+      setRecalcConfirmOpen(true)
+    } else {
+      void handleRecalculate()
+    }
+  }
+
+  async function handleSetPricingStatus(status: OrderPricingStatus) {
+    if (!order) return
+    setPricingBusy(true)
+    try {
+      const updated = await setOrderPricingStatus(order.id, status)
+      setOrder(updated)
+      showSuccess(`Prijsstatus gewijzigd naar ${ORDER_PRICING_STATUS_LABELS[status]}.`)
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De prijsstatus kon niet worden gewijzigd.')
+    } finally {
+      setPricingBusy(false)
+    }
+  }
+
   if (loadError) return <ErrorState message={loadError} />
   if (!order) return <LoadingState message="Opdracht laden..." />
 
@@ -170,6 +335,11 @@ export function TransportOrderDetailPage() {
   const planEditable =
     !['Completed', 'Invoiced', 'Cancelled'].includes(order.status) &&
     hasAnyPermission(['orders.edit', 'orders.manage'])
+  const canEditPricingLines = hasAnyPermission(['orders.override_price', 'orders.manage'])
+  const canEditPricingStatus = hasAnyPermission(['orders.edit', 'orders.manage'])
+  const canLockPrice = hasAnyPermission(['orders.lock_price', 'orders.manage'])
+  const pricingStatus = order.pricingSnapshot?.status ?? 'Draft'
+  const pricingLocked = pricingStatus === 'Locked' || pricingStatus === 'Invoiced'
 
   return (
     <div>
@@ -274,6 +444,116 @@ export function TransportOrderDetailPage() {
             </dl>
             {order.notes && <p className="to-notes">{order.notes}</p>}
           </section>
+
+          {order.pricingLines && order.pricingLines.length > 0 && (
+            <section className="to-section">
+              <h2>
+                Prijs{' '}
+                <Badge tone={ORDER_PRICING_STATUS_TONE[pricingStatus]}>{ORDER_PRICING_STATUS_LABELS[pricingStatus]}</Badge>
+              </h2>
+              <div className="to-header-actions to-price-status-actions">
+                {canEditPricingStatus && pricingStatus === 'Draft' && (
+                  <Button variant="secondary" onClick={() => void handleSetPricingStatus('Reviewed')} disabled={pricingBusy}>
+                    Markeer gecontroleerd
+                  </Button>
+                )}
+                {canEditPricingStatus && pricingStatus === 'Reviewed' && (
+                  <Button variant="secondary" onClick={() => void handleSetPricingStatus('Draft')} disabled={pricingBusy}>
+                    Terug naar concept
+                  </Button>
+                )}
+                {canLockPrice && (pricingStatus === 'Draft' || pricingStatus === 'Reviewed') && (
+                  <Button variant="secondary" onClick={() => void handleSetPricingStatus('Locked')} disabled={pricingBusy}>
+                    Vergrendel prijs
+                  </Button>
+                )}
+                {canLockPrice && pricingStatus === 'Locked' && (
+                  <Button variant="secondary" onClick={() => void handleSetPricingStatus('Reviewed')} disabled={pricingBusy}>
+                    Ontgrendel
+                  </Button>
+                )}
+                {!pricingLocked && (
+                  <Button variant="secondary" onClick={handleRecalculateClick} disabled={pricingBusy}>
+                    Herberekenen
+                  </Button>
+                )}
+                {canEditPricingLines && !pricingLocked && (
+                  <Button variant="secondary" onClick={() => setAddLineOpen(true)} disabled={pricingBusy}>
+                    + Vrije regel
+                  </Button>
+                )}
+                {order.pricingSnapshot && (
+                  <Button variant="ghost" onClick={() => setCalcDetailsOpen(true)}>
+                    Bekijk berekeningsdetails
+                  </Button>
+                )}
+              </div>
+              <table className="to-stops-table">
+                <thead>
+                  <tr>
+                    <th>Omschrijving</th>
+                    <th>Type</th>
+                    <th className="tof-price-amount">Bedrag</th>
+                    {canEditPricingLines && !pricingLocked && <th aria-label="Acties" />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {order.pricingLines.map((line, index) => (
+                    <tr key={line.id ?? line.lineKey ?? index} className={line.informational ? 'tof-price-informational' : undefined}>
+                      <td>
+                        {line.label}
+                        {line.kind === 'AutoAdjusted' && (
+                          <div className="to-price-original">
+                            <s>
+                              {line.originalQuantity != null && line.originalUnitPrice != null
+                                ? `${line.originalQuantity} × € ${line.originalUnitPrice.toFixed(2)}`
+                                : `€ ${(line.originalAmount ?? 0).toFixed(2)}`}
+                            </s>
+                            {' → '}
+                            {line.quantity != null && line.unitPrice != null
+                              ? `${line.quantity} × € ${line.unitPrice.toFixed(2)}`
+                              : `€ ${line.amount.toFixed(2)}`}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <Badge tone={ORDER_PRICE_LINE_KIND_TONE[line.kind]}>{ORDER_PRICE_LINE_KIND_LABELS[line.kind]}</Badge>
+                      </td>
+                      <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
+                      {canEditPricingLines && !pricingLocked && (
+                        <td className="to-price-line-actions">
+                          {line.kind === 'Proposed' ? (
+                            <Button variant="ghost" onClick={() => void handleConfirmLine(line)} disabled={pricingBusy}>
+                              Bevestigen
+                            </Button>
+                          ) : (
+                            <>
+                              <Button variant="ghost" onClick={() => openEditLine(line)} disabled={pricingBusy}>
+                                Bewerken
+                              </Button>
+                              <Button variant="ghost" onClick={() => setRemoveLine(line)} disabled={pricingBusy}>
+                                Verwijderen
+                              </Button>
+                            </>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th>Totaal</th>
+                    <th />
+                    <th className="tof-price-amount">
+                      € {(order.pricingSnapshot?.linesTotal ?? order.agreedPrice ?? 0).toFixed(2)}
+                    </th>
+                    {canEditPricingLines && !pricingLocked && <th />}
+                  </tr>
+                </tfoot>
+              </table>
+            </section>
+          )}
 
           <section className="to-section">
             <h2>Stops</h2>
@@ -496,6 +776,167 @@ export function TransportOrderDetailPage() {
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+
+      {editLine && (
+        <Modal
+          title="Prijsregel aanpassen"
+          onClose={() => setEditLine(null)}
+          busy={pricingBusy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setEditLine(null)} disabled={pricingBusy}>
+                Terug
+              </Button>
+              <Button onClick={() => void handleSaveEditLine()} disabled={pricingBusy}>
+                {pricingBusy ? 'Opslaan…' : 'Opslaan'}
+              </Button>
+            </>
+          }
+        >
+          <p className="customer-form-muted">{editLine.label}</p>
+          <div className="tof-row">
+            <FormField label="Aantal" htmlFor="price-line-qty">
+              <input
+                id="price-line-qty"
+                type="number"
+                step="0.01"
+                value={editQuantity}
+                onChange={(e) => setEditQuantity(e.target.value)}
+                disabled={pricingBusy}
+              />
+            </FormField>
+            <FormField label="Eenheidsprijs (€)" htmlFor="price-line-unit-price">
+              <input
+                id="price-line-unit-price"
+                type="number"
+                step="0.01"
+                value={editUnitPrice}
+                onChange={(e) => setEditUnitPrice(e.target.value)}
+                disabled={pricingBusy}
+              />
+            </FormField>
+          </div>
+          <FormField label="Bedrag (€)" htmlFor="price-line-amount" hint="Leeg = aantal × eenheidsprijs.">
+            <input
+              id="price-line-amount"
+              type="number"
+              step="0.01"
+              value={editAmount}
+              onChange={(e) => setEditAmount(e.target.value)}
+              disabled={pricingBusy}
+            />
+          </FormField>
+          <FormField label="Reden" htmlFor="price-line-reason" required hint="Verplicht bij een aanpassing.">
+            <input
+              id="price-line-reason"
+              value={editReason}
+              onChange={(e) => setEditReason(e.target.value)}
+              disabled={pricingBusy}
+              maxLength={500}
+              autoFocus
+            />
+          </FormField>
+        </Modal>
+      )}
+
+      {removeLine && (
+        <Modal
+          title="Prijsregel verwijderen"
+          onClose={() => setRemoveLine(null)}
+          busy={pricingBusy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setRemoveLine(null)} disabled={pricingBusy}>
+                Terug
+              </Button>
+              <Button variant="danger" onClick={() => void handleRemoveLine()} disabled={pricingBusy}>
+                {pricingBusy ? 'Verwijderen…' : 'Verwijderen'}
+              </Button>
+            </>
+          }
+        >
+          <p>
+            Weet je zeker dat je de regel <strong>{removeLine.label}</strong> wilt verwijderen?
+          </p>
+          {removeLine.kind !== 'Manual' && (
+            <FormField label="Reden" htmlFor="price-line-remove-reason" required hint="Verplicht bij het verwijderen van een berekende regel.">
+              <input
+                id="price-line-remove-reason"
+                value={removeReason}
+                onChange={(e) => setRemoveReason(e.target.value)}
+                disabled={pricingBusy}
+                maxLength={500}
+                autoFocus
+              />
+            </FormField>
+          )}
+        </Modal>
+      )}
+
+      {addLineOpen && (
+        <Modal
+          title="Vrije prijsregel toevoegen"
+          onClose={() => setAddLineOpen(false)}
+          busy={pricingBusy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setAddLineOpen(false)} disabled={pricingBusy}>
+                Terug
+              </Button>
+              <Button onClick={() => void handleAddLine()} disabled={pricingBusy}>
+                {pricingBusy ? 'Toevoegen…' : 'Toevoegen'}
+              </Button>
+            </>
+          }
+        >
+          <FormField label="Omschrijving" htmlFor="add-line-label" required>
+            <input id="add-line-label" value={addLabel} onChange={(e) => setAddLabel(e.target.value)} disabled={pricingBusy} maxLength={300} autoFocus />
+          </FormField>
+          <div className="tof-row">
+            <FormField label="Aantal" htmlFor="add-line-qty" hint="Optioneel.">
+              <input id="add-line-qty" type="number" step="0.01" value={addQuantity} onChange={(e) => setAddQuantity(e.target.value)} disabled={pricingBusy} />
+            </FormField>
+            <FormField label="Eenheidsprijs (€)" htmlFor="add-line-unit-price" hint="Optioneel.">
+              <input
+                id="add-line-unit-price"
+                type="number"
+                step="0.01"
+                value={addUnitPrice}
+                onChange={(e) => setAddUnitPrice(e.target.value)}
+                disabled={pricingBusy}
+              />
+            </FormField>
+          </div>
+          <FormField label="Bedrag (€)" htmlFor="add-line-amount" hint="Leeg = aantal × eenheidsprijs.">
+            <input id="add-line-amount" type="number" step="0.01" value={addAmount} onChange={(e) => setAddAmount(e.target.value)} disabled={pricingBusy} />
+          </FormField>
+          <FormField label="Reden" htmlFor="add-line-reason" hint="Optioneel.">
+            <input id="add-line-reason" value={addReason} onChange={(e) => setAddReason(e.target.value)} disabled={pricingBusy} maxLength={500} />
+          </FormField>
+        </Modal>
+      )}
+
+      {calcDetailsOpen && order.pricingSnapshot && (
+        <Modal title="Berekeningsdetails" onClose={() => setCalcDetailsOpen(false)}>
+          <p className="customer-form-muted">
+            Tariefdatum: {order.pricingSnapshot.tariffDate}
+            {order.pricingSnapshot.zoneName ? ` · Zone: ${order.pricingSnapshot.zoneName} (${order.pricingSnapshot.zoneCode})` : ''}
+            {order.pricingSnapshot.agreementNames ? ` · Tarief: ${order.pricingSnapshot.agreementNames}` : ''}
+          </p>
+          <pre className="to-calc-explanation">{order.pricingSnapshot.explanation}</pre>
+        </Modal>
+      )}
+
+      {recalcConfirmOpen && (
+        <ConfirmDialog
+          title="Prijs herberekenen"
+          message="De prijs is al gecontroleerd. Toch herberekenen?"
+          confirmLabel="Herberekenen"
+          busy={pricingBusy}
+          onConfirm={() => void handleRecalculate()}
+          onCancel={() => setRecalcConfirmOpen(false)}
         />
       )}
     </div>

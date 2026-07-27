@@ -4,6 +4,26 @@ using TransportationService.Api.Modules.Tarification.Entities;
 namespace TransportationService.Api.Modules.Orders.Entities;
 
 /// <summary>
+/// Manual-editing lifecycle of one pricing line (spec ch. 24-26). Auto/Proposed are engine-owned
+/// and get overwritten wholesale on recalculation; AutoAdjusted and Manual are user-owned and
+/// survive a recalculation (merge, never delete-all-rewrite). Stored as a string column.
+/// </summary>
+public enum OrderPriceLineKind
+{
+    /// <summary>Engine-produced, never edited; replaced wholesale on every recalculation.</summary>
+    Auto = 0,
+
+    /// <summary>Started as an engine line, then manually corrected; Original* preserves the engine baseline.</summary>
+    AutoAdjusted = 1,
+
+    /// <summary>Free line added by a user (or an orphaned AutoAdjusted line whose engine source disappeared).</summary>
+    Manual = 2,
+
+    /// <summary>Unconfirmed engine proposal (spec Phase 6, e.g. extra time); excluded from LinesTotal until confirmed.</summary>
+    Proposed = 3,
+}
+
+/// <summary>
 /// Snapshot of one line of the price calculation at save time. Historical orders keep this
 /// breakdown even when master-data tariffs change later; it is only rewritten on an explicit
 /// order save.
@@ -35,9 +55,61 @@ public class TransportOrderPricingLine : AuditableTenantEntity
 
     /// <summary>
     /// An unconfirmed extra-time charge (spec Phase 6): excluded from AgreedPrice/CalculatedPrice,
-    /// shown separately as a proposal until confirmed.
+    /// shown separately as a proposal until confirmed. Kept in sync with <see cref="Kind"/> ==
+    /// Proposed for Phase 6 DTO consumers; the Kind enum is the source of truth going forward.
     /// </summary>
     public bool Proposed { get; set; }
+
+    /// <summary>Manual-editing lifecycle (spec ch. 24-26); see <see cref="OrderPriceLineKind"/>.</summary>
+    public OrderPriceLineKind Kind { get; set; } = OrderPriceLineKind.Auto;
+
+    /// <summary>Current quantity, when the line is a simple qty × unit-price line (editable).</summary>
+    public decimal? Quantity { get; set; }
+
+    /// <summary>Current unit price, when derivable/editable (never invented for bracket/base-amount lines).</summary>
+    public decimal? UnitPrice { get; set; }
+
+    /// <summary>Quantity as last produced/refreshed by the engine, preserved once a line is adjusted.</summary>
+    public decimal? OriginalQuantity { get; set; }
+
+    /// <summary>Unit price as last produced/refreshed by the engine, preserved once a line is adjusted.</summary>
+    public decimal? OriginalUnitPrice { get; set; }
+
+    /// <summary>Amount as last produced/refreshed by the engine, preserved once a line is adjusted.</summary>
+    public decimal? OriginalAmount { get; set; }
+
+    /// <summary>Mandatory reason for a manual adjustment/removal (audit trail, spec §24).</summary>
+    public string? AdjustReason { get; set; }
+
+    public Guid? AdjustedByUserId { get; set; }
+    public DateTime? AdjustedAtUtc { get; set; }
+
+    /// <summary>Frozen identity of the tariff rule, for merge-matching (see LineKey too).</summary>
+    public Guid? RuleId { get; set; }
+
+    /// <summary>Frozen identity of the service option, for merge-matching (see LineKey too).</summary>
+    public Guid? ServiceOptionId { get; set; }
+
+    /// <summary>
+    /// Stable merge key stamped by the engine (or "manual:{guid}" for free lines): the single
+    /// source of truth used to match an existing adjusted/manual line against a fresh
+    /// recalculation instead of delete-all-rewrite (spec ch. 24-26).
+    /// </summary>
+    public string? LineKey { get; set; }
+}
+
+/// <summary>
+/// Status lifecycle of an order's price (spec ch. 24-26): Draft recalculates freely on every
+/// save; Reviewed still recalculates (the frontend warns) but marks the price as checked;
+/// Locked/Invoiced refuse recalculation entirely until explicitly unlocked. Stored as a string
+/// column. Invoiced is set only by invoice generation, never via the status endpoint.
+/// </summary>
+public enum OrderPricingStatus
+{
+    Draft = 0,
+    Reviewed = 1,
+    Locked = 2,
+    Invoiced = 3,
 }
 
 /// <summary>
@@ -67,6 +139,12 @@ public class TransportOrderPricingSnapshot : AuditableTenantEntity
 
     /// <summary>Human-readable multiline calculation explanation.</summary>
     public string? Explanation { get; set; }
+
+    /// <summary>Manual-editing / locking lifecycle (spec ch. 24-26); preserved across recalculations.</summary>
+    public OrderPricingStatus Status { get; set; } = OrderPricingStatus.Draft;
+
+    /// <summary>Sum of Auto/AutoAdjusted/Manual non-informational line amounts (drives AgreedPrice).</summary>
+    public decimal? LinesTotal { get; set; }
 }
 
 /// <summary>

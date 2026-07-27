@@ -17,6 +17,14 @@ public class TransportOrderPricingLineConfiguration : IEntityTypeConfiguration<T
         builder.Property(l => l.AgreementName).HasMaxLength(200);
         builder.Property(l => l.ActualQuantity).HasPrecision(12, 3);
         builder.Property(l => l.BillableQuantity).HasPrecision(12, 3);
+        builder.Property(l => l.Kind).HasConversion<string>().HasMaxLength(20);
+        builder.Property(l => l.Quantity).HasPrecision(12, 3);
+        builder.Property(l => l.UnitPrice).HasPrecision(14, 4);
+        builder.Property(l => l.OriginalQuantity).HasPrecision(12, 3);
+        builder.Property(l => l.OriginalUnitPrice).HasPrecision(14, 4);
+        builder.Property(l => l.OriginalAmount).HasPrecision(12, 2);
+        builder.Property(l => l.AdjustReason).HasMaxLength(500);
+        builder.Property(l => l.LineKey).HasMaxLength(200);
         builder.HasIndex(l => new { l.TenantId, l.TransportOrderId });
         builder.HasOne<TransportOrder>().WithMany().HasForeignKey(l => l.TransportOrderId).OnDelete(DeleteBehavior.Cascade);
         builder.HasQueryFilter(l => !l.IsDeleted);
@@ -38,6 +46,8 @@ public class TransportOrderPricingSnapshotConfiguration : IEntityTypeConfigurati
         builder.Property(s => s.OverrideAmount).HasPrecision(12, 2);
         builder.Property(s => s.OverrideReason).HasMaxLength(500);
         builder.Property(s => s.Explanation).HasMaxLength(4000);
+        builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(s => s.LinesTotal).HasPrecision(12, 2);
         builder.HasIndex(s => new { s.TenantId, s.TransportOrderId }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasOne<TransportOrder>().WithMany().HasForeignKey(s => s.TransportOrderId).OnDelete(DeleteBehavior.Cascade);
         builder.HasQueryFilter(s => !s.IsDeleted);

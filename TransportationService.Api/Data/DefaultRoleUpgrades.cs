@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 13;
+    public const int CurrentVersion = 14;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -318,6 +318,15 @@ public static class DefaultRoleUpgrades
             {
                 ["management"] = [PermissionCodes.OrdersOverridePrice],
                 ["planner"] = [PermissionCodes.OrdersOverridePrice],
+            }),
+
+        new(14,
+            "Order pricing status 2026-07-27: line-level manual pricing, status and locking.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.OrdersLockPrice],
+                ["management"] = [PermissionCodes.OrdersLockPrice],
+                ["boekhouding"] = [PermissionCodes.OrdersLockPrice],
             }),
     ];
 }

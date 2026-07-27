@@ -248,7 +248,15 @@ public record PriceBreakdownLine(
     Guid? AgreementId = null, string? AgreementName = null,
     decimal? ActualQuantity = null, decimal? BillableQuantity = null,
     /// <summary>An unconfirmed extra-time charge (spec Phase 6): excluded from Total, included in TotalWithProposed.</summary>
-    bool Proposed = false);
+    bool Proposed = false,
+    /// <summary>
+    /// Stable merge key stamped by the engine (spec ch. 24-26, single source of truth): lets the
+    /// order-side merge-on-recalc match this line against a previously adjusted/persisted one
+    /// instead of delete-all-rewrite. See TransportOrderService.ApplyPricingAsync.
+    /// </summary>
+    string? LineKey = null,
+    /// <summary>Service option identity, for the "service:{id}" LineKey scheme and merge-matching.</summary>
+    Guid? ServiceOptionId = null);
 
 /// <summary>A selected (or auto-applied) service option with its resolved (customer or default) price.</summary>
 public record PriceServiceLine(
