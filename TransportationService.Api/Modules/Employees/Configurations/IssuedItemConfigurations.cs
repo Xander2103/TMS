@@ -92,7 +92,9 @@ public class IssuedItemVariantValueConfiguration : IEntityTypeConfiguration<Issu
         builder.HasKey(v => v.Id);
         builder.Property(v => v.AttributeNameSnapshot).IsRequired().HasMaxLength(100);
         builder.Property(v => v.Value).IsRequired().HasMaxLength(100);
-        builder.HasIndex(v => new { v.TenantId, v.VariantId, v.AttributeDefinitionId }).IsUnique();
+        // Filtered on IsDeleted like every other soft-delete-aware unique index: a soft-deleted
+        // value row must never keep occupying the (variant, attribute) key (corrections wave §6).
+        builder.HasIndex(v => new { v.TenantId, v.VariantId, v.AttributeDefinitionId }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasOne<IssuedItemVariant>().WithMany()
             .HasForeignKey(v => v.VariantId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<IssuedItemAttributeOption>().WithMany()

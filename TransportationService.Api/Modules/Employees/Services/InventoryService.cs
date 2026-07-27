@@ -518,17 +518,37 @@ public class InventoryService : IInventoryService
             throw new DomainValidationException("values", $"De variant \"{label}\" bestaat al.");
         }
 
+        // Merge the attribute values IN PLACE per attribute (corrections wave §6): the old
+        // delete-all + re-add left a soft-deleted row occupying the same
+        // (TenantId, VariantId, AttributeDefinitionId) key, which violated the unique index on
+        // PostgreSQL for every attribute-backed variant edit. Unchanged values stay untouched.
         var oldValues = await _dbContext.IssuedItemVariantValues
             .Where(v => v.TenantId == _tenantContext.TenantId && v.VariantId == variantId)
             .ToListAsync(cancellationToken);
-        _dbContext.IssuedItemVariantValues.RemoveRange(oldValues);
+        var oldByDefinition = oldValues.ToDictionary(v => v.AttributeDefinitionId);
+        var mergedValues = new List<IssuedItemVariantValue>();
         foreach (var value in values)
         {
-            value.VariantId = variant.Id;
-            _dbContext.IssuedItemVariantValues.Add(value);
+            if (oldByDefinition.Remove(value.AttributeDefinitionId, out var existing))
+            {
+                existing.AttributeOptionId = value.AttributeOptionId;
+                existing.Value = value.Value;
+                existing.AttributeNameSnapshot = value.AttributeNameSnapshot;
+                mergedValues.Add(existing);
+            }
+            else
+            {
+                value.VariantId = variant.Id;
+                _dbContext.IssuedItemVariantValues.Add(value);
+                mergedValues.Add(value);
+            }
         }
 
+        // Attributes that no longer apply are removed (soft delete via the interceptor).
+        _dbContext.RemoveRange(oldByDefinition.Values);
+
         var oldLabel = variant.Label;
+        var oldThreshold = variant.LowStockThreshold;
         variant.Label = label;
         variant.IsActive = request.IsActive;
         variant.SortOrder = request.SortOrder;
@@ -543,10 +563,11 @@ public class InventoryService : IInventoryService
         else
         {
             await _auditService.RecordAsync(VariantEntity, variant.Id.ToString(), "Updated",
-                new { Label = oldLabel }, new { variant.Label }, cancellationToken);
+                new { Label = oldLabel, LowStockThreshold = oldThreshold },
+                new { variant.Label, variant.LowStockThreshold }, cancellationToken);
         }
 
-        return Map(variant, values.Select(MapValue).ToList());
+        return Map(variant, mergedValues.Select(MapValue).ToList());
     }
 
     public async Task<bool> DeleteVariantAsync(Guid templateId, Guid variantId, CancellationToken cancellationToken)

@@ -43,6 +43,8 @@ interface VariantEditorState {
   initialStock: string
   /** Free label for templates without linked attributes ("Small", "maat 43"). */
   label: string
+  /** Per-variant low-stock threshold; must round-trip on edit or saving wipes it. */
+  lowStockThreshold: string
 }
 
 interface StockDialogState {
@@ -216,7 +218,14 @@ export function IssuedItemTemplateDetailPage() {
       }
     }
     setVariantError(null)
-    setVariantEditor({ variant, values, isActive: variant?.isActive ?? true, initialStock: '', label: variant?.label ?? '' })
+    setVariantEditor({
+      variant,
+      values,
+      isActive: variant?.isActive ?? true,
+      initialStock: '',
+      label: variant?.label ?? '',
+      lowStockThreshold: variant?.lowStockThreshold != null ? String(variant.lowStockThreshold) : '',
+    })
   }
 
   async function handleVariantSubmit(event: FormEvent) {
@@ -237,6 +246,8 @@ export function IssuedItemTemplateDetailPage() {
       sortOrder: variantEditor.variant?.sortOrder ?? detail.variants.length,
       initialStock,
       label: variantEditor.label.trim() || null,
+      // Always round-trip the threshold — omitting it made every edit silently clear it.
+      lowStockThreshold: variantEditor.lowStockThreshold.trim() === '' ? null : Number(variantEditor.lowStockThreshold),
     }
     const ok = await run(
       () => (variantEditor.variant ? updateVariant(id, variantEditor.variant.id, input) : createVariant(id, input)),
@@ -821,6 +832,15 @@ export function IssuedItemTemplateDetailPage() {
                 />
               </FormField>
             )}
+            <FormField label="Lage-voorraadgrens" htmlFor="var-threshold" hint="Leeg = de grens van het sjabloon geldt.">
+              <input
+                id="var-threshold"
+                type="number"
+                min={0}
+                value={variantEditor.lowStockThreshold}
+                onChange={(e) => setVariantEditor((s) => (s ? { ...s, lowStockThreshold: e.target.value } : s))}
+              />
+            </FormField>
             <label className="issued-items-checkbox">
               <input
                 type="checkbox"
