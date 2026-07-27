@@ -37,6 +37,11 @@ public class LeaveConfigController : ControllerBase
     public async Task<ActionResult<LeaveBalanceTypeDto>> UpdateBalanceType(Guid id, SaveLeaveBalanceTypeRequest request, CancellationToken cancellationToken)
         => Ok(await _service.SaveBalanceTypeAsync(id, request, cancellationToken));
 
+    [HttpDelete("leave-balance-types/{id:guid}")]
+    [RequirePermission(PermissionCodes.LeaveTypesManage)]
+    public async Task<IActionResult> DeleteBalanceType(Guid id, CancellationToken cancellationToken)
+        => await _service.DeleteBalanceTypeAsync(id, cancellationToken) ? NoContent() : NotFound();
+
     [HttpGet("leave-types")]
     [RequirePermission(PermissionCodes.EmployeesView)]
     public async Task<ActionResult<IReadOnlyList<LeaveTypeDto>>> ListLeaveTypes(
@@ -52,6 +57,11 @@ public class LeaveConfigController : ControllerBase
     [RequirePermission(PermissionCodes.LeaveTypesManage)]
     public async Task<ActionResult<LeaveTypeDto>> UpdateLeaveType(Guid id, SaveLeaveTypeRequest request, CancellationToken cancellationToken)
         => Ok(await _service.SaveLeaveTypeAsync(id, request, cancellationToken));
+
+    [HttpDelete("leave-types/{id:guid}")]
+    [RequirePermission(PermissionCodes.LeaveTypesManage)]
+    public async Task<IActionResult> DeleteLeaveType(Guid id, CancellationToken cancellationToken)
+        => await _service.DeleteLeaveTypeAsync(id, cancellationToken) ? NoContent() : NotFound();
 
     [HttpGet("hr/leave-settings")]
     [RequirePermission(PermissionCodes.EmployeesView)]

@@ -58,6 +58,16 @@ export function saveLeaveBalanceType(id: string | null, input: SaveLeaveBalanceT
     : apiClient.postJson<LeaveBalanceType, SaveLeaveBalanceTypeInput>('/api/leave-balance-types', input)
 }
 
+/** Deletes an UNUSED balance type; a used one is refused with the deactivate-instead message. */
+export function deleteLeaveBalanceType(id: string): Promise<void> {
+  return apiClient.deleteRequest(`/api/leave-balance-types/${id}`)
+}
+
+/** Deletes an UNUSED leave type; one referenced by any absence is refused with the deactivate-instead message. */
+export function deleteLeaveType(id: string): Promise<void> {
+  return apiClient.deleteRequest(`/api/leave-types/${id}`)
+}
+
 export type SaveLeaveTypeInput = Omit<LeaveType, 'id'>
 export function saveLeaveType(id: string | null, input: SaveLeaveTypeInput): Promise<LeaveType> {
   return id

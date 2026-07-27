@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import {
+  deleteLeaveBalanceType,
+  deleteLeaveType,
   getLeaveBalanceTypes,
   getLeaveSettings,
   getLeaveTypes,
@@ -33,6 +36,7 @@ export function LeaveSettingsPage() {
   const [busy, setBusy] = useState(false)
   const [balanceDialog, setBalanceDialog] = useState<{ initial: LeaveBalanceType | null } | null>(null)
   const [leaveDialog, setLeaveDialog] = useState<{ initial: LeaveType | null } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: 'balance' | 'leave'; id: string; name: string } | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -91,6 +95,20 @@ export function LeaveSettingsPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return
+    const target = deleteTarget
+    setDeleteTarget(null)
+    try {
+      await (target.kind === 'balance' ? deleteLeaveBalanceType(target.id) : deleteLeaveType(target.id))
+      showSuccess(`Categorie '${target.name}' verwijderd.`)
+      setReload((n) => n + 1)
+    } catch (err) {
+      // A used category is refused server-side with the exact deactivate-instead message.
+      showError(describeApiError(err, 'De categorie kon niet worden verwijderd.').message)
+    }
+  }
+
   const balanceName = (id: string | null) => balanceTypes.find((b) => b.id === id)?.name ?? '—'
 
   return (
@@ -136,6 +154,7 @@ export function LeaveSettingsPage() {
           headers={['Code', 'Naam', 'Actief', 'Volgorde']}
           rows={balanceTypes.map((b) => [b.code, b.name, b.isActive ? 'Ja' : 'Nee', String(b.sortOrder)])}
           onEdit={canManage ? (i) => setBalanceDialog({ initial: balanceTypes[i] }) : undefined}
+          onDelete={canManage ? (i) => setDeleteTarget({ kind: 'balance', id: balanceTypes[i].id, name: balanceTypes[i].name }) : undefined}
         />
       </section>
 
@@ -148,6 +167,7 @@ export function LeaveSettingsPage() {
           headers={['Code', 'Naam', 'Boekt af', 'Saldotype', 'Self-service', 'Actief']}
           rows={leaveTypes.map((t) => [t.code, t.name, t.deductsFromBalance ? 'Ja' : 'Nee', t.deductsFromBalance ? balanceName(t.balanceTypeId) : '—', t.visibleInSelfService ? 'Ja' : 'Nee', t.isActive ? 'Ja' : 'Nee'])}
           onEdit={canManage ? (i) => setLeaveDialog({ initial: leaveTypes[i] }) : undefined}
+          onDelete={canManage ? (i) => setDeleteTarget({ kind: 'leave', id: leaveTypes[i].id, name: leaveTypes[i].name }) : undefined}
         />
       </section>
 
@@ -157,25 +177,51 @@ export function LeaveSettingsPage() {
       {leaveDialog && (
         <LeaveTypeDialog initial={leaveDialog.initial} balanceTypes={balanceTypes} busy={busy} onSubmit={submitLeaveType} onClose={() => setLeaveDialog(null)} />
       )}
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Categorie verwijderen"
+          message={`Weet je zeker dat je '${deleteTarget.name}' wilt verwijderen? Een categorie die al gebruikt is, kan alleen gedeactiveerd worden.`}
+          confirmLabel="Verwijderen"
+          destructive
+          onConfirm={() => void handleDelete()}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   )
 }
 
-function LeaveTable({ headers, rows, onEdit }: { headers: string[]; rows: string[][]; onEdit?: (index: number) => void }) {
+function LeaveTable({
+  headers,
+  rows,
+  onEdit,
+  onDelete,
+}: {
+  headers: string[]
+  rows: string[][]
+  onEdit?: (index: number) => void
+  onDelete?: (index: number) => void
+}) {
+  const hasActions = onEdit !== undefined || onDelete !== undefined
   return (
     <div className="lb-table-wrap">
       <table className="lb-table">
         <thead>
           <tr>
             {headers.map((h) => <th key={h}>{h}</th>)}
-            {onEdit && <th aria-label="Acties" />}
+            {hasActions && <th aria-label="Acties" />}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
             <tr key={i}>
               {row.map((cell, j) => <td key={j}>{cell}</td>)}
-              {onEdit && <td className="lb-actions-cell"><Button variant="ghost" onClick={() => onEdit(i)}>Bewerken</Button></td>}
+              {hasActions && (
+                <td className="lb-actions-cell">
+                  {onEdit && <Button variant="ghost" onClick={() => onEdit(i)}>Bewerken</Button>}
+                  {onDelete && <Button variant="ghost" onClick={() => onDelete(i)}>Verwijderen</Button>}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

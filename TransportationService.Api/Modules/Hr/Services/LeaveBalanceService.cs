@@ -19,8 +19,12 @@ public interface ILeaveBalanceService
 
     Task<IReadOnlyList<LeaveBalanceTypeDto>> ListBalanceTypesAsync(CancellationToken cancellationToken);
     Task<LeaveBalanceTypeDto> SaveBalanceTypeAsync(Guid? id, SaveLeaveBalanceTypeRequest request, CancellationToken cancellationToken);
+    /// <summary>Deletes an UNUSED balance type; a used one throws with the deactivate-instead message. False = unknown id.</summary>
+    Task<bool> DeleteBalanceTypeAsync(Guid id, CancellationToken cancellationToken);
     Task<IReadOnlyList<LeaveTypeDto>> ListLeaveTypesAsync(bool activeOnly, bool selfServiceOnly, CancellationToken cancellationToken);
     Task<LeaveTypeDto> SaveLeaveTypeAsync(Guid? id, SaveLeaveTypeRequest request, CancellationToken cancellationToken);
+    /// <summary>Deletes an UNUSED leave type; one referenced by any absence throws with the deactivate-instead message. False = unknown id.</summary>
+    Task<bool> DeleteLeaveTypeAsync(Guid id, CancellationToken cancellationToken);
     Task<LeaveSettingsDto> GetSettingsAsync(CancellationToken cancellationToken);
     Task<LeaveSettingsDto> UpdateSettingsAsync(LeaveSettingsDto request, CancellationToken cancellationToken);
 }
@@ -47,7 +51,9 @@ public class LeaveBalanceService : ILeaveBalanceService
     {
         var tenantId = _tenant.TenantId;
 
-        var existingBalanceCodes = await _db.LeaveBalanceTypes
+        // IgnoreQueryFilters: a deliberately DELETED seeded category must never be resurrected
+        // by the add-if-missing seeding (corrections wave §5).
+        var existingBalanceCodes = await _db.LeaveBalanceTypes.IgnoreQueryFilters()
             .Where(t => t.TenantId == tenantId).Select(t => t.Code).ToListAsync(cancellationToken);
         foreach (var seed in LeaveDefaults.BalanceTypes)
         {
@@ -61,7 +67,7 @@ public class LeaveBalanceService : ILeaveBalanceService
 
         var balanceByCode = await _db.LeaveBalanceTypes
             .Where(t => t.TenantId == tenantId).ToDictionaryAsync(t => t.Code, t => t.Id, cancellationToken);
-        var existingLeaveCodes = await _db.LeaveTypes
+        var existingLeaveCodes = await _db.LeaveTypes.IgnoreQueryFilters()
             .Where(t => t.TenantId == tenantId).Select(t => t.Code).ToListAsync(cancellationToken);
         foreach (var seed in LeaveDefaults.LeaveTypes)
         {
@@ -334,6 +340,60 @@ public class LeaveBalanceService : ILeaveBalanceService
         await _audit.RecordAsync("LeaveBalanceType", entity.Id.ToString(), id is null ? "Created" : "Updated", null,
             new { entity.Code, entity.Name, entity.IsActive }, cancellationToken);
         return new LeaveBalanceTypeDto(entity.Id, entity.Code, entity.Name, entity.Description, entity.IsActive, entity.SortOrder);
+    }
+
+    public async Task<bool> DeleteBalanceTypeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenant.TenantId;
+        var entity = await _db.LeaveBalanceTypes.FirstOrDefaultAsync(t => t.TenantId == tenantId && t.Id == id, cancellationToken);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        // Referenced anywhere — leave types or entitlement rows, soft-deleted included — blocks
+        // deletion; historical data must stay readable. Deactivating remains possible.
+        var used = await _db.LeaveTypes.IgnoreQueryFilters()
+                       .AnyAsync(t => t.TenantId == tenantId && t.BalanceTypeId == id, cancellationToken)
+                   || await _db.EmployeeLeaveBalances.IgnoreQueryFilters()
+                       .AnyAsync(b => b.TenantId == tenantId && b.BalanceTypeId == id, cancellationToken);
+        if (used)
+        {
+            await _audit.RecordAsync("LeaveBalanceType", id.ToString(), "DeleteBlocked",
+                new { entity.Code, entity.Name }, null, cancellationToken);
+            throw new DomainValidationException(
+                $"Categorie '{entity.Name}' is al gebruikt en kan niet worden verwijderd. Je kunt de categorie wel deactiveren.");
+        }
+
+        _db.Remove(entity); // soft delete via the auditing interceptor
+        await _db.SaveChangesAsync(cancellationToken);
+        await _audit.RecordAsync("LeaveBalanceType", id.ToString(), "Deleted", new { entity.Code, entity.Name }, null, cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> DeleteLeaveTypeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenant.TenantId;
+        var entity = await _db.LeaveTypes.FirstOrDefaultAsync(t => t.TenantId == tenantId && t.Id == id, cancellationToken);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        var used = await _db.Absences.IgnoreQueryFilters()
+            .AnyAsync(a => a.TenantId == tenantId && a.LeaveTypeId == id, cancellationToken);
+        if (used)
+        {
+            await _audit.RecordAsync("LeaveType", id.ToString(), "DeleteBlocked",
+                new { entity.Code, entity.Name }, null, cancellationToken);
+            throw new DomainValidationException(
+                $"Categorie '{entity.Name}' is al gebruikt en kan niet worden verwijderd. Je kunt de categorie wel deactiveren.");
+        }
+
+        _db.Remove(entity); // soft delete via the auditing interceptor
+        await _db.SaveChangesAsync(cancellationToken);
+        await _audit.RecordAsync("LeaveType", id.ToString(), "Deleted", new { entity.Code, entity.Name }, null, cancellationToken);
+        return true;
     }
 
     public async Task<IReadOnlyList<LeaveTypeDto>> ListLeaveTypesAsync(bool activeOnly, bool selfServiceOnly, CancellationToken cancellationToken)

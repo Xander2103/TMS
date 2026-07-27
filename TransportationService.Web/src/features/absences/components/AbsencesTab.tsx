@@ -15,11 +15,12 @@ import {
   listEmployeeAbsences,
   updateAbsence,
 } from '../api/absencesApi'
+import { getLeaveTypes } from '../../leave-balance/api/leaveBalanceApi'
+import type { LeaveType } from '../../leave-balance/types'
 import {
   ABSENCE_STATUS_LABELS,
   ABSENCE_STATUS_TONE,
   ABSENCE_TYPE_LABELS,
-  ABSENCE_TYPES,
   type Absence,
   type AbsenceInput,
   type AbsenceType,
@@ -28,6 +29,8 @@ import './absences.css'
 
 interface AbsenceForm {
   type: AbsenceType
+  /** Master-data leave category; '' only for legacy absences that predate leave types. */
+  leaveTypeId: string
   startDate: string
   endDate: string
   reason: string
@@ -35,6 +38,7 @@ interface AbsenceForm {
 
 const EMPTY_FORM: AbsenceForm = {
   type: 'Vacation',
+  leaveTypeId: '',
   startDate: '',
   endDate: '',
   reason: '',
@@ -52,6 +56,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
   const { hasPermission } = useAuth()
 
   const [absences, setAbsences] = useState<Absence[] | null>(null)
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
@@ -82,13 +87,27 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
     }
   }, [employeeId, reloadToken])
 
+  useEffect(() => {
+    let mounted = true
+    // Only ACTIVE leave categories are selectable for new registrations; historical rows keep
+    // rendering their stored type (corrections wave §5).
+    getLeaveTypes({ activeOnly: true })
+      .then((data) => {
+        if (mounted) setLeaveTypes(data)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   function set<K extends keyof AbsenceForm>(key: K, value: AbsenceForm[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
   function openCreate() {
     setEditing(null)
-    setForm(EMPTY_FORM)
+    setForm({ ...EMPTY_FORM, leaveTypeId: leaveTypes[0]?.id ?? '' })
     setFormError(null)
     setEditorOpen(true)
   }
@@ -97,6 +116,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
     setEditing(absence)
     setForm({
       type: absence.type,
+      leaveTypeId: absence.leaveTypeId ?? '',
       startDate: absence.startDate,
       endDate: absence.endDate,
       reason: absence.reason ?? '',
@@ -116,8 +136,11 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
       setFormError('De einddatum moet op of na de begindatum liggen.')
       return
     }
+    const selectedLeaveType = leaveTypes.find((t) => t.id === form.leaveTypeId)
     const input: AbsenceInput = {
-      type: form.type,
+      // The leave category is the source of truth; the enum type rides along for legacy rows.
+      type: (selectedLeaveType?.absenceType as AbsenceType | undefined) ?? form.type,
+      leaveTypeId: form.leaveTypeId || null,
       startDate: form.startDate,
       endDate: form.endDate,
       reason: form.reason.trim() || null,
@@ -311,11 +334,14 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
                 {formError}
               </div>
             )}
-            <FormField label="Type" htmlFor="ab-type" required>
-              <select id="ab-type" value={form.type} onChange={(e) => set('type', e.target.value as AbsenceType)} disabled={saving}>
-                {ABSENCE_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {ABSENCE_TYPE_LABELS[type]}
+            <FormField label="Categorie" htmlFor="ab-type" required>
+              <select id="ab-type" value={form.leaveTypeId} onChange={(e) => set('leaveTypeId', e.target.value)} disabled={saving}>
+                {editing && !editing.leaveTypeId && (
+                  <option value="">{ABSENCE_TYPE_LABELS[editing.type]} (oude registratie)</option>
+                )}
+                {leaveTypes.map((leaveType) => (
+                  <option key={leaveType.id} value={leaveType.id}>
+                    {leaveType.name}
                   </option>
                 ))}
               </select>
