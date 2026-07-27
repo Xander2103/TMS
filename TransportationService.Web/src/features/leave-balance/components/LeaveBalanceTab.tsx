@@ -60,11 +60,11 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey])
 
-  async function submitEntitlement(base: number, carry: number) {
+  async function submitEntitlement(base: number, carry: number, reason: string | null) {
     if (!dialog) return
     setBusy(true)
     try {
-      await setLeaveEntitlement(employeeId, year, { balanceTypeId: dialog.row.balanceTypeId, baseEntitlementDays: base, carryOverDays: carry })
+      await setLeaveEntitlement(employeeId, year, { balanceTypeId: dialog.row.balanceTypeId, baseEntitlementDays: base, carryOverDays: carry, reason })
       showSuccess('Jaarrecht bijgewerkt.')
       setDialog(null)
       setReloadToken((t) => t + 1)

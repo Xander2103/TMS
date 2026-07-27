@@ -12,7 +12,7 @@ import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { AbsencesTab } from '../../absences/components/AbsencesTab'
-import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
+import { EmployeeHistoryPanel } from '../components/EmployeeHistoryPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { DriverProfilePanel } from '../../drivers/components/DriverProfilePanel'
 import { IssuedItemsTab } from '../../issued-items/IssuedItemsTab'
@@ -342,7 +342,7 @@ export function EmployeeDetailPage() {
 
       {tab === 'historiek' && (
         <TabPanel tabId="historiek">
-          <AuditHistoryPanel entityType="Employee" entityId={employee.id} />
+          <EmployeeHistoryPanel employeeId={employee.id} />
         </TabPanel>
       )}
 

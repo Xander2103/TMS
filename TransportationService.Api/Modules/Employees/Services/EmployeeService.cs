@@ -205,7 +205,8 @@ public class EmployeeService : IEmployeeService
             cancellationToken);
 
         await _auditService.RecordAsync(EntityType, employee.Id.ToString(), "Created", null,
-            new { employee.EmployeeNumber, employee.FirstName, employee.LastName, employee.EmploymentStatus, employee.IsActive }, cancellationToken);
+            await BuildAuditSnapshotAsync(employee, employee.JobFunctions.Select(j => j.JobFunctionId).ToList(), cancellationToken),
+            cancellationToken);
 
         if (request.DriverProfile is { } driverProfile)
         {
@@ -248,7 +249,10 @@ public class EmployeeService : IEmployeeService
         await ValidateLookupCodesAsync(request.NationalityCode, request.PreferredLanguageCode, cancellationToken);
         await EnsureReferencesInTenantAsync(request.DepartmentId, request.ContractTypeId, request.JobFunctionIds, cancellationToken);
 
-        var oldValues = new { employee.FirstName, employee.LastName, employee.EmploymentStatus, employee.DepartmentId, employee.IsActive };
+        // Full before-image for the personnel history (corrections wave §4): every meaningful
+        // field with resolved names, confidential values masked. Captured BEFORE any mutation.
+        var oldSnapshot = await BuildAuditSnapshotAsync(
+            employee, employee.JobFunctions.Select(j => j.JobFunctionId).ToList(), cancellationToken);
 
         employee.FirstName = request.FirstName.Trim();
         employee.LastName = request.LastName.Trim();
@@ -306,8 +310,8 @@ public class EmployeeService : IEmployeeService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync(EntityType, employee.Id.ToString(), "Updated", oldValues,
-            new { employee.FirstName, employee.LastName, employee.EmploymentStatus, employee.DepartmentId, employee.IsActive }, cancellationToken);
+        var newSnapshot = await BuildAuditSnapshotAsync(employee, requestedFunctionIds.ToList(), cancellationToken);
+        await _auditService.RecordAsync(EntityType, employee.Id.ToString(), "Updated", oldSnapshot, newSnapshot, cancellationToken);
 
         return (await GetByIdAsync(id, canEditConfidential, cancellationToken))!;
     }
@@ -357,6 +361,81 @@ public class EmployeeService : IEmployeeService
 
         return true;
     }
+
+    /// <summary>
+    /// Full audit snapshot for the personnel history (corrections wave §4): every meaningful
+    /// field, lookup ids resolved to names at write time (so history never breaks when master
+    /// data is renamed/removed) and confidential values masked — the history shows THAT they
+    /// changed, never what they are. Keys are field identifiers translated to Dutch labels by
+    /// the history projection.
+    /// </summary>
+    private async Task<Dictionary<string, object?>> BuildAuditSnapshotAsync(
+        Employee employee, IReadOnlyCollection<Guid> jobFunctionIds, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        string? departmentName = employee.DepartmentId is { } departmentId
+            ? await _dbContext.Departments.AsNoTracking()
+                .Where(d => d.TenantId == tenantId && d.Id == departmentId).Select(d => d.Name)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+        string? contractTypeName = employee.ContractTypeId is { } contractTypeId
+            ? await _dbContext.ContractTypes.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && c.Id == contractTypeId).Select(c => c.Name)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var functionNames = jobFunctionIds.Count == 0
+            ? []
+            : await _dbContext.JobFunctions.AsNoTracking()
+                .Where(f => f.TenantId == tenantId && jobFunctionIds.Contains(f.Id))
+                .OrderBy(f => f.Name).Select(f => f.Name)
+                .ToListAsync(cancellationToken);
+        var contacts = employee.EmergencyContacts
+            .Where(c => !c.IsDeleted)
+            .OrderBy(c => c.Priority)
+            .Select(c => string.Join(" ", new[] { c.Name, string.IsNullOrWhiteSpace(c.Relationship) ? null : $"({c.Relationship})", c.Phone ?? c.MobilePhone }.Where(p => !string.IsNullOrWhiteSpace(p))))
+            .ToList();
+
+        return new Dictionary<string, object?>
+        {
+            ["EmployeeNumber"] = employee.EmployeeNumber,
+            ["FirstName"] = employee.FirstName,
+            ["LastName"] = employee.LastName,
+            ["DateOfBirth"] = employee.DateOfBirth.ToString("yyyy-MM-dd"),
+            ["PlaceOfBirth"] = employee.PlaceOfBirth,
+            ["Nationality"] = employee.NationalityCode,
+            ["Language"] = employee.PreferredLanguageCode,
+            ["Email"] = employee.Email,
+            ["PhoneNumber"] = employee.PhoneNumber,
+            ["MobilePhone"] = employee.MobilePhone,
+            ["Street"] = employee.Street,
+            ["HouseNumber"] = employee.HouseNumber,
+            ["PostalCode"] = employee.PostalCode,
+            ["City"] = employee.City,
+            ["Country"] = employee.CountryCode,
+            ["CivilStatus"] = employee.CivilStatus?.ToString(),
+            ["DependentChildren"] = employee.DependentChildren,
+            ["EmploymentStartDate"] = employee.EmploymentStartDate.ToString("yyyy-MM-dd"),
+            ["EmploymentEndDate"] = employee.EmploymentEndDate?.ToString("yyyy-MM-dd"),
+            ["EmploymentStatus"] = employee.EmploymentStatus.ToString(),
+            ["Department"] = departmentName,
+            ["ContractType"] = contractTypeName,
+            ["JobFunctions"] = functionNames.Count == 0 ? null : string.Join(", ", functionNames),
+            ["DimonaNumber"] = employee.DimonaNumber,
+            ["IsActive"] = employee.IsActive,
+            ["Notes"] = employee.Notes,
+            ["EmergencyContacts"] = contacts.Count == 0 ? null : string.Join("; ", contacts),
+            ["NationalRegisterNumber"] = MaskConfidential(employee.NationalRegisterNumber, 2),
+            ["IdentityCardNumber"] = MaskConfidential(employee.IdentityCardNumber, 2),
+            ["Iban"] = MaskConfidential(employee.Iban, 4),
+            ["Bic"] = employee.Bic,
+        };
+    }
+
+    /// <summary>"••• 89"-style masking: a change stays detectable without exposing the value.</summary>
+    private static string? MaskConfidential(string? value, int visibleSuffix) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Length <= visibleSuffix ? "•••" : $"•••{value[^visibleSuffix..]}";
 
     private static void ValidateRequired(string firstName, string lastName, string email)
     {

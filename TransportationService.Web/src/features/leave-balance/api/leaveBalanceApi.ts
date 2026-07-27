@@ -16,6 +16,8 @@ export interface SetEntitlementInput {
   balanceTypeId: string
   baseEntitlementDays: number
   carryOverDays: number
+  /** Optional reason shown in the personnel history (e.g. 'Jaarlijks saldo toegekend'). */
+  reason?: string | null
 }
 
 export function setLeaveEntitlement(employeeId: string, year: number, input: SetEntitlementInput): Promise<EmployeeLeaveBalance> {

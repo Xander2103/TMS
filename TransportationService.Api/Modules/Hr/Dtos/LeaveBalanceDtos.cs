@@ -23,7 +23,10 @@ public sealed record LeaveAdjustmentDto(
 /// <summary>Outcome of the self-service over-request check for a leave request.</summary>
 public sealed record LeaveAvailabilityResult(bool Allowed, decimal RemainingDays, decimal RequestedDays, string? Message);
 
-public sealed record SetLeaveEntitlementRequest(Guid BalanceTypeId, decimal BaseEntitlementDays, decimal CarryOverDays);
+public sealed record SetLeaveEntitlementRequest(
+    Guid BalanceTypeId, decimal BaseEntitlementDays, decimal CarryOverDays,
+    /// <summary>Optional reason shown in the entitlement history (e.g. "Jaarlijks saldo 2027 toegekend").</summary>
+    string? Reason = null);
 
 public sealed record AddLeaveAdjustmentRequest(Guid BalanceTypeId, decimal Days, string Reason, LeaveAdjustmentKind Kind);
 

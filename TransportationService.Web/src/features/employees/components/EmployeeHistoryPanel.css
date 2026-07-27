@@ -1,0 +1,48 @@
+.employee-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.employee-history-entry {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+}
+
+.employee-history-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.employee-history-when {
+  font-weight: 600;
+}
+
+.employee-history-actor {
+  color: var(--text);
+}
+
+.employee-history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+
+.employee-history-table th,
+.employee-history-table td {
+  text-align: left;
+  padding: 0.25rem 0.5rem;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.employee-history-table th {
+  border-top: none;
+  color: var(--text);
+  font-weight: 600;
+}

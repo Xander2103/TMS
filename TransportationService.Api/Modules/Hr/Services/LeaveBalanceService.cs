@@ -169,7 +169,14 @@ public class LeaveBalanceService : ILeaveBalanceService
 
         var row = await _db.EmployeeLeaveBalances
             .FirstOrDefaultAsync(b => b.TenantId == tenantId && b.EmployeeId == employeeId && b.CalendarYear == year && b.BalanceTypeId == request.BalanceTypeId, cancellationToken);
-        object? oldValues = row is null ? null : new { row.BaseEntitlementDays, row.CarryOverDays };
+        // Entitlement history (corrections wave §4.1): category, period, before/after, the
+        // difference and the unit are all explicit — never just a generic "updated".
+        var oldTotal = row is null ? 0m : row.BaseEntitlementDays + row.CarryOverDays;
+        object? oldValues = row is null ? null : new
+        {
+            Verlofcategorie = balanceType.Name, Jaar = year, Eenheid = "dagen",
+            row.BaseEntitlementDays, row.CarryOverDays,
+        };
         if (row is null)
         {
             row = new EmployeeLeaveBalance
@@ -185,8 +192,16 @@ public class LeaveBalanceService : ILeaveBalanceService
             row.CarryOverDays = carry;
         }
         await _db.SaveChangesAsync(cancellationToken);
+        var newTotal = row.BaseEntitlementDays + row.CarryOverDays;
         await _audit.RecordAsync("EmployeeLeaveBalance", row.Id.ToString(), oldValues is null ? "Created" : "Updated",
-            oldValues, new { row.BaseEntitlementDays, row.CarryOverDays, balanceType.Code, year }, cancellationToken);
+            oldValues, new
+            {
+                Verlofcategorie = balanceType.Name, Jaar = year, Eenheid = "dagen",
+                row.BaseEntitlementDays, row.CarryOverDays,
+                Verschil = newTotal - oldTotal,
+                Reden = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim(),
+                EmployeeId = employeeId,
+            }, cancellationToken);
     }
 
     public async Task AddAdjustmentAsync(Guid employeeId, int year, AddLeaveAdjustmentRequest request, CancellationToken cancellationToken)
@@ -197,6 +212,15 @@ public class LeaveBalanceService : ILeaveBalanceService
             throw new DomainValidationException("days", "Een aanpassing van 0 dagen heeft geen effect.");
 
         var row = await GetOrCreateEntitlementRowAsync(employeeId, year, request.BalanceTypeId, cancellationToken);
+        var balanceTypeName = await _db.LeaveBalanceTypes
+            .Where(t => t.TenantId == _tenant.TenantId && t.Id == row.BalanceTypeId)
+            .Select(t => t.Name)
+            .FirstOrDefaultAsync(cancellationToken);
+        // Before/after of the manual-adjustment total for this row (the entitlement itself is
+        // untouched by an adjustment; used/remaining stay live-computed).
+        var previousAdjustmentTotal = await _db.LeaveBalanceAdjustments
+            .Where(a => a.TenantId == _tenant.TenantId && a.EmployeeLeaveBalanceId == row.Id)
+            .SumAsync(a => (decimal?)a.Days, cancellationToken) ?? 0m;
         var adjustment = new LeaveBalanceAdjustment
         {
             Id = Guid.NewGuid(), TenantId = _tenant.TenantId, EmployeeLeaveBalanceId = row.Id,
@@ -204,8 +228,15 @@ public class LeaveBalanceService : ILeaveBalanceService
         };
         _db.LeaveBalanceAdjustments.Add(adjustment);
         await _db.SaveChangesAsync(cancellationToken);
-        await _audit.RecordAsync("LeaveBalanceAdjustment", adjustment.Id.ToString(), "Added", null,
-            new { adjustment.Days, adjustment.Reason, adjustment.Kind, employeeId, year }, cancellationToken);
+        await _audit.RecordAsync("LeaveBalanceAdjustment", adjustment.Id.ToString(), "Added",
+            new { AanpassingenTotaal = previousAdjustmentTotal },
+            new
+            {
+                Verlofcategorie = balanceTypeName, Jaar = year, Eenheid = "dagen",
+                AanpassingenTotaal = previousAdjustmentTotal + request.Days,
+                Verschil = adjustment.Days, Reden = adjustment.Reason, Soort = adjustment.Kind,
+                EmployeeId = employeeId,
+            }, cancellationToken);
     }
 
     public async Task<IReadOnlyList<LeaveAdjustmentDto>> GetAdjustmentsAsync(Guid employeeId, int year, Guid balanceTypeId, CancellationToken cancellationToken)

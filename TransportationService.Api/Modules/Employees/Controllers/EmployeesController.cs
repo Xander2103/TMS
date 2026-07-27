@@ -15,15 +15,18 @@ namespace TransportationService.Api.Modules.Employees.Controllers;
 public class EmployeesController : ControllerBase
 {
     private readonly IEmployeeService _employeeService;
+    private readonly IEmployeeHistoryService _historyService;
     private readonly ICurrentUserContext _currentUser;
     private readonly IPermissionAuthorizationService _authorization;
 
     public EmployeesController(
         IEmployeeService employeeService,
+        IEmployeeHistoryService historyService,
         ICurrentUserContext currentUser,
         IPermissionAuthorizationService authorization)
     {
         _employeeService = employeeService;
+        _historyService = historyService;
         _currentUser = currentUser;
         _authorization = authorization;
     }
@@ -59,6 +62,21 @@ public class EmployeesController : ControllerBase
     {
         var employee = await _employeeService.GetByIdAsync(id, await HasConfidentialAccessAsync(cancellationToken), cancellationToken);
         return employee is null ? NotFound() : Ok(employee);
+    }
+
+    /// <summary>
+    /// Complete readable change history of the personnel dossier (profile + qualifications,
+    /// documents, issued items, absences, leave balances, driver profile), newest first.
+    /// </summary>
+    [HttpGet("{id:guid}/history")]
+    [RequirePermission(PermissionCodes.EmployeesView)]
+    public async Task<ActionResult<EmployeeHistoryPageDto>> GetHistory(
+        Guid id, [FromQuery] int? page = null, [FromQuery] int? pageSize = null,
+        CancellationToken cancellationToken = default)
+    {
+        var pageRequest = PageRequest.Of(page, pageSize);
+        var history = await _historyService.GetHistoryAsync(id, pageRequest.Page, pageRequest.PageSize, cancellationToken);
+        return history is null ? NotFound() : Ok(history);
     }
 
     [HttpPost]

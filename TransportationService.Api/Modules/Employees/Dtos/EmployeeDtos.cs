@@ -144,3 +144,19 @@ public record UpdateEmployeeRequest(
     string? DimonaNumber = null,
     string? IdentityCardNumber = null,
     IReadOnlyList<EmployeeEmergencyContactInput>? EmergencyContacts = null);
+
+// --- Personnel history (corrections wave §4) ---
+
+/// <summary>One field-level change: readable Dutch label with the old and new value.</summary>
+public record EmployeeHistoryChangeDto(string Field, string? Before, string? After);
+
+/// <summary>
+/// One audited save: all field changes of that save grouped together, with actor, timestamp,
+/// action and the section of the personnel dossier they belong to.
+/// </summary>
+public record EmployeeHistoryEntryDto(
+    Guid Id, DateTime Timestamp, string? UserName, string Action, string ActionLabel,
+    string Category, IReadOnlyList<EmployeeHistoryChangeDto> Changes);
+
+public record EmployeeHistoryPageDto(
+    IReadOnlyList<EmployeeHistoryEntryDto> Items, int TotalCount, int Page, int PageSize);

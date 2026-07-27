@@ -89,6 +89,14 @@ public class QualificationService : IQualificationService
         var qualification = await _dbContext.EmployeeQualifications.FirstOrDefaultAsync(q => q.Id == id && q.TenantId == _tenantContext.TenantId, cancellationToken);
         if (qualification is null) return null;
 
+        // Before-image for the personnel history — this update path recorded nothing until the
+        // corrections wave (§4) while every sibling action (create/verify/suspend) already did.
+        var oldValues = new
+        {
+            qualification.DocumentNumber, qualification.ObtainedDate, qualification.ExpiryDate,
+            qualification.IssuingCountryCode, qualification.Notes,
+        };
+
         qualification.DocumentNumber = request.DocumentNumber;
         qualification.ObtainedDate = request.ObtainedDate;
         qualification.ExpiryDate = request.ExpiryDate;
@@ -97,6 +105,13 @@ public class QualificationService : IQualificationService
         qualification.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync("EmployeeQualification", qualification.Id.ToString(), "Updated", oldValues,
+            new
+            {
+                qualification.DocumentNumber, qualification.ObtainedDate, qualification.ExpiryDate,
+                qualification.IssuingCountryCode, qualification.Notes,
+            }, cancellationToken);
 
         return await MapAsync(qualification, cancellationToken);
     }
