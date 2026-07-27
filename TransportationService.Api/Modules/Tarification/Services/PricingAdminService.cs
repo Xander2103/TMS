@@ -426,10 +426,20 @@ public class PricingAdminService : IPricingAdminService
 
                 for (var i = 1; i < ordered.Count; i++)
                 {
-                    if (ordered[i - 1].ToQuantity is { } previousTo && ordered[i].FromQuantity > previousTo + 1)
+                    if (ordered[i - 1].ToQuantity is { } previousTo)
                     {
+                        if (ordered[i].FromQuantity > previousTo + 1)
+                        {
+                            checks.Add(new PricingConfigCheckDto("warning",
+                                $"Staffel '{rule.Name}' heeft een gat tussen {previousTo:0.##} en {ordered[i].FromQuantity:0.##}."));
+                        }
+                    }
+                    else
+                    {
+                        // An open-ended row (ToQuantity == null) before the last row silently skips
+                        // the gap check for the following row — surface it instead of no-oping.
                         checks.Add(new PricingConfigCheckDto("warning",
-                            $"Staffel '{rule.Name}' heeft een gat tussen {previousTo:0.##} en {ordered[i].FromQuantity:0.##}."));
+                            $"Staffel '{rule.Name}' heeft een open einde vóór de laatste rij."));
                     }
                 }
             }

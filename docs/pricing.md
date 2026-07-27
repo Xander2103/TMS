@@ -225,8 +225,22 @@ Per `PricingEngine.CalculateAsync`-aanroep, in exacte volgorde:
 
 1. **Regelselectie per eenheidlijn** — meest specifieke regel (klant beats bedrijf, zone beats
    zoneloos, dan `Priority`; exacte gelijkstand blokkeert).
-2. **Orderbrede regel** (indien geen eenheidregel matchte) — één primaire prijsbasis, nooit
-   gesommeerd over meerdere bases (spec §10/18).
+2. **Orderbrede regels** (`PricingEngine.CalculateAsync`, rond regel 220-295) — twee onderscheiden
+   takken, afhankelijk van of stap 1 al een eenheidregel matchte:
+   - **(a) Componentmodel** (`anyRuleMatched == true`, regel ~229-237): elke tabel die zonet via
+     een gematchte eenheidregel is "engaged" (zie `engagedAgreements`), levert OOK haar overige
+     orderbrede regels (bv. een basisbedrag, een km-component) — élk als eigen regel, naast de
+     eenheidregel(s). Dit is de vorm van een geconverteerde tarievenkaart met zowel een
+     eenheidprijs als een kilometercomponent op dezelfde tabel: beide regels tellen mee.
+     Enkel tabellen die effectief engaged zijn (via een gematchte eenheidregel) doen mee — een
+     tabel van een andere klant, of een niet-engaged tabel van dezelfde klant, levert nooit een
+     component (zie `Agreement_ComponentModel_OrderLevelRuleFiresAlongsideMatchedUnitLine` in
+     `PricingEngineV2Tests`).
+   - **(b) Fallback** (`anyRuleMatched == false`, regel ~238-295) — enkel wanneer GEEN
+     eenheidregel matchte: de meest specifieke toepasselijke tabel wint (haar gegroepeerde
+     orderbrede regels leveren samen de prijs); bestaat er geen tabelgebonden orderbrede regel,
+     dan wint één standalone regel — één primaire prijsbasis, nooit gesommeerd over meerdere
+     bases (spec §10/18).
 3. **Afleidingsmodifiers** (afgeleide tabel) — oplopende `Sequence`, op de lopende subtotaal.
 4. **Combinatiekorting** (spec §29-31) — na de modifiers, vóór de klantkoppeling-aanpassing.
 5. **Klantkoppeling-aanpassing** (gedeelde tabel) — eerst `PercentAdjustment`, dan `FixedAdjustment`.
@@ -273,7 +287,7 @@ Gebruikt door de **Controle**-sectie op `PricingTableDetailPage` (laadt automati
 | # | Controle | Ernst |
 |---|---|---|
 | 1 | Overlappende geldigheid van twee regels met identieke specificiteit (eenheid/zone/basis/klant/prioriteit) | error |
-| 2 | Gat in een staffel (bv. 1-2 dan 4-5) | warning |
+| 2 | Gat in een staffel (bv. 1-2 dan 4-5); een niet-laatste rij met een open einde (`ToQuantity == null`) vóór de laatste rij krijgt ook een eigen waarschuwing (zou anders de gat-check voor de volgende rij stilzwijgend overslaan — data-drift, normaal onmogelijk via opslagvalidatie) | warning |
 | 3 | Staffel start niet bij 0 of 1 | warning |
 | 4a | Afgeleide tabel: basistabel inactief | warning |
 | 4b | Afgeleide tabel: basisvenster dekt het eigen venster niet volledig | warning |
@@ -438,3 +452,10 @@ Eerlijk overgenomen uit de code (geen van deze is "verborgen" — elk is hierond
    Antwerpen, 2 in Mechelen, `Scope = DeliveryAddress`): elk adres krijgt zijn EIGEN staffel (nooit
    de gecombineerde 5-eenheden-staffel) — Antwerpen: aandeel 3/5 × €250 = €150 → -5% = -€7,50;
    Mechelen: aandeel 2/5 × €250 = €100 → -5% = -€5,00; totaal €250 - €7,50 - €5,00 = €237,50.
+7. **Componentmodel: eenheidregel + orderbrede km-component op dezelfde tabel**
+   (`Agreement_ComponentModel_OrderLevelRuleFiresAlongsideMatchedUnitLine`, §3 stap 2a): gedeelde
+   tabel met een `PerUnit`-regel €22/pallet (matcht de eenheidlijn) ÉN een `PerKm`-regel
+   (`BaseAmount` €25, €1,20/km). Klant A gekoppeld, klant B niet. Order 3 pallets, 100 km:
+   klant A → eenheidlijn 3 × €22 = €66 + km-component 25 + 1,20×100 = €145 → totaal €211 (beide
+   regels vuren, want de tabel is "engaged" via de gematchte eenheidregel). Klant B (geen koppeling)
+   → geen enkele regel van deze tabel vuurt — geen km-lijn, `RequiresManualPrice`.

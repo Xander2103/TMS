@@ -166,6 +166,37 @@ public class PricingValidationEndpointTests
     }
 
     [Fact]
+    public async Task BracketOpenEndedBeforeLastRow_ProducesWarning()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreement = await CreateAgreementAsync(h, "Staffeltabel met vroegtijdig open einde");
+        // Bypasses PricingAdminService's save-time overlap check (which would reject two brackets
+        // sharing the same open-ended quantity range) — a data-drift shape where a NON-LAST
+        // bracket's ToQuantity is null. That previously silently skipped the gap check for the
+        // row after it (ordered[i - 1].ToQuantity is { } previousTo && ... only ran when the
+        // previous row had a ToQuantity), so a real gap between rows 1 and 2 went unreported.
+        h.Db.Context.PriceRules.Add(new PriceRule
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, AgreementId = agreement.Id, UnitTypeId = h.PalletUnitId,
+            Basis = PriceRuleBasis.QuantityBracket, Name = "Staffelregel",
+            EffectiveFrom = Today.AddMonths(-2), IsActive = true,
+            Brackets =
+            [
+                new PriceRuleBracket { Id = Guid.NewGuid(), TenantId = h.TenantId, FromQuantity = 1, ToQuantity = null, Price = 50m },
+                new PriceRuleBracket { Id = Guid.NewGuid(), TenantId = h.TenantId, FromQuantity = 5, ToQuantity = 10, Price = 90m },
+            ],
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var checks = await h.Admin.ValidateAgreementConfigurationAsync(agreement.Id, CancellationToken.None);
+
+        Assert.NotNull(checks);
+        Assert.Contains(checks!, c => c.Severity == "warning"
+            && c.Message.Contains("Staffelregel") && c.Message.Contains("open einde"));
+    }
+
+    [Fact]
     public async Task GaplessBracketsStartingAtOne_ProducesNoBracketWarning()
     {
         var h = await SeedAsync();

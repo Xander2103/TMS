@@ -164,6 +164,43 @@ public class PricingEngineV2Tests
     }
 
     [Fact]
+    public async Task Agreement_ComponentModel_OrderLevelRuleFiresAlongsideMatchedUnitLine()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Doc §3 step 2(a): a shared table carrying BOTH a per-unit rule (matched by the pallet
+        // line) AND an order-level PerKm rule — once the unit rule engages this agreement, the
+        // km rule fires TOO, as its own line alongside the matched unit line (never only when no
+        // unit rule matched — that is the separate fallback branch, step 2(b)).
+        var agreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            null, "Colli + km", Today.AddMonths(-1), null, true, null, null, null,
+            IsShared: true), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(PerUnitRule(h, null, 22m, agreementId: agreement.Id), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            null, null, PriceRuleBasis.PerKm, null, "Kilometertarief",
+            Today.AddMonths(-1), null, true, 1.2m, null, null,
+            AgreementId: agreement.Id, BaseAmount: 25m), CancellationToken.None);
+        // Only customer A is assigned to the shared table — customer B has no access at all.
+        await h.Admin.SaveAssignmentsAsync(agreement.Id,
+            [new SavePricingAssignmentRequest(h.CustomerAId, null, null, null, null, null)], CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(Request(h, 3, h.CustomerAId, distanceKm: 100m), CancellationToken.None);
+
+        // Unit line: 3 × 22 = 66. Km component: 25 + 1.2 × 100 = 145. Both fire → total 211.
+        Assert.False(result.RequiresManualPrice);
+        Assert.Contains(result.Lines, l => l.RuleName == "Pallets" && l.Amount == 66m);
+        Assert.Contains(result.Lines, l => l.Label.StartsWith("Kilometertarief") && l.Amount == 145m);
+        Assert.Equal(211m, result.Total);
+
+        // Customer B has no assignment to this shared table: the agreement is never "engaged" for
+        // them, so neither the unit rule nor its order-level km component ever fire.
+        var resultB = await h.Engine.CalculateAsync(Request(h, 3, h.CustomerBId, distanceKm: 100m), CancellationToken.None);
+        Assert.True(resultB.RequiresManualPrice);
+        Assert.DoesNotContain(resultB.Lines, l => l.Label.StartsWith("Kilometertarief"));
+        Assert.Equal(0m, resultB.Total);
+    }
+
+    [Fact]
     public async Task ConvertedRateCardShape_PricesFromOrderMeasures()
     {
         var h = await SeedAsync();
