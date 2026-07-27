@@ -1323,8 +1323,10 @@ public class PricingAdminService : IPricingAdminService
         var option = new ServiceOption { Id = Guid.NewGuid(), TenantId = TenantId };
         ApplyOption(option, request);
         _dbContext.ServiceOptions.Add(option);
+        await ApplyWarehouseConditionsAsync(option, request.WarehouseIds, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Created", null, new { option.Code, option.Name, option.Kind }, cancellationToken);
+        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Created", null,
+            new { option.Code, option.Name, option.Kind, WarehouseIds = request.WarehouseIds ?? [] }, cancellationToken);
         return await MapOptionAsync(option, cancellationToken);
     }
 
@@ -1338,8 +1340,10 @@ public class PricingAdminService : IPricingAdminService
 
         await ValidateOptionAsync(request, cancellationToken);
         ApplyOption(option, request);
+        await ApplyWarehouseConditionsAsync(option, request.WarehouseIds, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Updated", null, new { option.Code, option.Name, option.Kind }, cancellationToken);
+        await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Updated", null,
+            new { option.Code, option.Name, option.Kind, WarehouseIds = request.WarehouseIds ?? [] }, cancellationToken);
         return await MapOptionAsync(option, cancellationToken);
     }
 
@@ -2055,6 +2059,38 @@ public class PricingAdminService : IPricingAdminService
         {
             throw new DomainValidationException("unitTypeId", "Een eenheid is alleen van toepassing bij 'per eenheid'.");
         }
+
+        if (request.WarehouseIds is { Count: > 0 } warehouseIds)
+        {
+            var known = await _dbContext.Warehouses
+                .CountAsync(w => w.TenantId == TenantId && warehouseIds.Contains(w.Id), cancellationToken);
+            if (known != warehouseIds.Distinct().Count())
+            {
+                throw new InvalidTenantReferenceException("magazijn");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Syncs the warehouse condition rows to exactly <paramref name="warehouseIds"/> (null/empty
+    /// = no condition, applies to all orders). Add/remove per row — never delete-all-rewrite.
+    /// </summary>
+    private async Task ApplyWarehouseConditionsAsync(
+        ServiceOption option, IReadOnlyList<Guid>? warehouseIds, CancellationToken cancellationToken)
+    {
+        var wanted = (warehouseIds ?? []).Distinct().ToHashSet();
+        var existing = await _dbContext.ServiceOptionConditions
+            .Where(c => c.TenantId == TenantId && c.ServiceOptionId == option.Id && c.Kind == ServiceConditionKind.Warehouse)
+            .ToListAsync(cancellationToken);
+        _dbContext.RemoveRange(existing.Where(c => !wanted.Contains(c.ReferenceId)));
+        foreach (var id in wanted.Except(existing.Select(c => c.ReferenceId)))
+        {
+            _dbContext.ServiceOptionConditions.Add(new ServiceOptionCondition
+            {
+                Id = Guid.NewGuid(), TenantId = TenantId, ServiceOptionId = option.Id,
+                Kind = ServiceConditionKind.Warehouse, ReferenceId = id,
+            });
+        }
     }
 
     private void ApplyOption(ServiceOption option, SaveServiceOptionRequest request)
@@ -2083,11 +2119,23 @@ public class PricingAdminService : IPricingAdminService
         var unitNames = await _dbContext.UnitTypes.AsNoTracking()
             .Where(u => u.TenantId == TenantId && unitIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
+        var optionIds = options.Select(o => o.Id).ToList();
+        var conditions = (await _dbContext.ServiceOptionConditions.AsNoTracking()
+                .Where(c => c.TenantId == TenantId && optionIds.Contains(c.ServiceOptionId)
+                            && c.Kind == ServiceConditionKind.Warehouse)
+                .ToListAsync(cancellationToken))
+            .ToLookup(c => c.ServiceOptionId, c => c.ReferenceId);
+        var warehouseIds = conditions.SelectMany(g => g).Distinct().ToList();
+        var warehouseNames = await _dbContext.Warehouses.AsNoTracking()
+            .Where(w => w.TenantId == TenantId && warehouseIds.Contains(w.Id))
+            .ToDictionaryAsync(w => w.Id, w => w.Name, cancellationToken);
         return options.Select(o => new ServiceOptionDto(
             o.Id, o.Code, o.Name, o.Kind, o.DefaultValue, o.IsActive, o.SortOrder,
             o.Description, o.InvoiceDescription, o.SelectableInOrders,
             o.UnitTypeId, o.UnitTypeId is { } uid ? unitNames.GetValueOrDefault(uid) : null,
-            o.AutoApply, o.OnlyForAdr)).ToList();
+            o.AutoApply, o.OnlyForAdr,
+            conditions[o.Id].ToList(),
+            conditions[o.Id].Select(id => warehouseNames.GetValueOrDefault(id, "?")).ToList())).ToList();
     }
 
     private async Task<IReadOnlyList<PriceRuleDto>> MapRulesAsync(IReadOnlyList<PriceRule> rules, CancellationToken cancellationToken)

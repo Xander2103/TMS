@@ -40,6 +40,30 @@ public class ServiceOption : AuditableTenantEntity
 }
 
 /// <summary>
+/// Condition kinds a service option can be restricted by, beyond the existing ADR flag.
+/// Evaluation model (documented in docs/pricing.md): rows of the SAME kind are OR'ed (any
+/// selected warehouse matches), DIFFERENT kinds — including OnlyForAdr — are AND'ed. No rows =
+/// the service applies to all orders. The enum is deliberately extensible: Product /
+/// ProductCategory / CustomerOwnedStock conditions require a cargo product master that does
+/// not exist yet in this codebase and MUST NOT be faked with loose category names.
+/// </summary>
+public enum ServiceConditionKind
+{
+    /// <summary>The order touches the referenced warehouse (a stop at the warehouse's master location).</summary>
+    Warehouse = 0,
+}
+
+/// <summary>One condition row restricting when a service option is charged/auto-applied.</summary>
+public class ServiceOptionCondition : AuditableTenantEntity
+{
+    public Guid ServiceOptionId { get; set; }
+    public ServiceConditionKind Kind { get; set; }
+
+    /// <summary>The referenced master-data id (Kind == Warehouse: the Warehouse id).</summary>
+    public Guid ReferenceId { get; set; }
+}
+
+/// <summary>
 /// Customer-specific override of a global service option (spec §7): a different value, a
 /// customer minimum, an own invoice description, an effective window, or disabling the
 /// service for this customer entirely. No row (or an empty row) = the global default applies.

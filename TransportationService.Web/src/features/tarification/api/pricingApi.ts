@@ -399,6 +399,9 @@ export interface ServiceOption {
   autoApply: boolean
   /** Only charged/auto-applied when the order requires ADR. */
   onlyForAdr: boolean
+  /** Warehouse condition: only applies when the order touches one of these warehouses. Empty = all orders. */
+  warehouseIds?: string[] | null
+  warehouseNames?: string[] | null
 }
 
 export interface ServiceOptionInput {
@@ -414,6 +417,8 @@ export interface ServiceOptionInput {
   unitTypeId?: string | null
   autoApply?: boolean
   onlyForAdr?: boolean
+  /** Warehouse condition (OR within the list, AND with the ADR flag); empty/omitted = all orders. */
+  warehouseIds?: string[] | null
 }
 
 export const listServiceOptions = (includeInactive = false, forOrderEntry = false): Promise<ServiceOption[]> => {

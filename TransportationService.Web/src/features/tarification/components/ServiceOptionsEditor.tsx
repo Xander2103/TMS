@@ -18,6 +18,8 @@ import {
   type ServiceOption,
   type UnitTypeSettings,
 } from '../api/pricingApi'
+import { listWarehouses } from '../../warehousing/api/warehousingApi'
+import type { Warehouse } from '../../warehousing/types'
 
 interface OptionDraft {
   option: ServiceOption | null
@@ -32,6 +34,7 @@ interface OptionDraft {
   unitTypeId: string
   autoApply: boolean
   onlyForAdr: boolean
+  warehouseIds: string[]
 }
 
 const VALUE_LABEL_BY_KIND: Partial<Record<SurchargeKind, string>> = {
@@ -60,6 +63,7 @@ export function ServiceOptionsEditor() {
 
   const [options, setOptions] = useState<ServiceOption[] | null>(null)
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [draft, setDraft] = useState<OptionDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
@@ -76,6 +80,10 @@ export function ServiceOptionsEditor() {
       .catch(() => setLoadError('De diensten konden niet worden geladen.'))
     listUnitTypeSettings()
       .then(setUnits)
+      .catch(() => {})
+    // Warehouses feed the optional warehouse condition; unavailable (no permission) is fine.
+    listWarehouses()
+      .then(setWarehouses)
       .catch(() => {})
   }, [canView])
 
@@ -104,6 +112,7 @@ export function ServiceOptionsEditor() {
             unitTypeId: option.unitTypeId ?? '',
             autoApply: option.autoApply,
             onlyForAdr: option.onlyForAdr,
+            warehouseIds: option.warehouseIds ?? [],
           }
         : {
             option: null,
@@ -118,6 +127,7 @@ export function ServiceOptionsEditor() {
             unitTypeId: '',
             autoApply: false,
             onlyForAdr: false,
+            warehouseIds: [],
           },
     )
   }
@@ -140,6 +150,7 @@ export function ServiceOptionsEditor() {
         unitTypeId: draft.kind === 'PerUnit' ? draft.unitTypeId || null : null,
         autoApply: draft.autoApply,
         onlyForAdr: draft.onlyForAdr,
+        warehouseIds: draft.warehouseIds,
       }
       if (draft.option) {
         await updateServiceOption(draft.option.id, input)
@@ -190,6 +201,9 @@ export function ServiceOptionsEditor() {
                 {formatServiceValue(option.kind, option.defaultValue, option.unitTypeName)}
                 {option.autoApply && <Badge tone="info">Automatisch</Badge>}
                 {option.onlyForAdr && <Badge tone="warning">Alleen bij ADR</Badge>}
+                {(option.warehouseNames?.length ?? 0) > 0 && (
+                  <Badge tone="warning">Magazijn: {option.warehouseNames!.join(', ')}</Badge>
+                )}
               </td>
               <td>{option.selectableInOrders ? 'Ja' : 'Nee'}</td>
               <td>
@@ -284,6 +298,36 @@ export function ServiceOptionsEditor() {
               <input type="checkbox" checked={draft.onlyForAdr} onChange={(e) => setDraft((d) => (d ? { ...d, onlyForAdr: e.target.checked } : d))} />
               Alleen bij ADR
             </label>
+            {warehouses.length > 0 && (
+              <FormField
+                label="Alleen voor magazijnen"
+                hint="Niets aangevinkt = alle orders. Meerdere magazijnen: één ervan volstaat (of); samen met 'Alleen bij ADR' moeten beide voorwaarden gelden (en)."
+              >
+                <div>
+                  {warehouses.filter((w) => w.isActive || draft.warehouseIds.includes(w.id)).map((warehouse) => (
+                    <label key={warehouse.id} className="tof-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={draft.warehouseIds.includes(warehouse.id)}
+                        onChange={(e) =>
+                          setDraft((d) =>
+                            d
+                              ? {
+                                  ...d,
+                                  warehouseIds: e.target.checked
+                                    ? [...d.warehouseIds, warehouse.id]
+                                    : d.warehouseIds.filter((id) => id !== warehouse.id),
+                                }
+                              : d,
+                          )
+                        }
+                      />
+                      {warehouse.name}
+                    </label>
+                  ))}
+                </div>
+              </FormField>
+            )}
             <label className="tof-checkbox">
               <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />
               Actief

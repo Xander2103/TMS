@@ -633,17 +633,34 @@ public class PricingEngine : IPricingEngine
             .Where(u => u.TenantId == tenantId && serviceUnitTypeIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
 
+        // Extra conditions beyond ADR (wave 2026-07-27 §2.4): rows of the same kind OR together,
+        // different kinds (incl. OnlyForAdr) AND together. No rows = applies to all orders.
+        var allOptionIdSet = allOptions.Select(o => o.Id).ToHashSet();
+        var conditionsByOption = (await _dbContext.ServiceOptionConditions.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && allOptionIds.Contains(c.ServiceOptionId))
+                .ToListAsync(cancellationToken))
+            .Where(c => allOptionIdSet.Contains(c.ServiceOptionId))
+            .ToLookup(c => c.ServiceOptionId);
+
         foreach (var option in allOptions)
         {
             var over = overrides.GetValueOrDefault(option.Id);
             var isSelected = selectedIds.Contains(option.Id);
 
+            var warehouseConditionIds = conditionsByOption[option.Id]
+                .Where(c => c.Kind == ServiceConditionKind.Warehouse)
+                .Select(c => c.ReferenceId)
+                .ToList();
+            var warehouseConditionHolds = warehouseConditionIds.Count == 0
+                || warehouseConditionIds.Any(id => request.WarehouseIds?.Contains(id) == true);
+
             // Auto-apply: a contract service the engine adds without the user selecting it —
             // active, effectively auto (customer override wins), not disabled for this customer,
-            // and (when ADR-only) the order is actually ADR.
+            // (when ADR-only) the order is actually ADR, and every configured condition holds.
             var effectiveAutoApply = over?.AutoApplyOverride ?? option.AutoApply;
             var autoEligible = effectiveAutoApply && over?.Disabled != true
-                                && (!option.OnlyForAdr || request.AdrRequired == true);
+                                && (!option.OnlyForAdr || request.AdrRequired == true)
+                                && warehouseConditionHolds;
             var isAutoApplied = !isSelected && autoEligible;
             if (!isSelected && !isAutoApplied)
             {
@@ -663,6 +680,15 @@ public class PricingEngine : IPricingEngine
                 // is an explicit selection that simply doesn't apply to a non-ADR order.
                 lines.Add(new PriceBreakdownLine(
                     $"{option.Name}: alleen van toepassing bij ADR", 0m, "Voorwaarde", Informational: true));
+                continue;
+            }
+
+            if (!warehouseConditionHolds)
+            {
+                // Explicit selection of a warehouse-conditioned service on an order that never
+                // touches one of the configured warehouses — informational, never charged.
+                lines.Add(new PriceBreakdownLine(
+                    $"{option.Name}: alleen van toepassing voor het gekoppelde magazijn", 0m, "Voorwaarde", Informational: true));
                 continue;
             }
 

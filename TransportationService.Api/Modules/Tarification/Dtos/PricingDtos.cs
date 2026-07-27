@@ -129,12 +129,17 @@ public record ServiceOptionDto(
     /// <summary>The engine adds this service automatically (contract service), quantified from the order.</summary>
     bool AutoApply = false,
     /// <summary>Only charged/auto-applied when the order requires ADR.</summary>
-    bool OnlyForAdr = false);
+    bool OnlyForAdr = false,
+    /// <summary>Warehouse condition: only charged/auto-applied when the order touches one of these warehouses. Empty = all orders.</summary>
+    IReadOnlyList<Guid>? WarehouseIds = null,
+    IReadOnlyList<string>? WarehouseNames = null);
 
 public record SaveServiceOptionRequest(
     string Code, string Name, SurchargeKind Kind, decimal DefaultValue, bool IsActive, int SortOrder,
     string? Description = null, string? InvoiceDescription = null, bool SelectableInOrders = true,
-    Guid? UnitTypeId = null, bool AutoApply = false, bool OnlyForAdr = false);
+    Guid? UnitTypeId = null, bool AutoApply = false, bool OnlyForAdr = false,
+    /// <summary>Warehouse condition (OR within the list, AND with the ADR flag); null/empty = all orders.</summary>
+    IReadOnlyList<Guid>? WarehouseIds = null);
 
 // --- Customer pricing configuration ---
 
@@ -296,7 +301,12 @@ public record PriceCalculationRequest(
     /// (spec §29-31). Null/empty => the engine falls back to one "order" group built from
     /// <see cref="Lines"/> so a caller that doesn't build groups still gets Order-scope discounts.
     /// </summary>
-    IReadOnlyList<PriceCalculationGroup>? Groups = null);
+    IReadOnlyList<PriceCalculationGroup>? Groups = null,
+    /// <summary>
+    /// Warehouses the order touches (a stop at the warehouse's master location), for
+    /// warehouse-conditioned service options. Null/empty = the order touches no known warehouse.
+    /// </summary>
+    IReadOnlyList<Guid>? WarehouseIds = null);
 
 /// <summary>A one-off order's own price agreement: no contract is consulted (spec Phase 6).</summary>
 public record OneOffPricingInput(

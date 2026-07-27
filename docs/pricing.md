@@ -201,6 +201,26 @@ automatisch toe zonder expliciete selectie — een contractdienst (bv. Picking, 
 **ADR-voorwaarde:** `OnlyForAdr` — enkel auto-toegepast/geldig wanneer `request.AdrRequired == true`;
 anders informatief ("alleen van toepassing bij ADR").
 
+**Dienstvoorwaarden (`ServiceOptionCondition`, wave 2026-07-27 §2.4):** naast ADR kan een dienst
+beperkt worden tot bepaalde **magazijnen**: de dienst geldt enkel wanneer de order stopt op de
+masterlocatie van één van de gekoppelde magazijnen (`TransportOrderService` leidt de geraakte
+magazijnen af uit de stop-locaties en geeft ze als `WarehouseIds` aan de engine door).
+Evaluatiemodel — expliciet gedocumenteerd:
+
+- **Binnen één soort voorwaarde: OF** — meerdere gekoppelde magazijnen: één match volstaat.
+- **Tussen soorten (incl. `OnlyForAdr`): EN** — "Alleen bij ADR" + magazijn X ⇒ beide moeten gelden.
+- **Geen voorwaarden = de dienst geldt gewoon voor alle orders.**
+- Een expliciet geselecteerde dienst die niet aan de voorwaarde voldoet wordt een informatieve
+  regel ("alleen van toepassing voor het gekoppelde magazijn"), nooit stil aangerekend.
+- Beheer in Prijsinstellingen → Diensten & toeslagen ("Alleen voor magazijnen"). Kanttekening: de
+  live orderpreview van de client kent de magazijn-koppeling niet zelf; magazijngebonden
+  automatische diensten verschijnen definitief bij het opslaan/herberekenen van de order.
+
+**Bewuste beperking:** voorwaarden op product/artikel, productcategorie of klantvoorraad vergen
+een productcatalogus voor ordervracht die vandaag niet bestaat (cargo-regels zijn vrije tekst +
+verpakkingstype); `ServiceConditionKind` is er bewust op voorbereid, maar losse categorienamen
+faken zonder echte masterdata doen we niet. Tests: `ServiceConditionTests`.
+
 **Klantoverride (`CustomerServiceOptionPrice`):** eigen `Value`, `Disabled`, `MinimumAmount`,
 `InvoiceDescription`, geldigheidsvenster, `AutoApplyOverride` — null-velden erven de globale
 standaard; `Disabled` schakelt de dienst helemaal uit voor die klant (ook al is ze globaal auto).

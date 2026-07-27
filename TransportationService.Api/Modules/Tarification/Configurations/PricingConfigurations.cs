@@ -185,6 +185,19 @@ public class ServiceOptionConfiguration : IEntityTypeConfiguration<ServiceOption
     }
 }
 
+public class ServiceOptionConditionConfiguration : IEntityTypeConfiguration<ServiceOptionCondition>
+{
+    public void Configure(EntityTypeBuilder<ServiceOptionCondition> builder)
+    {
+        builder.ToTable("service_option_conditions");
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Kind).HasConversion<string>().HasMaxLength(30);
+        builder.HasOne<ServiceOption>().WithMany().HasForeignKey(c => c.ServiceOptionId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(c => new { c.TenantId, c.ServiceOptionId });
+        builder.HasQueryFilter(c => !c.IsDeleted);
+    }
+}
+
 public class CustomerServiceOptionPriceConfiguration : IEntityTypeConfiguration<CustomerServiceOptionPrice>
 {
     public void Configure(EntityTypeBuilder<CustomerServiceOptionPrice> builder)

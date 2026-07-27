@@ -190,6 +190,7 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PriceRule> PriceRules => Set<TransportationService.Api.Modules.Tarification.Entities.PriceRule>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PriceRuleBracket> PriceRuleBrackets => Set<TransportationService.Api.Modules.Tarification.Entities.PriceRuleBracket>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PriceRuleBracketOverride> PriceRuleBracketOverrides => Set<TransportationService.Api.Modules.Tarification.Entities.PriceRuleBracketOverride>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.ServiceOptionCondition> ServiceOptionConditions => Set<TransportationService.Api.Modules.Tarification.Entities.ServiceOptionCondition>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.ServiceOption> ServiceOptions => Set<TransportationService.Api.Modules.Tarification.Entities.ServiceOption>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.CustomerServiceOptionPrice> CustomerServiceOptionPrices => Set<TransportationService.Api.Modules.Tarification.Entities.CustomerServiceOptionPrice>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.CustomerPreferredUnit> CustomerPreferredUnits => Set<TransportationService.Api.Modules.Tarification.Entities.CustomerPreferredUnit>();

@@ -1168,6 +1168,20 @@ public class TransportOrderService : ITransportOrderService
                     order.OneOffFixedAmount ?? 0m, order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes,
                     order.OneOffIncludedCombinedMinutes, order.OneOffExtraHourlyRate, order.OneOffNotes)
                 : null;
+            // Warehouses the order touches (stop at the warehouse's master location) — feeds
+            // warehouse-conditioned service options (wave 2026-07-27 §2.4).
+            var stopLocationIds = order.Stops
+                .Where(s => !s.IsDeleted && s.LocationId is not null)
+                .Select(s => s.LocationId!.Value)
+                .Distinct()
+                .ToList();
+            var warehouseIds = stopLocationIds.Count == 0
+                ? null
+                : await _dbContext.Warehouses.AsNoTracking()
+                    .Where(w => w.TenantId == tenantId && w.IsActive && stopLocationIds.Contains(w.LocationId))
+                    .Select(w => w.Id)
+                    .ToListAsync(cancellationToken);
+
             var groups = await BuildPricingGroupsAsync(order, cargoItems, cancellationToken);
             if (groups.Count == 0 && lines.Count > 0)
             {
@@ -1190,7 +1204,8 @@ public class TransportOrderService : ITransportOrderService
                 OneOff: oneOff,
                 ActualLoadingMinutes: actualLoadingMinutes,
                 ActualUnloadingMinutes: actualUnloadingMinutes,
-                Groups: groups.Count > 0 ? groups : null), cancellationToken);
+                Groups: groups.Count > 0 ? groups : null,
+                WarehouseIds: warehouseIds), cancellationToken);
         }
 
         var calculated = result is { RequiresManualPrice: false } && result.Lines.Any(l => !l.Informational)
