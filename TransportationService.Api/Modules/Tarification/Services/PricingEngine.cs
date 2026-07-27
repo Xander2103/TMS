@@ -159,6 +159,10 @@ public class PricingEngine : IPricingEngine
         // --- Unit lines: pick the most specific rule per line ---------------------------------
         var anyRuleMatched = false;
         var engagedAgreements = new Dictionary<Guid, PricingAgreement>();
+        // Captures each unit type's own priced breakdown line (spec §29-31, combined-unit
+        // degression): the eligible base for a discount is apportioned from these RAW base
+        // amounts, never from a post-modifier/assignment subtotal.
+        var unitLineByUnitTypeId = new Dictionary<Guid, PriceBreakdownLine>();
         foreach (var line in request.Lines)
         {
             var unitName = unitNames.GetValueOrDefault(line.UnitTypeId, "eenheid");
@@ -203,12 +207,14 @@ public class PricingEngine : IPricingEngine
 
             var zoneSuffix = rule.ZoneId is not null && zone is not null ? $" (zone {zone.Code})" : "";
             var billableSuffix = billable != line.Quantity ? $" — factureerbaar: {billable:0.##}" : "";
-            lines.Add(new PriceBreakdownLine(
+            var unitLine = new PriceBreakdownLine(
                 $"{line.Quantity:0.##} × {unitName}{zoneSuffix}{billableSuffix}",
                 decimal.Round(amount.Value, 2), rule.Name,
                 RuleId: rule.Id, RuleName: rule.Name,
                 AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name,
-                ActualQuantity: line.Quantity, BillableQuantity: billable, LineKey: RuleLineKey(rule.Id)));
+                ActualQuantity: line.Quantity, BillableQuantity: billable, LineKey: RuleLineKey(rule.Id));
+            lines.Add(unitLine);
+            unitLineByUnitTypeId[line.UnitTypeId] = unitLine;
         }
 
         // --- Order-level rules (no unit): forfaits, km/pallet/ton components ------------------
@@ -301,6 +307,124 @@ public class PricingEngine : IPricingEngine
             .Select(a => a!)
             .ToList();
 
+        // --- Combined-unit degression discounts (spec §29-31) --------------------------------
+        // Computed from the RAW base unit-line amounts captured above — never from a post-
+        // modifier/assignment subtotal — but ATTACHED to `lines` inside the per-agreement loop
+        // below, right after that agreement's own modifiers stack and BEFORE its assignment
+        // adjustment, so: base + modifier lines → degression discount → assignment %/fixed →
+        // minimum/maximum → surcharges. A discount line whose eligible unit lines span more than
+        // one engaged agreement (ambiguous attribution) never joins any agreement subtotal — it is
+        // added directly to `lines` as a plain line instead (still counted in Total).
+        var discountLinesByAgreementId = new Dictionary<Guid, List<PriceBreakdownLine>>();
+        if (unitLineByUnitTypeId.Count > 0)
+        {
+            var engagedAgreementIds = engagedAgreementsWithLines.Select(a => a.Id).ToHashSet();
+            var discountConfigs = await _dbContext.CombinedUnitDiscounts.AsNoTracking()
+                .Include(d => d.Units).Include(d => d.Tiers)
+                .Where(d => d.TenantId == tenantId && d.IsActive
+                            && d.EffectiveFrom <= request.Date && (d.EffectiveUntil == null || d.EffectiveUntil >= request.Date)
+                            && (d.CustomerId == null || d.CustomerId == request.CustomerId))
+                .ToListAsync(cancellationToken);
+            var applicableDiscounts = discountConfigs
+                .Where(d => d.AgreementId is null || engagedAgreementIds.Contains(d.AgreementId.Value))
+                .ToList();
+
+            CombinedUnitDiscount? winningDiscount = null;
+            if (applicableDiscounts.Count > 0)
+            {
+                int Specificity(CombinedUnitDiscount d) => (d.CustomerId is not null ? 2 : 0) + (d.AgreementId is not null ? 1 : 0);
+                var bestSpecificity = applicableDiscounts.Max(Specificity);
+                var best = applicableDiscounts.Where(d => Specificity(d) == bestSpecificity).ToList();
+                if (best.Count > 1)
+                {
+                    configurationError ??= "Conflicterende combinatiekortingen: "
+                        + string.Join(" én ", best.Select(d => $"'{d.Name}'")) + ".";
+                    lines.Add(new PriceBreakdownLine(configurationError, 0m, "Configuratiefout"));
+                    requiresManual = true;
+                }
+                else
+                {
+                    winningDiscount = best[0];
+                }
+            }
+
+            if (winningDiscount is not null)
+            {
+                var groups = request.Groups is { Count: > 0 } explicitGroups
+                    ? explicitGroups
+                    : [new PriceCalculationGroup(
+                        "order", "Order", request.Lines.Select(l => new PriceCalculationGroupUnit(l.UnitTypeId, l.Quantity)).ToList())];
+
+                var mergedGroups = CombinedUnitDiscountMath.MergeGroups(groups, winningDiscount.Scope);
+                var discountUnitTypeIds = winningDiscount.Units.Select(u => u.UnitTypeId).ToList();
+                var discountUnitFactors = winningDiscount.Units.Select(u => (u.UnitTypeId, u.EquivalentFactor)).ToList();
+
+                var lineAmountsByUnitType = discountUnitTypeIds
+                    .Where(unitLineByUnitTypeId.ContainsKey)
+                    .ToDictionary(id => id, id => unitLineByUnitTypeId[id].Amount);
+                var lineAgreementByUnitType = discountUnitTypeIds
+                    .Where(unitLineByUnitTypeId.ContainsKey)
+                    .ToDictionary(id => id, id => unitLineByUnitTypeId[id].AgreementId);
+
+                var totalQuantities = new Dictionary<Guid, decimal>();
+                foreach (var mergedGroup in mergedGroups)
+                {
+                    foreach (var (unitTypeId, quantity) in mergedGroup.Quantities)
+                    {
+                        totalQuantities[unitTypeId] = totalQuantities.GetValueOrDefault(unitTypeId) + quantity;
+                    }
+                }
+
+                foreach (var mergedGroup in mergedGroups)
+                {
+                    var equivalent = CombinedUnitDiscountMath.ComputeEquivalent(mergedGroup.Quantities, discountUnitFactors);
+                    var tier = CombinedUnitDiscountMath.FindTier(winningDiscount.Tiers, equivalent);
+                    if (tier is null)
+                    {
+                        continue;
+                    }
+
+                    var eligibleBase = CombinedUnitDiscountMath.ComputeEligibleBase(
+                        mergedGroup.Quantities, totalQuantities, lineAmountsByUnitType, discountUnitTypeIds);
+
+                    // Unambiguous attribution: every unit type that actually contributed a nonzero
+                    // share to this group's eligible base must point at the SAME engaged agreement
+                    // (or all at "no agreement") for the discount line to join that agreement's
+                    // subtotal — otherwise it stays a plain line (see comment above).
+                    var contributingAgreementIds = discountUnitTypeIds
+                        .Where(id => lineAmountsByUnitType.ContainsKey(id)
+                                     && totalQuantities.GetValueOrDefault(id) > 0
+                                     && mergedGroup.Quantities.GetValueOrDefault(id) > 0)
+                        .Select(id => lineAgreementByUnitType[id])
+                        .Distinct()
+                        .ToList();
+                    var targetAgreementId = contributingAgreementIds.Count == 1 ? contributingAgreementIds[0] : null;
+
+                    var discountLine = new PriceBreakdownLine(
+                        $"{winningDiscount.Name} ({mergedGroup.Label}): {equivalent:0.##} eenheden → -{tier.Percent:0.##}%",
+                        -decimal.Round(eligibleBase * tier.Percent / 100m, 2),
+                        winningDiscount.Name,
+                        AgreementId: targetAgreementId,
+                        LineKey: $"combineddiscount:{winningDiscount.Id}:{mergedGroup.Key}");
+
+                    if (targetAgreementId is { } aid)
+                    {
+                        if (!discountLinesByAgreementId.TryGetValue(aid, out var pending))
+                        {
+                            pending = [];
+                            discountLinesByAgreementId[aid] = pending;
+                        }
+
+                        pending.Add(discountLine);
+                    }
+                    else
+                    {
+                        lines.Add(discountLine);
+                    }
+                }
+            }
+        }
+
         // Multi-agreement included time (carried-over review item): at most ONE engaged agreement
         // may apply its included-time allowance against the same order actuals — otherwise two
         // configured agreements would double-charge/double-propose the same measured minutes.
@@ -357,6 +481,18 @@ public class PricingEngine : IPricingEngine
                         AgreementId: agreement.Id, AgreementName: agreement.Name,
                         LineKey: AgreementLineKey(agreement.Id, $"modifier:{modifier.Id}")));
                     subtotal += modifierAmount;
+                }
+            }
+
+            // Combined-unit degression discounts (spec §29-31): attached HERE — after base +
+            // modifier lines, before the assignment adjustment below — so assignment %/fixed,
+            // minimum, maximum and surcharges all see the discounted subtotal.
+            if (discountLinesByAgreementId.TryGetValue(agreement.Id, out var pendingDiscountLines))
+            {
+                foreach (var discountLine in pendingDiscountLines)
+                {
+                    lines.Add(discountLine);
+                    subtotal += discountLine.Amount;
                 }
             }
 

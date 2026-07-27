@@ -198,10 +198,42 @@ public record DuplicateAgreementRequest(
     string Name, DateOnly EffectiveFrom, bool CloseSource,
     decimal? Percent = null, decimal? AmountDelta = null, decimal? RoundingStep = null);
 
+// --- Combined-unit degression discounts (spec §29-31) ---
+
+public record CombinedUnitDiscountUnitDto(Guid Id, Guid UnitTypeId, string? UnitTypeName, decimal EquivalentFactor);
+
+public record CombinedUnitDiscountTierDto(Guid Id, decimal FromCount, decimal? ToCount, decimal Percent);
+
+public record CombinedUnitDiscountDto(
+    Guid Id, Guid? CustomerId, string? CustomerName, Guid? AgreementId, string? AgreementName,
+    string Name, DegressionScope Scope, DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
+    IReadOnlyList<CombinedUnitDiscountUnitDto> Units, IReadOnlyList<CombinedUnitDiscountTierDto> Tiers);
+
+public record SaveCombinedUnitDiscountUnitRequest(Guid UnitTypeId, decimal EquivalentFactor);
+
+public record SaveCombinedUnitDiscountTierRequest(decimal FromCount, decimal? ToCount, decimal Percent);
+
+public record SaveCombinedUnitDiscountRequest(
+    Guid? CustomerId, Guid? AgreementId, string Name, DegressionScope Scope,
+    DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
+    IReadOnlyList<SaveCombinedUnitDiscountUnitRequest> Units, IReadOnlyList<SaveCombinedUnitDiscountTierRequest> Tiers);
+
 // --- Calculation ---
 
 /// <summary>Physical detail of part of a line (from cargo items) used for billable-quantity rules.</summary>
 public record PriceCalculationLineDetail(decimal Quantity, decimal? LengthCm, decimal? WidthCm);
+
+/// <summary>One unit type's quantity within a <see cref="PriceCalculationGroup"/> (spec §29-31).</summary>
+public record PriceCalculationGroupUnit(Guid UnitTypeId, decimal Quantity);
+
+/// <summary>
+/// One combinable group of units for combined-unit degression discounts — normally one per
+/// unloading stop. <see cref="AddressKey"/> is a normalized identity of the delivery address
+/// (location id, or "address|postalcode|city" lowercased); null means "no known address" and the
+/// group never merges with another under <see cref="DegressionScope.DeliveryAddress"/>.
+/// </summary>
+public record PriceCalculationGroup(
+    string GroupKey, string GroupLabel, IReadOnlyList<PriceCalculationGroupUnit> Units, string? AddressKey = null);
 
 public record PriceCalculationLineInput(
     Guid UnitTypeId, decimal Quantity, IReadOnlyList<PriceCalculationLineDetail>? Details = null);
@@ -235,7 +267,13 @@ public record PriceCalculationRequest(
     OneOffPricingInput? OneOff = null,
     /// <summary>Measured loading/unloading minutes from stop executions, for included-time extra-time proposals.</summary>
     decimal? ActualLoadingMinutes = null,
-    decimal? ActualUnloadingMinutes = null);
+    decimal? ActualUnloadingMinutes = null,
+    /// <summary>
+    /// Per-stop (or otherwise combinable) unit groups for combined-unit degression discounts
+    /// (spec §29-31). Null/empty => the engine falls back to one "order" group built from
+    /// <see cref="Lines"/> so a caller that doesn't build groups still gets Order-scope discounts.
+    /// </summary>
+    IReadOnlyList<PriceCalculationGroup>? Groups = null);
 
 /// <summary>A one-off order's own price agreement: no contract is consulted (spec Phase 6).</summary>
 public record OneOffPricingInput(

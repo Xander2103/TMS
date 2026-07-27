@@ -254,4 +254,32 @@ public class PricingController : ControllerBase
         var cancelled = await _adjustments.CancelForAgreementAsync(id, adjustmentId, cancellationToken);
         return cancelled is null ? NotFound() : Ok(cancelled);
     }
+
+    // --- Combined-unit degression discounts (spec §29-31) ---
+
+    [HttpGet("api/pricing/combined-discounts")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<CombinedUnitDiscountDto>>> ListCombinedDiscounts(
+        [FromQuery] Guid? customerId, [FromQuery] Guid? agreementId, CancellationToken cancellationToken) =>
+        Ok(await _admin.ListCombinedDiscountsAsync(customerId, agreementId, cancellationToken));
+
+    [HttpPost("api/pricing/combined-discounts")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<CombinedUnitDiscountDto>> CreateCombinedDiscount(
+        SaveCombinedUnitDiscountRequest request, CancellationToken cancellationToken) =>
+        Ok(await _admin.CreateCombinedDiscountAsync(request, cancellationToken));
+
+    [HttpPut("api/pricing/combined-discounts/{id:guid}")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<CombinedUnitDiscountDto>> UpdateCombinedDiscount(
+        Guid id, SaveCombinedUnitDiscountRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _admin.UpdateCombinedDiscountAsync(id, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("api/pricing/combined-discounts/{id:guid}")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<IActionResult> DeleteCombinedDiscount(Guid id, CancellationToken cancellationToken) =>
+        await _admin.DeleteCombinedDiscountAsync(id, cancellationToken) ? NoContent() : NotFound();
 }

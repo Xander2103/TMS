@@ -24,6 +24,7 @@ import { CustomerBillingPanel } from '../components/CustomerBillingPanel'
 import { CustomerPriceAdjustmentsPanel } from '../components/CustomerPriceAdjustmentsPanel'
 import { CustomerUnitPricingPanel } from '../components/CustomerUnitPricingPanel'
 import { CustomerUnitsPanel } from '../components/CustomerUnitsPanel'
+import { CombinedDiscountsPanel } from '../../tarification/components/CombinedDiscountsPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
 import { VAT_TREATMENT_LABELS } from '../types'
@@ -215,6 +216,7 @@ export function CustomerDetailPage() {
                   <CustomerUnitsPanel customerId={id} />
                   <CustomerUnitPricingPanel customerId={id} />
                   <CustomerPriceAdjustmentsPanel customerId={id} />
+                  <CombinedDiscountsPanel customerId={id} />
                   <CustomerBillingPanel customerId={id} />
                 </>
               ) : (
@@ -431,6 +433,7 @@ export function CustomerDetailPage() {
               <CustomerUnitsPanel customerId={id} />
               <CustomerUnitPricingPanel customerId={id} />
               <CustomerPriceAdjustmentsPanel customerId={id} />
+              <CombinedDiscountsPanel customerId={id} />
               <CustomerBillingPanel customerId={id} />
             </TabPanel>
           )}

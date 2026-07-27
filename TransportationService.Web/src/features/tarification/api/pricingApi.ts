@@ -673,6 +673,82 @@ export const createPriceAdjustment = (
 export const cancelPriceAdjustment = (customerId: string, id: string): Promise<ScheduledPriceAdjustment> =>
   apiClient.postJson(`/api/customers/${customerId}/price-adjustments/${id}/cancel`, {})
 
+// --- Combined-unit degression discounts (spec §29-31) ---
+
+export type DegressionScope = 'Order' | 'DeliveryAddress' | 'Stop'
+
+export const DEGRESSION_SCOPE_LABELS: Record<DegressionScope, string> = {
+  Order: 'Hele order',
+  DeliveryAddress: 'Per leveradres',
+  Stop: 'Per stop',
+}
+
+export interface CombinedUnitDiscountUnit {
+  id: string
+  unitTypeId: string
+  unitTypeName: string | null
+  equivalentFactor: number
+}
+
+export interface CombinedUnitDiscountTier {
+  id: string
+  fromCount: number
+  toCount: number | null
+  percent: number
+}
+
+export interface CombinedUnitDiscount {
+  id: string
+  customerId: string | null
+  customerName: string | null
+  agreementId: string | null
+  agreementName: string | null
+  name: string
+  scope: DegressionScope
+  effectiveFrom: string
+  effectiveUntil: string | null
+  isActive: boolean
+  units: CombinedUnitDiscountUnit[]
+  tiers: CombinedUnitDiscountTier[]
+}
+
+export interface CombinedUnitDiscountUnitInput {
+  unitTypeId: string
+  equivalentFactor: number
+}
+
+export interface CombinedUnitDiscountTierInput {
+  fromCount: number
+  toCount: number | null
+  percent: number
+}
+
+export interface CombinedUnitDiscountInput {
+  customerId: string | null
+  agreementId: string | null
+  name: string
+  scope: DegressionScope
+  effectiveFrom: string
+  effectiveUntil: string | null
+  isActive: boolean
+  units: CombinedUnitDiscountUnitInput[]
+  tiers: CombinedUnitDiscountTierInput[]
+}
+
+export const listCombinedDiscounts = (customerId?: string, agreementId?: string): Promise<CombinedUnitDiscount[]> => {
+  const params = new URLSearchParams()
+  if (customerId) params.set('customerId', customerId)
+  if (agreementId) params.set('agreementId', agreementId)
+  const query = params.toString()
+  return apiClient.getJson(`/api/pricing/combined-discounts${query ? `?${query}` : ''}`)
+}
+export const createCombinedDiscount = (input: CombinedUnitDiscountInput): Promise<CombinedUnitDiscount> =>
+  apiClient.postJson('/api/pricing/combined-discounts', input)
+export const updateCombinedDiscount = (id: string, input: CombinedUnitDiscountInput): Promise<CombinedUnitDiscount> =>
+  apiClient.putJson(`/api/pricing/combined-discounts/${id}`, input)
+export const deleteCombinedDiscount = (id: string): Promise<void> =>
+  apiClient.deleteRequest(`/api/pricing/combined-discounts/${id}`)
+
 // --- Scheduled price adjustments (agreement-scoped, v2) ---
 
 export const listAgreementAdjustments = (agreementId: string): Promise<ScheduledPriceAdjustment[]> =>

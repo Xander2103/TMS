@@ -15,10 +15,11 @@ import { AgreementAssignmentsPanel } from '../components/AgreementAssignmentsPan
 import { AgreementDerivationPanel } from '../components/AgreementDerivationPanel'
 import { AgreementSurchargesPanel } from '../components/AgreementSurchargesPanel'
 import { AgreementVersionsPanel } from '../components/AgreementVersionsPanel'
+import { CombinedDiscountsPanel } from '../components/CombinedDiscountsPanel'
 import { RuleGridEditor } from '../components/RuleGridEditor'
 import './../components/pricingTableDetail.css'
 
-type TabId = 'regels' | 'klanten' | 'afleiding' | 'toeslagen' | 'aanpassing' | 'versies'
+type TabId = 'regels' | 'klanten' | 'afleiding' | 'toeslagen' | 'kortingen' | 'aanpassing' | 'versies'
 
 /**
  * A single rate table (pricing agreement): its rules (grid editor), customer assignments,
@@ -61,6 +62,7 @@ export function PricingTableDetailPage() {
     { id: 'klanten', label: 'Klanten' },
     ...(showAfleiding ? [{ id: 'afleiding', label: 'Afleiding' }] : []),
     { id: 'toeslagen', label: 'Toeslagen', badge: agreement.surcharges.length || undefined },
+    { id: 'kortingen', label: 'Kortingen' },
     { id: 'aanpassing', label: 'Prijsaanpassing' },
     { id: 'versies', label: 'Versies' },
   ]
@@ -110,6 +112,12 @@ export function PricingTableDetailPage() {
       {activeTab === 'toeslagen' && (
         <TabPanel tabId="toeslagen">
           <AgreementSurchargesPanel agreement={agreement} canManage={canManage} onUpdated={setAgreement} />
+        </TabPanel>
+      )}
+
+      {activeTab === 'kortingen' && (
+        <TabPanel tabId="kortingen">
+          <CombinedDiscountsPanel agreementId={id} />
         </TabPanel>
       )}
 

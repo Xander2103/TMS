@@ -40,6 +40,12 @@ public interface IPricingAdminService
 
     Task<CustomerPricingConfigDto?> GetCustomerConfigAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerPricingConfigDto?> SaveCustomerConfigAsync(Guid customerId, SaveCustomerPricingConfigRequest request, CancellationToken cancellationToken);
+
+    /// <summary>customerId/agreementId filter; both null lists every combined-unit discount of the tenant.</summary>
+    Task<IReadOnlyList<CombinedUnitDiscountDto>> ListCombinedDiscountsAsync(Guid? customerId, Guid? agreementId, CancellationToken cancellationToken);
+    Task<CombinedUnitDiscountDto> CreateCombinedDiscountAsync(SaveCombinedUnitDiscountRequest request, CancellationToken cancellationToken);
+    Task<CombinedUnitDiscountDto?> UpdateCombinedDiscountAsync(Guid id, SaveCombinedUnitDiscountRequest request, CancellationToken cancellationToken);
+    Task<bool> DeleteCombinedDiscountAsync(Guid id, CancellationToken cancellationToken);
 }
 
 public class PricingAdminService : IPricingAdminService
@@ -1030,6 +1036,231 @@ public class PricingAdminService : IPricingAdminService
         await _auditService.RecordAsync("CustomerPricingConfig", customerId.ToString(), "Updated", null,
             new { PreferredUnits = unitIds.Count, OptionPrices = request.OptionPrices.Count }, cancellationToken);
         return await GetCustomerConfigAsync(customerId, cancellationToken);
+    }
+
+    // --- Combined-unit degression discounts (spec §29-31) ---
+
+    public async Task<IReadOnlyList<CombinedUnitDiscountDto>> ListCombinedDiscountsAsync(
+        Guid? customerId, Guid? agreementId, CancellationToken cancellationToken)
+    {
+        var query = _dbContext.CombinedUnitDiscounts.AsNoTracking()
+            .Include(d => d.Units).Include(d => d.Tiers)
+            .Where(d => d.TenantId == TenantId);
+        if (customerId is { } cid)
+        {
+            query = query.Where(d => d.CustomerId == cid);
+        }
+
+        if (agreementId is { } aid)
+        {
+            query = query.Where(d => d.AgreementId == aid);
+        }
+
+        var discounts = await query.OrderBy(d => d.Name).ToListAsync(cancellationToken);
+        return await MapCombinedDiscountsAsync(discounts, cancellationToken);
+    }
+
+    public async Task<CombinedUnitDiscountDto> CreateCombinedDiscountAsync(
+        SaveCombinedUnitDiscountRequest request, CancellationToken cancellationToken)
+    {
+        await ValidateCombinedDiscountAsync(request, null, cancellationToken);
+        var discount = new CombinedUnitDiscount { Id = Guid.NewGuid(), TenantId = TenantId };
+        ApplyCombinedDiscount(discount, request);
+        _dbContext.CombinedUnitDiscounts.Add(discount);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("CombinedUnitDiscount", discount.Id.ToString(), "Created", null,
+            new { discount.Name, discount.CustomerId, discount.AgreementId, discount.Scope }, cancellationToken);
+        return (await MapCombinedDiscountsAsync([discount], cancellationToken))[0];
+    }
+
+    public async Task<CombinedUnitDiscountDto?> UpdateCombinedDiscountAsync(
+        Guid id, SaveCombinedUnitDiscountRequest request, CancellationToken cancellationToken)
+    {
+        var discount = await _dbContext.CombinedUnitDiscounts.Include(d => d.Units).Include(d => d.Tiers)
+            .FirstOrDefaultAsync(d => d.TenantId == TenantId && d.Id == id, cancellationToken);
+        if (discount is null)
+        {
+            return null;
+        }
+
+        await ValidateCombinedDiscountAsync(request, id, cancellationToken);
+        // Full-graph replace: units/tiers are always rewritten wholesale, same pattern as agreement surcharges/modifiers.
+        _dbContext.RemoveRange(discount.Units);
+        discount.Units = [];
+        _dbContext.RemoveRange(discount.Tiers);
+        discount.Tiers = [];
+        ApplyCombinedDiscount(discount, request);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("CombinedUnitDiscount", discount.Id.ToString(), "Updated", null,
+            new { discount.Name, discount.CustomerId, discount.AgreementId, discount.Scope }, cancellationToken);
+        return (await MapCombinedDiscountsAsync([discount], cancellationToken))[0];
+    }
+
+    public async Task<bool> DeleteCombinedDiscountAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var discount = await _dbContext.CombinedUnitDiscounts.FirstOrDefaultAsync(d => d.TenantId == TenantId && d.Id == id, cancellationToken);
+        if (discount is null)
+        {
+            return false;
+        }
+
+        _dbContext.Remove(discount);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("CombinedUnitDiscount", discount.Id.ToString(), "Deleted", new { discount.Name }, null, cancellationToken);
+        return true;
+    }
+
+    private async Task ValidateCombinedDiscountAsync(
+        SaveCombinedUnitDiscountRequest request, Guid? discountId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new DomainValidationException("name", "De naam is verplicht.");
+        }
+
+        if (request.EffectiveUntil is { } until && until < request.EffectiveFrom)
+        {
+            throw new DomainValidationException("effectiveUntil", "De einddatum ligt vóór de begindatum.");
+        }
+
+        if (request.Units is null || request.Units.Count == 0)
+        {
+            throw new DomainValidationException("units", "Kies minstens één eenheid.");
+        }
+
+        if (request.Tiers is null || request.Tiers.Count == 0)
+        {
+            throw new DomainValidationException("tiers", "Voeg minstens één staffel toe.");
+        }
+
+        var unitTypeIds = request.Units.Select(u => u.UnitTypeId).ToList();
+        if (unitTypeIds.Distinct().Count() != unitTypeIds.Count)
+        {
+            throw new DomainValidationException("units", "Elke eenheid mag maar één keer voorkomen.");
+        }
+
+        foreach (var unit in request.Units)
+        {
+            if (unit.EquivalentFactor <= 0)
+            {
+                throw new DomainValidationException("units", "De factor moet groter zijn dan 0.");
+            }
+        }
+
+        var knownUnits = await _dbContext.UnitTypes.CountAsync(
+            u => u.TenantId == TenantId && unitTypeIds.Contains(u.Id), cancellationToken);
+        if (knownUnits != unitTypeIds.Distinct().Count())
+        {
+            throw new InvalidTenantReferenceException("eenheid");
+        }
+
+        foreach (var tier in request.Tiers)
+        {
+            if (tier.FromCount < 0)
+            {
+                throw new DomainValidationException("tiers", "De van-waarde mag niet negatief zijn.");
+            }
+
+            if (tier.ToCount is { } to && to < tier.FromCount)
+            {
+                throw new DomainValidationException("tiers", "De van-waarde moet vóór de tot-waarde liggen.");
+            }
+
+            if (tier.Percent <= 0 || tier.Percent > 100)
+            {
+                throw new DomainValidationException("tiers", "De korting moet tussen 0 en 100% liggen.");
+            }
+        }
+
+        for (var i = 0; i < request.Tiers.Count; i++)
+        {
+            for (var j = i + 1; j < request.Tiers.Count; j++)
+            {
+                var aTo = request.Tiers[i].ToCount ?? decimal.MaxValue;
+                var bTo = request.Tiers[j].ToCount ?? decimal.MaxValue;
+                if (request.Tiers[i].FromCount <= bTo && request.Tiers[j].FromCount <= aTo)
+                {
+                    throw new DomainValidationException("tiers", "De staffels mogen elkaar niet overlappen.");
+                }
+            }
+        }
+
+        if (request.CustomerId is { } customerId
+            && !await _dbContext.Customers.AnyAsync(c => c.TenantId == TenantId && c.Id == customerId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("klant");
+        }
+
+        if (request.AgreementId is { } agreementId
+            && !await _dbContext.PricingAgreements.AnyAsync(a => a.TenantId == TenantId && a.Id == agreementId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("prijsafspraak");
+        }
+    }
+
+    private void ApplyCombinedDiscount(CombinedUnitDiscount discount, SaveCombinedUnitDiscountRequest request)
+    {
+        discount.CustomerId = request.CustomerId;
+        discount.AgreementId = request.AgreementId;
+        discount.Name = request.Name.Trim();
+        discount.Scope = request.Scope;
+        discount.EffectiveFrom = request.EffectiveFrom;
+        discount.EffectiveUntil = request.EffectiveUntil;
+        discount.IsActive = request.IsActive;
+
+        foreach (var unit in request.Units)
+        {
+            var entity = new CombinedUnitDiscountUnit
+            {
+                Id = Guid.NewGuid(), TenantId = TenantId, DiscountId = discount.Id,
+                UnitTypeId = unit.UnitTypeId, EquivalentFactor = unit.EquivalentFactor,
+            };
+            discount.Units.Add(entity);
+            // Client-set Guid keys reached via a navigation are otherwise tracked as
+            // existing (Modified) — mark them Added explicitly.
+            _dbContext.Entry(entity).State = Microsoft.EntityFrameworkCore.EntityState.Added;
+        }
+
+        foreach (var tier in request.Tiers)
+        {
+            var entity = new CombinedUnitDiscountTier
+            {
+                Id = Guid.NewGuid(), TenantId = TenantId, DiscountId = discount.Id,
+                FromCount = tier.FromCount, ToCount = tier.ToCount, Percent = tier.Percent,
+            };
+            discount.Tiers.Add(entity);
+            _dbContext.Entry(entity).State = Microsoft.EntityFrameworkCore.EntityState.Added;
+        }
+    }
+
+    private async Task<IReadOnlyList<CombinedUnitDiscountDto>> MapCombinedDiscountsAsync(
+        IReadOnlyList<CombinedUnitDiscount> discounts, CancellationToken cancellationToken)
+    {
+        var tenantId = TenantId;
+        var customerIds = discounts.Where(d => d.CustomerId.HasValue).Select(d => d.CustomerId!.Value).Distinct().ToList();
+        var customers = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && customerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        var agreementIds = discounts.Where(d => d.AgreementId.HasValue).Select(d => d.AgreementId!.Value).Distinct().ToList();
+        var agreements = await _dbContext.PricingAgreements.AsNoTracking()
+            .Where(a => a.TenantId == tenantId && agreementIds.Contains(a.Id))
+            .ToDictionaryAsync(a => a.Id, a => a.Name, cancellationToken);
+        var unitTypeIds = discounts.SelectMany(d => d.Units).Select(u => u.UnitTypeId).Distinct().ToList();
+        var unitNames = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == tenantId && unitTypeIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
+
+        return discounts.Select(d => new CombinedUnitDiscountDto(
+            d.Id, d.CustomerId, d.CustomerId is { } cid ? customers.GetValueOrDefault(cid) : null,
+            d.AgreementId, d.AgreementId is { } aid ? agreements.GetValueOrDefault(aid) : null,
+            d.Name, d.Scope, d.EffectiveFrom, d.EffectiveUntil, d.IsActive,
+            d.Units.OrderBy(u => u.Id)
+                .Select(u => new CombinedUnitDiscountUnitDto(u.Id, u.UnitTypeId, unitNames.GetValueOrDefault(u.UnitTypeId), u.EquivalentFactor))
+                .ToList(),
+            d.Tiers.OrderBy(t => t.FromCount)
+                .Select(t => new CombinedUnitDiscountTierDto(t.Id, t.FromCount, t.ToCount, t.Percent))
+                .ToList()))
+            .ToList();
     }
 
     // --- Helpers ---

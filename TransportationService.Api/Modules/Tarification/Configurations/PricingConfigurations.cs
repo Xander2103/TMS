@@ -222,3 +222,45 @@ public class CustomerPreferredUnitConfiguration : IEntityTypeConfiguration<Custo
         builder.HasQueryFilter(u => !u.IsDeleted);
     }
 }
+
+public class CombinedUnitDiscountConfiguration : IEntityTypeConfiguration<CombinedUnitDiscount>
+{
+    public void Configure(EntityTypeBuilder<CombinedUnitDiscount> builder)
+    {
+        builder.ToTable("combined_unit_discounts");
+        builder.HasKey(d => d.Id);
+        builder.Property(d => d.Name).IsRequired().HasMaxLength(200);
+        builder.Property(d => d.Scope).HasConversion<string>().HasMaxLength(20);
+        builder.HasMany(d => d.Units).WithOne().HasForeignKey(u => u.DiscountId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasMany(d => d.Tiers).WithOne().HasForeignKey(t => t.DiscountId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(d => new { d.TenantId, d.CustomerId });
+        builder.HasIndex(d => new { d.TenantId, d.AgreementId });
+        builder.HasQueryFilter(d => !d.IsDeleted);
+    }
+}
+
+public class CombinedUnitDiscountUnitConfiguration : IEntityTypeConfiguration<CombinedUnitDiscountUnit>
+{
+    public void Configure(EntityTypeBuilder<CombinedUnitDiscountUnit> builder)
+    {
+        builder.ToTable("combined_unit_discount_units");
+        builder.HasKey(u => u.Id);
+        builder.Property(u => u.EquivalentFactor).HasPrecision(7, 3);
+        builder.HasIndex(u => new { u.TenantId, u.DiscountId });
+        builder.HasQueryFilter(u => !u.IsDeleted);
+    }
+}
+
+public class CombinedUnitDiscountTierConfiguration : IEntityTypeConfiguration<CombinedUnitDiscountTier>
+{
+    public void Configure(EntityTypeBuilder<CombinedUnitDiscountTier> builder)
+    {
+        builder.ToTable("combined_unit_discount_tiers");
+        builder.HasKey(t => t.Id);
+        builder.Property(t => t.FromCount).HasPrecision(7, 3);
+        builder.Property(t => t.ToCount).HasPrecision(7, 3);
+        builder.Property(t => t.Percent).HasPrecision(7, 3);
+        builder.HasIndex(t => new { t.TenantId, t.DiscountId });
+        builder.HasQueryFilter(t => !t.IsDeleted);
+    }
+}

@@ -1153,6 +1153,16 @@ public class TransportOrderService : ITransportOrderService
                     order.OneOffFixedAmount ?? 0m, order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes,
                     order.OneOffIncludedCombinedMinutes, order.OneOffExtraHourlyRate, order.OneOffNotes)
                 : null;
+            var groups = await BuildPricingGroupsAsync(order, cargoItems, cancellationToken);
+            if (groups.Count == 0 && lines.Count > 0)
+            {
+                // No cargo item maps to a managed unit (or none exist) — fall back to a single
+                // "order" group built from the order-level unit line, so Order-scope combined-unit
+                // discounts still work even without per-stop cargo detail.
+                groups = [new PriceCalculationGroup(
+                    "order", "Order", lines.Select(l => new PriceCalculationGroupUnit(l.UnitTypeId, l.Quantity)).ToList())];
+            }
+
             result = await _pricingEngine.CalculateAsync(new PriceCalculationRequest(
                 order.CustomerId, order.OrderDate, lines,
                 delivery?.CountryCode, delivery?.PostalCode,
@@ -1164,7 +1174,8 @@ public class TransportOrderService : ITransportOrderService
                 CargoLineCount: cargoItems?.Count(c => !c.IsDeleted),
                 OneOff: oneOff,
                 ActualLoadingMinutes: actualLoadingMinutes,
-                ActualUnloadingMinutes: actualUnloadingMinutes), cancellationToken);
+                ActualUnloadingMinutes: actualUnloadingMinutes,
+                Groups: groups.Count > 0 ? groups : null), cancellationToken);
         }
 
         var calculated = result is { RequiresManualPrice: false } && result.Lines.Any(l => !l.Informational)
@@ -1346,6 +1357,63 @@ public class TransportOrderService : ITransportOrderService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Combined-unit degression groups (spec §29-31): one group per unloading stop, built from
+    /// non-deleted cargo items whose QuantityUnitCode resolves to a managed unit — quantities of
+    /// different stops are never merged here (the engine merges per-address itself when the
+    /// winning discount's Scope requires it). Returns [] when no cargo item maps to a managed
+    /// unit; the caller falls back to a single "order" group from the order-level unit line.
+    /// </summary>
+    private async Task<IReadOnlyList<PriceCalculationGroup>> BuildPricingGroupsAsync(
+        TransportOrder order, IReadOnlyList<CargoItem>? cargoItems, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var items = (cargoItems ?? [])
+            .Where(c => !c.IsDeleted && !string.IsNullOrWhiteSpace(c.QuantityUnitCode))
+            .ToList();
+        if (items.Count == 0)
+        {
+            return [];
+        }
+
+        var codes = items.Select(c => c.QuantityUnitCode!).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var unitTypeIdByCode = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == tenantId && codes.Contains(u.Code))
+            .ToDictionaryAsync(u => u.Code, u => u.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+        var mapped = items
+            .Select(c => (Item: c, UnitTypeId: unitTypeIdByCode.GetValueOrDefault(c.QuantityUnitCode!)))
+            .Where(x => x.UnitTypeId != Guid.Empty)
+            .ToList();
+        if (mapped.Count == 0)
+        {
+            return [];
+        }
+
+        var stopsById = order.Stops.Where(s => !s.IsDeleted).ToDictionary(s => s.Id);
+        var groups = new List<PriceCalculationGroup>();
+        foreach (var byStop in mapped.GroupBy(x => x.Item.UnloadingStopId))
+        {
+            var groupKey = byStop.Key?.ToString() ?? "order";
+            var label = "Order";
+            string? addressKey = null;
+            if (byStop.Key is { } stopId && stopsById.TryGetValue(stopId, out var stop))
+            {
+                label = stop.City ?? stop.LocationName ?? stop.Address ?? "Order";
+                addressKey = stop.LocationId is { } locationId
+                    ? $"loc:{locationId}"
+                    : $"{stop.Address}|{stop.PostalCode}|{stop.City}".ToLowerInvariant();
+            }
+
+            var units = byStop.GroupBy(x => x.UnitTypeId)
+                .Select(g => new PriceCalculationGroupUnit(g.Key, g.Sum(x => x.Item.ExpectedQuantity)))
+                .ToList();
+            groups.Add(new PriceCalculationGroup(groupKey, label, units, addressKey));
+        }
+
+        return groups;
     }
 
     /// <summary>Derives a display unit price (amount / quantity) only where that is a real per-unit rate — never invented for bracket/base-amount rule lines.</summary>

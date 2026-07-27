@@ -198,6 +198,9 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementModifier> PricingAgreementModifiers => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementModifier>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.ScheduledPriceAdjustment> ScheduledPriceAdjustments => Set<TransportationService.Api.Modules.Tarification.Entities.ScheduledPriceAdjustment>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.ScheduledPriceAdjustmentRule> ScheduledPriceAdjustmentRules => Set<TransportationService.Api.Modules.Tarification.Entities.ScheduledPriceAdjustmentRule>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscount> CombinedUnitDiscounts => Set<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscount>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscountUnit> CombinedUnitDiscountUnits => Set<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscountUnit>();
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscountTier> CombinedUnitDiscountTiers => Set<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscountTier>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
