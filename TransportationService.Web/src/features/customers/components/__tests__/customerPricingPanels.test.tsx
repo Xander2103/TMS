@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { CustomerUnitsPanel } from '../CustomerUnitsPanel'
 import { CustomerUnitPricingPanel } from '../CustomerUnitPricingPanel'
 import { CustomerPriceAdjustmentsPanel } from '../CustomerPriceAdjustmentsPanel'
@@ -292,7 +293,11 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
   })
 
   it('shows global vs override vs effective price with source and visible warnings', async () => {
-    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
 
     await screen.findByText('Diensten & toeslagen')
     // Table-wide warning is always visible, not a tooltip.
@@ -313,7 +318,11 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
 
   it('resets an override back to the global value', async () => {
     const user = userEvent.setup()
-    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
 
     await screen.findByText('Diensten & toeslagen')
     const resetButtons = screen.getAllByRole('button', { name: 'Algemene waarde opnieuw gebruiken' })
@@ -330,7 +339,11 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
 
   it('shows the auto-apply tri-state and saves an override', async () => {
     const user = userEvent.setup()
-    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
 
     await screen.findByText('Diensten & toeslagen')
     const autoSelect = screen.getByLabelText('Automatisch toepassen voor Picking')
@@ -364,7 +377,11 @@ describe('CustomerUnitPricingPanel', () => {
   })
 
   it('groups rules into current, future and history and shows the agreement', async () => {
-    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByText('Actuele prijzen')).toBeInTheDocument()
     expect(screen.getByText('Toekomstige prijzen')).toBeInTheDocument()
@@ -406,7 +423,11 @@ describe('CustomerUnitPricingPanel', () => {
       },
     ]
 
-    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByText('Distributie België 2026')).toBeInTheDocument()
     expect(screen.getByText('Gedeelde tabel')).toBeInTheDocument()
@@ -441,7 +462,11 @@ describe('CustomerUnitPricingPanel', () => {
     ]
     state.updateAgreement.mockResolvedValue(state.agreements[1])
 
-    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
 
     expect(await screen.findByText('Afgeleid van Distributie België')).toBeInTheDocument()
 
@@ -471,7 +496,11 @@ describe('CustomerUnitPricingPanel', () => {
     state.units = [
       { id: 'unit-pallet', code: 'EUROPALLET', name: 'Europallet', isActive: true, sortOrder: 0, allowForOrderEntry: true, allowForPricing: true },
     ]
-    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
 
     await user.click(await screen.findByRole('button', { name: '+ Prijsregel' }))
     const dialog = await screen.findByRole('dialog')
@@ -505,7 +534,11 @@ describe('CustomerUnitPricingPanel', () => {
     state.units = [
       { id: 'unit-pallet', code: 'EUROPALLET', name: 'Europallet', isActive: true, sortOrder: 0, allowForOrderEntry: true, allowForPricing: true },
     ]
-    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
 
     await user.click(await screen.findByRole('button', { name: '+ Prijsregel' }))
     const dialog = await screen.findByRole('dialog')
@@ -537,7 +570,11 @@ describe('CustomerUnitPricingPanel', () => {
 
   it('hides management actions without tariffs.manage', async () => {
     auth.permissions = new Set(['tariffs.view'])
-    render(<CustomerUnitPricingPanel customerId="cust-1" />)
+    render(
+      <MemoryRouter>
+        <CustomerUnitPricingPanel customerId="cust-1" />
+      </MemoryRouter>,
+    )
 
     await screen.findByText('Actuele prijzen')
     expect(screen.queryByRole('button', { name: '+ Prijsregel' })).not.toBeInTheDocument()

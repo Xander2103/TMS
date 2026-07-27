@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -26,6 +26,30 @@ import { RuleGridEditor } from '../components/RuleGridEditor'
 import './../components/pricingTableDetail.css'
 
 type TabId = 'regels' | 'klanten' | 'afleiding' | 'toeslagen' | 'kortingen' | 'aanpassing' | 'versies'
+
+/** One-line orientation per tab: what lives here and where the rest is managed. */
+const TAB_INTROS: Record<TabId, ReactNode> = {
+  regels: (
+    <>
+      Prijsregels en staffels van deze tabel. Uurregels bewerk je hier rechtstreeks (kolommen{' '}
+      <strong>Min. aantal</strong> en <strong>Afrondingsstap</strong>); een klantspecifieke prijs voor één
+      staffelrij maak je met <strong>Klantafwijking…</strong> op de rij zelf. Diensten & toeslagen (per
+      uur/dag/pallet-dag) beheer je onder <Link to="/settings/pricing">Prijsinstellingen</Link>.
+    </>
+  ),
+  klanten: 'Welke klanten deze tabel gebruiken, met hun eventuele plus/min-afwijking per klant.',
+  afleiding: 'Een afgeleide tabel erft alle regels van haar basistabel en past daar modifiers (bv. landtoeslag) op toe.',
+  toeslagen: (
+    <>
+      Automatische toeslagen bovenop het subtotaal van déze tabel (percentage of vast bedrag), plus
+      inbegrepen laad-/lostijd. Algemene diensten beheer je onder{' '}
+      <Link to="/settings/pricing">Prijsinstellingen → Diensten & toeslagen</Link>.
+    </>
+  ),
+  kortingen: 'Combinatiekortingen: gecombineerde eenheden per levering/stop/order bepalen samen de kortingstrap.',
+  aanpassing: 'Geplande bulkaanpassing (+/-% of vast bedrag) die op de ingangsdatum nieuwe regelversies aanmaakt.',
+  versies: 'Dupliceer deze tabel als nieuwe versie met een eigen geldigheidsperiode; klantkoppelingen kopieer je bewust niet mee.',
+}
 
 /**
  * A single rate table (pricing agreement): its rules (grid editor), customer assignments,
@@ -153,6 +177,8 @@ export function PricingTableDetailPage() {
       <AgreementValidationPanel agreementId={id} />
 
       <Tabs tabs={tabs} activeId={activeTab} onChange={(next) => setActiveTab(next as TabId)} />
+
+      <p className="ui-form-section-description">{TAB_INTROS[activeTab]}</p>
 
       {activeTab === 'regels' && (
         <TabPanel tabId="regels">

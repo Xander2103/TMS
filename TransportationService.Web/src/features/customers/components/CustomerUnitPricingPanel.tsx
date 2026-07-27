@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -601,7 +602,10 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             {sharedAssigned.map(({ agreement, assignment }) => (
               <tr key={`shared-${agreement.id}`}>
                 <td>
-                  {agreement.name} <Badge tone="info">Gedeelde tabel</Badge>
+                  <Link to={`/pricing/tables/${agreement.id}`} className="issued-items-link">
+                    {agreement.name}
+                  </Link>{' '}
+                  <Badge tone="info">Gedeelde tabel</Badge>
                 </td>
                 <td>
                   {agreement.effectiveFrom}
@@ -616,7 +620,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             {agreements.map((agreement) => (
               <tr key={agreement.id}>
                 <td>
-                  {agreement.name}
+                  <Link to={`/pricing/tables/${agreement.id}`} className="issued-items-link">
+                    {agreement.name}
+                  </Link>
                   {agreement.baseAgreementId && (
                     <Badge tone="info">Afgeleid van {agreement.baseAgreementName ?? '—'}</Badge>
                   )}
