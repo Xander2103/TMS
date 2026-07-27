@@ -12,9 +12,11 @@ const state = vi.hoisted(() => ({
   rules: [] as PriceRule[],
   units: [] as UnitTypeSettings[],
   zones: [] as PricingZone[],
+  overrides: {} as Record<string, unknown[]>,
   updateRule: vi.fn(),
   createRule: vi.fn(),
   deleteRule: vi.fn(),
+  deleteOverride: vi.fn(),
 }))
 
 vi.mock('../../api/pricingApi', async (importOriginal) => {
@@ -24,9 +26,11 @@ vi.mock('../../api/pricingApi', async (importOriginal) => {
     listPriceRulesByAgreement: () => Promise.resolve(state.rules),
     listUnitTypeSettings: () => Promise.resolve(state.units),
     listPricingZones: () => Promise.resolve(state.zones),
+    listBracketOverrides: (ruleId: string) => Promise.resolve(state.overrides[ruleId] ?? []),
     updatePriceRule: state.updateRule,
     createPriceRule: state.createRule,
     deletePriceRule: state.deleteRule,
+    deleteBracketOverride: state.deleteOverride,
   }
 })
 
@@ -78,6 +82,7 @@ function makeBracketRule(): PriceRule {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  state.overrides = {}
   state.rules = [makeRule(), makeBracketRule()]
   state.units = [
     { id: 'unit-pallet', code: 'EUROPALLET', name: 'Europallet', isActive: true, sortOrder: 0, allowForOrderEntry: true, allowForPricing: true },
@@ -184,6 +189,35 @@ describe('RuleGridEditor', () => {
         expect.objectContaining({ minimumQuantity: 4, quantityRoundingStep: 0.25 }),
       ),
     )
+  })
+
+  it('shows bracket-row customer overrides with a badge and removes them after confirmation', async () => {
+    const user = userEvent.setup()
+    state.overrides = {
+      'rule-2': [
+        {
+          id: 'ov-1', priceRuleId: 'rule-2', customerId: 'cust-1', customerName: 'Klant X',
+          fromQuantity: 1, toQuantity: 1, weightToKg: null, volumeToM3: null, loadingMetersTo: null,
+          price: 39, pricePerExtraUnit: null, effectiveFrom: null, effectiveUntil: null, notes: null, orphaned: false,
+        },
+      ],
+    }
+    state.deleteOverride.mockResolvedValue(undefined)
+    render(<RuleGridEditor agreementId="agr-1" agreementCustomerId={null} canManage />)
+
+    // The override renders under its bracket row with badge, customer and price.
+    expect(await screen.findByText('Klantafwijking')).toBeInTheDocument()
+    expect(screen.getByText('Klant X')).toBeInTheDocument()
+    expect(screen.getByText('€ 39.00')).toBeInTheDocument()
+    // Shared bracket rows offer the create action for shared rules.
+    expect(screen.getAllByRole('button', { name: 'Klantafwijking…' }).length).toBeGreaterThan(0)
+
+    // Removing goes through a confirm dialog and falls back to the shared price.
+    const overrideRow = screen.getByText('Klant X').closest('tr')!
+    await user.click(within(overrideRow).getByRole('button', { name: 'Verwijderen' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Klantafwijking verwijderen' })
+    await user.click(within(dialog).getByRole('button', { name: 'Verwijderen' }))
+    await waitFor(() => expect(state.deleteOverride).toHaveBeenCalledWith('ov-1'))
   })
 
   it('disables every input without tariffs.manage', async () => {

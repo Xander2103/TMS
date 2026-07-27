@@ -147,6 +147,27 @@ public class PriceRuleBracketConfiguration : IEntityTypeConfiguration<PriceRuleB
     }
 }
 
+public class PriceRuleBracketOverrideConfiguration : IEntityTypeConfiguration<PriceRuleBracketOverride>
+{
+    public void Configure(EntityTypeBuilder<PriceRuleBracketOverride> builder)
+    {
+        builder.ToTable("price_rule_bracket_overrides");
+        builder.HasKey(o => o.Id);
+        builder.Property(o => o.FromQuantity).HasPrecision(12, 3);
+        builder.Property(o => o.ToQuantity).HasPrecision(12, 3);
+        builder.Property(o => o.Price).HasPrecision(12, 2);
+        builder.Property(o => o.PricePerExtraUnit).HasPrecision(12, 4);
+        builder.Property(o => o.WeightToKg).HasPrecision(10, 2);
+        builder.Property(o => o.VolumeToM3).HasPrecision(10, 2);
+        builder.Property(o => o.LoadingMetersTo).HasPrecision(10, 2);
+        builder.Property(o => o.Notes).HasMaxLength(1000);
+        builder.HasOne(o => o.PriceRule).WithMany().HasForeignKey(o => o.PriceRuleId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasIndex(o => new { o.TenantId, o.PriceRuleId });
+        builder.HasIndex(o => new { o.TenantId, o.CustomerId });
+        builder.HasQueryFilter(o => !o.IsDeleted);
+    }
+}
+
 public class ServiceOptionConfiguration : IEntityTypeConfiguration<ServiceOption>
 {
     public void Configure(EntityTypeBuilder<ServiceOption> builder)

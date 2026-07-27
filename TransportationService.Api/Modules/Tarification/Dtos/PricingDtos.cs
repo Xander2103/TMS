@@ -102,6 +102,23 @@ public record SavePriceRuleRequest(
     decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null,
     decimal? MaximumAmount = null, BracketSelectionMode BracketMode = BracketSelectionMode.Absolute);
 
+// --- Bracket-row customer overrides ("klantafwijkingen") ---
+
+public record PriceRuleBracketOverrideDto(
+    Guid Id, Guid PriceRuleId, Guid CustomerId, string CustomerName,
+    decimal FromQuantity, decimal? ToQuantity,
+    decimal? WeightToKg, decimal? VolumeToM3, decimal? LoadingMetersTo,
+    decimal Price, decimal? PricePerExtraUnit,
+    DateOnly? EffectiveFrom, DateOnly? EffectiveUntil, string? Notes,
+    /// <summary>True when no bracket row with this exact identity exists on the rule anymore.</summary>
+    bool Orphaned);
+
+public record SavePriceRuleBracketOverrideRequest(
+    Guid CustomerId, decimal FromQuantity, decimal? ToQuantity,
+    decimal? WeightToKg = null, decimal? VolumeToM3 = null, decimal? LoadingMetersTo = null,
+    decimal Price = 0m, decimal? PricePerExtraUnit = null,
+    DateOnly? EffectiveFrom = null, DateOnly? EffectiveUntil = null, string? Notes = null);
+
 // --- Service options ---
 
 public record ServiceOptionDto(

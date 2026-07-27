@@ -161,6 +161,40 @@ public class PricingController : ControllerBase
     public async Task<IActionResult> DeleteRule(Guid id, CancellationToken cancellationToken) =>
         await _admin.DeleteRuleAsync(id, cancellationToken) ? NoContent() : NotFound();
 
+    // --- Bracket-row customer overrides ("klantafwijkingen") ---
+
+    [HttpGet("api/pricing/rules/{ruleId:guid}/bracket-overrides")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<PriceRuleBracketOverrideDto>>> ListBracketOverrides(
+        Guid ruleId, [FromQuery] Guid? customerId, CancellationToken cancellationToken)
+    {
+        var overrides = await _admin.ListBracketOverridesAsync(ruleId, customerId, cancellationToken);
+        return overrides is null ? NotFound() : Ok(overrides);
+    }
+
+    [HttpPost("api/pricing/rules/{ruleId:guid}/bracket-overrides")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<PriceRuleBracketOverrideDto>> CreateBracketOverride(
+        Guid ruleId, SavePriceRuleBracketOverrideRequest request, CancellationToken cancellationToken)
+    {
+        var created = await _admin.CreateBracketOverrideAsync(ruleId, request, cancellationToken);
+        return created is null ? NotFound() : Ok(created);
+    }
+
+    [HttpPut("api/pricing/bracket-overrides/{id:guid}")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<PriceRuleBracketOverrideDto>> UpdateBracketOverride(
+        Guid id, SavePriceRuleBracketOverrideRequest request, CancellationToken cancellationToken)
+    {
+        var updated = await _admin.UpdateBracketOverrideAsync(id, request, cancellationToken);
+        return updated is null ? NotFound() : Ok(updated);
+    }
+
+    [HttpDelete("api/pricing/bracket-overrides/{id:guid}")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<IActionResult> DeleteBracketOverride(Guid id, CancellationToken cancellationToken) =>
+        await _admin.DeleteBracketOverrideAsync(id, cancellationToken) ? NoContent() : NotFound();
+
     // --- Service options ---
 
     [HttpGet("api/service-options")]

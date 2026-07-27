@@ -140,6 +140,32 @@ public class PricingEngine : IPricingEngine
             .ToLookup(r => r.AgreementId!.Value);
         var standaloneRules = candidateRules.Where(r => r.AgreementId is null).ToList();
 
+        // Row-level customer overrides ("klantafwijkingen", spec wave 2026-07-27 §2.2): a
+        // customer-specific price for ONE bracket row of a shared/company rule. Loaded once,
+        // date-filtered; only rows of rules that are actually candidates matter. Two overrides
+        // valid on the same date for the same row never silently win — blocking config error.
+        var candidateRuleIds = candidateRules.Select(r => r.Id).ToHashSet();
+        var overrideRows = await _dbContext.PriceRuleBracketOverrides.AsNoTracking()
+            .Where(o => o.TenantId == tenantId && o.CustomerId == request.CustomerId
+                        && (o.EffectiveFrom == null || o.EffectiveFrom <= request.Date)
+                        && (o.EffectiveUntil == null || o.EffectiveUntil >= request.Date))
+            .ToListAsync(cancellationToken);
+        overrideRows.RemoveAll(o => !candidateRuleIds.Contains(o.PriceRuleId));
+        var conflictingOverride = overrideRows
+            .GroupBy(o => new { o.PriceRuleId, o.FromQuantity, o.ToQuantity, o.WeightToKg, o.VolumeToM3, o.LoadingMetersTo })
+            .FirstOrDefault(g => g.Count() > 1);
+        if (conflictingOverride is not null)
+        {
+            var conflictRuleName = candidateRules.First(r => r.Id == conflictingOverride.Key.PriceRuleId).Name;
+            var rowLabel = conflictingOverride.Key.ToQuantity is { } to
+                ? $"{conflictingOverride.Key.FromQuantity:0.##}–{to:0.##}"
+                : $"{conflictingOverride.Key.FromQuantity:0.##}+";
+            configurationError ??= $"Conflicterende klantafwijkingen voor regel '{conflictRuleName}' (staffel {rowLabel}). "
+                + "Corrigeer de klantafwijkingen (geldigheid of rij).";
+            requiresManual = true;
+        }
+        var bracketOverrides = new BracketOverrideSet(overrideRows);
+
         // One candidate per (rule, engaging agreement) pair — the same physical rule can be
         // reachable through more than one applicable agreement (e.g. its own root table AND a
         // derived table assigned to this customer); each engagement scores/attributes separately.
@@ -196,7 +222,9 @@ public class PricingEngine : IPricingEngine
             }
 
             var billable = BillableQuantity(rule, line);
-            var amount = ComputeRuleAmount(rule, billable, request);
+            var appliedBefore = bracketOverrides.AppliedCount;
+            var amount = ComputeRuleAmount(rule, billable, request, bracketOverrides);
+            var usedOverride = bracketOverrides.AppliedCount > appliedBefore;
             if (amount is null)
             {
                 lines.Add(new PriceBreakdownLine($"Geen staffel voor {billable:0.##} × {unitName}", 0m, rule.Name,
@@ -209,7 +237,7 @@ public class PricingEngine : IPricingEngine
             var billableSuffix = billable != line.Quantity ? $" — factureerbaar: {billable:0.##}" : "";
             var unitLine = new PriceBreakdownLine(
                 $"{line.Quantity:0.##} × {unitName}{zoneSuffix}{billableSuffix}",
-                decimal.Round(amount.Value, 2), rule.Name,
+                decimal.Round(amount.Value, 2), usedOverride ? $"{rule.Name} — klantafwijking" : rule.Name,
                 RuleId: rule.Id, RuleName: rule.Name,
                 AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name,
                 ActualQuantity: line.Quantity, BillableQuantity: billable, LineKey: RuleLineKey(rule.Id));
@@ -232,7 +260,7 @@ public class PricingEngine : IPricingEngine
             // its order-level components (base cost, km price, ...).
             foreach (var candidate in orderLevelCandidates.Where(c => c.EngagedAgreement is { } a && engagedAgreements.ContainsKey(a.Id)))
             {
-                AddOrderLevelLine(lines, candidate.Rule, request, candidate.EngagedAgreement);
+                AddOrderLevelLine(lines, candidate.Rule, request, candidate.EngagedAgreement, bracketOverrides);
             }
         }
         else if (orderLevelCandidates.Count > 0)
@@ -262,7 +290,7 @@ public class PricingEngine : IPricingEngine
                 {
                     foreach (var candidate in orderLevelCandidates.Where(c => c.EngagedAgreement?.Id == best[0].Id))
                     {
-                        producedAmount |= AddOrderLevelLine(lines, candidate.Rule, request, candidate.EngagedAgreement);
+                        producedAmount |= AddOrderLevelLine(lines, candidate.Rule, request, candidate.EngagedAgreement, bracketOverrides);
                     }
                 }
             }
@@ -281,7 +309,7 @@ public class PricingEngine : IPricingEngine
                 }
                 else if (candidate is not null)
                 {
-                    producedAmount |= AddOrderLevelLine(lines, candidate.Rule, request, candidate.EngagedAgreement);
+                    producedAmount |= AddOrderLevelLine(lines, candidate.Rule, request, candidate.EngagedAgreement, bracketOverrides);
                 }
             }
 
@@ -897,8 +925,10 @@ public class PricingEngine : IPricingEngine
 
     /// <summary>Returns true when the rule produced an amount line (false = informational skip).</summary>
     private static bool AddOrderLevelLine(
-        List<PriceBreakdownLine> lines, PriceRule rule, PriceCalculationRequest request, PricingAgreement? engagedAgreement)
+        List<PriceBreakdownLine> lines, PriceRule rule, PriceCalculationRequest request, PricingAgreement? engagedAgreement,
+        BracketOverrideSet overrides)
     {
+        var appliedBefore = overrides.AppliedCount;
         var (amount, label, missing) = rule.Basis switch
         {
             PriceRuleBasis.Fixed => (
@@ -912,7 +942,7 @@ public class PricingEngine : IPricingEngine
             PriceRuleBasis.PerTon => request.WeightKg is { } weight
                 ? ((rule.BaseAmount ?? 0m) + (rule.UnitPrice ?? 0m) * (weight / 1000m), $"{rule.Name} ({weight / 1000m:0.##} ton)", null)
                 : (0m, rule.Name, "geen gewicht gekend"),
-            PriceRuleBasis.WeightBracket => request.WeightKg is { } w && BracketAmount(rule, w, request) is { } bracketAmount
+            PriceRuleBasis.WeightBracket => request.WeightKg is { } w && BracketAmount(rule, w, request, overrides) is { } bracketAmount
                 ? ((rule.BaseAmount ?? 0m) + bracketAmount, $"{rule.Name} ({w:0.#} kg)", null)
                 : (0m, rule.Name, "geen gewicht of staffel"),
             PriceRuleBasis.PerLoadingMeter => request.LoadingMeters is { } ldm
@@ -923,7 +953,7 @@ public class PricingEngine : IPricingEngine
                 : (0m, rule.Name, "geen volume gekend"),
             PriceRuleBasis.PerStop => request.StopCount is { } stops
                 ? rule.Brackets.Count > 0
-                    ? BracketAmount(rule, stops, request) is { } stopAmount
+                    ? BracketAmount(rule, stops, request, overrides) is { } stopAmount
                         ? ((rule.BaseAmount ?? 0m) + stopAmount, $"{rule.Name} ({stops} stops)", null)
                         : (0m, rule.Name, "geen staffel voor dit aantal stops")
                     : ((rule.BaseAmount ?? 0m) + (rule.UnitPrice ?? 0m) * stops, $"{rule.Name} ({stops} stops)", null)
@@ -950,7 +980,8 @@ public class PricingEngine : IPricingEngine
             amount = maximum;
         }
 
-        lines.Add(new PriceBreakdownLine(label, decimal.Round(amount, 2),
+        var usedOverride = overrides.AppliedCount > appliedBefore;
+        lines.Add(new PriceBreakdownLine(usedOverride ? $"{label} — klantafwijking" : label, decimal.Round(amount, 2),
             engagedAgreement?.Name ?? rule.Name,
             RuleId: rule.Id, RuleName: rule.Name,
             AgreementId: engagedAgreement?.Id, AgreementName: engagedAgreement?.Name, LineKey: RuleLineKey(rule.Id)));
@@ -1058,7 +1089,8 @@ public class PricingEngine : IPricingEngine
         return billable;
     }
 
-    private static decimal? ComputeRuleAmount(PriceRule rule, decimal billableQuantity, PriceCalculationRequest request)
+    private static decimal? ComputeRuleAmount(
+        PriceRule rule, decimal billableQuantity, PriceCalculationRequest request, BracketOverrideSet overrides)
     {
         // Hourly quantity pipeline (spec §13): round UP to the configured step (per started
         // interval), then apply the minimum billable duration.
@@ -1080,8 +1112,8 @@ public class PricingEngine : IPricingEngine
             PriceRuleBasis.PerUnit or PriceRuleBasis.Hourly =>
                 rule.UnitPrice is { } rate ? rate * billableQuantity : null,
             PriceRuleBasis.Fixed => rule.UnitPrice,
-            PriceRuleBasis.QuantityBracket => BracketAmount(rule, billableQuantity, request),
-            PriceRuleBasis.WeightBracket => request.WeightKg is { } weight ? BracketAmount(rule, weight, request) : null,
+            PriceRuleBasis.QuantityBracket => BracketAmount(rule, billableQuantity, request, overrides),
+            PriceRuleBasis.WeightBracket => request.WeightKg is { } weight ? BracketAmount(rule, weight, request, overrides) : null,
             PriceRuleBasis.PerKm => request.DistanceKm is { } km && rule.UnitPrice is { } kmRate ? kmRate * km : null,
             PriceRuleBasis.PerPallet => request.PalletCount is { } pallets && rule.UnitPrice is { } palletRate ? palletRate * pallets : null,
             PriceRuleBasis.PerTon => request.WeightKg is { } kg && rule.UnitPrice is { } tonRate ? tonRate * (kg / 1000m) : null,
@@ -1130,11 +1162,11 @@ public class PricingEngine : IPricingEngine
             .FirstOrDefault();
     }
 
-    private static decimal? BracketAmount(PriceRule rule, decimal value, PriceCalculationRequest request)
+    private static decimal? BracketAmount(PriceRule rule, decimal value, PriceCalculationRequest request, BracketOverrideSet overrides)
     {
         if (rule.BracketMode == BracketSelectionMode.PerNextUnit)
         {
-            return PerNextUnitBracketAmount(rule, value, request);
+            return PerNextUnitBracketAmount(rule, value, request, overrides);
         }
 
         var bracket = FindMatchingBracket(rule, value, request);
@@ -1143,8 +1175,12 @@ public class PricingEngine : IPricingEngine
             return null;
         }
 
-        var amount = bracket.Price;
-        if (bracket.ToQuantity is null && bracket.PricePerExtraUnit is { } extra && value > bracket.FromQuantity)
+        // Row-level customer override: replaces exactly this row's price; PricePerExtraUnit only
+        // when the override provides one (most overrides change just the base row price).
+        var rowOverride = overrides.Find(rule, bracket);
+        var amount = rowOverride?.Price ?? bracket.Price;
+        var perExtra = rowOverride?.PricePerExtraUnit ?? bracket.PricePerExtraUnit;
+        if (bracket.ToQuantity is null && perExtra is { } extra && value > bracket.FromQuantity)
         {
             amount += extra * (value - bracket.FromQuantity);
         }
@@ -1158,11 +1194,12 @@ public class PricingEngine : IPricingEngine
     /// the fractional remainder billed at the bracket containing ceil(qty). A unit index with no
     /// matching bracket blocks the whole calculation (null → "Geen staffel voor …").
     /// </summary>
-    private static decimal? PerNextUnitBracketAmount(PriceRule rule, decimal quantity, PriceCalculationRequest request)
+    private static decimal? PerNextUnitBracketAmount(PriceRule rule, decimal quantity, PriceCalculationRequest request, BracketOverrideSet overrides)
     {
         var wholeUnits = (int)Math.Floor(quantity);
         var fraction = quantity - wholeUnits;
         var total = 0m;
+        decimal RowPrice(PriceRuleBracket bracket) => overrides.Find(rule, bracket)?.Price ?? bracket.Price;
 
         for (var i = 1; i <= wholeUnits; i++)
         {
@@ -1172,7 +1209,7 @@ public class PricingEngine : IPricingEngine
                 return null;
             }
 
-            total += bracket.Price;
+            total += RowPrice(bracket);
         }
 
         if (fraction > 0)
@@ -1183,10 +1220,46 @@ public class PricingEngine : IPricingEngine
                 return null;
             }
 
-            total += fraction * bracket.Price;
+            total += fraction * RowPrice(bracket);
         }
 
         return total;
+    }
+
+    /// <summary>
+    /// The order customer's date-valid row-level overrides, keyed by rule. Find() only ever
+    /// substitutes on rules that are NOT customer-private (a private rule already IS the
+    /// customer's own price) and counts every hit so callers can attribute "klantafwijking"
+    /// on the produced line. Duplicate rows for one identity were already flagged as a
+    /// blocking configuration error before any computation ran.
+    /// </summary>
+    private sealed class BracketOverrideSet
+    {
+        private readonly ILookup<Guid, PriceRuleBracketOverride> _byRuleId;
+
+        public BracketOverrideSet(IReadOnlyList<PriceRuleBracketOverride> rows)
+            => _byRuleId = rows.ToLookup(o => o.PriceRuleId);
+
+        public int AppliedCount { get; private set; }
+
+        public PriceRuleBracketOverride? Find(PriceRule rule, PriceRuleBracket bracket)
+        {
+            if (rule.CustomerId is not null)
+            {
+                return null;
+            }
+
+            var match = _byRuleId[rule.Id].FirstOrDefault(o =>
+                o.FromQuantity == bracket.FromQuantity && o.ToQuantity == bracket.ToQuantity
+                && o.WeightToKg == bracket.WeightToKg && o.VolumeToM3 == bracket.VolumeToM3
+                && o.LoadingMetersTo == bracket.LoadingMetersTo);
+            if (match is not null)
+            {
+                AppliedCount++;
+            }
+
+            return match;
+        }
     }
 
     private async Task<List<string>> BuildDiagnosticsAsync(

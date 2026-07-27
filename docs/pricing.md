@@ -122,6 +122,28 @@ als de order dat kenmerk kent ÉN binnen de cap valt; tussen matchende rijen win
 per eenheidindex 1..hoeveelheid (bv. "1e stuk €60, 2e €55, 3e €50, 4e en verder €45"); staffels
 moeten aaneensluitend zijn vanaf 1 (`FromQuantity == vorige ToQuantity + 1`).
 
+**Klantafwijkingen per staffelrij (`PriceRuleBracketOverride`):** één klantspecifieke prijs voor
+ÉÉN rij van een gedeelde/bedrijfsbrede staffelregel, zonder de hele tabel te kopiëren. Voorbeeld:
+gedeelde tabel 1/2/3/4+ pallets = €50/€80/€105/€125, klant X wijkt enkel af op rij 3 = €99 → 1, 2
+en 4+ blijven de gedeelde prijzen volgen. Werking:
+
+- De afwijking richt zich op een rij via haar **waarde-identiteit** (`FromQuantity`, `ToQuantity`
+  en de dimensiecaps), niet via het rij-id — regelbewerkingen en Excel-import vervangen rijen
+  integraal, dus id's overleven niet. Een afwijking waarvan de rij niet meer bestaat, is
+  "verweesd": ze wordt niet meer toegepast en het raster toont een waarschuwing.
+- De engine lost eerst de winnende regel + rij op zoals altijd (specificiteit, zone, datum); pas
+  daarna, en enkel wanneer die regel NIET klant-privé is, vervangt een op de orderdatum geldige
+  afwijking van de orderklant de prijs van precies die rij. `PricePerExtraUnit` wordt enkel
+  vervangen als de afwijking er zelf één opgeeft.
+- Twee afwijkingen die op dezelfde datum dezelfde rij claimen zijn een **blokkerende
+  configuratiefout** ("Conflicterende klantafwijkingen…"), nooit een stille keuze; opslaan van
+  overlappende vensters wordt bovendien al door de validatie geweigerd.
+- Beheer: in het regelraster per staffelrij de actie **"Klantafwijking…"** (badge *Klantafwijking*
+  onder de rij, verwijderen herstelt de geërfde prijs); API `GET/POST
+  api/pricing/rules/{ruleId}/bracket-overrides`, `PUT/DELETE api/pricing/bracket-overrides/{id}`.
+- Ordersnapshots blijven onaangeroerd: de afwijking beïnvloedt enkel nieuwe berekeningen; de
+  breakdownregel krijgt bron "… — klantafwijking". Tests: `BracketOverrideTests`.
+
 **Buitenmaat-billable factor:** `OversizeLengthCm`/`OversizeWidthCm`/`OversizeBillableFactor` —
 spec ch. 11: een stuk boven de drempel telt als `OversizeBillableFactor` factureerbare eenheden; de
 fysieke order verandert nooit (zie `PricingEngine.BillableQuantity`).

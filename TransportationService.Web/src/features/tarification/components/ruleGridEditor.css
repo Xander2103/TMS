@@ -48,3 +48,9 @@
   outline: 2px solid var(--danger);
   outline-offset: -1px;
 }
+
+/* Row-level customer overrides (klantafwijkingen) under their bracket row. */
+.rule-grid-override-row td {
+  background: var(--accent-bg);
+  font-style: italic;
+}

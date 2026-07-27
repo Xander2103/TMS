@@ -324,6 +324,50 @@ export interface PriceRuleInput {
   bracketMode?: BracketSelectionMode
 }
 
+// --- Bracket-row customer overrides ("klantafwijkingen") ---
+
+export interface PriceRuleBracketOverride {
+  id: string
+  priceRuleId: string
+  customerId: string
+  customerName: string
+  fromQuantity: number
+  toQuantity: number | null
+  weightToKg: number | null
+  volumeToM3: number | null
+  loadingMetersTo: number | null
+  price: number
+  pricePerExtraUnit: number | null
+  effectiveFrom: string | null
+  effectiveUntil: string | null
+  notes: string | null
+  /** True when the rule no longer has a bracket row with this exact identity. */
+  orphaned: boolean
+}
+
+export interface PriceRuleBracketOverrideInput {
+  customerId: string
+  fromQuantity: number
+  toQuantity: number | null
+  weightToKg?: number | null
+  volumeToM3?: number | null
+  loadingMetersTo?: number | null
+  price: number
+  pricePerExtraUnit?: number | null
+  effectiveFrom?: string | null
+  effectiveUntil?: string | null
+  notes?: string | null
+}
+
+export const listBracketOverrides = (ruleId: string): Promise<PriceRuleBracketOverride[]> =>
+  apiClient.getJson(`/api/pricing/rules/${ruleId}/bracket-overrides`)
+export const createBracketOverride = (
+  ruleId: string,
+  input: PriceRuleBracketOverrideInput,
+): Promise<PriceRuleBracketOverride> => apiClient.postJson(`/api/pricing/rules/${ruleId}/bracket-overrides`, input)
+export const deleteBracketOverride = (id: string): Promise<void> =>
+  apiClient.deleteRequest(`/api/pricing/bracket-overrides/${id}`)
+
 export const listPriceRules = (customerId?: string): Promise<PriceRule[]> =>
   apiClient.getJson(`/api/pricing/rules${customerId ? `?customerId=${customerId}` : ''}`)
 /** Rules belonging to exactly this agreement (used by the rate-table grid editor). */

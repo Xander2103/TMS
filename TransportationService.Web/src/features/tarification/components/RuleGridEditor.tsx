@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../../components/ui/EmptyState'
@@ -6,7 +7,9 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import {
   createPriceRule,
+  deleteBracketOverride,
   deletePriceRule,
+  listBracketOverrides,
   listPriceRulesByAgreement,
   listPricingZones,
   listUnitTypeSettings,
@@ -16,10 +19,12 @@ import {
   type PriceRuleBasis,
   type PriceRuleBracket,
   type PriceRuleBracketInput,
+  type PriceRuleBracketOverride,
   type PriceRuleInput,
   type PricingZone,
   type UnitTypeSettings,
 } from '../api/pricingApi'
+import { BracketOverrideDialog } from './BracketOverrideDialog'
 import './ruleGridEditor.css'
 
 interface RuleGridEditorProps {
@@ -94,6 +99,9 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<PriceRule | null>(null)
   const [bracketDeleteTarget, setBracketDeleteTarget] = useState<{ rule: PriceRule; index: number } | null>(null)
+  const [overridesByRule, setOverridesByRule] = useState<Record<string, PriceRuleBracketOverride[]>>({})
+  const [overrideDialog, setOverrideDialog] = useState<{ rule: PriceRule; bracket: PriceRuleBracket } | null>(null)
+  const [overrideDeleteTarget, setOverrideDeleteTarget] = useState<PriceRuleBracketOverride | null>(null)
 
   const reload = useCallback(() => {
     Promise.all([
@@ -101,11 +109,17 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
       listUnitTypeSettings().catch(() => [] as UnitTypeSettings[]),
       listPricingZones().catch(() => [] as PricingZone[]),
     ])
-      .then(([ruleData, unitData, zoneData]) => {
+      .then(async ([ruleData, unitData, zoneData]) => {
         setRules(ruleData)
         setUnits(unitData)
         setZones(zoneData)
         setLoadError(null)
+        // Row-level customer overrides only exist on shared/company bracket rules.
+        const bracketRules = ruleData.filter((r) => BRACKET_BASES.includes(r.basis) && r.customerId === null)
+        const loaded = await Promise.all(
+          bracketRules.map((r) => listBracketOverrides(r.id).catch(() => [] as PriceRuleBracketOverride[])),
+        )
+        setOverridesByRule(Object.fromEntries(bracketRules.map((r, i) => [r.id, loaded[i]])))
       })
       .catch(() => setLoadError('De prijsregels konden niet worden geladen.'))
   }, [agreementId])
@@ -159,6 +173,32 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
     const { rule, index } = bracketDeleteTarget
     setBracketDeleteTarget(null)
     removeBracket(rule, index)
+  }
+
+  async function handleConfirmRemoveOverride() {
+    if (!overrideDeleteTarget) return
+    const target = overrideDeleteTarget
+    setOverrideDeleteTarget(null)
+    try {
+      await deleteBracketOverride(target.id)
+      showSuccess('Klantafwijking verwijderd — de rij volgt weer de gedeelde prijs.')
+      reload()
+    } catch (err) {
+      showError(describeApiError(err, 'De klantafwijking kon niet worden verwijderd.').message)
+    }
+  }
+
+  /** Active overrides belonging to exactly this bracket row (matched on the row's value identity). */
+  function overridesForBracket(rule: PriceRule, bracket: PriceRuleBracket): PriceRuleBracketOverride[] {
+    return (overridesByRule[rule.id] ?? []).filter(
+      (o) =>
+        !o.orphaned &&
+        o.fromQuantity === bracket.fromQuantity &&
+        o.toQuantity === bracket.toQuantity &&
+        o.weightToKg === bracket.weightToKg &&
+        o.volumeToM3 === bracket.volumeToM3 &&
+        o.loadingMetersTo === bracket.loadingMetersTo,
+    )
   }
 
   async function addRule() {
@@ -497,7 +537,8 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       rule.brackets.map((bracket, index) => (
                         // bracket.id is server-assigned and regenerated on every save; index keeps
                         // the key stable/unique even for a not-yet-persisted or id-less bracket.
-                        <tr key={bracket.id ?? `${rule.id}-bracket-${index}`} className="rule-grid-bracket-row">
+                        <Fragment key={bracket.id ?? `${rule.id}-bracket-${index}`}>
+                        <tr className="rule-grid-bracket-row">
                           <td>↳ Staffel {bracketRangeLabel(bracket)}</td>
                           <td colSpan={4}>—</td>
                           <td>
@@ -596,6 +637,15 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           <td colSpan={2}>—</td>
                           {canManage && (
                             <td className="issued-items-row-actions">
+                              {rule.customerId === null && (
+                                <button
+                                  type="button"
+                                  className="issued-items-link"
+                                  onClick={() => setOverrideDialog({ rule, bracket })}
+                                >
+                                  Klantafwijking…
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 className="issued-items-link issued-items-link-danger"
@@ -606,7 +656,56 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                             </td>
                           )}
                         </tr>
+                        {overridesForBracket(rule, bracket).map((override) => (
+                          <tr key={override.id} className="rule-grid-bracket-row rule-grid-override-row">
+                            <td>
+                              ↳ <Badge tone="info">Klantafwijking</Badge> <span>{override.customerName}</span>
+                            </td>
+                            <td colSpan={4}>—</td>
+                            <td>€ {override.price.toFixed(2)}</td>
+                            <td>{override.pricePerExtraUnit !== null ? `€ ${override.pricePerExtraUnit.toFixed(2)}` : '—'}</td>
+                            <td colSpan={5}>—</td>
+                            <td colSpan={5}>—</td>
+                            <td>{override.effectiveFrom ?? '—'}</td>
+                            <td>{override.effectiveUntil ?? '—'}</td>
+                            {canManage && (
+                              <td className="issued-items-row-actions">
+                                <button
+                                  type="button"
+                                  className="issued-items-link issued-items-link-danger"
+                                  onClick={() => setOverrideDeleteTarget(override)}
+                                >
+                                  Verwijderen
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                        </Fragment>
                       ))}
+                    {expanded &&
+                      (overridesByRule[rule.id] ?? [])
+                        .filter((o) => o.orphaned)
+                        .map((override) => (
+                          <tr key={override.id} className="rule-grid-bracket-row rule-grid-override-row">
+                            <td colSpan={19}>
+                              ⚠ Klantafwijking van {override.customerName} (staffel {override.fromQuantity}–
+                              {override.toQuantity ?? 'open'}) verwijst naar een rij die niet meer bestaat en wordt niet
+                              toegepast.
+                            </td>
+                            {canManage && (
+                              <td className="issued-items-row-actions">
+                                <button
+                                  type="button"
+                                  className="issued-items-link issued-items-link-danger"
+                                  onClick={() => setOverrideDeleteTarget(override)}
+                                >
+                                  Verwijderen
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
                     {expanded && canManage && (
                       <tr className="rule-grid-bracket-row">
                         <td colSpan={20}>
@@ -643,6 +742,29 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
           destructive
           onConfirm={handleConfirmRemoveBracket}
           onCancel={() => setBracketDeleteTarget(null)}
+        />
+      )}
+
+      {overrideDeleteTarget && (
+        <ConfirmDialog
+          title="Klantafwijking verwijderen"
+          message={`Weet je zeker dat je de klantafwijking van ${overrideDeleteTarget.customerName} wilt verwijderen? De rij volgt daarna weer de gedeelde prijs.`}
+          confirmLabel="Verwijderen"
+          destructive
+          onConfirm={() => void handleConfirmRemoveOverride()}
+          onCancel={() => setOverrideDeleteTarget(null)}
+        />
+      )}
+
+      {overrideDialog && (
+        <BracketOverrideDialog
+          rule={overrideDialog.rule}
+          bracket={overrideDialog.bracket}
+          onSaved={() => {
+            setOverrideDialog(null)
+            reload()
+          }}
+          onClose={() => setOverrideDialog(null)}
         />
       )}
     </div>

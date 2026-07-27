@@ -52,6 +52,12 @@ public interface IPricingAdminService
     Task<PriceRuleDto?> UpdateRuleAsync(Guid id, SavePriceRuleRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteRuleAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Row-level customer overrides ("klantafwijkingen") of one bracket rule. Null = rule unknown for this tenant. customerId filters when set.</summary>
+    Task<IReadOnlyList<PriceRuleBracketOverrideDto>?> ListBracketOverridesAsync(Guid ruleId, Guid? customerId, CancellationToken cancellationToken);
+    Task<PriceRuleBracketOverrideDto?> CreateBracketOverrideAsync(Guid ruleId, SavePriceRuleBracketOverrideRequest request, CancellationToken cancellationToken);
+    Task<PriceRuleBracketOverrideDto?> UpdateBracketOverrideAsync(Guid id, SavePriceRuleBracketOverrideRequest request, CancellationToken cancellationToken);
+    Task<bool> DeleteBracketOverrideAsync(Guid id, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<ServiceOptionDto>> ListServiceOptionsAsync(bool includeInactive, bool forOrderEntry, CancellationToken cancellationToken);
     Task<ServiceOptionDto> CreateServiceOptionAsync(SaveServiceOptionRequest request, CancellationToken cancellationToken);
     Task<ServiceOptionDto?> UpdateServiceOptionAsync(Guid id, SaveServiceOptionRequest request, CancellationToken cancellationToken);
@@ -1108,6 +1114,189 @@ public class PricingAdminService : IPricingAdminService
         return true;
     }
 
+    // --- Bracket-row customer overrides ("klantafwijkingen") ---
+
+    public async Task<IReadOnlyList<PriceRuleBracketOverrideDto>?> ListBracketOverridesAsync(
+        Guid ruleId, Guid? customerId, CancellationToken cancellationToken)
+    {
+        var rule = await _dbContext.PriceRules.AsNoTracking().Include(r => r.Brackets)
+            .FirstOrDefaultAsync(r => r.TenantId == TenantId && r.Id == ruleId, cancellationToken);
+        if (rule is null)
+        {
+            return null;
+        }
+
+        var overrides = await _dbContext.PriceRuleBracketOverrides.AsNoTracking()
+            .Where(o => o.TenantId == TenantId && o.PriceRuleId == ruleId
+                        && (customerId == null || o.CustomerId == customerId))
+            .OrderBy(o => o.FromQuantity).ThenBy(o => o.EffectiveFrom)
+            .ToListAsync(cancellationToken);
+        return await MapBracketOverridesAsync(rule, overrides, cancellationToken);
+    }
+
+    public async Task<PriceRuleBracketOverrideDto?> CreateBracketOverrideAsync(
+        Guid ruleId, SavePriceRuleBracketOverrideRequest request, CancellationToken cancellationToken)
+    {
+        var rule = await _dbContext.PriceRules.AsNoTracking().Include(r => r.Brackets)
+            .FirstOrDefaultAsync(r => r.TenantId == TenantId && r.Id == ruleId, cancellationToken);
+        if (rule is null)
+        {
+            return null;
+        }
+
+        await ValidateBracketOverrideAsync(rule, request, existingId: null, cancellationToken);
+        var entity = new PriceRuleBracketOverride { Id = Guid.NewGuid(), TenantId = TenantId, PriceRuleId = ruleId };
+        ApplyBracketOverride(entity, request);
+        _dbContext.PriceRuleBracketOverrides.Add(entity);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PriceRuleBracketOverride", entity.Id.ToString(), "Created", null,
+            new { RuleName = rule.Name, entity.CustomerId, entity.FromQuantity, entity.ToQuantity, entity.Price }, cancellationToken);
+        return (await MapBracketOverridesAsync(rule, [entity], cancellationToken))[0];
+    }
+
+    public async Task<PriceRuleBracketOverrideDto?> UpdateBracketOverrideAsync(
+        Guid id, SavePriceRuleBracketOverrideRequest request, CancellationToken cancellationToken)
+    {
+        var entity = await _dbContext.PriceRuleBracketOverrides
+            .FirstOrDefaultAsync(o => o.TenantId == TenantId && o.Id == id, cancellationToken);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        var rule = await _dbContext.PriceRules.AsNoTracking().Include(r => r.Brackets)
+            .FirstOrDefaultAsync(r => r.TenantId == TenantId && r.Id == entity.PriceRuleId, cancellationToken);
+        if (rule is null)
+        {
+            return null;
+        }
+
+        await ValidateBracketOverrideAsync(rule, request, existingId: id, cancellationToken);
+        var oldValues = new { entity.CustomerId, entity.FromQuantity, entity.ToQuantity, entity.Price, entity.PricePerExtraUnit };
+        ApplyBracketOverride(entity, request);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PriceRuleBracketOverride", entity.Id.ToString(), "Updated", oldValues,
+            new { entity.CustomerId, entity.FromQuantity, entity.ToQuantity, entity.Price, entity.PricePerExtraUnit }, cancellationToken);
+        return (await MapBracketOverridesAsync(rule, [entity], cancellationToken))[0];
+    }
+
+    public async Task<bool> DeleteBracketOverrideAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var entity = await _dbContext.PriceRuleBracketOverrides
+            .FirstOrDefaultAsync(o => o.TenantId == TenantId && o.Id == id, cancellationToken);
+        if (entity is null)
+        {
+            return false;
+        }
+
+        _dbContext.Remove(entity);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("PriceRuleBracketOverride", entity.Id.ToString(), "Deleted",
+            new { entity.CustomerId, entity.FromQuantity, entity.ToQuantity, entity.Price }, null, cancellationToken);
+        return true;
+    }
+
+    private async Task ValidateBracketOverrideAsync(
+        PriceRule rule, SavePriceRuleBracketOverrideRequest request, Guid? existingId, CancellationToken cancellationToken)
+    {
+        if (rule.CustomerId is not null)
+        {
+            throw new DomainValidationException(
+                "Klantafwijkingen zijn enkel mogelijk op algemene of gedeelde tariefregels, niet op klantspecifieke regels.");
+        }
+
+        if (rule.Basis is not (PriceRuleBasis.QuantityBracket or PriceRuleBasis.WeightBracket))
+        {
+            throw new DomainValidationException("Klantafwijkingen zijn enkel mogelijk op staffelregels.");
+        }
+
+        if (!await _dbContext.Customers.AnyAsync(c => c.TenantId == TenantId && c.Id == request.CustomerId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("klant");
+        }
+
+        if (request.Price < 0)
+        {
+            throw new DomainValidationException("price", "De prijs mag niet negatief zijn.");
+        }
+
+        if (request.PricePerExtraUnit is < 0)
+        {
+            throw new DomainValidationException("pricePerExtraUnit", "De prijs per extra eenheid mag niet negatief zijn.");
+        }
+
+        if (request.EffectiveFrom is { } from && request.EffectiveUntil is { } until && until < from)
+        {
+            throw new DomainValidationException("effectiveUntil", "De einddatum ligt vóór de begindatum.");
+        }
+
+        // The override must target an EXISTING bracket row by exact value identity.
+        var rowExists = rule.Brackets.Any(b => BracketRowMatches(b, request));
+        if (!rowExists)
+        {
+            throw new DomainValidationException(
+                "fromQuantity", "Deze staffelrij bestaat niet (meer) in de regel. Kies een bestaande rij.");
+        }
+
+        // No two overrides for the same customer + row with overlapping validity (never let an
+        // ambiguous override silently win).
+        var siblings = await _dbContext.PriceRuleBracketOverrides.AsNoTracking()
+            .Where(o => o.TenantId == TenantId && o.PriceRuleId == rule.Id && o.CustomerId == request.CustomerId
+                        && (existingId == null || o.Id != existingId))
+            .ToListAsync(cancellationToken);
+        var overlapping = siblings.Any(o =>
+            o.FromQuantity == request.FromQuantity && o.ToQuantity == request.ToQuantity
+            && o.WeightToKg == request.WeightToKg && o.VolumeToM3 == request.VolumeToM3
+            && o.LoadingMetersTo == request.LoadingMetersTo
+            && WindowsOverlap(o.EffectiveFrom, o.EffectiveUntil, request.EffectiveFrom, request.EffectiveUntil));
+        if (overlapping)
+        {
+            throw new DomainValidationException(
+                "Er bestaat al een klantafwijking voor deze staffelrij in (een deel van) deze periode.");
+        }
+    }
+
+    private static bool WindowsOverlap(DateOnly? fromA, DateOnly? untilA, DateOnly? fromB, DateOnly? untilB)
+        => (fromA ?? DateOnly.MinValue) <= (untilB ?? DateOnly.MaxValue)
+           && (fromB ?? DateOnly.MinValue) <= (untilA ?? DateOnly.MaxValue);
+
+    private static bool BracketRowMatches(PriceRuleBracket bracket, SavePriceRuleBracketOverrideRequest request)
+        => bracket.FromQuantity == request.FromQuantity && bracket.ToQuantity == request.ToQuantity
+           && bracket.WeightToKg == request.WeightToKg && bracket.VolumeToM3 == request.VolumeToM3
+           && bracket.LoadingMetersTo == request.LoadingMetersTo;
+
+    private static void ApplyBracketOverride(PriceRuleBracketOverride entity, SavePriceRuleBracketOverrideRequest request)
+    {
+        entity.CustomerId = request.CustomerId;
+        entity.FromQuantity = request.FromQuantity;
+        entity.ToQuantity = request.ToQuantity;
+        entity.WeightToKg = request.WeightToKg;
+        entity.VolumeToM3 = request.VolumeToM3;
+        entity.LoadingMetersTo = request.LoadingMetersTo;
+        entity.Price = request.Price;
+        entity.PricePerExtraUnit = request.PricePerExtraUnit;
+        entity.EffectiveFrom = request.EffectiveFrom;
+        entity.EffectiveUntil = request.EffectiveUntil;
+        entity.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
+    }
+
+    private async Task<IReadOnlyList<PriceRuleBracketOverrideDto>> MapBracketOverridesAsync(
+        PriceRule rule, IReadOnlyList<PriceRuleBracketOverride> overrides, CancellationToken cancellationToken)
+    {
+        var customerIds = overrides.Select(o => o.CustomerId).Distinct().ToList();
+        var customerNames = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == TenantId && customerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        return overrides.Select(o => new PriceRuleBracketOverrideDto(
+            o.Id, o.PriceRuleId, o.CustomerId, customerNames.GetValueOrDefault(o.CustomerId, "?"),
+            o.FromQuantity, o.ToQuantity, o.WeightToKg, o.VolumeToM3, o.LoadingMetersTo,
+            o.Price, o.PricePerExtraUnit, o.EffectiveFrom, o.EffectiveUntil, o.Notes,
+            Orphaned: !rule.Brackets.Any(b =>
+                b.FromQuantity == o.FromQuantity && b.ToQuantity == o.ToQuantity
+                && b.WeightToKg == o.WeightToKg && b.VolumeToM3 == o.VolumeToM3
+                && b.LoadingMetersTo == o.LoadingMetersTo))).ToList();
+    }
+
     // --- Service options ---
 
     public async Task<IReadOnlyList<ServiceOptionDto>> ListServiceOptionsAsync(
@@ -1599,7 +1788,7 @@ public class PricingAdminService : IPricingAdminService
         zone.SortOrder = request.SortOrder;
         foreach (var area in request.Areas)
         {
-            zone.Areas.Add(new PricingZoneArea
+            var entity = new PricingZoneArea
             {
                 Id = Guid.NewGuid(),
                 TenantId = TenantId,
@@ -1607,7 +1796,11 @@ public class PricingAdminService : IPricingAdminService
                 CountryCode = area.CountryCode.Trim().ToUpperInvariant(),
                 PostalCodeFrom = area.PostalCodeFrom.Trim(),
                 PostalCodeTo = area.PostalCodeTo.Trim(),
-            });
+            };
+            zone.Areas.Add(entity);
+            // Client-set Guid keys reached via a navigation are otherwise tracked as
+            // existing (Modified) — mark them Added explicitly.
+            _dbContext.Entry(entity).State = Microsoft.EntityFrameworkCore.EntityState.Added;
         }
     }
 
@@ -1813,7 +2006,7 @@ public class PricingAdminService : IPricingAdminService
         rule.OversizeBillableFactor = request.OversizeBillableFactor;
         foreach (var bracket in request.Brackets ?? [])
         {
-            rule.Brackets.Add(new PriceRuleBracket
+            var entity = new PriceRuleBracket
             {
                 Id = Guid.NewGuid(),
                 TenantId = TenantId,
@@ -1825,7 +2018,11 @@ public class PricingAdminService : IPricingAdminService
                 WeightToKg = bracket.WeightToKg,
                 VolumeToM3 = bracket.VolumeToM3,
                 LoadingMetersTo = bracket.LoadingMetersTo,
-            });
+            };
+            rule.Brackets.Add(entity);
+            // Client-set Guid keys reached via a navigation are otherwise tracked as
+            // existing (Modified) — mark them Added explicitly.
+            _dbContext.Entry(entity).State = Microsoft.EntityFrameworkCore.EntityState.Added;
         }
     }
 
