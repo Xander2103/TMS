@@ -142,6 +142,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.ProfitabilityExport,
                 PermissionCodes.LegalEntitiesView,
                 PermissionCodes.LeaveBalancesView,
+                PermissionCodes.AccountingView,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -169,6 +170,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.CustomersImport, PermissionCodes.CustomersOverrideNumber,
                 PermissionCodes.CustomersManageFiscal, PermissionCodes.CustomersManageCommunication,
                 PermissionCodes.CustomersManageSurcharge, PermissionCodes.CustomersManagePo,
+                PermissionCodes.AccountingView, PermissionCodes.AccountingManage,
             ]),
 
         new("hr", "HR",

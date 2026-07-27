@@ -226,6 +226,10 @@ public static class PermissionCodes
     public const string InvoiceAttachmentsView = "invoice_attachments.view";
     public const string InvoiceAttachmentsManage = "invoice_attachments.manage";
 
+    // --- Accounting (ledger accounts + sales-category mappings) ---
+    public const string AccountingView = "accounting.view";
+    public const string AccountingManage = "accounting.manage";
+
     // --- Driver workflow (trip execution) ---
     public const string DriverWorkflowView = "driver_workflow.view";
     public const string DriverWorkflowExecute = "driver_workflow.execute";
@@ -461,6 +465,8 @@ public static class PermissionCodes
         (InvoicesOverrideNumber, "invoices", "override_number", "Factuurnummers handmatig corrigeren"),
         (InvoiceAttachmentsView, "invoice_attachments", "view", "Factuurbijlagen bekijken"),
         (InvoiceAttachmentsManage, "invoice_attachments", "manage", "Factuurbijlagen beheren"),
+        (AccountingView, "accounting", "view", "Boekhouding: grootboekrekeningen en mappings bekijken"),
+        (AccountingManage, "accounting", "manage", "Boekhouding: grootboekrekeningen en verkoopcategorie-mappings beheren"),
         (DriverWorkflowView, "driver_workflow", "view", "Eigen ritten en rituitvoering bekijken"),
         (DriverWorkflowExecute, "driver_workflow", "execute", "Stops registreren tijdens rituitvoering"),
         (ScanningView, "scanning", "view", "Scanhistoriek en scanstatus bekijken"),

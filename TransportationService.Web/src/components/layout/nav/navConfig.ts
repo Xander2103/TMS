@@ -190,6 +190,7 @@ export function getNavModules(): NavModule[] {
         { label: 'Rollen & rechten', to: '/roles', permissions: ['roles.view'] },
         { label: 'Functie → rol', to: '/job-function-mappings', permissions: ['roles.view', 'roles.manage_permissions'] },
         { label: 'Instellingen', to: '/settings', end: true, permissions: ['company_settings.view', 'company_settings.manage'] },
+        { label: 'Boekhouding', to: '/settings/accounting', permissions: ['accounting.view', 'accounting.manage'] },
       ],
     },
     masterDataModule(),

@@ -112,4 +112,17 @@ public class InvoiceLine : AuditableTenantEntity
     public decimal Quantity { get; set; } = 1m;
     public decimal UnitPrice { get; set; }
     public decimal VatRatePercent { get; set; }
+
+    // --- Sales category + ledger snapshot (corrections wave §7.3) ---
+
+    /// <summary>Live categorisation while Draft (system role or manual pick); may be null.</summary>
+    public Guid? SalesCategoryId { get; set; }
+
+    /// <summary>Frozen at Send: the category name at finalization; never re-derived afterwards.</summary>
+    public string? SalesCategoryNameSnapshot { get; set; }
+
+    /// <summary>Frozen at Send from the then-current mapping — later mapping changes never touch this line.</summary>
+    public Guid? LedgerAccountId { get; set; }
+    public string? LedgerAccountNumberSnapshot { get; set; }
+    public string? LedgerAccountNameSnapshot { get; set; }
 }

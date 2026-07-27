@@ -106,8 +106,19 @@ public class InvoiceLineConfiguration : IEntityTypeConfiguration<InvoiceLine>
 
         builder.HasIndex(l => new { l.InvoiceId, l.Sequence });
         builder.HasIndex(l => new { l.TenantId, l.TransportOrderId });
+        builder.HasIndex(l => new { l.TenantId, l.LedgerAccountId });
+
+        builder.Property(l => l.SalesCategoryNameSnapshot).HasMaxLength(200);
+        builder.Property(l => l.LedgerAccountNumberSnapshot).HasMaxLength(30);
+        builder.Property(l => l.LedgerAccountNameSnapshot).HasMaxLength(200);
 
         builder.HasOne<TransportOrder>().WithMany().HasForeignKey(l => l.TransportOrderId).OnDelete(DeleteBehavior.SetNull);
+        // Loose references on purpose: the snapshot strings are the accounting truth; the ids
+        // only support drill-down/usage checks and must never cascade.
+        builder.HasOne<Modules.Accounting.Entities.SalesCategory>().WithMany()
+            .HasForeignKey(l => l.SalesCategoryId).OnDelete(DeleteBehavior.SetNull);
+        builder.HasOne<Modules.Accounting.Entities.LedgerAccount>().WithMany()
+            .HasForeignKey(l => l.LedgerAccountId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasQueryFilter(l => !l.IsDeleted);
     }

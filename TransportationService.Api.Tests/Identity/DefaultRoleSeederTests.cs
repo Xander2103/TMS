@@ -353,10 +353,6 @@ public class DefaultRoleSeederTests
 
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(15, DefaultRoleUpgrades.CurrentVersion);
-        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
-        Assert.Equal(15, state.AppliedVersion);
-
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         var management = roles.Single(r => r.TemplateCode == "management");
         var boekhouding = roles.Single(r => r.TemplateCode == "boekhouding");
@@ -367,6 +363,34 @@ public class DefaultRoleSeederTests
         foreach (var other in others)
         {
             Assert.DoesNotContain(PermissionCodes.TariffsImport, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version16_GrantsAccounting_ToBoekhoudingManageAndManagementViewOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        Assert.Equal(16, DefaultRoleUpgrades.CurrentVersion);
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(16, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var boekhouding = roles.Single(r => r.TemplateCode == "boekhouding");
+        var others = roles.Where(r => r.TemplateCode is not ("management" or "boekhouding")).ToList();
+
+        Assert.Contains(PermissionCodes.AccountingView, await CodesOfAsync(db, boekhouding.Id));
+        Assert.Contains(PermissionCodes.AccountingManage, await CodesOfAsync(db, boekhouding.Id));
+        Assert.Contains(PermissionCodes.AccountingView, await CodesOfAsync(db, management.Id));
+        Assert.DoesNotContain(PermissionCodes.AccountingManage, await CodesOfAsync(db, management.Id));
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.AccountingView, await CodesOfAsync(db, other.Id));
+            Assert.DoesNotContain(PermissionCodes.AccountingManage, await CodesOfAsync(db, other.Id));
         }
     }
 

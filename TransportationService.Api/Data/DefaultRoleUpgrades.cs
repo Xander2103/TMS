@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 15;
+    public const int CurrentVersion = 16;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -335,6 +335,14 @@ public static class DefaultRoleUpgrades
             {
                 ["management"] = [PermissionCodes.TariffsImport],
                 ["boekhouding"] = [PermissionCodes.TariffsImport],
+            }),
+
+        new(16,
+            "Accounting 2026-07-28: tenant ledger accounts and sales-category mappings (Bedrijfsinstellingen → Boekhouding).",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["boekhouding"] = [PermissionCodes.AccountingView, PermissionCodes.AccountingManage],
+                ["management"] = [PermissionCodes.AccountingView],
             }),
     ];
 }
