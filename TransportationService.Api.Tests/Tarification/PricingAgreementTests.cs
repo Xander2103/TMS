@@ -116,6 +116,23 @@ public class PricingAgreementTests
     }
 
     [Fact]
+    public async Task Agreement_WithDuplicateSurchargeNames_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        // Case-insensitive, trimmed: "Duurtoeslag" and " duurtoeslag " collide — two Auto lines
+        // sharing the same LineKey (agreement:{id}:surcharge:{Name}) would otherwise merge
+        // unpredictably on the next recalculation (PricingEngine ~546).
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Admin.CreateAgreementAsync(
+            Agreement(h.CustomerId, surcharges:
+            [
+                new SavePricingAgreementSurchargeRequest("Duurtoeslag", SurchargeKind.Percent, 5m),
+                new SavePricingAgreementSurchargeRequest(" duurtoeslag ", SurchargeKind.Fixed, 12m),
+            ]), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Rule_PersistsAgreementPriorityBaseAmountAndOversize()
     {
         var h = await SeedAsync();

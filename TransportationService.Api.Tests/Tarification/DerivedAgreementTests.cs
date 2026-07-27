@@ -241,6 +241,22 @@ public class DerivedAgreementTests
     }
 
     [Fact]
+    public async Task Modifier_WithForeignOrUnknownZoneId_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var be = await CreateAgreementAsync(h, "Distributie België");
+        await CreatePalletRuleAsync(h, be.Id, 50m);
+
+        // A guessed/stale zone GUID on a modifier is refused, same as on a rule (§1730).
+        await Assert.ThrowsAsync<InvalidTenantReferenceException>(() => h.Admin.CreateAgreementAsync(
+            new SavePricingAgreementRequest(null, "NL Distributie", Today.AddMonths(-2), null, true, null, null, null,
+                IsShared: true, BaseAgreementId: be.Id,
+                Modifiers: [new SavePricingAgreementModifierRequest(1, "Onbekende zone", null, Guid.NewGuid(), 30m, null)]),
+            CancellationToken.None));
+    }
+
+    [Fact]
     public async Task TenantIsolation_BaseAgreementMustBeSameTenant_AndEngineNeverCrossesTenants()
     {
         var h = await SeedAsync();

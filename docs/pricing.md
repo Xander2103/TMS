@@ -339,9 +339,13 @@ nodig zijn.
 **Statussen/gates** — zie §2 (`OrderPricingStatus`) en `TransportOrderService.PricingStatusTransitions`:
 `Draft` ⇄ `Reviewed` ⇄ `Locked`; `Invoiced` enkel bereikbaar via facturatie. `Locked`/`Invoiced`
 weigeren: regelbewerking (`SaveOrderPriceLinesAsync`), herberekenen (`RecalculateOrderPricingAsync`),
-bevestigen (`ConfirmOrderPriceLineAsync`) én elke prijsrelevante orderwijziging bij een gewone save
-(bv. omschakelen naar handmatige override) — een niet-prijsrelevante wijziging (bv. enkel notities)
-blijft wél toegestaan.
+bevestigen (`ConfirmOrderPriceLineAsync`) en, bij een gewone save, een wijziging aan de
+handmatige-override-velden (`PriceIsManual`/`AgreedPrice`/reden), de one-off-velden
+(`PricingSource`, `OneOffFixedAmount`, `OneOffIncludedLoadingMinutes`,
+`OneOffIncludedUnloadingMinutes`, `OneOffIncludedCombinedMinutes`, `OneOffExtraHourlyRate`,
+`OneOffNotes`) of de expliciete dienstselectie (`PricingInputsChangedAsync`). Andere orderwijzigingen
+— aantal, eenheid, stops, gewicht, notities — blijven bij een `Locked`/`Invoiced` prijs gewoon
+toegestaan en gaan gewoon door; de prijs zelf blijft dan bevroren (geen herberekening).
 
 **Merge-op-herberekening (`LineKey`):** elke motorregel draagt een stabiele `LineKey`
 (`rule:{id}`, `agreement:{id}:{discriminator}`, `service:{id}`, `extratime:{loading|unloading|combined}`,
@@ -428,6 +432,13 @@ Eerlijk overgenomen uit de code (geen van deze is "verborgen" — elk is hierond
    `CustomerUnitPricingPanel.tsx` doet `sharedTables.map(a => getAgreementAssignments(a.id))` in
    een `Promise.all` — parallel, maar wel N aparte requests in plaats van één samengestelde
    endpoint. Merkbaar pas bij veel gedeelde tabellen; geen correctheidsprobleem.
+5. **Combinatiekorting-groepen en de geprijsde eenheidsregel tellen vanuit twee verschillende
+   bronnen.** `BuildPricingGroupsAsync` bouwt de combinatiekorting-groepen door per
+   lossing-stop de `CargoItem.ExpectedQuantity` van de gekoppelde vrachtregels op te tellen
+   (`byStop.GroupBy(...).Sum(x => x.Item.ExpectedQuantity)`), terwijl de geprijsde
+   order-eenheidsregel gewoon `order.Quantity` gebruikt (`ApplyPricingAsync`). Lopen deze twee
+   uiteen (vrachtregels die niet optellen tot het order-aantal), dan verdeelt de motor de
+   combinatiekorting over fracties van een ander totaal dan wat effectief gefactureerd wordt.
 
 ## 12. Uitgewerkte voorbeelden
 

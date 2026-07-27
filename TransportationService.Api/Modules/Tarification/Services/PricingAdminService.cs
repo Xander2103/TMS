@@ -756,6 +756,27 @@ public class PricingAdminService : IPricingAdminService
             }
         }
 
+        var modifierZoneIds = (request.Modifiers ?? [])
+            .Where(m => m.ZoneId.HasValue).Select(m => m.ZoneId!.Value).Distinct().ToList();
+        if (modifierZoneIds.Count > 0)
+        {
+            var knownModifierZones = await _dbContext.PricingZones
+                .CountAsync(z => z.TenantId == TenantId && modifierZoneIds.Contains(z.Id), cancellationToken);
+            if (knownModifierZones != modifierZoneIds.Count)
+            {
+                throw new InvalidTenantReferenceException("zone");
+            }
+        }
+
+        var surchargeNames = (request.Surcharges ?? [])
+            .Select(s => s.Name.Trim().ToLowerInvariant())
+            .ToList();
+        if (surchargeNames.Distinct().Count() != surchargeNames.Count)
+        {
+            throw new DomainValidationException("surcharges",
+                "Toeslagen op één tabel moeten een unieke naam hebben.");
+        }
+
         if (request.BaseAgreementId is { } baseAgreementId)
         {
             // A derived table has no rules of its own — reject converting a table that already
@@ -1225,6 +1246,17 @@ public class PricingAdminService : IPricingAdminService
             if (unit.CustomerLabel is { Length: > 150 } || unit.EdiCode is { Length: > 50 } || unit.ExcelCode is { Length: > 50 })
             {
                 throw new DomainValidationException("units", "Klantbenaming of externe code is te lang.");
+            }
+        }
+
+        var optionIds = request.OptionPrices.Select(p => p.ServiceOptionId).Distinct().ToList();
+        if (optionIds.Count > 0)
+        {
+            var knownOptions = await _dbContext.ServiceOptions
+                .CountAsync(o => o.TenantId == TenantId && optionIds.Contains(o.Id), cancellationToken);
+            if (knownOptions != optionIds.Count)
+            {
+                throw new DomainValidationException("optionPrices", "Eén of meer diensten bestaan niet.");
             }
         }
 

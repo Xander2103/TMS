@@ -1,3 +1,4 @@
+using TransportationService.Api.Common;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Partners.Entities;
@@ -177,6 +178,16 @@ public class CustomerServiceOverrideTests
         }, CancellationToken.None);
         Assert.Equal(70m, withoutQuantity.Total);
         Assert.Contains(withoutQuantity.Lines, l => l.Label.Contains("geef het aantal uur op") && l.Informational);
+    }
+
+    [Fact]
+    public async Task SaveCustomerConfigAsync_WithUnknownServiceOptionId_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        await Assert.ThrowsAsync<DomainValidationException>(() => h.Admin.SaveCustomerConfigAsync(
+            h.CustomerId, ConfigWith(new SaveCustomerOptionPriceRequest(Guid.NewGuid(), 10m)), CancellationToken.None));
     }
 
     [Fact]

@@ -194,6 +194,70 @@ public class InvoiceServiceTests
         Assert.Single(uninvoiced);
     }
 
+    /// <summary>
+    /// Invoiced has no outgoing transitions in the pricing status lifecycle (spec ch. 24-26) — a
+    /// cancelled invoice must give the order's price a way out, or it can never be corrected again.
+    /// </summary>
+    [Fact]
+    public async Task Cancel_ReleasesPricingSnapshot_ToLocked()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var snapshotId = Guid.NewGuid();
+        h.Db.Context.TransportOrderPricingSnapshots.Add(new TransportationService.Api.Modules.Orders.Entities.TransportOrderPricingSnapshot
+        {
+            Id = snapshotId, TenantId = h.TenantId, TransportOrderId = h.OrderId,
+            TariffDate = new DateOnly(2026, 7, 10), Currency = "EUR",
+            Status = TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Locked,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var invoice = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+        Assert.Equal(
+            TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Invoiced,
+            (await h.Db.Context.TransportOrderPricingSnapshots.FindAsync(snapshotId))!.Status);
+
+        await h.Sut.ChangeStatusAsync(invoice.Invoice!.Id, InvoiceStatus.Cancelled, CancellationToken.None);
+
+        Assert.Equal(
+            TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Locked,
+            (await h.Db.Context.TransportOrderPricingSnapshots.FindAsync(snapshotId))!.Status);
+
+        // Re-invoicing the now-uninvoiced order sets the snapshot back to Invoiced.
+        var reinvoiced = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, reinvoiced.Outcome);
+        Assert.Equal(
+            TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Invoiced,
+            (await h.Db.Context.TransportOrderPricingSnapshots.FindAsync(snapshotId))!.Status);
+    }
+
+    /// <summary>Deleting a (never-sent) Draft invoice must release the order's pricing exactly like a cancel.</summary>
+    [Fact]
+    public async Task Delete_DraftInvoice_ReleasesPricingSnapshot_ToLocked()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var snapshotId = Guid.NewGuid();
+        h.Db.Context.TransportOrderPricingSnapshots.Add(new TransportationService.Api.Modules.Orders.Entities.TransportOrderPricingSnapshot
+        {
+            Id = snapshotId, TenantId = h.TenantId, TransportOrderId = h.OrderId,
+            TariffDate = new DateOnly(2026, 7, 10), Currency = "EUR",
+            Status = TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Locked,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var invoice = await h.Sut.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null), CancellationToken.None);
+
+        var deleted = await h.Sut.DeleteAsync(invoice.Invoice!.Id, CancellationToken.None);
+
+        Assert.Equal(InvoiceOperationOutcome.Success, deleted.Outcome);
+        Assert.Equal(TransportOrderStatus.Completed, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
+        Assert.Equal(
+            TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Locked,
+            (await h.Db.Context.TransportOrderPricingSnapshots.FindAsync(snapshotId))!.Status);
+    }
+
     [Fact]
     public async Task StatusFlow_DraftSentPaid_LocksEditing()
     {
@@ -219,6 +283,14 @@ public class InvoiceServiceTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
+        var snapshotId = Guid.NewGuid();
+        h.Db.Context.TransportOrderPricingSnapshots.Add(new TransportationService.Api.Modules.Orders.Entities.TransportOrderPricingSnapshot
+        {
+            Id = snapshotId, TenantId = h.TenantId, TransportOrderId = h.OrderId,
+            TariffDate = new DateOnly(2026, 7, 10), Currency = "EUR",
+            Status = TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Locked,
+        });
+        await h.Db.Context.SaveChangesAsync();
         var invoice = await h.Sut.CreateAsync(new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId],
             [new ManualInvoiceLineInput("Toeslag", 1m, 50m, 21m)], null), CancellationToken.None);
         var manualLine = invoice.Invoice!.Lines.Single(l => l.TransportOrderId is null);
@@ -231,6 +303,10 @@ public class InvoiceServiceTests
         Assert.Equal(InvoiceOperationOutcome.Success, updated.Outcome);
         Assert.Single(updated.Invoice!.Lines);
         Assert.Equal(TransportOrderStatus.Completed, (await h.Db.Context.TransportOrders.FindAsync(h.OrderId))!.Status);
+        // The order's pricing must also be given a way out of the terminal Invoiced state.
+        Assert.Equal(
+            TransportationService.Api.Modules.Orders.Entities.OrderPricingStatus.Locked,
+            (await h.Db.Context.TransportOrderPricingSnapshots.FindAsync(snapshotId))!.Status);
     }
 
     [Fact]

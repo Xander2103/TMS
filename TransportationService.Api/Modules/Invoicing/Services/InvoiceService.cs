@@ -483,6 +483,9 @@ public class InvoiceService : IInvoiceService
             {
                 order.Status = TransportOrderStatus.Completed;
             }
+
+            await ReleasePricingSnapshotsAsync(
+                releasedOrders.Select(o => o.Id).ToList(), cancellationToken);
         }
 
         var removed = existingById.Values.Where(l => !keptIds.Contains(l.Id)).ToList();
@@ -777,6 +780,31 @@ public class InvoiceService : IInvoiceService
         foreach (var order in orders)
         {
             order.Status = TransportOrderStatus.Completed;
+        }
+
+        await ReleasePricingSnapshotsAsync(orders.Select(o => o.Id).ToList(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Mirrors an order-status release (Invoiced → Completed) on its pricing snapshot: an
+    /// invoice cancellation/delete/line-drop must give the price back a way out of the
+    /// terminal Invoiced state, or it can never be corrected (spec ch. 24-26). No-op when an
+    /// order carries no snapshot, or its snapshot isn't Invoiced (e.g. was never priced).
+    /// </summary>
+    private async Task ReleasePricingSnapshotsAsync(IReadOnlyList<Guid> orderIds, CancellationToken cancellationToken)
+    {
+        if (orderIds.Count == 0)
+        {
+            return;
+        }
+
+        var snapshots = await _dbContext.TransportOrderPricingSnapshots
+            .Where(s => s.TenantId == _tenantContext.TenantId && orderIds.Contains(s.TransportOrderId)
+                        && s.Status == Modules.Orders.Entities.OrderPricingStatus.Invoiced)
+            .ToListAsync(cancellationToken);
+        foreach (var snapshot in snapshots)
+        {
+            snapshot.Status = Modules.Orders.Entities.OrderPricingStatus.Locked;
         }
     }
 
