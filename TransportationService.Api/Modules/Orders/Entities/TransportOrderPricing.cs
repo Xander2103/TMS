@@ -55,8 +55,12 @@ public class TransportOrderPricingLine : AuditableTenantEntity
 
     /// <summary>
     /// An unconfirmed extra-time charge (spec Phase 6): excluded from AgreedPrice/CalculatedPrice,
-    /// shown separately as a proposal until confirmed. Kept in sync with <see cref="Kind"/> ==
-    /// Proposed for Phase 6 DTO consumers; the Kind enum is the source of truth going forward.
+    /// shown separately as a proposal until confirmed. DUPLICATES <see cref="Kind"/> == Proposed —
+    /// kept only for Phase 6 DTO/consumer compatibility. <see cref="Kind"/> is the single
+    /// authoritative source of truth (see <c>OrderPriceLineKind</c>); this flag is always derived
+    /// from it and must equal exactly (Kind == Proposed). Every write path that changes Kind uses
+    /// TransportOrderService.SetKind (or otherwise updates this flag in the same assignment) so the
+    /// two never drift — never set this independently of Kind.
     /// </summary>
     public bool Proposed { get; set; }
 

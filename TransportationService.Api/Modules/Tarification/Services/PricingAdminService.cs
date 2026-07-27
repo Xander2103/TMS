@@ -24,6 +24,14 @@ public interface IPricingAdminService
     Task<PricingAgreementDto?> DuplicateAgreementAsync(Guid id, DuplicateAgreementRequest request, CancellationToken cancellationToken);
 
     /// <summary>
+    /// "Controle": configuration-health checks for one agreement (overlapping rule windows, staffel
+    /// gaps, derivation-chain health, orphaned/mismatched assignments, inactive unit/zone
+    /// references, drifted min/max data, ...). Null = the agreement does not exist for this tenant.
+    /// Never throws for a "bad" configuration — every finding is reported, not blocked.
+    /// </summary>
+    Task<IReadOnlyList<PricingConfigCheckDto>?> ValidateAgreementConfigurationAsync(Guid agreementId, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Same duplication as <see cref="DuplicateAgreementAsync"/>, but prepares the copy WITHOUT
     /// saving or auditing — used by the Excel import "new version" mode, which must apply the
     /// file's changes to the copy's rules and persist everything (duplicate + import) in one
@@ -254,6 +262,222 @@ public class PricingAdminService : IPricingAdminService
             new { SourceAgreementId = id, newAgreement.Name, newAgreement.EffectiveFrom, request.CloseSource, RuleCount = ruleIdMap.Count },
             cancellationToken);
         return (await MapAgreementsAsync([newAgreement], cancellationToken))[0];
+    }
+
+    /// <summary>
+    /// "Controle": reports configuration-health findings for one agreement without ever throwing —
+    /// every problem (from a blocking overlap to a merely dead configuration) is a line in the
+    /// returned list, tenant-filtered throughout. See <see cref="IPricingAdminService.ValidateAgreementConfigurationAsync"/>.
+    /// </summary>
+    public async Task<IReadOnlyList<PricingConfigCheckDto>?> ValidateAgreementConfigurationAsync(
+        Guid agreementId, CancellationToken cancellationToken)
+    {
+        var tenantId = TenantId;
+        var agreement = await _dbContext.PricingAgreements.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.TenantId == tenantId && a.Id == agreementId, cancellationToken);
+        if (agreement is null)
+        {
+            return null;
+        }
+
+        var checks = new List<PricingConfigCheckDto>();
+
+        // Agreement MinimumAmount > MaximumAmount — re-check of save-time validation, since data
+        // can drift (e.g. a base table's max lowered after this agreement's min was already saved).
+        if (agreement.MinimumAmount is { } minAmount && agreement.MaximumAmount is { } maxAmount && minAmount > maxAmount)
+        {
+            checks.Add(new PricingConfigCheckDto("error",
+                $"Het minimumbedrag ({minAmount:0.00}) is hoger dan het maximumbedrag ({maxAmount:0.00})."));
+        }
+
+        // Derived-chain health: base inactive/window mismatch (warning), cycle/depth drift (error).
+        if (agreement.BaseAgreementId is { } baseId)
+        {
+            var baseAgreement = await _dbContext.PricingAgreements.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.TenantId == tenantId && a.Id == baseId, cancellationToken);
+            if (baseAgreement is null)
+            {
+                checks.Add(new PricingConfigCheckDto("warning", "De basistabel van deze afgeleide tabel bestaat niet meer."));
+            }
+            else
+            {
+                if (!baseAgreement.IsActive)
+                {
+                    checks.Add(new PricingConfigCheckDto("warning", $"Basistabel '{baseAgreement.Name}' is niet actief."));
+                }
+
+                var baseCoversWindow = baseAgreement.EffectiveFrom <= agreement.EffectiveFrom
+                    && (baseAgreement.EffectiveUntil is null
+                        || (agreement.EffectiveUntil is not null && baseAgreement.EffectiveUntil >= agreement.EffectiveUntil));
+                if (!baseCoversWindow)
+                {
+                    checks.Add(new PricingConfigCheckDto("warning",
+                        $"Basistabel '{baseAgreement.Name}' dekt de geldigheidsperiode van deze tabel niet volledig."));
+                }
+            }
+
+            // Should be impossible via save-time validation (ValidateDerivationChainAsync) — report
+            // if the data drifted (e.g. a chain rewired directly, bypassing normal saves).
+            var (cycle, tooDeep) = await CheckBaseChainAsync(agreementId, baseId, cancellationToken);
+            if (cycle)
+            {
+                checks.Add(new PricingConfigCheckDto("error", "Circulaire verwijzing tussen tarieventabellen."));
+            }
+            else if (tooDeep)
+            {
+                checks.Add(new PricingConfigCheckDto("error", "Maximale afleidingsdiepte (3) overschreden."));
+            }
+        }
+
+        var assignments = await _dbContext.PricingAgreementAssignments.AsNoTracking()
+            .Where(a => a.TenantId == tenantId && a.AgreementId == agreementId)
+            .ToListAsync(cancellationToken);
+        if (agreement.IsShared && assignments.Count == 0)
+        {
+            checks.Add(new PricingConfigCheckDto("warning", "Deze gedeelde tabel is aan geen enkele klant gekoppeld."));
+        }
+
+        if (assignments.Count > 0)
+        {
+            var customerIds = assignments.Select(a => a.CustomerId).Distinct().ToList();
+            var customerNames = await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && customerIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+            var agreementFrom = agreement.EffectiveFrom;
+            var agreementTo = agreement.EffectiveUntil ?? DateOnly.MaxValue;
+            foreach (var assignment in assignments)
+            {
+                var assignmentFrom = assignment.EffectiveFrom ?? DateOnly.MinValue;
+                var assignmentTo = assignment.EffectiveUntil ?? DateOnly.MaxValue;
+                var overlaps = assignmentFrom <= agreementTo && agreementFrom <= assignmentTo;
+                if (!overlaps)
+                {
+                    var customerName = customerNames.GetValueOrDefault(assignment.CustomerId, "?");
+                    checks.Add(new PricingConfigCheckDto("warning",
+                        $"De klantkoppeling met '{customerName}' valt buiten de geldigheidsperiode van deze tabel."));
+                }
+            }
+        }
+
+        // Rules physically owned by this agreement — a derived table has none of its own (it
+        // reuses its base-chain root's rules, checked there instead).
+        var rules = await _dbContext.PriceRules.AsNoTracking().Include(r => r.Brackets)
+            .Where(r => r.TenantId == tenantId && r.AgreementId == agreementId)
+            .ToListAsync(cancellationToken);
+
+        if (rules.Count > 0)
+        {
+            var unitIds = rules.Where(r => r.UnitTypeId is not null).Select(r => r.UnitTypeId!.Value).Distinct().ToList();
+            var zoneIds = rules.Where(r => r.ZoneId is not null).Select(r => r.ZoneId!.Value).Distinct().ToList();
+            var units = await _dbContext.UnitTypes.AsNoTracking()
+                .Where(u => u.TenantId == tenantId && unitIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, cancellationToken);
+            var zones = await _dbContext.PricingZones.AsNoTracking()
+                .Where(z => z.TenantId == tenantId && zoneIds.Contains(z.Id))
+                .ToDictionaryAsync(z => z.Id, cancellationToken);
+
+            foreach (var rule in rules)
+            {
+                if (rule.UnitTypeId is { } unitId && units.TryGetValue(unitId, out var unit) && !unit.IsActive)
+                {
+                    checks.Add(new PricingConfigCheckDto("warning", $"Regel '{rule.Name}' gebruikt de inactieve eenheid '{unit.Name}'."));
+                }
+
+                if (rule.ZoneId is { } zoneId && zones.TryGetValue(zoneId, out var zone) && !zone.IsActive)
+                {
+                    checks.Add(new PricingConfigCheckDto("warning", $"Regel '{rule.Name}' gebruikt de inactieve zone '{zone.Name}'."));
+                }
+            }
+
+            // Overlapping effective windows of two rules with identical specificity — an exact tie
+            // the pricing engine itself would refuse to resolve (SelectRule blocks on this).
+            foreach (var group in rules.GroupBy(r => (r.UnitTypeId, r.ZoneId, r.Basis, r.CustomerId, r.Priority)))
+            {
+                var candidates = group.ToList();
+                for (var i = 0; i < candidates.Count; i++)
+                {
+                    for (var j = i + 1; j < candidates.Count; j++)
+                    {
+                        if (RuleWindowsOverlap(candidates[i], candidates[j]))
+                        {
+                            checks.Add(new PricingConfigCheckDto("error",
+                                $"Regels '{candidates[i].Name}' en '{candidates[j].Name}' overlappen in geldigheid met gelijke "
+                                + "specificiteit — dit blokkeert prijsberekening in die periode."));
+                        }
+                    }
+                }
+            }
+
+            // Staffel gaps + brackets not starting at 0/1 (informational — the engine simply
+            // returns "geen staffel" for a quantity that falls in a gap, never crashes).
+            foreach (var rule in rules.Where(r => r.Basis is PriceRuleBasis.QuantityBracket or PriceRuleBasis.WeightBracket))
+            {
+                var ordered = rule.Brackets.OrderBy(b => b.FromQuantity).ToList();
+                if (ordered.Count == 0)
+                {
+                    continue;
+                }
+
+                if (ordered[0].FromQuantity != 0 && ordered[0].FromQuantity != 1)
+                {
+                    checks.Add(new PricingConfigCheckDto("warning",
+                        $"Staffel '{rule.Name}' begint niet bij 0 of 1 (begint bij {ordered[0].FromQuantity:0.##})."));
+                }
+
+                for (var i = 1; i < ordered.Count; i++)
+                {
+                    if (ordered[i - 1].ToQuantity is { } previousTo && ordered[i].FromQuantity > previousTo + 1)
+                    {
+                        checks.Add(new PricingConfigCheckDto("warning",
+                            $"Staffel '{rule.Name}' heeft een gat tussen {previousTo:0.##} en {ordered[i].FromQuantity:0.##}."));
+                    }
+                }
+            }
+        }
+
+        return checks;
+    }
+
+    /// <summary>Null-open windows treated as -/+ infinity; overlap = the two windows intersect.</summary>
+    private static bool RuleWindowsOverlap(PriceRule a, PriceRule b)
+    {
+        var aTo = a.EffectiveUntil ?? DateOnly.MaxValue;
+        var bTo = b.EffectiveUntil ?? DateOnly.MaxValue;
+        return a.EffectiveFrom <= bTo && b.EffectiveFrom <= aTo;
+    }
+
+    /// <summary>
+    /// Non-throwing counterpart of <see cref="ValidateDerivationChainAsync"/>, for the "Controle"
+    /// endpoint: walks the base-chain from <paramref name="baseAgreementId"/> upward (max 3 hops),
+    /// reporting a cycle or excessive depth instead of throwing — this data should never exist
+    /// (save-time validation prevents it) but is reported if it drifted in some other way.
+    /// </summary>
+    private async Task<(bool Cycle, bool TooDeep)> CheckBaseChainAsync(
+        Guid agreementId, Guid baseAgreementId, CancellationToken cancellationToken)
+    {
+        var visited = new HashSet<Guid> { agreementId };
+        Guid? current = baseAgreementId;
+        var hops = 0;
+        while (current is not null)
+        {
+            if (!visited.Add(current.Value))
+            {
+                return (true, false);
+            }
+
+            hops++;
+            if (hops > 3)
+            {
+                return (false, true);
+            }
+
+            current = await _dbContext.PricingAgreements.AsNoTracking()
+                .Where(a => a.TenantId == TenantId && a.Id == current.Value)
+                .Select(a => (Guid?)a.BaseAgreementId)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        return (false, false);
     }
 
     public async Task<(PricingAgreement NewAgreement, IReadOnlyDictionary<Guid, Guid> RuleIdMap)?> PrepareAgreementDuplicateAsync(

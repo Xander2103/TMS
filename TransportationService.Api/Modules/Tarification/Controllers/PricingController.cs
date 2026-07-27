@@ -105,6 +105,16 @@ public class PricingController : ControllerBase
         return duplicated is null ? NotFound() : Ok(duplicated);
     }
 
+    /// <summary>"Controle": configuration-health checks for one agreement (never blocks; every finding is reported).</summary>
+    [HttpGet("api/pricing/agreements/{id:guid}/validate")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<PricingConfigCheckDto>>> ValidateAgreementConfiguration(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var checks = await _admin.ValidateAgreementConfigurationAsync(id, cancellationToken);
+        return checks is null ? NotFound() : Ok(checks);
+    }
+
     // --- Pricing agreement assignments (shared tables → customers) ---
 
     [HttpGet("api/pricing/agreements/{id:guid}/assignments")]

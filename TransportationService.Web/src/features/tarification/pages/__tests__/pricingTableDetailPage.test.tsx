@@ -15,6 +15,7 @@ vi.mock('../../../../components/ui/toastContext', () => ({
 
 // Every sub-panel is stubbed — this test only exercises the header actions' permission gating.
 vi.mock('../../components/RuleGridEditor', () => ({ RuleGridEditor: () => <div>rules</div> }))
+vi.mock('../../components/AgreementValidationPanel', () => ({ AgreementValidationPanel: () => <div>validation</div> }))
 vi.mock('../../components/AgreementAssignmentsPanel', () => ({ AgreementAssignmentsPanel: () => <div>assignments</div> }))
 vi.mock('../../components/AgreementDerivationPanel', () => ({ AgreementDerivationPanel: () => <div>derivation</div> }))
 vi.mock('../../components/AgreementSurchargesPanel', () => ({ AgreementSurchargesPanel: () => <div>surcharges</div> }))
@@ -117,5 +118,13 @@ describe('PricingTableDetailPage — export/import header actions', () => {
     renderPage()
 
     expect(screen.getByText('Je hebt geen rechten om tarieventabellen te bekijken.')).toBeInTheDocument()
+  })
+
+  it('allows the page with only tariffs.import (no tariffs.view/manage) so the granted feature is reachable', async () => {
+    auth.permissions = new Set(['tariffs.import'])
+    renderPage()
+
+    expect(screen.queryByText('Je hebt geen rechten om tarieventabellen te bekijken.')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Importeren' })).toBeInTheDocument()
   })
 })

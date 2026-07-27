@@ -149,6 +149,16 @@ export interface DuplicateAgreementInput {
 export const duplicateAgreement = (agreementId: string, input: DuplicateAgreementInput): Promise<PricingAgreement> =>
   apiClient.postJson(`/api/pricing/agreements/${agreementId}/duplicate`, input)
 
+// --- Agreement configuration validation ("Controle") ---
+
+export interface PricingConfigCheck {
+  severity: 'error' | 'warning'
+  message: string
+}
+
+export const validateAgreementConfiguration = (agreementId: string): Promise<PricingConfigCheck[]> =>
+  apiClient.getJson(`/api/pricing/agreements/${agreementId}/validate`)
+
 // --- Pricing agreement assignments (shared tables → customers) ---
 
 export interface PricingAssignment {

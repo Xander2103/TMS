@@ -436,7 +436,7 @@ public class TransportOrderService : ITransportOrderService
         order.OneOffIncludedLoadingMinutes = includedLoadingMinutes;
         order.OneOffIncludedUnloadingMinutes = includedUnloadingMinutes;
         order.OneOffIncludedCombinedMinutes = includedCombinedMinutes;
-        order.OneOffExtraHourlyRate = extraHourlyRate is < 0 ? 0 : extraHourlyRate;
+        order.OneOffExtraHourlyRate = NonNegative(extraHourlyRate);
         order.OneOffNotes = Trim(notes);
     }
 
@@ -1228,6 +1228,11 @@ public class TransportOrderService : ITransportOrderService
                 matchedAdjusted.OriginalQuantity = line.BillableQuantity ?? line.ActualQuantity;
                 matchedAdjusted.OriginalUnitPrice = DeriveUnitPrice(line.LineKey, line.Amount, line.BillableQuantity);
                 matchedAdjusted.OriginalAmount = decimal.Round(line.Amount, 2);
+                // Invariant (Kind is authoritative, Proposed is derived — see the entity doc
+                // comment): an AutoAdjusted line is never Proposed, even if it started life as one
+                // (see SetKind — a Proposed line adjusted via the adjust endpoint becomes AutoAdjusted
+                // and Proposed is cleared there too). Re-asserted here defensively on every merge.
+                matchedAdjusted.Proposed = false;
                 mergedLines.Add(matchedAdjusted);
                 continue;
             }
@@ -1251,7 +1256,7 @@ public class TransportOrderService : ITransportOrderService
         // silently disappears — keep the row, convert it to a free Manual line.
         foreach (var orphan in autoAdjustedLines.Where(a => !consumedAdjustedIds.Contains(a.Id)))
         {
-            orphan.Kind = OrderPriceLineKind.Manual;
+            SetKind(orphan, OrderPriceLineKind.Manual);
             orphan.Sequence = sequence++;
             mergedLines.Add(orphan);
         }
@@ -1622,7 +1627,7 @@ public class TransportOrderService : ITransportOrderService
                 }
 
                 CaptureOriginalIfFirstAdjustment(existing);
-                existing.Kind = OrderPriceLineKind.AutoAdjusted;
+                SetKind(existing, OrderPriceLineKind.AutoAdjusted);
                 existing.Amount = 0m;
                 existing.AdjustReason = request.AdjustReason.Trim();
                 existing.AdjustedByUserId = _currentUser?.CurrentUserId;
@@ -1641,7 +1646,7 @@ public class TransportOrderService : ITransportOrderService
             if (existing.Kind != OrderPriceLineKind.Manual)
             {
                 CaptureOriginalIfFirstAdjustment(existing);
-                existing.Kind = OrderPriceLineKind.AutoAdjusted;
+                SetKind(existing, OrderPriceLineKind.AutoAdjusted);
             }
 
             var effectiveQuantity = request.Quantity ?? existing.Quantity;
@@ -1690,6 +1695,18 @@ public class TransportOrderService : ITransportOrderService
             line.OriginalUnitPrice = line.UnitPrice;
             line.OriginalAmount = line.Amount;
         }
+    }
+
+    /// <summary>
+    /// Sets the manual-editing lifecycle Kind (spec ch. 24-26, the single source of truth) and
+    /// keeps the legacy <see cref="TransportOrderPricingLine.Proposed"/> DTO-compat flag in
+    /// lockstep — Proposed must always equal exactly (Kind == Proposed), never drift independently
+    /// (e.g. a Proposed line manually adjusted here becomes AutoAdjusted and is no longer Proposed).
+    /// </summary>
+    private static void SetKind(TransportOrderPricingLine line, OrderPriceLineKind kind)
+    {
+        line.Kind = kind;
+        line.Proposed = kind == OrderPriceLineKind.Proposed;
     }
 
     /// <summary>Explicit re-run of the pricing engine (merge-on-recalc). Blocked while Locked/Invoiced.</summary>
@@ -1819,8 +1836,7 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid("Alleen een voorstel kan worden bevestigd.");
         }
 
-        line.Kind = OrderPriceLineKind.Auto;
-        line.Proposed = false;
+        SetKind(line, OrderPriceLineKind.Auto);
 
         await RecomputeLinesTotalAndAgreedPriceAsync(order, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);

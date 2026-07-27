@@ -554,7 +554,10 @@ public class PricingExcelService : IPricingExcelService
     /// <summary>One raw row's cell values, already type-converted where parsing succeeded.</summary>
     private sealed record RawRow(
         int RowNumber, Guid? RegelId, string Name, PriceRuleBasis? Basis, string? UnitCode, string? ZoneCode,
-        int Priority, decimal? StaffelVan, decimal? StaffelTot, decimal? GewichtTot, decimal? VolumeTot,
+        int Priority,
+        /// <summary>The Prioriteit cell's raw parsed value BEFORE defaulting to 0 — null = the cell was empty.</summary>
+        decimal? PriorityRaw,
+        decimal? StaffelVan, decimal? StaffelTot, decimal? GewichtTot, decimal? VolumeTot,
         decimal? LaadmeterTot, decimal? Staffelprijs, decimal? PrijsPerExtra, decimal? Eenheidsprijs,
         decimal? Basisbedrag, decimal? Minimum, decimal? Maximum, decimal? MinAantal, decimal? Afrondingsstap,
         BracketSelectionMode Staffelmodus, DateOnly? GeldigVan, DateOnly? GeldigTot);
@@ -606,6 +609,7 @@ public class PricingExcelService : IPricingExcelService
         var existingRules = await _dbContext.PriceRules.Include(r => r.Brackets)
             .Where(r => r.TenantId == TenantId && r.AgreementId == agreementId)
             .ToListAsync(cancellationToken);
+        var existingById = existingRules.ToDictionary(r => r.Id);
         var (unitCodes, zoneCodes, unitIdsByCode, zoneIdsByCode) = await LoadCodesAsync(cancellationToken);
 
         var errors = new List<(int Row, string Message)>();
@@ -704,7 +708,7 @@ public class PricingExcelService : IPricingExcelService
 
             rawRows.Add(new RawRow(
                 rowNumber, regelId, name, basis, unitCode, zoneCode,
-                (int)Math.Round(priorityValue ?? 0, 0, MidpointRounding.AwayFromZero),
+                (int)Math.Round(priorityValue ?? 0, 0, MidpointRounding.AwayFromZero), priorityValue,
                 staffelVan, staffelTot, gewichtTot, volumeTot, laadmeterTot,
                 staffelprijs, prijsPerExtra, eenheidsprijs, basisbedrag,
                 minimum, maximum, minAantal, afrondingsstap, staffelmodus, geldigVan, geldigTot));
@@ -755,6 +759,16 @@ public class PricingExcelService : IPricingExcelService
                     row.RegelId, row.RowNumber, row.Name, row.Basis!.Value, row.UnitCode, row.ZoneCode, row.Priority,
                     row.Eenheidsprijs, row.Basisbedrag, row.Minimum, row.Maximum,
                     row.MinAantal, row.Afrondingsstap, row.Staffelmodus, row.GeldigVan, row.GeldigTot, []));
+
+                // An empty Prioriteit cell silently defaults to 0, which can silently reorder
+                // precedence on re-import — warn only when the SOURCE rule actually had a non-zero
+                // priority (an empty cell on a genuinely new/zero-priority rule is not surprising).
+                if (row.RegelId is { } existingRuleId && row.PriorityRaw is null
+                    && existingById.TryGetValue(existingRuleId, out var existingForPriority)
+                    && existingForPriority.Priority != 0)
+                {
+                    warnings.Add((row.RowNumber, $"Prioriteit leeg — 0 gebruikt voor '{row.Name}'."));
+                }
             }
 
             if (row.StaffelVan is { } from)

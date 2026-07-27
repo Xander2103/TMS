@@ -258,6 +258,12 @@ public class WarehouseServiceTests
         Assert.Equal(0m, withoutWeight.Total);
         Assert.Empty(withoutWeight.ServiceLines);
         Assert.Contains(withoutWeight.Lines, l => l.Label.Contains("geen gewicht gekend") && l.Informational);
+
+        // An explicit 0 kg is treated the same as missing — never a silent €0 charge line.
+        var zeroWeight = await h.Engine.CalculateAsync(Request(h, weightKg: 0m), CancellationToken.None);
+        Assert.Equal(0m, zeroWeight.Total);
+        Assert.Empty(zeroWeight.ServiceLines);
+        Assert.Contains(zeroWeight.Lines, l => l.Label.Contains("geen gewicht gekend") && l.Informational);
     }
 
     [Fact]
@@ -274,6 +280,11 @@ public class WarehouseServiceTests
         var withoutVolume = await h.Engine.CalculateAsync(Request(h), CancellationToken.None);
         Assert.Equal(0m, withoutVolume.Total);
         Assert.Contains(withoutVolume.Lines, l => l.Label.Contains("geen volume gekend") && l.Informational);
+
+        // An explicit 0 m³ is treated the same as missing — never a silent €0 charge line.
+        var zeroVolume = await h.Engine.CalculateAsync(Request(h, volumeM3: 0m), CancellationToken.None);
+        Assert.Equal(0m, zeroVolume.Total);
+        Assert.Contains(zeroVolume.Lines, l => l.Label.Contains("geen volume gekend") && l.Informational);
     }
 
     [Fact]
@@ -290,6 +301,11 @@ public class WarehouseServiceTests
         var withoutLdm = await h.Engine.CalculateAsync(Request(h), CancellationToken.None);
         Assert.Equal(0m, withoutLdm.Total);
         Assert.Contains(withoutLdm.Lines, l => l.Label.Contains("geen laadmeters gekend") && l.Informational);
+
+        // An explicit 0 ldm is treated the same as missing — never a silent €0 charge line.
+        var zeroLdm = await h.Engine.CalculateAsync(Request(h, loadingMeters: 0m), CancellationToken.None);
+        Assert.Equal(0m, zeroLdm.Total);
+        Assert.Contains(zeroLdm.Lines, l => l.Label.Contains("geen laadmeters gekend") && l.Informational);
     }
 
     // --- PerOrderLine -----------------------------------------------------------------------------
@@ -307,6 +323,11 @@ public class WarehouseServiceTests
         var withoutCount = await h.Engine.CalculateAsync(Request(h), CancellationToken.None);
         Assert.Equal(0m, withoutCount.Total);
         Assert.Contains(withoutCount.Lines, l => l.Label.Contains("aantal orderlijnen onbekend") && l.Informational);
+
+        // An explicit 0 cargo lines is treated the same as missing — never a silent €0 charge line.
+        var zeroCount = await h.Engine.CalculateAsync(Request(h, cargoLineCount: 0), CancellationToken.None);
+        Assert.Equal(0m, zeroCount.Total);
+        Assert.Contains(zeroCount.Lines, l => l.Label.Contains("aantal orderlijnen onbekend") && l.Informational);
     }
 
     // --- PerDay / PerPalletDay ----------------------------------------------------------------------

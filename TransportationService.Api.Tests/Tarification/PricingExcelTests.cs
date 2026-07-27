@@ -456,6 +456,51 @@ public class PricingExcelTests
         Assert.Equal(3, bracketCount); // the duplicate was NOT added as a 4th bracket
     }
 
+    // ------------------------------------------------------------- 6d. Empty Prioriteit cell -> warning (ledger cleanup)
+
+    /// <summary>
+    /// An empty Prioriteit cell silently defaults to 0, which can silently reorder precedence on
+    /// re-import — warn when the source rule actually carried a non-zero priority; a rule whose
+    /// priority was already 0 produces no warning (nothing actually changes).
+    /// </summary>
+    [Fact]
+    public async Task EmptyPriorityCell_WarnsOnlyWhenSourceRuleHadNonZeroPriority_CommitStillAppliesZero()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var (agreementId, _, perKmRuleId) = await SeedAgreementAsync(h); // perKmRule has Priority == 0 (default)
+        var priorityRule = await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            null, null, PriceRuleBasis.Fixed, null,
+            "Vast bedrag met prioriteit", new DateOnly(2026, 1, 1), null, true, 20m, null, null,
+            agreementId, Priority: 5), CancellationToken.None);
+        var (file, _) = await h.Excel.ExportAsync(agreementId, CancellationToken.None);
+
+        var priorityRow = RowOf(file!, priorityRule.Id);
+        var cleared = Clear(file!, priorityRow, 6); // Prioriteit column, for the non-zero-priority rule
+
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(cleared), CancellationToken.None);
+        Assert.Null(error);
+        Assert.NotNull(preview);
+        Assert.Empty(preview!.Errors); // a warning never blocks
+        Assert.Contains(preview.Warnings, w => w.Row == priorityRow
+            && w.Message.Contains("Prioriteit leeg") && w.Message.Contains("0 gebruikt")
+            && w.Message.Contains("Vast bedrag met prioriteit"));
+
+        // Clearing the ALREADY-zero perKmRule's priority cell must not warn — nothing changed.
+        var perKmRow = RowOf(cleared, perKmRuleId);
+        var alsoCleared = Clear(cleared, perKmRow, 6);
+        var (preview2, _) = await h.Excel.PreviewAsync(agreementId, ToStream(alsoCleared), CancellationToken.None);
+        Assert.DoesNotContain(preview2!.Warnings, w => w.Row == perKmRow);
+
+        var (commit, commitError) = await h.Excel.CommitAsync(
+            agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
+            ToStream(cleared), CancellationToken.None);
+        Assert.Null(commitError);
+        Assert.NotNull(commit);
+        var updatedRule = await h.Db.Context.PriceRules.SingleAsync(r => r.Id == priorityRule.Id);
+        Assert.Equal(0, updatedRule.Priority); // the warning informs, never blocks the (deliberate) 0
+    }
+
     // ------------------------------------------------------------- 7. Foreign RegelId
 
     [Fact]

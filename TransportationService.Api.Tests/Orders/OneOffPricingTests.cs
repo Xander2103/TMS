@@ -548,6 +548,53 @@ public class OneOffPricingTests
         Assert.Single(informational);
     }
 
+    /// <summary>
+    /// Ledger cleanup (Phase 10): TransportOrderPricingLine.Proposed duplicates Kind == Proposed —
+    /// Kind is authoritative, Proposed is derived (see the entity's doc comment and
+    /// TransportOrderService.SetKind). Adjusting a Proposed line via the manual-edit endpoint must
+    /// flip Kind to AutoAdjusted AND clear Proposed in the same write, and every persisted line must
+    /// keep satisfying Proposed == (Kind == Proposed) through a subsequent recalculation.
+    /// </summary>
+    [Fact]
+    public async Task AdjustingAProposedLine_ClearsProposed_AndKindProposedInvariantHoldsThroughRecalculate()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(
+            OneOffRequest(h.CustomerId, 450m, includedCombined: 60, extraHourlyRate: 75m),
+            CancellationToken.None);
+        await SeedStopExecutionsAsync(h, created.Order!.Id, loadingMinutes: 45, unloadingMinutes: 45);
+        var reloaded = await RepriceAsync(h, created.Order.Id);
+        var proposed = Assert.Single(reloaded.PricingLines!, l => l.Proposed);
+        Assert.Equal(OrderPriceLineKind.Proposed, proposed.Kind);
+
+        var adjusted = await h.Sut.SaveOrderPriceLinesAsync(
+            created.Order.Id,
+            [new SaveOrderPriceLineRequest(proposed.LineKey, proposed.Label, null, null, 50m, "Herzien vóór bevestiging")],
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, adjusted.Outcome);
+        var adjustedLine = Assert.Single(adjusted.Order!.PricingLines!, l => l.LineKey == proposed.LineKey);
+        Assert.Equal(OrderPriceLineKind.AutoAdjusted, adjustedLine.Kind);
+        Assert.False(adjustedLine.Proposed); // must never stay true once Kind left Proposed
+        foreach (var line in adjusted.Order.PricingLines!)
+        {
+            Assert.Equal(line.Kind == OrderPriceLineKind.Proposed, line.Proposed);
+        }
+
+        var recalculated = await h.Sut.RecalculateOrderPricingAsync(created.Order.Id, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, recalculated.Outcome);
+        var survivingAdjusted = Assert.Single(recalculated.Order!.PricingLines!, l => l.LineKey == proposed.LineKey);
+        Assert.Equal(OrderPriceLineKind.AutoAdjusted, survivingAdjusted.Kind);
+        Assert.False(survivingAdjusted.Proposed);
+        foreach (var line in recalculated.Order.PricingLines!)
+        {
+            Assert.Equal(line.Kind == OrderPriceLineKind.Proposed, line.Proposed);
+        }
+    }
+
     // --- Contract mode: engaged agreement with included time (helper reused) ------------------
 
     [Fact]

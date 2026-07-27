@@ -97,7 +97,7 @@ public class PriceAdjustmentService : IPriceAdjustmentService
     private async Task<IReadOnlyList<PriceAdjustmentRulePreview>> PreviewInternalAsync(
         Guid? customerId, Guid? agreementId, PreviewPriceAdjustmentRequest request, CancellationToken cancellationToken)
     {
-        Validate(request.EffectiveDate, request.Percent, request.AmountDelta, request.RoundingStep);
+        Validate(request.EffectiveDate, request.Percent, request.AmountDelta, request.RoundingStep, customerId, agreementId);
         var rules = await LoadAdjustableRulesAsync(
             customerId, agreementId, request.EffectiveDate, request.RuleIds,
             request.BasisFilter, request.UnitTypeIdFilter, cancellationToken);
@@ -107,7 +107,7 @@ public class PriceAdjustmentService : IPriceAdjustmentService
     private async Task<ScheduledPriceAdjustmentDto> CreateInternalAsync(
         Guid? customerId, Guid? agreementId, CreatePriceAdjustmentRequest request, CancellationToken cancellationToken)
     {
-        Validate(request.EffectiveDate, request.Percent, request.AmountDelta, request.RoundingStep);
+        Validate(request.EffectiveDate, request.Percent, request.AmountDelta, request.RoundingStep, customerId, agreementId);
         var rules = await LoadAdjustableRulesAsync(
             customerId, agreementId, request.EffectiveDate, request.RuleIds,
             request.BasisFilter, request.UnitTypeIdFilter, cancellationToken);
@@ -226,8 +226,21 @@ public class PriceAdjustmentService : IPriceAdjustmentService
         return Map(adjustment, Today);
     }
 
-    private void Validate(DateOnly effectiveDate, decimal? percent, decimal? amountDelta, decimal? roundingStep)
+    /// <summary>
+    /// Runtime guard (defense in depth, currently structurally unreachable via the public API —
+    /// every caller passes exactly one of customerId/agreementId): a scope with both set would be
+    /// ambiguous (which scope's rules should the adjustment target?), so it is rejected outright
+    /// rather than silently picking one.
+    /// </summary>
+    private void Validate(
+        DateOnly effectiveDate, decimal? percent, decimal? amountDelta, decimal? roundingStep,
+        Guid? customerId = null, Guid? agreementId = null)
     {
+        if (customerId is not null && agreementId is not null)
+        {
+            throw new DomainValidationException("Kies precies één toepassingsgebied.");
+        }
+
         if (effectiveDate <= Today)
         {
             throw new DomainValidationException("effectiveDate", "De ingangsdatum moet in de toekomst liggen.");

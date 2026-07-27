@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Modules.Auditing.Services;
@@ -93,6 +94,26 @@ public class PriceAdjustmentTests
 
         var hourly = preview.Single(p => p.RuleName == "Uurtarief");
         Assert.Contains(hourly.Changes, c => c.OldValue == 72m && c.NewValue == 70.20m);
+    }
+
+    /// <summary>
+    /// Ledger cleanup (Phase 10): defense-in-depth guard on the shared Validate helper — a request
+    /// scoped to BOTH a customer AND an agreement must never be silently resolved to one. This is
+    /// structurally unreachable through the public API today (every public method always passes
+    /// exactly one of customerId/agreementId), so the guard is exercised directly via reflection.
+    /// </summary>
+    [Fact]
+    public async Task Validate_BothCustomerAndAgreementScoped_ThrowsDomainValidationException()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var method = typeof(PriceAdjustmentService).GetMethod("Validate", BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        var wrapped = Assert.Throws<TargetInvocationException>(() => method.Invoke(
+            h.Sut, [October, 10m, null, null, h.CustomerId, Guid.NewGuid()]));
+
+        var inner = Assert.IsType<DomainValidationException>(wrapped.InnerException);
+        Assert.Equal("Kies precies één toepassingsgebied.", inner.Message);
     }
 
     [Fact]

@@ -18,6 +18,7 @@ import { AgreementAdjustmentsPanel } from '../components/AgreementAdjustmentsPan
 import { AgreementAssignmentsPanel } from '../components/AgreementAssignmentsPanel'
 import { AgreementDerivationPanel } from '../components/AgreementDerivationPanel'
 import { AgreementSurchargesPanel } from '../components/AgreementSurchargesPanel'
+import { AgreementValidationPanel } from '../components/AgreementValidationPanel'
 import { AgreementVersionsPanel } from '../components/AgreementVersionsPanel'
 import { CombinedDiscountsPanel } from '../components/CombinedDiscountsPanel'
 import { PricingImportDialog } from '../components/PricingImportDialog'
@@ -37,9 +38,11 @@ export function PricingTableDetailPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
-  const canView = hasPermission('tariffs.view') || hasPermission('tariffs.manage')
   const canManage = hasPermission('tariffs.manage')
   const canImport = hasPermission('tariffs.import') || canManage
+  // A role holding only tariffs.import must still be able to reach the import feature it was
+  // granted — gating the whole page on view/manage alone would lock it out.
+  const canView = hasPermission('tariffs.view') || canManage || canImport
 
   const [agreement, setAgreement] = useState<PricingAgreement | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -146,6 +149,8 @@ export function PricingTableDetailPage() {
           Wijzigingen gelden voor al deze klanten — maak bij twijfel een nieuwe versie.
         </div>
       )}
+
+      <AgreementValidationPanel agreementId={id} />
 
       <Tabs tabs={tabs} activeId={activeTab} onChange={(next) => setActiveTab(next as TabId)} />
 

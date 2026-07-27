@@ -218,6 +218,12 @@ public record SaveCombinedUnitDiscountRequest(
     DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
     IReadOnlyList<SaveCombinedUnitDiscountUnitRequest> Units, IReadOnlyList<SaveCombinedUnitDiscountTierRequest> Tiers);
 
+// --- Agreement configuration validation ("Controle") ---
+
+/// <summary>One configuration-health finding for an agreement ("Controle"). Severity is "error"
+/// (blocks/would block price calculation) or "warning" (dead/surprising configuration, still prices).</summary>
+public record PricingConfigCheckDto(string Severity, string Message);
+
 // --- Calculation ---
 
 /// <summary>Physical detail of part of a line (from cargo items) used for billable-quantity rules.</summary>

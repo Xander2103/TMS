@@ -446,7 +446,9 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                     </tr>
                     {expanded &&
                       rule.brackets.map((bracket, index) => (
-                        <tr key={bracket.id} className="rule-grid-bracket-row">
+                        // bracket.id is server-assigned and regenerated on every save; index keeps
+                        // the key stable/unique even for a not-yet-persisted or id-less bracket.
+                        <tr key={bracket.id ?? `${rule.id}-bracket-${index}`} className="rule-grid-bracket-row">
                           <td>↳ Staffel {bracketRangeLabel(bracket)}</td>
                           <td colSpan={4}>—</td>
                           <td>

@@ -690,7 +690,9 @@ public class PricingEngine : IPricingEngine
             else if (option.Kind == SurchargeKind.PerOrderLine)
             {
                 var qty = enteredQuantity is { } q2 && q2 > 0 ? q2 : (decimal?)request.CargoLineCount;
-                if (qty is null)
+                // An explicit 0 (no cargo lines known) is treated as "missing" — same as null —
+                // so this never produces a silent €0 charge line, aligning with PerHour/PerStop/PerDay.
+                if (qty is null or <= 0)
                 {
                     lines.Add(new PriceBreakdownLine(
                         $"{option.Name}: aantal orderlijnen onbekend", 0m, source, Informational: true));
@@ -704,7 +706,8 @@ public class PricingEngine : IPricingEngine
             else if (option.Kind == SurchargeKind.PerKg)
             {
                 var qty = enteredQuantity is { } q3 && q3 > 0 ? q3 : request.WeightKg;
-                if (qty is null)
+                // Explicit 0 kg treated the same as unknown — no silent €0 charge line.
+                if (qty is null or <= 0)
                 {
                     lines.Add(new PriceBreakdownLine($"{option.Name}: geen gewicht gekend", 0m, source, Informational: true));
                     continue;
@@ -717,7 +720,8 @@ public class PricingEngine : IPricingEngine
             else if (option.Kind == SurchargeKind.PerM3)
             {
                 var qty = enteredQuantity is { } q4 && q4 > 0 ? q4 : request.VolumeM3;
-                if (qty is null)
+                // Explicit 0 m³ treated the same as unknown — no silent €0 charge line.
+                if (qty is null or <= 0)
                 {
                     lines.Add(new PriceBreakdownLine($"{option.Name}: geen volume gekend", 0m, source, Informational: true));
                     continue;
@@ -730,7 +734,8 @@ public class PricingEngine : IPricingEngine
             else if (option.Kind == SurchargeKind.PerLdm)
             {
                 var qty = enteredQuantity is { } q5 && q5 > 0 ? q5 : request.LoadingMeters;
-                if (qty is null)
+                // Explicit 0 ldm treated the same as unknown — no silent €0 charge line.
+                if (qty is null or <= 0)
                 {
                     lines.Add(new PriceBreakdownLine($"{option.Name}: geen laadmeters gekend", 0m, source, Informational: true));
                     continue;
