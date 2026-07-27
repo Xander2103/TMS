@@ -406,6 +406,56 @@ public class PricingExcelTests
         await AssertBlocksWithRowErrorAsync(h, agreementId, bad, row, "getal");
     }
 
+    // ------------------------------------------------------------- 6b. Malformed RegelId
+
+    [Fact]
+    public async Task MalformedRegelId_ProducesRowErrorAndBlocksCommit()
+    {
+        var (h, agreementId, file) = await SeedWithExportAsync();
+        using var _ = h.Db;
+        var row = RowOf(file, (await h.Db.Context.PriceRules.FirstAsync(r => r.Basis == PriceRuleBasis.PerKm)).Id);
+        var bad = SetText(file, row, 1, "abc-123");
+
+        await AssertBlocksWithRowErrorAsync(h, agreementId, bad, row, "geen geldige GUID");
+    }
+
+    // ------------------------------------------------------------- 6c. Duplicate bracket row -> warning, not blocked
+
+    [Fact]
+    public async Task DuplicateBracketRow_ProducesWarning_DoesNotBlockCommit()
+    {
+        var (h, agreementId, file) = await SeedWithExportAsync();
+        using var _ = h.Db;
+        var bracketRule = await h.Db.Context.PriceRules.FirstAsync(r => r.Basis == PriceRuleBasis.QuantityBracket);
+
+        // Append an extra row for the SAME rule (same RegelId) repeating the exact same bracket
+        // range (Staffel van/tot = 1/1) as an already-exported row for that rule.
+        var withDuplicate = AppendRow(file,
+            (1, bracketRule.Id.ToString()), (2, "Europallet Z1"), (3, "QuantityBracket"),
+            (7, 1m), (8, 1m), (12, 50m));
+        var sheetForRowLookup = OpenSheet(withDuplicate, out var lookupWorkbook);
+        var duplicateRow = sheetForRowLookup.LastRowUsed()!.RowNumber();
+        lookupWorkbook.Dispose();
+
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(withDuplicate), CancellationToken.None);
+        Assert.Null(error);
+        Assert.NotNull(preview);
+        Assert.Contains(preview!.Warnings, w => w.Row == duplicateRow && w.Message.Contains("Dubbele rij"));
+        Assert.Empty(preview.Errors);
+        Assert.Equal(preview.RowsFound, preview.RowsValid); // a warning never reduces RowsValid
+
+        var (commit, commitError) = await h.Excel.CommitAsync(
+            agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
+            ToStream(withDuplicate), CancellationToken.None);
+        Assert.Null(commitError);
+        Assert.NotNull(commit);
+        Assert.Equal(0, commit!.Added);
+        Assert.Equal(0, commit.Updated); // duplicate bracket ignored, so nothing actually changed
+
+        var bracketCount = await h.Db.Context.PriceRuleBrackets.CountAsync(b => b.PriceRuleId == bracketRule.Id);
+        Assert.Equal(3, bracketCount); // the duplicate was NOT added as a 4th bracket
+    }
+
     // ------------------------------------------------------------- 7. Foreign RegelId
 
     [Fact]
