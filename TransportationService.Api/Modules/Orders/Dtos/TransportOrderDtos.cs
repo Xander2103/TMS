@@ -82,13 +82,25 @@ public record TransportOrderDetailDto(
     string? PriceOverrideReason = null,
     IReadOnlyList<OrderPricingLineDto>? PricingLines = null,
     IReadOnlyList<OrderServiceLineDto>? ServiceLines = null,
-    OrderPricingSnapshotDto? PricingSnapshot = null);
+    OrderPricingSnapshotDto? PricingSnapshot = null,
+    /// <summary>Contract (default) or OneOff (spec Phase 6): this order carries its own price agreement.</summary>
+    OrderPricingSource PricingSource = OrderPricingSource.Contract,
+    decimal? OneOffFixedAmount = null,
+    int? OneOffIncludedLoadingMinutes = null,
+    int? OneOffIncludedUnloadingMinutes = null,
+    int? OneOffIncludedCombinedMinutes = null,
+    decimal? OneOffExtraHourlyRate = null,
+    string? OneOffNotes = null,
+    /// <summary>CalculatedPrice + proposed (unconfirmed) extra-time charges; null when nothing could be calculated.</summary>
+    decimal? TotalWithProposed = null);
 
 /// <summary>Snapshot line of the price calculation stored on the order.</summary>
 public record OrderPricingLineDto(
     string Label, decimal Amount, string Source, bool Informational,
     string? RuleName = null, string? AgreementName = null,
-    decimal? ActualQuantity = null, decimal? BillableQuantity = null);
+    decimal? ActualQuantity = null, decimal? BillableQuantity = null,
+    /// <summary>An unconfirmed extra-time charge (spec Phase 6): excluded from AgreedPrice, shown as a proposal.</summary>
+    bool Proposed = false);
 
 /// <summary>Frozen header of the order's pricing snapshot (spec ch. 21).</summary>
 public record OrderPricingSnapshotDto(
@@ -239,7 +251,15 @@ public record CreateTransportOrderRequest(
     bool PriceIsManual = false,
     string? PriceOverrideReason = null,
     /// <summary>Preferred over ServiceOptionIds when present: selections incl. quantities.</summary>
-    IReadOnlyList<OrderServiceInput>? Services = null);
+    IReadOnlyList<OrderServiceInput>? Services = null,
+    /// <summary>Contract (default) or OneOff (spec Phase 6): this order carries its own price agreement.</summary>
+    OrderPricingSource PricingSource = OrderPricingSource.Contract,
+    decimal? OneOffFixedAmount = null,
+    int? OneOffIncludedLoadingMinutes = null,
+    int? OneOffIncludedUnloadingMinutes = null,
+    int? OneOffIncludedCombinedMinutes = null,
+    decimal? OneOffExtraHourlyRate = null,
+    string? OneOffNotes = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -267,7 +287,15 @@ public record UpdateTransportOrderRequest(
     bool PriceIsManual = false,
     string? PriceOverrideReason = null,
     /// <summary>Preferred over ServiceOptionIds when present: selections incl. quantities.</summary>
-    IReadOnlyList<OrderServiceInput>? Services = null);
+    IReadOnlyList<OrderServiceInput>? Services = null,
+    /// <summary>Contract (default) or OneOff (spec Phase 6): this order carries its own price agreement.</summary>
+    OrderPricingSource PricingSource = OrderPricingSource.Contract,
+    decimal? OneOffFixedAmount = null,
+    int? OneOffIncludedLoadingMinutes = null,
+    int? OneOffIncludedUnloadingMinutes = null,
+    int? OneOffIncludedCombinedMinutes = null,
+    decimal? OneOffExtraHourlyRate = null,
+    string? OneOffNotes = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

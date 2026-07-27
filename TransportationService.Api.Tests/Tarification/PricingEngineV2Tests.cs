@@ -350,4 +350,90 @@ public class PricingEngineV2Tests
         Assert.Contains(result.Diagnostics!, d => d.Contains("1350"));
         Assert.Equal(Today, result.TariffDate);
     }
+
+    // --- Phase 6: included-time extra-time proposal helper (static, unit-testable) -------------
+
+    [Fact]
+    public void ExtraTime_SeparateMode_ExactMinuteMath_AndRounding()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 30, includedUnloadingMinutes: null, includedCombinedMinutes: null,
+            extraHourlyRate: 75m, actualLoadingMinutes: 60m, actualUnloadingMinutes: null);
+
+        var line = Assert.Single(lines);
+        Assert.Equal("Extra laadtijd: 60 min (inbegrepen 30 min)", line.Label);
+        Assert.Equal(37.50m, line.Amount); // 30 min extra / 60 × 75
+        Assert.True(line.Proposed);
+        Assert.Equal("Extra tijd", line.Source);
+        Assert.False(line.Informational);
+    }
+
+    [Fact]
+    public void ExtraTime_SeparateMode_BothSides_EachProduceTheirOwnLine()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 20, includedUnloadingMinutes: 15, includedCombinedMinutes: null,
+            extraHourlyRate: 60m, actualLoadingMinutes: 50m, actualUnloadingMinutes: 45m);
+
+        Assert.Equal(2, lines.Count);
+        Assert.Contains(lines, l => l.Label == "Extra laadtijd: 50 min (inbegrepen 20 min)" && l.Amount == 30m); // 30/60×60
+        Assert.Contains(lines, l => l.Label == "Extra lostijd: 45 min (inbegrepen 15 min)" && l.Amount == 30m); // 30/60×60
+    }
+
+    [Fact]
+    public void ExtraTime_CombinedMode_SumsBothSides()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: null, includedUnloadingMinutes: null, includedCombinedMinutes: 60,
+            extraHourlyRate: 75m, actualLoadingMinutes: 45m, actualUnloadingMinutes: 45m);
+
+        var line = Assert.Single(lines);
+        Assert.Equal("Extra laad-/lostijd: 90 min (inbegrepen 60 min)", line.Label);
+        Assert.Equal(37.50m, line.Amount);
+    }
+
+    [Fact]
+    public void ExtraTime_CombinedMode_WithBothActualsNull_ProducesNoLines()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: null, includedUnloadingMinutes: null, includedCombinedMinutes: 60,
+            extraHourlyRate: 75m, actualLoadingMinutes: null, actualUnloadingMinutes: null);
+
+        Assert.Empty(lines);
+    }
+
+    [Fact]
+    public void ExtraTime_NegativeClamp_ActualBelowIncluded_ProducesNoLine()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 60, includedUnloadingMinutes: 60, includedCombinedMinutes: null,
+            extraHourlyRate: 75m, actualLoadingMinutes: 40m, actualUnloadingMinutes: 60m);
+
+        Assert.Empty(lines);
+    }
+
+    [Fact]
+    public void ExtraTime_NoRate_IsInformational_NeverCharged()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 30, includedUnloadingMinutes: null, includedCombinedMinutes: null,
+            extraHourlyRate: null, actualLoadingMinutes: 60m, actualUnloadingMinutes: null);
+
+        var line = Assert.Single(lines);
+        Assert.Equal("Extra tijd: geef het uurtarief voor extra tijd op", line.Label);
+        Assert.Equal(0m, line.Amount);
+        Assert.True(line.Informational);
+        Assert.False(line.Proposed);
+    }
+
+    [Fact]
+    public void ExtraTime_MissingActualOnOneSide_OnlyTheKnownSideIsEvaluated()
+    {
+        var lines = PricingEngine.ComputeExtraTimeLines(
+            includedLoadingMinutes: 10, includedUnloadingMinutes: 10, includedCombinedMinutes: null,
+            extraHourlyRate: 60m, actualLoadingMinutes: 40m, actualUnloadingMinutes: null);
+
+        var line = Assert.Single(lines);
+        Assert.Equal("Extra laadtijd: 40 min (inbegrepen 10 min)", line.Label);
+    }
 }

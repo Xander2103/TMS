@@ -41,6 +41,33 @@ public class PricingEngine : IPricingEngine
 
         var zone = await ResolveZoneAsync(request.DeliveryCountryCode, request.DeliveryPostalCode, cancellationToken);
 
+        // One-off order pricing (spec Phase 6): the order carries its own price agreement — no
+        // contract is consulted at all (no candidate loading, no agreement post-processing, no
+        // "missing tariff" diagnostics). Services + diesel still run as usual, below.
+        if (request.OneOff is { } oneOff)
+        {
+            var source = "Eenmalig";
+            if (!string.IsNullOrWhiteSpace(oneOff.Notes))
+            {
+                var notes = oneOff.Notes.Trim();
+                if (notes.Length > 200)
+                {
+                    notes = notes[..200];
+                }
+
+                source = $"Eenmalig — {notes}";
+            }
+
+            lines.Add(new PriceBreakdownLine("Eenmalige prijsafspraak", decimal.Round(oneOff.FixedAmount, 2), source));
+            lines.AddRange(ComputeExtraTimeLines(
+                oneOff.IncludedLoadingMinutes, oneOff.IncludedUnloadingMinutes, oneOff.IncludedCombinedMinutes,
+                oneOff.ExtraHourlyRate, request.ActualLoadingMinutes, request.ActualUnloadingMinutes));
+
+            return await FinalizeAsync(
+                request, lines, requiresManual: false, configurationError: null,
+                zone, unitNames: new Dictionary<Guid, string>(), cancellationToken);
+        }
+
         var unitTypeIds = request.Lines.Select(l => l.UnitTypeId).Distinct().ToList();
         var unitNames = await _dbContext.UnitTypes.AsNoTracking()
             .Where(u => u.TenantId == tenantId && unitTypeIds.Contains(u.Id))
@@ -343,9 +370,32 @@ public class PricingEngine : IPricingEngine
                 lines.Add(new PriceBreakdownLine(surcharge.Name, amount, agreement.Name,
                     AgreementId: agreement.Id, AgreementName: agreement.Name));
             }
+
+            // Included loading/unloading time (spec Phase 6): an engaged agreement with any
+            // included-time field set gets the same extra-time proposal as one-off orders.
+            if (agreement.IncludedLoadingMinutes is not null || agreement.IncludedUnloadingMinutes is not null
+                || agreement.IncludedCombinedMinutes is not null)
+            {
+                lines.AddRange(ComputeExtraTimeLines(
+                    agreement.IncludedLoadingMinutes, agreement.IncludedUnloadingMinutes, agreement.IncludedCombinedMinutes,
+                    agreement.ExtraHourlyRate, request.ActualLoadingMinutes, request.ActualUnloadingMinutes));
+            }
         }
 
-        var subtotalBeforeServices = lines.Where(l => !l.Informational).Sum(l => l.Amount);
+        return await FinalizeAsync(request, lines, requiresManual, configurationError, zone, unitNames, cancellationToken);
+    }
+
+    /// <summary>
+    /// Shared tail of the calculation: service options, informational diesel line, no-tariff
+    /// diagnostics and the final totals. Used by both contract-mode pricing and one-off pricing
+    /// (spec Phase 6), which skips straight here after producing its own header line(s).
+    /// </summary>
+    private async Task<PriceCalculationResult> FinalizeAsync(
+        PriceCalculationRequest request, List<PriceBreakdownLine> lines, bool requiresManual, string? configurationError,
+        PricingZone? zone, IReadOnlyDictionary<Guid, string> unitNames, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var subtotalBeforeServices = lines.Where(l => !l.Informational && !l.Proposed).Sum(l => l.Amount);
 
         // Service options: explicitly selected ∪ auto-applied (contract) options. Percent applies
         // to the base subtotal. Customer overrides are date-aware and can disable a globally
@@ -540,7 +590,7 @@ public class PricingEngine : IPricingEngine
                 option.Id, option.Name, option.Kind, value, amount, quantity, invoiceLabel, source, isAutoApplied));
         }
 
-        var total = lines.Where(l => !l.Informational).Sum(l => l.Amount);
+        var total = lines.Where(l => !l.Informational && !l.Proposed).Sum(l => l.Amount);
 
         // Diesel surcharge is owned by invoicing (separate invoice lines); shown here as an
         // informational line so the calculation stays explainable without double-charging.
@@ -571,10 +621,81 @@ public class PricingEngine : IPricingEngine
         }
 
         var totalWithInformational = total + lines.Where(l => l.Informational).Sum(l => l.Amount);
+        // Proposed lines (unconfirmed extra-time charges) are excluded from Total/TotalWithInformational
+        // — never silently invoiceable — but surfaced here so the UI can show them as a "what if" total.
+        var totalWithProposed = total + lines.Where(l => l.Proposed && !l.Informational).Sum(l => l.Amount);
         return new PriceCalculationResult(
             lines, decimal.Round(total, 2), decimal.Round(totalWithInformational, 2), "EUR",
             zone?.Code, zone?.Name, requiresManual, serviceLines,
-            TariffDate: request.Date, ConfigurationError: configurationError, Diagnostics: diagnostics);
+            TariffDate: request.Date, ConfigurationError: configurationError, Diagnostics: diagnostics,
+            TotalWithProposed: decimal.Round(totalWithProposed, 2));
+    }
+
+    /// <summary>
+    /// Extra-time proposal lines for one included-time agreement (spec Phase 6, one-off order or
+    /// contract agreement): compares the actual measured loading/unloading minutes (from stop
+    /// executions) against the included allowance and charges the excess at the hourly rate — as
+    /// a PROPOSAL (never silently invoiceable) until confirmed. Combined mode and per-activity mode
+    /// are mutually exclusive; combined wins when both are somehow set. A configured excess with no
+    /// rate yields an informational "geef het uurtarief op" line instead of a charge.
+    /// </summary>
+    public static List<PriceBreakdownLine> ComputeExtraTimeLines(
+        int? includedLoadingMinutes, int? includedUnloadingMinutes, int? includedCombinedMinutes,
+        decimal? extraHourlyRate, decimal? actualLoadingMinutes, decimal? actualUnloadingMinutes)
+    {
+        var lines = new List<PriceBreakdownLine>();
+
+        if (includedCombinedMinutes is { } combined)
+        {
+            if (actualLoadingMinutes is null && actualUnloadingMinutes is null)
+            {
+                return lines;
+            }
+
+            var actualTotal = (actualLoadingMinutes ?? 0m) + (actualUnloadingMinutes ?? 0m);
+            var extra = Math.Max(0m, actualTotal - combined);
+            if (extra > 0)
+            {
+                AddExtraTimeLine(lines,
+                    $"Extra laad-/lostijd: {actualTotal:0.##} min (inbegrepen {combined} min)", extra, extraHourlyRate);
+            }
+
+            return lines;
+        }
+
+        if (includedLoadingMinutes is { } includedLoading && actualLoadingMinutes is { } actualLoading)
+        {
+            var extra = Math.Max(0m, actualLoading - includedLoading);
+            if (extra > 0)
+            {
+                AddExtraTimeLine(lines,
+                    $"Extra laadtijd: {actualLoading:0.##} min (inbegrepen {includedLoading} min)", extra, extraHourlyRate);
+            }
+        }
+
+        if (includedUnloadingMinutes is { } includedUnloading && actualUnloadingMinutes is { } actualUnloading)
+        {
+            var extra = Math.Max(0m, actualUnloading - includedUnloading);
+            if (extra > 0)
+            {
+                AddExtraTimeLine(lines,
+                    $"Extra lostijd: {actualUnloading:0.##} min (inbegrepen {includedUnloading} min)", extra, extraHourlyRate);
+            }
+        }
+
+        return lines;
+    }
+
+    private static void AddExtraTimeLine(List<PriceBreakdownLine> lines, string label, decimal extraMinutes, decimal? rate)
+    {
+        if (rate is null)
+        {
+            lines.Add(new PriceBreakdownLine(
+                "Extra tijd: geef het uurtarief voor extra tijd op", 0m, "Extra tijd", Informational: true));
+            return;
+        }
+
+        lines.Add(new PriceBreakdownLine(label, decimal.Round(extraMinutes / 60m * rate.Value, 2), "Extra tijd", Proposed: true));
     }
 
     /// <summary>Returns true when the rule produced an amount line (false = informational skip).</summary>

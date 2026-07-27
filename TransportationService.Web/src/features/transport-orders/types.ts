@@ -158,6 +158,8 @@ export interface CargoItemInput {
   unloadingStopIndex: number | null
 }
 
+export type OrderPricingSource = 'Contract' | 'OneOff'
+
 export interface TransportOrderDetail {
   id: string
   orderNumber: string
@@ -196,6 +198,16 @@ export interface TransportOrderDetail {
   priceOverrideReason: string | null
   pricingLines: OrderPricingLine[] | null
   serviceLines: OrderServiceLine[] | null
+  /** Contract (default) or OneOff (Phase 6): this order carries its own price agreement. */
+  pricingSource: OrderPricingSource
+  oneOffFixedAmount: number | null
+  oneOffIncludedLoadingMinutes: number | null
+  oneOffIncludedUnloadingMinutes: number | null
+  oneOffIncludedCombinedMinutes: number | null
+  oneOffExtraHourlyRate: number | null
+  oneOffNotes: string | null
+  /** CalculatedPrice + proposed (unconfirmed) extra-time charges; null when nothing could be calculated. */
+  totalWithProposed: number | null
 }
 
 export interface OrderPricingLine {
@@ -207,6 +219,8 @@ export interface OrderPricingLine {
   agreementName?: string | null
   actualQuantity?: number | null
   billableQuantity?: number | null
+  /** An unconfirmed extra-time charge (Phase 6): excluded from AgreedPrice, shown as a proposal ("VOORSTEL"). */
+  proposed?: boolean
 }
 
 export interface OrderServiceLine {
@@ -287,4 +301,12 @@ export interface TransportOrderInput {
   /** Explicit authorized override of the calculated price (orders.override_price). */
   priceIsManual?: boolean
   priceOverrideReason?: string | null
+  /** Contract (default) or OneOff (Phase 6): this order carries its own price agreement. */
+  pricingSource?: OrderPricingSource
+  oneOffFixedAmount?: number | null
+  oneOffIncludedLoadingMinutes?: number | null
+  oneOffIncludedUnloadingMinutes?: number | null
+  oneOffIncludedCombinedMinutes?: number | null
+  oneOffExtraHourlyRate?: number | null
+  oneOffNotes?: string | null
 }

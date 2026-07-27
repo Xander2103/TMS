@@ -32,6 +32,12 @@ public class TransportOrderPricingLine : AuditableTenantEntity
 
     /// <summary>Commercially billed quantity (spec ch. 11); differs on oversize contracts.</summary>
     public decimal? BillableQuantity { get; set; }
+
+    /// <summary>
+    /// An unconfirmed extra-time charge (spec Phase 6): excluded from AgreedPrice/CalculatedPrice,
+    /// shown separately as a proposal until confirmed.
+    /// </summary>
+    public bool Proposed { get; set; }
 }
 
 /// <summary>

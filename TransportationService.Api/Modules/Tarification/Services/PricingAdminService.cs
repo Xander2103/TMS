@@ -440,6 +440,23 @@ public class PricingAdminService : IPricingAdminService
                 "Een herbruikbare tabel is niet gekoppeld aan één klant; koppel klanten via de klantkoppelingen.");
         }
 
+        if (request.IncludedLoadingMinutes is < 0 || request.IncludedUnloadingMinutes is < 0 || request.IncludedCombinedMinutes is < 0)
+        {
+            throw new DomainValidationException("includedLoadingMinutes", "Inbegrepen tijd mag niet negatief zijn.");
+        }
+
+        if (request.ExtraHourlyRate is < 0)
+        {
+            throw new DomainValidationException("extraHourlyRate", "Het uurtarief voor extra tijd mag niet negatief zijn.");
+        }
+
+        if (request.IncludedCombinedMinutes is not null
+            && (request.IncludedLoadingMinutes is not null || request.IncludedUnloadingMinutes is not null))
+        {
+            throw new DomainValidationException("includedCombinedMinutes",
+                "Kies inbegrepen tijd per activiteit óf gecombineerd, niet beide.");
+        }
+
         foreach (var surcharge in request.Surcharges ?? [])
         {
             if (string.IsNullOrWhiteSpace(surcharge.Name))
@@ -520,6 +537,10 @@ public class PricingAdminService : IPricingAdminService
         agreement.IsShared = request.IsShared;
         agreement.Notes = Clean(request.Notes);
         agreement.BaseAgreementId = request.BaseAgreementId;
+        agreement.IncludedLoadingMinutes = request.IncludedLoadingMinutes;
+        agreement.IncludedUnloadingMinutes = request.IncludedUnloadingMinutes;
+        agreement.IncludedCombinedMinutes = request.IncludedCombinedMinutes;
+        agreement.ExtraHourlyRate = request.ExtraHourlyRate;
         foreach (var surcharge in request.Surcharges ?? [])
         {
             var entity = new PricingAgreementSurcharge
@@ -611,7 +632,8 @@ public class PricingAdminService : IPricingAdminService
                         m.Id, m.Sequence, m.Name, m.CountryCode, m.ZoneId,
                         m.ZoneId is { } zid ? zoneNames.GetValueOrDefault(zid) : null,
                         m.Percent, m.FixedAmount))
-                    .ToList());
+                    .ToList(),
+                a.IncludedLoadingMinutes, a.IncludedUnloadingMinutes, a.IncludedCombinedMinutes, a.ExtraHourlyRate);
         }).ToList();
     }
 

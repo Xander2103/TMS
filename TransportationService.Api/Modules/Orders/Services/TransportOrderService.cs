@@ -179,6 +179,14 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(cargoError);
         }
 
+        if (OneOffPricingError(
+                request.PricingSource, request.OneOffFixedAmount,
+                request.OneOffIncludedLoadingMinutes, request.OneOffIncludedUnloadingMinutes, request.OneOffIncludedCombinedMinutes)
+            is { } oneOffError)
+        {
+            return TransportOrderOperationResult.Invalid(oneOffError);
+        }
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
@@ -204,6 +212,9 @@ public class TransportOrderService : ITransportOrderService
             Notes = Trim(request.Notes),
             Stops = BuildStops(request.Stops),
         };
+        ApplyOneOffPricing(order, request.PricingSource, request.OneOffFixedAmount,
+            request.OneOffIncludedLoadingMinutes, request.OneOffIncludedUnloadingMinutes, request.OneOffIncludedCombinedMinutes,
+            request.OneOffExtraHourlyRate, request.OneOffNotes);
         ApplyDieselSurchargeOverride(order,
             request.DieselSurchargeOverride, request.DieselSurchargePercentOverride, request.DieselSurchargeOverrideReason);
         // Selling entity: explicit request value else the customer's default entity.
@@ -266,6 +277,14 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(cargoError);
         }
 
+        if (OneOffPricingError(
+                request.PricingSource, request.OneOffFixedAmount,
+                request.OneOffIncludedLoadingMinutes, request.OneOffIncludedUnloadingMinutes, request.OneOffIncludedCombinedMinutes)
+            is { } oneOffError)
+        {
+            return TransportOrderOperationResult.Invalid(oneOffError);
+        }
+
         var before = new { order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count };
 
         order.CustomerId = request.CustomerId;
@@ -283,6 +302,9 @@ public class TransportOrderService : ITransportOrderService
         // Null = unchanged, so older clients that don't send a priority never reset it.
         order.Priority = request.Priority ?? order.Priority;
         order.Notes = Trim(request.Notes);
+        ApplyOneOffPricing(order, request.PricingSource, request.OneOffFixedAmount,
+            request.OneOffIncludedLoadingMinutes, request.OneOffIncludedUnloadingMinutes, request.OneOffIncludedCombinedMinutes,
+            request.OneOffExtraHourlyRate, request.OneOffNotes);
 
         var surchargeBefore = new { order.DieselSurchargeOverride, order.DieselSurchargePercentOverride };
         ApplyDieselSurchargeOverride(order,
@@ -363,6 +385,59 @@ public class TransportOrderService : ITransportOrderService
             .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == customerId)
             .Select(c => c.DefaultLegalEntityId)
             .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Validates a one-off price agreement (spec Phase 6): a fixed amount is mandatory, and the
+    /// combined and per-activity included-time variants are mutually exclusive. Returns null when
+    /// PricingSource is Contract (nothing to validate) or when the OneOff fields are valid.
+    /// </summary>
+    private static string? OneOffPricingError(
+        OrderPricingSource pricingSource, decimal? fixedAmount,
+        int? includedLoadingMinutes, int? includedUnloadingMinutes, int? includedCombinedMinutes)
+    {
+        if (pricingSource != OrderPricingSource.OneOff)
+        {
+            return null;
+        }
+
+        if (fixedAmount is null || fixedAmount < 0)
+        {
+            return "Geef het vaste bedrag van de eenmalige prijsafspraak op.";
+        }
+
+        if (includedCombinedMinutes is not null && (includedLoadingMinutes is not null || includedUnloadingMinutes is not null))
+        {
+            return "Kies inbegrepen tijd per activiteit óf gecombineerd, niet beide.";
+        }
+
+        return null;
+    }
+
+    /// <summary>Sets the order's one-off price agreement fields; clears them when PricingSource is Contract.</summary>
+    private static void ApplyOneOffPricing(
+        TransportOrder order, OrderPricingSource pricingSource, decimal? fixedAmount,
+        int? includedLoadingMinutes, int? includedUnloadingMinutes, int? includedCombinedMinutes,
+        decimal? extraHourlyRate, string? notes)
+    {
+        order.PricingSource = pricingSource;
+        if (pricingSource != OrderPricingSource.OneOff)
+        {
+            order.OneOffFixedAmount = null;
+            order.OneOffIncludedLoadingMinutes = null;
+            order.OneOffIncludedUnloadingMinutes = null;
+            order.OneOffIncludedCombinedMinutes = null;
+            order.OneOffExtraHourlyRate = null;
+            order.OneOffNotes = null;
+            return;
+        }
+
+        order.OneOffFixedAmount = NonNegative(fixedAmount);
+        order.OneOffIncludedLoadingMinutes = includedLoadingMinutes;
+        order.OneOffIncludedUnloadingMinutes = includedUnloadingMinutes;
+        order.OneOffIncludedCombinedMinutes = includedCombinedMinutes;
+        order.OneOffExtraHourlyRate = extraHourlyRate is < 0 ? 0 : extraHourlyRate;
+        order.OneOffNotes = Trim(notes);
     }
 
     /// <summary>Override requires an explicit percentage and a reason; clearing wipes both.</summary>
@@ -925,8 +1000,13 @@ public class TransportOrderService : ITransportOrderService
             .OrderBy(l => l.Sequence)
             .Select(l => new OrderPricingLineDto(
                 l.Label, l.Amount, l.Source, l.Informational,
-                l.RuleName, l.AgreementName, l.ActualQuantity, l.BillableQuantity))
+                l.RuleName, l.AgreementName, l.ActualQuantity, l.BillableQuantity, l.Proposed))
             .ToListAsync(cancellationToken);
+        // Recomputed from the persisted lines (never separately snapshotted) so it can never drift
+        // from CalculatedPrice/pricingLines — a proposed extra-time charge is never invoiceable on its own.
+        var totalWithProposed = order.CalculatedPrice is { } calculatedTotal
+            ? calculatedTotal + pricingLines.Where(l => l.Proposed && !l.Informational).Sum(l => l.Amount)
+            : (decimal?)null;
         var pricingSnapshot = await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
             .Where(s => s.TenantId == _tenantContext.TenantId && s.TransportOrderId == order.Id)
             .Select(s => new OrderPricingSnapshotDto(
@@ -954,7 +1034,10 @@ public class TransportOrderService : ITransportOrderService
             order.DieselSurchargeOverride, order.DieselSurchargePercentOverride, order.DieselSurchargeOverrideReason,
             order.LegalEntityId, order.QuantityUnitCode,
             order.CalculatedPrice, order.PriceIsManual, order.PriceOverrideReason,
-            pricingLines, serviceLines, pricingSnapshot);
+            pricingLines, serviceLines, pricingSnapshot,
+            order.PricingSource, order.OneOffFixedAmount,
+            order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes, order.OneOffIncludedCombinedMinutes,
+            order.OneOffExtraHourlyRate, order.OneOffNotes, totalWithProposed);
     }
 
     /// <summary>
@@ -1020,6 +1103,12 @@ public class TransportOrderService : ITransportOrderService
                 .OrderBy(s => s.Sequence)
                 .ToList();
             var delivery = unloadingStops.LastOrDefault();
+            var (actualLoadingMinutes, actualUnloadingMinutes) = await ComputeActualStopMinutesAsync(order, cancellationToken);
+            var oneOff = order.PricingSource == OrderPricingSource.OneOff
+                ? new OneOffPricingInput(
+                    order.OneOffFixedAmount ?? 0m, order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes,
+                    order.OneOffIncludedCombinedMinutes, order.OneOffExtraHourlyRate, order.OneOffNotes)
+                : null;
             result = await _pricingEngine.CalculateAsync(new PriceCalculationRequest(
                 order.CustomerId, order.OrderDate, lines,
                 delivery?.CountryCode, delivery?.PostalCode,
@@ -1028,7 +1117,10 @@ public class TransportOrderService : ITransportOrderService
                 VolumeM3: order.VolumeM3,
                 StopCount: unloadingStops.Count > 0 ? unloadingStops.Count : null,
                 AdrRequired: order.AdrRequired,
-                CargoLineCount: cargoItems?.Count(c => !c.IsDeleted)), cancellationToken);
+                CargoLineCount: cargoItems?.Count(c => !c.IsDeleted),
+                OneOff: oneOff,
+                ActualLoadingMinutes: actualLoadingMinutes,
+                ActualUnloadingMinutes: actualUnloadingMinutes), cancellationToken);
         }
 
         var calculated = result is { RequiresManualPrice: false } && result.Lines.Any(l => !l.Informational)
@@ -1081,6 +1173,7 @@ public class TransportOrderService : ITransportOrderService
                     Source = line.Source, Informational = line.Informational,
                     RuleName = line.RuleName, AgreementName = line.AgreementName,
                     ActualQuantity = line.ActualQuantity, BillableQuantity = line.BillableQuantity,
+                    Proposed = line.Proposed,
                 });
             }
 
@@ -1122,6 +1215,53 @@ public class TransportOrderService : ITransportOrderService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Sums measured loading/unloading minutes from this order's stop executions (tenant-filtered,
+    /// via the order's own stops), for the included-time extra-time proposal (spec Phase 6). Only
+    /// stops with a recorded arrival AND a completion/departure count — an in-progress stop
+    /// contributes nothing yet. Null when no stop of that type has a measurable execution.
+    /// </summary>
+    private async Task<(decimal? LoadingMinutes, decimal? UnloadingMinutes)> ComputeActualStopMinutesAsync(
+        TransportOrder order, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var stopTypeById = order.Stops.Where(s => !s.IsDeleted).ToDictionary(s => s.Id, s => s.StopType);
+        if (stopTypeById.Count == 0)
+        {
+            return (null, null);
+        }
+
+        var stopIds = stopTypeById.Keys.ToList();
+        var executions = await _dbContext.Set<Modules.Planning.Entities.StopExecution>().AsNoTracking()
+            .Where(e => e.TenantId == tenantId && stopIds.Contains(e.TransportOrderStopId) && e.ArrivedAt != null)
+            .Select(e => new { e.TransportOrderStopId, e.ArrivedAt, e.CompletedAt, e.DepartedAt })
+            .ToListAsync(cancellationToken);
+
+        decimal? loadingMinutes = null;
+        decimal? unloadingMinutes = null;
+        foreach (var execution in executions)
+        {
+            var end = execution.DepartedAt ?? execution.CompletedAt;
+            if (end is null || execution.ArrivedAt is not { } arrived
+                || !stopTypeById.TryGetValue(execution.TransportOrderStopId, out var stopType))
+            {
+                continue;
+            }
+
+            var minutes = (decimal)(end.Value - arrived).TotalMinutes;
+            if (stopType == StopType.Loading)
+            {
+                loadingMinutes = (loadingMinutes ?? 0m) + minutes;
+            }
+            else
+            {
+                unloadingMinutes = (unloadingMinutes ?? 0m) + minutes;
+            }
+        }
+
+        return (loadingMinutes, unloadingMinutes);
     }
 
     /// <summary>Uppercases a managed unit code; blank → null (free-text QuantityUnit is the fallback).</summary>

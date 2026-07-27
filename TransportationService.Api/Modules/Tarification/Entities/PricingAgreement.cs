@@ -47,6 +47,19 @@ public class PricingAgreement : AuditableTenantEntity
     public Guid? BaseAgreementId { get; set; }
     public PricingAgreement? BaseAgreement { get; set; }
 
+    /// <summary>
+    /// Included loading/unloading time (spec Phase 6, contract mode): per-activity minutes.
+    /// Mutually exclusive with <see cref="IncludedCombinedMinutes"/>.
+    /// </summary>
+    public int? IncludedLoadingMinutes { get; set; }
+    public int? IncludedUnloadingMinutes { get; set; }
+
+    /// <summary>Included loading+unloading minutes combined. Mutually exclusive with the per-activity fields.</summary>
+    public int? IncludedCombinedMinutes { get; set; }
+
+    /// <summary>Hourly rate charged for time beyond the included allowance (proposal until confirmed).</summary>
+    public decimal? ExtraHourlyRate { get; set; }
+
     public List<PricingAgreementSurcharge> Surcharges { get; set; } = new();
     public List<PricingAgreementAssignment> Assignments { get; set; } = new();
     public List<PricingAgreementModifier> Modifiers { get; set; } = new();

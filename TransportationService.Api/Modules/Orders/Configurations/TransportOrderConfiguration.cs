@@ -30,6 +30,11 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
         builder.Property(o => o.Notes).HasMaxLength(4000);
         builder.Property(o => o.CancellationReason).HasMaxLength(500);
 
+        builder.Property(o => o.PricingSource).HasConversion<string>().HasMaxLength(20);
+        builder.Property(o => o.OneOffFixedAmount).HasPrecision(12, 2);
+        builder.Property(o => o.OneOffExtraHourlyRate).HasPrecision(10, 2);
+        builder.Property(o => o.OneOffNotes).HasMaxLength(1000);
+
         builder.HasIndex(o => new { o.TenantId, o.OrderNumber })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");

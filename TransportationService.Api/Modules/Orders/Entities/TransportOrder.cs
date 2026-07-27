@@ -33,6 +33,16 @@ public enum OrderPriority
 }
 
 /// <summary>
+/// Where an order's price agreement comes from: the customer's contract (rules/agreements) or a
+/// one-off price agreement carried on the order itself (spec Phase 6). Stored as string.
+/// </summary>
+public enum OrderPricingSource
+{
+    Contract,
+    OneOff,
+}
+
+/// <summary>
 /// A customer transport order: what has to be moved, for whom, via which stops. Planning
 /// (trip assignment, Phase 6) and pricing/invoicing (Phase 8) build on top of this entity.
 /// The order number is claimed from TenantSettings via the retry-safe numbering helper.
@@ -95,6 +105,32 @@ public class TransportOrder : AuditableTenantEntity
     public bool PriceIsManual { get; set; }
 
     public string? PriceOverrideReason { get; set; }
+
+    /// <summary>
+    /// Contract (default): priced by the customer's rules/agreements. OneOff: no contract is
+    /// consulted — the order carries its own fixed price + included-time agreement below.
+    /// Choosing OneOff and entering its fields needs NO special permission: it is the order's own
+    /// price agreement, not an override of a calculated price. <c>orders.override_price</c>
+    /// (<see cref="PriceIsManual"/>) is a SEPARATE, narrower gate that only applies when someone
+    /// overwrites whatever the engine calculated (contract OR one-off) with a different number.
+    /// </summary>
+    public OrderPricingSource PricingSource { get; set; } = OrderPricingSource.Contract;
+
+    /// <summary>OneOff only: the agreed fixed price for this single order.</summary>
+    public decimal? OneOffFixedAmount { get; set; }
+
+    /// <summary>OneOff only: included loading/unloading minutes, per activity. Mutually exclusive with the combined variant.</summary>
+    public int? OneOffIncludedLoadingMinutes { get; set; }
+    public int? OneOffIncludedUnloadingMinutes { get; set; }
+
+    /// <summary>OneOff only: included loading+unloading minutes combined. Mutually exclusive with the per-activity fields.</summary>
+    public int? OneOffIncludedCombinedMinutes { get; set; }
+
+    /// <summary>OneOff only: hourly rate charged for time beyond the included allowance (proposal until confirmed).</summary>
+    public decimal? OneOffExtraHourlyRate { get; set; }
+
+    /// <summary>OneOff only: free-text context for how the one-off price was agreed (e.g. "Afgesproken via telefoon").</summary>
+    public string? OneOffNotes { get; set; }
 
     // Diesel-surcharge override (customer config is the default). Overriding requires a
     // reason; the inherited value, override, actor and timestamp are audited.

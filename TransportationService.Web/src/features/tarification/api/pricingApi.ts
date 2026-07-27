@@ -94,6 +94,13 @@ export interface PricingAgreement {
   baseAgreementId: string | null
   baseAgreementName: string | null
   modifiers: PricingAgreementModifier[]
+  /** Included loading/unloading time (Phase 6). Mutually exclusive with includedCombinedMinutes. */
+  includedLoadingMinutes: number | null
+  includedUnloadingMinutes: number | null
+  /** Included loading+unloading minutes combined. Mutually exclusive with the per-activity fields. */
+  includedCombinedMinutes: number | null
+  /** Hourly rate charged for time beyond the included allowance (proposal until confirmed). */
+  extraHourlyRate: number | null
 }
 
 export interface PricingAgreementInput {
@@ -109,6 +116,10 @@ export interface PricingAgreementInput {
   maximumAmount?: number | null
   baseAgreementId?: string | null
   modifiers?: PricingAgreementModifierInput[] | null
+  includedLoadingMinutes?: number | null
+  includedUnloadingMinutes?: number | null
+  includedCombinedMinutes?: number | null
+  extraHourlyRate?: number | null
 }
 
 export const listPricingAgreements = (customerId?: string): Promise<PricingAgreement[]> =>
@@ -536,6 +547,21 @@ export interface PricePreviewInput {
   adrRequired?: boolean | null
   /** Drives PerOrderLine service options; null = unknown. */
   cargoLineCount?: number | null
+  /** Set => this order carries its own one-off price agreement; skips all rule/agreement resolution. */
+  oneOff?: OneOffPricingInput | null
+  /** Measured loading/unloading minutes from stop executions, for included-time extra-time proposals. */
+  actualLoadingMinutes?: number | null
+  actualUnloadingMinutes?: number | null
+}
+
+/** A one-off order's own price agreement: no contract is consulted (spec Phase 6). */
+export interface OneOffPricingInput {
+  fixedAmount: number
+  includedLoadingMinutes: number | null
+  includedUnloadingMinutes: number | null
+  includedCombinedMinutes: number | null
+  extraHourlyRate: number | null
+  notes: string | null
 }
 
 export interface PriceBreakdownLine {
@@ -547,6 +573,8 @@ export interface PriceBreakdownLine {
   agreementName: string | null
   actualQuantity: number | null
   billableQuantity: number | null
+  /** An unconfirmed extra-time charge (Phase 6): excluded from total, shown as a proposal ("VOORSTEL"). */
+  proposed?: boolean
 }
 
 export interface PricePreviewServiceLine {
@@ -572,6 +600,8 @@ export interface PriceCalculationResult {
   tariffDate: string | null
   configurationError: string | null
   diagnostics: string[] | null
+  /** Total + proposed (unconfirmed) extra-time charges — never silently invoiceable on its own. */
+  totalWithProposed: number
 }
 
 export const previewPrice = (input: PricePreviewInput): Promise<PriceCalculationResult> =>

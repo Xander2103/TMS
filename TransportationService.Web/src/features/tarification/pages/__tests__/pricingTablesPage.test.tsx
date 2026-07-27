@@ -63,6 +63,10 @@ function makeAgreement(overrides: Partial<PricingAgreement> = {}): PricingAgreem
     baseAgreementId: null,
     baseAgreementName: null,
     modifiers: [],
+    includedLoadingMinutes: null,
+    includedUnloadingMinutes: null,
+    includedCombinedMinutes: null,
+    extraHourlyRate: null,
     ...overrides,
   }
 }

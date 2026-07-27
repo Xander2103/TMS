@@ -232,7 +232,7 @@ describe('TransportOrderForm sections + pricing', () => {
     await userEvent.click(screen.getByRole('tab', { name: /^Prijs$/ }))
     await waitFor(() => expect(previewSpy).toHaveBeenCalled(), { timeout: 3000 })
     await waitFor(() => expect(screen.getByText('3 × Europallet (zone Z3)')).toBeInTheDocument())
-    expect(screen.getByText(/Berekend totaal/)).toBeInTheDocument()
+    expect(screen.getByText(/^Totaal/)).toBeInTheDocument()
     expect(screen.getAllByText('€ 145.00').length).toBeGreaterThan(0)
     // Without the permission there is no manual-override checkbox.
     expect(screen.queryByLabelText(/Handmatige prijs/)).not.toBeInTheDocument()
@@ -328,5 +328,63 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(checkbox).toBeDisabled()
     // The still-manual option (Wachttijd) keeps rendering normally alongside it.
     expect(screen.getByRole('checkbox', { name: /Wachttijd/ })).not.toBeDisabled()
+  })
+
+  it('switches to the one-off fieldset and includes the one-off fields in the preview payload', async () => {
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /^Prijs$/ }))
+
+    expect(screen.queryByLabelText('Vast bedrag (€) *')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('radio', { name: 'Eenmalige prijsafspraak' }))
+    expect(screen.getByLabelText('Vast bedrag (€) *')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('Vast bedrag (€) *'), '850')
+    await userEvent.click(screen.getByRole('radio', { name: 'Per activiteit' }))
+    await userEvent.type(screen.getByLabelText('Laden (min)'), '30')
+    await userEvent.type(screen.getByLabelText('Uurtarief extra tijd (€/u)'), '75')
+
+    await waitFor(() => expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      oneOff: expect.objectContaining({
+        fixedAmount: 850, includedLoadingMinutes: 30, includedUnloadingMinutes: null,
+        includedCombinedMinutes: null, extraHourlyRate: 75,
+      }),
+    })), { timeout: 3000 })
+
+    // Switching back to Klantcontract hides the fieldset again.
+    await userEvent.click(screen.getByRole('radio', { name: 'Klantcontract' }))
+    expect(screen.queryByLabelText('Vast bedrag (€) *')).not.toBeInTheDocument()
+  })
+
+  it('shows a VOORSTEL badge and the proposed subtotal for a proposed extra-time line', async () => {
+    previewSpy.mockResolvedValueOnce({
+      lines: [
+        { label: 'Eenmalige prijsafspraak', amount: 450, source: 'Eenmalig', informational: false },
+        {
+          label: 'Extra laadtijd: 60 min (inbegrepen 30 min)', amount: 37.5, source: 'Extra tijd',
+          informational: false, proposed: true,
+        },
+      ],
+      total: 450,
+      totalWithInformational: 450,
+      totalWithProposed: 487.5,
+      currency: 'EUR',
+      zoneCode: null,
+      zoneName: null,
+      requiresManualPrice: false,
+      serviceLines: [],
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /^Prijs$/ }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Eenmalige prijsafspraak' }))
+    await userEvent.type(screen.getByLabelText('Vast bedrag (€) *'), '450')
+
+    await waitFor(() => expect(screen.getByText(/Extra laadtijd: 60 min/)).toBeInTheDocument())
+    expect(screen.getByText('VOORSTEL')).toBeInTheDocument()
+    expect(screen.getByText('Totaal incl. voorstellen')).toBeInTheDocument()
+    expect(screen.getByText('€ 487.50')).toBeInTheDocument()
   })
 })

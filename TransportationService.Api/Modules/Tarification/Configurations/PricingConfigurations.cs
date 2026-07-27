@@ -70,6 +70,7 @@ public class PricingAgreementConfiguration : IEntityTypeConfiguration<PricingAgr
         builder.Property(a => a.MinimumAmount).HasPrecision(12, 2);
         builder.Property(a => a.MaximumAmount).HasPrecision(12, 2);
         builder.Property(a => a.Notes).HasMaxLength(2000);
+        builder.Property(a => a.ExtraHourlyRate).HasPrecision(10, 2);
         builder.HasMany(a => a.Surcharges).WithOne().HasForeignKey(s => s.AgreementId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(a => a.Assignments).WithOne(x => x.Agreement).HasForeignKey(x => x.AgreementId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(a => a.Modifiers).WithOne().HasForeignKey(m => m.AgreementId).OnDelete(DeleteBehavior.Cascade);

@@ -276,6 +276,32 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   const [priceIsManual, setPriceIsManual] = useState(order?.priceIsManual ?? false)
   const [priceOverrideReason, setPriceOverrideReason] = useState(order?.priceOverrideReason ?? '')
 
+  // --- One-off order pricing (Phase 6): the order carries its own price agreement, no contract ---
+  const [pricingSource, setPricingSource] = useState<'Contract' | 'OneOff'>(order?.pricingSource ?? 'Contract')
+  const [oneOffFixedAmount, setOneOffFixedAmount] = useState(
+    order?.oneOffFixedAmount === null || order?.oneOffFixedAmount === undefined ? '' : String(order.oneOffFixedAmount),
+  )
+  const [oneOffTimeMode, setOneOffTimeMode] = useState<'none' | 'separate' | 'combined'>(() =>
+    order?.oneOffIncludedCombinedMinutes != null
+      ? 'combined'
+      : order?.oneOffIncludedLoadingMinutes != null || order?.oneOffIncludedUnloadingMinutes != null
+        ? 'separate'
+        : 'none',
+  )
+  const [oneOffIncludedLoadingMinutes, setOneOffIncludedLoadingMinutes] = useState(
+    order?.oneOffIncludedLoadingMinutes == null ? '' : String(order.oneOffIncludedLoadingMinutes),
+  )
+  const [oneOffIncludedUnloadingMinutes, setOneOffIncludedUnloadingMinutes] = useState(
+    order?.oneOffIncludedUnloadingMinutes == null ? '' : String(order.oneOffIncludedUnloadingMinutes),
+  )
+  const [oneOffIncludedCombinedMinutes, setOneOffIncludedCombinedMinutes] = useState(
+    order?.oneOffIncludedCombinedMinutes == null ? '' : String(order.oneOffIncludedCombinedMinutes),
+  )
+  const [oneOffExtraHourlyRate, setOneOffExtraHourlyRate] = useState(
+    order?.oneOffExtraHourlyRate == null ? '' : String(order.oneOffExtraHourlyRate),
+  )
+  const [oneOffNotes, setOneOffNotes] = useState(order?.oneOffNotes ?? '')
+
   useEffect(() => {
     let mounted = true
     // Only active services that are selectable during order entry (spec §20).
@@ -329,20 +355,42 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       quantity: serviceQuantities[id]?.trim() ? Number(serviceQuantities[id]) : null,
     }))
 
+  // One-off pricing input built from the form state; undefined when Contract mode (nothing to send).
+  const oneOffPreviewInput = () =>
+    pricingSource !== 'OneOff' || oneOffFixedAmount.trim() === ''
+      ? null
+      : {
+          fixedAmount: Number(oneOffFixedAmount),
+          includedLoadingMinutes: oneOffTimeMode === 'separate' && oneOffIncludedLoadingMinutes.trim()
+            ? Number(oneOffIncludedLoadingMinutes)
+            : null,
+          includedUnloadingMinutes: oneOffTimeMode === 'separate' && oneOffIncludedUnloadingMinutes.trim()
+            ? Number(oneOffIncludedUnloadingMinutes)
+            : null,
+          includedCombinedMinutes: oneOffTimeMode === 'combined' && oneOffIncludedCombinedMinutes.trim()
+            ? Number(oneOffIncludedCombinedMinutes)
+            : null,
+          extraHourlyRate: oneOffExtraHourlyRate.trim() ? Number(oneOffExtraHourlyRate) : null,
+          notes: oneOffNotes.trim() || null,
+        }
+
   // Live price preview, debounced on the pricing-relevant inputs.
   const lastUnloading = [...stops].reverse().find((s) => s.stopType === 'Unloading')
   const previewKey = JSON.stringify([
     customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount,
     lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds, serviceQuantities,
     adrRequired, cargoItems.length,
+    pricingSource, oneOffFixedAmount, oneOffTimeMode, oneOffIncludedLoadingMinutes, oneOffIncludedUnloadingMinutes,
+    oneOffIncludedCombinedMinutes, oneOffExtraHourlyRate, oneOffNotes,
   ])
   useEffect(() => {
     const unitTypeId = unitOptions.find((u) => u.code === quantityUnitCode)?.id ?? null
     const lines = unitTypeId && quantity !== '' && Number(quantity) > 0
       ? [{ unitTypeId, quantity: Number(quantity) }]
       : []
+    const oneOff = oneOffPreviewInput()
     const shouldPreview = Boolean(customerId)
-      && (lines.length > 0 || selectedServiceOptionIds.length > 0 || cargoItems.length > 0 || adrRequired)
+      && (lines.length > 0 || selectedServiceOptionIds.length > 0 || cargoItems.length > 0 || adrRequired || oneOff !== null)
     const timer = window.setTimeout(() => {
       if (!shouldPreview) {
         setPreview(null)
@@ -361,6 +409,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         services: serviceSelections(),
         adrRequired,
         cargoLineCount: cargoItems.length > 0 ? cargoItems.length : null,
+        oneOff,
       })
         .then(setPreview)
         .catch(() => setPreview(null))
@@ -523,6 +572,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       setFormError('Geef een reden op voor de handmatige prijs.')
       return
     }
+    if (pricingSource === 'OneOff' && oneOffFixedAmount.trim() === '') {
+      setActive('prijs')
+      setFormError('Geef het vaste bedrag van de eenmalige prijsafspraak op.')
+      return
+    }
 
     const input: TransportOrderInput = {
       customerId,
@@ -547,6 +601,19 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       services: serviceSelections(),
       priceIsManual,
       priceOverrideReason: priceIsManual ? priceOverrideReason.trim() || null : null,
+      pricingSource,
+      oneOffFixedAmount: pricingSource === 'OneOff' && oneOffFixedAmount.trim() ? Number(oneOffFixedAmount) : null,
+      oneOffIncludedLoadingMinutes: pricingSource === 'OneOff' && oneOffTimeMode === 'separate' && oneOffIncludedLoadingMinutes.trim()
+        ? Number(oneOffIncludedLoadingMinutes)
+        : null,
+      oneOffIncludedUnloadingMinutes: pricingSource === 'OneOff' && oneOffTimeMode === 'separate' && oneOffIncludedUnloadingMinutes.trim()
+        ? Number(oneOffIncludedUnloadingMinutes)
+        : null,
+      oneOffIncludedCombinedMinutes: pricingSource === 'OneOff' && oneOffTimeMode === 'combined' && oneOffIncludedCombinedMinutes.trim()
+        ? Number(oneOffIncludedCombinedMinutes)
+        : null,
+      oneOffExtraHourlyRate: pricingSource === 'OneOff' && oneOffExtraHourlyRate.trim() ? Number(oneOffExtraHourlyRate) : null,
+      oneOffNotes: pricingSource === 'OneOff' ? oneOffNotes.trim() || null : null,
       stops: stops.map((stop) => ({
         stopType: stop.stopType,
         locationId: stop.locationId || null,
@@ -1250,6 +1317,144 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
 
   const prijsContent = (
     <>
+      <div className="tof-row">
+        <label className="tof-checkbox">
+          <input
+            type="radio"
+            name="to-pricing-source"
+            checked={pricingSource === 'Contract'}
+            onChange={() => setPricingSource('Contract')}
+            disabled={saving}
+          />
+          Klantcontract
+        </label>
+        <label className="tof-checkbox">
+          <input
+            type="radio"
+            name="to-pricing-source"
+            checked={pricingSource === 'OneOff'}
+            onChange={() => setPricingSource('OneOff')}
+            disabled={saving}
+          />
+          Eenmalige prijsafspraak
+        </label>
+      </div>
+
+      {pricingSource === 'OneOff' && (
+        <fieldset className="tof-stop">
+          <legend>Eenmalige prijsafspraak</legend>
+          <div className="tof-row">
+            <FormField label="Vast bedrag (€)" htmlFor="to-oneoff-amount" required>
+              <input
+                id="to-oneoff-amount"
+                type="number"
+                min={0}
+                step="0.01"
+                value={oneOffFixedAmount}
+                onChange={(e) => setOneOffFixedAmount(e.target.value)}
+                disabled={saving}
+              />
+            </FormField>
+          </div>
+          <p className="customer-form-muted">Inbegrepen tijd</p>
+          <div className="tof-row">
+            <label className="tof-checkbox">
+              <input
+                type="radio"
+                name="to-oneoff-time-mode"
+                checked={oneOffTimeMode === 'none'}
+                onChange={() => setOneOffTimeMode('none')}
+                disabled={saving}
+              />
+              Geen
+            </label>
+            <label className="tof-checkbox">
+              <input
+                type="radio"
+                name="to-oneoff-time-mode"
+                checked={oneOffTimeMode === 'separate'}
+                onChange={() => setOneOffTimeMode('separate')}
+                disabled={saving}
+              />
+              Per activiteit
+            </label>
+            <label className="tof-checkbox">
+              <input
+                type="radio"
+                name="to-oneoff-time-mode"
+                checked={oneOffTimeMode === 'combined'}
+                onChange={() => setOneOffTimeMode('combined')}
+                disabled={saving}
+              />
+              Gecombineerd
+            </label>
+          </div>
+          {oneOffTimeMode === 'separate' && (
+            <div className="tof-row">
+              <FormField label="Laden (min)" htmlFor="to-oneoff-loading">
+                <input
+                  id="to-oneoff-loading"
+                  type="number"
+                  min={0}
+                  value={oneOffIncludedLoadingMinutes}
+                  onChange={(e) => setOneOffIncludedLoadingMinutes(e.target.value)}
+                  disabled={saving}
+                />
+              </FormField>
+              <FormField label="Lossen (min)" htmlFor="to-oneoff-unloading">
+                <input
+                  id="to-oneoff-unloading"
+                  type="number"
+                  min={0}
+                  value={oneOffIncludedUnloadingMinutes}
+                  onChange={(e) => setOneOffIncludedUnloadingMinutes(e.target.value)}
+                  disabled={saving}
+                />
+              </FormField>
+            </div>
+          )}
+          {oneOffTimeMode === 'combined' && (
+            <div className="tof-row">
+              <FormField label="Totaal (min)" htmlFor="to-oneoff-combined">
+                <input
+                  id="to-oneoff-combined"
+                  type="number"
+                  min={0}
+                  value={oneOffIncludedCombinedMinutes}
+                  onChange={(e) => setOneOffIncludedCombinedMinutes(e.target.value)}
+                  disabled={saving}
+                />
+              </FormField>
+            </div>
+          )}
+          {oneOffTimeMode !== 'none' && (
+            <div className="tof-row">
+              <FormField label="Uurtarief extra tijd (€/u)" htmlFor="to-oneoff-rate">
+                <input
+                  id="to-oneoff-rate"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={oneOffExtraHourlyRate}
+                  onChange={(e) => setOneOffExtraHourlyRate(e.target.value)}
+                  disabled={saving}
+                />
+              </FormField>
+            </div>
+          )}
+          <FormField label="Notities" htmlFor="to-oneoff-notes" hint="Bv. 'Afgesproken via telefoon met dhr. Peeters'.">
+            <textarea
+              id="to-oneoff-notes"
+              rows={2}
+              value={oneOffNotes}
+              onChange={(e) => setOneOffNotes(e.target.value)}
+              disabled={saving}
+              maxLength={500}
+            />
+          </FormField>
+        </fieldset>
+      )}
+
       {preview ? (
         <div className="tof-price-breakdown">
           <p className="customer-form-muted">
@@ -1274,7 +1479,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               </tr>
             </thead>
             <tbody>
-              {preview.lines.map((line, index) => (
+              {preview.lines.filter((line) => !line.proposed).map((line, index) => (
                 <tr key={index} className={line.informational ? 'tof-price-informational' : undefined}>
                   <td>
                     {line.label}
@@ -1290,16 +1495,40 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
                   <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
                 </tr>
               ))}
+              {preview.lines.some((line) => line.proposed) && (
+                <>
+                  <tr>
+                    <th colSpan={2}>Subtotaal</th>
+                    <th className="tof-price-amount">€ {preview.total.toFixed(2)}</th>
+                  </tr>
+                  {preview.lines.filter((line) => line.proposed).map((line, index) => (
+                    <tr key={`proposed-${index}`} className="tof-price-proposed">
+                      <td>
+                        {line.label} <Badge tone="warning">VOORSTEL</Badge>
+                      </td>
+                      <td>{line.source}</td>
+                      <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </>
+              )}
             </tbody>
             <tfoot>
               <tr>
                 <th>
-                  Berekend totaal
+                  Totaal
                   {preview.zoneCode ? ` (zone ${preview.zoneCode})` : ''}
                 </th>
                 <th />
                 <th className="tof-price-amount">€ {preview.total.toFixed(2)}</th>
               </tr>
+              {preview.lines.some((line) => line.proposed) && (
+                <tr>
+                  <th>Totaal incl. voorstellen</th>
+                  <th />
+                  <th className="tof-price-amount">€ {preview.totalWithProposed.toFixed(2)}</th>
+                </tr>
+              )}
             </tfoot>
           </table>
           {preview.requiresManualPrice && !preview.configurationError && (

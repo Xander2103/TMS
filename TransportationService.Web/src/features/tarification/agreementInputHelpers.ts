@@ -22,5 +22,9 @@ export function agreementToInput(agreement: PricingAgreement): PricingAgreementI
       percent: m.percent,
       fixedAmount: m.fixedAmount,
     })),
+    includedLoadingMinutes: agreement.includedLoadingMinutes,
+    includedUnloadingMinutes: agreement.includedUnloadingMinutes,
+    includedCombinedMinutes: agreement.includedCombinedMinutes,
+    extraHourlyRate: agreement.extraHourlyRate,
   }
 }

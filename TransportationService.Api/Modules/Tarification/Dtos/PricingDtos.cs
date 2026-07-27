@@ -36,7 +36,14 @@ public record PricingAgreementDto(
     /// <summary>Set => this is a derived table; it reuses the base-chain root's rules.</summary>
     Guid? BaseAgreementId = null,
     string? BaseAgreementName = null,
-    IReadOnlyList<PricingAgreementModifierDto>? Modifiers = null);
+    IReadOnlyList<PricingAgreementModifierDto>? Modifiers = null,
+    /// <summary>Included loading/unloading time (Phase 6, contract mode). Mutually exclusive with IncludedCombinedMinutes.</summary>
+    int? IncludedLoadingMinutes = null,
+    int? IncludedUnloadingMinutes = null,
+    /// <summary>Included loading+unloading minutes combined. Mutually exclusive with the per-activity fields.</summary>
+    int? IncludedCombinedMinutes = null,
+    /// <summary>Hourly rate charged for time beyond the included allowance (proposal until confirmed).</summary>
+    decimal? ExtraHourlyRate = null);
 
 public record SavePricingAgreementSurchargeRequest(string Name, SurchargeKind Kind, decimal Value);
 
@@ -47,7 +54,9 @@ public record SavePricingAgreementRequest(
     Guid? CustomerId, string Name, DateOnly EffectiveFrom, DateOnly? EffectiveUntil, bool IsActive,
     decimal? MinimumAmount, string? Notes, IReadOnlyList<SavePricingAgreementSurchargeRequest>? Surcharges,
     bool IsShared = false, decimal? MaximumAmount = null,
-    Guid? BaseAgreementId = null, IReadOnlyList<SavePricingAgreementModifierRequest>? Modifiers = null);
+    Guid? BaseAgreementId = null, IReadOnlyList<SavePricingAgreementModifierRequest>? Modifiers = null,
+    int? IncludedLoadingMinutes = null, int? IncludedUnloadingMinutes = null,
+    int? IncludedCombinedMinutes = null, decimal? ExtraHourlyRate = null);
 
 // --- Pricing agreement assignments (shared tables → customers) ---
 
@@ -218,13 +227,28 @@ public record PriceCalculationRequest(
     /// <summary>Whether the order requires ADR handling; drives OnlyForAdr service options.</summary>
     bool? AdrRequired = null,
     /// <summary>Number of (non-deleted) cargo/order lines; drives PerOrderLine service options. Null = unknown.</summary>
-    int? CargoLineCount = null);
+    int? CargoLineCount = null,
+    /// <summary>
+    /// Set => this order carries its own one-off price agreement (spec Phase 6): the engine
+    /// skips all rule/agreement resolution and prices the fixed amount + extra-time proposals.
+    /// </summary>
+    OneOffPricingInput? OneOff = null,
+    /// <summary>Measured loading/unloading minutes from stop executions, for included-time extra-time proposals.</summary>
+    decimal? ActualLoadingMinutes = null,
+    decimal? ActualUnloadingMinutes = null);
+
+/// <summary>A one-off order's own price agreement: no contract is consulted (spec Phase 6).</summary>
+public record OneOffPricingInput(
+    decimal FixedAmount, int? IncludedLoadingMinutes, int? IncludedUnloadingMinutes, int? IncludedCombinedMinutes,
+    decimal? ExtraHourlyRate, string? Notes);
 
 public record PriceBreakdownLine(
     string Label, decimal Amount, string Source, bool Informational = false,
     Guid? RuleId = null, string? RuleName = null,
     Guid? AgreementId = null, string? AgreementName = null,
-    decimal? ActualQuantity = null, decimal? BillableQuantity = null);
+    decimal? ActualQuantity = null, decimal? BillableQuantity = null,
+    /// <summary>An unconfirmed extra-time charge (spec Phase 6): excluded from Total, included in TotalWithProposed.</summary>
+    bool Proposed = false);
 
 /// <summary>A selected (or auto-applied) service option with its resolved (customer or default) price.</summary>
 public record PriceServiceLine(
@@ -235,7 +259,7 @@ public record PriceServiceLine(
 
 public record PriceCalculationResult(
     IReadOnlyList<PriceBreakdownLine> Lines,
-    /// <summary>Calculated total EXCLUDING informational lines (diesel is added at invoicing).</summary>
+    /// <summary>Calculated total EXCLUDING informational AND proposed lines (diesel is added at invoicing).</summary>
     decimal Total,
     decimal TotalWithInformational,
     string Currency,
@@ -248,4 +272,6 @@ public record PriceCalculationResult(
     /// <summary>Blocking configuration problem (e.g. two equally specific rules). Fix the tariffs.</summary>
     string? ConfigurationError = null,
     /// <summary>Diagnostic context shown when no valid tariff was found.</summary>
-    IReadOnlyList<string>? Diagnostics = null);
+    IReadOnlyList<string>? Diagnostics = null,
+    /// <summary>Total + proposed (unconfirmed) extra-time charges — never silently invoiceable on its own.</summary>
+    decimal TotalWithProposed = 0m);
