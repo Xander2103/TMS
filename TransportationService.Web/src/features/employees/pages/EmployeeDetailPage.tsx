@@ -203,6 +203,17 @@ export function EmployeeDetailPage() {
 
       {tab === 'profiel' && (
         <TabPanel tabId="profiel">
+          {employee.notes && (
+            <section className="employee-notes-card">
+              <h3>Notities</h3>
+              <p className="employee-notes-text">{employee.notes}</p>
+              <p className="customer-form-muted">
+                {canEdit
+                  ? 'Aanpassen kan hieronder in de sectie "Notities"; elke wijziging verschijnt in het tabblad Historiek.'
+                  : 'Wijzigingen aan notities verschijnen in het tabblad Historiek.'}
+              </p>
+            </section>
+          )}
           {canEdit ? (
             <EmployeeForm
               mode="edit"
