@@ -48,6 +48,13 @@ export interface InvoiceLine {
   unitPrice: number
   vatRatePercent: number
   lineTotal: number
+  /** Verkoopcategorie: live while Draft, frozen name/account after Send. */
+  salesCategoryId: string | null
+  salesCategoryName: string | null
+  ledgerAccountNumber: string | null
+  ledgerAccountName: string | null
+  /** Draft-stage warning when the category is missing or unmapped; null = ok. */
+  ledgerWarning: string | null
 }
 
 export interface InvoiceDetail {
@@ -105,6 +112,8 @@ export interface UpdateLineInput {
   quantity: number
   unitPrice: number
   vatRatePercent: number
+  /** Null keeps the line's current category. */
+  salesCategoryId?: string | null
 }
 
 export function euro(value: number, currency = 'EUR'): string {

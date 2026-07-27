@@ -54,7 +54,8 @@ public class InvoiceEntityAndAttachmentTests
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(null));
         var invoices = new InvoiceService(db.Context, tenant, audit, new TestClock(Now),
             new InvoiceNumberService(db.Context, tenant),
-            new CustomerBillingConfigService(db.Context, tenant, audit, new TestClock(Now)));
+            new CustomerBillingConfigService(db.Context, tenant, audit, new TestClock(Now)),
+            new TransportationService.Api.Modules.Accounting.Services.AccountingService(db.Context, tenant, audit));
         var storageRoot = Path.Combine(Path.GetTempPath(), "ts-tests", Guid.NewGuid().ToString("N"));
         var attachments = new InvoiceAttachmentService(db.Context, tenant, audit, new LocalFileStorageService(storageRoot));
         return new Harness(db, invoices, attachments, tenantId, customerId, defaultEntity, customerEntity);

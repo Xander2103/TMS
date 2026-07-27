@@ -32,6 +32,7 @@ public class InvoiceService : IInvoiceService
     private readonly TimeProvider _timeProvider;
     private readonly IInvoiceNumberService _numberService;
     private readonly Partners.Services.ICustomerBillingConfigService _billingConfig;
+    private readonly Accounting.Services.IAccountingService _accounting;
 
     public InvoiceService(
         TransportationDbContext dbContext,
@@ -39,7 +40,8 @@ public class InvoiceService : IInvoiceService
         IAuditService auditService,
         TimeProvider timeProvider,
         IInvoiceNumberService numberService,
-        Partners.Services.ICustomerBillingConfigService billingConfig)
+        Partners.Services.ICustomerBillingConfigService billingConfig,
+        Accounting.Services.IAccountingService accounting)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -47,6 +49,7 @@ public class InvoiceService : IInvoiceService
         _timeProvider = timeProvider;
         _numberService = numberService;
         _billingConfig = billingConfig;
+        _accounting = accounting;
     }
 
     private IQueryable<Invoice> TenantScoped() =>
@@ -268,6 +271,27 @@ public class InvoiceService : IInvoiceService
                 .GroupBy(l => l.TransportOrderId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
+        // Sales categorisation (§7.2): system roles categorise structurally — the base transport
+        // line, the service/supplement lines and the diesel lines; manual lines carry the
+        // caller's explicit choice. The mapping itself resolves at Send, never here.
+        await _accounting.EnsureSeededAsync(cancellationToken);
+        var salesCategories = await _dbContext.SalesCategories.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && c.IsActive)
+            .ToListAsync(cancellationToken);
+        Guid? CategoryForRole(Modules.Accounting.Entities.SalesCategorySystemRole role) =>
+            salesCategories.FirstOrDefault(c => c.SystemRole == role)?.Id;
+        var transportCategoryId = CategoryForRole(Modules.Accounting.Entities.SalesCategorySystemRole.Transport);
+        var surchargeCategoryId = CategoryForRole(Modules.Accounting.Entities.SalesCategorySystemRole.Surcharge);
+        var dieselCategoryId = CategoryForRole(Modules.Accounting.Entities.SalesCategorySystemRole.Diesel);
+        var manualCategoryIds = request.ManualLines
+            .Where(m => m.SalesCategoryId is not null).Select(m => m.SalesCategoryId!.Value).Distinct().ToList();
+        if (manualCategoryIds.Count > 0
+            && await _dbContext.SalesCategories.CountAsync(
+                c => c.TenantId == tenantId && manualCategoryIds.Contains(c.Id), cancellationToken) != manualCategoryIds.Count)
+        {
+            throw new Common.InvalidTenantReferenceException("verkoopcategorie");
+        }
+
         var sequence = 1;
         foreach (var order in orderDtos)
         {
@@ -286,6 +310,7 @@ public class InvoiceService : IInvoiceService
                 Quantity = 1m,
                 UnitPrice = (order.AgreedPrice ?? 0m) - serviceTotal,
                 VatRatePercent = vatRate,
+                SalesCategoryId = transportCategoryId,
             });
             foreach (var serviceLine in orderServiceLines)
             {
@@ -304,6 +329,7 @@ public class InvoiceService : IInvoiceService
                     Quantity = 1m,
                     UnitPrice = serviceLine.Amount,
                     VatRatePercent = vatRate,
+                    SalesCategoryId = surchargeCategoryId,
                 });
             }
         }
@@ -319,6 +345,7 @@ public class InvoiceService : IInvoiceService
                 Quantity = manual.Quantity,
                 UnitPrice = manual.UnitPrice,
                 VatRatePercent = manual.VatRatePercent ?? vatRate,
+                SalesCategoryId = manual.SalesCategoryId,
             });
         }
 
@@ -370,6 +397,7 @@ public class InvoiceService : IInvoiceService
                     Quantity = 1m,
                     UnitPrice = surchargeLine.Amount,
                     VatRatePercent = vatRate,
+                    SalesCategoryId = dieselCategoryId,
                 });
             }
         }
@@ -465,6 +493,16 @@ public class InvoiceService : IInvoiceService
             ApplySnapshots(invoice, snapshotEntity, snapshotCustomer.VatTreatment, snapshotCustomer.VatNumber);
         }
 
+        var requestedCategoryIds = request.Lines
+            .Where(l => l.SalesCategoryId is not null).Select(l => l.SalesCategoryId!.Value).Distinct().ToList();
+        if (requestedCategoryIds.Count > 0
+            && await _dbContext.SalesCategories.CountAsync(
+                c => c.TenantId == _tenantContext.TenantId && requestedCategoryIds.Contains(c.Id), cancellationToken)
+                != requestedCategoryIds.Count)
+        {
+            return InvoiceOperationResult.Invalid("Een gekozen verkoopcategorie bestaat niet.");
+        }
+
         var existingById = invoice.Lines.Where(l => !l.IsDeleted).ToDictionary(l => l.Id);
         var keptIds = request.Lines.Where(l => l.Id is not null).Select(l => l.Id!.Value).ToHashSet();
 
@@ -502,6 +540,7 @@ public class InvoiceService : IInvoiceService
                 existing.Quantity = line.Quantity;
                 existing.UnitPrice = line.UnitPrice;
                 existing.VatRatePercent = line.VatRatePercent;
+                existing.SalesCategoryId = line.SalesCategoryId ?? existing.SalesCategoryId;
             }
             else
             {
@@ -515,6 +554,7 @@ public class InvoiceService : IInvoiceService
                     Quantity = line.Quantity,
                     UnitPrice = line.UnitPrice,
                     VatRatePercent = line.VatRatePercent,
+                    SalesCategoryId = line.SalesCategoryId,
                 });
             }
         }
@@ -614,6 +654,14 @@ public class InvoiceService : IInvoiceService
 
         var before = new { invoice.Status };
         invoice.Status = target;
+
+        if (target == InvoiceStatus.Sent)
+        {
+            // §7.3: freeze the sales category + ledger account from the THEN-current mapping.
+            // Later mapping changes never rewrite these lines; the accounting export reads
+            // exclusively from these snapshots.
+            await FreezeLedgerSnapshotsAsync(invoice, cancellationToken);
+        }
 
         if (target == InvoiceStatus.Cancelled)
         {
@@ -808,6 +856,40 @@ public class InvoiceService : IInvoiceService
         }
     }
 
+    /// <summary>§7.3: resolve category + mapped account for every category-carrying line at Send.</summary>
+    private async Task FreezeLedgerSnapshotsAsync(Invoice invoice, CancellationToken cancellationToken)
+    {
+        var lines = invoice.Lines.Where(l => !l.IsDeleted).ToList();
+        var categoryIds = lines.Where(l => l.SalesCategoryId is not null).Select(l => l.SalesCategoryId!.Value).Distinct().ToList();
+        if (categoryIds.Count == 0)
+        {
+            return;
+        }
+
+        var categories = await _dbContext.SalesCategories.AsNoTracking()
+            .Where(c => c.TenantId == _tenantContext.TenantId && categoryIds.Contains(c.Id))
+            .Select(c => new
+            {
+                c.Id, c.Name, c.LedgerAccountId,
+                AccountNumber = (string?)c.LedgerAccount!.AccountNumber,
+                AccountName = (string?)c.LedgerAccount.Name,
+            })
+            .ToDictionaryAsync(c => c.Id, cancellationToken);
+
+        foreach (var line in lines)
+        {
+            if (line.SalesCategoryId is not { } categoryId || !categories.TryGetValue(categoryId, out var category))
+            {
+                continue;
+            }
+
+            line.SalesCategoryNameSnapshot = category.Name;
+            line.LedgerAccountId = category.LedgerAccountId;
+            line.LedgerAccountNumberSnapshot = category.AccountNumber;
+            line.LedgerAccountNameSnapshot = category.AccountName;
+        }
+    }
+
     private async Task<InvoiceDetailDto> MapDetailAsync(Invoice invoice, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
@@ -825,11 +907,43 @@ public class InvoiceService : IInvoiceService
                 .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
                 .ToDictionaryAsync(o => o.Id, o => o.OrderNumber, cancellationToken);
 
-        var lines = liveLines.Select(l => new InvoiceLineDto(
-            l.Id, l.Sequence, l.TransportOrderId,
-            l.TransportOrderId is { } oid ? orderNumbers.GetValueOrDefault(oid) : null,
-            l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent,
-            Math.Round(l.Quantity * l.UnitPrice, 2))).ToList();
+        // Live category/mapping info while Draft; frozen snapshots afterwards (§7.3).
+        var lineCategoryIds = liveLines.Where(l => l.SalesCategoryId is not null)
+            .Select(l => l.SalesCategoryId!.Value).Distinct().ToList();
+        var liveCategories = lineCategoryIds.Count == 0
+            ? new Dictionary<Guid, (string Name, string? AccountNumber, string? AccountName)>()
+            : (await _dbContext.SalesCategories.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && lineCategoryIds.Contains(c.Id))
+                .Select(c => new
+                {
+                    c.Id, c.Name,
+                    AccountNumber = (string?)c.LedgerAccount!.AccountNumber,
+                    AccountName = (string?)c.LedgerAccount.Name,
+                })
+                .ToListAsync(cancellationToken))
+                .ToDictionary(c => c.Id, c => (c.Name, c.AccountNumber, c.AccountName));
+
+        var isDraft = invoice.Status == InvoiceStatus.Draft;
+        var lines = liveLines.Select(l =>
+        {
+            var live = l.SalesCategoryId is { } categoryId ? liveCategories.GetValueOrDefault(categoryId) : default;
+            var categoryName = isDraft ? live.Name : l.SalesCategoryNameSnapshot ?? live.Name;
+            var accountNumber = isDraft ? live.AccountNumber : l.LedgerAccountNumberSnapshot;
+            var accountName = isDraft ? live.AccountName : l.LedgerAccountNameSnapshot;
+            var warning = isDraft
+                ? l.SalesCategoryId is null
+                    ? "Geen verkoopcategorie gekozen voor deze lijn."
+                    : accountNumber is null
+                        ? $"Geen grootboekrekening ingesteld voor '{categoryName}'. Configureer deze bij Bedrijfsinstellingen → Boekhouding."
+                        : null
+                : null;
+            return new InvoiceLineDto(
+                l.Id, l.Sequence, l.TransportOrderId,
+                l.TransportOrderId is { } oid ? orderNumbers.GetValueOrDefault(oid) : null,
+                l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent,
+                Math.Round(l.Quantity * l.UnitPrice, 2),
+                l.SalesCategoryId, categoryName, accountNumber, accountName, warning);
+        }).ToList();
 
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
         var vat = Math.Round(liveLines.Sum(l => l.Quantity * l.UnitPrice * l.VatRatePercent / 100m), 2);

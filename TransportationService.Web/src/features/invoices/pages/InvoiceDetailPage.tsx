@@ -24,6 +24,7 @@ import {
   type InvoiceAttachment,
 } from '../api/invoiceAttachmentsApi'
 import { formatFileSize } from '../utils/fileSize'
+import { listSalesCategories, type SalesCategory } from '../../accounting/api/accountingApi'
 import {
   euro,
   INVOICE_STATUS_LABELS,
@@ -63,6 +64,9 @@ export function InvoiceDetailPage() {
 
   const [confirmTransition, setConfirmTransition] = useState<InvoiceStatus | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Active sales categories for the per-line select in edit mode; empty when the caller
+  // lacks the accounting/invoice read permissions — the select simply doesn't render then.
+  const [salesCategories, setSalesCategories] = useState<SalesCategory[]>([])
 
   const [overrideOpen, setOverrideOpen] = useState(false)
   const [overrideNumber, setOverrideNumber] = useState('')
@@ -102,8 +106,12 @@ export function InvoiceDetailPage() {
         quantity: l.quantity,
         unitPrice: l.unitPrice,
         vatRatePercent: l.vatRatePercent,
+        salesCategoryId: l.salesCategoryId,
       })),
     )
+    listSalesCategories()
+      .then(setSalesCategories)
+      .catch(() => setSalesCategories([]))
     setEditing(true)
   }
 
@@ -133,6 +141,7 @@ export function InvoiceDetailPage() {
           quantity: line.quantity,
           unitPrice: line.unitPrice,
           vatRatePercent: line.vatRatePercent,
+          salesCategoryId: line.salesCategoryId ?? null,
         })),
       })
       setInvoice(updated)
@@ -267,6 +276,7 @@ export function InvoiceDetailPage() {
             <thead>
               <tr>
                 <th>Omschrijving</th>
+                <th>Verkoopcategorie</th>
                 <th>Aantal</th>
                 <th>Prijs</th>
                 <th>Btw %</th>
@@ -279,6 +289,21 @@ export function InvoiceDetailPage() {
                   <td>
                     {line.orderNumber && <code className="inv-line-order">{line.orderNumber}</code>}
                     <input value={line.description} onChange={(e) => setLine(line.key, { description: e.target.value })} disabled={busy} maxLength={500} />
+                  </td>
+                  <td>
+                    <select
+                      aria-label={`Verkoopcategorie voor ${line.description || 'nieuwe lijn'}`}
+                      value={line.salesCategoryId ?? ''}
+                      onChange={(e) => setLine(line.key, { salesCategoryId: e.target.value || null })}
+                      disabled={busy}
+                    >
+                      <option value="">— Geen —</option>
+                      {salesCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td>
                     <input type="number" min={0.01} step="0.01" value={line.quantity} onChange={(e) => setLine(line.key, { quantity: Number(e.target.value) })} disabled={busy} />
@@ -303,7 +328,7 @@ export function InvoiceDetailPage() {
             onClick={() =>
               setLines((rows) => [
                 ...rows,
-                { key: `l-${++lineKey}`, id: null, orderNumber: null, description: '', quantity: 1, unitPrice: 0, vatRatePercent: 21 },
+                { key: `l-${++lineKey}`, id: null, orderNumber: null, description: '', quantity: 1, unitPrice: 0, vatRatePercent: 21, salesCategoryId: null },
               ])
             }
             disabled={busy}
@@ -347,6 +372,17 @@ export function InvoiceDetailPage() {
                       </button>
                     )}{' '}
                     {line.description}
+                    {(line.salesCategoryName || line.ledgerAccountNumber) && (
+                      <div className="customer-form-muted">
+                        {line.salesCategoryName}
+                        {line.ledgerAccountNumber && ` → ${line.ledgerAccountNumber} ${line.ledgerAccountName ?? ''}`.trimEnd()}
+                      </div>
+                    )}
+                    {line.ledgerWarning && (
+                      <div>
+                        <Badge tone="warning">{line.ledgerWarning}</Badge>
+                      </div>
+                    )}
                   </td>
                   <td>{line.quantity.toLocaleString('nl-BE')}</td>
                   <td>{euro(line.unitPrice, invoice.currency)}</td>

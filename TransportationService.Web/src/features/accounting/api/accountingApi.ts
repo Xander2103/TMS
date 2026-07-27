@@ -1,4 +1,6 @@
-import { apiClient } from '../../../api/apiClient'
+import { ApiError, apiClient } from '../../../api/apiClient'
+import { apiBaseUrl } from '../../../config/env'
+import { getAccessToken } from '../../auth/authStorage'
 
 export interface LedgerAccount {
   id: string
@@ -61,6 +63,33 @@ export const updateSalesCategory = (id: string, input: SalesCategoryInput): Prom
   apiClient.putJson(`/api/accounting/sales-categories/${id}`, input)
 
 export const getAccountingHealth = (): Promise<AccountingHealth> => apiClient.getJson('/api/accounting/health')
+
+/**
+ * Downloads the XLSX accounting export for the invoice-date window. The backend blocks with a
+ * clear Dutch message when any Sent/Paid line in the window misses a frozen ledger account.
+ */
+export async function downloadAccountingExport(from: string, to: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/accounting/export?from=${from}&to=${to}`, {
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+  })
+  if (!response.ok) {
+    let message = 'De boekhoudexport kon niet worden gemaakt.'
+    try {
+      const data = (await response.json()) as { detail?: string; message?: string }
+      message = data.detail ?? data.message ?? message
+    } catch {
+      // keep fallback
+    }
+    throw new ApiError(message, response.status)
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `boekhoudexport-${from}-${to}.xlsx`
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
 
 export const SYSTEM_ROLE_LABELS: Record<SalesCategorySystemRole, string> = {
   None: 'Handmatig te kiezen',

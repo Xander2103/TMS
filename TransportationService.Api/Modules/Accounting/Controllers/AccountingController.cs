@@ -15,10 +15,12 @@ namespace TransportationService.Api.Modules.Accounting.Controllers;
 public class AccountingController : ControllerBase
 {
     private readonly IAccountingService _service;
+    private readonly IAccountingExportService _export;
 
-    public AccountingController(IAccountingService service)
+    public AccountingController(IAccountingService service, IAccountingExportService export)
     {
         _service = service;
+        _export = export;
     }
 
     [HttpGet("ledger-accounts")]
@@ -72,4 +74,15 @@ public class AccountingController : ControllerBase
     [RequirePermission(PermissionCodes.AccountingView, PermissionCodes.AccountingManage)]
     public async Task<ActionResult<AccountingHealthDto>> GetHealth(CancellationToken cancellationToken)
         => Ok(await _service.GetHealthAsync(cancellationToken));
+
+    /// <summary>XLSX export of Sent/Paid invoice lines with their frozen ledger snapshots (§7.4).</summary>
+    [HttpGet("export")]
+    [RequirePermission(PermissionCodes.AccountingView, PermissionCodes.AccountingManage)]
+    public async Task<IActionResult> Export(
+        [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
+    {
+        var bytes = await _export.ExportAsync(from, to, cancellationToken);
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            $"boekhoudexport-{from:yyyyMMdd}-{to:yyyyMMdd}.xlsx");
+    }
 }

@@ -4,11 +4,16 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
+import { FormField } from '../../../components/ui/FormField'
+import { Modal } from '../../../components/ui/Modal'
 import { Pagination } from '../../../components/ui/Pagination'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { describeApiError } from '../../../api/problemDetails'
+import { downloadAccountingExport } from '../../accounting/api/accountingApi'
 import { searchInvoices } from '../api/invoicesApi'
 import {
   euro,
@@ -22,10 +27,15 @@ import './invoices.css'
 
 export function InvoicesPage() {
   const navigate = useNavigate()
-  const { hasPermission } = useAuth()
+  const { hasPermission, hasAnyPermission } = useAuth()
+  const { showError, showSuccess } = useToast()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | ''>('')
   const [page, setPage] = useState(1)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportFrom, setExportFrom] = useState('')
+  const [exportTo, setExportTo] = useState('')
+  const [exportBusy, setExportBusy] = useState(false)
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<InvoiceListItem>(
     (args) => searchInvoices({ ...args, status: statusFilter || undefined }),
@@ -59,9 +69,16 @@ export function InvoicesPage() {
       <PageHeader
         title="Facturen"
         action={
-          hasPermission('invoices.create') ? (
-            <Button onClick={() => navigate('/invoices/new')}>Nieuwe factuur</Button>
-          ) : undefined
+          <>
+            {hasAnyPermission(['accounting.view', 'accounting.manage']) && (
+              <Button variant="secondary" onClick={() => setExportOpen(true)}>
+                Boekhoudexport
+              </Button>
+            )}
+            {hasPermission('invoices.create') && (
+              <Button onClick={() => navigate('/invoices/new')}>Nieuwe factuur</Button>
+            )}
+          </>
         }
       />
       <div className="inv-filters">
@@ -101,6 +118,53 @@ export function InvoicesPage() {
         onRowClick={(row) => navigate(`/invoices/${row.id}`)}
       />
       <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />
+
+      {exportOpen && (
+        <Modal
+          title="Boekhoudexport"
+          onClose={() => setExportOpen(false)}
+          busy={exportBusy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setExportOpen(false)} disabled={exportBusy}>
+                Annuleren
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (!exportFrom || !exportTo) {
+                    showError('Kies een begin- en einddatum.')
+                    return
+                  }
+                  setExportBusy(true)
+                  try {
+                    await downloadAccountingExport(exportFrom, exportTo)
+                    showSuccess('Boekhoudexport gedownload.')
+                    setExportOpen(false)
+                  } catch (err) {
+                    showError(describeApiError(err, 'De boekhoudexport kon niet worden gemaakt.').message)
+                  } finally {
+                    setExportBusy(false)
+                  }
+                }}
+                disabled={exportBusy}
+              >
+                {exportBusy ? 'Bezig…' : 'Exporteren'}
+              </Button>
+            </>
+          }
+        >
+          <p className="placeholder-text">
+            Exporteert alle verzonden en betaalde factuurlijnen (factuurdatum in de periode) met hun vastgelegde
+            grootboekrekening. Ontbreekt er een rekening, dan wordt de export geblokkeerd met de betrokken facturen.
+          </p>
+          <FormField label="Van (factuurdatum)" htmlFor="exp-from" required>
+            <input id="exp-from" type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
+          </FormField>
+          <FormField label="Tot en met" htmlFor="exp-to" required>
+            <input id="exp-to" type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
+          </FormField>
+        </Modal>
+      )}
     </div>
   )
 }

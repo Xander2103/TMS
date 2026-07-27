@@ -25,7 +25,14 @@ public record InvoiceLineDto(
     decimal Quantity,
     decimal UnitPrice,
     decimal VatRatePercent,
-    decimal LineTotal);
+    decimal LineTotal,
+    /// <summary>Verkoopcategorie: live while Draft, frozen name/account after Send (§7.3).</summary>
+    Guid? SalesCategoryId = null,
+    string? SalesCategoryName = null,
+    string? LedgerAccountNumber = null,
+    string? LedgerAccountName = null,
+    /// <summary>Draft-stage warning when the category is missing or unmapped; null = ok.</summary>
+    string? LedgerWarning = null);
 
 public record InvoiceDetailDto(
     Guid Id,
@@ -64,7 +71,8 @@ public record ManualInvoiceLineInput(
     string Description,
     decimal Quantity,
     decimal UnitPrice,
-    decimal? VatRatePercent);
+    decimal? VatRatePercent,
+    Guid? SalesCategoryId = null);
 
 public record CreateInvoiceRequest(
     Guid CustomerId,
@@ -97,7 +105,9 @@ public record UpdateInvoiceLineInput(
     string Description,
     decimal Quantity,
     decimal UnitPrice,
-    decimal VatRatePercent);
+    decimal VatRatePercent,
+    /// <summary>Null keeps the line's current category (clearing is not a draft operation).</summary>
+    Guid? SalesCategoryId = null);
 
 public record ChangeInvoiceStatusRequest(InvoiceStatus Status);
 

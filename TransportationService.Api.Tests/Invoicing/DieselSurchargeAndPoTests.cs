@@ -51,7 +51,8 @@ public class DieselSurchargeAndPoTests
         var audit = new AuditService(db.Context, tenant, new DevCurrentUserContext(null));
         var billing = new CustomerBillingConfigService(db.Context, tenant, audit, new TestClock(Now));
         var invoices = new InvoiceService(db.Context, tenant, audit, new TestClock(Now),
-            new InvoiceNumberService(db.Context, tenant), billing);
+            new InvoiceNumberService(db.Context, tenant), billing,
+            new TransportationService.Api.Modules.Accounting.Services.AccountingService(db.Context, tenant, audit));
         return new Harness(db, invoices, billing, tenantId, customerId, orderId, secondOrderId);
     }
 
