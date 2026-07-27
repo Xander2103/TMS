@@ -130,6 +130,10 @@ fysieke order verandert nooit (zie `PricingEngine.BillableQuantity`).
 afronding per 0,25 (kwartier): 2u10 → rondt op naar 2,25u → onder het minimum → 3 × €72 = €216;
 3u40 → rondt op naar 3,75u → 3,75 × €72 = €270.
 
+Beide velden zijn rechtstreeks in het regelraster (`RuleGridEditor`) bewerkbaar via de kolommen
+**Min. aantal** en **Afrondingsstap** — dezelfde kolomnamen als in de Excel-rondgang (§9). De
+kolommen tonen enkel een invoerveld voor regels met basis *Per uur*; bij andere bases staat er "—".
+
 ### PricingZone
 
 `PricingZone` + `PricingZoneArea` (land + postcode-van/tot). Resolutie

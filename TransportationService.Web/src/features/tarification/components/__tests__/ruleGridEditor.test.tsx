@@ -157,6 +157,35 @@ describe('RuleGridEditor', () => {
     expect(patch.brackets).toHaveLength(1)
   })
 
+  it('shows editable hourly fields only for rules with basis Per uur', async () => {
+    const user = userEvent.setup()
+    state.rules = [
+      makeRule({ id: 'rule-h', name: 'Uurtarief kraan', basis: 'Hourly', minimumQuantity: 3, quantityRoundingStep: 0.25 }),
+      makeRule(),
+    ]
+    render(<RuleGridEditor agreementId="agr-1" agreementCustomerId={null} canManage />)
+
+    // Hourly rule: both fields present and prefilled.
+    const minInput = await screen.findByLabelText('Minimum aantal uren voor Uurtarief kraan')
+    expect(minInput).toHaveValue(3)
+    expect(screen.getByLabelText('Afrondingsstap voor Uurtarief kraan')).toHaveValue(0.25)
+
+    // Non-hourly rule: the fields are not rendered.
+    expect(screen.queryByLabelText('Minimum aantal uren voor Basisregel')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Afrondingsstap voor Basisregel')).not.toBeInTheDocument()
+
+    // Editing the minimum saves the full rule payload including both hourly fields.
+    await user.clear(minInput)
+    await user.type(minInput, '4')
+    await user.tab()
+    await waitFor(() =>
+      expect(state.updateRule).toHaveBeenCalledWith(
+        'rule-h',
+        expect.objectContaining({ minimumQuantity: 4, quantityRoundingStep: 0.25 }),
+      ),
+    )
+  })
+
   it('disables every input without tariffs.manage', async () => {
     render(<RuleGridEditor agreementId="agr-1" agreementCustomerId={null} canManage={false} />)
 

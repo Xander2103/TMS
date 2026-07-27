@@ -244,6 +244,8 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                 <th>Basisbedrag</th>
                 <th>Min</th>
                 <th>Max</th>
+                <th title="Minimum aantal te factureren uren (alleen bij basis Per uur)">Min. aantal</th>
+                <th title="Uren worden naar boven afgerond per stap, bv. 0,25 (alleen bij basis Per uur)">Afrondingsstap</th>
                 <th>Van</th>
                 <th>Tot</th>
                 <th>Gewicht tot (kg)</th>
@@ -405,6 +407,53 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           }}
                         />
                       </td>
+                      <td>
+                        {rule.basis === 'Hourly' ? (
+                          <input
+                            aria-label={`Minimum aantal uren voor ${rule.name}`}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            defaultValue={rule.minimumQuantity ?? ''}
+                            disabled={!canManage}
+                            className={fieldError(rule.id, 'minimumQuantity') ? 'rule-grid-cell-invalid' : undefined}
+                            onBlur={(e) => {
+                              const value = e.target.value.trim() === '' ? null : Number(e.target.value)
+                              if (value !== null && (Number.isNaN(value) || value < 0)) {
+                                showError('Min. aantal moet 0 of hoger zijn.')
+                                return
+                              }
+                              if (value !== rule.minimumQuantity) void saveRule(rule, { minimumQuantity: value })
+                            }}
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td>
+                        {rule.basis === 'Hourly' ? (
+                          <input
+                            aria-label={`Afrondingsstap voor ${rule.name}`}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="bv. 0,25"
+                            defaultValue={rule.quantityRoundingStep ?? ''}
+                            disabled={!canManage}
+                            className={fieldError(rule.id, 'quantityRoundingStep') ? 'rule-grid-cell-invalid' : undefined}
+                            onBlur={(e) => {
+                              const value = e.target.value.trim() === '' ? null : Number(e.target.value)
+                              if (value !== null && (Number.isNaN(value) || value < 0)) {
+                                showError('Afrondingsstap moet 0 of hoger zijn.')
+                                return
+                              }
+                              if (value !== rule.quantityRoundingStep) void saveRule(rule, { quantityRoundingStep: value })
+                            }}
+                          />
+                        ) : (
+                          '—'
+                        )}
+                      </td>
                       <td colSpan={5}>—</td>
                       <td>
                         <input
@@ -477,7 +526,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                               }}
                             />
                           </td>
-                          <td colSpan={3}>—</td>
+                          <td colSpan={5}>—</td>
                           <td>
                             <input
                               aria-label={`Staffel ${index + 1} van ${rule.name} van`}
@@ -560,7 +609,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       ))}
                     {expanded && canManage && (
                       <tr className="rule-grid-bracket-row">
-                        <td colSpan={18}>
+                        <td colSpan={20}>
                           <button type="button" className="issued-items-link" onClick={() => addBracket(rule)}>
                             + Staffelrij
                           </button>
