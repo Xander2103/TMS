@@ -56,6 +56,14 @@ vi.mock('../../../tarification/api/pricingApi', async () => {
           id: 'opt-wacht', code: 'WACHT', name: 'Wachttijd', kind: 'PerHour', defaultValue: 45,
           isActive: true, sortOrder: 1, description: null, invoiceDescription: null, selectableInOrders: true,
         },
+        {
+          id: 'opt-opslag', code: 'OPSLAG', name: 'Opslag', kind: 'PerDay', defaultValue: 0.25,
+          isActive: true, sortOrder: 2, description: null, invoiceDescription: null, selectableInOrders: true,
+        },
+        {
+          id: 'opt-paldag', code: 'PALDAG', name: 'Palletopslag', kind: 'PerPalletDay', defaultValue: 0.2,
+          isActive: true, sortOrder: 3, description: null, invoiceDescription: null, selectableInOrders: true,
+        },
       ]),
     getCustomerPricingConfig: () =>
       Promise.resolve({
@@ -158,6 +166,43 @@ describe('TransportOrderForm sections + pricing', () => {
     await waitFor(() => expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
       services: expect.arrayContaining([
         expect.objectContaining({ serviceOptionId: 'opt-wacht', quantity: 3 }),
+      ]),
+    })), { timeout: 3000 })
+  })
+
+  it('asks a day count for per-day services and derives pallet-days for per-pallet-day services', async () => {
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Services/ }))
+
+    // Per-day: a lone day-count input; sent as the billable quantity + dayCount.
+    await userEvent.click(await screen.findByRole('checkbox', { name: /^Opslag/ }))
+    await userEvent.type(await screen.findByLabelText('Aantal dagen — Opslag'), '12')
+    await waitFor(() => expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      services: expect.arrayContaining([
+        expect.objectContaining({ serviceOptionId: 'opt-opslag', quantity: 12, dayCount: 12 }),
+      ]),
+    })), { timeout: 3000 })
+
+    // Per-pallet-day: pallets × days auto-fills the (still editable) pallet-days quantity.
+    await userEvent.click(screen.getByRole('checkbox', { name: /Palletopslag/ }))
+    await userEvent.type(await screen.findByLabelText('Pallets — Palletopslag'), '4')
+    await userEvent.type(screen.getByLabelText('Dagen — Palletopslag'), '12')
+    expect(screen.getByLabelText('Pallet-dagen — Palletopslag')).toHaveValue(48)
+    await waitFor(() => expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      services: expect.arrayContaining([
+        expect.objectContaining({ serviceOptionId: 'opt-paldag', quantity: 48, palletCount: 4, dayCount: 12 }),
+      ]),
+    })), { timeout: 3000 })
+
+    // Manual correction of the derived quantity wins.
+    const palletDays = screen.getByLabelText('Pallet-dagen — Palletopslag')
+    await userEvent.clear(palletDays)
+    await userEvent.type(palletDays, '50')
+    await waitFor(() => expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
+      services: expect.arrayContaining([
+        expect.objectContaining({ serviceOptionId: 'opt-paldag', quantity: 50 }),
       ]),
     })), { timeout: 3000 })
   })

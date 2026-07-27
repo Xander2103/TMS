@@ -164,8 +164,14 @@ public class TransportOrderServiceLine : AuditableTenantEntity
     public decimal Value { get; set; }
     public decimal Amount { get; set; }
 
-    /// <summary>Entered quantity for per-hour / per-stop services.</summary>
+    /// <summary>Entered/derived billable quantity for per-hour / per-stop / per-day / per-pallet-day services.</summary>
     public decimal? Quantity { get; set; }
+
+    /// <summary>Per-pallet-day input: pallet count. Quantity = pallets × days unless manually corrected.</summary>
+    public decimal? PalletCount { get; set; }
+
+    /// <summary>Per-day / per-pallet-day input: number of days.</summary>
+    public decimal? DayCount { get; set; }
 
     /// <summary>Frozen effective invoice description (customer override > global > name).</summary>
     public string? InvoiceDescriptionSnapshot { get; set; }

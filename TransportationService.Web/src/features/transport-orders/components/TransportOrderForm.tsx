@@ -262,12 +262,28 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   const [selectedServiceOptionIds, setSelectedServiceOptionIds] = useState<string[]>(
     () => (order?.serviceLines ?? []).map((l) => l.serviceOptionId).filter((id): id is string => id !== null),
   )
-  // Entered quantities for per-hour/per-stop services, keyed by service option id.
+  // Entered quantities for per-hour/per-stop services — and the billable pallet-days for
+  // per-pallet-day services (auto-filled from pallets × days, manually correctable).
   const [serviceQuantities, setServiceQuantities] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       (order?.serviceLines ?? [])
         .filter((l) => l.serviceOptionId !== null && l.quantity !== null && l.quantity !== undefined)
         .map((l) => [l.serviceOptionId as string, String(l.quantity)]),
+    ),
+  )
+  // Per-pallet-day inputs: pallet count and day count, keyed by service option id.
+  const [servicePallets, setServicePallets] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (order?.serviceLines ?? [])
+        .filter((l) => l.serviceOptionId !== null && l.palletCount !== null && l.palletCount !== undefined)
+        .map((l) => [l.serviceOptionId as string, String(l.palletCount)]),
+    ),
+  )
+  const [serviceDays, setServiceDays] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (order?.serviceLines ?? [])
+        .filter((l) => l.serviceOptionId !== null && l.dayCount !== null && l.dayCount !== undefined)
+        .map((l) => [l.serviceOptionId as string, String(l.dayCount)]),
     ),
   )
   const [pricingConfig, setPricingConfig] = useState<{ customerId: string; config: CustomerPricingConfig } | null>(null)
@@ -350,10 +366,20 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     (o) => customerServiceById.get(o.id)?.disabled !== true && !autoAppliedServiceOptionIds.has(o.id),
   )
   const serviceSelections = () =>
-    selectedServiceOptionIds.map((id) => ({
-      serviceOptionId: id,
-      quantity: serviceQuantities[id]?.trim() ? Number(serviceQuantities[id]) : null,
-    }))
+    selectedServiceOptionIds.map((id) => {
+      const kind = serviceOptions.find((o) => o.id === id)?.kind
+      const quantity = serviceQuantities[id]?.trim() ? Number(serviceQuantities[id]) : null
+      const pallets = servicePallets[id]?.trim() ? Number(servicePallets[id]) : null
+      const days = serviceDays[id]?.trim() ? Number(serviceDays[id]) : null
+      if (kind === 'PerDay') {
+        // The day count IS the billable quantity for a per-day service.
+        return { serviceOptionId: id, quantity: days, dayCount: days }
+      }
+      if (kind === 'PerPalletDay') {
+        return { serviceOptionId: id, quantity, palletCount: pallets, dayCount: days }
+      }
+      return { serviceOptionId: id, quantity }
+    })
 
   // One-off pricing input built from the form state; undefined when Contract mode (nothing to send).
   const oneOffPreviewInput = () =>
@@ -379,6 +405,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   const previewKey = JSON.stringify([
     customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount,
     lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds, serviceQuantities,
+    servicePallets, serviceDays,
     adrRequired, cargoItems.length,
     pricingSource, oneOffFixedAmount, oneOffTimeMode, oneOffIncludedLoadingMinutes, oneOffIncludedUnloadingMinutes,
     oneOffIncludedCombinedMinutes, oneOffExtraHourlyRate, oneOffNotes,
@@ -1260,6 +1287,21 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           const checked = selectedServiceOptionIds.includes(option.id)
           const source = customerServiceById.get(option.id)?.source ?? 'Algemene standaard'
           const needsQuantity = option.kind === 'PerHour' || option.kind === 'PerStop'
+          const isPerDay = option.kind === 'PerDay'
+          const isPerPalletDay = option.kind === 'PerPalletDay'
+          const palletsValue = servicePallets[option.id] ?? ''
+          const daysValue = serviceDays[option.id] ?? ''
+          const palletDaysValue = serviceQuantities[option.id] ?? ''
+          // Auto-derive pallet-days from pallets × days; the result stays manually correctable.
+          const updatePalletDays = (pallets: string, days: string) => {
+            setServicePallets((q) => ({ ...q, [option.id]: pallets }))
+            setServiceDays((q) => ({ ...q, [option.id]: days }))
+            const p = pallets.trim() === '' ? NaN : Number(pallets)
+            const d = days.trim() === '' ? NaN : Number(days)
+            if (!Number.isNaN(p) && !Number.isNaN(d)) {
+              setServiceQuantities((q) => ({ ...q, [option.id]: String(p * d) }))
+            }
+          }
           return (
             <div key={option.id} className="tof-service-option">
               <label className="tof-checkbox">
@@ -1277,6 +1319,10 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
                       if (extraStops > 0) {
                         setServiceQuantities((q) => ({ ...q, [option.id]: String(extraStops) }))
                       }
+                    }
+                    if (on && option.kind === 'PerPalletDay' && !servicePallets[option.id] && palletCount.trim()) {
+                      // Sensible default: the order's pallet-place count.
+                      updatePalletDays(palletCount, serviceDays[option.id] ?? '')
                     }
                   }}
                   disabled={saving}
@@ -1303,6 +1349,64 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
                     disabled={saving}
                   />
                 </FormField>
+              )}
+              {checked && isPerDay && (
+                <FormField label={`Aantal dagen — ${option.name}`} htmlFor={`svc-days-${option.id}`}>
+                  <input
+                    id={`svc-days-${option.id}`}
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={daysValue}
+                    onChange={(e) => setServiceDays((q) => ({ ...q, [option.id]: e.target.value }))}
+                    disabled={saving}
+                  />
+                </FormField>
+              )}
+              {checked && isPerPalletDay && (
+                <div className="tof-row">
+                  <FormField label={`Pallets — ${option.name}`} htmlFor={`svc-pallets-${option.id}`}>
+                    <input
+                      id={`svc-pallets-${option.id}`}
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={palletsValue}
+                      onChange={(e) => updatePalletDays(e.target.value, daysValue)}
+                      disabled={saving}
+                    />
+                  </FormField>
+                  <FormField label={`Dagen — ${option.name}`} htmlFor={`svc-pd-days-${option.id}`}>
+                    <input
+                      id={`svc-pd-days-${option.id}`}
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={daysValue}
+                      onChange={(e) => updatePalletDays(palletsValue, e.target.value)}
+                      disabled={saving}
+                    />
+                  </FormField>
+                  <FormField
+                    label={`Pallet-dagen — ${option.name}`}
+                    htmlFor={`svc-qty-${option.id}`}
+                    hint={
+                      palletsValue.trim() && daysValue.trim()
+                        ? `${palletsValue} pallets × ${daysValue} dagen = ${Number(palletsValue) * Number(daysValue)} pallet-dagen; handmatig aanpasbaar.`
+                        : 'Wordt berekend als pallets × dagen; handmatig aanpasbaar.'
+                    }
+                  >
+                    <input
+                      id={`svc-qty-${option.id}`}
+                      type="number"
+                      min={0}
+                      step={0.5}
+                      value={palletDaysValue}
+                      onChange={(e) => setServiceQuantities((q) => ({ ...q, [option.id]: e.target.value }))}
+                      disabled={saving}
+                    />
+                  </FormField>
+                </div>
               )}
             </div>
           )

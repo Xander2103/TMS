@@ -290,10 +290,14 @@ export interface OrderPricingSnapshot {
 export interface OrderServiceLine {
   serviceOptionId: string | null
   name: string
-  kind: 'Percent' | 'Fixed' | 'PerHour' | 'PerStop'
+  kind: 'Percent' | 'Fixed' | 'PerHour' | 'PerStop' | 'PerUnit' | 'PerOrderLine' | 'PerKg' | 'PerM3' | 'PerLdm' | 'PerDay' | 'PerPalletDay'
   value: number
   amount: number
   quantity?: number | null
+  /** Per-pallet-day input: quantity = palletCount × dayCount unless manually corrected. */
+  palletCount?: number | null
+  /** Per-day / per-pallet-day input: number of days. */
+  dayCount?: number | null
 }
 
 export interface StopInput {
@@ -360,8 +364,8 @@ export interface TransportOrderInput {
   dieselSurchargeOverrideReason: string | null
   /** Selected delivery services/supplements; priced by the engine and snapshotted. */
   serviceOptionIds?: string[]
-  /** Preferred over serviceOptionIds: selections incl. quantities (per-hour/per-stop services). */
-  services?: { serviceOptionId: string; quantity: number | null }[]
+  /** Preferred over serviceOptionIds: selections incl. quantities (per-hour/per-stop/per-day/per-pallet-day services). */
+  services?: { serviceOptionId: string; quantity: number | null; palletCount?: number | null; dayCount?: number | null }[]
   /** Explicit authorized override of the calculated price (orders.override_price). */
   priceIsManual?: boolean
   priceOverrideReason?: string | null

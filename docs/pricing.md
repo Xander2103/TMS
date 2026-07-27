@@ -183,6 +183,15 @@ Voor `PerOrderLine`/`PerKg`/`PerM3`/`PerLdm`/`PerHour`/`PerStop`/`PerDay`/`PerPa
 **expliciete 0** wordt exact zo behandeld als "onbekend" — nooit een stille €0-regel, altijd de
 informatieve "geen ... gekend"-regel (ledger-fix, `PricingEngine.cs`, `FinalizeAsync`).
 
+**Dag- en pallet-daghoeveelheden op de order (wave 2026-07-27 §2.3):** voor een `PerDay`-dienst
+vraagt het orderformulier **"Aantal dagen"** (12 dagen × €0,25 = €3,00); voor `PerPalletDay`
+**"Pallets"** en **"Dagen"**, waarbij het factureerbare aantal **pallet-dagen = pallets × dagen**
+automatisch wordt afgeleid (4 × 12 = 48 → 48 × €0,20 = €9,60) maar handmatig corrigeerbaar blijft
+(een expliciet ingevuld aantal wint altijd — `TransportOrderService.EffectiveServiceQuantity`). De
+invoer (`PalletCount`, `DayCount`) wordt op `TransportOrderServiceLine` bewaard zodat herberekening
+identiek reproduceert en de UI de invoer terugtoont; ontbrekende invoer blijft de informatieve
+"geef het aantal (pallet-)dagen op"-regel. Tests: `OrderDayQuantityTests`.
+
 **Auto-apply:** `ServiceOption.AutoApply` (of de klant-override `AutoApplyOverride`) voegt de dienst
 automatisch toe zonder expliciete selectie — een contractdienst (bv. Picking, PAL UIT). Voorbeeld
 (`WarehouseServiceTests`): Picking €1,25/colli auto-toegepast op 3 colli → €3,75; PAL UIT

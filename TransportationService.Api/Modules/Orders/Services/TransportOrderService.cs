@@ -1020,7 +1020,7 @@ public class TransportOrderService : ITransportOrderService
         var serviceLines = await _dbContext.TransportOrderServiceLines.AsNoTracking()
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .OrderBy(l => l.NameSnapshot)
-            .Select(l => new OrderServiceLineDto(l.ServiceOptionId, l.NameSnapshot, l.Kind, l.Value, l.Amount, l.Quantity))
+            .Select(l => new OrderServiceLineDto(l.ServiceOptionId, l.NameSnapshot, l.Kind, l.Value, l.Amount, l.Quantity, l.PalletCount, l.DayCount))
             .ToListAsync(cancellationToken);
 
         return new TransportOrderDetailDto(
@@ -1050,11 +1050,26 @@ public class TransportOrderService : ITransportOrderService
     /// orders never move when master-data tariffs change.
     /// </summary>
     /// <summary>Newer quantity-aware selections win; the plain id list stays supported.</summary>
-    private static IReadOnlyList<PriceServiceInput> ResolveServiceSelections(
+    private static IReadOnlyList<OrderServiceInput> ResolveServiceSelections(
         IReadOnlyList<OrderServiceInput>? services, IReadOnlyList<Guid>? serviceOptionIds) =>
         services is { Count: > 0 }
-            ? services.Select(s => new PriceServiceInput(s.ServiceOptionId, s.Quantity)).ToList()
-            : (serviceOptionIds ?? []).Select(id => new PriceServiceInput(id)).ToList();
+            ? services
+            : (serviceOptionIds ?? []).Select(id => new OrderServiceInput(id)).ToList();
+
+    /// <summary>
+    /// The billable quantity the engine sees: an explicit Quantity (manual correction) always
+    /// wins; otherwise per-pallet-day derives pallets × days and per-day uses the lone day count.
+    /// </summary>
+    private static decimal? EffectiveServiceQuantity(OrderServiceInput selection) =>
+        selection.Quantity ?? (selection.PalletCount, selection.DayCount) switch
+        {
+            ({ } pallets, { } days) => pallets * days,
+            (null, { } days) => days,
+            _ => null,
+        };
+
+    private static IReadOnlyList<PriceServiceInput> ToEngineSelections(IReadOnlyList<OrderServiceInput> selections) =>
+        selections.Select(s => new PriceServiceInput(s.ServiceOptionId, EffectiveServiceQuantity(s))).ToList();
 
     /// <summary>Shared Dutch message for every endpoint that refuses to touch a Locked/Invoiced price.</summary>
     private const string PricingLockedMessage = "De prijs van deze order is vergrendeld. Ontgrendel eerst om te herberekenen.";
@@ -1083,7 +1098,7 @@ public class TransportOrderService : ITransportOrderService
     /// recalculation entirely; an attempt to change pricing-relevant inputs while locked is refused.
     /// </summary>
     private async Task<TransportOrderOperationResult?> ApplyPricingAsync(
-        TransportOrder order, decimal? requestedAgreedPrice, IReadOnlyList<PriceServiceInput> serviceSelections,
+        TransportOrder order, decimal? requestedAgreedPrice, IReadOnlyList<OrderServiceInput> serviceSelections,
         bool priceIsManual, string? overrideReason, IReadOnlyList<CargoItem>? cargoItems,
         CancellationToken cancellationToken)
     {
@@ -1094,7 +1109,7 @@ public class TransportOrderService : ITransportOrderService
 
         if (existingSnapshot is { Status: OrderPricingStatus.Locked or OrderPricingStatus.Invoiced })
         {
-            if (await PricingInputsChangedAsync(order, requestedAgreedPrice, priceIsManual, overrideReason, serviceSelections, cancellationToken))
+            if (await PricingInputsChangedAsync(order, requestedAgreedPrice, priceIsManual, overrideReason, ToEngineSelections(serviceSelections), cancellationToken))
             {
                 throw new Common.DomainValidationException(PricingLockedMessage);
             }
@@ -1167,7 +1182,7 @@ public class TransportOrderService : ITransportOrderService
                 order.CustomerId, order.OrderDate, lines,
                 delivery?.CountryCode, delivery?.PostalCode,
                 order.WeightKg, null, order.PalletCount,
-                [], Services: serviceSelections,
+                [], Services: ToEngineSelections(serviceSelections),
                 VolumeM3: order.VolumeM3,
                 StopCount: unloadingStops.Count > 0 ? unloadingStops.Count : null,
                 AdrRequired: order.AdrRequired,
@@ -1311,14 +1326,24 @@ public class TransportOrderService : ITransportOrderService
             order.PriceOverrideReason = null;
         }
 
+        var selectionByOptionId = serviceSelections
+            .GroupBy(s => s.ServiceOptionId)
+            .ToDictionary(g => g.Key, g => g.First());
         foreach (var serviceLine in result?.ServiceLines ?? [])
         {
+            // Persist the per-day / per-pallet-day inputs alongside the billable quantity so the
+            // UI can re-show them and a recalculation reproduces the exact same numbers.
+            var selection = serviceLine.ServiceOptionId is { } optionId
+                ? selectionByOptionId.GetValueOrDefault(optionId)
+                : null;
             _dbContext.TransportOrderServiceLines.Add(new TransportOrderServiceLine
             {
                 Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = order.Id,
                 ServiceOptionId = serviceLine.ServiceOptionId, NameSnapshot = serviceLine.Name,
                 Kind = serviceLine.Kind, Value = serviceLine.Value, Amount = serviceLine.Amount,
                 Quantity = serviceLine.Quantity,
+                PalletCount = selection?.PalletCount,
+                DayCount = selection?.DayCount,
                 InvoiceDescriptionSnapshot = serviceLine.InvoiceLabel,
             });
         }
@@ -1734,7 +1759,7 @@ public class TransportOrderService : ITransportOrderService
             .ToListAsync(cancellationToken);
         var serviceSelections = existingServiceLines
             .Where(l => l.ServiceOptionId is not null)
-            .Select(l => new PriceServiceInput(l.ServiceOptionId!.Value, l.Quantity))
+            .Select(l => new OrderServiceInput(l.ServiceOptionId!.Value, l.Quantity, l.PalletCount, l.DayCount))
             .ToList();
 
         var pricingError = await ApplyPricingAsync(

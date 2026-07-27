@@ -138,10 +138,17 @@ public record SetOrderPricingStatusRequest(OrderPricingStatus Status);
 public record OrderServiceLineDto(
     Guid? ServiceOptionId, string Name,
     TransportationService.Api.Modules.Tarification.Entities.SurchargeKind Kind,
-    decimal Value, decimal Amount, decimal? Quantity = null);
+    decimal Value, decimal Amount, decimal? Quantity = null,
+    decimal? PalletCount = null, decimal? DayCount = null);
 
-/// <summary>A selected service with the entered quantity (hours / stops) where applicable.</summary>
-public record OrderServiceInput(Guid ServiceOptionId, decimal? Quantity = null);
+/// <summary>
+/// A selected service with the entered quantity where applicable (hours / stops / days /
+/// pallet-days). For per-pallet-day services the pallet and day inputs are persisted and the
+/// billable quantity defaults to pallets × days; an explicitly sent Quantity is a manual
+/// correction and always wins. For per-day services a lone DayCount doubles as the quantity.
+/// </summary>
+public record OrderServiceInput(
+    Guid ServiceOptionId, decimal? Quantity = null, decimal? PalletCount = null, decimal? DayCount = null);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
