@@ -57,6 +57,7 @@ public class AccountingExportService : IAccountingExportService
                     x.Line.Quantity,
                     x.Line.UnitPrice,
                     x.Line.VatRatePercent,
+                    x.Line.SalesCategoryId,
                     x.Line.SalesCategoryNameSnapshot,
                     x.Line.LedgerAccountNumberSnapshot,
                     x.Line.LedgerAccountNameSnapshot,
@@ -65,18 +66,30 @@ public class AccountingExportService : IAccountingExportService
             .ToListAsync(cancellationToken);
 
         // Hard gate (§7.4): the export is only correct when EVERY line carries its frozen
-        // account. Offenders are named so the user can fix the mapping and re-send/correct.
-        var offenders = rows
-            .Where(r => string.IsNullOrEmpty(r.LedgerAccountNumberSnapshot))
-            .Select(r => r.InvoiceNumber)
-            .Distinct()
-            .ToList();
-        if (offenders.Count > 0)
+        // account. The message tells the user the actual fix per case: categorised lines can be
+        // completed via 'Boekhoudsnapshot aanvullen' after mapping; category-less lines predate
+        // the accounting module (or lost their category) and need a later export window.
+        var incomplete = rows.Where(r => string.IsNullOrEmpty(r.LedgerAccountNumberSnapshot)).ToList();
+        if (incomplete.Count > 0)
         {
-            throw new DomainValidationException(
-                "Boekhoudexport geblokkeerd: geen grootboekrekening vastgelegd voor factu(u)r(en) "
-                + string.Join(", ", offenders.Take(10))
-                + ". Configureer de mapping bij Bedrijfsinstellingen → Boekhouding en corrigeer deze facturen.");
+            var fixable = incomplete.Where(r => r.SalesCategoryId is not null)
+                .Select(r => r.InvoiceNumber).Distinct().Take(10).ToList();
+            var legacy = incomplete.Where(r => r.SalesCategoryId is null)
+                .Select(r => r.InvoiceNumber).Distinct().Take(10).ToList();
+            var parts = new List<string> { "Boekhoudexport geblokkeerd:" };
+            if (fixable.Count > 0)
+            {
+                parts.Add($"factu(u)r(en) {string.Join(", ", fixable)} missen een vastgelegde grootboekrekening — "
+                    + "koppel de rekening bij Bedrijfsinstellingen → Boekhouding en gebruik 'Boekhoudsnapshot aanvullen' op de factuur.");
+            }
+
+            if (legacy.Count > 0)
+            {
+                parts.Add($"factu(u)r(en) {string.Join(", ", legacy)} hebben lijnen zonder verkoopcategorie "
+                    + "(verzonden vóór de boekhoudmodule) — kies een exportperiode die deze facturen niet omvat.");
+            }
+
+            throw new DomainValidationException(string.Join(" ", parts));
         }
 
         using var workbook = new XLWorkbook();

@@ -106,7 +106,7 @@ public record UpdateInvoiceLineInput(
     decimal Quantity,
     decimal UnitPrice,
     decimal VatRatePercent,
-    /// <summary>Null keeps the line's current category (clearing is not a draft operation).</summary>
+    /// <summary>The line's sales category; null explicitly clears it (the editor round-trips the current value).</summary>
     Guid? SalesCategoryId = null);
 
 public record ChangeInvoiceStatusRequest(InvoiceStatus Status);

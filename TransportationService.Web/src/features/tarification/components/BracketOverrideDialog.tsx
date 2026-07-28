@@ -36,10 +36,31 @@ export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: Brack
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    searchCustomers({ page: 1, pageSize: 200, isActive: true })
-      .then((result) => setCustomers(result.items.map((c) => ({ value: c.id, label: c.name }))))
-      .catch(() => setCustomers([]))
-      .finally(() => setCustomersLoading(false))
+    let mounted = true
+    // The backend caps pages at 200 rows; keep fetching so tenants with more active
+    // customers can still pick any of them (hard stop at 5 pages = 1000 as a safety net).
+    async function loadAllCustomers() {
+      const options: SearchableSelectOption[] = []
+      for (let page = 1; page <= 5; page++) {
+        const result = await searchCustomers({ page, pageSize: 200, isActive: true })
+        options.push(...result.items.map((c) => ({ value: c.id, label: c.name })))
+        if (options.length >= result.totalCount) break
+      }
+      return options
+    }
+    loadAllCustomers()
+      .then((options) => {
+        if (mounted) setCustomers(options)
+      })
+      .catch(() => {
+        if (mounted) setCustomers([])
+      })
+      .finally(() => {
+        if (mounted) setCustomersLoading(false)
+      })
+    return () => {
+      mounted = false
+    }
   }, [])
 
   async function submit() {

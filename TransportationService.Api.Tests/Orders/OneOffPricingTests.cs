@@ -130,7 +130,7 @@ public class OneOffPricingTests
         var method = typeof(TransportOrderService).GetMethod("ApplyPricingAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var task = (Task<TransportOrderOperationResult?>)method.Invoke(h.Sut, new object?[]
         {
-            order, order.AgreedPrice, Array.Empty<TransportationService.Api.Modules.Tarification.Dtos.PriceServiceInput>(),
+            order, order.AgreedPrice, Array.Empty<OrderServiceInput>(),
             false, null, null, CancellationToken.None,
         })!;
         var error = await task;

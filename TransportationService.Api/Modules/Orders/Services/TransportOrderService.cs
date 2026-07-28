@@ -1057,19 +1057,36 @@ public class TransportOrderService : ITransportOrderService
             : (serviceOptionIds ?? []).Select(id => new OrderServiceInput(id)).ToList();
 
     /// <summary>
-    /// The billable quantity the engine sees: an explicit Quantity (manual correction) always
-    /// wins; otherwise per-pallet-day derives pallets × days and per-day uses the lone day count.
+    /// The billable quantity the engine sees, KIND-aware: an explicit Quantity (manual
+    /// correction) always wins; PerPalletDay derives pallets × days only when BOTH are known
+    /// (a lone day count must never silently imply one pallet — it stays the informational
+    /// "geef het aantal pallet-dagen op" prompt); PerDay accepts the lone day count.
     /// </summary>
-    private static decimal? EffectiveServiceQuantity(OrderServiceInput selection) =>
-        selection.Quantity ?? (selection.PalletCount, selection.DayCount) switch
+    private static decimal? EffectiveServiceQuantity(OrderServiceInput selection, Modules.Tarification.Entities.SurchargeKind kind) =>
+        kind switch
         {
-            ({ } pallets, { } days) => pallets * days,
-            (null, { } days) => days,
-            _ => null,
+            Modules.Tarification.Entities.SurchargeKind.PerPalletDay =>
+                selection.Quantity ?? (selection.PalletCount is { } pallets && selection.DayCount is { } days ? pallets * days : null),
+            Modules.Tarification.Entities.SurchargeKind.PerDay => selection.Quantity ?? selection.DayCount,
+            _ => selection.Quantity,
         };
 
-    private static IReadOnlyList<PriceServiceInput> ToEngineSelections(IReadOnlyList<OrderServiceInput> selections) =>
-        selections.Select(s => new PriceServiceInput(s.ServiceOptionId, EffectiveServiceQuantity(s))).ToList();
+    private async Task<IReadOnlyList<PriceServiceInput>> ToEngineSelectionsAsync(
+        IReadOnlyList<OrderServiceInput> selections, CancellationToken cancellationToken)
+    {
+        if (selections.Count == 0)
+        {
+            return [];
+        }
+
+        var optionIds = selections.Select(s => s.ServiceOptionId).Distinct().ToList();
+        var kinds = await _dbContext.ServiceOptions.AsNoTracking()
+            .Where(o => o.TenantId == _tenantContext.TenantId && optionIds.Contains(o.Id))
+            .ToDictionaryAsync(o => o.Id, o => o.Kind, cancellationToken);
+        return selections
+            .Select(s => new PriceServiceInput(s.ServiceOptionId, EffectiveServiceQuantity(s, kinds.GetValueOrDefault(s.ServiceOptionId))))
+            .ToList();
+    }
 
     /// <summary>Shared Dutch message for every endpoint that refuses to touch a Locked/Invoiced price.</summary>
     private const string PricingLockedMessage = "De prijs van deze order is vergrendeld. Ontgrendel eerst om te herberekenen.";
@@ -1107,9 +1124,11 @@ public class TransportOrderService : ITransportOrderService
         var existingSnapshot = await _dbContext.TransportOrderPricingSnapshots
             .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == order.Id, cancellationToken);
 
+        var engineSelections = await ToEngineSelectionsAsync(serviceSelections, cancellationToken);
+
         if (existingSnapshot is { Status: OrderPricingStatus.Locked or OrderPricingStatus.Invoiced })
         {
-            if (await PricingInputsChangedAsync(order, requestedAgreedPrice, priceIsManual, overrideReason, ToEngineSelections(serviceSelections), cancellationToken))
+            if (await PricingInputsChangedAsync(order, requestedAgreedPrice, priceIsManual, overrideReason, engineSelections, cancellationToken))
             {
                 throw new Common.DomainValidationException(PricingLockedMessage);
             }
@@ -1196,7 +1215,7 @@ public class TransportOrderService : ITransportOrderService
                 order.CustomerId, order.OrderDate, lines,
                 delivery?.CountryCode, delivery?.PostalCode,
                 order.WeightKg, null, order.PalletCount,
-                [], Services: ToEngineSelections(serviceSelections),
+                [], Services: engineSelections,
                 VolumeM3: order.VolumeM3,
                 StopCount: unloadingStops.Count > 0 ? unloadingStops.Count : null,
                 AdrRequired: order.AdrRequired,

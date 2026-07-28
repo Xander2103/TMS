@@ -51,6 +51,15 @@ Bruto, Valuta.
 `GET api/accounting/health` + de waarschuwingsbanner op de instellingenpagina tonen welke
 actieve verkoopcategorieën nog geen rekening hebben (configuratiegezondheid).
 
+**Herstelpad:** een factuur die verzonden werd terwijl de mapping nog ontbrak, blokkeert de
+export niet voorgoed. Koppel de rekening en gebruik **"Boekhoudsnapshot aanvullen"** op de
+factuurdetail (`POST api/invoices/{id}/complete-ledger-snapshots`, permissie
+`accounting.manage`): dat vult **uitsluitend de ontbrekende** snapshots vanuit de actuele
+mapping — al bevroren waarden worden nooit herschreven — en wordt geauditeerd
+(`LedgerSnapshotsCompleted`). Facturen van vóór de boekhoudmodule (lijnen zonder
+verkoopcategorie) zijn niet herleidbaar; de exportfout benoemt ze apart met het advies een
+exportperiode te kiezen die ze niet omvat.
+
 ## Permissies & isolatie
 
 `accounting.view` (bekijken/exporteren) en `accounting.manage` (beheren). Standaardrollen:

@@ -8,6 +8,8 @@ import { useSectionNavigation } from '../../../components/ui/useSectionNavigatio
 import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerDetail, CustomerListItem } from '../../customers/types'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
+import { listWarehouses } from '../../warehousing/api/warehousingApi'
+import type { Warehouse } from '../../warehousing/types'
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LocationSelect } from '../../locations/components/LocationSelect'
@@ -288,6 +290,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   )
   const [pricingConfig, setPricingConfig] = useState<{ customerId: string; config: CustomerPricingConfig } | null>(null)
   const [unitMaster, setUnitMaster] = useState<UnitTypeMaster[]>([])
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [preview, setPreview] = useState<PriceCalculationResult | null>(null)
   const [priceIsManual, setPriceIsManual] = useState(order?.priceIsManual ?? false)
   const [priceOverrideReason, setPriceOverrideReason] = useState(order?.priceOverrideReason ?? '')
@@ -330,6 +333,13 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     listUnitTypeMaster()
       .then((data) => {
         if (mounted) setUnitMaster(data)
+      })
+      .catch(() => {})
+    // Warehouses map stop locations onto warehouse-conditioned services so the PREVIEW matches
+    // what the save will charge; unavailable (no permission) degrades to the save-time result.
+    listWarehouses()
+      .then((data) => {
+        if (mounted) setWarehouses(data)
       })
       .catch(() => {})
     return () => {
@@ -402,10 +412,15 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
 
   // Live price preview, debounced on the pricing-relevant inputs.
   const lastUnloading = [...stops].reverse().find((s) => s.stopType === 'Unloading')
+  // Warehouses the order touches (stop at a warehouse's master location) — mirrors the
+  // save-time derivation so warehouse-conditioned services preview identically.
+  const touchedWarehouseIds = warehouses
+    .filter((w) => stops.some((s) => s.locationId !== null && s.locationId === w.locationId))
+    .map((w) => w.id)
   const previewKey = JSON.stringify([
     customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount,
     lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds, serviceQuantities,
-    servicePallets, serviceDays,
+    servicePallets, serviceDays, touchedWarehouseIds,
     adrRequired, cargoItems.length,
     pricingSource, oneOffFixedAmount, oneOffTimeMode, oneOffIncludedLoadingMinutes, oneOffIncludedUnloadingMinutes,
     oneOffIncludedCombinedMinutes, oneOffExtraHourlyRate, oneOffNotes,
@@ -437,6 +452,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         adrRequired,
         cargoLineCount: cargoItems.length > 0 ? cargoItems.length : null,
         oneOff,
+        warehouseIds: touchedWarehouseIds.length > 0 ? touchedWarehouseIds : null,
       })
         .then(setPreview)
         .catch(() => setPreview(null))

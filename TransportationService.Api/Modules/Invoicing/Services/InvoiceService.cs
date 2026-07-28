@@ -540,7 +540,10 @@ public class InvoiceService : IInvoiceService
                 existing.Quantity = line.Quantity;
                 existing.UnitPrice = line.UnitPrice;
                 existing.VatRatePercent = line.VatRatePercent;
-                existing.SalesCategoryId = line.SalesCategoryId ?? existing.SalesCategoryId;
+                // The draft editor always round-trips the current value, so an explicit null IS
+                // a deliberate clear ("— Geen —") — silently keeping the old category would
+                // freeze and export a category the user removed.
+                existing.SalesCategoryId = line.SalesCategoryId;
             }
             else
             {
@@ -878,6 +881,13 @@ public class InvoiceService : IInvoiceService
 
         foreach (var line in lines)
         {
+            // Never overwrite an already-frozen snapshot: freezing runs at Send and again only
+            // via the explicit gap-filling action for lines that still miss their account.
+            if (line.LedgerAccountNumberSnapshot is not null)
+            {
+                continue;
+            }
+
             if (line.SalesCategoryId is not { } categoryId || !categories.TryGetValue(categoryId, out var category))
             {
                 continue;
@@ -888,6 +898,31 @@ public class InvoiceService : IInvoiceService
             line.LedgerAccountNumberSnapshot = category.AccountNumber;
             line.LedgerAccountNameSnapshot = category.AccountName;
         }
+    }
+
+    public async Task<InvoiceOperationResult> CompleteLedgerSnapshotsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var invoice = await TenantScoped().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+        if (invoice is null)
+        {
+            return InvoiceOperationResult.NotFound;
+        }
+
+        if (invoice.Status is not (InvoiceStatus.Sent or InvoiceStatus.Paid))
+        {
+            return InvoiceOperationResult.InvalidState(
+                "Alleen verzonden of betaalde facturen kunnen hun boekhoudsnapshot laten aanvullen; concepten bevriezen bij het verzenden.");
+        }
+
+        var missingBefore = invoice.Lines.Count(l => !l.IsDeleted && l.LedgerAccountNumberSnapshot is null);
+        await FreezeLedgerSnapshotsAsync(invoice, cancellationToken);
+        var missingAfter = invoice.Lines.Count(l => !l.IsDeleted && l.LedgerAccountNumberSnapshot is null);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "LedgerSnapshotsCompleted",
+            new { MissingSnapshots = missingBefore }, new { MissingSnapshots = missingAfter }, cancellationToken);
+
+        return InvoiceOperationResult.Success(await MapDetailAsync(invoice, cancellationToken));
     }
 
     private async Task<InvoiceDetailDto> MapDetailAsync(Invoice invoice, CancellationToken cancellationToken)

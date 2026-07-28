@@ -12,7 +12,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
-import { changeInvoiceStatus, deleteInvoice, getInvoice, overrideInvoiceNumber, updateInvoice } from '../api/invoicesApi'
+import { changeInvoiceStatus, completeInvoiceLedgerSnapshots, deleteInvoice, getInvoice, overrideInvoiceNumber, updateInvoice } from '../api/invoicesApi'
 import {
   deleteInvoiceAttachment,
   downloadInvoiceAttachment,
@@ -425,6 +425,28 @@ export function InvoiceDetailPage() {
                 Verwijderen
               </Button>
             )}
+            {(invoice.status === 'Sent' || invoice.status === 'Paid')
+              && hasPermission('accounting.manage')
+              && invoice.lines.some((line) => !line.ledgerAccountNumber) && (
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    setBusy(true)
+                    try {
+                      const updated = await completeInvoiceLedgerSnapshots(invoice.id)
+                      setInvoice(updated)
+                      showSuccess('Ontbrekende boekhoudsnapshots aangevuld waar een mapping bestaat.')
+                    } catch (err) {
+                      showError(describeApiError(err, 'De snapshots konden niet worden aangevuld.').message)
+                    } finally {
+                      setBusy(false)
+                    }
+                  }}
+                  disabled={busy}
+                >
+                  Boekhoudsnapshot aanvullen
+                </Button>
+              )}
           </div>
         </>
       )}

@@ -138,6 +138,44 @@ public class InvoiceLedgerSnapshotTests
     }
 
     [Fact]
+    public async Task CompleteLedgerSnapshots_FillsOnlyMissingOnes_AndUnblocksTheExport()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Sent while the category existed but the MAPPING was still missing.
+        var categories = await h.Accounting.ListSalesCategoriesAsync(false, CancellationToken.None);
+        var category = categories.Single(c => c.Code == "DIVERS-BINNEN");
+        var created = await h.Invoices.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Verkoop binnenland", 1m, 100m, 21m, category.Id)], null),
+            CancellationToken.None);
+        await h.Invoices.ChangeStatusAsync(created.Invoice!.Id, InvoiceStatus.Sent, CancellationToken.None);
+
+        // Export is blocked and points at the fix.
+        var ex = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Export.ExportAsync(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), CancellationToken.None));
+        Assert.Contains("Boekhoudsnapshot aanvullen", ex.Message);
+
+        // Map the category, run the remediation → snapshots filled, export unblocked.
+        var account = await h.Accounting.CreateLedgerAccountAsync(
+            new SaveLedgerAccountRequest("700400", "Diverse verkoop binnenland"), CancellationToken.None);
+        await h.Accounting.UpdateSalesCategoryAsync(category.Id, new SaveSalesCategoryRequest(
+            category.Code, category.Name, category.SystemRole, account.Id, true, category.SortOrder), CancellationToken.None);
+        var completed = await h.Invoices.CompleteLedgerSnapshotsAsync(created.Invoice.Id, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.Success, completed.Outcome);
+        Assert.Equal("700400", completed.Invoice!.Lines[0].LedgerAccountNumber);
+
+        var bytes = await h.Export.ExportAsync(new DateOnly(2026, 7, 1), new DateOnly(2026, 7, 31), CancellationToken.None);
+        Assert.True(bytes.Length > 0);
+
+        // Draft invoices are refused by the remediation endpoint.
+        var draft = await h.Invoices.CreateAsync(new CreateInvoiceRequest(
+            h.CustomerId, null, [], [new ManualInvoiceLineInput("Concept", 1m, 10m, 21m, category.Id)], null),
+            CancellationToken.None);
+        var refused = await h.Invoices.CompleteLedgerSnapshotsAsync(draft.Invoice!.Id, CancellationToken.None);
+        Assert.Equal(InvoiceOperationOutcome.InvalidState, refused.Outcome);
+    }
+
+    [Fact]
     public async Task Export_IsTenantIsolated()
     {
         var h = await SeedAsync();

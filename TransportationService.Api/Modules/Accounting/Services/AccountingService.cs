@@ -306,7 +306,8 @@ public class AccountingService : IAccountingService
     private async Task<SalesCategoryDto> MapCategoryAsync(SalesCategory category, CancellationToken cancellationToken)
     {
         var account = category.LedgerAccountId is { } accountId
-            ? await _db.LedgerAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken)
+            ? await _db.LedgerAccounts.AsNoTracking()
+                .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == accountId, cancellationToken)
             : null;
         return new SalesCategoryDto(
             category.Id, category.Code, category.Name, category.SystemRole,

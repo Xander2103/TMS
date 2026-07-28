@@ -28,6 +28,13 @@ public interface IInvoiceService
     /// <summary>Draft-only manual number correction (permission + mandatory reason, audited).</summary>
     Task<InvoiceOperationResult> OverrideNumberAsync(Guid id, OverrideInvoiceNumberRequest request, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Fills ONLY the missing ledger snapshots of a Sent/Paid invoice from the current
+    /// category mapping (never overwrites frozen values) — the remediation for invoices sent
+    /// while a mapping was still missing. Audited.
+    /// </summary>
+    Task<InvoiceOperationResult> CompleteLedgerSnapshotsAsync(Guid id, CancellationToken cancellationToken);
+
     /// <summary>Next expected number for an entity + period without claiming it; null when no entity exists.</summary>
     Task<InvoiceNumberPreviewDto?> PreviewNextNumberAsync(Guid? legalEntityId, int? year, int? month, CancellationToken cancellationToken);
 }

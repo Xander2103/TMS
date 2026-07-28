@@ -71,6 +71,18 @@ public class InvoicesController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>
+    /// Fills only the MISSING ledger snapshots of a Sent/Paid invoice from the current mapping
+    /// (§7.4 remediation) — never rewrites already-frozen values. Requires accounting.manage.
+    /// </summary>
+    [HttpPost("{id:guid}/complete-ledger-snapshots")]
+    [RequirePermission(PermissionCodes.AccountingManage)]
+    public async Task<ActionResult<InvoiceDetailDto>> CompleteLedgerSnapshots(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _service.CompleteLedgerSnapshotsAsync(id, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     [HttpPost]
     [RequirePermission(PermissionCodes.InvoicesCreate)]
     public async Task<ActionResult<InvoiceDetailDto>> Create(CreateInvoiceRequest request, CancellationToken cancellationToken)

@@ -99,6 +99,11 @@ export function changeInvoiceStatus(id: string, status: InvoiceStatus): Promise<
   return apiClient.postJson<InvoiceDetail, { status: InvoiceStatus }>(`/api/invoices/${id}/status`, { status })
 }
 
+/** Fills only the MISSING ledger snapshots of a Sent/Paid invoice from the current mapping (accounting.manage). */
+export function completeInvoiceLedgerSnapshots(id: string): Promise<InvoiceDetail> {
+  return apiClient.postJson<InvoiceDetail, Record<string, never>>(`/api/invoices/${id}/complete-ledger-snapshots`, {})
+}
+
 export function deleteInvoice(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/invoices/${id}`)
 }

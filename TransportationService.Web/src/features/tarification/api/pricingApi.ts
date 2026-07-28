@@ -611,6 +611,8 @@ export interface PricePreviewInput {
   /** Measured loading/unloading minutes from stop executions, for included-time extra-time proposals. */
   actualLoadingMinutes?: number | null
   actualUnloadingMinutes?: number | null
+  /** Warehouses the order touches (stop at a warehouse's master location) — drives warehouse-conditioned services. */
+  warehouseIds?: string[] | null
 }
 
 /** A one-off order's own price agreement: no contract is consulted (spec Phase 6). */
