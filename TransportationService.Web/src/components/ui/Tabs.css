@@ -1,9 +1,9 @@
 .ui-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 20px;
-  overflow-x: auto;
 }
 
 .ui-tab {

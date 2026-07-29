@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -28,8 +28,20 @@ import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
 
-const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlofsaldo', 'afwezigheden', 'ritten', 'chauffeursprofiel', 'bedrijfsmiddelen', 'historiek'] as const
+const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlof', 'ritten', 'bedrijfsmiddelen', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
+
+/**
+ * Legacy `?tab=` values from before the navigation redesign (verlofsaldo/afwezigheden merged
+ * into "verlof"; chauffeursprofiel moved into a profile section). Deep links using these ids
+ * are redirected on load (`setSearchParams(..., { replace: true })`) so the URL never keeps
+ * showing a retired id.
+ */
+const TAB_ALIASES: Partial<Record<string, { tab: TabId; section?: string }>> = {
+  verlofsaldo: { tab: 'verlof' },
+  afwezigheden: { tab: 'verlof' },
+  chauffeursprofiel: { tab: 'profiel', section: 'chauffeursgegevens' },
+}
 
 export function EmployeeDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -47,7 +59,9 @@ export function EmployeeDetailPage() {
   const [showAccountDialog, setShowAccountDialog] = useState(false)
 
   const requestedTab = searchParams.get('tab')
-  const tab: TabId = TAB_IDS.includes(requestedTab as TabId) ? (requestedTab as TabId) : 'profiel'
+  const alias = requestedTab ? TAB_ALIASES[requestedTab] : undefined
+  const tab: TabId = alias ? alias.tab : TAB_IDS.includes(requestedTab as TabId) ? (requestedTab as TabId) : 'profiel'
+  const requestedSection = alias?.section ?? searchParams.get('section') ?? undefined
 
   const canEdit = hasPermission('employees.edit')
   const canDeactivate = hasPermission('employees.deactivate')
@@ -56,6 +70,27 @@ export function EmployeeDetailPage() {
   const canViewDocuments = hasPermission('employee_documents.view')
   const canViewIssuedItems = hasPermission('issued_items.view') || hasPermission('issued_items.manage')
   const canViewLeaveBalance = hasPermission('leave_balances.view')
+  const canViewAbsences = hasPermission('absences.view')
+
+  // Redirect a legacy `?tab=` alias to its new home so the URL never keeps a retired id.
+  useEffect(() => {
+    if (!alias) return
+    const next = new URLSearchParams(searchParams)
+    if (alias.tab === 'profiel') next.delete('tab')
+    else next.set('tab', alias.tab)
+    if (alias.section) next.set('section', alias.section)
+    setSearchParams(next, { replace: true })
+    // Only re-run when the raw ?tab= value changes; `alias`/`searchParams` are derived from it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedTab])
+
+  // Scroll the read-only profile straight to the driver block for the "chauffeursgegevens"
+  // deep link — the edit-mode form handles it via EmployeeForm's `initialSectionId` instead.
+  useEffect(() => {
+    if (!canEdit && requestedSection === 'chauffeursgegevens') {
+      document.getElementById('chauffeursgegevens')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [canEdit, requestedSection])
 
   if (isLoading) return <LoadingState message="Medewerker laden..." />
   if (error || !employee) return <ErrorState message={error ?? 'Medewerker niet gevonden.'} />
@@ -64,25 +99,26 @@ export function EmployeeDetailPage() {
     setSearchParams(next === 'profiel' ? {} : { tab: next }, { replace: true })
   }
 
+  /** Jumps to the profile tab with the "Chauffeursgegevens" section/block pre-selected. */
+  function goToDriverSection() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('tab')
+    next.set('section', 'chauffeursgegevens')
+    setSearchParams(next, { replace: true })
+  }
+
   // Edit-only self-saving panels, embedded as sections of the profile form (they remain
   // reachable as page tabs too). `panel: true` hides the form's shared Save — each panel
   // saves through its own existing API.
   const editExtraSections: SectionDef[] = [
     {
-      id: 'chauffeursprofiel',
-      label: 'Chauffeursprofiel',
+      id: 'chauffeursgegevens',
+      label: 'Chauffeursgegevens',
       optional: true,
       panel: true,
       render: () =>
         employee.driverId ? (
-          <DriverProfilePanel
-            driverId={employee.driverId}
-            onChanged={reload}
-            onDeleted={() => {
-              reload()
-              setTab('profiel')
-            }}
-          />
+          <DriverProfilePanel driverId={employee.driverId} onChanged={reload} onDeleted={reload} />
         ) : hasPermission('drivers.create') && employee.isActive ? (
           <p className="placeholder-text">
             <Link to={`/drivers/new?employeeId=${employee.id}`}>Chauffeursprofiel aanmaken →</Link>
@@ -171,8 +207,8 @@ export function EmployeeDetailPage() {
           }}
         />
         {employee.driverId ? (
-          <button type="button" className="employee-driver-link employee-driver-link-button" onClick={() => setTab('chauffeursprofiel')}>
-            Chauffeursprofiel bekijken →
+          <button type="button" className="employee-driver-link employee-driver-link-button" onClick={goToDriverSection}>
+            Chauffeursgegevens bekijken →
           </button>
         ) : (
           hasPermission('drivers.create') &&
@@ -186,14 +222,12 @@ export function EmployeeDetailPage() {
 
       <Tabs
         tabs={[
-          { id: 'profiel', label: 'Profiel' },
+          { id: 'profiel', label: 'Overzicht' },
           ...(canViewPlanning ? [{ id: 'planning', label: 'Planning' }] : []),
           { id: 'kwalificaties', label: 'Kwalificaties' },
           ...(canViewDocuments ? [{ id: 'documenten', label: 'Documenten' }] : []),
-          ...(canViewLeaveBalance ? [{ id: 'verlofsaldo', label: 'Verlofsaldo' }] : []),
-          { id: 'afwezigheden', label: 'Afwezigheden' },
+          ...(canViewLeaveBalance || canViewAbsences ? [{ id: 'verlof', label: 'Verlof & afwezigheden' }] : []),
           ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: 'Ritten' }] : []),
-          ...(employee.driverId ? [{ id: 'chauffeursprofiel', label: 'Chauffeursprofiel' }] : []),
           ...(canViewIssuedItems ? [{ id: 'bedrijfsmiddelen', label: 'Bedrijfsmiddelen' }] : []),
           { id: 'historiek', label: 'Historiek' },
         ]}
@@ -216,6 +250,7 @@ export function EmployeeDetailPage() {
           )}
           {canEdit ? (
             <EmployeeForm
+              key={requestedSection ?? 'default'}
               mode="edit"
               initial={employee}
               isSubmitting={mutations.isSubmitting}
@@ -224,6 +259,7 @@ export function EmployeeDetailPage() {
               onCancel={() => navigate('/employees')}
               onFunctionsChanged={setEditedFunctionCodes}
               extraSections={editExtraSections}
+              initialSectionId={requestedSection}
               onSubmit={async (values) => {
                 const updated = await mutations.update(employee.id, values)
                 if (updated) {
@@ -282,6 +318,14 @@ export function EmployeeDetailPage() {
               )}
             </div>
           )}
+          {!canEdit && employee.driverId && (
+            <section className="employee-readonly-driver">
+              <h3 id="chauffeursgegevens" className="employee-readonly-subtitle">
+                Chauffeursgegevens
+              </h3>
+              <DriverProfilePanel driverId={employee.driverId} onChanged={reload} onDeleted={reload} />
+            </section>
+          )}
         </TabPanel>
       )}
 
@@ -303,34 +347,24 @@ export function EmployeeDetailPage() {
         </TabPanel>
       )}
 
-      {tab === 'verlofsaldo' && canViewLeaveBalance && (
-        <TabPanel tabId="verlofsaldo">
-          <LeaveBalanceTab employeeId={employee.id} />
-        </TabPanel>
-      )}
-
-      {tab === 'afwezigheden' && (
-        <TabPanel tabId="afwezigheden">
-          <AbsencesTab employeeId={employee.id} highlightAbsenceId={searchParams.get('absenceId')} />
+      {tab === 'verlof' && (canViewLeaveBalance || canViewAbsences) && (
+        <TabPanel tabId="verlof">
+          {canViewLeaveBalance ? (
+            <LeaveBalanceTab employeeId={employee.id} />
+          ) : (
+            <p className="placeholder-text">Je hebt geen rechten om het verlofsaldo te bekijken.</p>
+          )}
+          {canViewAbsences ? (
+            <AbsencesTab employeeId={employee.id} highlightAbsenceId={searchParams.get('absenceId')} />
+          ) : (
+            <p className="placeholder-text">Je hebt geen rechten om afwezigheden te bekijken.</p>
+          )}
         </TabPanel>
       )}
 
       {tab === 'ritten' && employee.driverId && canViewTrips && (
         <TabPanel tabId="ritten">
           <EmployeeTripsTab driverId={employee.driverId} />
-        </TabPanel>
-      )}
-
-      {tab === 'chauffeursprofiel' && employee.driverId && (
-        <TabPanel tabId="chauffeursprofiel">
-          <DriverProfilePanel
-            driverId={employee.driverId}
-            onChanged={reload}
-            onDeleted={() => {
-              reload()
-              setTab('profiel')
-            }}
-          />
         </TabPanel>
       )}
 

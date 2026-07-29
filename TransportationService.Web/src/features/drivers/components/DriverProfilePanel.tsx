@@ -48,8 +48,8 @@ interface DriverProfilePanelProps {
 /**
  * Reusable driver profile: readiness, inline edit, block/unblock, assignment slots, fixed
  * trailer, qualifications and delete. Consumes driversApi; the driver↔vehicle relationship
- * stays on the vehicle side (single source of truth). Rendered inside the employee detail
- * "chauffeursprofiel" tab — the standalone driver page redirects here.
+ * stays on the vehicle side (single source of truth). Rendered on the employee detail page's
+ * "Chauffeursgegevens" block (read-only) / section (edit) — the standalone driver page redirects here.
  */
 export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverProfilePanelProps) {
   const { showSuccess, showError } = useToast()

@@ -75,6 +75,45 @@ describe('SectionedForm', () => {
     expect(onActiveChange).toHaveBeenCalledWith('hr')
   })
 
+  describe('orientation', () => {
+    it('defaults to a horizontal tablist (no aria-orientation)', () => {
+      renderForm('algemeen')
+      expect(screen.getByRole('tablist', { name: 'Formuliersecties' })).not.toHaveAttribute('aria-orientation')
+    })
+
+    it('orientation="left" renders a vertical rail (aria-orientation) navigable with ArrowUp/ArrowDown', async () => {
+      const onActiveChange = vi.fn()
+      render(
+        <SectionedForm
+          sections={buildSections()}
+          activeId="algemeen"
+          onActiveChange={onActiveChange}
+          orientation="left"
+          actions={<button type="submit">Opslaan</button>}
+        />,
+      )
+      const tablist = screen.getByRole('tablist', { name: 'Formuliersecties' })
+      expect(tablist).toHaveAttribute('aria-orientation', 'vertical')
+
+      screen.getByRole('tab', { name: /Algemeen/ }).focus()
+      await userEvent.keyboard('{ArrowDown}')
+      expect(onActiveChange).toHaveBeenCalledWith('hr')
+    })
+
+    it('orientation="left" still renders exactly one active section body', () => {
+      render(
+        <SectionedForm
+          sections={buildSections()}
+          activeId="algemeen"
+          onActiveChange={vi.fn()}
+          orientation="left"
+        />,
+      )
+      expect(screen.getByLabelText('naam')).toBeInTheDocument()
+      expect(screen.queryByLabelText('iban')).not.toBeInTheDocument()
+    })
+  })
+
   describe('active section is always expanded', () => {
     function Harness() {
       const [active, setActive] = useState('algemeen')

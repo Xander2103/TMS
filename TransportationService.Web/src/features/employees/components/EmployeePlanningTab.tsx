@@ -58,7 +58,7 @@ export function EmployeePlanningTab({ employeeId }: { employeeId: string }) {
       return () => navigate(`/planning/${entry.tripId}`)
     }
     if (entry.sourceType === 'Absence' && entry.absenceId) {
-      return () => navigate(`/employees/${employeeId}?tab=afwezigheden&absenceId=${entry.absenceId}`)
+      return () => navigate(`/employees/${employeeId}?tab=verlof&absenceId=${entry.absenceId}`)
     }
     return undefined
   }

@@ -6,8 +6,8 @@ import { getDriver } from '../api/driversApi'
 
 /**
  * Legacy standalone driver route. The driver profile now lives inside the personnel dossier,
- * so this resolver fetches the driver, learns its employee, and redirects to the
- * "chauffeursprofiel" tab. Personal and driver data live in one place — no duplicate screens.
+ * so this resolver fetches the driver, learns its employee, and redirects to the profile tab's
+ * "Chauffeursgegevens" section. Personal and driver data live in one place — no duplicate screens.
  */
 export function DriverDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -31,5 +31,5 @@ export function DriverDetailPage() {
 
   if (error) return <ErrorState message={error} />
   if (!employeeId) return <LoadingState message="Chauffeursprofiel openen…" />
-  return <Navigate to={`/employees/${employeeId}?tab=chauffeursprofiel`} replace />
+  return <Navigate to={`/employees/${employeeId}?section=chauffeursgegevens`} replace />
 }

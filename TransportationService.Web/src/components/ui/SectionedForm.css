@@ -90,3 +90,47 @@
     border-radius: 6px;
   }
 }
+
+/* orientation="left": sticky vertical rail beside the body at >=900px. Below that it falls
+   back to the same horizontal subnav as orientation="top" (the rules above already collapse
+   it further to the <select> at <=640px). */
+@media (min-width: 900px) {
+  .ui-sectioned-form-left {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    align-items: start;
+    gap: 2rem;
+  }
+  .ui-sectioned-form-left .ui-sectioned-form-nav-left {
+    position: sticky;
+    top: 1rem;
+    align-self: start;
+  }
+  .ui-sectioned-form-left .ui-section-nav {
+    flex-direction: column;
+    align-items: stretch;
+    overflow-x: visible;
+    overflow-y: auto;
+    max-height: calc(100vh - 2rem);
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+    padding-bottom: 0;
+    padding-right: 0.5rem;
+  }
+  .ui-sectioned-form-left .ui-section-tab {
+    justify-content: flex-start;
+    width: 100%;
+    border-bottom: none;
+    border-right: 2px solid transparent;
+    margin-bottom: 0;
+    border-radius: 4px 0 0 4px;
+  }
+  .ui-sectioned-form-left .ui-section-tab[aria-selected='true'] {
+    border-bottom-color: transparent;
+    border-right-color: var(--accent);
+    background: var(--code-bg);
+  }
+  .ui-sectioned-form-left .ui-sectioned-form-main {
+    min-width: 0;
+  }
+}

@@ -16,7 +16,7 @@
   text-decoration: underline;
 }
 
-/* Reset the button that opens the chauffeursprofiel tab so it reads as a link. */
+/* Reset the button that jumps to the "Chauffeursgegevens" section/block so it reads as a link. */
 .employee-driver-link-button {
   background: none;
   border: none;
@@ -30,6 +30,13 @@
   flex-direction: column;
   gap: 12px;
   max-width: 700px;
+}
+
+/* Read-only "Chauffeursgegevens" block on the profile tab (drivers.create-gated create link
+   lives inside DriverProfilePanel itself). Kept outside .employee-readonly-profile so it isn't
+   constrained by that block's narrower max-width — the panel has its own grids/tables. */
+.employee-readonly-driver {
+  margin-top: 16px;
 }
 
 .employee-readonly-grid {

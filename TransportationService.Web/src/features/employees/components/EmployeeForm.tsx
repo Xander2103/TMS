@@ -55,6 +55,8 @@ interface EmployeeFormProps {
   extraSections?: SectionDef[]
   /** Notifies the parent when the set of chosen job functions changes (driver suggestion). */
   onFunctionsChanged?: (functionCodes: string[]) => void
+  /** Section to activate on mount (e.g. a deep link to "chauffeursgegevens"); falls back to the first section when absent or unknown. */
+  initialSectionId?: string
 }
 
 /** User-facing labels for backend field paths, for the validation summary. */
@@ -71,7 +73,7 @@ function nullable(value: string): string | null {
   return trimmed ? trimmed : null
 }
 
-export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, extraSections, onFunctionsChanged }: EmployeeFormProps) {
+export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, extraSections, onFunctionsChanged, initialSectionId }: EmployeeFormProps) {
   const { hasPermission } = useAuth()
   const canSeeConfidential = hasPermission('employees.view_confidential')
 
@@ -560,7 +562,9 @@ export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldEr
     notitiesSection,
   ]
 
-  const { activeId, setActive } = useSectionNavigation(sections.map((s) => s.id), sections[0].id)
+  const defaultSectionId =
+    initialSectionId && sections.some((s) => s.id === initialSectionId) ? initialSectionId : sections[0].id
+  const { activeId, setActive } = useSectionNavigation(sections.map((s) => s.id), defaultSectionId)
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -619,6 +623,7 @@ export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldEr
         sections={sections}
         activeId={activeId}
         onActiveChange={setActive}
+        orientation="left"
         actions={
           <FormActions dirty={dirty}>
             <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>

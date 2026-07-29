@@ -12,16 +12,21 @@ interface SectionNavProps {
   items: SectionNavItem[]
   activeId: string
   onActiveChange: (id: string) => void
+  /** 'vertical' renders the sticky left rail used by {@link SectionedForm}'s `orientation="left"`. */
+  orientation?: 'horizontal' | 'vertical'
 }
 
 /** Desktop ARIA tablist for {@link SectionedForm}: scrollable, roving-tabindex, arrow-key nav. */
-export function SectionNav({ items, activeId, onActiveChange }: SectionNavProps) {
+export function SectionNav({ items, activeId, onActiveChange, orientation = 'horizontal' }: SectionNavProps) {
   const refs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const vertical = orientation === 'vertical'
 
   function onKeyDown(e: React.KeyboardEvent, index: number) {
     let next: number
-    if (e.key === 'ArrowRight') next = (index + 1) % items.length
-    else if (e.key === 'ArrowLeft') next = (index - 1 + items.length) % items.length
+    const nextKey = vertical ? 'ArrowDown' : 'ArrowRight'
+    const prevKey = vertical ? 'ArrowUp' : 'ArrowLeft'
+    if (e.key === nextKey) next = (index + 1) % items.length
+    else if (e.key === prevKey) next = (index - 1 + items.length) % items.length
     else if (e.key === 'Home') next = 0
     else if (e.key === 'End') next = items.length - 1
     else return
@@ -32,7 +37,12 @@ export function SectionNav({ items, activeId, onActiveChange }: SectionNavProps)
   }
 
   return (
-    <div className="ui-section-nav" role="tablist" aria-label="Formuliersecties">
+    <div
+      className="ui-section-nav"
+      role="tablist"
+      aria-label="Formuliersecties"
+      aria-orientation={vertical ? 'vertical' : undefined}
+    >
       {items.map((item, index) => {
         const selected = item.id === activeId
         return (

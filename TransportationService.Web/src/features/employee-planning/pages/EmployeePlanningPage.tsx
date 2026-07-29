@@ -159,7 +159,7 @@ export function EmployeePlanningPage() {
     }
     if (entry.sourceType === 'Absence') {
       return canViewEmployees && entry.absenceId
-        ? () => navigate(`/employees/${employeeId}?tab=afwezigheden&absenceId=${entry.absenceId}`)
+        ? () => navigate(`/employees/${employeeId}?tab=verlof&absenceId=${entry.absenceId}`)
         : undefined
     }
     if (entry.shiftId) {
