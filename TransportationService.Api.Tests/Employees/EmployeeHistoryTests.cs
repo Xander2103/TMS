@@ -64,7 +64,7 @@ public class EmployeeHistoryTests
             new CountryCodeValidator(db.Context), driverService, qualifications);
         var history = new EmployeeHistoryService(db.Context, tenant);
         var leaveBalances = new LeaveBalanceService(db.Context, tenant, audit);
-        var notes = new EmployeeNoteService(db.Context, tenant, audit);
+        var notes = new EmployeeNoteService(db.Context, tenant, audit, new DevCurrentUserContext(userId), TimeProvider.System);
         return new Harness(db, employees, history, qualifications, leaveBalances, notes, tenantId, userId, departmentId);
     }
 

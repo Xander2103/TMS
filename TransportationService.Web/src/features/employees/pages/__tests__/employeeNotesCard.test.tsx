@@ -65,6 +65,8 @@ function note(overrides: Partial<EmployeeNote> = {}): EmployeeNote {
     employeeId: 'emp-1',
     text: 'Heeft hoogtevrees — nooit inplannen op kraanwerk.',
     isPinnedToDashboard: false,
+    pinnedAt: null,
+    pinnedByUserId: null,
     createdAt: '2026-07-28T10:00:00Z',
     createdByUserId: null,
     updatedAt: '2026-07-28T10:00:00Z',

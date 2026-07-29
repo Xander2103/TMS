@@ -1508,6 +1508,12 @@ namespace TransportationService.Api.Migrations
                     b.Property<bool>("IsPinnedToDashboard")
                         .HasColumnType("boolean");
 
+                    b.Property<DateTime?>("PinnedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PinnedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 

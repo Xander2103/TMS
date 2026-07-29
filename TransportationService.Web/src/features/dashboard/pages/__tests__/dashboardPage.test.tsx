@@ -75,7 +75,7 @@ describe('DashboardPage — Aandachtspunten personeel', () => {
           employeeId: 'emp-1',
           employeeName: 'Jan Janssen',
           excerpt: 'Heeft hoogtevrees — nooit op kraanwerk.',
-          createdAt: '2026-07-28T10:00:00Z',
+          pinnedAt: '2026-07-28T10:00:00Z',
           authorName: 'Ann HR',
         },
       ],
@@ -85,6 +85,8 @@ describe('DashboardPage — Aandachtspunten personeel', () => {
     expect(await screen.findByText('Aandachtspunten personeel')).toBeInTheDocument()
     expect(screen.getByText(/Heeft hoogtevrees/)).toBeInTheDocument()
     expect(screen.getByText('Jan Janssen')).toBeInTheDocument()
+    // Displays the pin action's date/author, not the note's original write.
+    expect(screen.getByText(/Ann HR/)).toBeInTheDocument()
 
     await user.click(screen.getByText(/Heeft hoogtevrees/))
     expect(navigate).toHaveBeenCalledWith('/employees/emp-1?tab=profiel')

@@ -210,16 +210,19 @@ public class DashboardService : IDashboardService
             return [];
         }
 
+        // PinnedAt/PinnedByUserId (not CreatedAt/CreatedByUserId) drive both the sort order and
+        // the displayed attribution: an old note pinned just now must rise to the top and show
+        // who pinned it, not who originally wrote it.
         var rows = await (
                 from n in _dbContext.EmployeeNotes.AsNoTracking()
-                where n.TenantId == tenantId && n.IsPinnedToDashboard
+                where n.TenantId == tenantId && n.IsPinnedToDashboard && n.PinnedAt != null
                 join e in _dbContext.Employees.AsNoTracking().Where(e => e.TenantId == tenantId)
                     on n.EmployeeId equals e.Id
-                orderby n.CreatedAt descending
-                select new { n.Id, n.EmployeeId, EmployeeName = e.FirstName + " " + e.LastName, n.Text, n.CreatedAt, n.CreatedByUserId })
+                orderby n.PinnedAt descending
+                select new { n.Id, n.EmployeeId, EmployeeName = e.FirstName + " " + e.LastName, n.Text, n.PinnedAt, n.PinnedByUserId })
             .ToListAsync(cancellationToken);
 
-        var authorIds = rows.Where(r => r.CreatedByUserId is not null).Select(r => r.CreatedByUserId!.Value).Distinct().ToList();
+        var authorIds = rows.Where(r => r.PinnedByUserId is not null).Select(r => r.PinnedByUserId!.Value).Distinct().ToList();
         var authorNames = authorIds.Count == 0
             ? new Dictionary<Guid, string>()
             : await _dbContext.Users.AsNoTracking()
@@ -229,8 +232,8 @@ public class DashboardService : IDashboardService
         return rows.Select(r => new PinnedEmployeeNoteDto(
                 r.Id, r.EmployeeId, r.EmployeeName,
                 r.Text.Length > PinnedNoteExcerptLength ? r.Text[..PinnedNoteExcerptLength] + "…" : r.Text,
-                r.CreatedAt,
-                r.CreatedByUserId is { } authorId ? authorNames.GetValueOrDefault(authorId) : null))
+                r.PinnedAt!.Value,
+                r.PinnedByUserId is { } authorId ? authorNames.GetValueOrDefault(authorId) : null))
             .ToList();
     }
 }

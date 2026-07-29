@@ -146,8 +146,20 @@ public class DashboardServiceTests
         });
         await h.Db.Context.SaveChangesAsync();
         var tenant = new DevTenantContext(h.TenantId);
-        var notes = new EmployeeNoteService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+        var pinnedByUserId = Guid.NewGuid();
+        var noteClock = new TestClock(Now.AddDays(-30));
+        var notes = new EmployeeNoteService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(pinnedByUserId)),
+            new DevCurrentUserContext(pinnedByUserId), noteClock);
+        h.Db.Context.Users.Add(new User
+        {
+            Id = pinnedByUserId, TenantId = h.TenantId, Email = "ann@acme.example", FirstName = "Ann", LastName = "HR", IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        // The note is written 30 days before "now" but pinned only just now — the pinned block
+        // must reflect the pin action's time/author, not the original write's.
         var note = await notes.CreateAsync(employeeId, "Heeft hoogtevrees — nooit op kraanwerk.", CancellationToken.None);
+        noteClock.Advance(TimeSpan.FromDays(30));
         await notes.SetPinnedAsync(employeeId, note!.Id, true, CancellationToken.None);
 
         var userId = await SeedUserWithPermissionAsync(h, PermissionCodes.DashboardView, PermissionCodes.EmployeeNotesView);
@@ -158,6 +170,46 @@ public class DashboardServiceTests
         Assert.Equal(employeeId, pinned.EmployeeId);
         Assert.Equal("Jan Janssen", pinned.EmployeeName);
         Assert.Equal("Heeft hoogtevrees — nooit op kraanwerk.", pinned.Excerpt);
+        Assert.Equal(Now.UtcDateTime, pinned.PinnedAt);
+        Assert.Equal("Ann HR", pinned.AuthorName);
+    }
+
+    [Fact]
+    public async Task Get_SortsPinnedNotes_ByPinnedAt_NotCreatedAt()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var employeeId = Guid.NewGuid();
+        h.Db.Context.Employees.Add(new Employee
+        {
+            Id = employeeId, TenantId = h.TenantId, EmployeeNumber = "MED-1", FirstName = "Jan", LastName = "Janssen",
+            DateOfBirth = new(1990, 1, 1), Email = "jan@acme.example", PhoneNumber = "+3231112233",
+            Street = "Straat", HouseNumber = "1", PostalCode = "2000", City = "Antwerpen",
+            EmploymentStartDate = new(2020, 1, 1), EmploymentStatus = TransportationService.Api.Modules.Employees.Entities.EmploymentStatus.Active, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        var tenant = new DevTenantContext(h.TenantId);
+        var noteClock = new TestClock(Now.AddDays(-60));
+        var notes = new EmployeeNoteService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)), new DevCurrentUserContext(null), noteClock);
+
+        // "Old" is written first (30 days before "New") but pinned last (just now); "New" is
+        // written later but pinned earlier. Sorting by CreatedAt would rank New above Old —
+        // sorting by PinnedAt must rank Old (pinned most recently) first.
+        var old = await notes.CreateAsync(employeeId, "Old note", CancellationToken.None);
+        noteClock.Advance(TimeSpan.FromDays(30));
+        var recent = await notes.CreateAsync(employeeId, "New note", CancellationToken.None);
+        noteClock.Advance(TimeSpan.FromDays(29));
+        await notes.SetPinnedAsync(employeeId, recent!.Id, true, CancellationToken.None);
+        noteClock.Advance(TimeSpan.FromDays(1));
+        await notes.SetPinnedAsync(employeeId, old!.Id, true, CancellationToken.None);
+
+        var userId = await SeedUserWithPermissionAsync(h, PermissionCodes.DashboardView, PermissionCodes.EmployeeNotesView);
+        var dashboard = await BuildWithUser(h, userId).GetAsync(CancellationToken.None);
+
+        Assert.Equal(2, dashboard.PinnedEmployeeNotes.Count);
+        Assert.Equal(old.Id, dashboard.PinnedEmployeeNotes[0].NoteId);
+        Assert.Equal(recent.Id, dashboard.PinnedEmployeeNotes[1].NoteId);
     }
 
     [Fact]
@@ -175,7 +227,8 @@ public class DashboardServiceTests
         });
         await h.Db.Context.SaveChangesAsync();
         var tenant = new DevTenantContext(h.TenantId);
-        var notes = new EmployeeNoteService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+        var notes = new EmployeeNoteService(h.Db.Context, tenant,
+            new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)), new DevCurrentUserContext(null), new TestClock(Now));
         var note = await notes.CreateAsync(employeeId, "Vertrouwelijk.", CancellationToken.None);
         await notes.SetPinnedAsync(employeeId, note!.Id, true, CancellationToken.None);
 

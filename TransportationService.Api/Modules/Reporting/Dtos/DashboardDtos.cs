@@ -18,7 +18,7 @@ public record PinnedEmployeeNoteDto(
     Guid EmployeeId,
     string EmployeeName,
     string Excerpt,
-    DateTime CreatedAt,
+    DateTime PinnedAt,
     string? AuthorName);
 
 /// <summary>One-call aggregate for the company dashboard; heavier module views have their own endpoints.</summary>

@@ -17,6 +17,11 @@ interface Kpi {
   alert?: boolean
 }
 
+function formatPinnedAt(iso: string): string {
+  const date = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`)
+  return date.toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
+}
+
 export function DashboardPage() {
   const navigate = useNavigate()
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
@@ -163,7 +168,9 @@ export function DashboardPage() {
                   <span className="db-row-main">
                     <strong>{note.employeeName}</strong> — {note.excerpt}
                   </span>
-                  <span className="db-row-meta">{note.authorName ?? 'Systeem'}</span>
+                  <span className="db-row-meta">
+                    {formatPinnedAt(note.pinnedAt)} · {note.authorName ?? 'Systeem'}
+                  </span>
                 </button>
               </li>
             ))}

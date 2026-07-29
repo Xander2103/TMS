@@ -19,6 +19,8 @@ namespace TransportationService.Api.Migrations
                     EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
                     Text = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: false),
                     IsPinnedToDashboard = table.Column<bool>(type: "boolean", nullable: false),
+                    PinnedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PinnedByUserId = table.Column<Guid>(type: "uuid", nullable: true),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -58,6 +60,8 @@ namespace TransportationService.Api.Migrations
             // One-time backfill: every non-blank legacy Employee.Notes value becomes the
             // employee's first note. The legacy column is left untouched (read-only from now
             // on) — this INSERT runs once, by nature of the migration, and is never repeated.
+            // Backfilled notes start unpinned (PinnedAt/PinnedByUserId stay NULL, the column
+            // default) — nothing was ever pinned before this feature existed.
             migrationBuilder.Sql("""
                 INSERT INTO employee_notes
                     ("Id", "TenantId", "EmployeeId", "Text", "IsPinnedToDashboard",

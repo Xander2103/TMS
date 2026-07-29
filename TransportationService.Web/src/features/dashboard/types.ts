@@ -16,7 +16,9 @@ export interface PinnedEmployeeNote {
   employeeId: string
   employeeName: string
   excerpt: string
-  createdAt: string
+  /** When the note was pinned (not when it was originally written). */
+  pinnedAt: string
+  /** Who pinned the note (not necessarily its original author). */
   authorName: string | null
 }
 

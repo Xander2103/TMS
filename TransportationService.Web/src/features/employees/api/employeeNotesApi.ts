@@ -6,6 +6,9 @@ export interface EmployeeNote {
   employeeId: string
   text: string
   isPinnedToDashboard: boolean
+  /** Set on pin, cleared on unpin — null when not currently pinned. */
+  pinnedAt: string | null
+  pinnedByUserId: string | null
   createdAt: string
   createdByUserId: string | null
   updatedAt: string

@@ -16,13 +16,16 @@ namespace TransportationService.Api.Tests.Employees;
 /// </summary>
 public class EmployeeNoteTests
 {
-    private sealed record Harness(SqliteTestDbContext Db, EmployeeNoteService Sut, Guid TenantId, Guid EmployeeId);
+    private static readonly DateTimeOffset Now = new(2026, 7, 30, 9, 0, 0, TimeSpan.Zero);
+
+    private sealed record Harness(SqliteTestDbContext Db, EmployeeNoteService Sut, Guid TenantId, Guid EmployeeId, Guid UserId, TestClock Clock);
 
     private static async Task<Harness> SeedAsync()
     {
         var db = new SqliteTestDbContext();
         var tenantId = Guid.NewGuid();
         var employeeId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
         db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = DateTime.UtcNow });
         db.Context.Employees.Add(new Employee
         {
@@ -34,8 +37,10 @@ public class EmployeeNoteTests
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);
-        var sut = new EmployeeNoteService(db.Context, tenant, new AuditService(db.Context, tenant, new DevCurrentUserContext(null)));
-        return new Harness(db, sut, tenantId, employeeId);
+        var clock = new TestClock(Now);
+        var sut = new EmployeeNoteService(db.Context, tenant,
+            new AuditService(db.Context, tenant, new DevCurrentUserContext(userId)), new DevCurrentUserContext(userId), clock);
+        return new Harness(db, sut, tenantId, employeeId, userId, clock);
     }
 
     [Fact]
@@ -135,6 +140,26 @@ public class EmployeeNoteTests
     }
 
     [Fact]
+    public async Task Pin_SetsPinnedAtAndPinnedByUser_AndUnpinClearsBoth()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var note = await h.Sut.CreateAsync(h.EmployeeId, "Belangrijk", CancellationToken.None);
+        h.Clock.Advance(TimeSpan.FromMinutes(5));
+
+        var pinned = await h.Sut.SetPinnedAsync(h.EmployeeId, note!.Id, true, CancellationToken.None);
+        Assert.Equal(Now.AddMinutes(5).UtcDateTime, pinned!.PinnedAt);
+        Assert.Equal(h.UserId, pinned.PinnedByUserId);
+        // PinnedAt must be distinct from (later than) CreatedAt — an old note pinned later must
+        // be attributed to the pin action, not the original write.
+        Assert.True(pinned.PinnedAt > pinned.CreatedAt);
+
+        var unpinned = await h.Sut.SetPinnedAsync(h.EmployeeId, note.Id, false, CancellationToken.None);
+        Assert.Null(unpinned!.PinnedAt);
+        Assert.Null(unpinned.PinnedByUserId);
+    }
+
+    [Fact]
     public async Task UnknownEmployee_ReturnsNull()
     {
         var h = await SeedAsync();
@@ -162,7 +187,8 @@ public class EmployeeNoteTests
         var note = await h.Sut.CreateAsync(h.EmployeeId, "Geheim", CancellationToken.None);
 
         var otherTenant = new DevTenantContext(Guid.NewGuid());
-        var foreign = new EmployeeNoteService(h.Db.Context, otherTenant, new AuditService(h.Db.Context, otherTenant, new DevCurrentUserContext(null)));
+        var foreign = new EmployeeNoteService(h.Db.Context, otherTenant,
+            new AuditService(h.Db.Context, otherTenant, new DevCurrentUserContext(null)), new DevCurrentUserContext(null), TimeProvider.System);
 
         Assert.Null(await foreign.ListAsync(h.EmployeeId, CancellationToken.None));
         Assert.Null(await foreign.UpdateAsync(h.EmployeeId, note!.Id, "Overschrijven", CancellationToken.None));

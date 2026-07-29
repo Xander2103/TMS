@@ -12,7 +12,7 @@ using TransportationService.Api.Data;
 namespace TransportationService.Api.Migrations
 {
     [DbContext(typeof(TransportationDbContext))]
-    [Migration("20260729231156_EmployeeNotes")]
+    [Migration("20260729234002_EmployeeNotes")]
     partial class EmployeeNotes
     {
         /// <inheritdoc />
@@ -1510,6 +1510,12 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<bool>("IsPinnedToDashboard")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("PinnedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PinnedByUserId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");

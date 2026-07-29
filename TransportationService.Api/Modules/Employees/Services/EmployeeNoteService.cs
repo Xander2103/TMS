@@ -3,6 +3,7 @@ using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Entities;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Employees.Services;
@@ -12,6 +13,8 @@ public record EmployeeNoteDto(
     Guid EmployeeId,
     string Text,
     bool IsPinnedToDashboard,
+    DateTime? PinnedAt,
+    Guid? PinnedByUserId,
     DateTime CreatedAt,
     Guid? CreatedByUserId,
     DateTime UpdatedAt,
@@ -39,12 +42,21 @@ public class EmployeeNoteService : IEmployeeNoteService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly ICurrentUserContext _currentUserContext;
+    private readonly TimeProvider _timeProvider;
 
-    public EmployeeNoteService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public EmployeeNoteService(
+        TransportationDbContext dbContext,
+        ITenantContext tenantContext,
+        IAuditService auditService,
+        ICurrentUserContext currentUserContext,
+        TimeProvider timeProvider)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _currentUserContext = currentUserContext;
+        _timeProvider = timeProvider;
     }
 
     public async Task<IReadOnlyList<EmployeeNoteDto>?> ListAsync(Guid employeeId, CancellationToken cancellationToken)
@@ -138,6 +150,16 @@ public class EmployeeNoteService : IEmployeeNoteService
         }
 
         note.IsPinnedToDashboard = pinned;
+        if (pinned)
+        {
+            note.PinnedAt = _timeProvider.GetUtcNow().UtcDateTime;
+            note.PinnedByUserId = _currentUserContext.CurrentUserId;
+        }
+        else
+        {
+            note.PinnedAt = null;
+            note.PinnedByUserId = null;
+        }
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, note.Id.ToString(), pinned ? "Pinned" : "Unpinned",
@@ -170,5 +192,6 @@ public class EmployeeNoteService : IEmployeeNoteService
         _dbContext.Employees.AnyAsync(e => e.TenantId == _tenantContext.TenantId && e.Id == employeeId, cancellationToken);
 
     private static EmployeeNoteDto Map(EmployeeNote n) => new(
-        n.Id, n.EmployeeId, n.Text, n.IsPinnedToDashboard, n.CreatedAt, n.CreatedByUserId, n.UpdatedAt, n.UpdatedByUserId);
+        n.Id, n.EmployeeId, n.Text, n.IsPinnedToDashboard, n.PinnedAt, n.PinnedByUserId,
+        n.CreatedAt, n.CreatedByUserId, n.UpdatedAt, n.UpdatedByUserId);
 }

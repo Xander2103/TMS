@@ -17,4 +17,9 @@ public class EmployeeNote : AuditableTenantEntity, ISoftDeletable
     /// <summary>When true, a compact excerpt surfaces on the company dashboard for every user
     /// holding employee_notes.view.</summary>
     public bool IsPinnedToDashboard { get; set; }
+
+    /// <summary>When the note was last pinned (set on pin, cleared on unpin) — drives the
+    /// dashboard sort order and the displayed "pinned by/at" attribution. Null when not pinned.</summary>
+    public DateTime? PinnedAt { get; set; }
+    public Guid? PinnedByUserId { get; set; }
 }
