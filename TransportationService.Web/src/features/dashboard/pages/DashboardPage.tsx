@@ -149,6 +149,28 @@ export function DashboardPage() {
         ))}
       </div>
 
+      {dashboard.pinnedEmployeeNotes.length > 0 && (
+        <section className="db-panel db-panel-alert" aria-label="Aandachtspunten personeel">
+          <h2>Aandachtspunten personeel</h2>
+          <ul className="db-list">
+            {dashboard.pinnedEmployeeNotes.map((note) => (
+              <li key={note.noteId}>
+                <button
+                  type="button"
+                  className="db-row"
+                  onClick={() => navigate(`/employees/${note.employeeId}?tab=profiel`)}
+                >
+                  <span className="db-row-main">
+                    <strong>{note.employeeName}</strong> — {note.excerpt}
+                  </span>
+                  <span className="db-row-meta">{note.authorName ?? 'Systeem'}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="db-grid">
         <section className="db-panel">
           <h2>Ritten vandaag</h2>

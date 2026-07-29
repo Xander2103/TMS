@@ -3,6 +3,8 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Fleet.Services;
 using TransportationService.Api.Modules.Hr.Entities;
+using TransportationService.Api.Modules.Identity;
+using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Incidents.Entities;
 using TransportationService.Api.Modules.Invoicing.Entities;
 using TransportationService.Api.Modules.Orders.Entities;
@@ -31,19 +33,25 @@ public class DashboardService : IDashboardService
     private readonly IFleetDashboardService _fleetDashboardService;
     private readonly ITripService _tripService;
     private readonly TimeProvider _timeProvider;
+    private readonly ICurrentUserContext _currentUser;
+    private readonly IPermissionAuthorizationService _authorization;
 
     public DashboardService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IFleetDashboardService fleetDashboardService,
         ITripService tripService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ICurrentUserContext currentUser,
+        IPermissionAuthorizationService authorization)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _fleetDashboardService = fleetDashboardService;
         _tripService = tripService;
         _timeProvider = timeProvider;
+        _currentUser = currentUser;
+        _authorization = authorization;
     }
 
     public async Task<DashboardDto> GetAsync(CancellationToken cancellationToken)
@@ -151,6 +159,11 @@ public class DashboardService : IDashboardService
         // Today's planning board (conflicts computed live by the trip service).
         var tripsToday = await _tripService.ListAsync(today, today, null, null, cancellationToken);
 
+        // Personnel notes pinned to the dashboard — only ever surfaced to a caller holding
+        // employee_notes.view (defence in depth: the endpoint is also gated by dashboard.view,
+        // a distinct, broader permission).
+        var pinnedEmployeeNotes = await GetPinnedEmployeeNotesAsync(tenantId, cancellationToken);
+
         var recentOrders = await (from o in _dbContext.TransportOrders.AsNoTracking()
                                       .Where(o => o.TenantId == tenantId)
                                   join c in _dbContext.Customers.AsNoTracking().Where(c => c.TenantId == tenantId)
@@ -183,6 +196,41 @@ public class DashboardService : IDashboardService
             failedScanCount,
             overdueMaintenanceCount,
             recentOrders,
-            tripsToday);
+            tripsToday,
+            pinnedEmployeeNotes);
+    }
+
+    private const int PinnedNoteExcerptLength = 160;
+
+    private async Task<IReadOnlyList<PinnedEmployeeNoteDto>> GetPinnedEmployeeNotesAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        if (_currentUser.CurrentUserId is not { } userId
+            || !await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeeNotesView, cancellationToken))
+        {
+            return [];
+        }
+
+        var rows = await (
+                from n in _dbContext.EmployeeNotes.AsNoTracking()
+                where n.TenantId == tenantId && n.IsPinnedToDashboard
+                join e in _dbContext.Employees.AsNoTracking().Where(e => e.TenantId == tenantId)
+                    on n.EmployeeId equals e.Id
+                orderby n.CreatedAt descending
+                select new { n.Id, n.EmployeeId, EmployeeName = e.FirstName + " " + e.LastName, n.Text, n.CreatedAt, n.CreatedByUserId })
+            .ToListAsync(cancellationToken);
+
+        var authorIds = rows.Where(r => r.CreatedByUserId is not null).Select(r => r.CreatedByUserId!.Value).Distinct().ToList();
+        var authorNames = authorIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.Users.AsNoTracking()
+                .Where(u => u.TenantId == tenantId && authorIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => $"{u.FirstName} {u.LastName}".Trim(), cancellationToken);
+
+        return rows.Select(r => new PinnedEmployeeNoteDto(
+                r.Id, r.EmployeeId, r.EmployeeName,
+                r.Text.Length > PinnedNoteExcerptLength ? r.Text[..PinnedNoteExcerptLength] + "…" : r.Text,
+                r.CreatedAt,
+                r.CreatedByUserId is { } authorId ? authorNames.GetValueOrDefault(authorId) : null))
+            .ToList();
     }
 }

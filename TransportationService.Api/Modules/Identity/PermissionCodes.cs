@@ -27,6 +27,10 @@ public static class PermissionCodes
     public const string EmployeeDocumentsApprove = "employee_documents.approve";
     public const string EmployeeDocumentsViewSensitive = "employee_documents.view_sensitive";
 
+    public const string EmployeeNotesView = "employee_notes.view";
+    public const string EmployeeNotesManage = "employee_notes.manage";
+    public const string EmployeeNotesPin = "employee_notes.pin";
+
     // --- HR settings (reminders, expiry policies) ---
     public const string HrSettingsManage = "hr_settings.manage";
 
@@ -335,6 +339,9 @@ public static class PermissionCodes
         (EmployeeDocumentsDelete, "employee_documents", "delete", "Personeelsdocumenten verwijderen"),
         (EmployeeDocumentsApprove, "employee_documents", "approve", "Personeelsdocumenten goedkeuren"),
         (EmployeeDocumentsViewSensitive, "employee_documents", "view_sensitive", "Gevoelige personeelsdocumenten (ID, medisch, contract) bekijken"),
+        (EmployeeNotesView, "employee_notes", "view", "Notities van medewerkers bekijken"),
+        (EmployeeNotesManage, "employee_notes", "manage", "Notities van medewerkers toevoegen, bewerken en verwijderen"),
+        (EmployeeNotesPin, "employee_notes", "pin", "Notities aan het startscherm toevoegen of verwijderen"),
         (HrSettingsManage, "hr_settings", "manage", "HR-instellingen en herinneringen beheren"),
         (IssuedItemsView, "issued_items", "view", "Bedrijfsmiddelen van medewerkers bekijken"),
         (IssuedItemsManage, "issued_items", "manage", "Bedrijfsmiddelen uitreiken en innemen"),

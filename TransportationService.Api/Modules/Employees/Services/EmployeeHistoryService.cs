@@ -57,6 +57,7 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         ["Employee"] = "Profiel",
         ["EmployeeQualification"] = "Kwalificaties",
         ["EmployeeDocument"] = "Documenten",
+        ["EmployeeNote"] = "Notities",
         ["EmployeeIssuedItem"] = "Bedrijfsmiddelen",
         ["Absence"] = "Afwezigheden",
         ["EmployeeLeaveBalance"] = "Verlofsaldo",
@@ -92,6 +93,8 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         ["ChangesRequested"] = "Wijzigingen gevraagd",
         ["StatusChanged"] = "Status gewijzigd",
         ["InternalNoteChanged"] = "Interne notitie gewijzigd",
+        ["Pinned"] = "Toegevoegd aan startscherm",
+        ["Unpinned"] = "Verwijderd van startscherm",
     };
 
     private static readonly IReadOnlyDictionary<string, string> FieldLabels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -145,6 +148,8 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         ["FileName"] = "Bestandsnaam",
         ["SizeBytes"] = "Bestandsgrootte",
         ["IsArchived"] = "Gearchiveerd",
+        // Notes
+        ["Text"] = "Tekst",
         // Issued items
         ["NameSnapshot"] = "Item",
         ["VariantSnapshot"] = "Variant",
@@ -299,6 +304,9 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         var documentIds = Keys(await _db.EmployeeDocuments.IgnoreQueryFilters().AsNoTracking()
             .Where(d => d.TenantId == tenantId && d.EmployeeId == employeeId)
             .Select(d => d.Id).ToListAsync(cancellationToken));
+        var noteIds = Keys(await _db.EmployeeNotes.IgnoreQueryFilters().AsNoTracking()
+            .Where(n => n.TenantId == tenantId && n.EmployeeId == employeeId)
+            .Select(n => n.Id).ToListAsync(cancellationToken));
         var issuedItemIds = Keys(await _db.EmployeeIssuedItems.IgnoreQueryFilters().AsNoTracking()
             .Where(i => i.TenantId == tenantId && i.EmployeeId == employeeId)
             .Select(i => i.Id).ToListAsync(cancellationToken));
@@ -322,6 +330,7 @@ public class EmployeeHistoryService : IEmployeeHistoryService
                 (l.EntityType == "Employee" && l.EntityId == employeeKey)
                 || (l.EntityType == "EmployeeQualification" && qualificationIds.Contains(l.EntityId))
                 || (l.EntityType == "EmployeeDocument" && documentIds.Contains(l.EntityId))
+                || (l.EntityType == "EmployeeNote" && noteIds.Contains(l.EntityId))
                 || (l.EntityType == "EmployeeIssuedItem" && issuedItemIds.Contains(l.EntityId))
                 || (l.EntityType == "Absence" && absenceIds.Contains(l.EntityId))
                 || (l.EntityType == "EmployeeLeaveBalance" && balanceIds.Contains(l.EntityId))

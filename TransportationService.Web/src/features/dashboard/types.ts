@@ -10,6 +10,16 @@ export interface RecentOrder {
   goodsDescription: string
 }
 
+/** Only ever populated for a caller holding employee_notes.view. */
+export interface PinnedEmployeeNote {
+  noteId: string
+  employeeId: string
+  employeeName: string
+  excerpt: string
+  createdAt: string
+  authorName: string | null
+}
+
 export interface Dashboard {
   ordersOpenCount: number
   ordersInExecutionCount: number
@@ -34,4 +44,5 @@ export interface Dashboard {
   overdueMaintenanceCount: number
   recentOrders: RecentOrder[]
   tripsToday: TripListItem[]
+  pinnedEmployeeNotes: PinnedEmployeeNote[]
 }

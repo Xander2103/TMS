@@ -81,6 +81,8 @@ builder.Services.AddScoped<IRoleService, RoleService>();
 // Employees
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IEmployeeHistoryService, EmployeeHistoryService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IEmployeeNoteService,
+    TransportationService.Api.Modules.Employees.Services.EmployeeNoteService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Accounting.Services.IAccountingService, TransportationService.Api.Modules.Accounting.Services.AccountingService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Accounting.Services.IAccountingExportService, TransportationService.Api.Modules.Accounting.Services.AccountingExportService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IEmployeeDocumentService,

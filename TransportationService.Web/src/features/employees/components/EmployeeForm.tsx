@@ -14,6 +14,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
+import { EmployeeNotesPanel } from './EmployeeNotesPanel'
 import { formatIban, formatNrn, validateIban, validateNrn } from '../utils/personFormats'
 import {
   addEmergencyContactRow,
@@ -73,7 +74,7 @@ function nullable(value: string): string | null {
   return trimmed ? trimmed : null
 }
 
-export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, extraSections, onFunctionsChanged, initialSectionId }: EmployeeFormProps) {
+export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, extraSections, onFunctionsChanged, initialSectionId }: EmployeeFormProps) {
   const { hasPermission } = useAuth()
   const canSeeConfidential = hasPermission('employees.view_confidential')
 
@@ -117,8 +118,6 @@ export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldEr
   const [nationalRegisterNumber, setNationalRegisterNumber] = useState(initial?.nationalRegisterNumber ?? '')
   const [iban, setIban] = useState(initial?.iban ?? '')
   const [bic, setBic] = useState(initial?.bic ?? '')
-
-  const [notes, setNotes] = useState(initial?.notes ?? '')
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [dirty, setDirty] = useState(false)
@@ -542,15 +541,17 @@ export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldEr
     ),
   }
 
+  // Self-saving panel (`panel: true` hides the shared Save bar): every note action calls its
+  // own endpoint directly, replacing the legacy single-textarea-over-Employee.Notes section.
   const notitiesSection: SectionDef = {
     ...EMPLOYEE_NOTITIES_SECTION,
-    render: () => (
-      <FormSection title="Notities" columns={1}>
-        <FormField label="Interne notities" htmlFor="e-notes" className="form-span-all">
-          <textarea id="e-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} />
-        </FormField>
-      </FormSection>
-    ),
+    panel: true,
+    render: () =>
+      mode === 'edit' && initial ? (
+        <EmployeeNotesPanel employeeId={initial.id} />
+      ) : (
+        <p className="placeholder-text">Notities kun je toevoegen nadat je de medewerker hebt opgeslagen.</p>
+      ),
   }
 
   const sections: SectionDef[] = [
@@ -603,7 +604,9 @@ export function EmployeeForm({ initial, isSubmitting, submitError, serverFieldEr
       nationalRegisterNumber: canSeeConfidential ? nullable(nationalRegisterNumber) : null,
       iban: canSeeConfidential ? nullable(iban) : null,
       bic: canSeeConfidential ? nullable(bic) : null,
-      notes: nullable(notes),
+      // Legacy single-note field: no UI writes to it anymore (see EmployeeNotesPanel);
+      // pass the existing value through unchanged so it is never accidentally cleared.
+      notes: initial?.notes ?? null,
       civilStatus: civilStatus || null,
       dependentChildren: dependentChildren.trim() ? Number(dependentChildren) : null,
       dimonaNumber: nullable(dimonaNumber),

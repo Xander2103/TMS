@@ -35,7 +35,7 @@ public class EmployeeHistoryTests
 {
     private sealed record Harness(
         SqliteTestDbContext Db, EmployeeService Employees, EmployeeHistoryService History,
-        QualificationService Qualifications, LeaveBalanceService LeaveBalances,
+        QualificationService Qualifications, LeaveBalanceService LeaveBalances, EmployeeNoteService Notes,
         Guid TenantId, Guid UserId, Guid DepartmentId);
 
     private static async Task<Harness> SeedAsync()
@@ -64,7 +64,8 @@ public class EmployeeHistoryTests
             new CountryCodeValidator(db.Context), driverService, qualifications);
         var history = new EmployeeHistoryService(db.Context, tenant);
         var leaveBalances = new LeaveBalanceService(db.Context, tenant, audit);
-        return new Harness(db, employees, history, qualifications, leaveBalances, tenantId, userId, departmentId);
+        var notes = new EmployeeNoteService(db.Context, tenant, audit);
+        return new Harness(db, employees, history, qualifications, leaveBalances, notes, tenantId, userId, departmentId);
     }
 
     private static CreateEmployeeRequest CreateRequest(string? notes = null) => new(
@@ -189,6 +190,30 @@ public class EmployeeHistoryTests
         var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None);
         var updateEntry = history!.Items.First(e => e.Category == "Kwalificaties" && e.Action == "Updated");
         Assert.Contains(updateEntry.Changes, c => c.Field == "Vervaldatum" && c.Before == "01-01-2026" && c.After == "01-01-2027");
+    }
+
+    [Fact]
+    public async Task NoteActions_AppearAsNotitiesEntries_IncludingAfterSoftDelete()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Employees.CreateAsync(CreateRequest(), false, CancellationToken.None);
+
+        var note = await h.Notes.CreateAsync(created.Id, "Heeft hoogtevrees", CancellationToken.None);
+        await h.Notes.UpdateAsync(created.Id, note!.Id, "Heeft hoogtevrees — nooit op kraanwerk", CancellationToken.None);
+        await h.Notes.SetPinnedAsync(created.Id, note.Id, true, CancellationToken.None);
+        await h.Notes.SetPinnedAsync(created.Id, note.Id, false, CancellationToken.None);
+        await h.Notes.DeleteAsync(created.Id, note.Id, CancellationToken.None);
+
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, "Notities", CancellationToken.None);
+        Assert.Equal(5, history!.TotalCount);
+        Assert.All(history.Items, e => Assert.Equal("Notities", e.Category));
+        Assert.Contains(history.Items, e => e.Action == "Created");
+        var updated = history.Items.Single(e => e.Action == "Updated");
+        Assert.Contains(updated.Changes, c => c.Field == "Tekst" && c.Before == "Heeft hoogtevrees" && c.After == "Heeft hoogtevrees — nooit op kraanwerk");
+        Assert.Contains(history.Items, e => e.Action == "Pinned" && e.Summary == "Toegevoegd aan startscherm");
+        Assert.Contains(history.Items, e => e.Action == "Unpinned" && e.Summary == "Verwijderd van startscherm");
+        Assert.Contains(history.Items, e => e.Action == "Deleted");
     }
 
     [Fact]

@@ -143,6 +143,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.LegalEntitiesView,
                 PermissionCodes.LeaveBalancesView,
                 PermissionCodes.AccountingView,
+                PermissionCodes.EmployeeNotesView, PermissionCodes.EmployeeNotesManage, PermissionCodes.EmployeeNotesPin,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -185,6 +186,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeDocumentsView, PermissionCodes.EmployeeDocumentsCreate,
                 PermissionCodes.EmployeeDocumentsEdit, PermissionCodes.EmployeeDocumentsDelete,
                 PermissionCodes.EmployeeDocumentsViewSensitive, PermissionCodes.HrSettingsManage,
+                PermissionCodes.EmployeeNotesView, PermissionCodes.EmployeeNotesManage, PermissionCodes.EmployeeNotesPin,
                 PermissionCodes.IssuedItemsView, PermissionCodes.IssuedItemsManage, PermissionCodes.IssuedItemsManageTemplates,
                 PermissionCodes.InventoryView, PermissionCodes.InventoryManage, PermissionCodes.InventoryAdjust,
                 PermissionCodes.InventoryOverrideNegativeStock,

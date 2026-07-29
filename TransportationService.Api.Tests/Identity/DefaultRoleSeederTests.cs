@@ -374,9 +374,8 @@ public class DefaultRoleSeederTests
 
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(16, DefaultRoleUpgrades.CurrentVersion);
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
-        Assert.Equal(16, state.AppliedVersion);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         var management = roles.Single(r => r.TemplateCode == "management");
@@ -391,6 +390,40 @@ public class DefaultRoleSeederTests
         {
             Assert.DoesNotContain(PermissionCodes.AccountingView, await CodesOfAsync(db, other.Id));
             Assert.DoesNotContain(PermissionCodes.AccountingManage, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version17_GrantsEmployeeNotes_ToHrAndManagementOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        Assert.Equal(17, DefaultRoleUpgrades.CurrentVersion);
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(17, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var hr = roles.Single(r => r.TemplateCode == "hr");
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var others = roles.Where(r => r.TemplateCode is not ("hr" or "management")).ToList();
+
+        foreach (var role in new[] { hr, management })
+        {
+            var codes = await CodesOfAsync(db, role.Id);
+            Assert.Contains(PermissionCodes.EmployeeNotesView, codes);
+            Assert.Contains(PermissionCodes.EmployeeNotesManage, codes);
+            Assert.Contains(PermissionCodes.EmployeeNotesPin, codes);
+        }
+
+        foreach (var other in others)
+        {
+            var codes = await CodesOfAsync(db, other.Id);
+            Assert.DoesNotContain(PermissionCodes.EmployeeNotesView, codes);
+            Assert.DoesNotContain(PermissionCodes.EmployeeNotesManage, codes);
+            Assert.DoesNotContain(PermissionCodes.EmployeeNotesPin, codes);
         }
     }
 

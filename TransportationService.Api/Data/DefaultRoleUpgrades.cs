@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 16;
+    public const int CurrentVersion = 17;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -343,6 +343,20 @@ public static class DefaultRoleUpgrades
             {
                 ["boekhouding"] = [PermissionCodes.AccountingView, PermissionCodes.AccountingManage],
                 ["management"] = [PermissionCodes.AccountingView],
+            }),
+
+        new(17,
+            "Personnel notes 2026-07-29: multiple notes per employee with dashboard pinning.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["hr"] =
+                [
+                    PermissionCodes.EmployeeNotesView, PermissionCodes.EmployeeNotesManage, PermissionCodes.EmployeeNotesPin,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.EmployeeNotesView, PermissionCodes.EmployeeNotesManage, PermissionCodes.EmployeeNotesPin,
+                ],
             }),
     ];
 }

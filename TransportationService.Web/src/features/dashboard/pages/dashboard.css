@@ -44,6 +44,16 @@
   color: var(--text);
 }
 
+.db-panel-alert {
+  border-color: rgba(220, 38, 38, 0.5);
+  max-width: 1200px;
+  margin-bottom: 16px;
+}
+
+.db-panel-alert h2 {
+  color: #dc2626;
+}
+
 .db-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));

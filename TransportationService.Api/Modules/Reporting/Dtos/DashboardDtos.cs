@@ -11,6 +11,16 @@ public record RecentOrderDto(
     TransportOrderStatus Status,
     string GoodsDescription);
 
+/// <summary>One personnel note pinned to the dashboard — only ever populated for callers
+/// holding employee_notes.view (see DashboardService.GetAsync).</summary>
+public record PinnedEmployeeNoteDto(
+    Guid NoteId,
+    Guid EmployeeId,
+    string EmployeeName,
+    string Excerpt,
+    DateTime CreatedAt,
+    string? AuthorName);
+
 /// <summary>One-call aggregate for the company dashboard; heavier module views have their own endpoints.</summary>
 public record DashboardDto(
     int OrdersOpenCount,
@@ -35,4 +45,5 @@ public record DashboardDto(
     int FailedScanCount,
     int OverdueMaintenanceCount,
     IReadOnlyList<RecentOrderDto> RecentOrders,
-    IReadOnlyList<TripListItemDto> TripsToday);
+    IReadOnlyList<TripListItemDto> TripsToday,
+    IReadOnlyList<PinnedEmployeeNoteDto> PinnedEmployeeNotes);

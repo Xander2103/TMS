@@ -107,6 +107,7 @@ public class TransportationDbContext : DbContext
     public DbSet<Employee> Employees => Set<Employee>();
     public DbSet<EmployeeEmergencyContact> EmployeeEmergencyContacts => Set<EmployeeEmergencyContact>();
     public DbSet<EmployeeDocument> EmployeeDocuments => Set<EmployeeDocument>();
+    public DbSet<EmployeeNote> EmployeeNotes => Set<EmployeeNote>();
     public DbSet<IssuedItemTemplate> IssuedItemTemplates => Set<IssuedItemTemplate>();
     public DbSet<IssuedItemCategory> IssuedItemCategories => Set<IssuedItemCategory>();
     public DbSet<EmployeeIssuedItem> EmployeeIssuedItems => Set<EmployeeIssuedItem>();

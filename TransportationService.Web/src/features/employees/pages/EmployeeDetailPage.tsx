@@ -13,6 +13,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { AbsencesTab } from '../../absences/components/AbsencesTab'
 import { EmployeeHistoryPanel } from '../components/EmployeeHistoryPanel'
+import { EmployeeNotesPanel } from '../components/EmployeeNotesPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { DriverProfilePanel } from '../../drivers/components/DriverProfilePanel'
 import { IssuedItemsTab } from '../../issued-items/IssuedItemsTab'
@@ -237,15 +238,10 @@ export function EmployeeDetailPage() {
 
       {tab === 'profiel' && (
         <TabPanel tabId="profiel">
-          {employee.notes && (
+          {!canEdit && hasPermission('employee_notes.view') && (
             <section className="employee-notes-card">
               <h3>Notities</h3>
-              <p className="employee-notes-text">{employee.notes}</p>
-              <p className="customer-form-muted">
-                {canEdit
-                  ? 'Aanpassen kan hieronder in de sectie "Notities"; elke wijziging verschijnt in het tabblad Historiek.'
-                  : 'Wijzigingen aan notities verschijnen in het tabblad Historiek.'}
-              </p>
+              <EmployeeNotesPanel employeeId={employee.id} />
             </section>
           )}
           {canEdit ? (
