@@ -14,6 +14,7 @@ export interface EmployeeHistoryEntry {
   actionLabel: string
   category: string
   changes: EmployeeHistoryChange[]
+  summary: string
 }
 
 export interface EmployeeHistoryPage {
@@ -23,5 +24,15 @@ export interface EmployeeHistoryPage {
   pageSize: number
 }
 
-export const getEmployeeHistory = (employeeId: string, page = 1, pageSize = 25): Promise<EmployeeHistoryPage> =>
-  apiClient.getJson(`/api/employees/${employeeId}/history?page=${page}&pageSize=${pageSize}`)
+export const getEmployeeHistory = (
+  employeeId: string,
+  page = 1,
+  pageSize = 25,
+  category?: string | null,
+): Promise<EmployeeHistoryPage> => {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) })
+  if (category) {
+    params.set('category', category)
+  }
+  return apiClient.getJson(`/api/employees/${employeeId}/history?${params.toString()}`)
+}

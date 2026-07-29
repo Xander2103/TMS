@@ -72,10 +72,10 @@ public class EmployeesController : ControllerBase
     [RequirePermission(PermissionCodes.EmployeesView)]
     public async Task<ActionResult<EmployeeHistoryPageDto>> GetHistory(
         Guid id, [FromQuery] int? page = null, [FromQuery] int? pageSize = null,
-        CancellationToken cancellationToken = default)
+        [FromQuery] string? category = null, CancellationToken cancellationToken = default)
     {
         var pageRequest = PageRequest.Of(page, pageSize);
-        var history = await _historyService.GetHistoryAsync(id, pageRequest.Page, pageRequest.PageSize, cancellationToken);
+        var history = await _historyService.GetHistoryAsync(id, pageRequest.Page, pageRequest.PageSize, category, cancellationToken);
         return history is null ? NotFound() : Ok(history);
     }
 

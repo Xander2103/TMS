@@ -156,7 +156,7 @@ public record EmployeeHistoryChangeDto(string Field, string? Before, string? Aft
 /// </summary>
 public record EmployeeHistoryEntryDto(
     Guid Id, DateTime Timestamp, string? UserName, string Action, string ActionLabel,
-    string Category, IReadOnlyList<EmployeeHistoryChangeDto> Changes);
+    string Category, IReadOnlyList<EmployeeHistoryChangeDto> Changes, string Summary);
 
 public record EmployeeHistoryPageDto(
     IReadOnlyList<EmployeeHistoryEntryDto> Items, int TotalCount, int Page, int PageSize);
