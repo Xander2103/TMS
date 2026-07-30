@@ -19,7 +19,8 @@ public static class IdentityTestFactory
         var audit = new AuditService(db.Context, tenant, currentUser);
         var accountSecurity = new AccountSecurityService(
             db.Context, tenant, currentUser, new PermissionSetService(db.Context), TimeProvider.System);
-        return new UserService(db.Context, tenant, audit, new PasswordHasher(), currentUser, accountSecurity);
+        return new UserService(db.Context, tenant, audit, new PasswordHasher(), currentUser, accountSecurity,
+            TransportationService.Api.Modules.Authentication.PasswordPolicy.Default);
     }
 
     public static RoleService RoleService(SqliteTestDbContext db, Guid tenantId, Guid? actorUserId)

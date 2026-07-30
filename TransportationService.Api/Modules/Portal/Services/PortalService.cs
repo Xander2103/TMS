@@ -322,9 +322,9 @@ public class PortalService : IPortalService
             return PortalOperationResult.NotFound;
         }
 
-        if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < MinPasswordLength)
+        if (TransportationService.Api.Modules.Authentication.PasswordPolicy.Default.Validate(request.NewPassword) is { } policyError)
         {
-            return PortalOperationResult.Invalid($"Het nieuwe wachtwoord moet minstens {MinPasswordLength} tekens lang zijn.");
+            return PortalOperationResult.Invalid(policyError);
         }
 
         var user = await _dbContext.Users

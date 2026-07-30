@@ -12,7 +12,7 @@ public class UserService : IUserService
 {
     private const string AdministratorRoleName = "Administrator";
 
-    private const int MinPasswordLength = 8;
+    // Password rules live in the shared PasswordPolicy (min length + offline breached/common list).
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
@@ -20,11 +20,13 @@ public class UserService : IUserService
     private readonly Authentication.Services.IPasswordHasher _passwordHasher;
     private readonly ICurrentUserContext _currentUser;
     private readonly IAccountSecurityService _accountSecurity;
+    private readonly Authentication.IPasswordPolicy _passwordPolicy;
 
     public UserService(
         TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
         Authentication.Services.IPasswordHasher passwordHasher,
-        ICurrentUserContext currentUser, IAccountSecurityService accountSecurity)
+        ICurrentUserContext currentUser, IAccountSecurityService accountSecurity,
+        Authentication.IPasswordPolicy passwordPolicy)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -32,6 +34,7 @@ public class UserService : IUserService
         _passwordHasher = passwordHasher;
         _currentUser = currentUser;
         _accountSecurity = accountSecurity;
+        _passwordPolicy = passwordPolicy;
     }
 
     /// <summary>
@@ -44,10 +47,9 @@ public class UserService : IUserService
     /// </summary>
     public async Task<UserOperationResult> SetPasswordAsync(Guid id, string password, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(password) || password.Length < MinPasswordLength)
+        if (_passwordPolicy.Validate(password) is { } policyError)
         {
-            return new UserOperationResult(UserOperationOutcome.ValidationFailed, null,
-                $"Het wachtwoord moet minstens {MinPasswordLength} tekens lang zijn.");
+            return new UserOperationResult(UserOperationOutcome.ValidationFailed, null, policyError);
         }
 
         if (_currentUser.CurrentUserId is not { } actorId)
@@ -181,9 +183,19 @@ public class UserService : IUserService
         var oldValues = new { user.IsActive };
         user.IsActive = isActive;
         user.UpdatedAt = DateTime.UtcNow;
+
+        // Deactivation must take effect immediately: revoke refresh tokens and rotate the security
+        // stamp so outstanding access tokens are rejected on their next request.
+        if (!isActive)
+        {
+            await _accountSecurity.RevokeAllSessionsAsync(user, cancellationToken);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync("User", user.Id.ToString(), "SetActive", oldValues, new { user.IsActive }, cancellationToken);
+        await _auditService.RecordAsync("User", user.Id.ToString(),
+            isActive ? "SetActive" : Modules.Auditing.Services.SecurityAuditEvents.UserDeactivated,
+            oldValues, new { user.IsActive, SessionsRevoked = !isActive }, cancellationToken);
 
         return new UserOperationResult(UserOperationOutcome.Success, await MapAsync(user, cancellationToken));
     }
@@ -201,9 +213,18 @@ public class UserService : IUserService
         var oldValues = new { user.IsBlocked };
         user.IsBlocked = isBlocked;
         user.UpdatedAt = DateTime.UtcNow;
+
+        // Blocking must take effect immediately, not after the access token expires.
+        if (isBlocked)
+        {
+            await _accountSecurity.RevokeAllSessionsAsync(user, cancellationToken);
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync("User", user.Id.ToString(), "SetBlocked", oldValues, new { user.IsBlocked }, cancellationToken);
+        await _auditService.RecordAsync("User", user.Id.ToString(),
+            isBlocked ? Modules.Auditing.Services.SecurityAuditEvents.UserBlocked : "SetBlocked",
+            oldValues, new { user.IsBlocked, SessionsRevoked = isBlocked }, cancellationToken);
 
         return new UserOperationResult(UserOperationOutcome.Success, await MapAsync(user, cancellationToken));
     }

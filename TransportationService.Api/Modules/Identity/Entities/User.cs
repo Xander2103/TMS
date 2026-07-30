@@ -24,6 +24,12 @@ public class User
     /// </summary>
     public Guid SecurityStamp { get; set; } = Guid.NewGuid();
 
+    /// <summary>Consecutive failed sign-in attempts since the last success (account lockout).</summary>
+    public int FailedLoginCount { get; set; }
+
+    /// <summary>When set and in the future, sign-in is temporarily locked for this account.</summary>
+    public DateTime? LockoutEndsAt { get; set; }
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

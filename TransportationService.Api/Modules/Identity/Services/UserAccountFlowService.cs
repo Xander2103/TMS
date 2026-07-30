@@ -173,9 +173,9 @@ public class UserAccountFlowService : IUserAccountFlowService
             return "De link is ongeldig of verlopen.";
         }
 
-        if (newPassword.Length < MinPasswordLength)
+        if (Modules.Authentication.PasswordPolicy.Default.Validate(newPassword) is { } policyError)
         {
-            return $"Het wachtwoord moet minstens {MinPasswordLength} tekens lang zijn.";
+            return policyError;
         }
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
