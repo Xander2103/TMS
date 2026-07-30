@@ -13,7 +13,7 @@ public class PeppolTransmission : AuditableTenantEntity
 {
     public Guid InvoiceId { get; set; }
     public PeppolDocumentKind DocumentKind { get; set; } = PeppolDocumentKind.Invoice;
-    public PeppolTransmissionStatus Status { get; set; } = PeppolTransmissionStatus.Draft;
+    public PeppolTransmissionStatus Status { get; set; } = PeppolTransmissionStatus.Queued;
     public PeppolEnvironment Environment { get; set; } = PeppolEnvironment.Sandbox;
     public string ProviderKey { get; set; } = "sandbox";
     public string? ProviderMessageId { get; set; }

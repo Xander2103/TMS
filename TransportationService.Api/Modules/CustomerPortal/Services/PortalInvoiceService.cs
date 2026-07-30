@@ -20,7 +20,8 @@ public interface IPortalInvoiceService
 /// <summary>
 /// Customer-facing invoice list/detail/PDF/attachments — own customer only, Draft invoices
 /// never surface (a Draft is an internal working document, not yet a real invoice to the
-/// customer). PeppolStatus is a placeholder field the Phase-13 Peppol module will fill in.
+/// customer). PeppolStatus shows the newest transmission's progress; internal failure
+/// states are deliberately hidden from customers.
 /// </summary>
 public class PortalInvoiceService : IPortalInvoiceService
 {

@@ -20,8 +20,9 @@ import {
 const PAGE_SIZE = 25
 
 const KIND_LABELS: Record<string, string> = {
-  Invoice: 'Factuur',
-  CreditNote: 'Creditnota',
+  SupplierInvoice: 'Leveranciersfactuur',
+  SupplierCreditNote: 'Leverancierscreditnota',
+  StatusMessage: 'Statusbericht',
 }
 
 interface DecisionState {

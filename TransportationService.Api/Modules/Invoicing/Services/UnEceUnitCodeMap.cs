@@ -4,8 +4,9 @@ namespace TransportationService.Api.Modules.Invoicing.Services;
 /// Best-effort mapping from tenant unit-type codes/symbols onto UN/ECE Recommendation 20
 /// codes for Peppol invoice lines. Unit types are tenant-editable free data, so this maps by
 /// well-known code and symbol; anything unknown falls back to C62 ("one/stuk") — the BIS 3.0
-/// safe default. Single source: the invoice UI's unit select and any future automatic
-/// derivation must read from here, never re-hardcode codes.
+/// safe default. <see cref="Selectable"/> is the ready-made option list for a future invoice
+/// line unit select (not rendered yet). Structural line codes (transport C62, per-hour
+/// service HUR) are set directly by InvoiceService from domain knowledge.
 /// </summary>
 public static class UnEceUnitCodeMap
 {

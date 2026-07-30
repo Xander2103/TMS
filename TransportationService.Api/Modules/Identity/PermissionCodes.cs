@@ -569,6 +569,6 @@ public static class PermissionCodes
         (PeppolValidate, "peppol", "validate", "Peppol-gegevens van klanten en eigen bedrijven valideren"),
         (PeppolSend, "peppol", "send", "Facturen via Peppol verzenden"),
         (PeppolRetry, "peppol", "retry", "Mislukte Peppol-verzendingen opnieuw proberen"),
-        (PeppolViewIncoming, "peppol", "view_incoming", "Inkomende Peppol-documenten bekijken"),
+        (PeppolViewIncoming, "peppol", "view_incoming", "Inkomende Peppol-documenten bekijken en beoordelen"),
     ];
 }

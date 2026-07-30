@@ -22,7 +22,10 @@ public enum PeppolDocumentKind
 /// </summary>
 public enum PeppolTransmissionStatus
 {
+    /// <summary>Reserved; transmissions are created directly as Queued today.</summary>
     Draft = 0,
+
+    /// <summary>Reserved; transmissions are created directly as Queued today.</summary>
     Validated = 1,
     Queued = 2,
     SubmittedToProvider = 3,

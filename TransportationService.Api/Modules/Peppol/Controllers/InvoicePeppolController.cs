@@ -7,9 +7,9 @@ using TransportationService.Api.Modules.Peppol.Services;
 namespace TransportationService.Api.Modules.Peppol.Controllers;
 
 /// <summary>
-/// Per-invoice Peppol readiness: validation checklist, structured preview and the rendered
-/// UBL document. Sending itself (transmissions, dispatcher) is phase 13 — none of these
-/// endpoints contact any provider.
+/// Per-invoice Peppol operations: validation checklist, structured preview, the rendered
+/// UBL document, queueing for sending and the transmission timeline. None of these
+/// endpoints contact a provider directly — the background dispatcher does the sending.
 /// </summary>
 [ApiController]
 [Route("api/invoices/{id:guid}/peppol")]

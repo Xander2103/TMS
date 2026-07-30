@@ -139,7 +139,11 @@ public class PeppolSettingsService : IPeppolSettingsService
             .CountAsync(t => t.TenantId == TenantId && t.Status == PeppolTransmissionStatus.Delivered, cancellationToken);
         var failed = await _db.PeppolTransmissions
             .CountAsync(t => t.TenantId == TenantId && t.Status == PeppolTransmissionStatus.Failed, cancellationToken);
-        var incoming = await _db.PeppolIncomingDocuments.CountAsync(d => d.TenantId == TenantId, cancellationToken);
+        // Actionable queue size: only documents still awaiting review, not the full history.
+        var incoming = await _db.PeppolIncomingDocuments.CountAsync(
+            d => d.TenantId == TenantId
+                 && (d.Status == PeppolIncomingDocumentStatus.Received
+                     || d.Status == PeppolIncomingDocumentStatus.NeedsReview), cancellationToken);
 
         var customersEnabledWithoutId = await _db.Customers.CountAsync(
             c => c.TenantId == TenantId && c.PeppolEnabled &&

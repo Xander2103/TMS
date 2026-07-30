@@ -61,3 +61,20 @@ gematcht op TemplateCode; maatwerk blijft intact):
 Idempotente endpoints (client-sleutel, replay = huidige staat): stopovergangen
 (`ClientRequestId`), stop afronden/overslaan, POD-afronding, incident aanmaken, scans
 (bestaand `ClientEventId`).
+
+## Peppol-wave (2026-07-30, roltemplates v21)
+
+| Code | Omschrijving | Gebruikt door |
+|---|---|---|
+| `peppol.view` | Peppol-overzicht, transmissies en configuratie bekijken | `GET /api/peppol/overview|settings/{id}|transmissions`, `GET /api/invoices/{id}/peppol/transmissions|preview`, /peppol-pagina |
+| `peppol.configure` | Peppol-instellingen per juridische entiteit beheren | `PUT /api/peppol/settings/{legalEntityId}` |
+| `peppol.validate` | Peppol-gegevens valideren (klant, eigen bedrijf, factuur) | `POST /api/customers/{id}/peppol/verify`, `POST /api/peppol/settings/{id}/test-connection`, `POST /api/invoices/{id}/peppol/validate`, `GET .../peppol/xml` |
+| `peppol.send` | Facturen via Peppol versturen / verzending annuleren | `POST /api/invoices/{id}/peppol/send`, `POST /api/peppol/transmissions/{id}/cancel` |
+| `peppol.retry` | Mislukte/geweigerde verzendingen opnieuw proberen | `POST /api/peppol/transmissions/{id}/retry` |
+| `peppol.view_incoming` | Inkomende Peppol-documenten beoordelen | `GET /api/peppol/incoming*`, `POST /api/peppol/incoming/{id}/review|reject` |
+
+Toewijzing v21: **management** krijgt alle zes (incl. `peppol.configure`, naar het
+`accounting.manage`-precedent); **boekhouding** krijgt alles behalve `peppol.configure`.
+De webhook (`POST /api/peppol/webhook/{providerKey}`) is anoniem en wordt uitsluitend
+door het gedeelde secret (`Peppol:Webhook:Secret`, header `X-Peppol-Webhook-Secret`)
+beschermd — zonder geconfigureerd secret weigert hij alles. Zie docs/peppol.md.

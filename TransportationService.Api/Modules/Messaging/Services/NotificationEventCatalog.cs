@@ -34,7 +34,8 @@ public sealed record NotificationEventInfo(
     IReadOnlyList<RecipientSpec> DefaultRecipients,
     string MessageKind,
     NotificationSeverity DefaultSeverity,
-    /// <summary>True for the three Peppol events: cataloged now, wired in Phase 12/13.</summary>
+    /// <summary>True while an event is cataloged but its producer is not wired yet; the admin
+    /// UI shows it read-only as "Nog niet actief". All Peppol events are live since 2026-07-30.</summary>
     bool PeppolPending = false);
 
 public static class NotificationEventCatalog
@@ -117,15 +118,15 @@ public static class NotificationEventCatalog
             new(MessageKinds.InvoicePeppolQueued, "Peppol-factuur in wachtrij", NotificationEventGroups.Facturatie,
                 ["invoiceNumber", "customerName"], DefaultInApp: true, DefaultEmail: false,
                 [new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.InvoicesView)],
-                MessageKinds.InvoicePeppolQueued, NotificationSeverity.Info, PeppolPending: true),
+                MessageKinds.InvoicePeppolQueued, NotificationSeverity.Info),
             new(MessageKinds.InvoicePeppolDelivered, "Peppol-factuur afgeleverd", NotificationEventGroups.Facturatie,
                 ["invoiceNumber", "customerName"], DefaultInApp: true, DefaultEmail: false,
                 [new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.InvoicesView)],
-                MessageKinds.InvoicePeppolDelivered, NotificationSeverity.Info, PeppolPending: true),
+                MessageKinds.InvoicePeppolDelivered, NotificationSeverity.Info),
             new(MessageKinds.InvoicePeppolFailed, "Peppol-factuur mislukt", NotificationEventGroups.Facturatie,
                 ["invoiceNumber", "customerName", "reason"], DefaultInApp: true, DefaultEmail: false,
                 [new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.InvoicesView)],
-                MessageKinds.InvoicePeppolFailed, NotificationSeverity.Warning, PeppolPending: true),
+                MessageKinds.InvoicePeppolFailed, NotificationSeverity.Warning),
             new(MessageKinds.InvoiceCreditNote, "Creditnota aangemaakt", NotificationEventGroups.Facturatie,
                 ["invoiceNumber", "customerName"], DefaultInApp: false, DefaultEmail: true,
                 [new RecipientSpec(NotificationRecipientType.CustomerCommunicationRule, "Invoice")],

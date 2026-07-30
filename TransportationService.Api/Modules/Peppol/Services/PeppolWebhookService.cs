@@ -127,7 +127,77 @@ public class PeppolWebhookService : IPeppolWebhookService
                 _db, tenant, new Modules.Identity.Services.DevCurrentUserContext(null))
             .RecordAsync("PeppolTransmission", transmission.Id.ToString(), "WebhookStatusChanged",
                 null, new { Status = status.ToString(), request.ProviderMessageId }, cancellationToken);
+
+        // Same notifications as the dispatcher's poll path: with a real (webhook-driven)
+        // provider this is the ONLY channel that ever learns about delivery or rejection.
+        if (status == PeppolTransmissionStatus.Delivered)
+        {
+            await NotifyAsync(transmission, Modules.Messaging.Entities.MessageKinds.InvoicePeppolDelivered, null, cancellationToken);
+        }
+        else if (status == PeppolTransmissionStatus.Rejected)
+        {
+            await NotifyAsync(transmission, Modules.Messaging.Entities.MessageKinds.InvoicePeppolFailed,
+                transmission.ErrorDetail ?? "Geweigerd door het Peppol-netwerk.", cancellationToken);
+        }
+
         return new PeppolWebhookOutcomeDto(true, null);
+    }
+
+    /// <summary>Per-tenant notification publication from this tenant-less anonymous scope
+    /// (mirrors <see cref="PeppolDispatcher"/>); failures never bounce the webhook.</summary>
+    private async Task NotifyAsync(
+        PeppolTransmission transmission, string eventKey, string? reason, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var invoice = await _db.Invoices.AsNoTracking()
+                .Where(i => i.TenantId == transmission.TenantId && i.Id == transmission.InvoiceId)
+                .Select(i => new { i.Id, i.InvoiceNumber, i.CustomerId })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (invoice is null)
+            {
+                return;
+            }
+
+            var customerName = await _db.Customers.AsNoTracking()
+                .Where(c => c.TenantId == transmission.TenantId && c.Id == invoice.CustomerId)
+                .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+            var tokens = new Dictionary<string, string>
+            {
+                ["invoiceNumber"] = invoice.InvoiceNumber,
+                ["customerName"] = customerName,
+            };
+            if (reason is not null)
+            {
+                tokens["reason"] = reason;
+            }
+
+            var tenant = new Modules.Tenancy.Services.DevTenantContext(transmission.TenantId);
+            var user = new Modules.Identity.Services.DevCurrentUserContext(null);
+            var eventService = new Modules.Messaging.Services.NotificationEventService(
+                _db, tenant,
+                new Modules.Messaging.Services.MessageOutboxService(_db, tenant, _timeProvider),
+                new Modules.Notifications.Services.NotificationService(_db, tenant, user, _timeProvider),
+                new Modules.Partners.Services.CustomerCommunicationService(
+                    _db, tenant, new Modules.Auditing.Services.AuditService(_db, tenant, user)),
+                Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance
+                    .CreateLogger<Modules.Messaging.Services.NotificationEventService>());
+            var message = eventKey == Modules.Messaging.Entities.MessageKinds.InvoicePeppolDelivered
+                ? $"Factuur {invoice.InvoiceNumber} is afgeleverd via Peppol."
+                : $"Peppol-verzending van factuur {invoice.InvoiceNumber} is mislukt: {reason}";
+            await eventService.PublishAsync(eventKey,
+                new Modules.Messaging.Services.NotificationEventContext("Invoice", invoice.Id.ToString(), tokens)
+                {
+                    CustomerId = invoice.CustomerId,
+                    LinkPath = $"/invoices/{invoice.Id}",
+                    InAppMessage = message,
+                }, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger?.LogError(exception, "Peppol webhook notification '{EventKey}' failed for transmission {TransmissionId}.",
+                eventKey, transmission.Id);
+        }
     }
 
     private async Task<PeppolWebhookOutcomeDto> ProcessIncomingAsync(
