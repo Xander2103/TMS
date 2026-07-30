@@ -30,7 +30,9 @@ public sealed record InvoicePdfSnapshot(
     decimal VatAmount,
     decimal Total,
     string Currency,
-    string? Notes);
+    string? Notes,
+    bool IsCreditNote = false,
+    string? CreditedInvoiceNumber = null);
 
 /// <summary>
 /// Renders a one-page-per-overflow invoice PDF: header (seller + optional logo), invoice meta,
@@ -104,15 +106,26 @@ public static class InvoicePdfRenderer
 
         // --- Invoice meta + customer block, side by side ---
         var metaX = margin + width * 0.55;
-        gfx.DrawString("FACTUUR", Heading, XBrushes.Black, new XPoint(metaX, y + 9));
+        gfx.DrawString(invoice.IsCreditNote ? "CREDITNOTA" : "FACTUUR", Heading, XBrushes.Black, new XPoint(metaX, y + 9));
         y += 16;
-        gfx.DrawString($"Factuurnummer: {invoice.InvoiceNumber}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
+        gfx.DrawString(
+            $"{(invoice.IsCreditNote ? "Creditnotanummer" : "Factuurnummer")}: {invoice.InvoiceNumber}",
+            Body, XBrushes.Black, new XPoint(metaX, y + 9));
         var customerY = y - 16;
         y += 14;
-        gfx.DrawString($"Factuurdatum: {invoice.InvoiceDate:dd-MM-yyyy}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
+        gfx.DrawString($"Datum: {invoice.InvoiceDate:dd-MM-yyyy}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
         y += 14;
-        gfx.DrawString($"Vervaldatum: {invoice.DueDate:dd-MM-yyyy}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
-        y += 14;
+        if (!invoice.IsCreditNote)
+        {
+            gfx.DrawString($"Vervaldatum: {invoice.DueDate:dd-MM-yyyy}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
+            y += 14;
+        }
+
+        if (invoice.CreditedInvoiceNumber is { Length: > 0 })
+        {
+            gfx.DrawString($"Crediteert factuur: {invoice.CreditedInvoiceNumber}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
+            y += 14;
+        }
         if (invoice.PurchaseOrderNumber is { Length: > 0 })
         {
             gfx.DrawString($"PO-nummer: {invoice.PurchaseOrderNumber}", Body, XBrushes.Black, new XPoint(metaX, y + 9));

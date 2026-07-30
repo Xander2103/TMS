@@ -26,6 +26,8 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(i => i.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(i => i.Currency).IsRequired().HasMaxLength(3);
         builder.Property(i => i.Notes).HasMaxLength(4000);
+        builder.Property(i => i.Kind).HasConversion<string>().HasMaxLength(20).HasDefaultValue(InvoiceKind.Invoice);
+        builder.Property(i => i.PaymentReference).HasMaxLength(30);
 
         builder.HasIndex(i => new { i.TenantId, i.InvoiceNumber })
             .IsUnique()
@@ -38,6 +40,15 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.HasOne<Customer>().WithMany().HasForeignKey(i => i.CustomerId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Modules.Organization.Entities.LegalEntity>().WithMany()
             .HasForeignKey(i => i.LegalEntityId).OnDelete(DeleteBehavior.Restrict);
+        // Self-reference: a credited invoice can never be hard-deleted from under its credit note.
+        builder.HasOne<Invoice>().WithMany()
+            .HasForeignKey(i => i.CreditedInvoiceId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(i => new { i.TenantId, i.CreditedInvoiceId });
+        // Concurrency-safe backstop for the one-live-credit-note-per-invoice rule (the service
+        // pre-check alone can race). Partial index syntax works on PostgreSQL and SQLite alike.
+        builder.HasIndex(i => new { i.TenantId, i.CreditedInvoiceId }, "IX_invoices_one_live_credit_note")
+            .IsUnique()
+            .HasFilter("\"CreditedInvoiceId\" IS NOT NULL AND \"Status\" <> 'Cancelled' AND \"IsDeleted\" = false");
 
         builder.HasMany(i => i.Lines)
             .WithOne()
@@ -103,6 +114,8 @@ public class InvoiceLineConfiguration : IEntityTypeConfiguration<InvoiceLine>
         builder.Property(l => l.Quantity).HasPrecision(12, 2);
         builder.Property(l => l.UnitPrice).HasPrecision(12, 2);
         builder.Property(l => l.VatRatePercent).HasPrecision(5, 2);
+        builder.Property(l => l.UnitCode).IsRequired().HasMaxLength(10).HasDefaultValue("C62");
+        builder.Property(l => l.VatCategoryCode).HasMaxLength(10);
 
         builder.HasIndex(l => new { l.InvoiceId, l.Sequence });
         builder.HasIndex(l => new { l.TenantId, l.TransportOrderId });

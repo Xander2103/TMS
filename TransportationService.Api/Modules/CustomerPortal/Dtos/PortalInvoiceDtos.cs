@@ -12,7 +12,9 @@ public record PortalInvoiceListItemDto(
     string Currency,
     /// <summary>Placeholder for the Peppol transmission status; always null until Phase 13 wires
     /// real Peppol send tracking onto the invoice/portal read model.</summary>
-    string? PeppolStatus = null);
+    string? PeppolStatus = null,
+    /// <summary>"Invoice" or "CreditNote" — credit notes carry positive amounts; the sign is the kind.</summary>
+    string Kind = "Invoice");
 
 public record PortalInvoiceLineDto(
     string Description, decimal Quantity, decimal UnitPrice, decimal VatRatePercent, decimal LineTotal);
@@ -33,4 +35,6 @@ public record PortalInvoiceDetailDto(
     decimal Total,
     IReadOnlyList<PortalInvoiceAttachmentDto> Attachments,
     /// <summary>See <see cref="PortalInvoiceListItemDto.PeppolStatus"/>.</summary>
-    string? PeppolStatus = null);
+    string? PeppolStatus = null,
+    /// <summary>See <see cref="PortalInvoiceListItemDto.Kind"/>.</summary>
+    string Kind = "Invoice");

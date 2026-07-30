@@ -28,7 +28,8 @@ public record LegalEntityDto(
     bool HasLogo,
     string? LogoFileName,
     bool IsActive,
-    bool IsDefault);
+    bool IsDefault,
+    string? CreditNotePrefix = null);
 
 /// <summary>Compact shape for dropdowns (entity pickers, top-bar selector).</summary>
 public record LegalEntityOptionDto(Guid Id, string DisplayName, string? VatNumber, bool IsDefault, bool IsActive);
@@ -57,6 +58,7 @@ public record SaveLegalEntityRequest(
     int InvoiceSequencePadding,
     string? InvoicePrefix,
     string? InvoiceFooter,
-    bool IsDefault);
+    bool IsDefault,
+    string? CreditNotePrefix = null);
 
 public record ActiveLegalEntityDto(Guid? LegalEntityId);

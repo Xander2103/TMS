@@ -48,6 +48,7 @@ function entity(): LegalEntity {
     invoiceNumberFormat: '{YYYY}{MM}{SEQ}',
     invoiceSequencePadding: 4,
     invoicePrefix: null,
+    creditNotePrefix: null,
     invoiceFooter: null,
     hasLogo: false,
     logoFileName: null,

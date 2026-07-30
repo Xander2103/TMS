@@ -48,6 +48,7 @@ const EMPTY_FORM: SaveLegalEntityInput = {
   invoiceNumberFormat: '{YYYY}{MM}{SEQ}',
   invoiceSequencePadding: 4,
   invoicePrefix: null,
+  creditNotePrefix: null,
   invoiceFooter: null,
   isDefault: false,
 }
@@ -76,6 +77,7 @@ function toInput(entity: LegalEntity): SaveLegalEntityInput {
     invoiceNumberFormat: entity.invoiceNumberFormat,
     invoiceSequencePadding: entity.invoiceSequencePadding,
     invoicePrefix: entity.invoicePrefix,
+    creditNotePrefix: entity.creditNotePrefix,
     invoiceFooter: entity.invoiceFooter,
     isDefault: entity.isDefault,
   }
@@ -464,6 +466,10 @@ export function LegalEntitiesPage() {
                 />
               </FormField>
               {text('invoicePrefix', 'Voorvoegsel', { maxLength: 20 })}
+              {text('creditNotePrefix', 'Creditnotavoorvoegsel', {
+                maxLength: 20,
+                hint: 'Leeg = factuurvoorvoegsel + "CN".',
+              })}
               <FormField
                 label="Factuurvoettekst"
                 htmlFor="le-invoiceFooter"

@@ -110,6 +110,15 @@ public class InvoicesController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>Creates a Draft credit note for a Sent/Paid invoice (positive amounts, linked to the original).</summary>
+    [HttpPost("{id:guid}/credit-note")]
+    [RequirePermission(PermissionCodes.InvoicesCreate)]
+    public async Task<ActionResult<InvoiceDetailDto>> CreateCreditNote(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _service.CreateCreditNoteAsync(id, cancellationToken);
+        return Handle(result, created: true);
+    }
+
     [HttpPost("{id:guid}/status")]
     [RequirePermission(PermissionCodes.InvoicesChangeStatus)]
     public async Task<ActionResult<InvoiceDetailDto>> ChangeStatus(

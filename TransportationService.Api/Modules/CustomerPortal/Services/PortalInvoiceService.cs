@@ -67,7 +67,9 @@ public class PortalInvoiceService : IPortalInvoiceService
         var page = await _invoiceService.SearchAsync(null, null, customerId, PageRequest.Of(1, 200), cancellationToken);
         var items = page.Items
             .Where(i => i.Status != InvoiceStatus.Draft)
-            .Select(i => new PortalInvoiceListItemDto(i.Id, i.InvoiceNumber, i.InvoiceDate, i.DueDate, i.Status, i.Total, i.Currency))
+            .Select(i => new PortalInvoiceListItemDto(
+                i.Id, i.InvoiceNumber, i.InvoiceDate, i.DueDate, i.Status, i.Total, i.Currency,
+                Kind: i.Kind.ToString()))
             .ToList();
         return PortalResult<IReadOnlyList<PortalInvoiceListItemDto>>.Success(items);
     }
@@ -96,7 +98,8 @@ public class PortalInvoiceService : IPortalInvoiceService
             invoice.Id, invoice.InvoiceNumber, invoice.InvoiceDate, invoice.DueDate, invoice.Status, invoice.Currency,
             invoice.PurchaseOrderNumber,
             invoice.Lines.Select(l => new PortalInvoiceLineDto(l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent, l.LineTotal)).ToList(),
-            invoice.Subtotal, invoice.VatAmount, invoice.Total, visibleAttachments));
+            invoice.Subtotal, invoice.VatAmount, invoice.Total, visibleAttachments,
+            Kind: invoice.Kind.ToString()));
     }
 
     public async Task<PortalResult<PortalFileDto>> GetInvoicePdfAsync(Guid invoiceId, CancellationToken cancellationToken)

@@ -49,3 +49,33 @@ public record CustomerPeppolVerifyResultDto(
     IReadOnlyList<string> SupportedDocumentTypes,
     DateTime LastCheckedAt,
     string? Reference);
+
+/// <summary>One actionable Dutch readiness issue blocking Peppol sending of an invoice.</summary>
+public record PeppolValidationIssueDto(string Code, string Message);
+
+public record PeppolInvoiceValidationResultDto(bool IsValid, IReadOnlyList<PeppolValidationIssueDto> Issues);
+
+public record PeppolPreviewPartyDto(string Name, string? VatNumber, string? Participant);
+
+public record PeppolPreviewLineDto(
+    int Sequence, string Description, decimal Quantity, string UnitCode,
+    decimal UnitPrice, decimal LineTotal, string VatCategoryCode, decimal VatRatePercent);
+
+public record PeppolPreviewVatGroupDto(string VatCategoryCode, decimal VatRatePercent, decimal TaxableAmount, decimal VatAmount);
+
+/// <summary>Structured summary of what the UBL document will contain (no XML parsing in the UI).</summary>
+public record PeppolInvoicePreviewDto(
+    string InvoiceNumber,
+    string Kind,
+    DateOnly InvoiceDate,
+    string Currency,
+    PeppolPreviewPartyDto Seller,
+    PeppolPreviewPartyDto Buyer,
+    IReadOnlyList<PeppolPreviewLineDto> Lines,
+    IReadOnlyList<PeppolPreviewVatGroupDto> VatGroups,
+    decimal Subtotal,
+    decimal VatAmount,
+    decimal Total,
+    string? BuyerReference,
+    string? PurchaseOrderNumber,
+    string? CreditedInvoiceNumber);

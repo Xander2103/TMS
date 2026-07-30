@@ -77,7 +77,14 @@ public class InvoicePdfService : IInvoicePdfService
             .Select(l => new InvoicePdfLine(l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent, Math.Round(l.Quantity * l.UnitPrice, 2)))
             .ToList();
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
-        var vat = Math.Round(invoice.Lines.Where(l => !l.IsDeleted).Sum(l => l.Quantity * l.UnitPrice * l.VatRatePercent / 100m), 2);
+        var vat = InvoiceTotals.VatTotal(invoice.Lines, invoice.CustomerVatTreatment);
+
+        var creditedInvoiceNumber = invoice.CreditedInvoiceId is { } creditedId
+            ? await _dbContext.Invoices.AsNoTracking()
+                .Where(i => i.TenantId == tenantId && i.Id == creditedId)
+                .Select(i => i.InvoiceNumber)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
 
         var customerAddress = customer is null
             ? null
@@ -109,10 +116,13 @@ public class InvoicePdfService : IInvoicePdfService
             vat,
             subtotal + vat,
             invoice.Currency,
-            invoice.Notes);
+            invoice.Notes,
+            invoice.Kind == InvoiceKind.CreditNote,
+            creditedInvoiceNumber);
 
         var bytes = InvoicePdfRenderer.Render(snapshot);
-        var fileName = $"factuur-{invoice.InvoiceNumber.Replace('/', '-')}.pdf";
+        var prefix = invoice.Kind == InvoiceKind.CreditNote ? "creditnota" : "factuur";
+        var fileName = $"{prefix}-{invoice.InvoiceNumber.Replace('/', '-')}.pdf";
         return (bytes, fileName);
     }
 

@@ -31,6 +31,7 @@ public class LegalEntityConfiguration : IEntityTypeConfiguration<LegalEntity>
         builder.Property(e => e.DefaultCurrency).IsRequired().HasMaxLength(3);
         builder.Property(e => e.InvoiceNumberFormat).IsRequired().HasMaxLength(50);
         builder.Property(e => e.InvoicePrefix).HasMaxLength(20);
+        builder.Property(e => e.CreditNotePrefix).HasMaxLength(20);
         builder.Property(e => e.InvoiceFooter).HasMaxLength(2000);
         builder.Property(e => e.LogoStorageKey).HasMaxLength(500);
         builder.Property(e => e.LogoFileName).HasMaxLength(255);

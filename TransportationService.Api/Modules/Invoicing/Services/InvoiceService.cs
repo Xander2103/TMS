@@ -109,7 +109,7 @@ public class InvoiceService : IInvoiceService
             .OrderByDescending(x => x.i.InvoiceDate).ThenByDescending(x => x.i.InvoiceNumber)
             .Skip(page.Skip)
             .Take(page.PageSize)
-            .Select(x => new { x.i.Id, x.i.InvoiceNumber, x.i.InvoiceDate, x.i.DueDate, x.i.CustomerId, x.CustomerName, x.i.Status, x.i.Currency })
+            .Select(x => new { x.i.Id, x.i.InvoiceNumber, x.i.InvoiceDate, x.i.DueDate, x.i.CustomerId, x.CustomerName, x.i.Status, x.i.Currency, x.i.Kind })
             .ToListAsync(cancellationToken);
 
         var invoiceIds = pageRows.Select(r => r.Id).ToList();
@@ -122,11 +122,15 @@ public class InvoiceService : IInvoiceService
         var items = pageRows.Select(r =>
         {
             var invoiceLines = linesByInvoice[r.Id].ToList();
-            var subtotal = Math.Round(invoiceLines.Sum(l => l.Quantity * l.UnitPrice), 2);
-            var vat = Math.Round(invoiceLines.Sum(l => l.Quantity * l.UnitPrice * l.VatRatePercent / 100m), 2);
+            var subtotal = Math.Round(invoiceLines.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2)), 2);
+            // Same per-rate group rounding as InvoiceTotals/the UBL document.
+            var vat = invoiceLines
+                .GroupBy(l => l.VatRatePercent)
+                .Sum(g => Math.Round(
+                    Math.Round(g.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2)), 2) * g.Key / 100m, 2));
             return new InvoiceListItemDto(
                 r.Id, r.InvoiceNumber, r.InvoiceDate, r.DueDate, r.CustomerId, r.CustomerName,
-                r.Status, r.Currency, subtotal, vat, subtotal + vat, invoiceLines.Count);
+                r.Status, r.Currency, subtotal, vat, subtotal + vat, invoiceLines.Count, r.Kind);
         }).ToList();
 
         return new PagedResult<InvoiceListItemDto>(items, totalCount, page.Page, page.PageSize);
@@ -358,6 +362,7 @@ public class InvoiceService : IInvoiceService
                     UnitPrice = serviceLine.Amount,
                     VatRatePercent = vatRate,
                     SalesCategoryId = surchargeCategoryId,
+                    UnitCode = serviceLine.Kind == Modules.Tarification.Entities.SurchargeKind.PerHour ? "HUR" : "C62",
                 });
             }
         }
@@ -374,6 +379,7 @@ public class InvoiceService : IInvoiceService
                 UnitPrice = manual.UnitPrice,
                 VatRatePercent = manual.VatRatePercent ?? vatRate,
                 SalesCategoryId = manual.SalesCategoryId,
+                UnitCode = NormalizeUnitCode(manual.UnitCode),
             });
         }
 
@@ -518,19 +524,32 @@ public class InvoiceService : IInvoiceService
         invoice.DueDate = request.DueDate < request.InvoiceDate ? request.InvoiceDate : request.DueDate;
         invoice.Notes = Trim(request.Notes);
         invoice.PurchaseOrderNumber = Trim(request.PurchaseOrderNumber);
+        var paymentReference = Trim(request.PaymentReference);
+        if (paymentReference is { Length: > 30 })
+        {
+            return InvoiceOperationResult.Invalid("De betalingsreferentie mag maximaal 30 tekens lang zijn.");
+        }
+
+        invoice.PaymentReference = paymentReference;
 
         // While Draft, snapshots track current master data; Sent freezes them for good.
-        var snapshotEntity = invoice.LegalEntityId is { } snapEntityId
-            ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
-                e => e.TenantId == _tenantContext.TenantId && e.Id == snapEntityId, cancellationToken)
-            : null;
-        var snapshotCustomer = await _dbContext.Customers.AsNoTracking()
-            .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId)
-            .Select(c => new { c.VatTreatment, c.VatNumber })
-            .FirstOrDefaultAsync(cancellationToken);
-        if (snapshotCustomer is not null)
+        // Credit notes are the exception: they mirror the CREDITED document and must never be
+        // re-snapshotted from live master data, or their frozen line VAT categories would
+        // contradict a since-changed customer treatment.
+        if (invoice.Kind != InvoiceKind.CreditNote)
         {
-            ApplySnapshots(invoice, snapshotEntity, snapshotCustomer.VatTreatment, snapshotCustomer.VatNumber);
+            var snapshotEntity = invoice.LegalEntityId is { } snapEntityId
+                ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
+                    e => e.TenantId == _tenantContext.TenantId && e.Id == snapEntityId, cancellationToken)
+                : null;
+            var snapshotCustomer = await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == invoice.CustomerId)
+                .Select(c => new { c.VatTreatment, c.VatNumber })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (snapshotCustomer is not null)
+            {
+                ApplySnapshots(invoice, snapshotEntity, snapshotCustomer.VatTreatment, snapshotCustomer.VatNumber);
+            }
         }
 
         var requestedCategoryIds = request.Lines
@@ -580,6 +599,7 @@ public class InvoiceService : IInvoiceService
                 existing.Quantity = line.Quantity;
                 existing.UnitPrice = line.UnitPrice;
                 existing.VatRatePercent = line.VatRatePercent;
+                existing.UnitCode = NormalizeUnitCode(line.UnitCode ?? existing.UnitCode);
                 // The draft editor always round-trips the current value, so an explicit null IS
                 // a deliberate clear ("— Geen —") — silently keeping the old category would
                 // freeze and export a category the user removed.
@@ -598,6 +618,7 @@ public class InvoiceService : IInvoiceService
                     UnitPrice = line.UnitPrice,
                     VatRatePercent = line.VatRatePercent,
                     SalesCategoryId = line.SalesCategoryId,
+                    UnitCode = NormalizeUnitCode(line.UnitCode),
                 });
             }
         }
@@ -700,10 +721,19 @@ public class InvoiceService : IInvoiceService
 
         if (target == InvoiceStatus.Sent)
         {
+            // Never guess a VAT category: without the treatment snapshot the freeze below would
+            // stamp permanent, possibly wrong categories on the lines.
+            if (string.IsNullOrWhiteSpace(invoice.CustomerVatTreatment))
+            {
+                return InvoiceOperationResult.InvalidState(
+                    "De btw-regeling van de klant ontbreekt op deze factuur; bewerk en bewaar de conceptfactuur eerst opnieuw.");
+            }
+
             // §7.3: freeze the sales category + ledger account from the THEN-current mapping.
             // Later mapping changes never rewrite these lines; the accounting export reads
             // exclusively from these snapshots.
             await FreezeLedgerSnapshotsAsync(invoice, cancellationToken);
+            FreezeVatCategories(invoice);
         }
 
         if (target == InvoiceStatus.Cancelled)
@@ -954,6 +984,143 @@ public class InvoiceService : IInvoiceService
         }
     }
 
+    /// <summary>
+    /// Freezes the UNCL5305 VAT category per line at Send, derived from the invoice's own
+    /// VAT-treatment snapshot — the same immutability rule as the ledger snapshots. Never
+    /// overwrites an already-frozen value.
+    /// </summary>
+    private static void FreezeVatCategories(Invoice invoice)
+    {
+        var treatment = Enum.TryParse<VatTreatment>(invoice.CustomerVatTreatment, out var parsed)
+            ? parsed
+            : VatTreatment.DomesticVat;
+        foreach (var line in invoice.Lines.Where(l => !l.IsDeleted && l.VatCategoryCode is null))
+        {
+            line.VatCategoryCode = Partners.Services.VatTreatmentCatalog.ResolveVatCategory(treatment, line.VatRatePercent).Code;
+        }
+    }
+
+    public async Task<InvoiceOperationResult> CreateCreditNoteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var original = await TenantScoped().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+        if (original is null)
+        {
+            return InvoiceOperationResult.NotFound;
+        }
+
+        if (original.Kind != InvoiceKind.Invoice)
+        {
+            return InvoiceOperationResult.InvalidState("Een creditnota kan zelf niet gecrediteerd worden.");
+        }
+
+        if (original.Status is not (InvoiceStatus.Sent or InvoiceStatus.Paid))
+        {
+            return InvoiceOperationResult.InvalidState("Alleen verzonden of betaalde facturen kunnen gecrediteerd worden.");
+        }
+
+        var existingCredit = await TenantScoped().AnyAsync(
+            i => i.CreditedInvoiceId == original.Id && i.Status != InvoiceStatus.Cancelled, cancellationToken);
+        if (existingCredit)
+        {
+            return InvoiceOperationResult.InvalidState(
+                "Er bestaat al een creditnota voor deze factuur. Annuleer die eerst als je opnieuw wilt crediteren.");
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var settings = await _dbContext.TenantSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+
+        var creditNote = new Invoice
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenantId,
+            Kind = InvoiceKind.CreditNote,
+            CreditedInvoiceId = original.Id,
+            CustomerId = original.CustomerId,
+            LegalEntityId = original.LegalEntityId,
+            InvoicePeriodYear = today.Year,
+            InvoicePeriodMonth = today.Month,
+            InvoiceDate = today,
+            DueDate = today.AddDays(settings?.PaymentTermDays ?? 30),
+            Currency = original.Currency,
+            PurchaseOrderNumber = original.PurchaseOrderNumber,
+            Notes = $"Creditnota voor factuur {original.InvoiceNumber}.",
+            // Snapshot copy FROM the credited document, never from live master data: the credit
+            // note must mirror exactly what it credits.
+            SellerName = original.SellerName,
+            SellerVatNumber = original.SellerVatNumber,
+            SellerIban = original.SellerIban,
+            SellerAddressLine = original.SellerAddressLine,
+            CustomerVatTreatment = original.CustomerVatTreatment,
+            CustomerVatNumberSnapshot = original.CustomerVatNumberSnapshot,
+            VatLegalText = original.VatLegalText,
+        };
+
+        var sequence = 1;
+        foreach (var line in original.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.Sequence))
+        {
+            creditNote.Lines.Add(new InvoiceLine
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                // Deliberately NOT order-linked: crediting never re-opens the order lifecycle.
+                TransportOrderId = null,
+                Sequence = sequence++,
+                Description = line.Description,
+                // UBL credit notes carry POSITIVE amounts; the sign lives in the document kind.
+                Quantity = line.Quantity,
+                UnitPrice = line.UnitPrice,
+                VatRatePercent = line.VatRatePercent,
+                UnitCode = line.UnitCode,
+                VatCategoryCode = line.VatCategoryCode,
+                SalesCategoryId = line.SalesCategoryId,
+            });
+        }
+
+        _dbContext.Add(creditNote);
+
+        var legalEntity = original.LegalEntityId is { } entityId
+            ? await _dbContext.LegalEntities.FirstOrDefaultAsync(
+                e => e.TenantId == tenantId && e.Id == entityId, cancellationToken)
+            : null;
+        if (legalEntity is not null)
+        {
+            // Same monthly sequence as invoices, distinguished by the credit-note prefix
+            // (CreditNotePrefix, else InvoicePrefix + "CN"). A format without {PREFIX} gets it
+            // prepended so the prefix can never silently disappear.
+            var format = legalEntity.InvoiceNumberFormat.Contains("{PREFIX}", StringComparison.Ordinal)
+                ? legalEntity.InvoiceNumberFormat
+                : "{PREFIX}" + legalEntity.InvoiceNumberFormat;
+            var numberingEntity = new LegalEntity
+            {
+                Id = legalEntity.Id,
+                InvoiceNumberFormat = format,
+                InvoiceSequencePadding = legalEntity.InvoiceSequencePadding,
+                InvoicePrefix = legalEntity.CreditNotePrefix ?? $"{legalEntity.InvoicePrefix}CN",
+            };
+            await _numberService.ClaimAsync(numberingEntity, today.Year, today.Month,
+                number => creditNote.InvoiceNumber = number, cancellationToken);
+        }
+        else
+        {
+            var writableSettings = await _dbContext.TenantSettings
+                .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
+            await TenantNumbering.SaveWithClaimedNumberAsync(
+                _dbContext, writableSettings,
+                () => creditNote.InvoiceNumber = $"CN{GenerateInvoiceNumber(writableSettings)}",
+                cancellationToken);
+        }
+
+        await _auditService.RecordAsync(EntityType, creditNote.Id.ToString(), "CreditNoteCreated",
+            new { CreditedInvoiceNumber = original.InvoiceNumber },
+            new { creditNote.InvoiceNumber, LineCount = creditNote.Lines.Count }, cancellationToken);
+        await _auditService.RecordAsync(EntityType, original.Id.ToString(), "Credited",
+            null, new { CreditNoteNumber = creditNote.InvoiceNumber, CreditNoteId = creditNote.Id }, cancellationToken);
+
+        return InvoiceOperationResult.Success(await MapDetailAsync(creditNote, cancellationToken));
+    }
+
     public async Task<InvoiceOperationResult> CompleteLedgerSnapshotsAsync(Guid id, CancellationToken cancellationToken)
     {
         var invoice = await TenantScoped().Include(i => i.Lines).FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
@@ -1013,6 +1180,9 @@ public class InvoiceService : IInvoiceService
                 .ToDictionary(c => c.Id, c => (c.Name, c.AccountNumber, c.AccountName));
 
         var isDraft = invoice.Status == InvoiceStatus.Draft;
+        var mappedTreatment = Enum.TryParse<VatTreatment>(invoice.CustomerVatTreatment, out var parsedTreatment)
+            ? parsedTreatment
+            : VatTreatment.DomesticVat;
         var lines = liveLines.Select(l =>
         {
             var live = l.SalesCategoryId is { } categoryId ? liveCategories.GetValueOrDefault(categoryId) : default;
@@ -1031,16 +1201,26 @@ public class InvoiceService : IInvoiceService
                 l.TransportOrderId is { } oid ? orderNumbers.GetValueOrDefault(oid) : null,
                 l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent,
                 Math.Round(l.Quantity * l.UnitPrice, 2),
-                l.SalesCategoryId, categoryName, accountNumber, accountName, warning);
+                l.SalesCategoryId, categoryName, accountNumber, accountName, warning,
+                l.UnitCode,
+                // Frozen after Send; live-derived while Draft so the preview shows what WILL freeze.
+                l.VatCategoryCode ?? Partners.Services.VatTreatmentCatalog.ResolveVatCategory(mappedTreatment, l.VatRatePercent).Code);
         }).ToList();
 
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
-        var vat = Math.Round(liveLines.Sum(l => l.Quantity * l.UnitPrice * l.VatRatePercent / 100m), 2);
+        var vat = InvoiceTotals.VatTotal(liveLines, invoice.CustomerVatTreatment);
 
         var legalEntityName = invoice.LegalEntityId is { } entityId
             ? await _dbContext.LegalEntities.AsNoTracking()
                 .Where(e => e.TenantId == tenantId && e.Id == entityId)
                 .Select(e => e.TradingName ?? e.LegalName)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
+        var creditedInvoiceNumber = invoice.CreditedInvoiceId is { } creditedId
+            ? await _dbContext.Invoices.AsNoTracking()
+                .Where(i => i.TenantId == tenantId && i.Id == creditedId)
+                .Select(i => i.InvoiceNumber)
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
@@ -1051,7 +1231,8 @@ public class InvoiceService : IInvoiceService
             lines, subtotal, vat, subtotal + vat, Transitions[invoice.Status],
             invoice.LegalEntityId, legalEntityName,
             invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth, invoice.NumberIsManual,
-            invoice.PurchaseOrderNumber);
+            invoice.PurchaseOrderNumber,
+            invoice.Kind, invoice.CreditedInvoiceId, creditedInvoiceNumber, invoice.PaymentReference);
     }
 
     private static string GenerateInvoiceNumber(TenantSettings? settings)
@@ -1079,4 +1260,22 @@ public class InvoiceService : IInvoiceService
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Uppercased UN/ECE rec 20 code, max 10 chars; empty/null falls back to C62 (stuk).</summary>
+    private static string NormalizeUnitCode(string? unitCode)
+    {
+        var trimmed = Trim(unitCode)?.ToUpperInvariant();
+        if (trimmed is null)
+        {
+            return "C62";
+        }
+
+        if (trimmed.Length > 10 || !trimmed.All(char.IsAsciiLetterOrDigit))
+        {
+            throw new Common.DomainValidationException("unitCode",
+                "De eenheidscode moet een UN/ECE-code van maximaal 10 letters of cijfers zijn (bv. C62, KGM, HUR).");
+        }
+
+        return trimmed;
+    }
 }

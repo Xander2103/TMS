@@ -11,6 +11,17 @@ public enum InvoiceStatus
 }
 
 /// <summary>
+/// Invoice vs credit note. A credit note stores POSITIVE line amounts (like the UBL 2.1
+/// CreditNote document it maps to); its commercial sign comes from the Kind, never from
+/// negative quantities or prices.
+/// </summary>
+public enum InvoiceKind
+{
+    Invoice = 0,
+    CreditNote = 1,
+}
+
+/// <summary>
 /// Customer invoice built from completed transport orders plus optional manual lines.
 /// Totals are always computed from the lines; nothing is denormalised. Sending to an
 /// accounting package / Peppol is out of scope — clean extension point only.
@@ -65,6 +76,14 @@ public class Invoice : AuditableTenantEntity
 
     public string? Notes { get; set; }
 
+    public InvoiceKind Kind { get; set; } = InvoiceKind.Invoice;
+
+    /// <summary>For credit notes: the invoice being (partially) credited.</summary>
+    public Guid? CreditedInvoiceId { get; set; }
+
+    /// <summary>Optional structured payment reference (e.g. Belgian OGM) printed and sent as PaymentID.</summary>
+    public string? PaymentReference { get; set; }
+
     public List<InvoiceLine> Lines { get; set; } = [];
 }
 
@@ -112,6 +131,15 @@ public class InvoiceLine : AuditableTenantEntity
     public decimal Quantity { get; set; } = 1m;
     public decimal UnitPrice { get; set; }
     public decimal VatRatePercent { get; set; }
+
+    /// <summary>UN/ECE Recommendation 20 unit code for the quantity ("C62" = piece, default).</summary>
+    public string UnitCode { get; set; } = "C62";
+
+    /// <summary>
+    /// UNCL5305 VAT category (S/Z/AE/K/G/E) frozen at Send from the customer's VAT treatment —
+    /// snapshot immutability, like the ledger block below. Null while Draft (derived live).
+    /// </summary>
+    public string? VatCategoryCode { get; set; }
 
     // --- Sales category + ledger snapshot (corrections wave §7.3) ---
 

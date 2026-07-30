@@ -51,6 +51,9 @@ public class LegalEntity : AuditableTenantEntity
     /// <summary>Free text rendered by the {PREFIX} token (e.g. "FAC-").</summary>
     public string? InvoicePrefix { get; set; }
 
+    /// <summary>Prefix for credit-note numbers; null falls back to InvoicePrefix + "CN".</summary>
+    public string? CreditNotePrefix { get; set; }
+
     /// <summary>Footer text printed on invoices of this entity.</summary>
     public string? InvoiceFooter { get; set; }
 

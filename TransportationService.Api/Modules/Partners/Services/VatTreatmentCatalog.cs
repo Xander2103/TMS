@@ -43,4 +43,23 @@ public static class VatTreatmentCatalog
 
     public static VatTreatmentInfo Resolve(VatTreatment treatment) =>
         All.FirstOrDefault(i => i.Treatment == treatment) ?? All[0];
+
+    /// <summary>UNCL5305 VAT category + EN 16931 exemption reason for one invoice line.</summary>
+    public sealed record VatCategoryInfo(string Code, string? ExemptionReasonCode, string? ExemptionReasonText);
+
+    /// <summary>
+    /// Maps a VAT treatment (+ effective line rate) onto the UBL/Peppol category. Single
+    /// source for both the stored line snapshot and the generated document — no duplicated
+    /// tax logic anywhere else. Never guesses: unknown treatments fall through to S.
+    /// </summary>
+    public static VatCategoryInfo ResolveVatCategory(VatTreatment treatment, decimal ratePercent) => treatment switch
+    {
+        VatTreatment.DomesticVat when ratePercent > 0m => new("S", null, null),
+        VatTreatment.DomesticVat => new("Z", null, null),
+        VatTreatment.ReverseCharge => new("AE", "VATEX-EU-AE", Resolve(treatment).InvoiceLegalText),
+        VatTreatment.IntraCommunitySupply => new("K", "VATEX-EU-IC", Resolve(treatment).InvoiceLegalText),
+        VatTreatment.ExportOutsideEu => new("G", "VATEX-EU-G", Resolve(treatment).InvoiceLegalText),
+        VatTreatment.VatExempt => new("E", null, Resolve(treatment).InvoiceLegalText),
+        _ => new("S", null, null),
+    };
 }

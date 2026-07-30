@@ -23,6 +23,7 @@ export interface LegalEntity {
   invoiceNumberFormat: string
   invoiceSequencePadding: number
   invoicePrefix: string | null
+  creditNotePrefix: string | null
   invoiceFooter: string | null
   hasLogo: boolean
   logoFileName: string | null
@@ -63,6 +64,7 @@ export interface SaveLegalEntityInput {
   invoiceNumberFormat: string | null
   invoiceSequencePadding: number
   invoicePrefix: string | null
+  creditNotePrefix: string | null
   invoiceFooter: string | null
   isDefault: boolean
 }

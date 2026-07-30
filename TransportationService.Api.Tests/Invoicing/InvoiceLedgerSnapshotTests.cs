@@ -121,8 +121,9 @@ public class InvoiceLedgerSnapshotTests
         using (var workbook = new ClosedXML.Excel.XLWorkbook(new MemoryStream(bytes)))
         {
             var sheet = workbook.Worksheet("Boekhoudexport");
-            Assert.Equal("700400", sheet.Cell(2, 6).GetString());
-            Assert.Equal(200d, sheet.Cell(2, 8).GetDouble()); // netto 2 × 100
+            Assert.Equal("Factuur", sheet.Cell(2, 2).GetString());
+            Assert.Equal("700400", sheet.Cell(2, 7).GetString());
+            Assert.Equal(200d, sheet.Cell(2, 9).GetDouble()); // netto 2 × 100
         }
 
         // An invoice sent WITHOUT a frozen account blocks the export by name.

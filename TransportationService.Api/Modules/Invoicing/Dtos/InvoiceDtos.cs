@@ -14,7 +14,8 @@ public record InvoiceListItemDto(
     decimal Subtotal,
     decimal VatAmount,
     decimal Total,
-    int LineCount);
+    int LineCount,
+    InvoiceKind Kind = InvoiceKind.Invoice);
 
 public record InvoiceLineDto(
     Guid Id,
@@ -32,7 +33,11 @@ public record InvoiceLineDto(
     string? LedgerAccountNumber = null,
     string? LedgerAccountName = null,
     /// <summary>Draft-stage warning when the category is missing or unmapped; null = ok.</summary>
-    string? LedgerWarning = null);
+    string? LedgerWarning = null,
+    /// <summary>UN/ECE rec 20 unit code for the quantity (default C62 = stuk).</summary>
+    string UnitCode = "C62",
+    /// <summary>UNCL5305 VAT category: frozen after Send, live-derived while Draft.</summary>
+    string? VatCategoryCode = null);
 
 public record InvoiceDetailDto(
     Guid Id,
@@ -55,7 +60,11 @@ public record InvoiceDetailDto(
     int InvoicePeriodYear,
     int InvoicePeriodMonth,
     bool NumberIsManual,
-    string? PurchaseOrderNumber = null);
+    string? PurchaseOrderNumber = null,
+    InvoiceKind Kind = InvoiceKind.Invoice,
+    Guid? CreditedInvoiceId = null,
+    string? CreditedInvoiceNumber = null,
+    string? PaymentReference = null);
 
 /// <summary>Completed, not-yet-invoiced order offered in the invoice builder.</summary>
 public record UninvoicedOrderDto(
@@ -72,7 +81,9 @@ public record ManualInvoiceLineInput(
     decimal Quantity,
     decimal UnitPrice,
     decimal? VatRatePercent,
-    Guid? SalesCategoryId = null);
+    Guid? SalesCategoryId = null,
+    /// <summary>UN/ECE rec 20 unit code; null = C62 (stuk).</summary>
+    string? UnitCode = null);
 
 public record CreateInvoiceRequest(
     Guid CustomerId,
@@ -92,7 +103,8 @@ public record UpdateInvoiceRequest(
     string? Notes,
     int? InvoicePeriodYear = null,
     int? InvoicePeriodMonth = null,
-    string? PurchaseOrderNumber = null);
+    string? PurchaseOrderNumber = null,
+    string? PaymentReference = null);
 
 /// <summary>Draft-only manual invoice-number correction; requires invoices.override_number + reason.</summary>
 public record OverrideInvoiceNumberRequest(string InvoiceNumber, string Reason);
@@ -107,7 +119,9 @@ public record UpdateInvoiceLineInput(
     decimal UnitPrice,
     decimal VatRatePercent,
     /// <summary>The line's sales category; null explicitly clears it (the editor round-trips the current value).</summary>
-    Guid? SalesCategoryId = null);
+    Guid? SalesCategoryId = null,
+    /// <summary>UN/ECE rec 20 unit code; null keeps the current value (new lines: C62).</summary>
+    string? UnitCode = null);
 
 public record ChangeInvoiceStatusRequest(InvoiceStatus Status);
 

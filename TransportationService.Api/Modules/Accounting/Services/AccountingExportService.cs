@@ -51,6 +51,7 @@ public class AccountingExportService : IAccountingExportService
                     x.Invoice.InvoiceNumber,
                     x.Invoice.InvoiceDate,
                     x.Invoice.Currency,
+                    x.Invoice.Kind,
                     CustomerName = c.Name,
                     x.Line.Sequence,
                     x.Line.Description,
@@ -96,7 +97,7 @@ public class AccountingExportService : IAccountingExportService
         var sheet = workbook.Worksheets.Add("Boekhoudexport");
         string[] headers =
         [
-            "Factuurnummer", "Factuurdatum", "Klant", "Omschrijving", "Verkoopcategorie",
+            "Factuurnummer", "Type", "Factuurdatum", "Klant", "Omschrijving", "Verkoopcategorie",
             "Grootboekrekening", "Rekeningnaam", "Netto", "Btw %", "Btw-bedrag", "Bruto", "Valuta",
         ];
         for (var i = 0; i < headers.Length; i++)
@@ -108,21 +109,25 @@ public class AccountingExportService : IAccountingExportService
         var rowIndex = 2;
         foreach (var row in rows)
         {
-            var net = Math.Round(row.Quantity * row.UnitPrice, 2);
-            var vat = Math.Round(net * row.VatRatePercent / 100m, 2);
+            // Credit notes store positive line amounts; the export carries their commercial
+            // sign so revenue sums stay correct in the accounting package.
+            var sign = row.Kind == InvoiceKind.CreditNote ? -1m : 1m;
+            var net = sign * Math.Round(row.Quantity * row.UnitPrice, 2);
+            var vat = sign * Math.Round(Math.Abs(net) * row.VatRatePercent / 100m, 2);
             sheet.Cell(rowIndex, 1).Value = row.InvoiceNumber;
-            sheet.Cell(rowIndex, 2).Value = row.InvoiceDate.ToDateTime(TimeOnly.MinValue);
-            sheet.Cell(rowIndex, 2).Style.DateFormat.Format = "dd-mm-yyyy";
-            sheet.Cell(rowIndex, 3).Value = row.CustomerName;
-            sheet.Cell(rowIndex, 4).Value = row.Description;
-            sheet.Cell(rowIndex, 5).Value = row.SalesCategoryNameSnapshot ?? string.Empty;
-            sheet.Cell(rowIndex, 6).Value = row.LedgerAccountNumberSnapshot;
-            sheet.Cell(rowIndex, 7).Value = row.LedgerAccountNameSnapshot ?? string.Empty;
-            sheet.Cell(rowIndex, 8).Value = net;
-            sheet.Cell(rowIndex, 9).Value = row.VatRatePercent;
-            sheet.Cell(rowIndex, 10).Value = vat;
-            sheet.Cell(rowIndex, 11).Value = net + vat;
-            sheet.Cell(rowIndex, 12).Value = row.Currency;
+            sheet.Cell(rowIndex, 2).Value = row.Kind == InvoiceKind.CreditNote ? "Creditnota" : "Factuur";
+            sheet.Cell(rowIndex, 3).Value = row.InvoiceDate.ToDateTime(TimeOnly.MinValue);
+            sheet.Cell(rowIndex, 3).Style.DateFormat.Format = "dd-mm-yyyy";
+            sheet.Cell(rowIndex, 4).Value = row.CustomerName;
+            sheet.Cell(rowIndex, 5).Value = row.Description;
+            sheet.Cell(rowIndex, 6).Value = row.SalesCategoryNameSnapshot ?? string.Empty;
+            sheet.Cell(rowIndex, 7).Value = row.LedgerAccountNumberSnapshot;
+            sheet.Cell(rowIndex, 8).Value = row.LedgerAccountNameSnapshot ?? string.Empty;
+            sheet.Cell(rowIndex, 9).Value = net;
+            sheet.Cell(rowIndex, 10).Value = row.VatRatePercent;
+            sheet.Cell(rowIndex, 11).Value = vat;
+            sheet.Cell(rowIndex, 12).Value = net + vat;
+            sheet.Cell(rowIndex, 13).Value = row.Currency;
             rowIndex++;
         }
 

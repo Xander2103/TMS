@@ -23,6 +23,13 @@ public interface IInvoiceService
     /// <summary>Draft→Sent→Paid with Cancelled branches; cancelling releases the orders.</summary>
     Task<InvoiceOperationResult> ChangeStatusAsync(Guid id, InvoiceStatus target, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Creates a Draft credit note for a Sent/Paid invoice: lines copied with POSITIVE
+    /// amounts (the sign lives in the document Kind), snapshots copied from the credited
+    /// document, numbered in the same monthly series with the credit-note prefix.
+    /// </summary>
+    Task<InvoiceOperationResult> CreateCreditNoteAsync(Guid id, CancellationToken cancellationToken);
+
     Task<InvoiceOperationResult> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>Draft-only manual number correction (permission + mandatory reason, audited).</summary>

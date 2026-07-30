@@ -405,6 +405,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Peppol.Services.IPe
     TransportationService.Api.Modules.Peppol.Services.PeppolSettingsService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Peppol.Services.IPeppolCustomerVerificationService,
     TransportationService.Api.Modules.Peppol.Services.PeppolCustomerVerificationService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Peppol.Services.IPeppolInvoiceService,
+    TransportationService.Api.Modules.Peppol.Services.PeppolInvoiceService>();
 
 // ETA foundation (sequential raming; IRouteEstimationProvider is the future PTV seam)
 builder.Services.AddSingleton<TransportationService.Api.Modules.Eta.Services.IRouteEstimationProvider,

@@ -75,17 +75,17 @@ public class DashboardService : IDashboardService
                              && o.OrderDate >= monthStart && o.OrderDate <= today, cancellationToken);
 
         // Invoices: bounded in-memory sums over the relevant lines.
-        var monthInvoiceIds = await _dbContext.Invoices.AsNoTracking()
+        var monthInvoices = await _dbContext.Invoices.AsNoTracking()
             .Where(i => i.TenantId == tenantId && i.Status != InvoiceStatus.Cancelled
                         && i.InvoiceDate >= monthStart && i.InvoiceDate <= today)
-            .Select(i => i.Id)
+            .Select(i => new { i.Id, i.Kind })
             .ToListAsync(cancellationToken);
         var outstandingInvoices = await _dbContext.Invoices.AsNoTracking()
             .Where(i => i.TenantId == tenantId && i.Status == InvoiceStatus.Sent)
-            .Select(i => new { i.Id, i.DueDate })
+            .Select(i => new { i.Id, i.DueDate, i.Kind })
             .ToListAsync(cancellationToken);
 
-        var relevantInvoiceIds = monthInvoiceIds.Concat(outstandingInvoices.Select(i => i.Id)).Distinct().ToList();
+        var relevantInvoiceIds = monthInvoices.Select(i => i.Id).Concat(outstandingInvoices.Select(i => i.Id)).Distinct().ToList();
         var lines = relevantInvoiceIds.Count == 0
             ? []
             : await _dbContext.InvoiceLines.AsNoTracking()
@@ -96,8 +96,10 @@ public class DashboardService : IDashboardService
             .GroupBy(l => l.InvoiceId)
             .ToDictionary(g => g.Key, g => Math.Round(g.Sum(l => l.Quantity * l.UnitPrice * (1 + l.VatRatePercent / 100m)), 2));
 
-        var revenueThisMonth = monthInvoiceIds.Sum(id => totalsByInvoice.GetValueOrDefault(id));
-        var outstanding = outstandingInvoices.Sum(i => totalsByInvoice.GetValueOrDefault(i.Id));
+        // Credit notes carry positive line amounts; their commercial sign is the Kind.
+        static decimal Sign(InvoiceKind kind) => kind == InvoiceKind.CreditNote ? -1m : 1m;
+        var revenueThisMonth = monthInvoices.Sum(i => Sign(i.Kind) * totalsByInvoice.GetValueOrDefault(i.Id));
+        var outstanding = outstandingInvoices.Sum(i => Sign(i.Kind) * totalsByInvoice.GetValueOrDefault(i.Id));
         var overdueCount = outstandingInvoices.Count(i => i.DueDate < today);
 
         // Availability & fleet

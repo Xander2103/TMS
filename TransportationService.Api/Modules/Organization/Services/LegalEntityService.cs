@@ -351,6 +351,7 @@ public class LegalEntityService : ILegalEntityService
         entity.InvoiceNumberFormat = format;
         entity.InvoiceSequencePadding = Math.Clamp(request.InvoiceSequencePadding, 2, 8);
         entity.InvoicePrefix = Trim(request.InvoicePrefix);
+        entity.CreditNotePrefix = Trim(request.CreditNotePrefix);
         entity.InvoiceFooter = Trim(request.InvoiceFooter);
     }
 
@@ -380,5 +381,5 @@ public class LegalEntityService : ILegalEntityService
         e.DefaultCurrency, e.PaymentTermDays,
         e.InvoiceNumberFormat, e.InvoiceSequencePadding, e.InvoicePrefix, e.InvoiceFooter,
         e.LogoStorageKey is not null, e.LogoFileName,
-        e.IsActive, e.IsDefault);
+        e.IsActive, e.IsDefault, e.CreditNotePrefix);
 }
