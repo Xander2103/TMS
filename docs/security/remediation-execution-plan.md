@@ -118,12 +118,16 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 > `Security/Phase3TenantIsolationTests.cs`. Alleen H1 (globale EF-queryfilter) staat nog open —
 > de architectuurtests (TenantId-kolom + PK op elke tenant-entiteit) liggen al klaar.
 
-- **H1 globale tenant-filter · PLANNED:** `ITenantOwnedEntity`-interface op alle tenant-entiteiten; globale
-  EF `HasQueryFilter(TenantId == currentTenant && !IsDeleted)` via een ambient tenant-provider in
-  `TransportationDbContext.OnModelCreating`; expliciete, geaudite bypass voor background jobs/
-  migraties (`IgnoreQueryFilters` achter een helper); PostgreSQL RLS als defence-in-depth
-  (Fase 9). **Architectuurtest** die tenant-entiteiten zonder filter faalt. Unieke indexen
-  tenant-aware maken waar nodig. Risico: raakt elke module → gefaseerd + volledige suite per stap.
+- **H1 globale tenant-filter · DONE:** `ITenantQueryFilterAccessor` (HTTP-implementatie leest de
+  door `TenantContextMiddleware` geresolvede tenant; null buiten een request) +
+  `TransportationDbContext.ApplyGlobalTenantFilters` — elke `ITenantOwned`-entiteit krijgt
+  `CurrentTenantFilterId == null || TenantId == CurrentTenantFilterId` ge-AND met de bestaande
+  (soft-delete-)filter. Request-contexten zijn structureel omheind, ook zonder expliciete
+  `Where`; system-/backgroundscope (dispatcher, seeders, migraties, anonieme login/webhook) is
+  de gedocumenteerde open-bypass. `IgnoreQueryFilters`-sites dragen hun eigen tenantpredicaat
+  (al aanwezig). Architectuurtest: tenant-entiteit zonder filter faalt de build; gedragstests:
+  fencing per tenant, open systeemscope, compositie met soft delete
+  (`Phase3TenantIsolationTests`). PostgreSQL RLS blijft Fase 9-defence-in-depth.
 - **H7 driver-scoping POD/exception:** `PodService`/`ExecutionExceptionService` open/download —
   `restrictToOwnDriver` + trip→driver-check, 404 bij mismatch. Test: chauffeur A ≠ B → 404.
 - **M1 Peppol-identiteit:** globale unieke index op actieve `(PeppolScheme, PeppolId)` op
@@ -164,9 +168,10 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 
 > H9 (forwarded headers + resolved-IP-partitie), H10 (security-headers-middleware), M15 (CORS
 > fail-closed uit config), M10/M11 (ProblemDetails zonder stacktrace, `TryParseDefined<TEnum>`)
-> zijn **DONE**; tests in `Security/Phase5ApiHardeningTests.cs`. **Nog open:** M2 webhook-HMAC is
-> deels (replay-window/rotatie ontbreken) en **L7** (`TransportOrderService._permissionService`
-> is nog nullable/fail-open).
+> zijn **DONE**; tests in `Security/Phase5ApiHardeningTests.cs`. **L7 is inmiddels DONE**: de
+> permissiechecks in `TransportOrderService` (prijs-override, prijsstatus) zijn fail-closed —
+> een ontbrekende authorization service weigert, nooit stilzwijgend toestaan. **Nog open:** M2
+> webhook-HMAC is deels (replay-window/rotatie ontbreken).
 
 - **H9 forwarded headers:** `UseForwardedHeaders` met `KnownProxies/KnownNetworks` vóór rate
   limiting/auth; partitie op resolved client-IP + per-account (`Program.cs`,

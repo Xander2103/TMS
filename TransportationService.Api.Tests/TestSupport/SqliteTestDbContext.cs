@@ -15,8 +15,12 @@ public sealed class SqliteTestDbContext : IDisposable
 {
     public TransportationDbContext Context { get; }
     private readonly SqliteConnection _connection;
+    private readonly DbContextOptions<TransportationDbContext> _options;
 
-    public SqliteTestDbContext()
+    /// <param name="ambientTenantId">When set, the context behaves like a request-scoped context
+    /// of that tenant: the global tenant query filter (H1) is ACTIVE. Default (null) mimics
+    /// system/background scope — filter open, exactly like production seeders and dispatchers.</param>
+    public SqliteTestDbContext(Guid? ambientTenantId = null)
     {
         _connection = new SqliteConnection("DataSource=:memory:");
         _connection.Open();
@@ -25,14 +29,19 @@ public sealed class SqliteTestDbContext : IDisposable
         var statusHistoryInterceptor = new TransportationService.Api.Modules.Orders.Services.OrderStatusHistoryInterceptor(
             new HttpContextAccessor(), TimeProvider.System);
 
-        var options = new DbContextOptionsBuilder<TransportationDbContext>()
+        _options = new DbContextOptionsBuilder<TransportationDbContext>()
             .UseSqlite(_connection)
             .AddInterceptors(interceptor, statusHistoryInterceptor)
             .Options;
 
-        Context = new TransportationDbContext(options);
+        Context = new TransportationDbContext(_options, new FixedTenantQueryFilterAccessor(ambientTenantId));
         Context.Database.EnsureCreated();
     }
+
+    /// <summary>Second context over the SAME database, scoped to <paramref name="tenantId"/> —
+    /// what a request-scoped context of that tenant sees through the H1 filter. Caller disposes.</summary>
+    public TransportationDbContext CreateContextForTenant(Guid tenantId) =>
+        new(_options, new FixedTenantQueryFilterAccessor(tenantId));
 
     public void Dispose()
     {

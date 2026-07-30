@@ -72,6 +72,81 @@ public class Phase3TenantIsolationTests
         Assert.True(withoutId.Count == 0, "Tenant-owned entities without a primary key: " + string.Join(", ", withoutId));
     }
 
+    // ===================== H1 — global tenant query filter =====================
+
+    [Fact]
+    public void EveryTenantOwnedEntity_HasAQueryFilter()
+    {
+        // The structural guarantee itself: no tenant-owned entity may exist without the global
+        // filter (a new entity is fenced automatically, or this test fails the build).
+        using var db = new SqliteTestDbContext();
+        var offenders = db.Context.Model.GetEntityTypes()
+            .Where(e => typeof(ITenantOwned).IsAssignableFrom(e.ClrType) && !e.IsOwned() && e.BaseType is null)
+            .Where(e => e.GetDeclaredQueryFilters().Count == 0)
+            .Select(e => e.ClrType.Name)
+            .ToList();
+
+        Assert.True(offenders.Count == 0, "Tenant-owned entities without a query filter: " + string.Join(", ", offenders));
+    }
+
+    [Fact]
+    public async Task RequestScopedContext_OnlySeesItsOwnTenant_EvenWithoutExplicitWhere()
+    {
+        var (db, tenantA, tenantB) = await SeedTwoTenantsAsync();
+        using var _ = db;
+        db.Context.Vehicles.AddRange(
+            new Vehicle { Id = Guid.NewGuid(), TenantId = tenantA, LicensePlate = "A-1", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+            new Vehicle { Id = Guid.NewGuid(), TenantId = tenantB, LicensePlate = "B-1", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        await db.Context.SaveChangesAsync();
+
+        // Deliberately NO Where(TenantId == …): the global filter is the only fence here.
+        using (var contextA = db.CreateContextForTenant(tenantA))
+        {
+            var visible = await contextA.Vehicles.ToListAsync();
+            Assert.Equal("A-1", Assert.Single(visible).LicensePlate);
+        }
+
+        using (var contextB = db.CreateContextForTenant(tenantB))
+        {
+            var visible = await contextB.Vehicles.ToListAsync();
+            Assert.Equal("B-1", Assert.Single(visible).LicensePlate);
+        }
+    }
+
+    [Fact]
+    public async Task SystemScopedContext_WithoutAmbientTenant_SeesEverything()
+    {
+        // Background jobs, seeders and migrations run without an ambient tenant — the filter is
+        // open there by design (the documented bypass).
+        var (db, tenantA, tenantB) = await SeedTwoTenantsAsync();
+        using var _ = db;
+        db.Context.Vehicles.AddRange(
+            new Vehicle { Id = Guid.NewGuid(), TenantId = tenantA, LicensePlate = "A-1", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow },
+            new Vehicle { Id = Guid.NewGuid(), TenantId = tenantB, LicensePlate = "B-1", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        await db.Context.SaveChangesAsync();
+
+        Assert.Equal(2, await db.Context.Vehicles.CountAsync());
+    }
+
+    [Fact]
+    public async Task GlobalTenantFilter_ComposesWithSoftDelete()
+    {
+        var (db, tenantA, tenantB) = await SeedTwoTenantsAsync();
+        using var _ = db;
+        var deleted = new Vehicle { Id = Guid.NewGuid(), TenantId = tenantA, LicensePlate = "A-DEL", InternalNumber = "V-1", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+        var kept = new Vehicle { Id = Guid.NewGuid(), TenantId = tenantA, LicensePlate = "A-KEEP", InternalNumber = "V-2", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+        db.Context.Vehicles.AddRange(deleted, kept,
+            new Vehicle { Id = Guid.NewGuid(), TenantId = tenantB, LicensePlate = "B-1", CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+        await db.Context.SaveChangesAsync();
+        db.Context.Remove(deleted); // soft delete via interceptor
+        await db.Context.SaveChangesAsync();
+
+        using var contextA = db.CreateContextForTenant(tenantA);
+        // Both filters apply: not soft-deleted AND own tenant.
+        var visible = await contextA.Vehicles.ToListAsync();
+        Assert.Equal("A-KEEP", Assert.Single(visible).LicensePlate);
+    }
+
     // ===================== M12 / L8 — cross-tenant references =====================
 
     private static async Task<(SqliteTestDbContext Db, Guid TenantA, Guid TenantB)> SeedTwoTenantsAsync()

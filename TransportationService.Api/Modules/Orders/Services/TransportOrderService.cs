@@ -1334,9 +1334,12 @@ public class TransportOrderService : ITransportOrderService
                 return TransportOrderOperationResult.Invalid("Een reden is verplicht bij een handmatige prijs.");
             }
 
+            // Fail-closed (L7): no wired authorization service means NO override rights, never a
+            // silent allow-all.
             var userId = _currentUser?.CurrentUserId;
-            var allowed = _permissionService is null
-                || (userId is { } id && await _permissionService.UserHasPermissionAsync(id, PermissionCodes.OrdersOverridePrice, cancellationToken));
+            var allowed = _permissionService is not null
+                && userId is { } id
+                && await _permissionService.UserHasPermissionAsync(id, PermissionCodes.OrdersOverridePrice, cancellationToken);
             if (!allowed)
             {
                 return TransportOrderOperationResult.Invalid("Je hebt geen rechten om de berekende prijs te overschrijven.");
@@ -1939,12 +1942,13 @@ public class TransportOrderService : ITransportOrderService
         // Touching Locked in either direction (lock or unlock) requires the dedicated permission;
         // the Draft<->Reviewed pair only needs the ordinary edit permission.
         var requiresLockPermission = target == OrderPricingStatus.Locked || snapshot.Status == OrderPricingStatus.Locked;
+        // Fail-closed (L7): a missing authorization service denies, never allows.
         var userId = _currentUser?.CurrentUserId;
-        var allowed = _permissionService is null
-            || (userId is { } uid
-                && (await _permissionService.UserHasPermissionAsync(
-                        uid, requiresLockPermission ? PermissionCodes.OrdersLockPrice : PermissionCodes.OrdersEdit, cancellationToken)
-                    || await _permissionService.UserHasPermissionAsync(uid, PermissionCodes.OrdersManage, cancellationToken)));
+        var allowed = _permissionService is not null
+            && userId is { } uid
+            && (await _permissionService.UserHasPermissionAsync(
+                    uid, requiresLockPermission ? PermissionCodes.OrdersLockPrice : PermissionCodes.OrdersEdit, cancellationToken)
+                || await _permissionService.UserHasPermissionAsync(uid, PermissionCodes.OrdersManage, cancellationToken));
         if (!allowed)
         {
             return TransportOrderOperationResult.Invalid("Je hebt geen rechten voor deze statuswijziging.");

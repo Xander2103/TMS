@@ -118,6 +118,9 @@ builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>
 // Algemene services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTenantContextAccessors();
+// H1: ambient tenant for the DbContext's global query filter (null outside a resolved request).
+builder.Services.AddSingleton<TransportationService.Api.Common.Persistence.ITenantQueryFilterAccessor,
+    TransportationService.Api.Common.Persistence.HttpTenantQueryFilterAccessor>();
 builder.Services.AddSingleton(TimeProvider.System);
 
 // Cross-cutting persistence behaviour (audit stamps, soft delete, order status history)

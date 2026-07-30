@@ -23,10 +23,24 @@ namespace TransportationService.Api.Data;
 
 public class TransportationDbContext : DbContext
 {
-    public TransportationDbContext(DbContextOptions<TransportationDbContext> options)
+    private readonly Common.Persistence.ITenantQueryFilterAccessor? _tenantFilter;
+
+    public TransportationDbContext(
+        DbContextOptions<TransportationDbContext> options,
+        Common.Persistence.ITenantQueryFilterAccessor? tenantFilter = null)
         : base(options)
     {
+        _tenantFilter = tenantFilter;
     }
+
+    /// <summary>
+    /// Ambient tenant for the global query filter (H1). Null (no accessor, or system/background
+    /// scope) leaves the filter open; a request-scoped context is fenced to its own tenant on
+    /// EVERY tenant-owned entity, independent of the services' explicit Where-clauses.
+    /// Referenced from the model's query filters — EF re-parameterizes the context reference per
+    /// query, so the value is read live on each execution.
+    /// </summary>
+    public Guid? CurrentTenantFilterId => _tenantFilter?.CurrentTenantIdOrNull;
 
     // Transport orders (Phase 5)
     public DbSet<TransportOrder> TransportOrders => Set<TransportOrder>();
@@ -224,5 +238,51 @@ public class TransportationDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TransportationDbContext).Assembly);
+        ApplyGlobalTenantFilters(modelBuilder);
+    }
+
+    /// <summary>
+    /// H1: one structural fence instead of hundreds of hand-written Where-clauses. Every entity
+    /// implementing <see cref="Common.Abstractions.ITenantOwned"/> gets
+    /// <c>CurrentTenantFilterId == null || e.TenantId == CurrentTenantFilterId</c> AND-ed onto
+    /// whatever filter its configuration already declared (typically soft delete). Callers using
+    /// <c>IgnoreQueryFilters()</c> therefore bypass BOTH — every such site must (and does) carry
+    /// its own explicit tenant predicate.
+    /// </summary>
+    private void ApplyGlobalTenantFilters(ModelBuilder modelBuilder)
+    {
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (!typeof(Common.Abstractions.ITenantOwned).IsAssignableFrom(entityType.ClrType)
+                || entityType.IsOwned()
+                || entityType.BaseType is not null)
+            {
+                continue;
+            }
+
+            var parameter = System.Linq.Expressions.Expression.Parameter(entityType.ClrType, "e");
+            var currentTenant = System.Linq.Expressions.Expression.Property(
+                System.Linq.Expressions.Expression.Constant(this), nameof(CurrentTenantFilterId));
+            var tenantBody = System.Linq.Expressions.Expression.OrElse(
+                System.Linq.Expressions.Expression.Equal(
+                    currentTenant, System.Linq.Expressions.Expression.Constant(null, typeof(Guid?))),
+                System.Linq.Expressions.Expression.Equal(
+                    System.Linq.Expressions.Expression.Convert(
+                        System.Linq.Expressions.Expression.Property(
+                            parameter, nameof(Common.Abstractions.ITenantOwned.TenantId)),
+                        typeof(Guid?)),
+                    currentTenant));
+
+            var body = tenantBody;
+            var existing = entityType.GetQueryFilter();
+            if (existing is not null)
+            {
+                var rebased = Microsoft.EntityFrameworkCore.Query.ReplacingExpressionVisitor.Replace(
+                    existing.Parameters[0], parameter, existing.Body);
+                body = System.Linq.Expressions.Expression.AndAlso(rebased, body);
+            }
+
+            entityType.SetQueryFilter(System.Linq.Expressions.Expression.Lambda(body, parameter));
+        }
     }
 }
