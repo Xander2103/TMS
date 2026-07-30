@@ -44,10 +44,6 @@ public class AbsenceService : IAbsenceService
         INotificationService notificationService,
         IFileStorageService fileStorageService,
         ICalendarSyncService calendarSyncService,
-        // Retained only for constructor-signature compatibility with existing call sites;
-        // leave-decided (approve/reject) now queues its e-mail through PublishEventAsync
-        // (NotificationEventService) instead of this service calling the outbox directly.
-        IMessageOutboxService messageOutbox,
         TimeProvider timeProvider,
         INotificationEventService? notificationEvents = null,
         Microsoft.Extensions.Logging.ILogger<AbsenceService>? logger = null)
@@ -59,7 +55,6 @@ public class AbsenceService : IAbsenceService
         _notificationService = notificationService;
         _fileStorageService = fileStorageService;
         _calendarSyncService = calendarSyncService;
-        _ = messageOutbox;
         _timeProvider = timeProvider;
         _notificationEvents = notificationEvents;
         _logger = logger;

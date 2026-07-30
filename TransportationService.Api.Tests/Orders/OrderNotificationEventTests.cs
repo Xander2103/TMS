@@ -109,6 +109,35 @@ public class OrderNotificationEventTests
         ],
         CargoItems: [new PortalCargoInput("Pallets", 12, "paletten", TransportationService.Api.Modules.Packages.Entities.PackageUnitType.EuroPallet, TotalWeightKg: 7200)]);
 
+    /// <summary>Fix round 1: order_created is fired straight from TransportOrderService.CreateAsync
+    /// (not only reachable via the portal submit path) — a direct internal order create must
+    /// notify orders.change_status holders too.</summary>
+    [Fact]
+    public async Task DirectCreate_Publishes_OrderCreated_InApp_ToChangeStatusHolders()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var createRequest = new CreateTransportOrderRequest(
+            h.CustomerId, "PO-2", new DateOnly(2026, 7, 29), "12 pallets",
+            Quantity: null, QuantityUnit: null, WeightKg: null, VolumeM3: null, PalletCount: null,
+            AdrRequired: false, CraneRequired: false, AgreedPrice: null, Notes: null,
+            Stops:
+            [
+                new TransportOrderStopInput(StopType.Loading, h.LocationId, null, null, null, null, null,
+                    new DateTime(2026, 7, 29, 8, 0, 0, DateTimeKind.Utc), new DateTime(2026, 7, 29, 10, 0, 0, DateTimeKind.Utc), null, null),
+                new TransportOrderStopInput(StopType.Unloading, null, "Klant eindbestemming", "Dorpsstraat 1", "9000", "Gent", "BE", null, null, null, null),
+            ]);
+
+        var created = await h.Orders.CreateAsync(createRequest, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+
+        var planner = new NotificationService(h.Db.Context, new DevTenantContext(h.TenantId), new DevCurrentUserContext(h.PlannerUserId), TimeProvider.System);
+        var notified = await planner.ListMineAsync(new NotificationQuery(false, null, false, 10), CancellationToken.None);
+        var notice = Assert.Single(notified, n => n.Type == MessageKinds.OrderCreated);
+        Assert.Contains(created.Order!.OrderNumber, notice.Message);
+    }
+
     [Fact]
     public async Task PortalSubmit_Publishes_OrderSubmittedPortal_InApp_ToChangeStatusHolders()
     {

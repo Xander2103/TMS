@@ -78,7 +78,7 @@ public class NotificationServiceTests
             new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(
                 Path.Combine(Path.GetTempPath(), "ts-notif-tests", Guid.NewGuid().ToString("N"))),
             new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(),
-            messageOutbox, clock, notificationEvents);
+            clock, notificationEvents);
 
         var created = await absences.CreateForEmployeeAsync(employeeId,
             new CreateAbsenceRequest(AbsenceType.Vacation, new(2026, 8, 3), new(2026, 8, 14), null),

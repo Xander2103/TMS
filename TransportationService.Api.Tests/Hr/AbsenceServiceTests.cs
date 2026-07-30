@@ -40,8 +40,6 @@ public class AbsenceServiceTests
             new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(
                 Path.Combine(Path.GetTempPath(), "ts-absence-tests", Guid.NewGuid().ToString("N"))),
             new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(),
-            new TransportationService.Api.Modules.Messaging.Services.MessageOutboxService(
-                db.Context, tenant, new TestClock(Now)),
             new TestClock(Now));
         return new Harness(db, sut, tenantId, employeeId);
     }
