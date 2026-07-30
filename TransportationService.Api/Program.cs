@@ -277,6 +277,20 @@ builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Serv
     TransportationService.Api.Modules.CustomerPortal.Services.CustomerPortalService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.ICustomerPortalUserService,
     TransportationService.Api.Modules.CustomerPortal.Services.CustomerPortalUserService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.ICustomerMessageService,
+    TransportationService.Api.Modules.CustomerPortal.Services.CustomerMessageService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.IPortalAnnouncementService,
+    TransportationService.Api.Modules.CustomerPortal.Services.PortalAnnouncementService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.IPortalDashboardService,
+    TransportationService.Api.Modules.CustomerPortal.Services.PortalDashboardService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.IPortalInvoiceService,
+    TransportationService.Api.Modules.CustomerPortal.Services.PortalInvoiceService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.IPortalDocumentService,
+    TransportationService.Api.Modules.CustomerPortal.Services.PortalDocumentService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Invoicing.Services.IInvoicePdfService,
+    TransportationService.Api.Modules.Invoicing.Services.InvoicePdfService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.IOrderPortalReviewService,
+    TransportationService.Api.Modules.CustomerPortal.Services.OrderPortalReviewService>();
 
 // Planning (trips + conflict engine)
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IPlanningConflictService,

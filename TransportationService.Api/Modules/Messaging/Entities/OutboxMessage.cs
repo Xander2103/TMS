@@ -80,6 +80,12 @@ public static class MessageKinds
     /// <see cref="Services.NotificationEventService"/> recipient type.</summary>
     public const string PortalUserInvited = "portal_user_invited";
 
+    // Customer portal messages (corrections wave 4, phase 9).
+    /// <summary>A customer wrote a message via the portal — in-app only, to internal staff.</summary>
+    public const string CustomerMessageReceived = "customer_message_received";
+    /// <summary>Staff replied to a customer via the portal messages thread — e-mail to the customer.</summary>
+    public const string CustomerMessageReply = "customer_message_reply";
+
     public static readonly IReadOnlyList<string> All =
     [
         OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate, Delay, DeliveryCompleted,
@@ -92,7 +98,7 @@ public static class MessageKinds
         InvoiceCreditNote, PersonnelQualificationExpiry, PersonnelMedicalExpiry, PersonnelDocumentExpiry,
         LeaveRequested, LeaveDecided, EmployeeNotePinned,
         FleetMaintenanceDue, FleetInspectionDue, FleetDocumentExpiry, FleetDamageCreated,
-        PortalUserInvited,
+        PortalUserInvited, CustomerMessageReceived, CustomerMessageReply,
     ];
 }
 

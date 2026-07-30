@@ -22,17 +22,29 @@ public class TransportOrdersController : ControllerBase
     private readonly TransportationService.Api.Modules.Edi.Services.IEdiService _ediService;
     private readonly ITransportOrderTimelineService _timelineService;
     private readonly TransportationService.Api.Modules.Packages.Services.IPackageGenerationService _packageGeneration;
+    private readonly TransportationService.Api.Modules.CustomerPortal.Services.IOrderPortalReviewService _portalReviewService;
 
     public TransportOrdersController(
         ITransportOrderService service,
         TransportationService.Api.Modules.Edi.Services.IEdiService ediService,
         ITransportOrderTimelineService timelineService,
-        TransportationService.Api.Modules.Packages.Services.IPackageGenerationService packageGeneration)
+        TransportationService.Api.Modules.Packages.Services.IPackageGenerationService packageGeneration,
+        TransportationService.Api.Modules.CustomerPortal.Services.IOrderPortalReviewService portalReviewService)
     {
         _service = service;
         _ediService = ediService;
         _timelineService = timelineService;
         _packageGeneration = packageGeneration;
+        _portalReviewService = portalReviewService;
+    }
+
+    [HttpPost("{id:guid}/portal-review")]
+    [RequirePermission(PermissionCodes.OrdersChangeStatus, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> PortalReview(
+        Guid id, TransportationService.Api.Modules.CustomerPortal.Services.PortalReviewRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _portalReviewService.ReviewAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
     }
 
     [HttpGet]

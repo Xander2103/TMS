@@ -650,6 +650,7 @@ public class TransportOrderService : ITransportOrderService
                 $"Een opdracht met status '{order.Status}' kan niet meer worden geannuleerd.");
         }
 
+        var wasSubmitted = order.Status == TransportOrderStatus.Submitted;
         var before = new { order.Status };
         order.PendingStatusChangeReason = reason.Trim();
         order.Status = TransportOrderStatus.Cancelled;
@@ -658,6 +659,28 @@ public class TransportOrderService : ITransportOrderService
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Cancelled", before,
             new { order.Status, order.CancellationReason }, cancellationToken);
+
+        // Portal review outcome: a Submitted order rejected outright (Cancelled, not sent back
+        // to Draft) still tells the customer their order was rejected, same event as the
+        // Submitted->Draft "send back for corrections" path in ChangeStatusAsync.
+        if (wasSubmitted)
+        {
+            var customerName = await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
+                .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+            await PublishEventAsync(MessageKinds.OrderRejected, new NotificationEventContext(
+                EntityType, order.Id.ToString(),
+                new Dictionary<string, string>
+                {
+                    ["orderNumber"] = order.OrderNumber,
+                    ["customerName"] = customerName,
+                    ["goodsDescription"] = order.GoodsDescription ?? string.Empty,
+                })
+            {
+                CustomerId = order.CustomerId,
+                LinkPath = $"/portal/orders/{order.Id}",
+            }, cancellationToken);
+        }
 
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }

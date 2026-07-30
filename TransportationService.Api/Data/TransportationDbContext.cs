@@ -170,6 +170,14 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Hr.Entities.LeaveBalanceAdjustment> LeaveBalanceAdjustments => Set<TransportationService.Api.Modules.Hr.Entities.LeaveBalanceAdjustment>();
     public DbSet<TransportationService.Api.Modules.Hr.Entities.LeaveEntitlementSettings> LeaveEntitlementSettings => Set<TransportationService.Api.Modules.Hr.Entities.LeaveEntitlementSettings>();
 
+    // Customer portal (messages, announcements)
+    public DbSet<TransportationService.Api.Modules.CustomerPortal.Entities.CustomerMessage> CustomerMessages =>
+        Set<TransportationService.Api.Modules.CustomerPortal.Entities.CustomerMessage>();
+    public DbSet<TransportationService.Api.Modules.CustomerPortal.Entities.CustomerMessageRead> CustomerMessageReads =>
+        Set<TransportationService.Api.Modules.CustomerPortal.Entities.CustomerMessageRead>();
+    public DbSet<TransportationService.Api.Modules.CustomerPortal.Entities.PortalAnnouncement> PortalAnnouncements =>
+        Set<TransportationService.Api.Modules.CustomerPortal.Entities.PortalAnnouncement>();
+
     // Locations
     public DbSet<Location> Locations => Set<Location>();
 

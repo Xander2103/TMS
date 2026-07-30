@@ -75,6 +75,10 @@ public static class BuiltInMessageTemplates
         [MessageKinds.OrderRejected] = new(
             "Uw opdracht {{orderNumber}} is geweigerd",
             "Beste {{customerName}},\n\nUw opdracht {{orderNumber}} ({{goodsDescription}}) kon helaas niet worden geaccepteerd. Neem contact met ons op voor meer informatie.\n\n{{companyName}}"),
+        [MessageKinds.OrderInfoRequested] = new(
+            "Extra informatie gevraagd voor {{orderNumber}}",
+            "Beste {{customerName}},\n\nVoor opdracht {{orderNumber}} ({{goodsDescription}}) hebben wij extra informatie nodig:\n\n"
+            + "\"{{reason}}\"\n\nGelieve te reageren via het klantportaal.\n\nMet vriendelijke groeten,\n{{companyName}}"),
         [MessageKinds.OrderDelayDetected] = new(
             "Vertraging bij opdracht {{orderNumber}}",
             "Beste {{customerName}},\n\nOpdracht {{orderNumber}} loopt vertraging op: {{reason}}.\n\n{{companyName}}"),
@@ -93,6 +97,10 @@ public static class BuiltInMessageTemplates
         [MessageKinds.LeaveDecided] = new(
             "Verlofaanvraag {{decision}}",
             "Beste {{employeeName}},\n\nJe verlofaanvraag van {{period}} is {{decision}}. {{note}}\n\nHR"),
+        [MessageKinds.CustomerMessageReply] = new(
+            "Nieuw bericht van {{companyName}}",
+            "Beste {{customerName}},\n\nU heeft een nieuw bericht ontvangen via het klantportaal:\n\n\"{{preview}}\"\n\n"
+            + "Log in op het klantportaal om te reageren.\n\nMet vriendelijke groeten,\n{{companyName}}"),
         [MessageKinds.PortalUserInvited] = new(
             "Uitnodiging voor het klantportaal van {{companyName}}",
             "Beste {{firstName}},\n\nU bent uitgenodigd voor het klantportaal van {{companyName}}. "

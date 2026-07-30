@@ -62,7 +62,7 @@ public static class NotificationEventCatalog
                 [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
                 MessageKinds.OrderRejected, NotificationSeverity.Warning),
             new(MessageKinds.OrderInfoRequested, "Extra informatie gevraagd", NotificationEventGroups.Orders,
-                OrderTokens, DefaultInApp: false, DefaultEmail: true,
+                [.. OrderTokens, "reason"], DefaultInApp: false, DefaultEmail: true,
                 [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
                 MessageKinds.OrderInfoRequested, NotificationSeverity.Warning),
             new(MessageKinds.OrderPlanned, "Opdracht ingepland", NotificationEventGroups.Orders,
@@ -185,6 +185,18 @@ public static class NotificationEventCatalog
                 ["firstName", "companyName", "activationLink"], DefaultInApp: false, DefaultEmail: true,
                 [new RecipientSpec(NotificationRecipientType.ExplicitEmail, null)],
                 MessageKinds.PortalUserInvited, NotificationSeverity.Info),
+
+            // Corrections wave 4, phase 9: customer portal messages thread. Two directions —
+            // customer -> staff (in-app only, no e-mail: staff already live in the app) and
+            // staff -> customer (e-mail only: the customer's only channel is their inbox/portal).
+            new(MessageKinds.CustomerMessageReceived, "Bericht van klant ontvangen", NotificationEventGroups.Portaal,
+                ["customerName", "preview"], DefaultInApp: true, DefaultEmail: false,
+                [new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.CustomerMessagesView)],
+                MessageKinds.CustomerMessageReceived, NotificationSeverity.Info),
+            new(MessageKinds.CustomerMessageReply, "Antwoord op klantbericht", NotificationEventGroups.Portaal,
+                ["customerName", "preview"], DefaultInApp: false, DefaultEmail: true,
+                [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
+                MessageKinds.CustomerMessageReply, NotificationSeverity.Info),
         }.ToDictionary(e => e.EventKey, StringComparer.OrdinalIgnoreCase);
 
     public static IReadOnlyCollection<NotificationEventInfo> All => (IReadOnlyCollection<NotificationEventInfo>)Entries.Values;

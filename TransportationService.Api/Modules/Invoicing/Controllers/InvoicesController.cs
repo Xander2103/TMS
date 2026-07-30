@@ -13,10 +13,20 @@ namespace TransportationService.Api.Modules.Invoicing.Controllers;
 public class InvoicesController : ControllerBase
 {
     private readonly IInvoiceService _service;
+    private readonly IInvoicePdfService _pdfService;
 
-    public InvoicesController(IInvoiceService service)
+    public InvoicesController(IInvoiceService service, IInvoicePdfService pdfService)
     {
         _service = service;
+        _pdfService = pdfService;
+    }
+
+    [HttpGet("{id:guid}/pdf")]
+    [RequirePermission(PermissionCodes.InvoicesView)]
+    public async Task<IActionResult> Pdf(Guid id, CancellationToken cancellationToken)
+    {
+        var pdf = await _pdfService.RenderAsync(id, cancellationToken);
+        return pdf is null ? NotFound() : File(pdf.Value.Bytes, "application/pdf", pdf.Value.FileName);
     }
 
     [HttpGet]
