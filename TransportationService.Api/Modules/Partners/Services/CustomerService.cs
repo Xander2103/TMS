@@ -129,6 +129,7 @@ public class CustomerService : ICustomerService
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
             request.PurchaseOrderRequired, request.SignedDeliveryNoteRequired, request.CustomerReferenceRequired,
+            request.PeppolEnabled, request.PeppolDeliveryPreference, request.BuyerReference,
             cancellationToken);
 
         // Optional initial contact: same entity + rules as the detail-page contacts, created
@@ -218,7 +219,11 @@ public class CustomerService : ICustomerService
 
         await EnsureCategoryInTenantAsync(request.CategoryId, cancellationToken);
 
-        var oldValues = new { customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber };
+        var oldValues = new
+        {
+            customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber,
+            customer.PeppolEnabled, PeppolDeliveryPreference = customer.PeppolDeliveryPreference.ToString(), customer.BuyerReference,
+        };
 
         if (!canManageFiscal && FiscalValuesChanged(customer, request))
         {
@@ -250,12 +255,17 @@ public class CustomerService : ICustomerService
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
             request.PurchaseOrderRequired, request.SignedDeliveryNoteRequired, request.CustomerReferenceRequired,
+            request.PeppolEnabled, request.PeppolDeliveryPreference, request.BuyerReference,
             cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "Updated", oldValues,
-            new { customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber }, cancellationToken);
+            new
+            {
+                customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber,
+                customer.PeppolEnabled, PeppolDeliveryPreference = customer.PeppolDeliveryPreference.ToString(), customer.BuyerReference,
+            }, cancellationToken);
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
         return MapToDetail(customer, categoryName);
@@ -476,6 +486,7 @@ public class CustomerService : ICustomerService
         VatTreatment vatTreatment, decimal? defaultVatRatePercent, string? vatCountryCode, string? vatNotes,
         string? peppolId, string? peppolScheme, string? invoiceLanguageCode,
         bool purchaseOrderRequired, bool signedDeliveryNoteRequired, bool customerReferenceRequired,
+        bool peppolEnabled, string? peppolDeliveryPreference, string? buyerReference,
         CancellationToken cancellationToken)
     {
         if (defaultVatRatePercent is { } rate && rate is < 0 or > 100)
@@ -503,6 +514,38 @@ public class CustomerService : ICustomerService
             }
         }
 
+        if (peppolEnabled && (trimmedPeppolId is null || trimmedPeppolScheme is null))
+        {
+            throw new DomainValidationException("peppolEnabled",
+                "Peppol kan pas worden ingeschakeld als er een Peppol-ID en -schema zijn ingevuld.");
+        }
+
+        // IsDefined guards the string-stored column against numeric strings ("7") that
+        // Enum.TryParse would otherwise accept as an undefined enum value.
+        var deliveryPreference = Modules.Peppol.Entities.PeppolDeliveryPreference.Peppol;
+        if (!string.IsNullOrWhiteSpace(peppolDeliveryPreference)
+            && (!Enum.TryParse(peppolDeliveryPreference, ignoreCase: true, out deliveryPreference)
+                || !Enum.IsDefined(deliveryPreference)))
+        {
+            throw new DomainValidationException("peppolDeliveryPreference",
+                "Kies een geldige bezorgvoorkeur (Peppol of EmailFallback).");
+        }
+
+        var trimmedBuyerReference = Trim(buyerReference);
+        if (trimmedBuyerReference is { Length: > 200 })
+        {
+            throw new DomainValidationException("buyerReference", "De kopersreferentie mag maximaal 200 tekens lang zijn.");
+        }
+
+        // A changed participant identity invalidates any earlier provider lookup result.
+        if (!string.Equals(customer.PeppolId, trimmedPeppolId, StringComparison.Ordinal)
+            || !string.Equals(customer.PeppolScheme, trimmedPeppolScheme, StringComparison.Ordinal))
+        {
+            customer.PeppolValidationStatus = Modules.Peppol.Entities.CustomerPeppolValidationStatus.Unknown;
+            customer.PeppolValidatedAt = null;
+            customer.PeppolValidationReference = null;
+        }
+
         customer.VatTreatment = vatTreatment;
         customer.DefaultVatRatePercent = defaultVatRatePercent;
         customer.VatCountryCode = await _countryValidator.NormalizeAndValidateAsync(vatCountryCode, "BTW-land", cancellationToken, "vatCountryCode");
@@ -513,6 +556,9 @@ public class CustomerService : ICustomerService
         customer.PurchaseOrderRequired = purchaseOrderRequired;
         customer.SignedDeliveryNoteRequired = signedDeliveryNoteRequired;
         customer.CustomerReferenceRequired = customerReferenceRequired;
+        customer.PeppolEnabled = peppolEnabled;
+        customer.PeppolDeliveryPreference = deliveryPreference;
+        customer.BuyerReference = trimmedBuyerReference;
     }
 
     private async Task EnsureCategoryInTenantAsync(Guid? categoryId, CancellationToken cancellationToken)
@@ -556,6 +602,9 @@ public class CustomerService : ICustomerService
         !string.IsNullOrWhiteSpace(r.VatNumber) || r.VatTreatment != VatTreatment.DomesticVat
         || r.DefaultVatRatePercent is not null || !string.IsNullOrWhiteSpace(r.VatCountryCode)
         || !string.IsNullOrWhiteSpace(r.PeppolId) || !string.IsNullOrWhiteSpace(r.PeppolScheme)
+        || r.PeppolEnabled || !string.IsNullOrWhiteSpace(r.BuyerReference)
+        || (!string.IsNullOrWhiteSpace(r.PeppolDeliveryPreference)
+            && !string.Equals(r.PeppolDeliveryPreference.Trim(), "Peppol", StringComparison.OrdinalIgnoreCase))
         || !string.IsNullOrWhiteSpace(r.CompanyNumber) || !string.IsNullOrWhiteSpace(r.Iban)
         || !string.IsNullOrWhiteSpace(r.Bic) || !string.IsNullOrWhiteSpace(r.BankAccountNumber)
         || (!string.IsNullOrWhiteSpace(r.CurrencyCode) && !string.Equals(r.CurrencyCode.Trim(), "EUR", StringComparison.OrdinalIgnoreCase));
@@ -568,6 +617,9 @@ public class CustomerService : ICustomerService
         || !string.Equals(Trim(r.VatCountryCode), c.VatCountryCode, StringComparison.OrdinalIgnoreCase)
         || !string.Equals(Trim(r.PeppolId), c.PeppolId, StringComparison.Ordinal)
         || !string.Equals(Trim(r.PeppolScheme), c.PeppolScheme, StringComparison.Ordinal)
+        || r.PeppolEnabled != c.PeppolEnabled
+        || !string.Equals(Trim(r.BuyerReference), c.BuyerReference, StringComparison.Ordinal)
+        || !string.Equals(Trim(r.PeppolDeliveryPreference) ?? "Peppol", c.PeppolDeliveryPreference.ToString(), StringComparison.OrdinalIgnoreCase)
         || !string.Equals(Trim(r.CompanyNumber), c.CompanyNumber, StringComparison.OrdinalIgnoreCase)
         || !string.Equals(Trim(r.Iban)?.Replace(" ", string.Empty), c.Iban, StringComparison.OrdinalIgnoreCase)
         || !string.Equals(Trim(r.Bic), c.Bic, StringComparison.OrdinalIgnoreCase)
@@ -637,5 +689,7 @@ public class CustomerService : ICustomerService
         c.Contacts.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.LastName).Select(MapContact).ToList(),
         c.Nickname, c.CompanyNumber, c.CurrencyCode,
         c.Iban, c.Bic, c.BankName, c.BankAccountNumber,
-        c.DefaultLegalEntityId);
+        c.DefaultLegalEntityId,
+        c.PeppolEnabled, c.PeppolDeliveryPreference.ToString(), c.BuyerReference,
+        c.PeppolValidationStatus.ToString(), c.PeppolValidatedAt, c.PeppolValidationReference);
 }

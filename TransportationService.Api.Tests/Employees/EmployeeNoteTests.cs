@@ -20,7 +20,9 @@ namespace TransportationService.Api.Tests.Employees;
 /// </summary>
 public class EmployeeNoteTests
 {
-    private static readonly DateTimeOffset Now = new(2026, 7, 30, 9, 0, 0, TimeSpan.Zero);
+    // Far-future fixed clock: PinnedAt (fake clock) must stay later than CreatedAt, which the
+    // auditing interceptor stamps with the REAL system clock — a near-past date would rot.
+    private static readonly DateTimeOffset Now = new(2126, 7, 30, 9, 0, 0, TimeSpan.Zero);
 
     private sealed record Harness(SqliteTestDbContext Db, EmployeeNoteService Sut, Guid TenantId, Guid EmployeeId, Guid UserId, TestClock Clock);
 

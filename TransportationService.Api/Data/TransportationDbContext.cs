@@ -216,6 +216,10 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscount> CombinedUnitDiscounts => Set<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscount>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscountUnit> CombinedUnitDiscountUnits => Set<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscountUnit>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscountTier> CombinedUnitDiscountTiers => Set<TransportationService.Api.Modules.Tarification.Entities.CombinedUnitDiscountTier>();
+    public DbSet<TransportationService.Api.Modules.Peppol.Entities.PeppolSettings> PeppolSettings => Set<TransportationService.Api.Modules.Peppol.Entities.PeppolSettings>();
+    public DbSet<TransportationService.Api.Modules.Peppol.Entities.PeppolTransmission> PeppolTransmissions => Set<TransportationService.Api.Modules.Peppol.Entities.PeppolTransmission>();
+    public DbSet<TransportationService.Api.Modules.Peppol.Entities.PeppolTransmissionEvent> PeppolTransmissionEvents => Set<TransportationService.Api.Modules.Peppol.Entities.PeppolTransmissionEvent>();
+    public DbSet<TransportationService.Api.Modules.Peppol.Entities.PeppolIncomingDocument> PeppolIncomingDocuments => Set<TransportationService.Api.Modules.Peppol.Entities.PeppolIncomingDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

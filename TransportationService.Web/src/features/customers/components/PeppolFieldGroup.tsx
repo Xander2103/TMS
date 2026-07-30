@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { FormField } from '../../../components/ui/FormField'
 import { combinePeppolValue, parsePeppolValue, peppolFormatError } from '../utils/peppolValue'
 import type { PeppolScheme, PeppolStatus } from '../types'
+// The .peppol-* styles live in the shared customers stylesheet; import it here so the
+// component also carries its styles when reused outside the customer pages (legal entities).
+import './customers.css'
 
 const STATUS_TEXT: Record<PeppolStatus, string> = {
   auto: 'Gevalideerd',

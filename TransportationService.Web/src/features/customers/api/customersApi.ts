@@ -7,6 +7,7 @@ import type {
   CustomerDetail,
   CustomerInput,
   CustomerListItem,
+  CustomerPeppolVerifyResult,
   PeppolScheme,
   RegistryLookupResponse,
   UpdateCustomerInput,
@@ -43,6 +44,11 @@ export function getPeppolSchemes(): Promise<PeppolScheme[]> {
 /** Official company-registry lookup on VAT or enterprise number (customers.create/edit). */
 export function registryLookup(number: string): Promise<RegistryLookupResponse> {
   return apiClient.postJson<RegistryLookupResponse, { number: string }>('/api/customers/registry-lookup', { number })
+}
+
+/** Checks the customer's Peppol identity at the provider directory (peppol.validate). */
+export function verifyCustomerPeppol(id: string): Promise<CustomerPeppolVerifyResult> {
+  return apiClient.postJson<CustomerPeppolVerifyResult, Record<string, never>>(`/api/customers/${id}/peppol/verify`, {})
 }
 
 export function getCustomer(id: string): Promise<CustomerDetail> {

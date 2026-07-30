@@ -11,6 +11,9 @@ import { FormSection } from '../../../components/ui/FormSection'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { getPeppolSchemes } from '../../customers/api/customersApi'
+import { PeppolFieldGroup } from '../../customers/components/PeppolFieldGroup'
+import type { PeppolScheme } from '../../customers/types'
 import {
   createLegalEntity,
   deleteLegalEntityLogo,
@@ -110,6 +113,22 @@ export function LegalEntitiesPage() {
   const [busy, setBusy] = useState(false)
   const [deactivating, setDeactivating] = useState<LegalEntity | null>(null)
   const logoInputRef = useRef<HTMLInputElement | null>(null)
+
+  // Authoritative Peppol scheme catalog for the grouped Peppol control (same source as customers).
+  const [peppolSchemes, setPeppolSchemes] = useState<PeppolScheme[]>([])
+  useEffect(() => {
+    let cancelled = false
+    getPeppolSchemes()
+      .then((data) => {
+        if (!cancelled) setPeppolSchemes(data)
+      })
+      .catch(() => {
+        /* fallback: lege schemalijst, handmatige invoer blijft mogelijk */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -346,8 +365,30 @@ export function LegalEntitiesPage() {
               {text('tradingName', 'Handelsnaam', { maxLength: 200 })}
               {text('companyNumber', 'Ondernemingsnummer', { maxLength: 50 })}
               {text('vatNumber', 'BTW-nummer', { maxLength: 50 })}
-              {text('peppolId', 'Peppol-ID', { maxLength: 100 })}
-              {text('peppolScheme', 'Peppol-schema', { maxLength: 50 })}
+              <div className="form-span-all">
+                <PeppolFieldGroup
+                  scheme={editor.form.peppolScheme ?? ''}
+                  participantId={editor.form.peppolId ?? ''}
+                  status={editor.form.peppolId || editor.form.peppolScheme ? 'manual' : 'not-validated'}
+                  schemes={peppolSchemes}
+                  disabled={busy}
+                  error={getFieldError(fieldErrors, 'peppolId') ?? getFieldError(fieldErrors, 'peppolScheme')}
+                  onChange={(next) =>
+                    setEditor((current) =>
+                      current
+                        ? {
+                            ...current,
+                            form: {
+                              ...current.form,
+                              peppolScheme: next.scheme === '' ? null : next.scheme,
+                              peppolId: next.participantId === '' ? null : next.participantId,
+                            },
+                          }
+                        : current,
+                    )
+                  }
+                />
+              </div>
             </FormSection>
 
             <FormSection title="Adres">

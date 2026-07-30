@@ -395,6 +395,17 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Messaging.Services.
 builder.Services.AddScoped<TransportationService.Api.Modules.Edi.Services.IEdiService,
     TransportationService.Api.Modules.Edi.Services.EdiService>();
 
+// Peppol (provider-neutral; only the deterministic sandbox Access Point adapter is registered —
+// a real provider plugs in as an extra IPeppolProvider + configuration, never code changes here)
+builder.Services.AddSingleton<TransportationService.Api.Modules.Peppol.Services.IPeppolProvider,
+    TransportationService.Api.Modules.Peppol.Services.SandboxPeppolProvider>();
+builder.Services.AddSingleton<TransportationService.Api.Modules.Peppol.Services.IPeppolProviderFactory,
+    TransportationService.Api.Modules.Peppol.Services.PeppolProviderFactory>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Peppol.Services.IPeppolSettingsService,
+    TransportationService.Api.Modules.Peppol.Services.PeppolSettingsService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Peppol.Services.IPeppolCustomerVerificationService,
+    TransportationService.Api.Modules.Peppol.Services.PeppolCustomerVerificationService>();
+
 // ETA foundation (sequential raming; IRouteEstimationProvider is the future PTV seam)
 builder.Services.AddSingleton<TransportationService.Api.Modules.Eta.Services.IRouteEstimationProvider,
     TransportationService.Api.Modules.Eta.Services.NoRouteEstimationProvider>();

@@ -7,12 +7,13 @@ import { SectionedForm, type SectionDef } from '../../../components/ui/Sectioned
 import { useSectionNavigation, firstSectionWithError } from '../../../components/ui/useSectionNavigation'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
-import { getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { Badge } from '../../../components/ui/Badge'
 import { useAuth } from '../../auth/authContextValue'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
-import { getVatTreatments, registryLookup, getPeppolSchemes } from '../api/customersApi'
+import { getVatTreatments, registryLookup, getPeppolSchemes, verifyCustomerPeppol } from '../api/customersApi'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { validateVatNumber } from '../utils/vatNumber'
@@ -21,10 +22,13 @@ import { PeppolFieldGroup } from './PeppolFieldGroup'
 import { combinePeppolValue, peppolFormatError } from '../utils/peppolValue'
 import { CUSTOMER_SECTION_FIELD_KEYS } from './customerSections'
 import {
+  PEPPOL_DELIVERY_PREFERENCE_LABELS,
   VAT_TREATMENT_LABELS,
   type CompanyRegistryResult,
   type CustomerDetail,
   type CustomerInput,
+  type CustomerPeppolVerifyResult,
+  type PeppolDeliveryPreference,
   type PeppolScheme,
   type PeppolStatus,
   type UpdateCustomerInput,
@@ -73,6 +77,9 @@ const FIELD_LABELS: Record<string, string> = {
   'initialContact.lastName': 'Contactpersoon — achternaam',
   peppolId: 'Peppol-ID',
   peppolScheme: 'Peppol-schema',
+  peppolEnabled: 'Facturen via Peppol versturen',
+  peppolDeliveryPreference: 'Bezorgvoorkeur',
+  buyerReference: 'Kopersreferentie',
 }
 
 const FISCAL_PERMISSION_HINT = 'Vereist recht: fiscale gegevens beheren.'
@@ -96,10 +103,21 @@ type LookupState =
   | { kind: 'error'; message: string }
   | { kind: 'result'; result: CompanyRegistryResult }
 
+type PeppolVerifyState =
+  | { kind: 'idle' }
+  | { kind: 'busy' }
+  | { kind: 'error'; message: string }
+  | { kind: 'result'; result: CustomerPeppolVerifyResult }
+
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
+}
+
 export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, editPanels }: CustomerFormProps) {
   const languages = useLookupOptions('/api/languages')
   const { hasPermission } = useAuth()
   const canManageFiscal = hasPermission('customers.manage_fiscal')
+  const canValidatePeppol = hasPermission('peppol.validate')
   const fiscalHint = canManageFiscal ? undefined : FISCAL_PERMISSION_HINT
 
   // VAT-treatment catalog: the backend owns labels, rates and legal texts. On load failure
@@ -163,6 +181,12 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   const [peppolStatus, setPeppolStatus] = useState<PeppolStatus>(
     initial?.peppolId || initial?.peppolScheme ? 'manual' : 'not-validated',
   )
+  const [peppolEnabled, setPeppolEnabled] = useState(initial?.peppolEnabled ?? false)
+  const [peppolDeliveryPreference, setPeppolDeliveryPreference] = useState<PeppolDeliveryPreference>(
+    initial?.peppolDeliveryPreference ?? 'Peppol',
+  )
+  const [buyerReference, setBuyerReference] = useState(initial?.buyerReference ?? '')
+  const [peppolVerify, setPeppolVerify] = useState<PeppolVerifyState>({ kind: 'idle' })
 
   const [iban, setIban] = useState(initial?.iban ?? '')
   const [bic, setBic] = useState(initial?.bic ?? '')
@@ -320,6 +344,27 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     }
     touch()
     setLookup({ kind: 'idle' })
+  }
+
+  // De backend controleert de OPGESLAGEN identiteit; een nog niet bewaarde wijziging zou een
+  // resultaat tonen dat over het oude ID gaat.
+  const peppolIdentityDirty =
+    mode === 'edit' &&
+    (peppolId.trim() !== (initial?.peppolId ?? '') || peppolScheme.trim() !== (initial?.peppolScheme ?? ''))
+
+  /** Provider-directorycontrole van het Peppol-ID van deze klant (alleen bestaande klanten). */
+  async function handlePeppolVerify() {
+    if (!initial) return
+    setPeppolVerify({ kind: 'busy' })
+    try {
+      const result = await verifyCustomerPeppol(initial.id)
+      setPeppolVerify({ kind: 'result', result })
+    } catch (error) {
+      setPeppolVerify({
+        kind: 'error',
+        message: describeApiError(error, 'De Peppol-controle is mislukt. Probeer het later opnieuw.').message,
+      })
+    }
   }
 
   const contactHasInput =
@@ -704,6 +749,131 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               onChange={onPeppolChange}
             />
           </div>
+          <div className="customer-form-requirements form-span-all">
+            <label className="customer-form-checkbox">
+              <input
+                type="checkbox"
+                checked={peppolEnabled}
+                disabled={!canManageFiscal}
+                onChange={(e) => setPeppolEnabled(e.target.checked)}
+              />
+              Facturen via Peppol versturen
+            </label>
+          </div>
+          <FormField
+            label="Bezorgvoorkeur"
+            htmlFor="c-peppol-delivery"
+            hint="Hoe uitgaande facturen bezorgd worden zolang Peppol is ingeschakeld."
+            error={getFieldError(serverFieldErrors, 'peppolDeliveryPreference')}
+          >
+            <select
+              id="c-peppol-delivery"
+              value={peppolDeliveryPreference}
+              disabled={!canManageFiscal || !peppolEnabled}
+              onChange={(e) => setPeppolDeliveryPreference(e.target.value as PeppolDeliveryPreference)}
+            >
+              {(Object.entries(PEPPOL_DELIVERY_PREFERENCE_LABELS) as [PeppolDeliveryPreference, string][]).map(
+                ([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ),
+              )}
+            </select>
+          </FormField>
+          <FormField
+            label="Kopersreferentie (buyer reference)"
+            htmlFor="c-buyer-reference"
+            hint="Wordt als kopersreferentie op uitgaande Peppol-facturen gezet, bv. een kostenplaats."
+            error={getFieldError(serverFieldErrors, 'buyerReference')}
+          >
+            <input
+              id="c-buyer-reference"
+              value={buyerReference}
+              onChange={(e) => setBuyerReference(e.target.value)}
+              maxLength={200}
+              disabled={!canManageFiscal}
+            />
+          </FormField>
+          {isEdit && initial && (
+            <div className="customer-form-lookup form-span-all">
+              {canValidatePeppol && peppolId.trim() !== '' && peppolScheme.trim() !== '' && (
+                <div className="customer-form-lookup-row">
+                  <Button
+                    variant="secondary"
+                    onClick={() => void handlePeppolVerify()}
+                    disabled={peppolVerify.kind === 'busy' || isSubmitting || peppolIdentityDirty}
+                  >
+                    {peppolVerify.kind === 'busy' ? 'Controleren…' : 'Peppol-gegevens controleren'}
+                  </Button>
+                  {peppolIdentityDirty && (
+                    <span className="customer-form-muted">
+                      Sla de gewijzigde Peppol-gegevens eerst op voordat je ze controleert.
+                    </span>
+                  )}
+                  {peppolVerify.kind === 'error' && (
+                    <span className="ui-form-field-error" role="alert">
+                      {peppolVerify.message}
+                    </span>
+                  )}
+                </div>
+              )}
+              {peppolVerify.kind === 'result' ? (
+                <div className="customer-form-lookup-panel">
+                  {peppolVerify.result.found ? (
+                    <>
+                      <div>
+                        <Badge tone="success">Gevonden in het Peppol-netwerk</Badge>
+                      </div>
+                      {peppolVerify.result.supportedDocumentTypes.length > 0 && (
+                        <p className="customer-form-muted">
+                          Ondersteunde documenttypes: {peppolVerify.result.supportedDocumentTypes.join(', ')}
+                        </p>
+                      )}
+                      <p className="customer-form-muted">
+                        Laatst gecontroleerd: {formatDateTime(peppolVerify.result.lastCheckedAt)}
+                      </p>
+                      {peppolVerify.result.reference && (
+                        <p className="customer-form-muted">Referentie: {peppolVerify.result.reference}</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <Badge tone="danger">Niet gevonden in het Peppol-netwerk</Badge>
+                      </div>
+                      <p className="customer-form-muted">
+                        Laatst gecontroleerd: {formatDateTime(peppolVerify.result.lastCheckedAt)}
+                      </p>
+                    </>
+                  )}
+                </div>
+              ) : initial.peppolValidationStatus === 'Found' ? (
+                <div className="customer-form-lookup-row">
+                  <Badge tone="success">Gevonden in het Peppol-netwerk</Badge>
+                  {initial.peppolValidatedAt && (
+                    <span className="customer-form-muted">
+                      Laatst gecontroleerd: {formatDateTime(initial.peppolValidatedAt)}
+                    </span>
+                  )}
+                  {initial.peppolValidationReference && (
+                    <span className="customer-form-muted">Referentie: {initial.peppolValidationReference}</span>
+                  )}
+                </div>
+              ) : initial.peppolValidationStatus === 'NotFound' ? (
+                <div className="customer-form-lookup-row">
+                  <Badge tone="danger">Niet gevonden in het Peppol-netwerk</Badge>
+                  {initial.peppolValidatedAt && (
+                    <span className="customer-form-muted">
+                      Laatst gecontroleerd: {formatDateTime(initial.peppolValidatedAt)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="customer-form-muted">Nog niet gecontroleerd.</p>
+              )}
+            </div>
+          )}
           <FormField label="BTW-notities" htmlFor="c-vat-notes" className="form-span-all">
             <textarea id="c-vat-notes" value={vatNotes} onChange={(e) => setVatNotes(e.target.value)} rows={2} maxLength={1000} disabled={!canManageFiscal} />
           </FormField>
@@ -919,6 +1089,9 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
           vatCountryCode: vatCountryCode || null,
           peppolId: nullable(peppolId),
           peppolScheme: nullable(peppolScheme),
+          peppolEnabled,
+          peppolDeliveryPreference,
+          buyerReference: nullable(buyerReference),
           companyNumber: nullable(companyNumber),
           currencyCode: nullable(currencyCode)?.toUpperCase() ?? null,
           iban: nullable(iban),
@@ -932,6 +1105,9 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
           vatCountryCode: initial?.vatCountryCode ?? null,
           peppolId: initial?.peppolId ?? null,
           peppolScheme: initial?.peppolScheme ?? null,
+          peppolEnabled: initial?.peppolEnabled ?? false,
+          peppolDeliveryPreference: initial?.peppolDeliveryPreference ?? ('Peppol' as PeppolDeliveryPreference),
+          buyerReference: initial?.buyerReference ?? null,
           companyNumber: initial?.companyNumber ?? null,
           currencyCode: initial?.currencyCode ?? null,
           iban: initial?.iban ?? null,

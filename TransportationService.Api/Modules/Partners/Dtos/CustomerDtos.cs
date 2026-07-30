@@ -72,7 +72,13 @@ public record CustomerDetailDto(
     string? Bic = null,
     string? BankName = null,
     string? BankAccountNumber = null,
-    Guid? DefaultLegalEntityId = null);
+    Guid? DefaultLegalEntityId = null,
+    bool PeppolEnabled = false,
+    string PeppolDeliveryPreference = "Peppol",
+    string? BuyerReference = null,
+    string PeppolValidationStatus = "Unknown",
+    DateTime? PeppolValidatedAt = null,
+    string? PeppolValidationReference = null);
 
 public record CreateCustomerRequest(
     string Name,
@@ -110,7 +116,10 @@ public record CreateCustomerRequest(
     string? Bic = null,
     string? BankName = null,
     string? BankAccountNumber = null,
-    Guid? DefaultLegalEntityId = null);
+    Guid? DefaultLegalEntityId = null,
+    bool PeppolEnabled = false,
+    string? PeppolDeliveryPreference = null,
+    string? BuyerReference = null);
 
 public record UpdateCustomerRequest(
     string Name,
@@ -147,7 +156,10 @@ public record UpdateCustomerRequest(
     string? Bic = null,
     string? BankName = null,
     string? BankAccountNumber = null,
-    Guid? DefaultLegalEntityId = null);
+    Guid? DefaultLegalEntityId = null,
+    bool PeppolEnabled = false,
+    string? PeppolDeliveryPreference = null,
+    string? BuyerReference = null);
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
 

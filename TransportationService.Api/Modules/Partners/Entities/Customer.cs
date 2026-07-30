@@ -1,4 +1,5 @@
 using TransportationService.Api.Common.Abstractions;
+using TransportationService.Api.Modules.Peppol.Entities;
 
 namespace TransportationService.Api.Modules.Partners.Entities;
 
@@ -63,6 +64,22 @@ public class Customer : AuditableTenantEntity
     public string? PeppolId { get; set; }
     /// <summary>Peppol scheme code (e.g. "0208" = Belgian enterprise number).</summary>
     public string? PeppolScheme { get; set; }
+
+    /// <summary>Whether this customer is set up to receive invoices via Peppol (requires PeppolId+PeppolScheme).</summary>
+    public bool PeppolEnabled { get; set; }
+
+    /// <summary>Outcome of the last provider participant lookup for this customer's Peppol id.</summary>
+    public CustomerPeppolValidationStatus PeppolValidationStatus { get; set; } = CustomerPeppolValidationStatus.Unknown;
+    public DateTime? PeppolValidatedAt { get; set; }
+
+    /// <summary>Provider reference returned by the last successful validation (opaque, no secrets).</summary>
+    public string? PeppolValidationReference { get; set; }
+
+    /// <summary>Buyer reference to include on outgoing Peppol invoices for this customer (e.g. a cost-centre code).</summary>
+    public string? BuyerReference { get; set; }
+
+    /// <summary>How this customer should receive invoices when Peppol is enabled.</summary>
+    public PeppolDeliveryPreference PeppolDeliveryPreference { get; set; } = PeppolDeliveryPreference.Peppol;
 
     /// <summary>Invoice language override; null = DefaultLanguageCode.</summary>
     public string? InvoiceLanguageCode { get; set; }

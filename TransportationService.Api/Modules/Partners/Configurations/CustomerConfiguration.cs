@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using TransportationService.Api.Modules.Partners.Entities;
+using TransportationService.Api.Modules.Peppol.Entities;
 
 namespace TransportationService.Api.Modules.Partners.Configurations;
 
@@ -42,6 +43,13 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.VatNotes).HasMaxLength(1000);
         builder.Property(c => c.PeppolId).HasMaxLength(64);
         builder.Property(c => c.PeppolScheme).HasMaxLength(10);
+        builder.Property(c => c.PeppolEnabled).HasDefaultValue(false);
+        builder.Property(c => c.PeppolValidationStatus).HasConversion<string>().HasMaxLength(20)
+            .HasDefaultValue(CustomerPeppolValidationStatus.Unknown);
+        builder.Property(c => c.PeppolValidationReference).HasMaxLength(200);
+        builder.Property(c => c.BuyerReference).HasMaxLength(200);
+        builder.Property(c => c.PeppolDeliveryPreference).HasConversion<string>().HasMaxLength(20)
+            .HasDefaultValue(PeppolDeliveryPreference.Peppol);
         builder.Property(c => c.InvoiceLanguageCode).HasMaxLength(10);
 
         builder.HasIndex(c => new { c.TenantId, c.CustomerNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");

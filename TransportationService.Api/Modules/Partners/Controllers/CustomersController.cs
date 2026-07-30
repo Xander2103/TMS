@@ -5,6 +5,8 @@ using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Partners.Dtos;
 using TransportationService.Api.Modules.Partners.Services;
+using TransportationService.Api.Modules.Peppol.Dtos;
+using TransportationService.Api.Modules.Peppol.Services;
 
 namespace TransportationService.Api.Modules.Partners.Controllers;
 
@@ -16,14 +18,17 @@ public class CustomersController : ControllerBase
     private readonly ICurrentUserContext _currentUser;
     private readonly IPermissionAuthorizationService _authorization;
     private readonly ICompanyRegistryProvider _registryProvider;
+    private readonly IPeppolCustomerVerificationService _peppolVerification;
 
     public CustomersController(ICustomerService customerService, ICurrentUserContext currentUser,
-        IPermissionAuthorizationService authorization, ICompanyRegistryProvider registryProvider)
+        IPermissionAuthorizationService authorization, ICompanyRegistryProvider registryProvider,
+        IPeppolCustomerVerificationService peppolVerification)
     {
         _customerService = customerService;
         _currentUser = currentUser;
         _authorization = authorization;
         _registryProvider = registryProvider;
+        _peppolVerification = peppolVerification;
     }
 
     /// <summary>Fiscal/Peppol/bank mutations are gated on customers.manage_fiscal.</summary>
@@ -167,6 +172,18 @@ public class CustomersController : ControllerBase
 
         var contact = await _customerService.UpdateContactAsync(id, contactId, request, cancellationToken);
         return contact is null ? NotFound() : Ok(contact);
+    }
+
+    /// <summary>
+    /// "Peppol-gegevens controleren": looks the customer's Peppol participant up at the
+    /// configured provider and persists the outcome (status, timestamp, reference).
+    /// </summary>
+    [HttpPost("{id:guid}/peppol/verify")]
+    [RequirePermission(PermissionCodes.PeppolValidate)]
+    public async Task<ActionResult<CustomerPeppolVerifyResultDto>> VerifyPeppol(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await _peppolVerification.VerifyAsync(id, cancellationToken);
+        return result is null ? NotFound() : Ok(result);
     }
 
     [HttpDelete("{id:guid}/contacts/{contactId:guid}")]

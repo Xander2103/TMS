@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 20;
+    public const int CurrentVersion = 21;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -399,6 +399,24 @@ public static class DefaultRoleUpgrades
                 ["management"] =
                 [
                     PermissionCodes.EdiView, PermissionCodes.EdiTest, PermissionCodes.EdiRetry,
+                ],
+            }),
+
+        new(21,
+            "Peppol foundations 2026-07-30: provider-neutral Peppol domain and configuration. "
+            + "Boekhouding gets everyday Peppol operation rights; management additionally gets "
+            + "peppol.configure (per-legal-entity settings).",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["management"] =
+                [
+                    PermissionCodes.PeppolView, PermissionCodes.PeppolConfigure, PermissionCodes.PeppolValidate,
+                    PermissionCodes.PeppolSend, PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
+                ],
+                ["boekhouding"] =
+                [
+                    PermissionCodes.PeppolView, PermissionCodes.PeppolValidate,
+                    PermissionCodes.PeppolSend, PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
                 ],
             }),
     ];

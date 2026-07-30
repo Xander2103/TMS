@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Common.Validation;
@@ -99,6 +100,94 @@ public class CustomerFiscalTests
         // Changing a fiscal value without the permission is refused.
         await Assert.ThrowsAsync<DomainValidationException>(() =>
             h.Sut.UpdateAsync(created.Id, Update(null, "BE68539007547034"), CancellationToken.None, canManageFiscal: false));
+    }
+
+    [Fact]
+    public async Task Create_PeppolEnabledWithoutIdentity_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Sut.CreateAsync(Request() with { PeppolEnabled = true }, CancellationToken.None));
+
+        var created = await h.Sut.CreateAsync(Request() with
+        {
+            PeppolEnabled = true, PeppolId = "0417497106", PeppolScheme = "0208",
+            PeppolDeliveryPreference = "EmailFallback", BuyerReference = " KP-123 ",
+        }, CancellationToken.None);
+
+        Assert.True(created.PeppolEnabled);
+        Assert.Equal("EmailFallback", created.PeppolDeliveryPreference);
+        Assert.Equal("KP-123", created.BuyerReference);
+        Assert.Equal("Unknown", created.PeppolValidationStatus);
+    }
+
+    [Fact]
+    public async Task Create_InvalidDeliveryPreference_IsRefused()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Sut.CreateAsync(Request() with
+            {
+                PeppolId = "0417497106", PeppolScheme = "0208", PeppolDeliveryPreference = "Duif",
+            }, CancellationToken.None));
+
+        // Numeric strings parse to an UNDEFINED enum value; the string-stored column must refuse them.
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Sut.CreateAsync(Request() with
+            {
+                PeppolId = "0417497106", PeppolScheme = "0208", PeppolDeliveryPreference = "7",
+            }, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Update_ChangedPeppolIdentity_ResetsValidationOutcome()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request() with { PeppolId = "0417497106", PeppolScheme = "0208" }, CancellationToken.None);
+
+        // Simulate an earlier successful provider lookup.
+        var entity = await h.Db.Context.Customers.SingleAsync(c => c.Id == created.Id);
+        entity.PeppolValidationStatus = Modules.Peppol.Entities.CustomerPeppolValidationStatus.Found;
+        entity.PeppolValidatedAt = DateTime.UtcNow;
+        entity.PeppolValidationReference = "sandbox-0208:0417497106";
+        await h.Db.Context.SaveChangesAsync();
+
+        UpdateCustomerRequest Update(string peppolId) => new(
+            created.Name, null, null, null, null, null, null, null, null, null, null, null, null, 30, null, null,
+            IsActive: true, PeppolId: peppolId, PeppolScheme: "0208");
+
+        // Round-trip with the same id keeps the stored outcome.
+        await h.Sut.UpdateAsync(created.Id, Update("0417497106"), CancellationToken.None);
+        Assert.Equal(Modules.Peppol.Entities.CustomerPeppolValidationStatus.Found,
+            (await h.Db.Context.Customers.SingleAsync(c => c.Id == created.Id)).PeppolValidationStatus);
+
+        // A different id invalidates the lookup result.
+        var updated = await h.Sut.UpdateAsync(created.Id, Update("0417497107"), CancellationToken.None);
+        Assert.Equal("Unknown", updated!.PeppolValidationStatus);
+        Assert.Null(updated.PeppolValidatedAt);
+        Assert.Null(updated.PeppolValidationReference);
+    }
+
+    [Fact]
+    public async Task Update_PeppolFieldsAreFiscallyGated()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request() with { PeppolId = "0417497106", PeppolScheme = "0208" }, CancellationToken.None);
+
+        UpdateCustomerRequest Update(bool enabled) => new(
+            created.Name, null, null, null, null, null, null, null, null, null, null, null, null, 30, null, null,
+            IsActive: true, PeppolId: "0417497106", PeppolScheme: "0208", PeppolEnabled: enabled);
+
+        // Round-trip without changes passes; flipping the Peppol switch without the permission does not.
+        Assert.NotNull(await h.Sut.UpdateAsync(created.Id, Update(false), CancellationToken.None, canManageFiscal: false));
+        await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Sut.UpdateAsync(created.Id, Update(true), CancellationToken.None, canManageFiscal: false));
     }
 
     [Fact]

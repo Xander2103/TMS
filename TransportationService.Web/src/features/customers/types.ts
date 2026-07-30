@@ -77,6 +77,25 @@ export interface RegistryLookupResponse {
 /** Provenance of the grouped Peppol control's current value, shown as a status chip. */
 export type PeppolStatus = 'auto' | 'manual' | 'not-found' | 'not-validated'
 
+/** Bezorgvoorkeur voor uitgaande facturen wanneer Peppol is ingeschakeld. */
+export type PeppolDeliveryPreference = 'Peppol' | 'EmailFallback'
+
+export const PEPPOL_DELIVERY_PREFERENCE_LABELS: Record<PeppolDeliveryPreference, string> = {
+  Peppol: 'Peppol',
+  EmailFallback: 'E-mail (terugval)',
+}
+
+/** Persisted outcome of the provider directory check (read-only; updated via verify). */
+export type PeppolValidationStatus = 'Unknown' | 'Found' | 'NotFound'
+
+/** Result of POST /api/customers/{id}/peppol/verify (peppol.validate). */
+export interface CustomerPeppolVerifyResult {
+  found: boolean
+  supportedDocumentTypes: string[]
+  lastCheckedAt: string
+  reference: string | null
+}
+
 /** One Peppol scheme (EAS) option served by GET /api/customers/peppol-schemes. */
 export interface PeppolScheme {
   code: string
@@ -91,6 +110,11 @@ export interface CustomerVatProfile {
   vatNotes: string | null
   peppolId: string | null
   peppolScheme: string | null
+  /** Facturen via Peppol versturen (vereist een Peppol-ID en -schema, fiscaal recht). */
+  peppolEnabled: boolean
+  peppolDeliveryPreference: PeppolDeliveryPreference
+  /** Kopersreferentie (buyer reference) op uitgaande Peppol-facturen, bv. een kostenplaats. */
+  buyerReference: string | null
   invoiceLanguageCode: string | null
   purchaseOrderRequired: boolean
   signedDeliveryNoteRequired: boolean
@@ -248,6 +272,10 @@ export interface CustomerDetail extends CustomerVatProfile {
   bankName: string | null
   bankAccountNumber: string | null
   defaultLegalEntityId: string | null
+  /** Read-only: laatste uitkomst van de Peppol-netwerkcontrole. */
+  peppolValidationStatus: PeppolValidationStatus
+  peppolValidatedAt: string | null
+  peppolValidationReference: string | null
   contacts: CustomerContact[]
 }
 

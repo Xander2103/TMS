@@ -334,6 +334,14 @@ public static class PermissionCodes
     public const string NotificationRulesView = "notification_rules.view";
     public const string NotificationRulesManage = "notification_rules.manage";
 
+    // --- Peppol e-invoicing (provider-neutral configuration, transmissions, incoming documents) ---
+    public const string PeppolView = "peppol.view";
+    public const string PeppolConfigure = "peppol.configure";
+    public const string PeppolValidate = "peppol.validate";
+    public const string PeppolSend = "peppol.send";
+    public const string PeppolRetry = "peppol.retry";
+    public const string PeppolViewIncoming = "peppol.view_incoming";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -556,5 +564,11 @@ public static class PermissionCodes
         (LeaveTypesManage, "leave_types", "manage", "Verloftypes en saldotypes beheren"),
         (NotificationRulesView, "notification_rules", "view", "Meldingsregels en klantafwijkingen bekijken"),
         (NotificationRulesManage, "notification_rules", "manage", "Meldingsregels, ontvangers en klantafwijkingen beheren"),
+        (PeppolView, "peppol", "view", "Peppol-configuratie en overzicht bekijken"),
+        (PeppolConfigure, "peppol", "configure", "Peppol-instellingen per eigen bedrijf beheren"),
+        (PeppolValidate, "peppol", "validate", "Peppol-gegevens van klanten en eigen bedrijven valideren"),
+        (PeppolSend, "peppol", "send", "Facturen via Peppol verzenden"),
+        (PeppolRetry, "peppol", "retry", "Mislukte Peppol-verzendingen opnieuw proberen"),
+        (PeppolViewIncoming, "peppol", "view_incoming", "Inkomende Peppol-documenten bekijken"),
     ];
 }

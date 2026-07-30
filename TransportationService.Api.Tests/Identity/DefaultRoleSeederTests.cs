@@ -517,10 +517,6 @@ public class DefaultRoleSeederTests
 
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(20, DefaultRoleUpgrades.CurrentVersion);
-        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
-        Assert.Equal(20, state.AppliedVersion);
-
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         var management = roles.Single(r => r.TemplateCode == "management");
         var managementCodes = await CodesOfAsync(db, management.Id);
@@ -537,6 +533,45 @@ public class DefaultRoleSeederTests
             Assert.DoesNotContain(PermissionCodes.EdiView, codes);
             Assert.DoesNotContain(PermissionCodes.EdiTest, codes);
             Assert.DoesNotContain(PermissionCodes.EdiRetry, codes);
+        }
+    }
+
+    [Fact]
+    public async Task Version21_GrantsPeppolPermissions_ConfigureOnlyToManagement()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        Assert.Equal(21, DefaultRoleUpgrades.CurrentVersion);
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(21, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var managementCodes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "management").Id);
+        var boekhoudingCodes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "boekhouding").Id);
+
+        string[] everyday =
+        [
+            PermissionCodes.PeppolView, PermissionCodes.PeppolValidate, PermissionCodes.PeppolSend,
+            PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
+        ];
+        foreach (var code in everyday)
+        {
+            Assert.Contains(code, managementCodes);
+            Assert.Contains(code, boekhoudingCodes);
+        }
+
+        // Per-legal-entity configuration follows the accounting.manage precedent: management only.
+        Assert.Contains(PermissionCodes.PeppolConfigure, managementCodes);
+        Assert.DoesNotContain(PermissionCodes.PeppolConfigure, boekhoudingCodes);
+
+        var others = roles.Where(r =>
+            r.TemplateCode is not null and not "management" and not "boekhouding");
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.PeppolView, await CodesOfAsync(db, other.Id));
         }
     }
 

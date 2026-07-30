@@ -149,6 +149,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeeNotesView, PermissionCodes.EmployeeNotesManage, PermissionCodes.EmployeeNotesPin,
                 PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend,
                 PermissionCodes.PortalAnnouncementsManage,
+                PermissionCodes.PeppolView, PermissionCodes.PeppolConfigure, PermissionCodes.PeppolValidate,
+                PermissionCodes.PeppolSend, PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -177,6 +179,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.CustomersManageFiscal, PermissionCodes.CustomersManageCommunication,
                 PermissionCodes.CustomersManageSurcharge, PermissionCodes.CustomersManagePo,
                 PermissionCodes.AccountingView, PermissionCodes.AccountingManage,
+                PermissionCodes.PeppolView, PermissionCodes.PeppolValidate,
+                PermissionCodes.PeppolSend, PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
             ]),
 
         new("hr", "HR",

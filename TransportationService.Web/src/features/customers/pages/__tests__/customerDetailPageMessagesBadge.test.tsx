@@ -29,6 +29,8 @@ function customer(): CustomerDetail {
     vatTreatment: 'DomesticVat', defaultVatRatePercent: null, vatCountryCode: null, vatNotes: null,
     peppolId: null, peppolScheme: null, invoiceLanguageCode: null, purchaseOrderRequired: false,
     signedDeliveryNoteRequired: false, customerReferenceRequired: false,
+    peppolEnabled: false, peppolDeliveryPreference: 'Peppol', buyerReference: null,
+    peppolValidationStatus: 'Unknown', peppolValidatedAt: null, peppolValidationReference: null,
   } as CustomerDetail
 }
 
