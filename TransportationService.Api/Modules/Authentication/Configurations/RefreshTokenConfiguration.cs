@@ -14,5 +14,11 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
         builder.Property(t => t.ReplacedByTokenHash).HasMaxLength(200);
         builder.HasIndex(t => t.TokenHash).IsUnique();
         builder.HasIndex(t => t.UserId);
+        // Reuse detection revokes a whole rotation lineage at once.
+        builder.HasIndex(t => new { t.UserId, t.FamilyId });
+
+        // Concurrency guard: two simultaneous refreshes of the SAME token both try to stamp
+        // RevokedAt; the loser's UPDATE matches zero rows and throws, so at most one rotation wins.
+        builder.Property(t => t.RevokedAt).IsConcurrencyToken();
     }
 }

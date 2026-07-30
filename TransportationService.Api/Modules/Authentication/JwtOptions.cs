@@ -22,8 +22,25 @@ public sealed class JwtOptions
     [MinLength(32)]
     public string SigningKey { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Previous signing key, accepted for VALIDATION only during a controlled rotation window so
+    /// rotating the key does not log everyone out instantly. Remove it once the window has passed.
+    /// </summary>
+    [MinLength(32)]
+    public string? PreviousSigningKey { get; set; }
+
+    /// <summary>Key id (kid) stamped on issued tokens; lets validators pick the right key.</summary>
+    public string KeyId { get; set; } = "primary";
+
+    /// <summary>Key id of <see cref="PreviousSigningKey"/> during rotation.</summary>
+    public string PreviousKeyId { get; set; } = "previous";
+
+    /// <summary>
+    /// Short-lived by design: server-side revocation (security stamp) closes the remaining window,
+    /// and the refresh flow keeps sessions usable. Kept configurable for operational tuning.
+    /// </summary>
     [Range(1, 1440)]
-    public int AccessTokenMinutes { get; set; } = 60;
+    public int AccessTokenMinutes { get; set; } = 15;
 
     [Range(1, 365)]
     public int RefreshTokenDays { get; set; } = 14;

@@ -31,7 +31,7 @@ public class PermissionSetService : IPermissionSetService
                 join r in _dbContext.Roles.AsNoTracking() on ur.RoleId equals r.Id
                 join rp in _dbContext.RolePermissions.AsNoTracking() on r.Id equals rp.RoleId
                 join p in _dbContext.Permissions.AsNoTracking() on rp.PermissionId equals p.Id
-                where ur.UserId == userId && r.IsActive && r.TenantId == u.TenantId
+                where ur.UserId == userId && u.IsActive && !u.IsBlocked && r.IsActive && r.TenantId == u.TenantId
                 select p.Code)
             .Distinct()
             .ToListAsync(cancellationToken);

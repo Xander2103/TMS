@@ -17,7 +17,9 @@ public sealed class TokenService : ITokenService
     {
         _options = options.Value;
         _timeProvider = timeProvider;
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey));
+        // The kid lets validators (and a future asymmetric setup) select the right key during a
+        // controlled rotation window.
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey)) { KeyId = _options.KeyId };
         _signingCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
     }
 
