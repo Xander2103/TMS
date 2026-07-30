@@ -21,6 +21,15 @@ public enum EdiIngestOutcome
 
 public record EdiIngestResult(EdiIngestOutcome Outcome, EdiMessage? Message, string? Error = null);
 
+/// <summary>What would be created if the payload were ingested for real.</summary>
+public record EdiValidationSummary(
+    string ExternalOrderId, string? CustomerReference, string GoodsDescription,
+    int StopCount, int CargoLineCount,
+    IReadOnlyList<string> ResolvedLocationCodes, IReadOnlyList<string> ResolvedUnitCodes);
+
+/// <summary>Dry-run outcome: never persists an <see cref="EdiMessage"/> or transport order.</summary>
+public record EdiValidationResult(bool Valid, IReadOnlyList<string> Errors, EdiValidationSummary? WouldCreate);
+
 public interface IEdiService
 {
     /// <summary>Stores and immediately processes an inbound payload; duplicates are stored but never reprocessed.</summary>
@@ -31,12 +40,24 @@ public interface IEdiService
 
     /// <summary>Outbound status payload for an order that entered through EDI; no-op otherwise.</summary>
     Task QueueOutboundStatusAsync(Guid orderId, string status, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Runs the same parse + partner/location + unit resolution pipeline as ingestion, WITHOUT
+    /// creating an <see cref="EdiMessage"/> row or a transport order — for the "Testen" tab's
+    /// "Valideren zonder te versturen" action.
+    /// </summary>
+    Task<EdiValidationResult> ValidateAsync(string partnerCode, string messageType, string payload, CancellationToken cancellationToken);
 }
 
 public class EdiService : IEdiService
 {
     private const string EntityType = "EdiMessage";
     private const int MaxAttempts = 3;
+
+    /// <summary>Public marker used both as EdiMessage.FailureKind and in the mapping-issue filter.</summary>
+    public const string FailureKindMapping = "mapping";
+    public const string FailureKindValidation = "validation";
+    public const string FailureKindProcessing = "processing";
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
@@ -183,71 +204,61 @@ public class EdiService : IEdiService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<EdiValidationResult> ValidateAsync(
+        string partnerCode, string messageType, string payload, CancellationToken cancellationToken)
+    {
+        var partner = await _dbContext.TradingPartners.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.TenantId == _tenantContext.TenantId
+                                      && p.Code == partnerCode && p.IsActive, cancellationToken);
+        if (partner is null)
+        {
+            return new EdiValidationResult(false, ["Onbekende of inactieve handelspartner."], null);
+        }
+
+        if (!string.Equals(messageType, "order", StringComparison.OrdinalIgnoreCase))
+        {
+            return new EdiValidationResult(false,
+                [$"Berichttype '{messageType}' wordt (nog) niet ondersteund."], null);
+        }
+
+        var prepared = await PrepareAsync(partner, payload, cancellationToken);
+        if (prepared.Order is null)
+        {
+            var errors = prepared.Errors.Count > 0 ? prepared.Errors : [prepared.ErrorDetail ?? "Validatie mislukt."];
+            return new EdiValidationResult(false, errors, null);
+        }
+
+        var summary = new EdiValidationSummary(
+            prepared.Order.ExternalOrderId, prepared.Order.CustomerReference, prepared.Order.GoodsDescription,
+            prepared.Stops.Count, prepared.CargoItems.Count,
+            prepared.Order.Stops.Where(s => s.ExternalLocationCode is not null).Select(s => s.ExternalLocationCode!).ToList(),
+            prepared.CargoItems.Where(c => c.QuantityUnitCode is not null).Select(c => c.QuantityUnitCode!).Distinct().ToList());
+        return new EdiValidationResult(true, [], summary);
+    }
+
     private async Task ProcessAsync(EdiMessage message, TradingPartner partner, CancellationToken cancellationToken)
     {
         message.AttemptCount += 1;
-        var errors = new List<string>();
         try
         {
-            var order = ParseGenericJson(message.PayloadJson, errors);
-            if (order is null || errors.Count > 0)
+            var prepared = await PrepareAsync(partner, message.PayloadJson, cancellationToken);
+            if (prepared.Order is null)
             {
-                Fail(message, "Validatie mislukt.", errors);
+                Fail(message, prepared.ErrorDetail ?? "Validatie mislukt.", prepared.Errors, prepared.FailureKind ?? FailureKindValidation);
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 return;
             }
-
-            if (partner.CustomerId is not { } customerId)
-            {
-                Fail(message, "De handelspartner is niet aan een klant gekoppeld.", errors);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-                return;
-            }
-
-            // Resolve partner location codes to master locations.
-            var mappings = await _dbContext.EdiPartnerLocations.AsNoTracking()
-                .Where(l => l.TenantId == _tenantContext.TenantId && l.TradingPartnerId == partner.Id)
-                .ToDictionaryAsync(l => l.ExternalLocationCode, l => l.LocationId, StringComparer.OrdinalIgnoreCase,
-                    cancellationToken);
-
-            var stops = new List<TransportOrderStopInput>();
-            foreach (var stop in order.Stops)
-            {
-                Guid? locationId = null;
-                if (!string.IsNullOrWhiteSpace(stop.ExternalLocationCode))
-                {
-                    if (!mappings.TryGetValue(stop.ExternalLocationCode, out var mapped))
-                    {
-                        errors.Add($"Onbekende locatiecode '{stop.ExternalLocationCode}' voor deze partner.");
-                        continue;
-                    }
-
-                    locationId = mapped;
-                }
-
-                stops.Add(new TransportOrderStopInput(
-                    stop.Type, locationId, null, null, null, stop.City, null,
-                    stop.PlannedFrom, stop.PlannedTo, stop.Reference, null));
-            }
-
-            if (errors.Count > 0)
-            {
-                Fail(message, "Locatiemapping onvolledig.", errors);
-                await _dbContext.SaveChangesAsync(cancellationToken);
-                return;
-            }
-
-            var cargoItems = await ResolveCargoUnitsAsync(customerId, order.CargoItems, cancellationToken);
 
             var result = await _orderService.CreateAsync(new CreateTransportOrderRequest(
-                customerId, order.CustomerReference, null, order.GoodsDescription,
+                prepared.CustomerId, prepared.Order.CustomerReference, null, prepared.Order.GoodsDescription,
                 null, null, null, null, null, false, false, null,
-                $"EDI-bericht van {partner.Name} ({order.ExternalOrderId})",
-                stops, cargoItems), cancellationToken);
+                $"EDI-bericht van {partner.Name} ({prepared.Order.ExternalOrderId})",
+                prepared.Stops, prepared.CargoItems), cancellationToken);
 
             if (result.Outcome != TransportOrderOperationOutcome.Success)
             {
-                Fail(message, result.Error ?? $"Opdracht kon niet worden aangemaakt ({result.Outcome}).", errors);
+                Fail(message, result.Error ?? $"Opdracht kon niet worden aangemaakt ({result.Outcome}).",
+                    prepared.Errors, FailureKindProcessing);
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 return;
             }
@@ -256,6 +267,7 @@ public class EdiService : IEdiService
             message.ProcessedAt = _timeProvider.GetUtcNow().UtcDateTime;
             message.ErrorDetail = null;
             message.ValidationErrorsJson = null;
+            message.FailureKind = null;
             message.ResultEntityType = "TransportOrder";
             message.ResultEntityId = result.Order!.Id.ToString();
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -265,9 +277,70 @@ public class EdiService : IEdiService
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            Fail(message, exception.Message, errors);
+            Fail(message, exception.Message, [], FailureKindProcessing);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    private sealed record PreparedOrder(
+        ParsedOrder? Order, Guid CustomerId, IReadOnlyList<TransportOrderStopInput> Stops,
+        IReadOnlyList<CargoItemInput> CargoItems, List<string> Errors, string? ErrorDetail, string? FailureKind);
+
+    /// <summary>
+    /// The reusable core behind both real processing and the dry-run validate endpoint: parses
+    /// the generic-JSON payload, requires the partner to be linked to a customer, resolves the
+    /// partner's location codes to master locations, and resolves cargo unit codes. Never
+    /// touches <c>EdiMessage</c> or persists anything itself — callers decide what to do with
+    /// the result.
+    /// </summary>
+    private async Task<PreparedOrder> PrepareAsync(TradingPartner partner, string payloadJson, CancellationToken cancellationToken)
+    {
+        var errors = new List<string>();
+        var order = ParseGenericJson(payloadJson, errors);
+        if (order is null || errors.Count > 0)
+        {
+            return new PreparedOrder(null, Guid.Empty, [], [], errors, "Validatie mislukt.", FailureKindValidation);
+        }
+
+        if (partner.CustomerId is not { } customerId)
+        {
+            return new PreparedOrder(null, Guid.Empty, [], [], errors,
+                "De handelspartner is niet aan een klant gekoppeld.", FailureKindMapping);
+        }
+
+        // Resolve partner location codes to master locations.
+        var mappings = await _dbContext.EdiPartnerLocations.AsNoTracking()
+            .Where(l => l.TenantId == _tenantContext.TenantId && l.TradingPartnerId == partner.Id)
+            .ToDictionaryAsync(l => l.ExternalLocationCode, l => l.LocationId, StringComparer.OrdinalIgnoreCase,
+                cancellationToken);
+
+        var stops = new List<TransportOrderStopInput>();
+        foreach (var stop in order.Stops)
+        {
+            Guid? locationId = null;
+            if (!string.IsNullOrWhiteSpace(stop.ExternalLocationCode))
+            {
+                if (!mappings.TryGetValue(stop.ExternalLocationCode, out var mapped))
+                {
+                    errors.Add($"Onbekende locatiecode '{stop.ExternalLocationCode}' voor deze partner.");
+                    continue;
+                }
+
+                locationId = mapped;
+            }
+
+            stops.Add(new TransportOrderStopInput(
+                stop.Type, locationId, null, null, null, stop.City, null,
+                stop.PlannedFrom, stop.PlannedTo, stop.Reference, null));
+        }
+
+        if (errors.Count > 0)
+        {
+            return new PreparedOrder(null, Guid.Empty, [], [], errors, "Locatiemapping onvolledig.", FailureKindMapping);
+        }
+
+        var cargoItems = await ResolveCargoUnitsAsync(customerId, order.CargoItems, cancellationToken);
+        return new PreparedOrder(order, customerId, stops, cargoItems, errors, null, null);
     }
 
     /// <summary>
@@ -321,13 +394,14 @@ public class EdiService : IEdiService
         }).ToList();
     }
 
-    private void Fail(EdiMessage message, string error, IReadOnlyList<string> validationErrors)
+    private void Fail(EdiMessage message, string error, IReadOnlyList<string> validationErrors, string failureKind)
     {
         message.Status = message.AttemptCount >= MaxAttempts
             ? EdiProcessingStatus.DeadLettered
             : EdiProcessingStatus.Failed;
         message.ErrorDetail = error;
         message.ValidationErrorsJson = validationErrors.Count > 0 ? JsonSerializer.Serialize(validationErrors) : null;
+        message.FailureKind = failureKind;
     }
 
     private sealed record ParsedStop(

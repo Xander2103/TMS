@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 19;
+    public const int CurrentVersion = 20;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -388,6 +388,17 @@ public static class DefaultRoleUpgrades
                 [
                     PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend,
                     PermissionCodes.PortalAnnouncementsManage,
+                ],
+            }),
+
+        new(20,
+            "EDI redesign 2026-07-30: edi.manage keeps full rights; edi.view/test/retry granted "
+            + "alongside it to the same template (management is the only current edi.manage holder).",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["management"] =
+                [
+                    PermissionCodes.EdiView, PermissionCodes.EdiTest, PermissionCodes.EdiRetry,
                 ],
             }),
     ];

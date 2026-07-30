@@ -24,6 +24,9 @@ public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
         _permissionCodes = permissionCodes;
     }
 
+    /// <summary>The any-of permission codes this endpoint accepts, in declaration order.</summary>
+    public IReadOnlyList<string> PermissionCodes => _permissionCodes;
+
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         var currentUser = context.HttpContext.RequestServices.GetRequiredService<ICurrentUserContext>();

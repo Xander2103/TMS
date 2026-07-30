@@ -473,9 +473,8 @@ public class DefaultRoleSeederTests
 
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(19, DefaultRoleUpgrades.CurrentVersion);
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
-        Assert.Equal(19, state.AppliedVersion);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         var klantportaal = roles.Single(r => r.TemplateCode == "klantportaal");
@@ -508,6 +507,37 @@ public class DefaultRoleSeederTests
         Assert.Equal([PermissionCodes.CustomerPortalViewDocuments], await CodesOfAsync(db, documenten.Id));
         Assert.Equal([PermissionCodes.CustomerPortalViewInvoices], await CodesOfAsync(db, facturen.Id));
         Assert.Equal([PermissionCodes.CustomerPortalManageUsers], await CodesOfAsync(db, gebruikersbeheer.Id));
+    }
+
+    [Fact]
+    public async Task Version20_GrantsEdiViewTestRetry_ToTheSameTemplateAsEdiManage()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        Assert.Equal(20, DefaultRoleUpgrades.CurrentVersion);
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(20, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var managementCodes = await CodesOfAsync(db, management.Id);
+        Assert.Contains(PermissionCodes.EdiView, managementCodes);
+        Assert.Contains(PermissionCodes.EdiManage, managementCodes);
+        Assert.Contains(PermissionCodes.EdiTest, managementCodes);
+        Assert.Contains(PermissionCodes.EdiRetry, managementCodes);
+
+        // edi.manage is the only pre-existing holder; every other template stays untouched.
+        var others = roles.Where(r => r.TemplateCode != "management" && r.TemplateCode != null);
+        foreach (var other in others)
+        {
+            var codes = await CodesOfAsync(db, other.Id);
+            Assert.DoesNotContain(PermissionCodes.EdiView, codes);
+            Assert.DoesNotContain(PermissionCodes.EdiTest, codes);
+            Assert.DoesNotContain(PermissionCodes.EdiRetry, codes);
+        }
     }
 
     [Fact]
