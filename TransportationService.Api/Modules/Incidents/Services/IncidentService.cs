@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
@@ -70,7 +70,7 @@ public class IncidentService : IIncidentService
 
         if (!string.IsNullOrWhiteSpace(status))
         {
-            if (!Enum.TryParse<IncidentStatus>(status, ignoreCase: true, out var parsedStatus))
+            if (!TransportationService.Api.Common.EnumParsing.TryParseDefined<IncidentStatus>(status, out var parsedStatus))
             {
                 throw new DomainValidationException("status", "Onbekende incidentstatus.");
             }
@@ -80,7 +80,7 @@ public class IncidentService : IIncidentService
 
         if (!string.IsNullOrWhiteSpace(severity))
         {
-            if (!Enum.TryParse<IncidentSeverity>(severity, ignoreCase: true, out var parsedSeverity))
+            if (!TransportationService.Api.Common.EnumParsing.TryParseDefined<IncidentSeverity>(severity, out var parsedSeverity))
             {
                 throw new DomainValidationException("severity", "Onbekende ernst.");
             }
@@ -242,7 +242,7 @@ public class IncidentService : IIncidentService
             return null;
         }
 
-        if (!Enum.TryParse<IncidentStatus>(request.Status, ignoreCase: true, out var target))
+        if (!TransportationService.Api.Common.EnumParsing.TryParseDefined<IncidentStatus>(request.Status, out var target))
         {
             throw new DomainValidationException("status", "Onbekende incidentstatus.");
         }
@@ -293,7 +293,9 @@ public class IncidentService : IIncidentService
             throw new DomainValidationException("description", "Een omschrijving is verplicht.");
         }
 
-        if (!Enum.TryParse<IncidentType>(request.IncidentType, ignoreCase: true, out var incidentType))
+        // TryParseDefined: a numeric string would otherwise pass as an undefined enum value and be
+        // persisted verbatim into the string-stored column.
+        if (!EnumParsing.TryParseDefined<IncidentType>(request.IncidentType, out var incidentType))
         {
             throw new DomainValidationException("incidentType", "Onbekend incidenttype.");
         }
@@ -303,7 +305,7 @@ public class IncidentService : IIncidentService
             throw new DomainValidationException("customTypeName", "Geef het type een naam bij 'Overig'.");
         }
 
-        if (!Enum.TryParse<IncidentSeverity>(request.Severity, ignoreCase: true, out var severity))
+        if (!EnumParsing.TryParseDefined<IncidentSeverity>(request.Severity, out var severity))
         {
             throw new DomainValidationException("severity", "Onbekende ernst.");
         }

@@ -264,7 +264,7 @@ public class NotificationEventService : INotificationEventService
         string? typeValue, Guid? customerId, Guid tenantId, CancellationToken cancellationToken)
     {
         if (customerId is not { } id || string.IsNullOrWhiteSpace(typeValue)
-            || !Enum.TryParse<CustomerCommunicationType>(typeValue, ignoreCase: true, out var type))
+            || !TransportationService.Api.Common.EnumParsing.TryParseDefined<CustomerCommunicationType>(typeValue, out var type))
         {
             return [];
         }

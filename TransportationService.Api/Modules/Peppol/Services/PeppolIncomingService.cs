@@ -25,7 +25,7 @@ public interface IPeppolIncomingService
 
 /// <summary>
 /// Review queue over inbound Peppol documents. No supplier master exists, so "linking" is a
-/// reviewer note plus the Linked status — a real supplier-invoice module can attach later.
+/// reviewer note plus the Linked status �?" a real supplier-invoice module can attach later.
 /// </summary>
 public class PeppolIncomingService : IPeppolIncomingService
 {
@@ -49,7 +49,7 @@ public class PeppolIncomingService : IPeppolIncomingService
     {
         var query = _db.PeppolIncomingDocuments.AsNoTracking().Where(d => d.TenantId == TenantId);
         if (!string.IsNullOrWhiteSpace(status)
-            && Enum.TryParse<PeppolIncomingDocumentStatus>(status, ignoreCase: true, out var parsed))
+            && TransportationService.Api.Common.EnumParsing.TryParseDefined<PeppolIncomingDocumentStatus>(status, out var parsed))
         {
             query = query.Where(d => d.Status == parsed);
         }

@@ -43,7 +43,7 @@ public interface IEdiService
 
     /// <summary>
     /// Runs the same parse + partner/location + unit resolution pipeline as ingestion, WITHOUT
-    /// creating an <see cref="EdiMessage"/> row or a transport order — for the "Testen" tab's
+    /// creating an <see cref="EdiMessage"/> row or a transport order �?" for the "Testen" tab's
     /// "Valideren zonder te versturen" action.
     /// </summary>
     Task<EdiValidationResult> ValidateAsync(string partnerCode, string messageType, string payload, CancellationToken cancellationToken);
@@ -290,7 +290,7 @@ public class EdiService : IEdiService
     /// The reusable core behind both real processing and the dry-run validate endpoint: parses
     /// the generic-JSON payload, requires the partner to be linked to a customer, resolves the
     /// partner's location codes to master locations, and resolves cargo unit codes. Never
-    /// touches <c>EdiMessage</c> or persists anything itself — callers decide what to do with
+    /// touches <c>EdiMessage</c> or persists anything itself �?" callers decide what to do with
     /// the result.
     /// </summary>
     private async Task<PreparedOrder> PrepareAsync(TradingPartner partner, string payloadJson, CancellationToken cancellationToken)
@@ -413,7 +413,7 @@ public class EdiService : IEdiService
         IReadOnlyList<ParsedStop> Stops, IReadOnlyList<CargoItemInput> CargoItems);
 
     /// <summary>
-    /// The "generic-json-v1" mapping profile — the only implemented format, deliberately ours.
+    /// The "generic-json-v1" mapping profile �?" the only implemented format, deliberately ours.
     /// Real partner formats plug in as additional profiles once a specification exists.
     /// </summary>
     private static ParsedOrder? ParseGenericJson(string payload, List<string> errors)
@@ -450,7 +450,7 @@ public class EdiService : IEdiService
                 foreach (var stop in stopsElement.EnumerateArray())
                 {
                     var typeText = ReadString(stop, "type");
-                    if (!Enum.TryParse<StopType>(typeText, ignoreCase: true, out var type))
+                    if (!TransportationService.Api.Common.EnumParsing.TryParseDefined<StopType>(typeText, out var type))
                     {
                         errors.Add($"Onbekend stoptype '{typeText}'.");
                         continue;

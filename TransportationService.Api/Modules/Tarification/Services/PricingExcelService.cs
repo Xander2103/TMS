@@ -911,7 +911,8 @@ public class PricingExcelService : IPricingExcelService
             return BracketSelectionMode.Absolute;
         }
 
-        if (Enum.TryParse<BracketSelectionMode>(text, ignoreCase: true, out var mode))
+        // TryParseDefined: a numeric string would otherwise pass as an undefined enum value.
+        if (Common.EnumParsing.TryParseDefined<BracketSelectionMode>(text, out var mode))
         {
             return mode;
         }

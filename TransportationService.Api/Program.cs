@@ -32,8 +32,23 @@ builder.Services
 // OpenAPI
 builder.Services.AddOpenApi();
 
-// Consistent RFC7807 error responses
-builder.Services.AddProblemDetails();
+// Consistent RFC7807 error responses. Unhandled exceptions never expose stack traces, exception
+// types or SQL/table details; the correlation id is the bridge to the server-side log.
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        context.ProblemDetails.Extensions["correlationId"] = context.HttpContext.TraceIdentifier;
+        context.ProblemDetails.Extensions.Remove("exception");
+
+        if (context.ProblemDetails.Status is StatusCodes.Status500InternalServerError)
+        {
+            context.ProblemDetails.Title = "Er is een onverwachte fout opgetreden.";
+            context.ProblemDetails.Detail =
+                "De aanvraag kon niet worden verwerkt. Vermeld de correlatie-id bij een melding.";
+        }
+    };
+});
 
 // JWT authentication + authorization (password hashing, token + auth services)
 builder.Services.AddJwtAuthentication(builder.Configuration);
@@ -41,19 +56,55 @@ builder.Services.AddJwtAuthentication(builder.Configuration);
 // Anonymous auth endpoints (login, forgot/reset password, activation) are rate-limited per IP.
 builder.Services.AddAuthRateLimiting();
 
-// CORS voor React frontend
+// CORS: allowed origins come from configuration (Cors:AllowedOrigins), never a wildcard. In
+// Development the local Vite ports are the fallback; outside Development an empty list means the
+// policy allows nothing at all (fail closed) rather than silently opening up.
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+if (corsOrigins.Length == 0 && builder.Environment.IsDevelopment())
+{
+    corsOrigins = ["http://localhost:5173", "http://localhost:5174"];
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:5173",
-                "http://localhost:5174"
-            )
+            .WithOrigins(corsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
+});
+
+// Trust forwarded headers ONLY from explicitly known proxies, so the rate limiter partitions on
+// the real client IP instead of the proxy's (which would put every tenant in one bucket and make
+// a login DoS trivial). An unlisted proxy is ignored �?" X-Forwarded-For is never blindly believed.
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+        | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownProxies.Clear();
+    options.KnownIPNetworks.Clear();
+
+    foreach (var proxy in builder.Configuration.GetSection("Network:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (System.Net.IPAddress.TryParse(proxy, out var address))
+        {
+            options.KnownProxies.Add(address);
+        }
+    }
+
+    foreach (var network in builder.Configuration.GetSection("Network:KnownNetworks").Get<string[]>() ?? [])
+    {
+        var parts = network.Split('/', 2);
+        if (parts.Length == 2 && System.Net.IPAddress.TryParse(parts[0], out var prefix)
+            && int.TryParse(parts[1], out var length))
+        {
+            options.KnownIPNetworks.Add(new System.Net.IPNetwork(prefix, length));
+        }
+    }
 });
 
 // Algemene services
@@ -380,7 +431,7 @@ builder.Services.AddHostedService<TransportationService.Api.Modules.Notification
 // The DevelopmentSinkProvider writes rendered messages (including invite/activation links with
 // raw tokens) to App_Data/message-sink, so it is registered ONLY in Development. Outside
 // Development a fail-closed placeholder is registered and StartupSecurityValidator refuses to
-// boot until a real provider exists — raw tokens can never leak via a production sink.
+// boot until a real provider exists �?" raw tokens can never leak via a production sink.
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>(_ =>
@@ -413,7 +464,7 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Messaging.Services.
 builder.Services.AddScoped<TransportationService.Api.Modules.Edi.Services.IEdiService,
     TransportationService.Api.Modules.Edi.Services.EdiService>();
 
-// Peppol (provider-neutral; only the deterministic sandbox Access Point adapter is registered —
+// Peppol (provider-neutral; only the deterministic sandbox Access Point adapter is registered �?"
 // a real provider plugs in as an extra IPeppolProvider + configuration, never code changes here)
 builder.Services.AddSingleton<TransportationService.Api.Modules.Peppol.Services.IPeppolProvider,
     TransportationService.Api.Modules.Peppol.Services.SandboxPeppolProvider>();
@@ -506,11 +557,29 @@ if (app.Environment.IsDevelopment())
     await DevAdminSeeder.EnsurePasswordAsync(dbContext, passwordHasher, app.Logger);
 }
 
+// Security pipeline order (documented deliberately):
+//  1. forwarded headers  -> the real client IP/scheme must be known before anything keys off it
+//  2. exception handler  -> catches everything downstream, emits ProblemDetails without internals
+//  3. security headers   -> stamped on every response, including error responses
+//  4. HTTPS/HSTS         -> transport hardening in real environments
+//  5. CORS               -> before auth so preflights are answered correctly
+//  6. authentication     -> populates HttpContext.User
+//  7. rate limiting      -> after auth so policies can key on the authenticated identity
+//  8. tenant context     -> derives tenant/user from the validated principal
+//  9. authorization      -> fallback policy + permission filters + account-state filter
+// 10. endpoints
+app.UseForwardedHeaders();
+
+app.UseExceptionHandler();
+
+app.UseMiddleware<TransportationService.Api.Modules.Security.SecurityHeadersMiddleware>();
+
 // Enforce HTTPS in real environments. In Development the SPA talks to the API over http
 // (http://localhost:5019); redirecting to https there would drop the Authorization header on the
 // cross-scheme 307, so redirection is intentionally skipped for local development only.
 if (!app.Environment.IsDevelopment())
 {
+    app.UseHsts();
     app.UseHttpsRedirection();
 }
 

@@ -11,8 +11,25 @@ public static class RateLimitingServiceCollectionExtensions
     /// queueing (the 11th request in the window is rejected immediately, not delayed).</summary>
     public const string AuthPolicy = "auth";
 
+    /// <summary>Throttles the anonymous provider webhook so a shared secret cannot be brute-forced
+    /// at line rate and a flood cannot amplify into database work.</summary>
+    public const string WebhookPolicy = "webhook";
+
+    /// <summary>Throttles token refresh/logout (authenticated but unauthenticated-reachable).</summary>
+    public const string SessionPolicy = "session";
+
     private const int PermitLimit = 10;
+    private const int WebhookPermitLimit = 60;
+    private const int SessionPermitLimit = 30;
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// The real client IP: behind a known proxy <c>UseForwardedHeaders</c> has already replaced
+    /// <c>RemoteIpAddress</c> with the forwarded value, so partitioning on it is correct and an
+    /// unknown proxy cannot spoof its way into someone else's bucket.
+    /// </summary>
+    private static string ClientKey(HttpContext context) =>
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
     public static IServiceCollection AddAuthRateLimiting(this IServiceCollection services)
     {
@@ -37,10 +54,34 @@ public static class RateLimitingServiceCollectionExtensions
             // global counter across every caller, which is not what "per IP" requires.
             options.AddPolicy(AuthPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    partitionKey: ClientKey(httpContext),
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = PermitLimit,
+                        Window = Window,
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        AutoReplenishment = true,
+                    }));
+
+            options.AddPolicy(WebhookPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = WebhookPermitLimit,
+                        Window = Window,
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        AutoReplenishment = true,
+                    }));
+
+            options.AddPolicy(SessionPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = SessionPermitLimit,
                         Window = Window,
                         QueueLimit = 0,
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,

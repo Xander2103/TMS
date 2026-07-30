@@ -30,6 +30,8 @@ public class PeppolWebhookController : ControllerBase
 
     [HttpPost("{providerKey}")]
     [AllowAnonymous]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(
+        TransportationService.Api.Modules.Authentication.RateLimitingServiceCollectionExtensions.WebhookPolicy)]
     [RequestSizeLimit(10 * 1024 * 1024)]
     public async Task<IActionResult> Receive(
         string providerKey, PeppolWebhookRequest request, CancellationToken cancellationToken)

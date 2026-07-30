@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Tarification.Dtos;
@@ -64,7 +64,7 @@ public class PricingImportController : ControllerBase
             return BadRequest(new { message = "Het bestand moet tussen 1 byte en 5 MB groot zijn." });
         }
 
-        if (!Enum.TryParse<PricingImportMode>(mode, ignoreCase: true, out var parsedMode))
+        if (!TransportationService.Api.Common.EnumParsing.TryParseDefined<PricingImportMode>(mode, out var parsedMode))
         {
             return BadRequest(new { message = "Onbekende importmodus." });
         }

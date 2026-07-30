@@ -19,7 +19,7 @@ public interface IPeppolTransmissionService
 {
     /// <summary>
     /// Validates, renders and stores the UBL payload and creates a Queued transmission for a
-    /// Sent/Paid invoice. The dispatcher — never this method — talks to the provider.
+    /// Sent/Paid invoice. The dispatcher �?" never this method �?" talks to the provider.
     /// Null when the invoice does not exist in this tenant.
     /// </summary>
     Task<PeppolTransmissionDto?> QueueAsync(Guid invoiceId, CancellationToken cancellationToken);
@@ -41,7 +41,7 @@ public interface IPeppolTransmissionService
 /// <summary>
 /// Owns the OUTBOUND transmission lifecycle rows. The duplicate check + filtered unique index
 /// guarantee at most one non-terminal transmission per invoice; payloads are immutable once
-/// stored (retry reuses the same storage key and hash — the invoice is frozen after Sent).
+/// stored (retry reuses the same storage key and hash �?" the invoice is frozen after Sent).
 /// </summary>
 public class PeppolTransmissionService : IPeppolTransmissionService
 {
@@ -294,7 +294,7 @@ public class PeppolTransmissionService : IPeppolTransmissionService
     {
         var query = _db.PeppolTransmissions.AsNoTracking().Where(t => t.TenantId == TenantId);
         if (!string.IsNullOrWhiteSpace(status)
-            && Enum.TryParse<PeppolTransmissionStatus>(status, ignoreCase: true, out var parsed))
+            && TransportationService.Api.Common.EnumParsing.TryParseDefined<PeppolTransmissionStatus>(status, out var parsed))
         {
             query = query.Where(t => t.Status == parsed);
         }

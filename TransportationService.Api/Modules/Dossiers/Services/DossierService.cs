@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
@@ -63,7 +63,7 @@ public class DossierService : IDossierService
 
         if (!string.IsNullOrWhiteSpace(status))
         {
-            if (!Enum.TryParse<DossierStatus>(status, ignoreCase: true, out var parsed))
+            if (!TransportationService.Api.Common.EnumParsing.TryParseDefined<DossierStatus>(status, out var parsed))
             {
                 throw new DomainValidationException("status", "Onbekende dossierstatus.");
             }
@@ -370,7 +370,7 @@ public class DossierService : IDossierService
             throw new DomainValidationException("targetDossierId", "Een dossier kan niet aan zichzelf gekoppeld worden.");
         }
 
-        if (!Enum.TryParse<DossierRelationType>(request.RelationType, ignoreCase: true, out var relationType))
+        if (!TransportationService.Api.Common.EnumParsing.TryParseDefined<DossierRelationType>(request.RelationType, out var relationType))
         {
             throw new DomainValidationException("relationType", "Onbekend relatietype.");
         }

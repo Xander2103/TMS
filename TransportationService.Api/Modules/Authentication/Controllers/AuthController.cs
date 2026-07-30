@@ -62,6 +62,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("refresh")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingServiceCollectionExtensions.SessionPolicy)]
     public async Task<ActionResult<AuthTokensDto>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
     {
         var result = await _authService.RefreshAsync(request.RefreshToken, cancellationToken);
@@ -74,6 +75,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("logout")]
     [Authorize]
+    [EnableRateLimiting(RateLimitingServiceCollectionExtensions.SessionPolicy)]
     [TransportationService.Api.Modules.Identity.Authorization.PermitWhenPasswordChangeRequired]
     public async Task<IActionResult> Logout(LogoutRequest request, CancellationToken cancellationToken)
     {

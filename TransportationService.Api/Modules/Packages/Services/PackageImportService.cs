@@ -48,7 +48,7 @@ public interface IPackageImportService
     /// <summary>
     /// allOrNothing: any invalid row aborts the whole import. Otherwise valid rows commit and
     /// failures are reported per row plus as a downloadable error workbook. allowUpdates
-    /// permits matching EXISTING packages by their internal PackageNumber only — ambiguous
+    /// permits matching EXISTING packages by their internal PackageNumber only �?" ambiguous
     /// rows are errors, never silent merges.
     /// </summary>
     Task<(ImportCommitDto? Result, string? Error)> CommitAsync(
@@ -97,7 +97,7 @@ public class PackageImportService : IPackageImportService
             sheet.Cell(1, column + 1).SetValue(Headers[column]).Style.Font.Bold = true;
         }
 
-        // One example row (text values only — never formulas).
+        // One example row (text values only �?" never formulas).
         sheet.Cell(2, 2).SetValue("Doos onderdelen");
         sheet.Cell(2, 3).SetValue(1);
         sheet.Cell(2, 4).SetValue("Colli");
@@ -544,7 +544,7 @@ public class PackageImportService : IPackageImportService
             return null;
         }
 
-        if (Enum.TryParse<PackageUnitType>(value.Trim(), ignoreCase: true, out var parsed))
+        if (TransportationService.Api.Common.EnumParsing.TryParseDefined<PackageUnitType>(value.Trim(), out var parsed))
         {
             return parsed;
         }
