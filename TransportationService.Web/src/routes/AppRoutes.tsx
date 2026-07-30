@@ -100,6 +100,7 @@ const IssuedItemTemplatesPage = lazyPage(() => import('../features/issued-items/
 const IssuedItemTemplateDetailPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemTemplateDetailPage'), 'IssuedItemTemplateDetailPage')
 const LeaveSettingsPage = lazyPage(() => import('../features/leave-balance/pages/LeaveSettingsPage'), 'LeaveSettingsPage')
 const AccountingSettingsPage = lazyPage(() => import('../features/accounting/pages/AccountingSettingsPage'), 'AccountingSettingsPage')
+const NotificationAdminPage = lazyPage(() => import('../features/notification-admin/pages/NotificationAdminPage'), 'NotificationAdminPage')
 const UsersPage = lazyPage(() => import('../features/users/pages/UsersPage'), 'UsersPage')
 const NewUserPage = lazyPage(() => import('../features/users/pages/NewUserPage'), 'NewUserPage')
 const UserDetailPage = lazyPage(() => import('../features/users/pages/UserDetailPage'), 'UserDetailPage')
@@ -240,6 +241,7 @@ const router = createBrowserRouter(
           <Route path="/settings/issued-item-templates/:id" element={<IssuedItemTemplateDetailPage />} />
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
           <Route path="/settings/accounting" element={<AccountingSettingsPage />} />
+          <Route path="/settings/notifications" element={<NotificationAdminPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

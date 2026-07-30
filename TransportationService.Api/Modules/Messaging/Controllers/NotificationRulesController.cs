@@ -146,6 +146,17 @@ public class NotificationRulesController : ControllerBase
         }
 
         var tenantId = _tenantContext.TenantId;
+
+        // Mirrors ListForCustomer's filter: a customer override only makes sense for an event the
+        // tenant rule has explicitly opened up (default false — most events cannot be overridden).
+        var allowOverride = (await _dbContext.NotificationRules.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.TenantId == tenantId && r.EventKey == eventKey, cancellationToken))
+            ?.AllowCustomerOverride ?? false;
+        if (!allowOverride)
+        {
+            return BadRequest(new { message = "Deze gebeurtenis staat geen klantafwijking toe." });
+        }
+
         var overrideRow = await _dbContext.CustomerNotificationOverrides
             .FirstOrDefaultAsync(o => o.TenantId == tenantId && o.CustomerId == customerId && o.EventKey == eventKey, cancellationToken);
         var before = overrideRow?.Enabled;

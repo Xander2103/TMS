@@ -176,7 +176,7 @@ export function getNavModules(): NavModule[] {
       items: [
         { label: 'Berichten', to: '/inbox' },
         { label: 'Meldingen', to: '/notifications', badge: 'notifications' },
-        { label: 'E-mail / SMS', to: '/messaging', permissions: ['messaging.manage'] },
+        { label: 'Meldingen en e-mails', to: '/settings/notifications', permissions: ['notification_rules.view'] },
         { label: 'EDI', to: '/edi', permissions: ['edi.manage'] },
         { label: 'Integraties', to: '/integrations', permissions: ['integrations.manage'] },
       ],

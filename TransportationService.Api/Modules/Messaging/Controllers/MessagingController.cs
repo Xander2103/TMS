@@ -36,12 +36,16 @@ public class MessagingController : ControllerBase
     public record OutboxRowDto(
         Guid Id, MessageChannel Channel, string Kind, string RecipientAddress, string? RecipientName,
         string? Subject, OutboxStatus Status, int AttemptCount, DateTime? NextAttemptAt, DateTime? SentAt,
-        string? FailureReason, DateTime CreatedAt, bool IsFallback);
+        string? FailureReason, DateTime CreatedAt, bool IsFallback,
+        string? RelatedEntityType, string? RelatedEntityId);
 
+    /// <summary><paramref name="search"/> matches recipient address/name (admin "Verzonden"/"Mislukte
+    /// berichten" tabs, Phase 7); <paramref name="channel"/> narrows by channel.</summary>
     [HttpGet("api/messaging/outbox")]
     [RequirePermission(PermissionCodes.MessagingManage)]
     public async Task<ActionResult<PagedResult<OutboxRowDto>>> Outbox(
-        [FromQuery] OutboxStatus? status, [FromQuery] string? kind,
+        [FromQuery] OutboxStatus? status, [FromQuery] string? kind, [FromQuery] MessageChannel? channel,
+        [FromQuery] string? search,
         [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken cancellationToken)
     {
         var pageRequest = PageRequest.Of(page, pageSize);
@@ -49,6 +53,13 @@ public class MessagingController : ControllerBase
             .Where(m => m.TenantId == _tenantContext.TenantId);
         if (status is { } s) query = query.Where(m => m.Status == s);
         if (!string.IsNullOrWhiteSpace(kind)) query = query.Where(m => m.Kind == kind);
+        if (channel is { } c) query = query.Where(m => m.Channel == c);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(m => m.RecipientAddress.ToLower().Contains(term)
+                                     || (m.RecipientName != null && m.RecipientName.ToLower().Contains(term)));
+        }
 
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query
@@ -58,7 +69,7 @@ public class MessagingController : ControllerBase
             .Select(m => new OutboxRowDto(
                 m.Id, m.Channel, m.Kind, m.RecipientAddress, m.RecipientName, m.Subject,
                 m.Status, m.AttemptCount, m.NextAttemptAt, m.SentAt, m.FailureReason, m.CreatedAt,
-                m.FallbackOfMessageId != null))
+                m.FallbackOfMessageId != null, m.RelatedEntityType, m.RelatedEntityId))
             .ToListAsync(cancellationToken);
 
         return Ok(new PagedResult<OutboxRowDto>(items, totalCount, pageRequest.Page, pageRequest.PageSize));
@@ -177,6 +188,22 @@ public class MessagingController : ControllerBase
     [HttpGet("api/message-templates/kinds")]
     [RequirePermission(PermissionCodes.MessageTemplatesManage)]
     public ActionResult<IReadOnlyList<string>> Kinds() => Ok(MessageKinds.All);
+
+    /// <summary>Placeholder tokens available for a template's chosen kind (admin editor, Phase 7):
+    /// the catalog event's own tokens (kind and event key are identical for every catalog-linked
+    /// kind, see NotificationEventCatalog) plus the tokens every template may use. Legacy
+    /// pre-catalog kinds — and an omitted/unknown eventKey — resolve to just the global tokens,
+    /// matching <see cref="ValidatePlaceholders"/>'s "unvalidated" treatment of those kinds.</summary>
+    [HttpGet("api/message-templates/placeholders")]
+    [RequirePermission(PermissionCodes.MessageTemplatesManage)]
+    public ActionResult<IReadOnlyList<string>> Placeholders([FromQuery] string? eventKey)
+    {
+        var eventInfo = string.IsNullOrWhiteSpace(eventKey) ? null : NotificationEventCatalog.Resolve(eventKey);
+        var tokens = new List<string>();
+        if (eventInfo is not null) tokens.AddRange(eventInfo.AllowedTokens);
+        tokens.AddRange(GlobalTokens);
+        return Ok(tokens.Distinct().ToList());
+    }
 
     public record CustomerTemplateDto(
         string Kind, MessageChannel Channel, string Language, bool IsOverridden,

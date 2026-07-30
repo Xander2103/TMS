@@ -137,4 +137,113 @@ public class MessagingControllerTests
         Assert.True(overridden.IsOverridden);
         Assert.Equal("Klant onderwerp", overridden.Subject);
     }
+
+    // --- Phase 7: GET api/message-templates/placeholders ---
+
+    [Fact]
+    public void Placeholders_KnownEventKey_ReturnsEventTokensPlusGlobalTokens()
+    {
+        var sut = new MessagingController(null!, null!, null!);
+
+        var result = sut.Placeholders(MessageKinds.OrderAccepted);
+
+        var tokens = UnwrapValue(result);
+        Assert.Contains("orderNumber", tokens);
+        Assert.Contains("customerName", tokens);
+        Assert.Contains("companyName", tokens); // global token
+    }
+
+    [Fact]
+    public void Placeholders_UnknownOrMissingEventKey_ReturnsOnlyGlobalTokens()
+    {
+        var sut = new MessagingController(null!, null!, null!);
+
+        Assert.Equal(new[] { "companyName" }, UnwrapValue(sut.Placeholders("does_not_exist")));
+        Assert.Equal(new[] { "companyName" }, UnwrapValue(sut.Placeholders(null)));
+    }
+
+    // --- Phase 7: outbox filters (channel, recipient search) + related-entity passthrough ---
+
+    private static async Task<OutboxMessage> SeedOutboxRowAsync(
+        Harness h, MessageChannel channel, OutboxStatus status, string recipientAddress, string? recipientName = null,
+        string? relatedEntityType = null, string? relatedEntityId = null)
+    {
+        var message = new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            TenantId = h.TenantId,
+            Channel = channel,
+            Kind = MessageKinds.OrderAccepted,
+            OwnerType = MessageOwnerType.Customer,
+            OwnerId = h.CustomerId,
+            RecipientAddress = recipientAddress,
+            RecipientName = recipientName,
+            Language = "nl",
+            Body = "Body",
+            Status = status,
+            IdempotencyKey = $"order_accepted:{Guid.NewGuid()}",
+            RelatedEntityType = relatedEntityType,
+            RelatedEntityId = relatedEntityId,
+            CreatedAt = Now.UtcDateTime,
+            UpdatedAt = Now.UtcDateTime,
+        };
+        h.Db.Context.OutboxMessages.Add(message);
+        await h.Db.Context.SaveChangesAsync();
+        return message;
+    }
+
+    [Fact]
+    public async Task Outbox_FiltersByChannelAndRecipientSearch()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedOutboxRowAsync(h, MessageChannel.Email, OutboxStatus.Sent, "haven@klant.test", "Haven BV");
+        await SeedOutboxRowAsync(h, MessageChannel.Sms, OutboxStatus.Sent, "+32470000000");
+        await SeedOutboxRowAsync(h, MessageChannel.Email, OutboxStatus.Sent, "andere@klant.test", "Andere Klant");
+
+        var byChannel = UnwrapValue(await h.Sut.Outbox(null, null, MessageChannel.Sms, null, null, null, CancellationToken.None));
+        Assert.Single(byChannel.Items);
+        Assert.Equal(MessageChannel.Sms, byChannel.Items[0].Channel);
+
+        var bySearch = UnwrapValue(await h.Sut.Outbox(null, null, null, "haven", null, null, CancellationToken.None));
+        Assert.Single(bySearch.Items);
+        Assert.Equal("haven@klant.test", bySearch.Items[0].RecipientAddress);
+    }
+
+    [Fact]
+    public async Task Outbox_IncludesRelatedEntityFields()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedOutboxRowAsync(h, MessageChannel.Email, OutboxStatus.Failed, "haven@klant.test",
+            relatedEntityType: "TransportOrder", relatedEntityId: "ORD-42");
+
+        var page = UnwrapValue(await h.Sut.Outbox(OutboxStatus.Failed, null, null, null, null, null, CancellationToken.None));
+
+        var row = Assert.Single(page.Items);
+        Assert.Equal("TransportOrder", row.RelatedEntityType);
+        Assert.Equal("ORD-42", row.RelatedEntityId);
+    }
+
+    [Fact]
+    public async Task Outbox_TenantIsolation_OtherTenantRowsNeverReturned()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var otherTenantId = Guid.NewGuid();
+        h.Db.Context.Tenants.Add(new Tenant { Id = otherTenantId, Name = "Other", Slug = "other", IsActive = true, CreatedAt = Now.UtcDateTime });
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.OutboxMessages.Add(new OutboxMessage
+        {
+            Id = Guid.NewGuid(), TenantId = otherTenantId, Channel = MessageChannel.Email, Kind = MessageKinds.OrderAccepted,
+            OwnerType = MessageOwnerType.Customer, OwnerId = Guid.NewGuid(), RecipientAddress = "other@tenant.test",
+            Language = "nl", Body = "Body", Status = OutboxStatus.Sent, IdempotencyKey = $"order_accepted:{Guid.NewGuid()}",
+            CreatedAt = Now.UtcDateTime, UpdatedAt = Now.UtcDateTime,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var page = UnwrapValue(await h.Sut.Outbox(null, null, null, null, null, null, CancellationToken.None));
+
+        Assert.Empty(page.Items);
+    }
 }
