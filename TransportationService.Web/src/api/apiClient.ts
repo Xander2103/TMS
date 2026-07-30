@@ -1,5 +1,5 @@
 import { apiBaseUrl } from '../config/env'
-import { getAccessToken, getRefreshToken, storeTokens, clearTokens } from '../features/auth/authStorage'
+import { getAccessToken, setAccessToken, clearTokens } from '../features/auth/authStorage'
 import { refresh as refreshTokens } from '../features/auth/authApi'
 import { extractFieldErrors, type FieldErrors } from './problemDetails'
 
@@ -41,11 +41,10 @@ let refreshInFlight: Promise<boolean> | null = null
 
 function attemptRefresh(): Promise<boolean> {
   refreshInFlight ??= (async () => {
-    const refreshToken = getRefreshToken()
-    if (!refreshToken) return false
-    const tokens = await refreshTokens(refreshToken)
+    // H5: the refresh credential is the HttpOnly cookie — nothing to read locally.
+    const tokens = await refreshTokens()
     if (!tokens) return false
-    storeTokens(tokens)
+    setAccessToken(tokens.accessToken)
     return true
   })().finally(() => {
     refreshInFlight = null

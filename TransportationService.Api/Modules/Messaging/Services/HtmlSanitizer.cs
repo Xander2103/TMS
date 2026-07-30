@@ -1,37 +1,31 @@
 using System.Net;
-using System.Text.RegularExpressions;
+using System.Text;
+using AngleSharp.Dom;
+using AngleSharp.Html.Parser;
 
 namespace TransportationService.Api.Modules.Messaging.Services;
 
 /// <summary>
-/// Minimal, dependency-free allowlist HTML sanitizer for <c>MessageTemplate.BodyHtml</c>.
-/// Keeps only p, br, strong, em, ul, ol, li, a (href http/https only), h1-h3; every other tag is
-/// stripped (script/style are removed together with their content — anything else keeps its
-/// inner text but loses its tags), and every attribute except a valid a[href] is dropped.
+/// Allowlist HTML sanitizer for <c>MessageTemplate.BodyHtml</c>, built on a real HTML parser
+/// (AngleSharp) instead of regexes (M5): the browser's own parsing rules decide what a tag is,
+/// so malformed markup, weird casing, slash-separated attributes or half-closed elements cannot
+/// smuggle anything past a pattern. Output is REBUILT from the parsed tree — only p, br, strong,
+/// em, ul, ol, li, a (href http/https only), h1-h3 survive; script/style/svg and friends are
+/// dropped with their content; every other tag is stripped but keeps its inner text; all text is
+/// HTML-encoded on the way out.
 /// </summary>
-public static partial class HtmlSanitizer
+public static class HtmlSanitizer
 {
     private static readonly HashSet<string> AllowedTags = new(StringComparer.OrdinalIgnoreCase)
     {
         "p", "br", "strong", "em", "ul", "ol", "li", "a", "h1", "h2", "h3",
     };
 
+    /// <summary>Content of these is never user-visible text — remove the subtree entirely.</summary>
     private static readonly HashSet<string> RemoveWithContentTags = new(StringComparer.OrdinalIgnoreCase)
     {
-        "script", "style",
+        "script", "style", "svg", "math", "template", "iframe", "object", "embed", "noscript",
     };
-
-    [GeneratedRegex(@"<(script|style)\b[^>]*>.*?</\1\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-    private static partial Regex ScriptOrStylePattern();
-
-    [GeneratedRegex(@"<(/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^<>]*)?)\s*/?>", RegexOptions.Singleline)]
-    private static partial Regex TagPattern();
-
-    [GeneratedRegex(@"href\s*=\s*(?:""([^""]*)""|'([^']*)'|([^\s>]+))", RegexOptions.IgnoreCase)]
-    private static partial Regex HrefPattern();
-
-    [GeneratedRegex(@"^https?://", RegexOptions.IgnoreCase)]
-    private static partial Regex HttpSchemePattern();
 
     public static string Sanitize(string? html)
     {
@@ -40,48 +34,81 @@ public static partial class HtmlSanitizer
             return string.Empty;
         }
 
-        // Remove <script>/<style> together with their content first — their inner text is never
-        // meant to be visible and must not leak into the sanitized output.
-        var withoutScripts = ScriptOrStylePattern().Replace(html, string.Empty);
+        var parser = new HtmlParser();
+        using var document = parser.ParseDocument("<html><body></body></html>");
+        var nodes = parser.ParseFragment(html, document.Body!);
 
-        return TagPattern().Replace(withoutScripts, match =>
+        var builder = new StringBuilder(html.Length);
+        foreach (var node in nodes)
         {
-            var isClosing = match.Groups[1].Value == "/";
-            var tagName = match.Groups[2].Value.ToLowerInvariant();
+            AppendSanitized(node, builder);
+        }
 
-            if (RemoveWithContentTags.Contains(tagName))
-            {
-                // A lone/unbalanced script tag that survived the pass above (e.g. malformed
-                // markup): still strip the tag itself.
-                return string.Empty;
-            }
-
-            if (!AllowedTags.Contains(tagName))
-            {
-                return string.Empty;
-            }
-
-            if (isClosing)
-            {
-                return $"</{tagName}>";
-            }
-
-            if (tagName == "a")
-            {
-                var attrs = match.Groups[3].Value;
-                var hrefMatch = HrefPattern().Match(attrs);
-                var href = hrefMatch.Success
-                    ? hrefMatch.Groups[1].Success ? hrefMatch.Groups[1].Value
-                        : hrefMatch.Groups[2].Success ? hrefMatch.Groups[2].Value
-                        : hrefMatch.Groups[3].Value
-                    : null;
-
-                return href is not null && HttpSchemePattern().IsMatch(href)
-                    ? $"<a href=\"{WebUtility.HtmlEncode(href)}\">"
-                    : "<a>";
-            }
-
-            return tagName == "br" ? "<br>" : $"<{tagName}>";
-        });
+        return builder.ToString();
     }
+
+    private static void AppendSanitized(INode node, StringBuilder builder)
+    {
+        switch (node)
+        {
+            case IText text:
+                builder.Append(WebUtility.HtmlEncode(text.Data));
+                return;
+
+            case IElement element:
+                var tagName = element.LocalName.ToLowerInvariant();
+                if (RemoveWithContentTags.Contains(tagName))
+                {
+                    return;
+                }
+
+                if (!AllowedTags.Contains(tagName))
+                {
+                    // Unknown/disallowed tag: the wrapper goes, the readable content stays.
+                    AppendChildren(element, builder);
+                    return;
+                }
+
+                if (tagName == "br")
+                {
+                    builder.Append("<br>");
+                    return;
+                }
+
+                if (tagName == "a")
+                {
+                    var href = element.GetAttribute("href");
+                    builder.Append(IsSafeHref(href)
+                        ? $"<a href=\"{WebUtility.HtmlEncode(href)}\">"
+                        : "<a>");
+                    AppendChildren(element, builder);
+                    builder.Append("</a>");
+                    return;
+                }
+
+                builder.Append('<').Append(tagName).Append('>');
+                AppendChildren(element, builder);
+                builder.Append("</").Append(tagName).Append('>');
+                return;
+
+            default:
+                // Comments, processing instructions, doctypes: never part of the output.
+                return;
+        }
+    }
+
+    private static void AppendChildren(IElement element, StringBuilder builder)
+    {
+        foreach (var child in element.ChildNodes)
+        {
+            AppendSanitized(child, builder);
+        }
+    }
+
+    /// <summary>Absolute http/https only — javascript:, data:, vbscript:, protocol-relative and
+    /// scheme-obfuscating whitespace/control characters all fail the Uri parse or scheme check.</summary>
+    private static bool IsSafeHref(string? href) =>
+        !string.IsNullOrWhiteSpace(href)
+        && Uri.TryCreate(href, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 }

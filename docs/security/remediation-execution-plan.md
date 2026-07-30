@@ -135,23 +135,30 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
   trip/packages/voertuig/locatie/leasing/EDI-mapping/qualification/communication-rule.
 - **L2 fail-open fallback:** al verwijderd in C1 (`TenantContextMiddleware`). Test dekt het.
 
-## Fase 4 — XSS, uploads, documenten, frontendsessie · **PLANNED**
+## Fase 4 — XSS, uploads, documenten, frontendsessie · **DONE**
 
-- **H5 tokens uit localStorage:** refresh-token naar `HttpOnly; Secure; SameSite` cookie
-  (`AuthController` login/refresh/logout server-side; frontend `authStorage.ts`/`apiClient.ts`/
-  `AuthContext.tsx` alleen access-token in geheugen); CSRF-bescherming op de cookieflow; CORS
-  `AllowCredentials` afstemmen. Grote frontend+backend-wijziging.
-- **H6/L3 content-type:** server-side MIME uit gevalideerde extensie + magic bytes; mismatch
-  weigeren; blob-URL-anchors voor gebruikerscontent verwijderen/forceren tot attachment
-  (`PodService`, `ExecutionExceptionService`, `exceptionsApi.ts`, `podApi.ts`, detailpagina's);
-  read-fallback voor bestaande rijen.
-- **M5 sanitizer:** parser-gebaseerde sanitizer (AngleSharp) i.p.v. regex (`HtmlSanitizer.cs`);
-  encode bij render; regressietests (svg/onload, img/onerror, malformed, slash-attrs, casing,
-  protocol/data-URLs).
-- **L1 SVG:** SVG weren uit uploads (of streng saneren + attachment + nosniff); bestaande logo's
-  hervalideren.
-- **L4/L10 storage:** root-containment met separator-guard (`LocalFileStorageService`); globale
-  request-bodylimiet; magic-byte-validatie; uitbreidbare malware-scaninterface + quarantaine.
+- **H5 tokens uit localStorage · DONE:** refresh-token in `HttpOnly; Secure; SameSite=Strict`
+  cookie, gescoped op `Path=/api/auth` (`AuthController` — login/refresh/logout zetten/roteren/
+  verwijderen de cookie; body-token blijft geaccepteerd voor non-browser-API-clients maar wordt
+  in browser-responses leeggehaald). Frontend: access-token uitsluitend in geheugen
+  (`authStorage.ts`), boot-restore via cookie-refresh (`AuthContext.tsx`), refresh-on-401 via
+  cookie (`apiClient.ts`), legacy-localStorage-tokens worden actief gewist. CSRF: SameSite=Strict
+  (cross-site requests dragen de cookie nooit) + expliciete CORS-origins met `AllowCredentials`.
+- **H6/L3 content-type · DONE:** gedeelde `Modules/Security/UploadValidation` — magic-byte-
+  signaturen (pdf/png/jpg/webp/xlsx) naast de bestaande extensie-whitelists, gewired in alle
+  upload-endpoints (employee-/fleet-/order-docs, kwalificaties, attesten, POD/exception-foto's,
+  invoices, logo's, klant-/pricing-/colli-imports) + service-level in `AbsenceService`.
+  Downloads bepalen het content-type al server-side uit de extensie; nosniff staat globaal (H10).
+- **M5 sanitizer · DONE:** `HtmlSanitizer` herbouwd op AngleSharp (parse → allowlist-rebuild,
+  tekst geëncodeerd, href alleen absolute http/https via `Uri.TryCreate`); regressietests dekken
+  svg/onload, img/onerror, malformed nesting, slash-attrs, casing, data:/javascript:-URL's.
+- **L1 SVG · DONE:** SVG uit de logo-whitelist (`LegalEntitiesController`); scriptbare formaten
+  hebben nergens een signatuur. Bestaande SVG-logo's worden met attachment-disposition geserveerd.
+- **L4/L10 storage · DONE:** separator-guard in `LocalFileStorageService`-root-containment
+  (sibling-prefix-truc gedekt); globale Kestrel-bodylimiet 32 MB naast per-endpoint
+  `[RequestSizeLimit]`; `IUploadScanner`-seam met expliciete `PassThroughUploadScanner` in DI —
+  echte engine = checklist #18.
+- **Tests:** `Security/Phase4UploadHardeningTests.cs` + frontend-suite (549) groen.
 
 ## Fase 5 — Rate limiting, headers, CORS, API-hardening · **DEELS DONE (`59732e0`)**
 

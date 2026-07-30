@@ -206,7 +206,8 @@ public class LeaveWorkflowTests
 
         try
         {
-            using var upload = new MemoryStream(Encoding.UTF8.GetBytes("ziektebriefje"));
+            // Content must carry the real PDF signature since the magic-byte gate (H6).
+            using var upload = new MemoryStream(Encoding.UTF8.GetBytes("%PDF-1.7 ziektebriefje"));
             var attached = await h.Sut.AttachDocumentAsync(absence.Id, "attest.pdf", upload, CancellationToken.None);
             Assert.Equal(AbsenceOperationOutcome.Success, attached.Outcome);
             Assert.True(attached.Absence!.HasAttachment);
@@ -216,10 +217,15 @@ public class LeaveWorkflowTests
             Assert.NotNull(open);
             Assert.False(open!.MedicalRestricted);
             using var reader = new StreamReader(open.Content!);
-            Assert.Equal("ziektebriefje", await reader.ReadToEndAsync());
+            Assert.Equal("%PDF-1.7 ziektebriefje", await reader.ReadToEndAsync());
 
             var exeRefused = await h.Sut.AttachDocumentAsync(absence.Id, "virus.exe", new MemoryStream([1]), CancellationToken.None);
             Assert.Equal(AbsenceOperationOutcome.ValidationFailed, exeRefused.Outcome);
+
+            // A renamed non-PDF is refused on its bytes, not its name (H6).
+            var fakePdf = await h.Sut.AttachDocumentAsync(
+                absence.Id, "vermomd.pdf", new MemoryStream(Encoding.UTF8.GetBytes("MZ...")), CancellationToken.None);
+            Assert.Equal(AbsenceOperationOutcome.ValidationFailed, fakePdf.Outcome);
         }
         finally
         {

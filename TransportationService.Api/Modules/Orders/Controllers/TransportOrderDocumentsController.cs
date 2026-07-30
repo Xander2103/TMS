@@ -66,6 +66,11 @@ public class TransportOrderDocumentsController : ControllerBase
             return BadRequest(new { message = "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan." });
         }
 
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
         var contentType = extension switch
         {
             ".pdf" => "application/pdf",

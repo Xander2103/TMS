@@ -13,6 +13,11 @@ using TransportationService.Api.Modules.Tenancy;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Global request-body ceiling (L10): the server-wide default caps every endpoint; upload
+// endpoints then narrow further with their own [RequestSizeLimit]. 32 MB comfortably covers the
+// largest legitimate upload (10 MB documents) with headroom for multipart overhead.
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 32 * 1024 * 1024);
+
 // Controllers + enums als tekst in JSON
 builder.Services
     .AddControllers(options =>
@@ -72,7 +77,10 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(corsOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            // The HttpOnly refresh cookie (H5) must travel on the auth endpoints; credentials
+            // are only ever allowed together with the EXPLICIT origin list above, never "*".
+            .AllowCredentials();
     });
 });
 
@@ -156,13 +164,19 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.ILowStockNotifier,
     TransportationService.Api.Modules.Employees.Services.LowStockNotifier>();
 
-// Qualification file storage
-builder.Services.AddSingleton<IFileStorageService>(
+// Upload malware-scan seam (L10): pass-through until a real engine is attached — see
+// docs/security/operational-checklist.md #18.
+builder.Services.AddSingleton<TransportationService.Api.Modules.Security.IUploadScanner,
+    TransportationService.Api.Modules.Security.PassThroughUploadScanner>();
+
+// File storage (all uploaded documents funnel through this chokepoint)
+builder.Services.AddSingleton<IFileStorageService>(serviceProvider =>
     new LocalFileStorageService(
         Path.Combine(
             builder.Environment.ContentRootPath,
             "App_Data"
-        )
+        ),
+        serviceProvider.GetRequiredService<TransportationService.Api.Modules.Security.IUploadScanner>()
     )
 );
 

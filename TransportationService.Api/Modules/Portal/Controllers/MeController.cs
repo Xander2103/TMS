@@ -90,6 +90,11 @@ public class MeController : ControllerBase
             return BadRequest(new { message = "De bijlage moet tussen 1 byte en 10 MB groot zijn." });
         }
 
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
         await using var stream = file.OpenReadStream();
         return HandleAbsence(await _service.AttachMyAbsenceDocumentAsync(id, file.FileName, stream, cancellationToken));
     }

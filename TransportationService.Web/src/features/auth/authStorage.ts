@@ -1,30 +1,30 @@
-import type { AuthTokens } from './authTypes'
-
 /**
- * Token persistence for the current development architecture. Tokens live in localStorage so
- * the session survives a refresh. The access token is short-lived and the refresh token rotates
- * on every use (single-use, server-revocable), which bounds the blast radius.
- *
- * Production hardening (documented, out of scope for this milestone): move the refresh token to
- * an httpOnly, Secure, SameSite cookie so it is never reachable from JavaScript.
+ * Access-token holder (H5). The short-lived access token lives ONLY in memory: nothing
+ * long-lived is ever readable from JavaScript, so XSS cannot steal a credential that outlives
+ * the tab. The session itself survives a page refresh through the HttpOnly refresh cookie the
+ * server sets on /api/auth — on boot the AuthProvider exchanges that cookie for a fresh access
+ * token. The legacy localStorage entries from the previous architecture are actively removed.
  */
-const ACCESS_KEY = 'ts.accessToken'
-const REFRESH_KEY = 'ts.refreshToken'
+const LEGACY_ACCESS_KEY = 'ts.accessToken'
+const LEGACY_REFRESH_KEY = 'ts.refreshToken'
+
+let accessToken: string | null = null
 
 export function getAccessToken(): string | null {
-  return localStorage.getItem(ACCESS_KEY)
+  return accessToken
 }
 
-export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_KEY)
-}
-
-export function storeTokens(tokens: AuthTokens): void {
-  localStorage.setItem(ACCESS_KEY, tokens.accessToken)
-  localStorage.setItem(REFRESH_KEY, tokens.refreshToken)
+export function setAccessToken(token: string | null): void {
+  accessToken = token
 }
 
 export function clearTokens(): void {
-  localStorage.removeItem(ACCESS_KEY)
-  localStorage.removeItem(REFRESH_KEY)
+  accessToken = null
+  clearLegacyTokens()
+}
+
+/** One-time migration sweep: tokens must never linger in localStorage on upgraded clients. */
+export function clearLegacyTokens(): void {
+  localStorage.removeItem(LEGACY_ACCESS_KEY)
+  localStorage.removeItem(LEGACY_REFRESH_KEY)
 }

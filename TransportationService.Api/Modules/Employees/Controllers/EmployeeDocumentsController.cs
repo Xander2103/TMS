@@ -142,9 +142,12 @@ public class EmployeeDocumentsController : ControllerBase
         }
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        return AllowedExtensions.Contains(extension)
-            ? null
-            : "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan.";
+        if (!AllowedExtensions.Contains(extension))
+        {
+            return "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan.";
+        }
+
+        return Modules.Security.UploadValidation.SignatureError(file);
     }
 
     private static string ContentTypeFor(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() switch

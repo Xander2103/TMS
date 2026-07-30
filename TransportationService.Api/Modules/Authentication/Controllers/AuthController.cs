@@ -47,6 +47,31 @@ public class AuthController : ControllerBase
         return error is null ? NoContent() : BadRequest(new { message = error });
     }
 
+    /// <summary>
+    /// H5: the refresh token travels in an HttpOnly cookie so it is unreachable from JavaScript
+    /// (XSS cannot exfiltrate the long-lived credential). Scoped to the auth endpoints only;
+    /// SameSite=Strict means no cross-site request ever carries it (CSRF). The body still ACCEPTS
+    /// a token for non-browser API clients, but browser responses no longer contain one.
+    /// </summary>
+    private const string RefreshCookieName = "ts_refresh";
+
+    private CookieOptions RefreshCookieOptions(DateTime? expiresAtUtc) => new()
+    {
+        HttpOnly = true,
+        Secure = Request.IsHttps,
+        SameSite = SameSiteMode.Strict,
+        Path = "/api/auth",
+        IsEssential = true,
+        Expires = expiresAtUtc is { } expiry ? new DateTimeOffset(expiry, TimeSpan.Zero) : null,
+    };
+
+    /// <summary>Cookie set + the raw refresh token stripped from the JSON body.</summary>
+    private AuthTokensDto IssueRefreshCookie(AuthTokensDto tokens)
+    {
+        Response.Cookies.Append(RefreshCookieName, tokens.RefreshToken, RefreshCookieOptions(tokens.RefreshTokenExpiresAt));
+        return tokens with { RefreshToken = string.Empty };
+    }
+
     [HttpPost("login")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitingServiceCollectionExtensions.AuthPolicy)]
@@ -55,7 +80,7 @@ public class AuthController : ControllerBase
         var result = await _authService.LoginAsync(request.Email, request.Password, cancellationToken);
         return result.Outcome switch
         {
-            AuthOutcome.Success => Ok(result.Tokens),
+            AuthOutcome.Success => Ok(IssueRefreshCookie(result.Tokens!)),
             _ => InvalidCredentials(),
         };
     }
@@ -63,14 +88,25 @@ public class AuthController : ControllerBase
     [HttpPost("refresh")]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitingServiceCollectionExtensions.SessionPolicy)]
-    public async Task<ActionResult<AuthTokensDto>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<AuthTokensDto>> Refresh(RefreshRequest? request, CancellationToken cancellationToken)
     {
-        var result = await _authService.RefreshAsync(request.RefreshToken, cancellationToken);
-        return result.Outcome switch
+        // Cookie first (browser flow); explicit body token only for non-browser API clients.
+        var fromCookie = Request.Cookies[RefreshCookieName];
+        var refreshToken = !string.IsNullOrEmpty(fromCookie) ? fromCookie : request?.RefreshToken;
+        if (string.IsNullOrEmpty(refreshToken))
         {
-            AuthOutcome.Success => Ok(result.Tokens),
-            _ => InvalidCredentials(),
-        };
+            return InvalidCredentials();
+        }
+
+        var result = await _authService.RefreshAsync(refreshToken, cancellationToken);
+        if (result.Outcome != AuthOutcome.Success)
+        {
+            Response.Cookies.Delete(RefreshCookieName, RefreshCookieOptions(null));
+            return InvalidCredentials();
+        }
+
+        // Rotation: the cookie always carries the newest token of the family.
+        return Ok(IssueRefreshCookie(result.Tokens!));
     }
 
     [HttpPost("logout")]
@@ -79,7 +115,9 @@ public class AuthController : ControllerBase
     [TransportationService.Api.Modules.Identity.Authorization.PermitWhenPasswordChangeRequired]
     public async Task<IActionResult> Logout(LogoutRequest request, CancellationToken cancellationToken)
     {
-        await _authService.LogoutAsync(request.RefreshToken, cancellationToken);
+        var refreshToken = request.RefreshToken ?? Request.Cookies[RefreshCookieName];
+        await _authService.LogoutAsync(refreshToken, cancellationToken);
+        Response.Cookies.Delete(RefreshCookieName, RefreshCookieOptions(null));
         return NoContent();
     }
 

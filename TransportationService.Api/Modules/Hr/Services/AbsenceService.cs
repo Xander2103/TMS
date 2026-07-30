@@ -536,6 +536,12 @@ public class AbsenceService : IAbsenceService
             return AbsenceOperationResult.Invalid("Alleen pdf-, jpg- of png-bestanden zijn toegestaan.");
         }
 
+        // Defence-in-depth behind the controller gate: content must actually be the claimed type.
+        if (!Modules.Security.UploadValidation.MatchesSignature(fileName, content))
+        {
+            return AbsenceOperationResult.Invalid(Modules.Security.UploadValidation.SignatureMismatchMessage);
+        }
+
         if (absence.AttachmentPath is { } existing)
         {
             await _fileStorageService.DeleteAsync(existing, cancellationToken);

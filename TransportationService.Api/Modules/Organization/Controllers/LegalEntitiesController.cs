@@ -11,7 +11,9 @@ namespace TransportationService.Api.Modules.Organization.Controllers;
 public class LegalEntitiesController : ControllerBase
 {
     private const long MaxLogoBytes = 2 * 1024 * 1024;
-    private static readonly string[] AllowedLogoExtensions = [".png", ".jpg", ".jpeg", ".svg"];
+    // SVG deliberately excluded (L1): a scriptable image format served back to browsers is an
+    // XSS vector; raster formats only.
+    private static readonly string[] AllowedLogoExtensions = [".png", ".jpg", ".jpeg"];
 
     private readonly ILegalEntityService _service;
 
@@ -80,14 +82,18 @@ public class LegalEntitiesController : ControllerBase
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
         if (!AllowedLogoExtensions.Contains(extension))
         {
-            return BadRequest(new { message = "Alleen PNG-, JPG- en SVG-bestanden zijn toegestaan." });
+            return BadRequest(new { message = "Alleen PNG- en JPG-bestanden zijn toegestaan." });
+        }
+
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
         }
 
         var contentType = extension switch
         {
             ".png" => "image/png",
             ".jpg" or ".jpeg" => "image/jpeg",
-            ".svg" => "image/svg+xml",
             _ => "application/octet-stream",
         };
 

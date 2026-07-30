@@ -41,6 +41,11 @@ public class CustomerImportController : ControllerBase
             return BadRequest(new { message = "Het bestand moet tussen 1 byte en 5 MB groot zijn." });
         }
 
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
         await using var stream = file.OpenReadStream();
         var (preview, error) = await _importService.PreviewAsync(stream, cancellationToken);
         return error is not null ? BadRequest(new { message = error }) : Ok(preview);
@@ -58,6 +63,11 @@ public class CustomerImportController : ControllerBase
         if (file.Length == 0 || file.Length > MaxUploadBytes)
         {
             return BadRequest(new { message = "Het bestand moet tussen 1 byte en 5 MB groot zijn." });
+        }
+
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
         }
 
         await using var stream = file.OpenReadStream();

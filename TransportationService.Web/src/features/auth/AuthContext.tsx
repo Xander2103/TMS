@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { setUnauthorizedHandler } from '../../api/apiClient'
 import * as authApi from './authApi'
 import { AuthContext, type AuthContextValue } from './authContextValue'
-import { clearTokens, getAccessToken, getRefreshToken, storeTokens } from './authStorage'
+import { clearLegacyTokens, clearTokens, getAccessToken, setAccessToken } from './authStorage'
 import type { CurrentUser } from './authTypes'
 
 type AuthStatus = AuthContextValue['status']
@@ -29,26 +29,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initialised.current = true
 
     void (async () => {
-      const refreshToken = getRefreshToken()
-      if (!refreshToken) {
-        setStatus('unauthenticated')
-        return
-      }
+      // H5 migration: any tokens the previous architecture left in localStorage are wiped.
+      clearLegacyTokens()
 
-      // Prefer a rotation-refresh so a stale access token is replaced up front.
-      const tokens = await authApi.refresh(refreshToken)
+      // The session credential is the HttpOnly refresh cookie — ask the server for a fresh
+      // access token; no cookie (or an expired one) simply means "not signed in".
+      const tokens = await authApi.refresh()
       if (tokens) {
-        storeTokens(tokens)
+        setAccessToken(tokens.accessToken)
         setUser(tokens.user)
-        setStatus('authenticated')
-        return
-      }
-
-      // Refresh token no longer valid — fall back to the access token if one is still good.
-      const accessToken = getAccessToken()
-      const me = accessToken ? await authApi.fetchCurrentUser(accessToken) : null
-      if (me) {
-        setUser(me)
         setStatus('authenticated')
       } else {
         clearTokens()
@@ -59,16 +48,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string, signal?: AbortSignal) => {
     const tokens = await authApi.login(email, password, signal)
-    storeTokens(tokens)
+    setAccessToken(tokens.accessToken)
     setUser(tokens.user)
     setStatus('authenticated')
   }, [])
 
   const logout = useCallback(async () => {
     const accessToken = getAccessToken()
-    const refreshToken = getRefreshToken()
     if (accessToken) {
-      await authApi.logout(accessToken, refreshToken)
+      await authApi.logout(accessToken)
     }
     clearTokens()
     // Secure cleanup: queued offline actions and cached driver snapshots never

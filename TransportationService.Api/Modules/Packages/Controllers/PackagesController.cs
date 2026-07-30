@@ -140,6 +140,11 @@ public class PackagesController : ControllerBase
             return BadRequest(new { message = "Bestand ontbreekt of is groter dan 5 MB." });
         }
 
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
         await using var stream = file.OpenReadStream();
         var (preview, error) = await _importService.PreviewAsync(orderId, stream, cancellationToken);
         return error is not null ? BadRequest(new { message = error }) : Ok(preview);
@@ -156,6 +161,11 @@ public class PackagesController : ControllerBase
         if (file.Length is 0 or > MaxImportBytes)
         {
             return BadRequest(new { message = "Bestand ontbreekt of is groter dan 5 MB." });
+        }
+
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
         }
 
         await using var stream = file.OpenReadStream();

@@ -54,6 +54,11 @@ public class InvoiceAttachmentsController : ControllerBase
             return BadRequest(new { message = "Alleen PDF-, XML-, XLSX-, XLS-, CSV-, JPG- en PNG-bestanden zijn toegestaan." });
         }
 
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
         await using var stream = file.OpenReadStream();
         var uploaded = await _service.UploadAsync(invoiceId, file.FileName, contentType, file.Length, stream, cancellationToken);
         return uploaded is null ? NotFound() : Ok(uploaded);

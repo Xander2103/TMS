@@ -2,7 +2,8 @@ namespace TransportationService.Api.Modules.Authentication.Dtos;
 
 public record LoginRequest(string Email, string Password);
 
-public record RefreshRequest(string RefreshToken);
+/// <summary>Body token is the legacy/API-client path; browsers use the HttpOnly cookie (H5).</summary>
+public record RefreshRequest(string? RefreshToken);
 
 public record LogoutRequest(string? RefreshToken);
 

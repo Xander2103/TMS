@@ -17,6 +17,7 @@ export interface CurrentUser {
 export interface AuthTokens {
   accessToken: string
   accessTokenExpiresAt: string
+  /** Always empty for browser clients (H5): the refresh token lives in an HttpOnly cookie. */
   refreshToken: string
   refreshTokenExpiresAt: string
   user: CurrentUser

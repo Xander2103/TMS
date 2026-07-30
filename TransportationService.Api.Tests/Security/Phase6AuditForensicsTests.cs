@@ -269,7 +269,7 @@ public class Phase6AuditForensicsTests
         try
         {
             var hr = h.Absences(h.HrUserId, PermissionCodes.AbsencesViewMedical);
-            using var upload = new MemoryStream(Encoding.UTF8.GetBytes("attest"));
+            using var upload = new MemoryStream(Encoding.UTF8.GetBytes("%PDF-1.7 attest"));
             var attached = await hr.AttachDocumentAsync(absence.Id, "attest.pdf", upload, CancellationToken.None);
             Assert.Equal(AbsenceOperationOutcome.Success, attached.Outcome);
 
@@ -285,7 +285,7 @@ public class Phase6AuditForensicsTests
             Assert.NotNull(opened);
             Assert.False(opened!.MedicalRestricted);
             using var reader = new StreamReader(opened.Content!);
-            Assert.Equal("attest", await reader.ReadToEndAsync());
+            Assert.Equal("%PDF-1.7 attest", await reader.ReadToEndAsync());
 
             var trace = Assert.Single(await h.AuditRowsAsync(SecurityAuditEvents.HealthDataViewed));
             Assert.Equal(absence.Id.ToString(), trace.EntityId);

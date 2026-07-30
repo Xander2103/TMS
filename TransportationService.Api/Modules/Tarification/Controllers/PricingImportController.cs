@@ -43,6 +43,11 @@ public class PricingImportController : ControllerBase
             return BadRequest(new { message = "Het bestand moet tussen 1 byte en 5 MB groot zijn." });
         }
 
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
         await using var stream = file.OpenReadStream();
         var (preview, error) = await _excelService.PreviewAsync(id, stream, cancellationToken);
         return error is not null ? BadRequest(new { message = error }) : Ok(preview);
@@ -67,6 +72,11 @@ public class PricingImportController : ControllerBase
         if (!TransportationService.Api.Common.EnumParsing.TryParseDefined<PricingImportMode>(mode, out var parsedMode))
         {
             return BadRequest(new { message = "Onbekende importmodus." });
+        }
+
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
         }
 
         await using var stream = file.OpenReadStream();

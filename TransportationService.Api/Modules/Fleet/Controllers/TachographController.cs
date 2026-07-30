@@ -84,7 +84,12 @@ internal static class FleetFileHelpers
         }
 
         var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-        return allowedExtensions.Contains(extension) ? null : "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan.";
+        if (!allowedExtensions.Contains(extension))
+        {
+            return "Alleen PDF-, JPG- en PNG-bestanden zijn toegestaan.";
+        }
+
+        return Modules.Security.UploadValidation.SignatureError(file);
     }
 
     public static string ContentTypeFor(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() switch
