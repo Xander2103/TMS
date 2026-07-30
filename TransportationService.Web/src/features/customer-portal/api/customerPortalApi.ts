@@ -126,3 +126,60 @@ export function createPortalLocation(input: {
 }): Promise<PortalLocation> {
   return apiClient.postJson<PortalLocation, typeof input>('/api/customer-portal/locations', input)
 }
+
+// --- Portal user management (customer_portal.manage_users) ---
+
+export interface PortalUserGrants {
+  documents: boolean
+  invoices: boolean
+  manageUsers: boolean
+}
+
+export interface PortalUserListItem {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  isActive: boolean
+  isBlocked: boolean
+  hasPendingActivation: boolean
+  grants: PortalUserGrants
+}
+
+export interface PortalUserInviteResult {
+  user: PortalUserListItem
+  activationToken: string
+  activationTokenExpiresAtUtc: string
+}
+
+export function listPortalUsers(): Promise<PortalUserListItem[]> {
+  return apiClient.getJson<PortalUserListItem[]>('/api/customer-portal/users')
+}
+
+export function invitePortalUser(input: {
+  firstName: string
+  lastName: string
+  email: string
+  grants: PortalUserGrants
+}): Promise<PortalUserInviteResult> {
+  return apiClient.postJson<PortalUserInviteResult, typeof input>('/api/customer-portal/users', input)
+}
+
+export function deactivatePortalUser(id: string): Promise<PortalUserListItem> {
+  return apiClient.postJson<PortalUserListItem, undefined>(`/api/customer-portal/users/${id}/deactivate`, undefined)
+}
+
+export function reactivatePortalUser(id: string): Promise<PortalUserListItem> {
+  return apiClient.postJson<PortalUserListItem, undefined>(`/api/customer-portal/users/${id}/reactivate`, undefined)
+}
+
+export function resendPortalUserInvite(id: string): Promise<PortalUserInviteResult> {
+  return apiClient.postJson<PortalUserInviteResult, undefined>(`/api/customer-portal/users/${id}/resend-invite`, undefined)
+}
+
+export function setPortalUserGrants(id: string, grants: PortalUserGrants): Promise<PortalUserListItem> {
+  return apiClient.putJson<PortalUserListItem, { grants: PortalUserGrants }>(
+    `/api/customer-portal/users/${id}/grants`,
+    { grants },
+  )
+}

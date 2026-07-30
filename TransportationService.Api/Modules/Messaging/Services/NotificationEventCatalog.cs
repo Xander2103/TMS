@@ -13,6 +13,7 @@ public static class NotificationEventGroups
     public const string Facturatie = "Facturatie";
     public const string Personeel = "Personeel";
     public const string Vloot = "Vloot";
+    public const string Portaal = "Portaal";
 }
 
 /// <summary>
@@ -173,6 +174,17 @@ public static class NotificationEventCatalog
                 ["vehicle", "description"], DefaultInApp: true, DefaultEmail: false,
                 [new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.MaintenancePoliciesView)],
                 MessageKinds.FleetDamageCreated, NotificationSeverity.Warning),
+
+            // --- Portaal ---
+            // Delivered by a DIRECT IMessageOutboxService.QueueAsync call in
+            // CustomerPortalUserService (see MessageKinds.PortalUserInvited) — the invited
+            // address is intrinsic to the invite action, not a resolvable RecipientSpec type.
+            // Cataloged anyway so the admin UI can show/disable it like any other event; the
+            // DefaultRecipients entry below is informational only and is never consulted.
+            new(MessageKinds.PortalUserInvited, "Klantportaalgebruiker uitgenodigd", NotificationEventGroups.Portaal,
+                ["firstName", "companyName", "activationLink"], DefaultInApp: false, DefaultEmail: true,
+                [new RecipientSpec(NotificationRecipientType.ExplicitEmail, null)],
+                MessageKinds.PortalUserInvited, NotificationSeverity.Info),
         }.ToDictionary(e => e.EventKey, StringComparer.OrdinalIgnoreCase);
 
     public static IReadOnlyCollection<NotificationEventInfo> All => (IReadOnlyCollection<NotificationEventInfo>)Entries.Values;

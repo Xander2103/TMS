@@ -43,8 +43,8 @@ export function CustomerPortalOrderDetailPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klantportaal', to: '/customer-portal' }, { label: order.orderNumber }]} />
-      <BackButton to="/customer-portal" label="Terug naar mijn opdrachten" />
+      <Breadcrumbs items={[{ label: 'Klantportaal', to: '/klantportaal' }, { label: order.orderNumber }]} />
+      <BackButton to="/klantportaal" label="Terug naar mijn opdrachten" />
       <PageHeader
         title={order.orderNumber}
         subtitle={`Ingediend voor ${order.orderDate}${order.customerReference ? ` · uw ref. ${order.customerReference}` : ''}`}

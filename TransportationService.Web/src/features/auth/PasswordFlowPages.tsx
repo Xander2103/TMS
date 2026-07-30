@@ -107,6 +107,79 @@ export function ResetPasswordPage() {
   )
 }
 
+/**
+ * Public activation page for customer-portal invites: /activeren?token=...&email=...
+ * Completes with the SAME backend endpoint as password reset — UserAccountFlowService.
+ * CompleteWithTokenAsync consumes any usable UserSecurityToken regardless of Activation vs.
+ * PasswordReset kind, so no separate activation endpoint exists (see AuthController.ResetPassword).
+ */
+export function ActivatePage() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const toast = useToast()
+  const token = searchParams.get('token') ?? ''
+  const email = searchParams.get('email') ?? ''
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    if (!token) {
+      setError('Deze activeringslink is ongeldig.')
+      return
+    }
+    if (password !== confirm) {
+      setError('De wachtwoorden komen niet overeen.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await apiClient.postJson<void, { token: string; newPassword: string }>('/api/auth/reset-password', {
+        token,
+        newPassword: password,
+      })
+      toast.showSuccess('Uw account is geactiveerd. Meld u aan met uw nieuwe wachtwoord.')
+      navigate('/login')
+    } catch (err) {
+      setError(describeApiError(err, 'Het account kon niet worden geactiveerd.').message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="login-page">
+      <form className="login-card" onSubmit={handleSubmit} noValidate>
+        <h1>Klantportaal activeren</h1>
+        <p>
+          {email ? `Welkom, ${email}. ` : ''}
+          Stel hieronder uw wachtwoord in om uw account te activeren.
+        </p>
+        <ValidationSummary message={error} />
+        <FormField label="Wachtwoord" htmlFor="act-password" required hint="Minstens 8 tekens.">
+          <input
+            id="act-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+            disabled={busy}
+          />
+        </FormField>
+        <FormField label="Bevestig wachtwoord" htmlFor="act-confirm" required>
+          <input id="act-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={busy} />
+        </FormField>
+        <Button type="submit" disabled={busy || password.length === 0}>
+          {busy ? 'Bezig...' : 'Account activeren'}
+        </Button>
+        <Link to="/login">Terug naar aanmelden</Link>
+      </form>
+    </div>
+  )
+}
+
 /** Forced first-login change: reachable only via the RequireAuth redirect while the flag is set. */
 export function ChangePasswordPage() {
   const navigate = useNavigate()

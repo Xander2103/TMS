@@ -43,7 +43,7 @@ export function CustomerPortalOrdersPage() {
     {
       key: 'number',
       header: 'Opdracht',
-      render: (row) => <Link to={`/customer-portal/orders/${row.id}`}>{row.orderNumber}</Link>,
+      render: (row) => <Link to={`/klantportaal/orders/${row.id}`}>{row.orderNumber}</Link>,
     },
     { key: 'date', header: 'Datum', render: (row) => row.orderDate },
     { key: 'ref', header: 'Uw referentie', render: (row) => row.customerReference ?? '—' },
@@ -69,7 +69,7 @@ export function CustomerPortalOrdersPage() {
       <PageHeader
         title="Mijn transportopdrachten"
         subtitle={customerName ?? undefined}
-        action={canSubmit && <Button onClick={() => navigate('/customer-portal/new')}>Nieuwe opdracht indienen</Button>}
+        action={canSubmit && <Button onClick={() => navigate('/klantportaal/new')}>Nieuwe opdracht indienen</Button>}
       />
       <DataTable
         columns={columns}

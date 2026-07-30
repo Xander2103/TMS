@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 18;
+    public const int CurrentVersion = 19;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -369,6 +369,26 @@ public static class DefaultRoleUpgrades
                 ],
                 ["hr"] = [PermissionCodes.NotificationRulesView],
                 ["boekhouding"] = [PermissionCodes.NotificationRulesView],
+            }),
+
+        new(19,
+            "Customer portal foundation 2026-07-30: portal messages default on the base "
+            + "klantportaal role, and internal customer-messages/portal-announcements access.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                // klantportaal_documenten/klantportaal_facturen/klantportaal_gebruikersbeheer are
+                // BRAND NEW templates — the seeder's create-phase (phase 2) already stamps them
+                // for every tenant with their full permission set, so no upgrade step is needed
+                // for those three; only the pre-existing "klantportaal" role needs its new
+                // CustomerPortalMessages grant applied here.
+                ["klantportaal"] = [PermissionCodes.CustomerPortalMessages],
+                ["planner"] = [PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend],
+                ["dispatcher"] = [PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend],
+                ["management"] =
+                [
+                    PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend,
+                    PermissionCodes.PortalAnnouncementsManage,
+                ],
             }),
     ];
 }

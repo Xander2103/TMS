@@ -131,7 +131,6 @@ export function getNavModules(): NavModule[] {
       icon: Contact,
       items: [
         { label: 'Klanten', to: '/customers', permissions: ['customers.view'] },
-        { label: 'Klantportaal', to: '/customer-portal', permissions: ['customer_portal.view'] },
         { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
         { label: 'Kostentarieven', to: '/cost-rates', permissions: ['trip_costs.view', 'trip_costs.manage'] },
       ],

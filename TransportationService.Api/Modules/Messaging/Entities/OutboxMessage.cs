@@ -74,6 +74,12 @@ public static class MessageKinds
     public const string FleetDocumentExpiry = "fleet_document_expiry";
     public const string FleetDamageCreated = "fleet_damage_created";
 
+    /// <summary>Cataloged so admins see/disable it, but delivered by a direct
+    /// <see cref="Services.IMessageOutboxService"/> queue call (see CustomerPortalUserService) —
+    /// the recipient (the invited address) is intrinsic to the invite, not resolved via a
+    /// <see cref="Services.NotificationEventService"/> recipient type.</summary>
+    public const string PortalUserInvited = "portal_user_invited";
+
     public static readonly IReadOnlyList<string> All =
     [
         OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate, Delay, DeliveryCompleted,
@@ -86,6 +92,7 @@ public static class MessageKinds
         InvoiceCreditNote, PersonnelQualificationExpiry, PersonnelMedicalExpiry, PersonnelDocumentExpiry,
         LeaveRequested, LeaveDecided, EmployeeNotePinned,
         FleetMaintenanceDue, FleetInspectionDue, FleetDocumentExpiry, FleetDamageCreated,
+        PortalUserInvited,
     ];
 }
 

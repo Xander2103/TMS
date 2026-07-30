@@ -87,7 +87,12 @@ public class DefaultRoleSeederTests
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         Assert.Equal(
-            new[] { "Boekhouding", "Chauffeur", "Dispatcher", "HR", "Klantportaal", "Magazijn", "Management", "Planner" },
+            new[]
+            {
+                "Boekhouding", "Chauffeur", "Dispatcher", "HR", "Klantportaal",
+                "Klantportaal - Documenten", "Klantportaal - Facturen", "Klantportaal - Gebruikersbeheer",
+                "Magazijn", "Management", "Planner",
+            },
             roles.Select(r => r.Name).OrderBy(n => n).ToArray());
         Assert.All(roles, r => Assert.False(r.IsSystemRole));
 
@@ -160,7 +165,7 @@ public class DefaultRoleSeederTests
         // …and the next startup must NOT re-grant it or duplicate roles.
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(8, await db.Context.Roles.CountAsync(r => r.TenantId == tenantId));
+        Assert.Equal(11, await db.Context.Roles.CountAsync(r => r.TenantId == tenantId));
         Assert.False(await db.Context.RolePermissions
             .AnyAsync(rp => rp.RoleId == planner.Id && rp.PermissionId == cancelPermission.Id));
     }
@@ -434,9 +439,8 @@ public class DefaultRoleSeederTests
 
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(18, DefaultRoleUpgrades.CurrentVersion);
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
-        Assert.Equal(18, state.AppliedVersion);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         var management = roles.Single(r => r.TemplateCode == "management");
@@ -459,6 +463,51 @@ public class DefaultRoleSeederTests
             Assert.DoesNotContain(PermissionCodes.NotificationRulesView, codes);
             Assert.DoesNotContain(PermissionCodes.NotificationRulesManage, codes);
         }
+    }
+
+    [Fact]
+    public async Task Version19_GrantsPortalMessagesAndCustomerMessages_AndSeedsAddOnTemplates()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        Assert.Equal(19, DefaultRoleUpgrades.CurrentVersion);
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(19, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var klantportaal = roles.Single(r => r.TemplateCode == "klantportaal");
+        var planner = roles.Single(r => r.TemplateCode == "planner");
+        var dispatcher = roles.Single(r => r.TemplateCode == "dispatcher");
+        var management = roles.Single(r => r.TemplateCode == "management");
+
+        Assert.Contains(PermissionCodes.CustomerPortalMessages, await CodesOfAsync(db, klantportaal.Id));
+        // Documents/invoices/manage_users are NEVER on the base role — only the add-on templates.
+        Assert.DoesNotContain(PermissionCodes.CustomerPortalViewDocuments, await CodesOfAsync(db, klantportaal.Id));
+        Assert.DoesNotContain(PermissionCodes.CustomerPortalViewInvoices, await CodesOfAsync(db, klantportaal.Id));
+        Assert.DoesNotContain(PermissionCodes.CustomerPortalManageUsers, await CodesOfAsync(db, klantportaal.Id));
+
+        foreach (var role in new[] { planner, dispatcher })
+        {
+            var codes = await CodesOfAsync(db, role.Id);
+            Assert.Contains(PermissionCodes.CustomerMessagesView, codes);
+            Assert.Contains(PermissionCodes.CustomerMessagesSend, codes);
+        }
+
+        var managementCodes = await CodesOfAsync(db, management.Id);
+        Assert.Contains(PermissionCodes.CustomerMessagesView, managementCodes);
+        Assert.Contains(PermissionCodes.CustomerMessagesSend, managementCodes);
+        Assert.Contains(PermissionCodes.PortalAnnouncementsManage, managementCodes);
+
+        // The three add-on templates are seeded fresh with exactly their one permission each.
+        var documenten = roles.Single(r => r.TemplateCode == "klantportaal_documenten");
+        var facturen = roles.Single(r => r.TemplateCode == "klantportaal_facturen");
+        var gebruikersbeheer = roles.Single(r => r.TemplateCode == "klantportaal_gebruikersbeheer");
+        Assert.Equal([PermissionCodes.CustomerPortalViewDocuments], await CodesOfAsync(db, documenten.Id));
+        Assert.Equal([PermissionCodes.CustomerPortalViewInvoices], await CodesOfAsync(db, facturen.Id));
+        Assert.Equal([PermissionCodes.CustomerPortalManageUsers], await CodesOfAsync(db, gebruikersbeheer.Id));
     }
 
     [Fact]

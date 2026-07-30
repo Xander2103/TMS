@@ -147,7 +147,8 @@ public sealed class AuthService : IAuthService
             user.EmployeeId,
             roles,
             permissions,
-            user.MustChangePassword);
+            user.MustChangePassword,
+            user.CustomerId);
     }
 
     private async Task<AuthResult> IssueTokensAsync(
@@ -185,7 +186,7 @@ public sealed class AuthService : IAuthService
 
         var userDto = new CurrentUserDto(
             user.Id, user.TenantId, tenantName, user.Email, user.FirstName, user.LastName,
-            user.EmployeeId, roles, permissions, user.MustChangePassword);
+            user.EmployeeId, roles, permissions, user.MustChangePassword, user.CustomerId);
 
         var tokens = new AuthTokensDto(
             access.Value, access.ExpiresAtUtc, refresh.Value, refresh.ExpiresAtUtc, userDto);

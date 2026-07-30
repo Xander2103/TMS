@@ -73,6 +73,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.WarehouseSchedule, PermissionCodes.WarehouseConflictOverride,
                 PermissionCodes.LegalEntitiesView,
                 PermissionCodes.ContactDepartmentsManage,
+                PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend,
             ]),
 
         new("dispatcher", "Dispatcher",
@@ -97,6 +98,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.OperationsView, PermissionCodes.OperationsManageAlerts,
                 PermissionCodes.WarehouseSchedule,
                 PermissionCodes.LegalEntitiesView,
+                PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend,
             ]),
 
         new("management", "Management",
@@ -144,6 +146,8 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.LeaveBalancesView,
                 PermissionCodes.AccountingView,
                 PermissionCodes.EmployeeNotesView, PermissionCodes.EmployeeNotesManage, PermissionCodes.EmployeeNotesPin,
+                PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend,
+                PermissionCodes.PortalAnnouncementsManage,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -211,13 +215,37 @@ public static class DefaultRoleDefinitions
             ]),
 
         // Deliberately NO internal orders.view: portal users reach only the customer-portal
-        // endpoints, which scope every query to their linked customer.
+        // endpoints, which scope every query to their linked customer. Every portal user gets
+        // this base role — Documenten/Facturen/Gebruikersbeheer are OPTIONAL add-ons granted
+        // per user via the three templates below (composed with this one, never replacing it).
         new("klantportaal", "Klantportaal",
             "Klantgebruikers: eigen opdrachten bekijken en indienen via het klantportaal.",
             [
                 PermissionCodes.CustomerPortalView,
                 PermissionCodes.CustomerPortalSubmitOrders,
                 PermissionCodes.CustomerPortalManageLocations,
+                PermissionCodes.CustomerPortalMessages,
+            ]),
+
+        // Optional add-on templates composing extra portal capability onto a klantportaal user;
+        // never assigned alone. See CustomerPortalUserService — invite/grants toggle these by
+        // TemplateCode, and never expose any other role to a portal user.
+        new("klantportaal_documenten", "Klantportaal - Documenten",
+            "Optionele klantportaal-uitbreiding: documenten van eigen opdrachten bekijken.",
+            [
+                PermissionCodes.CustomerPortalViewDocuments,
+            ]),
+
+        new("klantportaal_facturen", "Klantportaal - Facturen",
+            "Optionele klantportaal-uitbreiding: eigen facturen bekijken.",
+            [
+                PermissionCodes.CustomerPortalViewInvoices,
+            ]),
+
+        new("klantportaal_gebruikersbeheer", "Klantportaal - Gebruikersbeheer",
+            "Optionele klantportaal-uitbreiding: klantgebruikers uitnodigen en beheren.",
+            [
+                PermissionCodes.CustomerPortalManageUsers,
             ]),
 
         // Warehouse: scans, packages, releases and incident reporting — deliberately no

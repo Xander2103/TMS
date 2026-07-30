@@ -35,6 +35,9 @@ builder.Services.AddProblemDetails();
 // JWT authentication + authorization (password hashing, token + auth services)
 builder.Services.AddJwtAuthentication(builder.Configuration);
 
+// Anonymous auth endpoints (login, forgot/reset password, activation) are rate-limited per IP.
+builder.Services.AddAuthRateLimiting();
+
 // CORS voor React frontend
 builder.Services.AddCors(options =>
 {
@@ -272,6 +275,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITr
     TransportationService.Api.Modules.Orders.Services.TransportOrderTimelineService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.ICustomerPortalService,
     TransportationService.Api.Modules.CustomerPortal.Services.CustomerPortalService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.ICustomerPortalUserService,
+    TransportationService.Api.Modules.CustomerPortal.Services.CustomerPortalUserService>();
 
 // Planning (trips + conflict engine)
 builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.IPlanningConflictService,
@@ -455,6 +460,8 @@ if (!app.Environment.IsDevelopment())
 app.UseCors("Frontend");
 
 app.UseAuthentication();
+
+app.UseRateLimiter();
 
 app.UseMiddleware<TenantContextMiddleware>();
 

@@ -219,6 +219,17 @@ public static class PermissionCodes
     public const string CustomerPortalView = "customer_portal.view";
     public const string CustomerPortalSubmitOrders = "customer_portal.submit_orders";
     public const string CustomerPortalManageLocations = "customer_portal.manage_locations";
+    public const string CustomerPortalViewDocuments = "customer_portal.view_documents";
+    public const string CustomerPortalViewInvoices = "customer_portal.view_invoices";
+    public const string CustomerPortalMessages = "customer_portal.messages";
+    public const string CustomerPortalManageUsers = "customer_portal.manage_users";
+
+    // --- Customer messages (internal side of the portal's Berichten module) ---
+    public const string CustomerMessagesView = "customer_messages.view";
+    public const string CustomerMessagesSend = "customer_messages.send";
+
+    // --- Portal announcements (broadcast notices shown in the customer portal) ---
+    public const string PortalAnnouncementsManage = "portal_announcements.manage";
 
     // --- Invoices ---
     public const string InvoicesView = "invoices.view";
@@ -468,6 +479,13 @@ public static class PermissionCodes
         (CustomerPortalView, "customer_portal", "view", "Klantportaal: eigen opdrachten bekijken"),
         (CustomerPortalSubmitOrders, "customer_portal", "submit_orders", "Klantportaal: opdrachten indienen"),
         (CustomerPortalManageLocations, "customer_portal", "manage_locations", "Klantportaal: eigen locaties beheren"),
+        (CustomerPortalViewDocuments, "customer_portal", "view_documents", "Klantportaal: documenten bekijken"),
+        (CustomerPortalViewInvoices, "customer_portal", "view_invoices", "Klantportaal: facturen bekijken"),
+        (CustomerPortalMessages, "customer_portal", "messages", "Klantportaal: berichten bekijken en versturen"),
+        (CustomerPortalManageUsers, "customer_portal", "manage_users", "Klantportaal: klantgebruikers beheren (uitnodigen, blokkeren, rechten)"),
+        (CustomerMessagesView, "customer_messages", "view", "Berichten van klanten via het klantportaal bekijken"),
+        (CustomerMessagesSend, "customer_messages", "send", "Berichten naar klanten via het klantportaal versturen"),
+        (PortalAnnouncementsManage, "portal_announcements", "manage", "Mededelingen in het klantportaal beheren"),
         (InvoicesView, "invoices", "view", "Facturen bekijken"),
         (InvoicesCreate, "invoices", "create", "Facturen aanmaken"),
         (InvoicesEdit, "invoices", "edit", "Facturen bewerken"),

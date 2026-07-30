@@ -11,6 +11,7 @@ import { AuthProvider } from '../features/auth/AuthContext'
 import { LoginPage } from '../features/auth/LoginPage'
 import { RequireAuth } from '../features/auth/RequireAuth'
 import { AppLayout } from '../components/layout/AppLayout'
+import { InternalOnly, RootRedirect } from './portalRouting'
 import { LoadingState } from '../components/feedback/LoadingState'
 import { NotFoundPage } from '../components/feedback/NotFoundPage'
 import { LOOKUP_RESOURCES } from '../features/master-data/lookupRegistry'
@@ -80,8 +81,15 @@ const MaintenancePoliciesPage = lazyPage(() => import('../features/maintenance-p
 const CustomerPortalOrdersPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalOrdersPage'), 'CustomerPortalOrdersPage')
 const CustomerPortalNewOrderPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalNewOrderPage'), 'CustomerPortalNewOrderPage')
 const CustomerPortalOrderDetailPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalOrderDetailPage'), 'CustomerPortalOrderDetailPage')
+const CustomerPortalLayout = lazyPage(() => import('../features/customer-portal/components/CustomerPortalLayout'), 'CustomerPortalLayout')
+const CustomerPortalDashboardPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalDashboardPage'), 'CustomerPortalDashboardPage')
+const CustomerPortalDocumentsPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalComingSoonPages'), 'CustomerPortalDocumentsPage')
+const CustomerPortalInvoicesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalComingSoonPages'), 'CustomerPortalInvoicesPage')
+const CustomerPortalMessagesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalComingSoonPages'), 'CustomerPortalMessagesPage')
+const CustomerPortalUsersPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalUsersPage'), 'CustomerPortalUsersPage')
 const ForgotPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ForgotPasswordPage')
 const ResetPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ResetPasswordPage')
+const ActivatePage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ActivatePage')
 const ChangePasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ChangePasswordPage')
 const JobFunctionMappingsPage = lazyPage(() => import('../features/roles/pages/JobFunctionMappingsPage'), 'JobFunctionMappingsPage')
 const InboxPage = lazyPage(() => import('../features/inbox/pages/InboxPage'), 'InboxPage')
@@ -139,7 +147,9 @@ const router = createBrowserRouter(
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/activeren" element={<ActivatePage />} />
       <Route element={<RequireAuth />}>
+        <Route path="/" element={<RootRedirect />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
         {/* Mobile-first driver shell (bottom tabs); execution pages stay shared under /my-trips. */}
         <Route element={<DriverLayout />}>
@@ -147,8 +157,19 @@ const router = createBrowserRouter(
           <Route path="/driver/documents" element={<DriverDocumentsPage />} />
           <Route path="/driver/incidents" element={<DriverIncidentsPage />} />
         </Route>
+        {/* Customer-portal shell: portal users never render the internal AppLayout sidebar. */}
+        <Route element={<CustomerPortalLayout />}>
+          <Route path="/klantportaal" element={<CustomerPortalOrdersPage />} />
+          <Route path="/klantportaal/dashboard" element={<CustomerPortalDashboardPage />} />
+          <Route path="/klantportaal/new" element={<CustomerPortalNewOrderPage />} />
+          <Route path="/klantportaal/orders/:id" element={<CustomerPortalOrderDetailPage />} />
+          <Route path="/klantportaal/documenten" element={<CustomerPortalDocumentsPage />} />
+          <Route path="/klantportaal/facturen" element={<CustomerPortalInvoicesPage />} />
+          <Route path="/klantportaal/berichten" element={<CustomerPortalMessagesPage />} />
+          <Route path="/klantportaal/gebruikers" element={<CustomerPortalUsersPage />} />
+        </Route>
+        <Route element={<InternalOnly />}>
         <Route element={<AppLayout />}>
-              <Route path="/" element={<Navigate to="/transport-orders" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/transport-orders" element={<TransportOrdersPage />} />
           <Route path="/transport-orders/new" element={<NewTransportOrderPage />} />
@@ -202,9 +223,6 @@ const router = createBrowserRouter(
           <Route path="/incidents" element={<IncidentsPage />} />
           <Route path="/incidents/new" element={<IncidentDetailPage />} />
           <Route path="/incidents/:id" element={<IncidentDetailPage />} />
-          <Route path="/customer-portal" element={<CustomerPortalOrdersPage />} />
-          <Route path="/customer-portal/new" element={<CustomerPortalNewOrderPage />} />
-          <Route path="/customer-portal/orders/:id" element={<CustomerPortalOrderDetailPage />} />
           <Route path="/cost-rates" element={<CostRatesPage />} />
           <Route path="/settings/pricing" element={<PricingSettingsPage />} />
           <Route path="/pricing/tables" element={<PricingTablesPage />} />
@@ -243,6 +261,7 @@ const router = createBrowserRouter(
           <Route path="/settings/accounting" element={<AccountingSettingsPage />} />
           <Route path="/settings/notifications" element={<NotificationAdminPage />} />
           <Route path="*" element={<NotFoundPage />} />
+        </Route>
         </Route>
       </Route>
     </Route>,

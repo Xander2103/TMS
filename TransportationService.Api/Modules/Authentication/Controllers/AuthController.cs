@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using TransportationService.Api.Modules.Authentication;
 using TransportationService.Api.Modules.Authentication.Dtos;
 using TransportationService.Api.Modules.Authentication.Services;
 using TransportationService.Api.Modules.Identity.Services;
@@ -26,15 +28,19 @@ public class AuthController : ControllerBase
     /// <summary>Always returns 204 — the response never reveals whether an account exists.</summary>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingServiceCollectionExtensions.AuthPolicy)]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordRequest request, CancellationToken cancellationToken)
     {
         await _accountFlows.RequestPasswordResetAsync(request.Email, cancellationToken);
         return NoContent();
     }
 
-    /// <summary>Completes password reset or account activation with a single-use token.</summary>
+    /// <summary>Completes password reset OR account activation with a single-use token (the same
+    /// endpoint serves both — see UserAccountFlowService.CompleteWithTokenAsync — so the
+    /// frontend's /activeren page posts here too, no separate activation endpoint needed).</summary>
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingServiceCollectionExtensions.AuthPolicy)]
     public async Task<IActionResult> ResetPassword(ResetPasswordRequest request, CancellationToken cancellationToken)
     {
         var error = await _accountFlows.CompleteWithTokenAsync(request.Token, request.NewPassword, cancellationToken);
@@ -43,6 +49,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingServiceCollectionExtensions.AuthPolicy)]
     public async Task<ActionResult<AuthTokensDto>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         var result = await _authService.LoginAsync(request.Email, request.Password, cancellationToken);

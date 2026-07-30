@@ -10,6 +10,8 @@ export interface CurrentUser {
   permissions: string[]
   /** Temporary/admin-set credential: the UI forces a password change before anything else. */
   mustChangePassword: boolean
+  /** Set for customer-portal users only; drives post-login routing into /klantportaal. */
+  customerId: string | null
 }
 
 export interface AuthTokens {

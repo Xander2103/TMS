@@ -24,7 +24,10 @@ public record CurrentUserDto(
     IReadOnlyList<string> Roles,
     IReadOnlyList<string> Permissions,
     /// <summary>True while a temporary/admin-set credential is active: the UI forces a change first.</summary>
-    bool MustChangePassword = false);
+    bool MustChangePassword = false,
+    /// <summary>Set for customer-portal users only; drives the frontend's post-login routing
+    /// into the /klantportaal shell instead of the internal app.</summary>
+    Guid? CustomerId = null);
 
 public enum AuthOutcome
 {

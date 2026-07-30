@@ -145,7 +145,7 @@ export function CustomerPortalNewOrderPage() {
       }
       const created = await submitPortalOrder(payload)
       toast.showSuccess(`Opdracht ${created.orderNumber} ingediend. Onze planning neemt deze in behandeling.`)
-      navigate('/customer-portal')
+      navigate('/klantportaal')
     } catch (err) {
       const described = describeApiError(err, 'De opdracht kon niet worden ingediend.')
       setError(described.message)
@@ -156,8 +156,8 @@ export function CustomerPortalNewOrderPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klantportaal', to: '/customer-portal' }, { label: 'Nieuwe opdracht' }]} />
-      <BackButton to="/customer-portal" label="Terug naar mijn opdrachten" />
+      <Breadcrumbs items={[{ label: 'Klantportaal', to: '/klantportaal' }, { label: 'Nieuwe opdracht' }]} />
+      <BackButton to="/klantportaal" label="Terug naar mijn opdrachten" />
       <PageHeader title="Nieuwe transportopdracht indienen" subtitle="Na indiening beoordeelt onze planning uw aanvraag." />
 
       <form onSubmit={handleSubmit} noValidate>
@@ -311,7 +311,7 @@ export function CustomerPortalNewOrderPage() {
         </FormSection>
 
         <FormActions>
-          <Button variant="secondary" onClick={() => navigate('/customer-portal')} disabled={saving}>
+          <Button variant="secondary" onClick={() => navigate('/klantportaal')} disabled={saving}>
             Annuleren
           </Button>
           <Button type="submit" disabled={saving}>

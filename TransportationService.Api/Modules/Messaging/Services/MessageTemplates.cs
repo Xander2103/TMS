@@ -93,6 +93,11 @@ public static class BuiltInMessageTemplates
         [MessageKinds.LeaveDecided] = new(
             "Verlofaanvraag {{decision}}",
             "Beste {{employeeName}},\n\nJe verlofaanvraag van {{period}} is {{decision}}. {{note}}\n\nHR"),
+        [MessageKinds.PortalUserInvited] = new(
+            "Uitnodiging voor het klantportaal van {{companyName}}",
+            "Beste {{firstName}},\n\nU bent uitgenodigd voor het klantportaal van {{companyName}}. "
+            + "Stel via onderstaande link uw wachtwoord in om te starten:\n\n{{activationLink}}\n\n"
+            + "Deze link is 72 uur geldig.\n\nMet vriendelijke groeten,\n{{companyName}}"),
     };
 
     private static readonly IReadOnlyDictionary<string, Template> Sms = new Dictionary<string, Template>
