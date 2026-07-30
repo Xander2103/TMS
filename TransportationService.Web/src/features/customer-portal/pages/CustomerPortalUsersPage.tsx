@@ -92,7 +92,15 @@ export function CustomerPortalUsersPage() {
     try {
       const result = await resendPortalUserInvite(user.id)
       toast.showSuccess(`Uitnodiging opnieuw verstuurd naar ${user.email}.`)
-      setLastToken({ email: user.email, link: `/activeren?token=${result.activationToken}&email=${encodeURIComponent(user.email)}` })
+      // The backend only ever includes activationToken while its mail provider is the
+      // development sink (no real SMTP/SendGrid configured) — see customerPortalApi.ts. Once a
+      // live provider is registered, this is null and the normal "sent" toast above is the only
+      // feedback the admin gets, exactly as it should be.
+      if (result.activationToken) {
+        setLastToken({ email: user.email, link: `/activeren?token=${result.activationToken}&email=${encodeURIComponent(user.email)}` })
+      } else {
+        setLastToken(null)
+      }
       await reload()
     } catch (err) {
       toast.showError(describeApiError(err, 'Opnieuw uitnodigen is mislukt.').message)
@@ -213,10 +221,16 @@ export function CustomerPortalUsersPage() {
           onClose={() => setInviteOpen(false)}
           onInvited={(result) => {
             setInviteOpen(false)
-            setLastToken({
-              email: result.user.email,
-              link: `/activeren?token=${result.activationToken}&email=${encodeURIComponent(result.user.email)}`,
-            })
+            // See handleResend: the dev-only activation link is shown ONLY when the backend
+            // actually returned a raw token (development sink), never under a live mail provider.
+            setLastToken(
+              result.activationToken
+                ? {
+                    email: result.user.email,
+                    link: `/activeren?token=${result.activationToken}&email=${encodeURIComponent(result.user.email)}`,
+                  }
+                : null,
+            )
             toast.showSuccess(`Uitnodiging verstuurd naar ${result.user.email}.`)
             void reload()
           }}

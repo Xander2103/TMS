@@ -37,11 +37,18 @@ public class CustomerPortalUserServiceTests
         public Microsoft.Extensions.FileProviders.IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
+    /// <summary>A stand-in for a live SMTP/SendGrid provider — anything that is NOT
+    /// <see cref="DevelopmentSinkProvider"/> — used to prove the raw-token guard actually flips.</summary>
+    private sealed class FakeLiveEmailProvider : IEmailProvider
+    {
+        public Task SendAsync(OutboxMessage message, CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
     private sealed record Harness(
         SqliteTestDbContext Db, TestClock Clock, Guid TenantId, Guid CustomerId, Guid OtherCustomerId,
         Guid CallerUserId, Guid OtherCustomerCallerUserId, Guid UnlinkedUserId)
     {
-        public CustomerPortalUserService For(Guid callerUserId)
+        public CustomerPortalUserService For(Guid callerUserId, IEmailProvider? emailProvider = null)
         {
             var tenant = new DevTenantContext(TenantId);
             var currentUser = new DevCurrentUserContext(callerUserId);
@@ -50,8 +57,10 @@ public class CustomerPortalUserServiceTests
                 Db.Context, tenant, new PasswordHasher(), audit, Clock, new TestHostEnvironment());
             var outbox = new MessageOutboxService(Db.Context, tenant, Clock);
             var configuration = new ConfigurationBuilder().Build();
+            var provider = emailProvider
+                ?? new DevelopmentSinkProvider(Path.Combine(Path.GetTempPath(), "portal-user-tests-" + Guid.NewGuid().ToString("N")));
             return new CustomerPortalUserService(
-                Db.Context, tenant, currentUser, accountFlows, outbox, audit, Clock, configuration);
+                Db.Context, tenant, currentUser, accountFlows, outbox, provider, audit, Clock, configuration);
         }
     }
 
@@ -112,6 +121,41 @@ public class CustomerPortalUserServiceTests
         var mail = h.Db.Context.OutboxMessages.Single(m => m.Kind == MessageKinds.PortalUserInvited);
         Assert.Equal("nieuw@haven.be", mail.RecipientAddress);
         Assert.Contains("/activeren", mail.Body);
+    }
+
+    [Fact]
+    public async Task Invite_WithALiveEmailProviderRegistered_NeverReturnsTheRawToken()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.For(h.CallerUserId, new FakeLiveEmailProvider())
+            .InviteAsync(Invite("live-provider@haven.be"), CancellationToken.None);
+
+        Assert.Equal(PortalUserOperationOutcome.Success, result.Outcome);
+        Assert.Null(result.Value!.ActivationToken);
+        // The token itself still exists server-side (activation still works) — only the API
+        // response withholds it.
+        var stored = h.Db.Context.Users.Single(u => u.Email == "live-provider@haven.be");
+        Assert.True(h.Db.Context.UserSecurityTokens.Any(t =>
+            t.UserId == stored.Id && t.Kind == UserSecurityTokenKind.Activation && t.UsedAt == null && t.RevokedAt == null));
+    }
+
+    [Fact]
+    public async Task ResendInvite_WithALiveEmailProviderRegistered_NeverReturnsTheRawToken()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Invited under the dev sink (so the initial token IS returned)...
+        await h.For(h.CallerUserId).InviteAsync(Invite("resend-live@haven.be"), CancellationToken.None);
+        var target = h.Db.Context.Users.Single(u => u.Email == "resend-live@haven.be");
+
+        // ...but a resend under a live provider must withhold the new one too.
+        var result = await h.For(h.CallerUserId, new FakeLiveEmailProvider())
+            .ResendInviteAsync(target.Id, CancellationToken.None);
+
+        Assert.Equal(PortalUserOperationOutcome.Success, result.Outcome);
+        Assert.Null(result.Value!.ActivationToken);
     }
 
     [Fact]

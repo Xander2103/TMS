@@ -148,7 +148,10 @@ export interface PortalUserListItem {
 
 export interface PortalUserInviteResult {
   user: PortalUserListItem
-  activationToken: string
+  /** Present ONLY while the backend's registered mail provider is the development sink (no real
+   * SMTP/SendGrid provider configured) — see CustomerPortalUserService.IsRawTokenSafeToReturn.
+   * Once a live provider is configured, the backend omits this field entirely. */
+  activationToken: string | null
   activationTokenExpiresAtUtc: string
 }
 

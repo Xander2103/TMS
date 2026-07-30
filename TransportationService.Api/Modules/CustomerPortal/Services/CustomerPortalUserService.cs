@@ -52,6 +52,7 @@ public class CustomerPortalUserService : ICustomerPortalUserService
     private readonly ICurrentUserContext _currentUserContext;
     private readonly IUserAccountFlowService _accountFlows;
     private readonly IMessageOutboxService _messageOutbox;
+    private readonly IEmailProvider _emailProvider;
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
     private readonly IConfiguration _configuration;
@@ -63,6 +64,7 @@ public class CustomerPortalUserService : ICustomerPortalUserService
         ICurrentUserContext currentUserContext,
         IUserAccountFlowService accountFlows,
         IMessageOutboxService messageOutbox,
+        IEmailProvider emailProvider,
         IAuditService auditService,
         TimeProvider timeProvider,
         IConfiguration configuration,
@@ -73,11 +75,21 @@ public class CustomerPortalUserService : ICustomerPortalUserService
         _currentUserContext = currentUserContext;
         _accountFlows = accountFlows;
         _messageOutbox = messageOutbox;
+        _emailProvider = emailProvider;
         _auditService = auditService;
         _timeProvider = timeProvider;
         _configuration = configuration;
         _logger = logger;
     }
+
+    /// <summary>
+    /// Enforced guard (not just documentation): the raw activation token is only ever safe to
+    /// hand back in an API response while the registered <see cref="IEmailProvider"/> is the
+    /// development sink — i.e. mail delivery isn't actually configured, so there is no other way
+    /// for the invited person to receive the link. The moment a real provider (SMTP/SendGrid/…)
+    /// is registered in DI, this flips to false and the token is withheld from every response.
+    /// </summary>
+    private bool IsRawTokenSafeToReturn => _emailProvider is DevelopmentSinkProvider;
 
     private async Task<(Guid CustomerId, string CustomerName)?> MyCustomerAsync(CancellationToken cancellationToken)
     {
@@ -193,7 +205,7 @@ public class CustomerPortalUserService : ICustomerPortalUserService
 
         var dto = (await MapManyAsync([user], cancellationToken))[0];
         return PortalUserOperationResult<PortalUserInviteResultDto>.Success(
-            new PortalUserInviteResultDto(dto, started.Token, started.ExpiresAtUtc));
+            new PortalUserInviteResultDto(dto, IsRawTokenSafeToReturn ? started.Token : null, started.ExpiresAtUtc));
     }
 
     public async Task<PortalUserOperationResult<PortalUserListItemDto>> DeactivateAsync(Guid userId, CancellationToken cancellationToken)
@@ -262,7 +274,7 @@ public class CustomerPortalUserService : ICustomerPortalUserService
 
         var dto = (await MapManyAsync([user], cancellationToken))[0];
         return PortalUserOperationResult<PortalUserInviteResultDto>.Success(
-            new PortalUserInviteResultDto(dto, started.Token, started.ExpiresAtUtc));
+            new PortalUserInviteResultDto(dto, IsRawTokenSafeToReturn ? started.Token : null, started.ExpiresAtUtc));
     }
 
     public async Task<PortalUserOperationResult<PortalUserListItemDto>> SetGrantsAsync(

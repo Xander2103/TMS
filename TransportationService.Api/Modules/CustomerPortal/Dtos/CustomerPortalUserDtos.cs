@@ -22,12 +22,13 @@ public record PortalInviteUserRequest(string FirstName, string LastName, string 
 
 /// <summary>
 /// The raw activation token is returned exactly once — same contract as the internal admin
-/// "start activation" flow — because this codebase's only mail channel today is the
-/// development sink (no live SMTP/SendGrid provider is registered); when a real provider is
-/// plugged in behind <see cref="TransportationService.Api.Modules.Messaging.Services.IEmailProvider"/>
-/// this field should be dropped for tenants with mail actually configured.
+/// "start activation" flow — but ONLY while the resolved
+/// <see cref="TransportationService.Api.Modules.Messaging.Services.IEmailProvider"/> is the
+/// development sink (see <c>CustomerPortalUserService.IsRawTokenSafeToReturn</c>, an explicit
+/// runtime type check, not just a doc comment). The moment a real SMTP/SendGrid provider is
+/// registered, this field is <see langword="null"/> on every response — enforced, not aspirational.
 /// </summary>
-public record PortalUserInviteResultDto(PortalUserListItemDto User, string ActivationToken, DateTime ActivationTokenExpiresAtUtc);
+public record PortalUserInviteResultDto(PortalUserListItemDto User, string? ActivationToken, DateTime ActivationTokenExpiresAtUtc);
 
 public record PortalUserGrantsRequest(PortalUserGrantsDto Grants);
 
