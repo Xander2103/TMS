@@ -1,24 +1,53 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TemplatesTab } from '../components/TemplatesTab'
+import type { CustomerMessageTemplate } from '../types'
 
 vi.mock('../../../components/ui/toastContext', () => ({
   useToast: () => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),
 }))
 
+const customersState = vi.hoisted(() => ({
+  items: [] as { id: string; customerNumber: string; name: string; city: null; countryCode: null; categoryName: null; isActive: boolean; isBlocked: boolean }[],
+}))
 vi.mock('../../customers/api/customersApi', () => ({
-  searchCustomers: vi.fn().mockResolvedValue({ items: [], totalCount: 0, page: 1, pageSize: 500 }),
+  searchCustomers: vi.fn(() =>
+    Promise.resolve({ items: customersState.items, totalCount: customersState.items.length, page: 1, pageSize: 500 }),
+  ),
 }))
 
 const api = vi.hoisted(() => ({
   listMessageTemplates: vi.fn(),
+  listCustomerMessageTemplates: vi.fn(),
+  deleteMessageTemplate: vi.fn(),
   getMessageTemplateKinds: vi.fn(),
   getPlaceholders: vi.fn(),
   saveMessageTemplate: vi.fn(),
   previewTemplate: vi.fn(),
 }))
 vi.mock('../api/notificationAdminApi', () => api)
+
+function customerRow(overrides: Partial<CustomerMessageTemplate> = {}): CustomerMessageTemplate {
+  return {
+    kind: 'order_created',
+    channel: 'Email',
+    language: 'nl',
+    isOverridden: false,
+    id: null,
+    subject: null,
+    body: 'Standaardtekst',
+    bodyHtml: null,
+    isActive: true,
+    ...overrides,
+  }
+}
+
+async function selectCustomerScope(user: ReturnType<typeof userEvent.setup>) {
+  const combobox = await screen.findByRole('combobox', { name: 'Klantweergave' })
+  await user.click(combobox)
+  await user.click(await screen.findByRole('option', { name: 'KL-1 — Haven BV' }))
+}
 
 class FakeApiError extends Error {
   fieldErrors: Record<string, string[]>
@@ -31,8 +60,11 @@ class FakeApiError extends Error {
 describe('TemplatesTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    customersState.items = []
     api.listMessageTemplates.mockResolvedValue([])
-    api.getMessageTemplateKinds.mockResolvedValue(['order_created'])
+    api.listCustomerMessageTemplates.mockResolvedValue([])
+    api.deleteMessageTemplate.mockResolvedValue(undefined)
+    api.getMessageTemplateKinds.mockResolvedValue(['order_created', 'invoice_sent'])
     api.getPlaceholders.mockResolvedValue(['orderNumber', 'customerName'])
   })
 
@@ -71,5 +103,77 @@ describe('TemplatesTab', () => {
     expect(alerts.some((el) => el.textContent?.includes('Onbekende placeholder'))).toBe(true)
     // The FormField-level error (next to "Inhoud") is a distinct alert from the top banner.
     expect(alerts.length).toBeGreaterThanOrEqual(2)
+  })
+
+  describe('customer-override round-trip', () => {
+    beforeEach(() => {
+      customersState.items = [
+        { id: 'cust-1', customerNumber: 'KL-1', name: 'Haven BV', city: null, countryCode: null, categoryName: null, isActive: true, isBlocked: false },
+      ]
+    })
+
+    it('lists a selected customer\'s effective templates with Standaard/Klantspecifiek badges', async () => {
+      const user = userEvent.setup()
+      api.listCustomerMessageTemplates.mockResolvedValue([
+        customerRow({ kind: 'order_created', isOverridden: false }),
+        customerRow({ kind: 'invoice_sent', isOverridden: true, id: 'ovr-1', subject: 'Klant onderwerp', body: 'Klant tekst' }),
+      ])
+
+      render(<TemplatesTab canManage />)
+      await selectCustomerScope(user)
+
+      await waitFor(() => expect(api.listCustomerMessageTemplates).toHaveBeenCalledWith('cust-1'))
+      expect(await screen.findByText('Standaard')).toBeInTheDocument()
+      expect(screen.getByText('Klantspecifiek: Haven BV')).toBeInTheDocument()
+    })
+
+    it('edits an inherited row into a customer override, pre-filled with the default content', async () => {
+      const user = userEvent.setup()
+      api.listCustomerMessageTemplates.mockResolvedValue([customerRow({ kind: 'order_created', isOverridden: false, body: 'Standaardtekst' })])
+
+      render(<TemplatesTab canManage />)
+      await selectCustomerScope(user)
+
+      await user.click(await screen.findByRole('button', { name: 'Bewerken' }))
+      expect(await screen.findByRole('dialog', { name: 'Klantspecifiek sjabloon aanmaken' })).toBeInTheDocument()
+      const body = screen.getByRole('textbox', { name: /^Inhoud/ })
+      expect(body).toHaveValue('Standaardtekst')
+
+      await user.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+      await waitFor(() =>
+        expect(api.saveMessageTemplate).toHaveBeenCalledWith(
+          expect.objectContaining({ kind: 'order_created', customerId: 'cust-1', body: 'Standaardtekst' }),
+        ),
+      )
+    })
+
+    it('deletes a customer override via the confirm dialog and reloads the customer list', async () => {
+      const user = userEvent.setup()
+      api.listCustomerMessageTemplates.mockResolvedValue([
+        customerRow({ kind: 'invoice_sent', isOverridden: true, id: 'ovr-1', subject: 'Klant onderwerp', body: 'Klant tekst' }),
+      ])
+
+      render(<TemplatesTab canManage />)
+      await selectCustomerScope(user)
+
+      await user.click(await screen.findByRole('button', { name: 'Verwijderen' }))
+      const confirmDialog = await screen.findByRole('dialog', { name: 'Sjabloon verwijderen' })
+      await user.click(within(confirmDialog).getByRole('button', { name: 'Verwijderen' }))
+
+      await waitFor(() => expect(api.deleteMessageTemplate).toHaveBeenCalledWith('ovr-1'))
+      await waitFor(() => expect(api.listCustomerMessageTemplates).toHaveBeenCalledTimes(2))
+    })
+
+    it('does not offer a delete action for an inherited (non-overridden) row', async () => {
+      const user = userEvent.setup()
+      api.listCustomerMessageTemplates.mockResolvedValue([customerRow({ kind: 'order_created', isOverridden: false })])
+
+      render(<TemplatesTab canManage />)
+      await selectCustomerScope(user)
+
+      await screen.findByRole('button', { name: 'Bewerken' })
+      expect(screen.queryByRole('button', { name: 'Verwijderen' })).not.toBeInTheDocument()
+    })
   })
 })

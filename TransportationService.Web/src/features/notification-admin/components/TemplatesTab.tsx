@@ -1,21 +1,25 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { searchCustomers } from '../../customers/api/customersApi'
+import type { CustomerListItem } from '../../customers/types'
 import {
+  deleteMessageTemplate,
   getMessageTemplateKinds,
   getPlaceholders,
+  listCustomerMessageTemplates,
   listMessageTemplates,
   previewTemplate,
   saveMessageTemplate,
   type PreviewResult,
 } from '../api/notificationAdminApi'
-import { kindLabel, type MessageChannel, type MessageTemplate } from '../types'
+import { kindLabel, type CustomerMessageTemplate, type MessageChannel, type MessageTemplate } from '../types'
 
 const LANGUAGES = [
   { value: 'nl', label: 'Nederlands' },
@@ -25,8 +29,14 @@ const LANGUAGES = [
 
 type ActiveField = 'subject' | 'body' | 'bodyHtml'
 
+/** 'create' = brand new tenant default; 'override' = first customer-specific override for an
+ * otherwise-inherited row; 'edit' = an existing row (tenant default or an already-overridden
+ * customer row) — distinction is display-only, `saveMessageTemplate` upserts by
+ * (kind, channel, language, customerId) regardless. */
+type DraftMode = 'create' | 'override' | 'edit'
+
 interface Draft {
-  template: MessageTemplate | null
+  mode: DraftMode
   kind: string
   channel: MessageChannel
   language: string
@@ -35,6 +45,18 @@ interface Draft {
   body: string
   bodyHtml: string
   isActive: boolean
+}
+
+interface DeleteTarget {
+  id: string
+  label: string
+  successMessage: string
+}
+
+const DRAFT_TITLES: Record<DraftMode, string> = {
+  create: 'Sjabloon toevoegen',
+  override: 'Klantspecifiek sjabloon aanmaken',
+  edit: 'Sjabloon bewerken',
 }
 
 function insertTokenAt(
@@ -62,13 +84,18 @@ interface TemplatesTabProps {
   canManage: boolean
 }
 
-/** "Sjablonen" tab: tenant-wide message templates, with an editor supporting an optional
- * customer-specific override, placeholder-token insertion and a live preview. */
+/** "Sjablonen" tab: tenant-wide message templates plus, per customer, the full effective-vs-
+ * overridden round-trip — pick a customer to see every kind's effective template (inherited or
+ * that customer's own override), edit either into an override, and delete an override back to
+ * inherited. The editor's optional customer field creates the override; this tab is where you
+ * find, re-edit and remove it afterwards. */
 export function TemplatesTab({ canManage }: TemplatesTabProps) {
   const { showSuccess, showError } = useToast()
   const [templates, setTemplates] = useState<MessageTemplate[] | null>(null)
+  const [customerTemplates, setCustomerTemplates] = useState<CustomerMessageTemplate[] | null>(null)
+  const [scopeCustomerId, setScopeCustomerId] = useState<string | null>(null)
+  const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [kinds, setKinds] = useState<string[]>([])
-  const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -77,6 +104,7 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [busy, setBusy] = useState(false)
 
   const subjectRef = useRef<HTMLInputElement>(null)
@@ -85,13 +113,22 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
 
   const reload = useCallback(() => {
     if (!canManage) return
-    listMessageTemplates()
-      .then((data) => {
-        setTemplates(data)
-        setLoadError(null)
-      })
-      .catch(() => setLoadError('De sjablonen konden niet worden geladen.'))
-  }, [canManage])
+    if (scopeCustomerId) {
+      listCustomerMessageTemplates(scopeCustomerId)
+        .then((data) => {
+          setCustomerTemplates(data)
+          setLoadError(null)
+        })
+        .catch(() => setLoadError('De klantsjablonen konden niet worden geladen.'))
+    } else {
+      listMessageTemplates()
+        .then((data) => {
+          setTemplates(data)
+          setLoadError(null)
+        })
+        .catch(() => setLoadError('De sjablonen konden niet worden geladen.'))
+    }
+  }, [canManage, scopeCustomerId])
 
   useEffect(() => {
     reload()
@@ -101,8 +138,8 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
     if (!canManage) return
     getMessageTemplateKinds().then(setKinds).catch(() => setKinds([]))
     searchCustomers({ page: 1, pageSize: 500 })
-      .then((result) => setCustomerOptions(result.items.map((c) => ({ value: c.id, label: `${c.customerNumber} — ${c.name}` }))))
-      .catch(() => setCustomerOptions([]))
+      .then((result) => setCustomers(result.items))
+      .catch(() => setCustomers([]))
   }, [canManage])
 
   useEffect(() => {
@@ -113,26 +150,33 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft?.kind])
 
-  function openNew() {
-    setDraft({
-      template: null,
-      kind: kinds[0] ?? '',
-      channel: 'Email',
-      language: 'nl',
-      customerId: null,
-      subject: '',
-      body: '',
-      bodyHtml: '',
-      isActive: true,
-    })
+  const customerOptions: SearchableSelectOption[] = customers.map((c) => ({ value: c.id, label: `${c.customerNumber} — ${c.name}` }))
+  const scopeCustomerName = customers.find((c) => c.id === scopeCustomerId)?.name ?? ''
+
+  function resetDraftState() {
     setPreview(null)
     setDraftError(null)
     setFieldErrors({})
   }
 
+  function openNew() {
+    setDraft({
+      mode: 'create',
+      kind: kinds[0] ?? '',
+      channel: 'Email',
+      language: 'nl',
+      customerId: scopeCustomerId,
+      subject: '',
+      body: '',
+      bodyHtml: '',
+      isActive: true,
+    })
+    resetDraftState()
+  }
+
   function openEdit(template: MessageTemplate) {
     setDraft({
-      template,
+      mode: 'edit',
       kind: template.kind,
       channel: template.channel,
       language: template.language,
@@ -142,9 +186,27 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
       bodyHtml: template.bodyHtml ?? '',
       isActive: template.isActive,
     })
-    setPreview(null)
-    setDraftError(null)
-    setFieldErrors({})
+    resetDraftState()
+  }
+
+  /** Editing an effective row from the customer-scoped table: an inherited (non-overridden) row
+   * starts a new override pre-filled with the default's own content; an already-overridden row
+   * edits that override directly. Either way `saveMessageTemplate` upserts by
+   * (kind, channel, language, customerId), so no id is needed here. */
+  function openCustomerRow(row: CustomerMessageTemplate) {
+    if (!scopeCustomerId) return
+    setDraft({
+      mode: row.isOverridden ? 'edit' : 'override',
+      kind: row.kind,
+      channel: row.channel,
+      language: row.language,
+      customerId: scopeCustomerId,
+      subject: row.subject ?? '',
+      body: row.body,
+      bodyHtml: row.bodyHtml ?? '',
+      isActive: row.isActive,
+    })
+    resetDraftState()
   }
 
   function insertToken(token: string) {
@@ -199,26 +261,49 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
     }
   }
 
+  async function confirmDelete() {
+    const target = deleteTarget
+    if (!target) return
+    setDeleteTarget(null)
+    try {
+      await deleteMessageTemplate(target.id)
+      showSuccess(target.successMessage)
+      reload()
+    } catch (err) {
+      showError(describeApiError(err, 'Het sjabloon kon niet worden verwijderd.').message)
+    }
+  }
+
   if (!canManage) return null
   if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (templates === null) return <p className="placeholder-text">Sjablonen laden…</p>
 
   return (
     <div>
       <div className="notification-admin-toolbar">
-        <Button onClick={openNew}>+ Sjabloon</Button>
+        <div className="notification-admin-customer-picker">
+          <SearchableSelect
+            ariaLabel="Klantweergave"
+            value={scopeCustomerId}
+            onChange={setScopeCustomerId}
+            options={customerOptions}
+            placeholder="Standaard (alle klanten) — kies een klant voor klantspecifieke sjablonen"
+          />
+        </div>
+        <Button onClick={openNew}>{scopeCustomerId ? '+ Klantspecifiek sjabloon' : '+ Sjabloon'}</Button>
       </div>
 
-      {templates.length === 0 && (
+      {!scopeCustomerId && templates === null && <p className="placeholder-text">Sjablonen laden…</p>}
+      {!scopeCustomerId && templates !== null && templates.length === 0 && (
         <p className="placeholder-text">Nog geen eigen sjablonen — ingebouwde standaardteksten worden gebruikt.</p>
       )}
-      {templates.length > 0 && (
+      {!scopeCustomerId && templates !== null && templates.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
               <th>Type</th>
               <th>Kanaal</th>
               <th>Taal</th>
+              <th>Bereik</th>
               <th>Status</th>
               <th aria-label="Acties" />
             </tr>
@@ -229,11 +314,80 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
                 <td>{kindLabel(template.kind)}</td>
                 <td>{template.channel === 'Email' ? 'E-mail' : 'SMS'}</td>
                 <td>{template.language}</td>
+                <td>
+                  <Badge tone="neutral">Standaard</Badge>
+                </td>
                 <td>{!template.isActive && <Badge tone="neutral">inactief</Badge>}</td>
                 <td className="issued-items-row-actions">
                   <button type="button" className="issued-items-link" onClick={() => openEdit(template)}>
                     Bewerken
                   </button>
+                  <button
+                    type="button"
+                    className="issued-items-link issued-items-link-danger"
+                    onClick={() =>
+                      setDeleteTarget({
+                        id: template.id,
+                        label: kindLabel(template.kind),
+                        successMessage: 'Sjabloon verwijderd — het ingebouwde sjabloon geldt weer.',
+                      })
+                    }
+                  >
+                    Verwijderen
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {scopeCustomerId && customerTemplates === null && <p className="placeholder-text">Klantsjablonen laden…</p>}
+      {scopeCustomerId && customerTemplates !== null && (
+        <table className="issued-items-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Kanaal</th>
+              <th>Taal</th>
+              <th>Bereik</th>
+              <th>Status</th>
+              <th aria-label="Acties" />
+            </tr>
+          </thead>
+          <tbody>
+            {customerTemplates.map((row) => (
+              <tr key={`${row.kind}:${row.channel}:${row.language}`}>
+                <td>{kindLabel(row.kind)}</td>
+                <td>{row.channel === 'Email' ? 'E-mail' : 'SMS'}</td>
+                <td>{row.language}</td>
+                <td>
+                  {row.isOverridden ? (
+                    <Badge tone="info">Klantspecifiek: {scopeCustomerName}</Badge>
+                  ) : (
+                    <Badge tone="neutral">Standaard</Badge>
+                  )}
+                </td>
+                <td>{!row.isActive && <Badge tone="neutral">inactief</Badge>}</td>
+                <td className="issued-items-row-actions">
+                  <button type="button" className="issued-items-link" onClick={() => openCustomerRow(row)}>
+                    Bewerken
+                  </button>
+                  {row.isOverridden && row.id && (
+                    <button
+                      type="button"
+                      className="issued-items-link issued-items-link-danger"
+                      onClick={() =>
+                        setDeleteTarget({
+                          id: row.id!,
+                          label: kindLabel(row.kind),
+                          successMessage: `Klantspecifiek sjabloon verwijderd — standaard geldt weer voor ${scopeCustomerName}.`,
+                        })
+                      }
+                    >
+                      Verwijderen
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -243,7 +397,7 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
 
       {draft && (
         <Modal
-          title={draft.template ? 'Sjabloon bewerken' : 'Sjabloon toevoegen'}
+          title={DRAFT_TITLES[draft.mode]}
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
@@ -387,6 +541,17 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
             )}
           </form>
         </Modal>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="Sjabloon verwijderen"
+          message={`Weet je zeker dat je het sjabloon voor '${deleteTarget.label}' wilt verwijderen?`}
+          confirmLabel="Verwijderen"
+          destructive
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   )

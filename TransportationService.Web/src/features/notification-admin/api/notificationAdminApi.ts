@@ -1,6 +1,7 @@
 import { apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
 import type {
+  CustomerMessageTemplate,
   CustomerNotificationOverride,
   MessageChannel,
   MessageTemplate,
@@ -44,6 +45,14 @@ export function getPlaceholders(eventKey: string | null): Promise<string[]> {
 
 export function listMessageTemplates(): Promise<MessageTemplate[]> {
   return apiClient.getJson<MessageTemplate[]>('/api/message-templates')
+}
+
+/** Effective templates for one customer: every tenant-default row, each flagged whether this
+ * customer overrides it — the read side of the customer-override round-trip (write side is
+ * `saveMessageTemplate` with a `customerId`, delete side is `deleteMessageTemplate` on the
+ * override's own id). */
+export function listCustomerMessageTemplates(customerId: string): Promise<CustomerMessageTemplate[]> {
+  return apiClient.getJson<CustomerMessageTemplate[]>(`/api/customers/${customerId}/message-templates`)
 }
 
 export interface SaveTemplateInput {

@@ -51,8 +51,16 @@
 
 .notification-admin-toolbar {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 12px;
+}
+
+.notification-admin-toolbar .notification-admin-customer-picker {
+  flex: 1;
+  max-width: 480px;
+  margin-bottom: 0;
 }
 
 .notification-admin-form-error {

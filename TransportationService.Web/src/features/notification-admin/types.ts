@@ -90,6 +90,21 @@ export interface MessageTemplate {
   isActive: boolean
 }
 
+/** One (kind, channel, language) row as it resolves for a specific customer: either the tenant
+ * default (isOverridden false, id null) or that customer's own override (isOverridden true, id
+ * set — the override row's own id, usable with the same delete endpoint as a tenant template). */
+export interface CustomerMessageTemplate {
+  kind: string
+  channel: MessageChannel
+  language: string
+  isOverridden: boolean
+  id: string | null
+  subject: string | null
+  body: string
+  bodyHtml: string | null
+  isActive: boolean
+}
+
 /** Dutch display label for a message kind — mirrors NotificationEventCatalog for the 30 event
  * kinds and adds the (unmanaged, pre-Phase-6) legacy kinds still visible in the outbox. Falls
  * back to the raw code for anything unrecognised, so a future kind never renders blank. */
