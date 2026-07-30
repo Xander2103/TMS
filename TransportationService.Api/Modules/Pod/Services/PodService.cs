@@ -372,13 +372,14 @@ public class PodService : IPodService
     }
 
     public async Task<(Stream Content, string ContentType, string FileName)?> OpenPhotoAsync(
-        Guid podId, Guid photoId, CancellationToken cancellationToken)
+        Guid podId, Guid photoId, bool restrictToOwnDriver, CancellationToken cancellationToken)
     {
         var photo = await _dbContext.PodPhotos.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == photoId && p.ProofOfDeliveryId == podId
                                       && p.TenantId == _tenantContext.TenantId, cancellationToken);
-        if (photo is null)
+        if (photo is null || !await MayAccessPodAsync(podId, restrictToOwnDriver, cancellationToken))
         {
+            // Same null result whether the object does not exist or is not yours: no id oracle.
             return null;
         }
 
@@ -386,19 +387,47 @@ public class PodService : IPodService
         return (stream, photo.ContentType, photo.FileName);
     }
 
-    public async Task<(Stream Content, string ContentType)?> OpenSignatureAsync(Guid podId, CancellationToken cancellationToken)
+    public async Task<(Stream Content, string ContentType)?> OpenSignatureAsync(
+        Guid podId, bool restrictToOwnDriver, CancellationToken cancellationToken)
     {
         var signaturePath = await _dbContext.ProofsOfDelivery.AsNoTracking()
             .Where(p => p.Id == podId && p.TenantId == _tenantContext.TenantId)
             .Select(p => p.SignaturePath)
             .FirstOrDefaultAsync(cancellationToken);
-        if (signaturePath is null)
+        if (signaturePath is null || !await MayAccessPodAsync(podId, restrictToOwnDriver, cancellationToken))
         {
             return null;
         }
 
         var stream = await _fileStorageService.OpenReadAsync(signaturePath, cancellationToken);
         return (stream, "image/png");
+    }
+
+    /// <summary>
+    /// Record-level guard for POD media: when the caller only holds driver-workflow rights, the
+    /// POD must belong to a trip assigned to that driver. Mirrors AttachPhotoAsync's check so read
+    /// and write paths cannot drift apart.
+    /// </summary>
+    private async Task<bool> MayAccessPodAsync(Guid podId, bool restrictToOwnDriver, CancellationToken cancellationToken)
+    {
+        if (!restrictToOwnDriver)
+        {
+            return true;
+        }
+
+        var driverId = await CurrentDriverIdAsync(cancellationToken);
+        if (driverId is null)
+        {
+            return false;
+        }
+
+        var tripDriverId = await _dbContext.ProofsOfDelivery.AsNoTracking()
+            .Where(p => p.Id == podId && p.TenantId == _tenantContext.TenantId)
+            .Join(_dbContext.Trips.AsNoTracking().Where(t => t.TenantId == _tenantContext.TenantId),
+                p => p.TripId, t => t.Id, (p, t) => t.DriverId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return tripDriverId == driverId;
     }
 
     private sealed record SignatureStoreResult(string? StoragePath, string? Error);

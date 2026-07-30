@@ -30,8 +30,9 @@ public interface IExecutionExceptionService
     Task<ExceptionOperationResult> AttachPhotoAsync(
         Guid id, string fileName, string contentType, Stream content, bool restrictToOwnDriver, CancellationToken cancellationToken);
 
+    /// <summary>Driver-workflow callers (restrictToOwnDriver) may only open media of their own trips.</summary>
     Task<(Stream Content, string ContentType, string FileName)?> OpenPhotoAsync(
-        Guid id, Guid photoId, CancellationToken cancellationToken);
+        Guid id, Guid photoId, bool restrictToOwnDriver, CancellationToken cancellationToken);
 
     Task<ExceptionOperationResult> DeletePhotoAsync(Guid id, Guid photoId, CancellationToken cancellationToken);
 }

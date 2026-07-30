@@ -361,11 +361,38 @@ public class CustomerService : ICustomerService
         if (customer.IsActive != request.IsActive)
         {
             customer.IsActive = request.IsActive;
+
+            // Deactivating a customer must immediately end their portal users' sessions: revoke
+            // refresh tokens and rotate security stamps so outstanding access tokens die too.
+            var revokedSessions = 0;
+            if (!request.IsActive)
+            {
+                var nowUtc = DateTime.UtcNow;
+                var portalUsers = await _dbContext.Users
+                    .Where(u => u.TenantId == _tenantContext.TenantId && u.CustomerId == customer.Id)
+                    .ToListAsync(cancellationToken);
+                var portalUserIds = portalUsers.Select(u => u.Id).ToList();
+                var tokens = await _dbContext.Set<Modules.Authentication.Entities.RefreshToken>()
+                    .Where(t => portalUserIds.Contains(t.UserId) && t.RevokedAt == null)
+                    .ToListAsync(cancellationToken);
+                foreach (var token in tokens)
+                {
+                    token.RevokedAt = nowUtc;
+                }
+
+                foreach (var portalUser in portalUsers)
+                {
+                    portalUser.SecurityStamp = Guid.NewGuid();
+                }
+
+                revokedSessions = tokens.Count;
+            }
+
             await _dbContext.SaveChangesAsync(cancellationToken);
 
             await _auditService.RecordAsync(EntityType, customer.Id.ToString(),
                 request.IsActive ? "Activated" : "Deactivated", null,
-                new { customer.IsActive }, cancellationToken);
+                new { customer.IsActive, PortalSessionsRevoked = revokedSessions }, cancellationToken);
         }
 
         return true;

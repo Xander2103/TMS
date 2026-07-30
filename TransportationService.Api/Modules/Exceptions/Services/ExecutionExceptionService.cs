@@ -371,18 +371,45 @@ public class ExecutionExceptionService : IExecutionExceptionService
     }
 
     public async Task<(Stream Content, string ContentType, string FileName)?> OpenPhotoAsync(
-        Guid id, Guid photoId, CancellationToken cancellationToken)
+        Guid id, Guid photoId, bool restrictToOwnDriver, CancellationToken cancellationToken)
     {
         var photo = await _dbContext.ExceptionPhotos.AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == photoId && p.ExecutionExceptionId == id
                                       && p.TenantId == _tenantContext.TenantId, cancellationToken);
-        if (photo is null)
+        if (photo is null || !await MayAccessExceptionAsync(id, restrictToOwnDriver, cancellationToken))
         {
+            // Identical null result for "missing" and "not yours" — no id oracle.
             return null;
         }
 
         var stream = await _fileStorageService.OpenReadAsync(photo.StoragePath, cancellationToken);
         return (stream, photo.ContentType, photo.FileName);
+    }
+
+    /// <summary>
+    /// Record-level guard for exception media: a driver-workflow caller may only read photos of
+    /// exceptions on trips assigned to them. Mirrors the write path (AttachPhotoAsync).
+    /// </summary>
+    private async Task<bool> MayAccessExceptionAsync(Guid exceptionId, bool restrictToOwnDriver, CancellationToken cancellationToken)
+    {
+        if (!restrictToOwnDriver)
+        {
+            return true;
+        }
+
+        var driverId = await CurrentDriverIdAsync(cancellationToken);
+        if (driverId is null)
+        {
+            return false;
+        }
+
+        var tripDriverId = await Scoped()
+            .Where(e => e.Id == exceptionId)
+            .Join(_dbContext.Trips.AsNoTracking().Where(t => t.TenantId == _tenantContext.TenantId),
+                e => e.TripId, t => t.Id, (e, t) => t.DriverId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return tripDriverId == driverId;
     }
 
     public async Task<ExceptionOperationResult> DeletePhotoAsync(Guid id, Guid photoId, CancellationToken cancellationToken)

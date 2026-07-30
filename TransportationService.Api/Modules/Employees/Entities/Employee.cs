@@ -8,7 +8,7 @@ namespace TransportationService.Api.Modules.Employees.Entities;
 /// NationalRegisterNumber, Iban and Bic are confidential: served and editable only with
 /// the employees.view_confidential permission.
 /// </summary>
-public class Employee : ITenantOwned, IAuditableEntity
+public class Employee : ITenantOwned, IHasId, IAuditableEntity
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

@@ -1,4 +1,5 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
@@ -80,6 +81,14 @@ public class LeasingContractService : ILeasingContractService
     private async Task<LeasingContractDto> CreateAsync(Guid? vehicleId, Guid? trailerId, SaveLeasingContractRequest request, bool includeFinance, CancellationToken cancellationToken)
     {
         Validate(request);
+
+        // The owning vehicle/trailer must belong to this tenant; without this check a guessed
+        // foreign id would attach a local contract to another tenant's asset.
+        await _dbContext.Vehicles.EnsureBelongsToTenantAsync(
+            vehicleId, _tenantContext.TenantId, "voertuig", cancellationToken);
+        await _dbContext.Trailers.EnsureBelongsToTenantAsync(
+            trailerId, _tenantContext.TenantId, "trailer", cancellationToken);
+
         var contract = new LeasingContract
         {
             Id = Guid.NewGuid(),
@@ -179,7 +188,7 @@ public class LeasingContractService : ILeasingContractService
 
         if (request.StartDate is { } start && request.EndDate is { } end && end < start)
         {
-            throw new DomainValidationException("endDate", "De einddatum kan niet vóór de begindatum liggen.");
+            throw new DomainValidationException("endDate", "De einddatum kan niet vÃ³Ã³r de begindatum liggen.");
         }
     }
 

@@ -92,7 +92,10 @@ public class PodController : ControllerBase
     [RequirePermission(PermissionCodes.PodView, PermissionCodes.DriverWorkflowView)]
     public async Task<IActionResult> DownloadPhoto(Guid id, Guid photoId, CancellationToken cancellationToken)
     {
-        var photo = await _service.OpenPhotoAsync(id, photoId, cancellationToken);
+        // A caller without the back-office pod.view right is a driver: they may only read media of
+        // their own trips (404 on anything else, so ids cannot be probed).
+        var restrict = !await HasAsync(PermissionCodes.PodView, cancellationToken);
+        var photo = await _service.OpenPhotoAsync(id, photoId, restrict, cancellationToken);
         return photo is null ? NotFound() : File(photo.Value.Content, photo.Value.ContentType, photo.Value.FileName);
     }
 
@@ -100,7 +103,8 @@ public class PodController : ControllerBase
     [RequirePermission(PermissionCodes.PodView, PermissionCodes.DriverWorkflowView)]
     public async Task<IActionResult> DownloadSignature(Guid id, CancellationToken cancellationToken)
     {
-        var signature = await _service.OpenSignatureAsync(id, cancellationToken);
+        var restrict = !await HasAsync(PermissionCodes.PodView, cancellationToken);
+        var signature = await _service.OpenSignatureAsync(id, restrict, cancellationToken);
         return signature is null ? NotFound() : File(signature.Value.Content, signature.Value.ContentType);
     }
 

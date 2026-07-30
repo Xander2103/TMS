@@ -45,6 +45,14 @@ public class LegalEntityConfiguration : IEntityTypeConfiguration<LegalEntity>
             .IsUnique()
             .HasFilter("\"IsDefault\" = true AND \"IsDeleted\" = false");
 
+        // A Peppol participant identity is GLOBALLY unique across tenants: inbound documents are
+        // routed to a tenant by this pair, so allowing tenant B to claim tenant A's identity would
+        // misroute A's supplier invoices into B. The index is deliberately not tenant-scoped.
+        builder.HasIndex(e => new { e.PeppolScheme, e.PeppolId })
+            .HasDatabaseName("ix_legal_entities_peppol_participant")
+            .IsUnique()
+            .HasFilter("\"PeppolScheme\" IS NOT NULL AND \"PeppolId\" IS NOT NULL AND \"IsActive\" = true AND \"IsDeleted\" = false");
+
         builder.HasQueryFilter(e => !e.IsDeleted);
     }
 }

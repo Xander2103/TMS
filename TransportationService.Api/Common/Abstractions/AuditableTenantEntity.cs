@@ -6,7 +6,7 @@ namespace TransportationService.Api.Common.Abstractions;
 /// table. Timestamp/user/soft-delete fields are managed centrally by the auditing
 /// interceptor - never assign them from a service.
 /// </summary>
-public abstract class AuditableTenantEntity : ITenantOwned, IAuditableEntity, ISoftDeletable
+public abstract class AuditableTenantEntity : ITenantOwned, IHasId, IAuditableEntity, ISoftDeletable
 {
     public Guid Id { get; set; }
     public Guid TenantId { get; set; }

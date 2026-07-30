@@ -286,7 +286,8 @@ public class PodServiceTests
 
         try
         {
-            var signature = await h.Sut.OpenSignatureAsync(result.Pod!.Id, CancellationToken.None);
+            // restrictToOwnDriver: false = a back-office caller holding pod.view.
+            var signature = await h.Sut.OpenSignatureAsync(result.Pod!.Id, false, CancellationToken.None);
             Assert.NotNull(signature);
             using var ms = new MemoryStream();
             await using (var content = signature!.Value.Content)

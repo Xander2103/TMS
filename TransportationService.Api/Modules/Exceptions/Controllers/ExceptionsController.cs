@@ -135,7 +135,10 @@ public class ExceptionsController : ControllerBase
     [RequirePermission(PermissionCodes.ExceptionsView, PermissionCodes.DriverWorkflowView)]
     public async Task<IActionResult> DownloadPhoto(Guid id, Guid photoId, CancellationToken cancellationToken)
     {
-        var photo = await _service.OpenPhotoAsync(id, photoId, cancellationToken);
+        // Non-staff callers reach this through driver-workflow rights and may only read media of
+        // their own trips; anything else is 404 so ids cannot be probed.
+        var restrict = !await IsStaffAsync(cancellationToken);
+        var photo = await _service.OpenPhotoAsync(id, photoId, restrict, cancellationToken);
         return photo is null ? NotFound() : File(photo.Value.Content, photo.Value.ContentType, photo.Value.FileName);
     }
 

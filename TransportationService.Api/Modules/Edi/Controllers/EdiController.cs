@@ -1,5 +1,6 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common.Persistence;
 using System.Linq.Expressions;
 using System.Text.Json;
 using TransportationService.Api.Common;
@@ -88,7 +89,7 @@ public class EdiController : ControllerBase
 
         var partners = _dbContext.TradingPartners.AsNoTracking().Where(p => p.TenantId == _tenantContext.TenantId);
         var totalCount = await query.CountAsync(cancellationToken);
-        // Pull the raw failure fields through the query, then compute MappingIssue client-side —
+        // Pull the raw failure fields through the query, then compute MappingIssue client-side â€”
         // keeping the derivation logic in one place (IsMappingIssue) instead of duplicating it as
         // a second EF-translatable expression inside the projection.
         var rows = await query
@@ -116,7 +117,7 @@ public class EdiController : ControllerBase
     /// exact Dutch sentences a location/customer mapping failure produces for rows recorded
     /// before that column existed. EF-translatable as-is for use inside a query (<c>.Where</c>,
     /// <c>CountAsync</c>); <see cref="IsMappingIssueCompiled"/> compiles this same expression
-    /// once for client-side use once fields are already materialized — no second definition.
+    /// once for client-side use once fields are already materialized â€” no second definition.
     /// </summary>
     private static readonly Expression<Func<EdiMessage, bool>> MappingIssueExpression = m =>
         m.FailureKind == EdiService.FailureKindMapping
@@ -333,8 +334,14 @@ public class EdiController : ControllerBase
             return NotFound();
         }
 
+        // The mapped location is a client-supplied id: without this check a guessed foreign id
+        // would leak another tenant's location name/address through later EDI projections.
+        await _dbContext.Locations.EnsureBelongsToTenantAsync(
+            request.LocationId, _tenantContext.TenantId, "locatie", cancellationToken);
+
         var existing = await _dbContext.EdiPartnerLocations
             .FirstOrDefaultAsync(l => l.TradingPartnerId == partnerId
+                                      && l.TenantId == _tenantContext.TenantId
                                       && l.ExternalLocationCode == request.ExternalLocationCode.Trim(), cancellationToken);
         var isNew = existing is null;
         if (existing is null)
@@ -353,6 +360,8 @@ public class EdiController : ControllerBase
         {
             existing.LocationId = request.LocationId;
         }
+
+
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(LocationEntityType, existing.Id.ToString(), isNew ? "Created" : "Updated", null,

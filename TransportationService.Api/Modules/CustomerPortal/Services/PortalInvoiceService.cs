@@ -79,9 +79,11 @@ public class PortalInvoiceService : IPortalInvoiceService
             return null;
         }
 
+        // Join Customers so a deactivated/soft-deleted customer immediately loses portal access.
         return await _dbContext.Users.AsNoTracking()
             .Where(u => u.Id == userId && u.TenantId == _tenantContext.TenantId && u.CustomerId != null)
-            .Select(u => u.CustomerId)
+            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId && c.IsActive),
+                u => u.CustomerId, c => c.Id, (u, c) => (Guid?)c.Id)
             .FirstOrDefaultAsync(cancellationToken);
     }
 

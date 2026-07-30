@@ -23,7 +23,9 @@ public interface IPodService
         Guid podId, PodPhotoCategory category, string fileName, string contentType, Stream content,
         bool restrictToOwnDriver, CancellationToken cancellationToken);
 
-    Task<(Stream Content, string ContentType, string FileName)?> OpenPhotoAsync(Guid podId, Guid photoId, CancellationToken cancellationToken);
+    Task<(Stream Content, string ContentType, string FileName)?> OpenPhotoAsync(
+        Guid podId, Guid photoId, bool restrictToOwnDriver, CancellationToken cancellationToken);
 
-    Task<(Stream Content, string ContentType)?> OpenSignatureAsync(Guid podId, CancellationToken cancellationToken);
+    Task<(Stream Content, string ContentType)?> OpenSignatureAsync(
+        Guid podId, bool restrictToOwnDriver, CancellationToken cancellationToken);
 }

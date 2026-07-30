@@ -210,16 +210,25 @@ public class PeppolWebhookService : IPeppolWebhookService
         }
 
         var (scheme, id) = SplitParticipant(document.ReceiverParticipant);
-        var tenantId = await _db.LegalEntities.AsNoTracking()
+        // Fail closed on ambiguity: a globally unique index normally prevents two tenants from
+        // claiming the same participant, but if legacy data ever produced a duplicate we refuse to
+        // guess which tenant owns the document rather than misrouting financial data.
+        var receiverTenantIds = await _db.LegalEntities.AsNoTracking()
             .Where(e => e.PeppolScheme == scheme && e.PeppolId == id && e.IsActive)
-            .Select(e => (Guid?)e.TenantId)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (tenantId is null)
+            .Select(e => e.TenantId)
+            .Distinct()
+            .Take(2)
+            .ToListAsync(cancellationToken);
+        if (receiverTenantIds.Count != 1)
         {
-            _logger?.LogWarning("Peppol incoming document for unknown receiver {Receiver}; ignored.", document.ReceiverParticipant);
+            _logger?.LogWarning(
+                "Peppol incoming document for receiver {Receiver} matched {Count} tenants; ignored.",
+                document.ReceiverParticipant, receiverTenantIds.Count);
             // Uniform wording — no existence oracle for receiver participants.
             return new PeppolWebhookOutcomeDto(false, "Genegeerd.");
         }
+
+        var tenantId = (Guid?)receiverTenantIds[0];
 
         // Idempotency 1: the provider's message id is unique per tenant.
         var duplicateById = await _db.PeppolIncomingDocuments.AnyAsync(

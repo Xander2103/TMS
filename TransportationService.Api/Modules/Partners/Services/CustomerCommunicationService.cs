@@ -255,9 +255,11 @@ public class CustomerCommunicationService : ICustomerCommunicationService
     }
 
     private async Task<CustomerCommunicationRule> ReloadAsync(Guid ruleId, CancellationToken cancellationToken) =>
+        // Tenant predicate kept even though callers pre-verify: defence in depth, so a future
+        // caller cannot turn this into a cross-tenant read.
         await _dbContext.CustomerCommunicationRules
             .Include(r => r.Contacts)
-            .FirstAsync(r => r.Id == ruleId, cancellationToken);
+            .FirstAsync(r => r.Id == ruleId && r.TenantId == _tenantContext.TenantId, cancellationToken);
 
     private static CustomerCommunicationRuleDto Map(CustomerCommunicationRule r) => new(
         r.Id, r.Type, r.CustomTypeLabel, r.Channel, r.CcEmail, r.LanguageCode,
