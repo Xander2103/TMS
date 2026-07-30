@@ -4,6 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Local development secrets (Jwt:SigningKey, dev connection string) live in user-secrets,
+         never in tracked configuration. See docs/security/dev-setup.md. -->
+    <UserSecretsId>transportation-service-api</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

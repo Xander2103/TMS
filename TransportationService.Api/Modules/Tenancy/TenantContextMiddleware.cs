@@ -1,5 +1,4 @@
-using Microsoft.EntityFrameworkCore;
-using TransportationService.Api.Data;
+using System.Security.Claims;
 using TransportationService.Api.Modules.Authentication;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -7,72 +6,80 @@ using TransportationService.Api.Modules.Tenancy.Services;
 namespace TransportationService.Api.Modules.Tenancy;
 
 /// <summary>
-/// Resolves the current tenant and current user for the request pipeline.
-/// When the request is authenticated the values come exclusively from the JWT claims
-/// (a client-supplied tenant id is never trusted in that case). Only when there is no
-/// authenticated principal — and only in Development — does it fall back to the trusted
-/// X-Dev-* headers, so Scalar/manual testing keeps working without a login.
-/// Runs after UseAuthentication so <see cref="HttpContext.User"/> is already populated.
+/// Resolves the current tenant and user for the request pipeline. Identity provenance is
+/// ALWAYS the validated JWT principal (<see cref="HttpContext.User"/>) — never a client-supplied
+/// header. The <c>X-Dev-*</c> impersonation headers are honoured strictly in Development and only
+/// when explicitly opted in via <c>Dev:AllowImpersonationHeaders</c>; in every other environment
+/// they are ignored completely.
+///
+/// Fail-closed: this middleware never falls back to a default/oldest tenant. A request that cannot
+/// be resolved gets NO ambient context — protected endpoints are then rejected by the authorization
+/// fallback policy / permission filter, and anonymous endpoints (login, webhook) resolve their own
+/// scope. Runs after <c>UseAuthentication</c> so the principal is already populated.
 /// </summary>
 public class TenantContextMiddleware
 {
     public const string TenantHeaderName = "X-Dev-Tenant-Id";
     public const string UserHeaderName = "X-Dev-User-Id";
+    public const string ImpersonationFlag = "Dev:AllowImpersonationHeaders";
 
     private readonly RequestDelegate _next;
     private readonly IWebHostEnvironment _environment;
+    private readonly bool _allowImpersonationHeaders;
 
-    public TenantContextMiddleware(RequestDelegate next, IWebHostEnvironment environment)
+    public TenantContextMiddleware(RequestDelegate next, IWebHostEnvironment environment, IConfiguration configuration)
     {
         _next = next;
         _environment = environment;
+        // The opt-in only ever takes effect in Development; StartupSecurityValidator additionally
+        // refuses to boot a non-Development host that has the flag enabled.
+        _allowImpersonationHeaders = environment.IsDevelopment() && configuration.GetValue<bool>(ImpersonationFlag);
     }
 
-    public async Task InvokeAsync(HttpContext context, TransportationDbContext dbContext)
+    public async Task InvokeAsync(HttpContext context)
     {
-        Guid tenantId;
-        Guid? userId;
+        var resolution = Resolve(
+            context.User, _environment.IsDevelopment(), _allowImpersonationHeaders, context.Request.Headers);
 
-        if (context.User.Identity?.IsAuthenticated == true)
+        if (resolution.TenantId is { } tenantId)
         {
-            userId = context.User.GetUserId();
-            tenantId = context.User.GetTenantId() ?? await GetDefaultTenantIdAsync(dbContext);
-        }
-        else if (_environment.IsDevelopment())
-        {
-            userId = ResolveDevUserId(context);
-            tenantId = ResolveDevTenantId(context) ?? await GetDefaultTenantIdAsync(dbContext);
-        }
-        else
-        {
-            userId = null;
-            tenantId = await GetDefaultTenantIdAsync(dbContext);
+            context.Items[nameof(ITenantContext)] = new DevTenantContext(tenantId);
         }
 
-        context.Items[nameof(ITenantContext)] = new DevTenantContext(tenantId);
-        context.Items[nameof(ICurrentUserContext)] = new DevCurrentUserContext(userId);
+        if (resolution.UserId is { } userId)
+        {
+            context.Items[nameof(ICurrentUserContext)] = new DevCurrentUserContext(userId);
+        }
 
         await _next(context);
     }
 
-    private static Task<Guid> GetDefaultTenantIdAsync(TransportationDbContext dbContext) =>
-        dbContext.Tenants
-            .AsNoTracking()
-            .OrderBy(t => t.CreatedAt)
-            .Select(t => t.Id)
-            .FirstOrDefaultAsync();
+    public readonly record struct TenantResolution(Guid? TenantId, Guid? UserId);
 
-    private static Guid? ResolveDevTenantId(HttpContext context) =>
-        context.Request.Headers.TryGetValue(TenantHeaderName, out var headerValue)
-        && Guid.TryParse(headerValue, out var parsed)
-            ? parsed
-            : null;
+    /// <summary>
+    /// Pure, side-effect-free resolution of the request's tenant/user context. Unit-tested in
+    /// isolation. An authenticated principal always wins; a missing tenant claim is treated as a
+    /// malformed token and is NOT substituted with a default tenant (fail-closed).
+    /// </summary>
+    public static TenantResolution Resolve(
+        ClaimsPrincipal user, bool isDevelopment, bool allowImpersonationHeaders, IHeaderDictionary headers)
+    {
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            return new TenantResolution(user.GetTenantId(), user.GetUserId());
+        }
 
-    private static Guid? ResolveDevUserId(HttpContext context) =>
-        context.Request.Headers.TryGetValue(UserHeaderName, out var headerValue)
-        && Guid.TryParse(headerValue, out var parsed)
-            ? parsed
-            : null;
+        if (isDevelopment && allowImpersonationHeaders)
+        {
+            return new TenantResolution(
+                ParseHeaderGuid(headers, TenantHeaderName), ParseHeaderGuid(headers, UserHeaderName));
+        }
+
+        return new TenantResolution(null, null);
+    }
+
+    private static Guid? ParseHeaderGuid(IHeaderDictionary headers, string name) =>
+        headers.TryGetValue(name, out var value) && Guid.TryParse(value, out var parsed) ? parsed : null;
 }
 
 public static class TenantContextServiceCollectionExtensions
@@ -81,11 +88,15 @@ public static class TenantContextServiceCollectionExtensions
     {
         services.AddScoped<ITenantContext>(sp =>
             (ITenantContext?)sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.Items[nameof(ITenantContext)]
-            ?? throw new InvalidOperationException("Tenant context was not resolved. Ensure TenantContextMiddleware runs before this service is used."));
+            ?? throw new InvalidOperationException(
+                "Tenant context was not resolved for this request. This is fail-closed behaviour: the "
+                + "endpoint requires an authenticated principal with a tenant claim (see TenantContextMiddleware)."));
 
         services.AddScoped<ICurrentUserContext>(sp =>
             (ICurrentUserContext?)sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.Items[nameof(ICurrentUserContext)]
-            ?? throw new InvalidOperationException("Current user context was not resolved. Ensure TenantContextMiddleware runs before this service is used."));
+            ?? throw new InvalidOperationException(
+                "Current user context was not resolved for this request. This is fail-closed behaviour: the "
+                + "endpoint requires an authenticated principal (see TenantContextMiddleware)."));
 
         return services;
     }

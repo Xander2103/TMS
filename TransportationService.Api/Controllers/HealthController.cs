@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace TransportationService.Api.Controllers;
@@ -6,7 +7,9 @@ namespace TransportationService.Api.Controllers;
 [Route("api/[controller]")]
 public class HealthController : ControllerBase
 {
+    /// <summary>Liveness probe — deliberately anonymous so load balancers can reach it without a token.</summary>
     [HttpGet]
+    [AllowAnonymous]
     public IActionResult Get()
     {
         return Ok(new

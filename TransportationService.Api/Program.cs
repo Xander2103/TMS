@@ -372,14 +372,28 @@ builder.Services.AddHostedService<TransportationService.Api.Modules.Integrations
 // Periodic expiry sweep (qualifications + fleet documents -> notifications)
 builder.Services.AddHostedService<TransportationService.Api.Modules.Notifications.Services.ExpiryNotificationHostedService>();
 
-// Messaging (provider-neutral email/SMS): dev sink providers, outbox, dispatcher
-builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>(_ =>
-    new TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider(
-        Path.Combine(builder.Environment.ContentRootPath, "App_Data", "message-sink")));
-builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.IEmailProvider>(sp =>
-    sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>());
-builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.ISmsProvider>(sp =>
-    sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>());
+// Messaging (provider-neutral email/SMS): outbox, dispatcher.
+// The DevelopmentSinkProvider writes rendered messages (including invite/activation links with
+// raw tokens) to App_Data/message-sink, so it is registered ONLY in Development. Outside
+// Development a fail-closed placeholder is registered and StartupSecurityValidator refuses to
+// boot until a real provider exists — raw tokens can never leak via a production sink.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>(_ =>
+        new TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider(
+            Path.Combine(builder.Environment.ContentRootPath, "App_Data", "message-sink")));
+    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.IEmailProvider>(sp =>
+        sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>());
+    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.ISmsProvider>(sp =>
+        sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>());
+}
+else
+{
+    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.IEmailProvider,
+        TransportationService.Api.Modules.Messaging.Services.UnconfiguredEmailProvider>();
+    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.ISmsProvider,
+        TransportationService.Api.Modules.Messaging.Services.UnconfiguredSmsProvider>();
+}
 builder.Services.AddScoped<TransportationService.Api.Modules.Messaging.Services.IMessageOutboxService,
     TransportationService.Api.Modules.Messaging.Services.MessageOutboxService>();
 builder.Services.AddScoped(sp => new TransportationService.Api.Modules.Messaging.Services.MessageDispatcher(
@@ -440,6 +454,11 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.
     TransportationService.Api.Modules.Reporting.Services.DashboardService>();
 
 var app = builder.Build();
+
+// Fail-fast on production-unsafe configuration (impersonation headers enabled, no real mail
+// provider, etc.) before the host starts serving.
+TransportationService.Api.Modules.Security.StartupSecurityValidator.Validate(
+    app.Environment, app.Configuration, app.Services);
 
 // Global reference data runs in every environment: the ISO country list must exist for
 // country validation and comboboxes regardless of how tenants are onboarded.

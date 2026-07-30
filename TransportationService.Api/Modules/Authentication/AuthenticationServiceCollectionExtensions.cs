@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using TransportationService.Api.Modules.Authentication.Services;
 
@@ -17,6 +19,10 @@ public static class AuthenticationServiceCollectionExtensions
             .Bind(configuration.GetSection(JwtOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+
+        // Rejects the burned committed dev key, placeholders and too-short keys in every
+        // environment (runs as part of ValidateOnStart above).
+        services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
 
         var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 
@@ -67,7 +73,16 @@ public static class AuthenticationServiceCollectionExtensions
                 };
             });
 
-        services.AddAuthorization();
+        // Fail-closed authorization: EVERY endpoint requires an authenticated principal unless it
+        // explicitly opts out with [AllowAnonymous]. Function-level permission checks
+        // (RequirePermissionAttribute) run on top of this. This closes the ambient-context
+        // authentication bypass — an unauthenticated request can no longer reach a business action.
+        services.AddAuthorization(options =>
+        {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build();
+        });
         return services;
     }
 
