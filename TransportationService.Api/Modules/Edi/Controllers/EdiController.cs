@@ -111,9 +111,12 @@ public class EdiController : ControllerBase
     }
 
     /// <summary>
-    /// EF-translatable "is this a mapping problem" predicate for use inside a query (<c>.Where</c>,
-    /// <c>CountAsync</c>). Must stay logically identical to <see cref="IsMappingIssue"/> below,
-    /// which is the client-side equivalent used once an entity/its fields are already materialized.
+    /// The single source of truth for "is this a mapping problem": the machine-readable
+    /// <see cref="EdiMessage.FailureKind"/> going forward, falling back to a text match on the
+    /// exact Dutch sentences a location/customer mapping failure produces for rows recorded
+    /// before that column existed. EF-translatable as-is for use inside a query (<c>.Where</c>,
+    /// <c>CountAsync</c>); <see cref="IsMappingIssueCompiled"/> compiles this same expression
+    /// once for client-side use once fields are already materialized — no second definition.
     /// </summary>
     private static readonly Expression<Func<EdiMessage, bool>> MappingIssueExpression = m =>
         m.FailureKind == EdiService.FailureKindMapping
@@ -121,16 +124,14 @@ public class EdiController : ControllerBase
             && ((m.ErrorDetail != null && (m.ErrorDetail.Contains("Locatiemapping") || m.ErrorDetail.Contains("klant gekoppeld")))
                 || (m.ValidationErrorsJson != null && m.ValidationErrorsJson.Contains("locatiecode"))));
 
-    /// <summary>
-    /// Machine-readable failure category going forward (<see cref="EdiMessage.FailureKind"/>),
-    /// falling back to a text match on the exact Dutch sentences a location/customer mapping
-    /// failure produces for rows recorded before that column existed.
-    /// </summary>
+    private static readonly Func<EdiMessage, bool> IsMappingIssueCompiled = MappingIssueExpression.Compile();
+
+    /// <summary>Client-side check once FailureKind/ErrorDetail/ValidationErrorsJson are already materialized.</summary>
     private static bool IsMappingIssue(string? failureKind, string? errorDetail, string? validationErrorsJson) =>
-        failureKind == EdiService.FailureKindMapping
-        || (failureKind == null
-            && ((errorDetail != null && (errorDetail.Contains("Locatiemapping") || errorDetail.Contains("klant gekoppeld")))
-                || (validationErrorsJson != null && validationErrorsJson.Contains("locatiecode"))));
+        IsMappingIssueCompiled(new EdiMessage
+        {
+            FailureKind = failureKind, ErrorDetail = errorDetail, ValidationErrorsJson = validationErrorsJson,
+        });
 
     [HttpGet("api/edi/messages/{id:guid}")]
     [RequirePermission(PermissionCodes.EdiView, PermissionCodes.EdiManage)]
@@ -162,7 +163,7 @@ public class EdiController : ControllerBase
             ValidationErrors = message.ValidationErrorsJson != null
                 ? JsonSerializer.Deserialize<string[]>(message.ValidationErrorsJson)
                 : null,
-            MappingIssue = IsMappingIssue(message.FailureKind, message.ErrorDetail, message.ValidationErrorsJson),
+            MappingIssue = IsMappingIssueCompiled(message),
             message.PayloadJson,
             message.ResultEntityType,
             message.ResultEntityId,

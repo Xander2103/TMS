@@ -86,7 +86,7 @@ export function EdiPage() {
       )}
       {tab === 'testen' && canTest && (
         <TabPanel tabId="testen">
-          <TestenTab />
+          <TestenTab canRetry={canRetry} />
         </TabPanel>
       )}
     </div>

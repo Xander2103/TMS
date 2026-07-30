@@ -14,9 +14,14 @@ import {
 } from '../api/ediApi'
 import { MessageDetailModal } from './MessageDetailModal'
 
+interface TestenTabProps {
+  /** Whether the detail modal opened after "Versturen naar test" may show its replay button (edi.retry or edi.manage). */
+  canRetry: boolean
+}
+
 /** "Testen" tab: dry-run validation against the live mapping (no side effects) plus the
  * development simulator that actually ingests a sample order. */
-export function TestenTab() {
+export function TestenTab({ canRetry }: TestenTabProps) {
   const { showSuccess, showError } = useToast()
   const [partners, setPartners] = useState<EdiPartner[]>([])
   const [partnerCode, setPartnerCode] = useState('')
@@ -145,7 +150,7 @@ export function TestenTab() {
       {createdMessageId && (
         <MessageDetailModal
           id={createdMessageId}
-          canRetry
+          canRetry={canRetry}
           onClose={() => setCreatedMessageId(null)}
           onReplayed={() => setCreatedMessageId(null)}
         />
