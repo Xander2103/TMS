@@ -32,8 +32,9 @@ public class AbsenceService : IAbsenceService
     private readonly INotificationService _notificationService;
     private readonly IFileStorageService _fileStorageService;
     private readonly ICalendarSyncService _calendarSyncService;
-    private readonly IMessageOutboxService _messageOutbox;
     private readonly TimeProvider _timeProvider;
+    private readonly INotificationEventService? _notificationEvents;
+    private readonly Microsoft.Extensions.Logging.ILogger<AbsenceService>? _logger;
 
     public AbsenceService(
         TransportationDbContext dbContext,
@@ -43,8 +44,13 @@ public class AbsenceService : IAbsenceService
         INotificationService notificationService,
         IFileStorageService fileStorageService,
         ICalendarSyncService calendarSyncService,
+        // Retained only for constructor-signature compatibility with existing call sites;
+        // leave-decided (approve/reject) now queues its e-mail through PublishEventAsync
+        // (NotificationEventService) instead of this service calling the outbox directly.
         IMessageOutboxService messageOutbox,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        INotificationEventService? notificationEvents = null,
+        Microsoft.Extensions.Logging.ILogger<AbsenceService>? logger = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -53,8 +59,29 @@ public class AbsenceService : IAbsenceService
         _notificationService = notificationService;
         _fileStorageService = fileStorageService;
         _calendarSyncService = calendarSyncService;
-        _messageOutbox = messageOutbox;
+        _ = messageOutbox;
         _timeProvider = timeProvider;
+        _notificationEvents = notificationEvents;
+        _logger = logger;
+    }
+
+    /// <summary>Fire-and-forget event publication: a notification failure never breaks the
+    /// already-committed business operation.</summary>
+    private async Task PublishEventAsync(string eventKey, NotificationEventContext context, CancellationToken cancellationToken)
+    {
+        if (_notificationEvents is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _notificationEvents.PublishAsync(eventKey, context, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger?.LogError(exception, "Notification event '{EventKey}' failed to publish; business operation already committed.", eventKey);
+        }
     }
 
     private static string? PartDayError(CreateAbsenceRequest request) =>
@@ -171,11 +198,22 @@ public class AbsenceService : IAbsenceService
 
         var dto = await RequireDtoAsync(absence.Id, cancellationToken);
 
-        await _notificationService.NotifyPermissionHoldersAsync(
-            PermissionCodes.AbsencesApprove, "absence_requested",
-            "Afwezigheid aangevraagd",
-            $"{dto.EmployeeName}: {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}.",
-            "/absences", cancellationToken);
+        // Notification ownership moved to the configurable event (Phase 6): NotificationEventCatalog's
+        // leave_requested default recipient is InternalPermission(AbsencesApprove), replacing what
+        // used to be a hardcoded NotifyPermissionHoldersAsync call here.
+        await PublishEventAsync(MessageKinds.LeaveRequested, new NotificationEventContext(
+            EntityType, absence.Id.ToString(),
+            new Dictionary<string, string>
+            {
+                ["employeeName"] = dto.EmployeeName,
+                ["period"] = $"{absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}",
+            })
+        {
+            EmployeeId = absence.EmployeeId,
+            LinkPath = "/absences",
+            InAppTitle = "Afwezigheid aangevraagd",
+            InAppMessage = $"{dto.EmployeeName}: {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}.",
+        }, cancellationToken);
 
         return AbsenceOperationResult.Success(dto);
     }
@@ -252,16 +290,6 @@ public class AbsenceService : IAbsenceService
             request.Approve ? "Approved" : "Rejected", before,
             new { absence.Status, absence.DecisionNote }, cancellationToken);
 
-        // Tell the employee's own user account (if it exists) about the decision.
-        var recipient = await _dbContext.Users.AsNoTracking()
-            .Where(u => u.TenantId == _tenantContext.TenantId && u.EmployeeId == absence.EmployeeId)
-            .Select(u => (Guid?)u.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-        await _notificationService.NotifyAsync(recipient, "absence_decided",
-            request.Approve ? "Afwezigheid goedgekeurd" : "Afwezigheid afgewezen",
-            $"Je {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy} is {(request.Approve ? "goedgekeurd" : "afgewezen")}.",
-            "/portal/absences", cancellationToken);
-
         // Approved leave flows towards the (future) external calendar through the sync seam.
         if (request.Approve)
         {
@@ -270,22 +298,30 @@ public class AbsenceService : IAbsenceService
                 $"Afwezigheid: {absence.Type}"), cancellationToken);
         }
 
-        // The e-mail leaves through the provider-neutral outbox (profile decides channel/opt-out).
+        // Notification ownership moved to the configurable event (Phase 6): leave_decided covers
+        // both the in-app notice (was a hardcoded NotifyAsync) and the e-mail (was a direct
+        // LeaveApproved/LeaveRejected outbox queue) in one call; its default recipient resolves
+        // to the employee themselves (Driver = "subject employee of this event").
         var employeeName = await _dbContext.Employees.AsNoTracking()
             .Where(e => e.Id == absence.EmployeeId && e.TenantId == _tenantContext.TenantId)
             .Select(e => e.FirstName + " " + e.LastName)
             .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
-        await _messageOutbox.QueueAsync(new MessageRequest(
-            request.Approve ? MessageKinds.LeaveApproved : MessageKinds.LeaveRejected,
-            MessageOwnerType.Employee, absence.EmployeeId,
+        var decisionLabel = request.Approve ? "Goedgekeurd" : "Afgewezen";
+        await PublishEventAsync(MessageKinds.LeaveDecided, new NotificationEventContext(
+            EntityType, absence.Id.ToString(),
             new Dictionary<string, string>
             {
                 ["employeeName"] = employeeName,
                 ["period"] = $"{absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy}",
                 ["note"] = absence.DecisionNote ?? string.Empty,
-            },
-            EntityType, absence.Id.ToString(),
-            $"leave_decided:{absence.Id}"), cancellationToken);
+                ["decision"] = decisionLabel,
+            })
+        {
+            EmployeeId = absence.EmployeeId,
+            LinkPath = "/portal/absences",
+            InAppTitle = request.Approve ? "Afwezigheid goedgekeurd" : "Afwezigheid afgewezen",
+            InAppMessage = $"Je {absence.Type} van {absence.StartDate:dd-MM-yyyy} t/m {absence.EndDate:dd-MM-yyyy} is {(request.Approve ? "goedgekeurd" : "afgewezen")}.",
+        }, cancellationToken);
 
         return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
     }

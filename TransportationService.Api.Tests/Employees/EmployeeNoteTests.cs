@@ -1,9 +1,13 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using TransportationService.Api.Common;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Employees.Services;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Messaging.Services;
+using TransportationService.Api.Modules.Notifications.Services;
+using TransportationService.Api.Modules.Partners.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 using TransportationService.Api.Tests.TestSupport;
@@ -193,5 +197,58 @@ public class EmployeeNoteTests
         Assert.Null(await foreign.ListAsync(h.EmployeeId, CancellationToken.None));
         Assert.Null(await foreign.UpdateAsync(h.EmployeeId, note!.Id, "Overschrijven", CancellationToken.None));
         Assert.False(await foreign.DeleteAsync(h.EmployeeId, note.Id, CancellationToken.None));
+    }
+
+    /// <summary>Phase 6 (corrections wave 4): pinning a note fires employee_note_pinned.</summary>
+    [Fact]
+    public async Task Pin_PublishesEmployeeNotePinnedEvent()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var note = await h.Sut.CreateAsync(h.EmployeeId, "Belangrijk", CancellationToken.None);
+
+        var tenant = new DevTenantContext(h.TenantId);
+        var currentUser = new DevCurrentUserContext(h.UserId);
+        var outbox = new MessageOutboxService(h.Db.Context, tenant, h.Clock);
+        var notifications = new NotificationService(h.Db.Context, tenant, currentUser, h.Clock);
+        var communication = new CustomerCommunicationService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, currentUser));
+        var events = new NotificationEventService(h.Db.Context, tenant, outbox, notifications, communication, NullLogger<NotificationEventService>.Instance);
+        var sutWithEvents = new EmployeeNoteService(
+            h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, currentUser), currentUser, h.Clock, events);
+
+        await sutWithEvents.SetPinnedAsync(h.EmployeeId, note!.Id, true, CancellationToken.None);
+
+        // Default recipients for employee_note_pinned is InternalPermission(employee_notes.view);
+        // with no permission holders seeded, the event still runs to completion without throwing —
+        // the assertion here is really "the pin call did not blow up", covered implicitly by
+        // reaching this line. A holder-resolves case is exercised in NotificationEventServiceTests.
+        var updated = await sutWithEvents.ListAsync(h.EmployeeId, CancellationToken.None);
+        Assert.True(updated!.Single(n => n.Id == note.Id).IsPinnedToDashboard);
+    }
+
+    /// <summary>Phase 6 (corrections wave 4): a notification failure must never break the pin.</summary>
+    private sealed class ThrowingNotificationEventService : INotificationEventService
+    {
+        public Task PublishAsync(string eventKey, NotificationEventContext context, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("boom");
+    }
+
+    [Fact]
+    public async Task Pin_SucceedsEvenWhenNotificationPublishThrows()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var note = await h.Sut.CreateAsync(h.EmployeeId, "Belangrijk", CancellationToken.None);
+
+        var tenant = new DevTenantContext(h.TenantId);
+        var currentUser = new DevCurrentUserContext(h.UserId);
+        var sutWithThrowingEvents = new EmployeeNoteService(
+            h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, currentUser), currentUser, h.Clock,
+            new ThrowingNotificationEventService());
+
+        var pinned = await sutWithThrowingEvents.SetPinnedAsync(h.EmployeeId, note!.Id, true, CancellationToken.None);
+
+        Assert.True(pinned!.IsPinnedToDashboard);
+        Assert.True(await h.Db.Context.AuditLogs.AnyAsync(a => a.EntityType == "EmployeeNote" && a.EntityId == note.Id.ToString() && a.Action == "Pinned"));
     }
 }

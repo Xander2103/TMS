@@ -50,7 +50,7 @@ public sealed class ExpiryNotificationHostedService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<TransportationDbContext>();
         var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
-        var producer = new ExpiryNotificationProducer(dbContext, timeProvider);
+        var producer = new ExpiryNotificationProducer(dbContext, timeProvider, _logger);
         var hrProducer = new Modules.Hr.Services.HrReminderProducer(dbContext, timeProvider);
 
         var tenantIds = await dbContext.Tenants.AsNoTracking()

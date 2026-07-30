@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Messaging.Entities;
+using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Employees.Services;
@@ -44,19 +47,25 @@ public class EmployeeNoteService : IEmployeeNoteService
     private readonly IAuditService _auditService;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly TimeProvider _timeProvider;
+    private readonly INotificationEventService? _notificationEvents;
+    private readonly ILogger<EmployeeNoteService>? _logger;
 
     public EmployeeNoteService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
         ICurrentUserContext currentUserContext,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        INotificationEventService? notificationEvents = null,
+        ILogger<EmployeeNoteService>? logger = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _currentUserContext = currentUserContext;
         _timeProvider = timeProvider;
+        _notificationEvents = notificationEvents;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<EmployeeNoteDto>?> ListAsync(Guid employeeId, CancellationToken cancellationToken)
@@ -164,6 +173,29 @@ public class EmployeeNoteService : IEmployeeNoteService
 
         await _auditService.RecordAsync(EntityType, note.Id.ToString(), pinned ? "Pinned" : "Unpinned",
             null, null, cancellationToken);
+
+        if (pinned && _notificationEvents is not null)
+        {
+            try
+            {
+                var employeeName = await _dbContext.Employees.AsNoTracking()
+                    .Where(e => e.Id == employeeId && e.TenantId == _tenantContext.TenantId)
+                    .Select(e => e.FirstName + " " + e.LastName)
+                    .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+                await _notificationEvents.PublishAsync(MessageKinds.EmployeeNotePinned, new NotificationEventContext(
+                    EntityType, note.Id.ToString(), new Dictionary<string, string> { ["employeeName"] = employeeName })
+                {
+                    EmployeeId = employeeId,
+                    LinkPath = $"/employees/{employeeId}?tab=notities",
+                    InAppMessage = $"Een notitie van {employeeName} is aan het dashboard vastgepind.",
+                }, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger?.LogError(exception, "Notification event '{EventKey}' failed to publish; business operation already committed.",
+                    MessageKinds.EmployeeNotePinned);
+            }
+        }
 
         return Map(note);
     }

@@ -41,11 +41,51 @@ public static class MessageKinds
     public const string HrSeniority = "hr_seniority";
     public const string HrEmploymentEnd = "hr_employment_end";
 
+    // Notification-event kinds (corrections wave 4, phase 6): one kind per NotificationEventCatalog
+    // entry, named identically to the event key so outbox rows and rule resolution line up 1:1.
+    public const string OrderCreated = "order_created";
+    public const string OrderSubmittedPortal = "order_submitted_portal";
+    public const string OrderAccepted = "order_accepted";
+    public const string OrderRejected = "order_rejected";
+    public const string OrderInfoRequested = "order_info_requested";
+    public const string OrderPlanned = "order_planned";
+    public const string OrderPickupWindow = "order_pickup_window";
+    public const string OrderDeliveryWindow = "order_delivery_window";
+    public const string OrderPickupCompleted = "order_pickup_completed";
+    public const string OrderDeliveryCompleted = "order_delivery_completed";
+    public const string OrderDelayDetected = "order_delay_detected";
+    public const string OrderFailedDelivery = "order_failed_delivery";
+    public const string OrderDamageRegistered = "order_damage_registered";
+    public const string OrderPodAvailable = "order_pod_available";
+    public const string InvoiceDraftReady = "invoice_draft_ready";
+    public const string InvoiceSent = "invoice_sent";
+    public const string InvoicePeppolQueued = "invoice_peppol_queued";
+    public const string InvoicePeppolDelivered = "invoice_peppol_delivered";
+    public const string InvoicePeppolFailed = "invoice_peppol_failed";
+    public const string InvoiceCreditNote = "invoice_credit_note";
+    public const string PersonnelQualificationExpiry = "personnel_qualification_expiry";
+    public const string PersonnelMedicalExpiry = "personnel_medical_expiry";
+    public const string PersonnelDocumentExpiry = "personnel_document_expiry";
+    public const string LeaveRequested = "leave_requested";
+    public const string LeaveDecided = "leave_decided";
+    public const string EmployeeNotePinned = "employee_note_pinned";
+    public const string FleetMaintenanceDue = "fleet_maintenance_due";
+    public const string FleetInspectionDue = "fleet_inspection_due";
+    public const string FleetDocumentExpiry = "fleet_document_expiry";
+    public const string FleetDamageCreated = "fleet_damage_created";
+
     public static readonly IReadOnlyList<string> All =
     [
         OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate, Delay, DeliveryCompleted,
         PodAvailable, LeaveSubmitted, LeaveApproved, LeaveRejected, PlanningChanged, QualificationExpiry,
         HrBirthday, HrSeniority, HrEmploymentEnd,
+        OrderCreated, OrderSubmittedPortal, OrderAccepted, OrderRejected, OrderInfoRequested, OrderPlanned,
+        OrderPickupWindow, OrderDeliveryWindow, OrderPickupCompleted, OrderDeliveryCompleted,
+        OrderDelayDetected, OrderFailedDelivery, OrderDamageRegistered, OrderPodAvailable,
+        InvoiceDraftReady, InvoiceSent, InvoicePeppolQueued, InvoicePeppolDelivered, InvoicePeppolFailed,
+        InvoiceCreditNote, PersonnelQualificationExpiry, PersonnelMedicalExpiry, PersonnelDocumentExpiry,
+        LeaveRequested, LeaveDecided, EmployeeNotePinned,
+        FleetMaintenanceDue, FleetInspectionDue, FleetDocumentExpiry, FleetDamageCreated,
     ];
 }
 
@@ -115,15 +155,27 @@ public class MessagingProfile : AuditableTenantEntity
     public MessageChannel? FallbackChannel { get; set; }
 }
 
-/// <summary>Tenant-specific template override for (kind, channel, language); built-ins cover the rest.</summary>
+/// <summary>
+/// Tenant-specific template override for (kind, channel, language); built-ins cover the rest.
+/// <see cref="CustomerId"/> null = tenant-wide default; set = an override scoped to one customer,
+/// consulted before the tenant default (resolution chain lives in <c>MessageOutboxService</c>).
+/// </summary>
 public class MessageTemplate : AuditableTenantEntity
 {
     public string Kind { get; set; } = string.Empty;
     public MessageChannel Channel { get; set; }
     public string Language { get; set; } = "nl";
 
+    /// <summary>Null = tenant-wide default template; set = override for one customer.</summary>
+    public Guid? CustomerId { get; set; }
+
     public string? Subject { get; set; }
     public string Body { get; set; } = string.Empty;
+
+    /// <summary>Optional rich-text authoring surface, sanitized on save (see HtmlSanitizer). Not
+    /// yet consumed by outbound rendering (plain Body drives the outbox) — reserved for the
+    /// admin preview/rich-email pipeline.</summary>
+    public string? BodyHtml { get; set; }
 
     public bool IsActive { get; set; } = true;
 }

@@ -1,10 +1,13 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Invoicing.Dtos;
 using TransportationService.Api.Modules.Invoicing.Entities;
+using TransportationService.Api.Modules.Messaging.Entities;
+using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Organization.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
@@ -33,6 +36,8 @@ public class InvoiceService : IInvoiceService
     private readonly IInvoiceNumberService _numberService;
     private readonly Partners.Services.ICustomerBillingConfigService _billingConfig;
     private readonly Accounting.Services.IAccountingService _accounting;
+    private readonly INotificationEventService? _notificationEvents;
+    private readonly ILogger<InvoiceService>? _logger;
 
     public InvoiceService(
         TransportationDbContext dbContext,
@@ -41,7 +46,9 @@ public class InvoiceService : IInvoiceService
         TimeProvider timeProvider,
         IInvoiceNumberService numberService,
         Partners.Services.ICustomerBillingConfigService billingConfig,
-        Accounting.Services.IAccountingService accounting)
+        Accounting.Services.IAccountingService accounting,
+        INotificationEventService? notificationEvents = null,
+        ILogger<InvoiceService>? logger = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -50,6 +57,27 @@ public class InvoiceService : IInvoiceService
         _numberService = numberService;
         _billingConfig = billingConfig;
         _accounting = accounting;
+        _notificationEvents = notificationEvents;
+        _logger = logger;
+    }
+
+    /// <summary>Fire-and-forget event publication: a notification failure never breaks the
+    /// already-committed business operation.</summary>
+    private async Task PublishEventAsync(string eventKey, NotificationEventContext context, CancellationToken cancellationToken)
+    {
+        if (_notificationEvents is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _notificationEvents.PublishAsync(eventKey, context, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger?.LogError(exception, "Notification event '{EventKey}' failed to publish; business operation already committed.", eventKey);
+        }
     }
 
     private IQueryable<Invoice> TenantScoped() =>
@@ -428,6 +456,18 @@ public class InvoiceService : IInvoiceService
         await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "Created", null,
             new { invoice.InvoiceNumber, invoice.CustomerId, LineCount = invoice.Lines.Count }, cancellationToken);
 
+        var draftCustomerName = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.Id == invoice.CustomerId && c.TenantId == tenantId)
+            .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+        await PublishEventAsync(MessageKinds.InvoiceDraftReady, new NotificationEventContext(
+            EntityType, invoice.Id.ToString(),
+            new Dictionary<string, string> { ["invoiceNumber"] = invoice.InvoiceNumber ?? string.Empty, ["customerName"] = draftCustomerName })
+        {
+            CustomerId = invoice.CustomerId,
+            LinkPath = $"/invoices/{invoice.Id}",
+            InAppMessage = $"Conceptfactuur {invoice.InvoiceNumber} voor {draftCustomerName} is klaar.",
+        }, cancellationToken);
+
         return InvoiceOperationResult.Success(await MapDetailAsync(invoice, cancellationToken));
     }
 
@@ -675,6 +715,20 @@ public class InvoiceService : IInvoiceService
 
         await _auditService.RecordAsync(EntityType, invoice.Id.ToString(), "StatusChanged", before,
             new { invoice.Status }, cancellationToken);
+
+        if (target == InvoiceStatus.Sent)
+        {
+            var sentCustomerName = await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.Id == invoice.CustomerId && c.TenantId == _tenantContext.TenantId)
+                .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+            await PublishEventAsync(MessageKinds.InvoiceSent, new NotificationEventContext(
+                EntityType, invoice.Id.ToString(),
+                new Dictionary<string, string> { ["invoiceNumber"] = invoice.InvoiceNumber ?? string.Empty, ["customerName"] = sentCustomerName })
+            {
+                CustomerId = invoice.CustomerId,
+                LinkPath = $"/invoices/{invoice.Id}",
+            }, cancellationToken);
+        }
 
         return InvoiceOperationResult.Success(await MapDetailAsync(invoice, cancellationToken));
     }

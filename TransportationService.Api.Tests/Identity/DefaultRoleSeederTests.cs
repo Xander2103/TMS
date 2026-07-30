@@ -401,9 +401,8 @@ public class DefaultRoleSeederTests
 
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(17, DefaultRoleUpgrades.CurrentVersion);
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
-        Assert.Equal(17, state.AppliedVersion);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         var hr = roles.Single(r => r.TemplateCode == "hr");
@@ -424,6 +423,41 @@ public class DefaultRoleSeederTests
             Assert.DoesNotContain(PermissionCodes.EmployeeNotesView, codes);
             Assert.DoesNotContain(PermissionCodes.EmployeeNotesManage, codes);
             Assert.DoesNotContain(PermissionCodes.EmployeeNotesPin, codes);
+        }
+    }
+
+    [Fact]
+    public async Task Version18_GrantsNotificationRules_ToManagementHrAndBoekhouding()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        Assert.Equal(18, DefaultRoleUpgrades.CurrentVersion);
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(18, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var management = roles.Single(r => r.TemplateCode == "management");
+        var hr = roles.Single(r => r.TemplateCode == "hr");
+        var boekhouding = roles.Single(r => r.TemplateCode == "boekhouding");
+        var others = roles.Where(r => r.TemplateCode is not ("management" or "hr" or "boekhouding")).ToList();
+
+        Assert.Contains(PermissionCodes.NotificationRulesView, await CodesOfAsync(db, management.Id));
+        Assert.Contains(PermissionCodes.NotificationRulesManage, await CodesOfAsync(db, management.Id));
+
+        Assert.Contains(PermissionCodes.NotificationRulesView, await CodesOfAsync(db, hr.Id));
+        Assert.DoesNotContain(PermissionCodes.NotificationRulesManage, await CodesOfAsync(db, hr.Id));
+
+        Assert.Contains(PermissionCodes.NotificationRulesView, await CodesOfAsync(db, boekhouding.Id));
+        Assert.DoesNotContain(PermissionCodes.NotificationRulesManage, await CodesOfAsync(db, boekhouding.Id));
+
+        foreach (var other in others)
+        {
+            var codes = await CodesOfAsync(db, other.Id);
+            Assert.DoesNotContain(PermissionCodes.NotificationRulesView, codes);
+            Assert.DoesNotContain(PermissionCodes.NotificationRulesManage, codes);
         }
     }
 

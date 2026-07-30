@@ -6,7 +6,12 @@ using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Messaging.Services;
 
-/// <summary>Everything a producer knows: what happened, about whom, with which template tokens.</summary>
+/// <summary>Everything a producer knows: what happened, about whom, with which template tokens.
+/// OwnerType/OwnerId still identify whose <see cref="MessagingProfile"/> governs quiet
+/// hours/opt-outs/fallback; the three Override* fields let a caller (NotificationEventService)
+/// supply an already-resolved recipient (e.g. a customer contact's own address, or a literal
+/// explicit address with no natural owner) without that owner having to BE the message target —
+/// resolution still prefers an explicit MessagingProfile override first.</summary>
 public record MessageRequest(
     string Kind,
     MessageOwnerType OwnerType,
@@ -14,7 +19,13 @@ public record MessageRequest(
     IReadOnlyDictionary<string, string> Tokens,
     string? RelatedEntityType,
     string? RelatedEntityId,
-    string IdempotencyKey);
+    string IdempotencyKey,
+    string? OverrideAddress = null,
+    string? OverrideName = null,
+    string? OverrideLanguage = null,
+    /// <summary>When set, template resolution consults this customer's overrides before the
+    /// tenant defaults (see MessageTemplate.CustomerId).</summary>
+    Guid? CustomerIdForTemplate = null);
 
 public enum QueueOutcome
 {
@@ -62,7 +73,7 @@ public class MessageOutboxService : IMessageOutboxService
                                       && p.OwnerId == request.OwnerId, cancellationToken);
 
         var owner = await ResolveOwnerAsync(request.OwnerType, request.OwnerId, cancellationToken);
-        if (owner is null)
+        if (owner is null && string.IsNullOrWhiteSpace(request.OverrideAddress))
         {
             return new QueueResult(QueueOutcome.NoRecipient, Reason: "Eigenaar niet gevonden.");
         }
@@ -71,10 +82,10 @@ public class MessageOutboxService : IMessageOutboxService
         var smsEnabled = profile?.SmsEnabled ?? false;
         var channel = emailEnabled ? MessageChannel.Email : smsEnabled ? MessageChannel.Sms : (MessageChannel?)null;
 
-        var language = profile?.PreferredLanguage ?? owner.Language ?? "nl";
+        var language = profile?.PreferredLanguage ?? request.OverrideLanguage ?? owner?.Language ?? "nl";
         var address = channel == MessageChannel.Sms
             ? profile?.PhoneNumber
-            : profile?.EmailAddress ?? owner.Email;
+            : profile?.EmailAddress ?? request.OverrideAddress ?? owner?.Email;
 
         string? suppressReason = null;
         if (channel is null)
@@ -90,7 +101,8 @@ public class MessageOutboxService : IMessageOutboxService
             return new QueueResult(QueueOutcome.NoRecipient, Reason: "Geen adres/telefoonnummer bekend.");
         }
 
-        var (subject, body) = await RenderAsync(request.Kind, channel ?? MessageChannel.Email, language, request.Tokens, cancellationToken);
+        var (subject, body) = await RenderAsync(
+            request.Kind, channel ?? MessageChannel.Email, language, request.Tokens, request.CustomerIdForTemplate, cancellationToken);
 
         var message = new OutboxMessage
         {
@@ -100,8 +112,8 @@ public class MessageOutboxService : IMessageOutboxService
             Kind = request.Kind,
             OwnerType = request.OwnerType,
             OwnerId = request.OwnerId,
-            RecipientAddress = address ?? owner.Email ?? "onbekend",
-            RecipientName = owner.Name,
+            RecipientAddress = address ?? owner?.Email ?? "onbekend",
+            RecipientName = request.OverrideName ?? owner?.Name,
             Language = language,
             Subject = subject,
             Body = body,
@@ -162,8 +174,8 @@ public class MessageOutboxService : IMessageOutboxService
     }
 
     private async Task<(string? Subject, string Body)> RenderAsync(
-        string kind, MessageChannel channel, string language,
-        IReadOnlyDictionary<string, string> tokens, CancellationToken cancellationToken)
+        string kind, MessageChannel channel, string language, IReadOnlyDictionary<string, string> tokens,
+        Guid? customerIdForTemplate, CancellationToken cancellationToken)
     {
         var tokensWithDefaults = new Dictionary<string, string>(tokens);
         if (!tokensWithDefaults.ContainsKey("companyName"))
@@ -175,27 +187,44 @@ public class MessageOutboxService : IMessageOutboxService
             tokensWithDefaults["companyName"] = companyName;
         }
 
-        var custom = await _dbContext.MessageTemplates.AsNoTracking()
-            .FirstOrDefaultAsync(t => t.TenantId == _tenantContext.TenantId && t.Kind == kind
-                                      && t.Channel == channel && t.Language == language && t.IsActive, cancellationToken);
-
-        string? subjectTemplate;
-        string bodyTemplate;
-        if (custom is not null)
-        {
-            subjectTemplate = custom.Subject;
-            bodyTemplate = custom.Body;
-        }
-        else
-        {
-            var builtIn = BuiltInMessageTemplates.Resolve(kind, channel);
-            subjectTemplate = builtIn.Subject;
-            bodyTemplate = builtIn.Body;
-        }
+        var (subjectTemplate, bodyTemplate) = await ResolveTemplateAsync(kind, channel, language, customerIdForTemplate, cancellationToken);
 
         return (
             subjectTemplate is null ? null : MessageTemplateRenderer.Render(subjectTemplate, tokensWithDefaults),
             MessageTemplateRenderer.Render(bodyTemplate, tokensWithDefaults));
+    }
+
+    /// <summary>
+    /// Resolution chain: (customer, kind, channel, language) → (customer, kind, channel, "nl") →
+    /// (tenant, kind, channel, language) → (tenant, kind, channel, "nl") → built-in. A customer
+    /// row is only consulted when the caller identifies one (customer-directed messages);
+    /// internal/explicit recipients always resolve against the tenant-wide template.
+    /// </summary>
+    private async Task<(string? Subject, string Body)> ResolveTemplateAsync(
+        string kind, MessageChannel channel, string language, Guid? customerId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var candidates = await _dbContext.MessageTemplates.AsNoTracking()
+            .Where(t => t.TenantId == tenantId && t.Kind == kind && t.Channel == channel && t.IsActive
+                        && (t.CustomerId == null || t.CustomerId == customerId))
+            .ToListAsync(cancellationToken);
+
+        MessageTemplate? Find(Guid? forCustomer, string forLanguage) =>
+            candidates.FirstOrDefault(t => t.CustomerId == forCustomer && t.Language == forLanguage);
+
+        var resolved =
+            (customerId is { } id ? Find(id, language) : null)
+            ?? (customerId is { } id2 ? Find(id2, "nl") : null)
+            ?? Find(null, language)
+            ?? Find(null, "nl");
+
+        if (resolved is not null)
+        {
+            return (resolved.Subject, resolved.Body);
+        }
+
+        var builtIn = BuiltInMessageTemplates.Resolve(kind, channel);
+        return (builtIn.Subject, builtIn.Body);
     }
 
     private sealed record OwnerInfo(string? Email, string? Language, string? Name);

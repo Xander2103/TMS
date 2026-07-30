@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.CustomerPortal.Dtos;
@@ -6,6 +7,8 @@ using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Locations.Dtos;
 using TransportationService.Api.Modules.Locations.Entities;
 using TransportationService.Api.Modules.Locations.Services;
+using TransportationService.Api.Modules.Messaging.Entities;
+using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Orders.Dtos;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Orders.Services;
@@ -44,6 +47,8 @@ public class CustomerPortalService : ICustomerPortalService
     private readonly ITransportOrderService _orderService;
     private readonly ILocationService _locationService;
     private readonly IAuditService _auditService;
+    private readonly INotificationEventService? _notificationEvents;
+    private readonly ILogger<CustomerPortalService>? _logger;
 
     public CustomerPortalService(
         TransportationDbContext dbContext,
@@ -51,7 +56,9 @@ public class CustomerPortalService : ICustomerPortalService
         ICurrentUserContext currentUserContext,
         ITransportOrderService orderService,
         ILocationService locationService,
-        IAuditService auditService)
+        IAuditService auditService,
+        INotificationEventService? notificationEvents = null,
+        ILogger<CustomerPortalService>? logger = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -59,6 +66,8 @@ public class CustomerPortalService : ICustomerPortalService
         _orderService = orderService;
         _locationService = locationService;
         _auditService = auditService;
+        _notificationEvents = notificationEvents;
+        _logger = logger;
     }
 
     private async Task<(Guid CustomerId, string CustomerName)?> MyCustomerAsync(CancellationToken cancellationToken)
@@ -188,6 +197,31 @@ public class CustomerPortalService : ICustomerPortalService
 
         await _auditService.RecordAsync("TransportOrder", entity.Id.ToString(), "PortalSubmitted", null,
             new { entity.OrderNumber, CustomerId = customer.Value.CustomerId }, cancellationToken);
+
+        if (_notificationEvents is not null)
+        {
+            try
+            {
+                await _notificationEvents.PublishAsync(MessageKinds.OrderSubmittedPortal, new NotificationEventContext(
+                    "TransportOrder", entity.Id.ToString(),
+                    new Dictionary<string, string>
+                    {
+                        ["orderNumber"] = entity.OrderNumber,
+                        ["customerName"] = customer.Value.CustomerName,
+                        ["goodsDescription"] = entity.GoodsDescription ?? string.Empty,
+                    })
+                {
+                    CustomerId = customer.Value.CustomerId,
+                    LinkPath = $"/orders/{entity.Id}",
+                    InAppMessage = $"{entity.OrderNumber} ({customer.Value.CustomerName}) is ingediend via het klantportaal.",
+                }, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger?.LogError(exception, "Notification event '{EventKey}' failed to publish; business operation already committed.",
+                    MessageKinds.OrderSubmittedPortal);
+            }
+        }
 
         var detail = await _orderService.GetByIdAsync(entity.Id, cancellationToken);
         return PortalResult<PortalOrderDetailDto>.Success(Trim(detail!));

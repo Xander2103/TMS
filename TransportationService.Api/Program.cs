@@ -369,6 +369,8 @@ builder.Services.AddScoped(sp => new TransportationService.Api.Modules.Messaging
     sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.ISmsProvider>(),
     sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddHostedService<TransportationService.Api.Modules.Messaging.Services.OutboxDispatcherHostedService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Messaging.Services.INotificationEventService,
+    TransportationService.Api.Modules.Messaging.Services.NotificationEventService>();
 
 // EDI foundation (generic-json-v1 profile; partner formats plug in as profiles later)
 builder.Services.AddScoped<TransportationService.Api.Modules.Edi.Services.IEdiService,

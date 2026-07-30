@@ -1,10 +1,13 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Messaging.Entities;
+using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Orders.Dtos;
 using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Tarification.Dtos;
@@ -63,6 +66,8 @@ public class TransportOrderService : ITransportOrderService
     private readonly IPricingEngine? _pricingEngine;
     private readonly ICurrentUserContext? _currentUser;
     private readonly IPermissionAuthorizationService? _permissionService;
+    private readonly INotificationEventService? _notificationEvents;
+    private readonly ILogger<TransportOrderService>? _logger;
 
     public TransportOrderService(
         TransportationDbContext dbContext,
@@ -71,7 +76,9 @@ public class TransportOrderService : ITransportOrderService
         TimeProvider timeProvider,
         IPricingEngine? pricingEngine = null,
         ICurrentUserContext? currentUser = null,
-        IPermissionAuthorizationService? permissionService = null)
+        IPermissionAuthorizationService? permissionService = null,
+        INotificationEventService? notificationEvents = null,
+        ILogger<TransportOrderService>? logger = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -80,6 +87,27 @@ public class TransportOrderService : ITransportOrderService
         _pricingEngine = pricingEngine;
         _currentUser = currentUser;
         _permissionService = permissionService;
+        _notificationEvents = notificationEvents;
+        _logger = logger;
+    }
+
+    /// <summary>Fire-and-forget event publication: never lets a notification failure break the
+    /// business operation that already committed (see NotificationEventService's contract).</summary>
+    private async Task PublishEventAsync(string eventKey, NotificationEventContext context, CancellationToken cancellationToken)
+    {
+        if (_notificationEvents is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _notificationEvents.PublishAsync(eventKey, context, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            _logger?.LogError(exception, "Notification event '{EventKey}' failed to publish; business operation already committed.", eventKey);
+        }
     }
 
     private IQueryable<TransportOrder> TenantScoped() =>
@@ -236,6 +264,23 @@ public class TransportOrderService : ITransportOrderService
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Created", null,
             new { order.OrderNumber, order.CustomerId, order.OrderDate, StopCount = order.Stops.Count }, cancellationToken);
+
+        var customerName = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
+            .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+        await PublishEventAsync(MessageKinds.OrderCreated, new NotificationEventContext(
+            EntityType, order.Id.ToString(),
+            new Dictionary<string, string>
+            {
+                ["orderNumber"] = order.OrderNumber,
+                ["customerName"] = customerName,
+                ["goodsDescription"] = order.GoodsDescription ?? string.Empty,
+            })
+        {
+            CustomerId = order.CustomerId,
+            LinkPath = $"/orders/{order.Id}",
+            InAppMessage = $"{order.OrderNumber} ({customerName}) is aangemaakt.",
+        }, cancellationToken);
 
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
@@ -499,12 +544,37 @@ public class TransportOrderService : ITransportOrderService
             }
         }
 
+        var wasSubmitted = order.Status == TransportOrderStatus.Submitted;
         var before = new { order.Status };
         order.Status = target;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "StatusChanged", before,
             new { order.Status }, cancellationToken);
+
+        // Portal review outcome: a Submitted order the planner confirms or sends back to Draft.
+        // Only these two ORIGINATE from a portal submission — Confirmed<->Draft transitions
+        // elsewhere in the workflow (e.g. un-confirming an internally created order) are not
+        // customer-facing decisions and stay silent.
+        if (wasSubmitted && target is TransportOrderStatus.Confirmed or TransportOrderStatus.Draft)
+        {
+            var eventKey = target == TransportOrderStatus.Confirmed ? MessageKinds.OrderAccepted : MessageKinds.OrderRejected;
+            var customerName = await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
+                .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
+            await PublishEventAsync(eventKey, new NotificationEventContext(
+                EntityType, order.Id.ToString(),
+                new Dictionary<string, string>
+                {
+                    ["orderNumber"] = order.OrderNumber,
+                    ["customerName"] = customerName,
+                    ["goodsDescription"] = order.GoodsDescription ?? string.Empty,
+                })
+            {
+                CustomerId = order.CustomerId,
+                LinkPath = $"/portal/orders/{order.Id}",
+            }, cancellationToken);
+        }
 
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }

@@ -316,6 +316,10 @@ public static class PermissionCodes
     public const string LeaveBalancesViewOwn = "leave_balances.view_own";
     public const string LeaveTypesManage = "leave_types.manage";
 
+    // --- Notification rules (configurable events, recipients, customer overrides) ---
+    public const string NotificationRulesView = "notification_rules.view";
+    public const string NotificationRulesManage = "notification_rules.manage";
+
     public static readonly IReadOnlyList<(string Code, string Module, string Action, string Description)> All =
     [
         (UsersView, "users", "view", "Gebruikers bekijken"),
@@ -526,5 +530,7 @@ public static class PermissionCodes
         (LeaveBalancesAdjust, "leave_balances", "adjust", "Verlofsaldo handmatig aanpassen (met reden)"),
         (LeaveBalancesViewOwn, "leave_balances", "view_own", "Eigen verlofsaldo bekijken"),
         (LeaveTypesManage, "leave_types", "manage", "Verloftypes en saldotypes beheren"),
+        (NotificationRulesView, "notification_rules", "view", "Meldingsregels en klantafwijkingen bekijken"),
+        (NotificationRulesManage, "notification_rules", "manage", "Meldingsregels, ontvangers en klantafwijkingen beheren"),
     ];
 }

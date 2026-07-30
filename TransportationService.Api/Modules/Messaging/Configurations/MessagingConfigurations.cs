@@ -73,11 +73,55 @@ public class MessageTemplateConfiguration : IEntityTypeConfiguration<MessageTemp
         builder.Property(t => t.Language).HasMaxLength(5);
         builder.Property(t => t.Subject).HasMaxLength(300);
         builder.Property(t => t.Body).IsRequired().HasMaxLength(8000);
+        builder.Property(t => t.BodyHtml).HasMaxLength(20000);
 
+        // Two filtered unique indexes rather than one: Postgres treats every NULL as distinct,
+        // so a single index on (TenantId, CustomerId, Kind, Channel, Language) would silently
+        // allow duplicate tenant-default (CustomerId IS NULL) rows.
         builder.HasIndex(t => new { t.TenantId, t.Kind, t.Channel, t.Language })
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false AND \"CustomerId\" IS NULL");
+        builder.HasIndex(t => new { t.TenantId, t.CustomerId, t.Kind, t.Channel, t.Language })
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false AND \"CustomerId\" IS NOT NULL");
+
+        builder.HasQueryFilter(t => !t.IsDeleted);
+    }
+}
+
+public class NotificationRuleConfiguration : IEntityTypeConfiguration<NotificationRule>
+{
+    public void Configure(EntityTypeBuilder<NotificationRule> builder)
+    {
+        builder.ToTable("notification_rules");
+
+        builder.HasKey(r => r.Id);
+
+        builder.Property(r => r.EventKey).IsRequired().HasMaxLength(80);
+        builder.Property(r => r.RecipientsJson).HasMaxLength(4000);
+
+        builder.HasIndex(r => new { r.TenantId, r.EventKey })
             .IsUnique()
             .HasFilter("\"IsDeleted\" = false");
 
-        builder.HasQueryFilter(t => !t.IsDeleted);
+        builder.HasQueryFilter(r => !r.IsDeleted);
+    }
+}
+
+public class CustomerNotificationOverrideConfiguration : IEntityTypeConfiguration<CustomerNotificationOverride>
+{
+    public void Configure(EntityTypeBuilder<CustomerNotificationOverride> builder)
+    {
+        builder.ToTable("customer_notification_overrides");
+
+        builder.HasKey(o => o.Id);
+
+        builder.Property(o => o.EventKey).IsRequired().HasMaxLength(80);
+
+        builder.HasIndex(o => new { o.TenantId, o.CustomerId, o.EventKey })
+            .IsUnique()
+            .HasFilter("\"IsDeleted\" = false");
+
+        builder.HasQueryFilter(o => !o.IsDeleted);
     }
 }

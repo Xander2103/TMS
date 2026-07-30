@@ -57,7 +57,8 @@ public class ExpiryPolicyTests
 
         await new ExpiryNotificationProducer(db.Context, new TestClock(Now)).ProduceForTenantAsync(tenantId, CancellationToken.None);
 
-        Assert.Contains(db.Context.Notifications, n => n.Type == "qualification_expiring" && n.UserId == userId);
+        Assert.Contains(db.Context.Notifications,
+            n => n.Type == TransportationService.Api.Modules.Messaging.Entities.MessageKinds.PersonnelQualificationExpiry && n.UserId == userId);
     }
 
     [Fact]
@@ -69,7 +70,8 @@ public class ExpiryPolicyTests
 
         await new ExpiryNotificationProducer(db.Context, new TestClock(Now)).ProduceForTenantAsync(tenantId, CancellationToken.None);
 
-        Assert.DoesNotContain(db.Context.Notifications, n => n.Type == "qualification_expiring");
+        Assert.DoesNotContain(db.Context.Notifications,
+            n => n.Type == TransportationService.Api.Modules.Messaging.Entities.MessageKinds.PersonnelQualificationExpiry);
     }
 
     [Fact]

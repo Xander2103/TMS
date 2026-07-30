@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Hr.Dtos;
@@ -5,7 +6,10 @@ using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Hr.Services;
 using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Messaging.Entities;
+using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Notifications.Services;
+using TransportationService.Api.Modules.Partners.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 using TransportationService.Api.Tests.TestSupport;
@@ -63,13 +67,18 @@ public class NotificationServiceTests
         var tenant = new DevTenantContext(tenantId);
         var clock = new TestClock(Now);
         var notifications = new NotificationService(db.Context, tenant, new DevCurrentUserContext(deciderId), clock);
+        var auditService = new AuditService(db.Context, tenant, new DevCurrentUserContext(deciderId));
+        var messageOutbox = new MessageOutboxService(db.Context, tenant, clock);
+        var notificationEvents = new NotificationEventService(
+            db.Context, tenant, messageOutbox, notifications,
+            new CustomerCommunicationService(db.Context, tenant, auditService),
+            NullLogger<NotificationEventService>.Instance);
         var absences = new AbsenceService(db.Context, tenant, new DevCurrentUserContext(deciderId),
-            new AuditService(db.Context, tenant, new DevCurrentUserContext(deciderId)), notifications,
+            auditService, notifications,
             new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(
                 Path.Combine(Path.GetTempPath(), "ts-notif-tests", Guid.NewGuid().ToString("N"))),
             new TransportationService.Api.Modules.Integrations.Services.NoOpCalendarSyncService(),
-            new TransportationService.Api.Modules.Messaging.Services.MessageOutboxService(db.Context, tenant, clock),
-            clock);
+            messageOutbox, clock, notificationEvents);
 
         var created = await absences.CreateForEmployeeAsync(employeeId,
             new CreateAbsenceRequest(AbsenceType.Vacation, new(2026, 8, 3), new(2026, 8, 14), null),
@@ -78,7 +87,7 @@ public class NotificationServiceTests
 
         var employeeView = new NotificationService(db.Context, tenant, new DevCurrentUserContext(employeeUserId), clock);
         var mine = await employeeView.ListMineAsync(new NotificationQuery(false, null, false, 50), CancellationToken.None);
-        var decision = Assert.Single(mine, n => n.Type == "absence_decided");
+        var decision = Assert.Single(mine, n => n.Type == MessageKinds.LeaveDecided);
         Assert.Equal("Afwezigheid goedgekeurd", decision.Title);
     }
 }

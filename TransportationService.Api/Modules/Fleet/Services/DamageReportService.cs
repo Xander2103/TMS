@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Fleet.Dtos;
 using TransportationService.Api.Modules.Fleet.Entities;
+using TransportationService.Api.Modules.Messaging.Entities;
+using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Fleet.Services;
@@ -14,12 +17,18 @@ public class DamageReportService : IDamageReportService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly INotificationEventService? _notificationEvents;
+    private readonly ILogger<DamageReportService>? _logger;
 
-    public DamageReportService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+    public DamageReportService(
+        TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        INotificationEventService? notificationEvents = null, ILogger<DamageReportService>? logger = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _notificationEvents = notificationEvents;
+        _logger = logger;
     }
 
     private IQueryable<DamageReport> TenantScoped() =>
@@ -175,6 +184,30 @@ public class DamageReportService : IDamageReportService
 
         await _auditService.RecordAsync(EntityType, report.Id.ToString(), "Created", null,
             new { report.IncidentDate, report.Severity, report.VehicleId, report.TrailerId }, cancellationToken);
+
+        if (_notificationEvents is not null)
+        {
+            try
+            {
+                var vehicleLabel = report.VehicleId is { } vId
+                    ? await _dbContext.Vehicles.AsNoTracking().Where(v => v.Id == vId).Select(v => v.LicensePlate).FirstOrDefaultAsync(cancellationToken)
+                    : report.TrailerId is { } tId
+                        ? await _dbContext.Trailers.AsNoTracking().Where(t => t.Id == tId).Select(t => t.LicensePlate).FirstOrDefaultAsync(cancellationToken)
+                        : null;
+                await _notificationEvents.PublishAsync(MessageKinds.FleetDamageCreated, new NotificationEventContext(
+                    EntityType, report.Id.ToString(),
+                    new Dictionary<string, string> { ["vehicle"] = vehicleLabel ?? "onbekend", ["description"] = report.Description })
+                {
+                    LinkPath = report.VehicleId is { } linkVehicleId ? $"/vehicles/{linkVehicleId}?tab=schade" : "/trailers",
+                    InAppMessage = $"Nieuw schadegeval ({vehicleLabel ?? "onbekend"}): {report.Description}",
+                }, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                _logger?.LogError(exception, "Notification event '{EventKey}' failed to publish; business operation already committed.",
+                    MessageKinds.FleetDamageCreated);
+            }
+        }
 
         return DamageOperationResult.Success(await MapAsync(report, cancellationToken));
     }
