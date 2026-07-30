@@ -4,7 +4,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { MonthGrid } from '../../../components/calendar/MonthGrid'
 import { WeekGrid } from '../../../components/calendar/WeekGrid'
 import { CalendarToolbar, type CalendarViewMode } from '../../../components/calendar/CalendarToolbar'
-import { DAY_NAMES, addDays, dayIndexMonday, monthGridRange, toIsoDate } from '../../../components/calendar/dateUtils'
+import { DAY_NAMES, addDays, dayIndexMonday, monthGridRange, startOfMonth, toIsoDate } from '../../../components/calendar/dateUtils'
 import '../../../components/calendar/calendar.css'
 import { useAuth } from '../../auth/authContextValue'
 import { ScheduleChip, ScheduleLegend } from '../../employee-planning/components/ScheduleChip'
@@ -52,7 +52,12 @@ export function EmployeePlanningTab({ employeeId }: { employeeId: string }) {
   const canApprove = hasPermission('absences.approve')
 
   const [view, setViewState] = useState<CalendarViewMode>(() => readStoredView())
-  const [anchor, setAnchor] = useState(() => toIsoDate(mondayOf(new Date())))
+  // Seeded per the resolved initial view: month view should open on the current calendar month
+  // even when today falls before that month's first Monday (e.g. today = Sat 1 Aug -> Mon 27
+  // Jul would otherwise land the initial anchor in July).
+  const [anchor, setAnchor] = useState(() =>
+    toIsoDate(view === 'month' ? startOfMonth(new Date()) : mondayOf(new Date())),
+  )
   const [state, setState] = useState<{ days: ScheduleDay[] | null; loadedKey: string }>({ days: null, loadedKey: '' })
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<{ entry: ScheduleEntry; date: string } | null>(null)
@@ -64,10 +69,17 @@ export function EmployeePlanningTab({ employeeId }: { employeeId: string }) {
 
   const anchorDate = new Date(`${anchor}T00:00:00`)
   const monthRange = view === 'month' ? monthGridRange(anchorDate) : null
-  const from = monthRange ? toIsoDate(monthRange.start) : anchor
+  // Week view always fetches/renders the Monday..Sunday week *containing* the anchor, never the
+  // raw anchor..anchor+6 range — `anchor` isn't guaranteed Monday-aligned (e.g. after paging
+  // months in month view and then switching to week view), and WeekGrid itself always renders
+  // `mondayOf(anchor)`, so the fetch must match that or days silently render empty.
+  const weekStart = view === 'week' ? mondayOf(anchorDate) : null
+  const from = monthRange ? toIsoDate(monthRange.start) : weekStart ? toIsoDate(weekStart) : anchor
   const to = monthRange
     ? toIsoDate(monthRange.end)
-    : toIsoDate(addDays(anchorDate, view === 'week' ? 6 : LIST_WINDOW_DAYS - 1))
+    : weekStart
+      ? toIsoDate(addDays(weekStart, 6))
+      : toIsoDate(addDays(anchorDate, LIST_WINDOW_DAYS - 1))
   const requestKey = `${from}|${to}|${employeeId}`
 
   useEffect(() => {

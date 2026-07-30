@@ -17,8 +17,14 @@ export interface WeekGridProps<T> {
   today?: Date
 }
 
-/** Week calendar: 7 day columns (ma-zo) with date headers; entries render via `renderEntry`
- * and stay individually interactive (day columns are plain containers, not buttons). */
+/**
+ * Week calendar: 7 day columns (ma-zo) with date headers; entries render via `renderEntry`
+ * and stay individually interactive (day columns are plain containers, not buttons).
+ *
+ * Deliberately plain markup, no `role="grid"`/`"row"`/`"gridcell"` — see the same note on
+ * `MonthGrid`. Day headers and entries stay reachable via ordinary Tab order with nl-BE
+ * `aria-label`s.
+ */
 export function WeekGrid<T>({
   anchor,
   entriesByDate,
@@ -32,7 +38,7 @@ export function WeekGrid<T>({
   const days = Array.from({ length: 7 }, (_, index) => addDays(monday, index))
 
   return (
-    <div className="cal-week" role="grid" aria-label="Weekkalender">
+    <div className="cal-week">
       {days.map((date) => {
         const iso = toIsoDate(date)
         const entries = entriesByDate.get(iso) ?? []
@@ -40,7 +46,7 @@ export function WeekGrid<T>({
         const label = `${DAY_NAMES[dayIndexMonday(date)]} ${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`
         const ariaLabel = cellAriaLabel(date, entries.length)
         return (
-          <div key={iso} className={`cal-week-day${isToday ? ' cal-today' : ''}`} role="row">
+          <div key={iso} className={`cal-week-day${isToday ? ' cal-today' : ''}`}>
             {onSelectDate ? (
               <button type="button" className="cal-week-date" onClick={() => onSelectDate(iso)} aria-label={ariaLabel}>
                 {label}
@@ -50,7 +56,7 @@ export function WeekGrid<T>({
                 {label}
               </div>
             )}
-            <div className="cal-week-entries" role="gridcell">
+            <div className="cal-week-entries">
               {entries.length === 0 && <span className="cal-week-free">{emptyLabel}</span>}
               {entries.map((entry, index) => (
                 <span className="cal-week-entry" key={index}>

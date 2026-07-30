@@ -27,6 +27,12 @@ export interface MonthGridProps<T> {
  * Cells are buttons (whole-cell click -> `onSelectDate`); entries themselves are rendered via
  * `renderEntry` and are expected to stay non-interactive here (buttons cannot nest) — the
  * week/list views are where entries become individually clickable.
+ *
+ * Deliberately plain markup, no `role="grid"`/`"row"`/`"gridcell"`: the APG grid pattern requires
+ * a roving-tabindex/arrow-key implementation we don't have, and a bare `role="grid"` without one
+ * is worse than no role (screen readers announce grid navigation that doesn't work, and it would
+ * make every one of the 42 cells a fresh Tab stop either way). Cells stay plain `<button>`s with
+ * the nl-BE `aria-label`, giving standard Tab/Enter/Space operability.
  */
 export function MonthGrid<T>({
   anchor,
@@ -45,14 +51,14 @@ export function MonthGrid<T>({
 
   return (
     <div className="cal-month">
-      <div className="cal-month-headerrow" role="row">
+      <div className="cal-month-headerrow">
         {DAY_NAMES.map((name) => (
-          <div key={name} className="cal-month-header" role="columnheader">
+          <div key={name} className="cal-month-header">
             {name}
           </div>
         ))}
       </div>
-      <div className="cal-month-grid" role="grid" aria-label="Maandkalender">
+      <div className="cal-month-grid">
         {cells.map((date) => {
           const iso = toIsoDate(date)
           const entries = entriesByDate.get(iso) ?? []
@@ -63,7 +69,6 @@ export function MonthGrid<T>({
             <button
               type="button"
               key={iso}
-              role="gridcell"
               className={`cal-month-cell${inMonth ? '' : ' cal-month-cell-outside'}${isToday ? ' cal-today' : ''}`}
               onClick={onSelectDate ? () => onSelectDate(iso) : undefined}
               aria-label={cellAriaLabel(date, entries.length)}

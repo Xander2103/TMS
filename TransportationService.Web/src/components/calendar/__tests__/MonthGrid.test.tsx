@@ -15,7 +15,7 @@ describe('MonthGrid', () => {
   it('renders a full 6-week grid with correct leading/trailing pad cells for the anchor month', () => {
     render(<MonthGrid<Item> anchor={anchor} entriesByDate={new Map()} renderEntry={(item) => item.label} />)
 
-    const cells = screen.getAllByRole('gridcell')
+    const cells = screen.getAllByRole('button')
     expect(cells).toHaveLength(42)
 
     // Leading pad: 27-31 July land in the grid but outside August.
@@ -39,9 +39,9 @@ describe('MonthGrid', () => {
 
     expect(screen.getByText('Shift A')).toBeInTheDocument()
     // "dinsdag 4 augustus, 1 item" — nl-BE weekday + day + month, singular count.
-    expect(screen.getByRole('gridcell', { name: 'dinsdag 4 augustus, 1 item' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'dinsdag 4 augustus, 1 item' })).toBeInTheDocument()
     // A day with no entries still gets an accessible label.
-    expect(screen.getByRole('gridcell', { name: 'woensdag 5 augustus, geen items' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'woensdag 5 augustus, geen items' })).toBeInTheDocument()
   })
 
   it('shows a "+N meer" overflow marker beyond maxVisible entries', () => {
@@ -66,7 +66,7 @@ describe('MonthGrid', () => {
       />,
     )
 
-    const todayCell = screen.getByRole('gridcell', { name: /^dinsdag 4 augustus/ })
+    const todayCell = screen.getByRole('button', { name: /^dinsdag 4 augustus/ })
     expect(todayCell.className).toContain('cal-today')
   })
 
@@ -76,10 +76,10 @@ describe('MonthGrid', () => {
       <MonthGrid<Item> anchor={anchor} entriesByDate={new Map()} renderEntry={(item) => item.label} onSelectDate={onSelectDate} />,
     )
 
-    await userEvent.click(screen.getByRole('gridcell', { name: /^dinsdag 4 augustus/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^dinsdag 4 augustus/ }))
     expect(onSelectDate).toHaveBeenCalledWith('2026-08-04')
 
-    await userEvent.click(screen.getByRole('gridcell', { name: /^maandag 27 juli/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^maandag 27 juli/ }))
     expect(onSelectDate).toHaveBeenCalledWith('2026-07-27')
   })
 })

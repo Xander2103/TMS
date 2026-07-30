@@ -12,7 +12,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { MonthGrid } from '../../../components/calendar/MonthGrid'
 import { WeekGrid } from '../../../components/calendar/WeekGrid'
 import { CalendarToolbar, type CalendarViewMode } from '../../../components/calendar/CalendarToolbar'
-import { DAY_NAMES, dayIndexMonday } from '../../../components/calendar/dateUtils'
+import { DAY_NAMES, dayIndexMonday, monthGridRange } from '../../../components/calendar/dateUtils'
 import '../../../components/calendar/calendar.css'
 import { ScheduleChip, ScheduleLegend } from '../../employee-planning/components/ScheduleChip'
 import { mondayOf, toIsoDate, type ScheduleDay, type ScheduleEntry } from '../../employee-planning/types'
@@ -41,13 +41,21 @@ export function PortalPlanningPage() {
   const [reloadToken, setReloadToken] = useState(0)
   const [noteDialog, setNoteDialog] = useState<{ note: PersonalCalendarNote | null; date: string } | null>(null)
 
-  // Visible range per view: week = 7 days from the anchor Monday; month = the anchor's
-  // calendar month; list = 14 days.
+  // Visible range per view: week = 7 days from the anchor's Monday; month = the full padded
+  // grid MonthGrid renders (leading/trailing weeks from neighbouring months included, so their
+  // dimmed pad cells aren't silently empty); list = 14 days.
+  // `anchor` isn't guaranteed Monday-aligned for week view (e.g. after paging months while in
+  // month view and then switching to week), and WeekGrid always renders `mondayOf(anchor)`, so
+  // the fetch must be derived the same way or days would render empty.
   const anchorDate = new Date(`${anchor}T00:00:00`)
-  const monthStart = toIsoDate(new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1))
-  const monthEnd = toIsoDate(new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0))
-  const from = view === 'month' ? monthStart : anchor
-  const to = view === 'month' ? monthEnd : addDays(anchor, view === 'week' ? 6 : 13)
+  const monthRange = view === 'month' ? monthGridRange(anchorDate) : null
+  const weekStart = view === 'week' ? mondayOf(anchorDate) : null
+  const from = monthRange ? toIsoDate(monthRange.start) : weekStart ? toIsoDate(weekStart) : anchor
+  const to = monthRange
+    ? toIsoDate(monthRange.end)
+    : weekStart
+      ? addDays(toIsoDate(weekStart), 6)
+      : addDays(anchor, 13)
 
   // Loading is derived from a request key so no setState runs synchronously in the effect.
   const requestKey = `${from}|${to}|${reloadToken}`

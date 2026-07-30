@@ -3,6 +3,9 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { WeekGrid } from '../WeekGrid'
 
+// The grid deliberately carries no ARIA row/gridcell roles (see WeekGrid's doc comment), so day
+// columns are located by class instead of role="row".
+
 interface Item {
   label: string
 }
@@ -12,7 +15,7 @@ const anchor = new Date(2026, 7, 4)
 
 describe('WeekGrid', () => {
   it('renders 7 day columns with date headers for the anchor week (Monday-first)', () => {
-    render(<WeekGrid<Item> anchor={anchor} entriesByDate={new Map()} renderEntry={(item) => item.label} />)
+    const { container } = render(<WeekGrid<Item> anchor={anchor} entriesByDate={new Map()} renderEntry={(item) => item.label} />)
 
     expect(screen.getByText('ma 03/08')).toBeInTheDocument()
     expect(screen.getByText('di 04/08')).toBeInTheDocument()
@@ -21,7 +24,7 @@ describe('WeekGrid', () => {
     expect(screen.getByText('vr 07/08')).toBeInTheDocument()
     expect(screen.getByText('za 08/08')).toBeInTheDocument()
     expect(screen.getByText('zo 09/08')).toBeInTheDocument()
-    expect(screen.getAllByRole('row')).toHaveLength(7)
+    expect(container.querySelectorAll('.cal-week-day')).toHaveLength(7)
   })
 
   it('places entries under the column matching their ISO date', () => {

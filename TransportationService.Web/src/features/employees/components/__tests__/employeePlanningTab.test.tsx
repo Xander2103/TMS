@@ -40,9 +40,18 @@ function entry(overrides: Partial<ScheduleEntry>): ScheduleEntry {
   }
 }
 
-/** Scopes queries to the week grid, excluding the legend (which repeats every state label). */
+/**
+ * Scopes queries to the week grid, excluding the legend (which repeats every state label).
+ * WeekGrid deliberately carries no ARIA role (see its doc comment), so it's located by class.
+ */
 function weekGrid() {
-  return within(screen.getByRole('grid', { name: 'Weekkalender' }))
+  const grid = document.querySelector('.cal-week')
+  if (!grid) throw new Error('Week grid is not rendered')
+  return within(grid as HTMLElement)
+}
+
+async function waitForWeekGrid() {
+  await waitFor(() => expect(document.querySelector('.cal-week')).not.toBeNull())
 }
 
 function gridWith(days: ScheduleDay[]): ScheduleGrid {
@@ -134,7 +143,7 @@ describe('EmployeePlanningTab', () => {
     render(<EmployeePlanningTab employeeId={EMPLOYEE_ID} />)
     vi.useRealTimers()
 
-    await waitFor(() => expect(screen.getByRole('grid', { name: 'Weekkalender' })).toBeInTheDocument())
+    await waitForWeekGrid()
     const requested = await weekGrid().findByText('Verlof aangevraagd')
     const approved = await weekGrid().findByText('Verlof goedgekeurd')
     expect(requested).toBeInTheDocument()
@@ -155,7 +164,7 @@ describe('EmployeePlanningTab', () => {
     render(<EmployeePlanningTab employeeId={EMPLOYEE_ID} />)
     vi.useRealTimers()
 
-    await waitFor(() => expect(screen.getByRole('grid', { name: 'Weekkalender' })).toBeInTheDocument())
+    await waitForWeekGrid()
     const chip = await weekGrid().findByText('Ziek')
     expect(chip.closest('.schedule-chip')?.className).toContain('schedule-chip-fullwidth')
   })
@@ -184,7 +193,7 @@ describe('EmployeePlanningTab', () => {
     render(<EmployeePlanningTab employeeId={EMPLOYEE_ID} />)
     vi.useRealTimers()
 
-    await waitFor(() => expect(screen.getByRole('grid', { name: 'Weekkalender' })).toBeInTheDocument())
+    await waitForWeekGrid()
     const chip = await weekGrid().findByText('Verlof aangevraagd')
     const user = userEvent.setup({ delay: null })
     await user.click(chip)
@@ -195,5 +204,40 @@ describe('EmployeePlanningTab', () => {
 
     await user.click(screen.getByRole('button', { name: /Naar verlof/ }))
     expect(navigateSpy).toHaveBeenCalledWith(`/employees/${EMPLOYEE_ID}?tab=verlof&absenceId=abs-9`)
+  })
+
+  it('opens the current calendar month even when today falls before the month\'s first Monday', async () => {
+    // Saturday 1 August 2026: mondayOf(today) is 27 July, a different month than today's own.
+    // The initial anchor for month view must be seeded from startOfMonth(today), not
+    // mondayOf(today), or month view opens on July instead of August.
+    vi.setSystemTime(new Date(2026, 7, 1, 9, 0, 0))
+    render(<EmployeePlanningTab employeeId={EMPLOYEE_ID} />)
+    vi.useRealTimers()
+
+    expect(screen.getByText('augustus 2026')).toBeInTheDocument()
+    await waitFor(() => expect(getScheduleMock).toHaveBeenCalled())
+    expect(getScheduleMock).toHaveBeenCalledWith('2026-07-27', '2026-09-06', undefined, EMPLOYEE_ID)
+  })
+
+  it('keeps the fetched range in sync with what WeekGrid renders after paging months then switching to week view', async () => {
+    render(<EmployeePlanningTab employeeId={EMPLOYEE_ID} />)
+    vi.useRealTimers()
+    const user = userEvent.setup({ delay: null })
+
+    await waitFor(() => expect(getScheduleMock).toHaveBeenCalledWith('2026-07-27', '2026-09-06', undefined, EMPLOYEE_ID))
+    getScheduleMock.mockClear()
+
+    // Page forward one month while still in month view: anchor becomes 1 September (a Tuesday,
+    // not Monday-aligned).
+    await user.click(screen.getByRole('button', { name: 'Volgende periode' }))
+    await waitFor(() => expect(getScheduleMock).toHaveBeenCalledWith('2026-08-31', '2026-10-04', undefined, EMPLOYEE_ID))
+    getScheduleMock.mockClear()
+
+    // Switching to week view (not navigating) must fetch the Monday..Sunday week *containing*
+    // that anchor — the same week WeekGrid renders — not the raw anchor..anchor+6 range.
+    await user.click(screen.getByRole('button', { name: 'Week' }))
+    await waitFor(() => expect(getScheduleMock).toHaveBeenCalledWith('2026-08-31', '2026-09-06', undefined, EMPLOYEE_ID))
+    await waitForWeekGrid()
+    expect(weekGrid().getByText('ma 31/08')).toBeInTheDocument()
   })
 })
