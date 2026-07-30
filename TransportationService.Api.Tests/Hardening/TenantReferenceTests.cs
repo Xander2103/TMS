@@ -164,7 +164,7 @@ public class TenantReferenceTests
         h.Db.Context.Roles.Add(new Role { Id = foreignRole, TenantId = h.ForeignTenantId, Name = "ForeignAdmin", IsActive = true, CreatedAt = Now.UtcDateTime, UpdatedAt = Now.UtcDateTime });
         await h.Db.Context.SaveChangesAsync();
 
-        var sut = new UserService(h.Db.Context, new DevTenantContext(h.TenantId), Audit(h.Db, h.TenantId), new TransportationService.Api.Modules.Authentication.Services.PasswordHasher());
+        var sut = TransportationService.Api.Tests.TestSupport.IdentityTestFactory.UserService(h.Db, h.TenantId, Guid.NewGuid());
         var request = new CreateUserRequest("a@b.com", "A", "B", null, null, new[] { foreignRole });
 
         await Assert.ThrowsAsync<InvalidTenantReferenceException>(

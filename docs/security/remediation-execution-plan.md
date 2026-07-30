@@ -26,18 +26,45 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
   startupvalidator gooit bij impersonatie in prod.
 - **Rest/OPS:** productie moet `ASPNETCORE_ENVIRONMENT` correct zetten (checklist).
 
-### C2 — Privilege escalation via users.edit & password reset · **PLANNED**
-- **Code:** `Modules/Identity/Services/UserService.cs` `SetPasswordAsync` — injecteer
-  `ICurrentUserContext` + `IPermissionSetService`; weiger reset wanneer doel een permissie bezit
-  die de aanroeper mist of in een `IsSystemRole`-rol zit; roep refresh-token-revoke aan; audit
-  `PasswordResetByAdmin`. Nieuwe `MustChangePasswordActionFilter` die business-endpoints blokkeert
-  (alleen identity/logout/change-password toegestaan) op basis van een `must_change_password`-claim.
-  `AuthService` + `TokenService`: claim toevoegen; refresh-revoke bij reset.
-- **DB:** geen (MustChangePassword bestaat al op `User`).
-- **Tests:** users.edit kan geen hoger/systeemaccount resetten; reset trekt refresh-tokens in;
-  MustChangePassword blokkeert business-endpoints; adminreset geaudit.
-- **Let op:** wijzigt de constructor van `UserService` (breekt bestaande `new UserService(...)`
-  in tests → mee migreren).
+### C2 — Privilege escalation via users.edit & password reset · **DONE (iteratie 2)**
+- **Code:** `Modules/Identity/Services/AccountSecurityService.cs` (nieuw: effectieve permissies,
+  `CanManageUserAsync`, `IsProtectedSystemUserAsync`, `ActorHoldsAllAsync`, `RevokeAllSessionsAsync`,
+  portal-helpers); `UserService.SetPasswordAsync` (aparte permissie, self-reset geweigerd,
+  privilege-subset + systeemaccount-guard, sessie-revocatie, audit `PasswordResetByAdmin` zonder
+  wachtwoord/token); `UsersController` gate → `users.reset_password` + 403-mapping;
+  `Modules/Identity/Authorization/AccountStateAuthorizationFilter.cs` (nieuw: security-stamp-
+  verificatie + MustChangePassword-afdwinging, centraal als globale filter geregistreerd);
+  `PermitWhenPasswordChangeRequiredAttribute` op `/auth/me`, `/auth/logout`, `/me/password`;
+  `TokenService`/`AuthService`/`AppClaimTypes` (stamp- + must-change-claims);
+  `UserAccountFlowService` roteert de stamp bij token-reset.
+- **DB:** migratie `20260730203928_AccountSecurityHardening` — `users.SecurityStamp` (additief).
+- **Permissie:** `users.reset_password` (v-loze catalogusuitbreiding; systeemrollen krijgen de
+  volledige catalogus automatisch via `PermissionCatalogSeeder`, dus standaard alleen Administrator).
+- **Tests:** `Security/Phase2PrivilegeEscalationTests.cs` — hoger-geprivilegieerd doel 403,
+  systeemadmin 403, self-reset 403, toegestane reset revoked sessies + zet MustChangePassword +
+  roteert stamp + audit zonder secrets.
+- **Open (bewust):** *recente re-authenticatie* bij administratieve reset is NIET geïmplementeerd;
+  gekozen alternatief = aparte gevoelige permissie + effectieve privilege-subsetcontrole. Blijft
+  open hardeningpunt.
+
+### H2 — Self-role assignment & role escalation · **DONE (iteratie 2)**
+- **Code:** `UserService.AssignRolesAsync` — self-guard (actor ≠ target), replace-semantiek
+  autoriseert zowel toevoegen als verwijderen, systeemrol alleen door systeemgebruiker,
+  rol-permissies moeten subset van de actor zijn, laatste-administrator-guard behouden, audit
+  met actor.
+- **Tests:** self-assign 403, rol met ontbrekende permissies 403, systeemrol 403, verwijderen van
+  hoger-geprivilegieerde rol 403, toegestane toewijzing + audit.
+
+### H3 — Onveilige permission assignment · **DONE (iteratie 2)**
+- **Code:** `RoleService.AssignPermissionsAsync` — systeemrollen volledig beschermd
+  (`SystemRoleProtected`, voorkomt uithollen/lockout), onbekende codes geweigerd (ook
+  casing-varianten), klantportaalrollen alleen `customer_portal.*`, actor kan enkel eigen
+  permissies toekennen; `RolesController` 403/400-mapping.
+- **Break-glass:** systeemrollen worden centraal door `PermissionCatalogSeeder` van de volledige
+  catalogus voorzien bij startup — herstel vereist dus geen applicatiepermissie (gedocumenteerd
+  als break-glass, geen verborgen bypass in de gewone flow).
+- **Tests:** systeemrol-mutatie geweigerd, permissie buiten actor-set 403, portalrol weigert
+  interne permissie (ook andere casing), portalrol accepteert portal-permissie, onbekende code 400.
 
 ### C3 — Raw tokens in responses/outbox/bestanden · **DEELS DONE**
 - **DONE (responselek dicht):** sink alleen in Development geregistreerd; prod = fail-closed
@@ -66,14 +93,11 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 
 ---
 
-## Fase 2 — Rollen, permissions & sessie · **PLANNED**
+## Fase 2 — Rollen, permissions & sessie
 
-- **H2 self-role-assignment:** `UserService.AssignRolesAsync` — injecteer `ICurrentUserContext` +
-  `IPermissionSetService`; weiger `id == CurrentUserId`; weiger rollen met permissies buiten de
-  set van de aanroeper; audit. Tests: self-assign geweigerd, superset geweigerd.
-- **H3 permission-assignment:** `Modules/Identity/Services/RoleService.cs AssignPermissionsAsync` —
-  `IsSystemRole`-guard (zoals Update/Deactivate), snijden met caller-set, `klantportaal*` mag enkel
-  `customer_portal.*`; break-glass herstel gedocumenteerd (geen gewone permissie). Tests idem.
+> **H2 en H3 zijn in iteratie 2 opgelost** (zie de C2/H2/H3-blokken hierboven). De resterende
+> punten van deze fase staan hieronder en zijn nog **PLANNED**.
+
 - **H4 refresh-reuse:** `AuthService` refresh-pad — detecteer herroepen/geroteerde token, revoke de
   familie via `ReplacedByTokenHash`, audit `RefreshReuseDetected`; per-user sessielimiet
   (config); purge-job (Fase 7). Betrouwbare familierelaties (transactioneel). Test: reuse trekt
@@ -81,10 +105,11 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 - **H8 account-lockout:** `User` + migratie (`FailedLoginCount`, `LockedUntil`); `AuthService` telt
   mislukte pogingen, exponentiële lock; rate-limit-partitie ook op genormaliseerd e-mailadres;
   audit login-events (Fase 6). Test: lock na N pogingen ook vanaf nieuw IP.
-- **H14 block/inactive:** `PermissionAuthorizationService`/`PermissionSetService` — `IsActive &&
-  !IsBlocked`-predicaat; `SetActive/SetBlocked` revoken refresh-tokens; `SecurityStamp`/
-  `TokenVersion` op `User` + claim + per-request check; access-token TTL naar 10–15 min (config).
-  Migratie voor stamp. Test: geblokkeerde gebruiker geweigerd; sessies ongeldig na block/reset.
+- **H14 block/inactive:** *deels voorbereid in iteratie 2* — `User.SecurityStamp` + claim +
+  per-request verificatie (`AccountStateAuthorizationFilter`) en `RevokeAllSessionsAsync` bestaan
+  al. **Nog te doen:** `IsActive && !IsBlocked`-predicaat in `PermissionAuthorizationService`/
+  `PermissionSetService`, `SetActive`/`SetBlocked` laten revoken via `RevokeAllSessionsAsync`, en
+  access-token-TTL naar 10–15 min. Test: geblokkeerde gebruiker geweigerd bij volgende request.
 - **M3 password-hardening:** centrale `PasswordPolicy` (min 12, config), veelgebruikte-wachtwoord-
   deny-list lokaal, `PasswordHasherOptions` expliciete iteraties (of Argon2id), rehash-on-login
   (`AuthService` handelt `SuccessRehashNeeded`). Test: legacy-hash upgrade.
