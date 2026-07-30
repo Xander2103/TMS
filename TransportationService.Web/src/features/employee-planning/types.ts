@@ -188,18 +188,7 @@ export function formatMinutes(minutes: number): string {
   return rest === 0 ? `${hours}u` : `${hours}u${String(rest).padStart(2, '0')}`
 }
 
-/** Monday of the week containing the given date (ISO week start). */
-export function mondayOf(date: Date): Date {
-  const result = new Date(date)
-  const day = (result.getDay() + 6) % 7
-  result.setDate(result.getDate() - day)
-  result.setHours(0, 0, 0, 0)
-  return result
-}
-
-export function toIsoDate(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+// `mondayOf`/`toIsoDate` live in the shared calendar date helpers (single implementation,
+// reused by the shared calendar grid components as well as this feature). Re-exported here
+// so existing imports from this module keep working unchanged.
+export { mondayOf, toIsoDate } from '../../components/calendar/dateUtils'

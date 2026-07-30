@@ -19,13 +19,25 @@ function chipText(entry: ScheduleEntry): string {
 }
 
 /** One schedule cell chip: colour + icon + label, never colour alone. */
-export function ScheduleChip({ entry, onClick, compact }: { entry: ScheduleEntry; onClick?: () => void; compact?: boolean }) {
+export function ScheduleChip({
+  entry,
+  onClick,
+  compact,
+  fullWidth,
+}: {
+  entry: ScheduleEntry
+  onClick?: () => void
+  compact?: boolean
+  /** All-day entries (e.g. absences, which carry no start/end time) read better as a full-width banner. */
+  fullWidth?: boolean
+}) {
   const range = timeRange(entry)
   const description = chipDescription(entry)
   const conflictClass = entry.conflictSeverity
     ? ` schedule-chip-conflict schedule-chip-conflict-${entry.conflictSeverity.toLowerCase()}`
     : ''
   const compactClass = compact ? ' schedule-chip-compact' : ''
+  const fullWidthClass = fullWidth ? ' schedule-chip-fullwidth' : ''
   // Dynamic colour (leave type / personal note) overrides the per-state convention; the
   // icon + label stay, so colour is never the only signal.
   const colourStyle = entry.colour
@@ -51,7 +63,7 @@ export function ScheduleChip({ entry, onClick, compact }: { entry: ScheduleEntry
   return onClick ? (
     <button
       type="button"
-      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}${compactClass}`}
+      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}${compactClass}${fullWidthClass}`}
       style={colourStyle}
       onClick={onClick}
       title={description}
@@ -61,7 +73,7 @@ export function ScheduleChip({ entry, onClick, compact }: { entry: ScheduleEntry
     </button>
   ) : (
     <span
-      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}${compactClass}`}
+      className={`schedule-chip schedule-chip-${entry.state.toLowerCase()}${conflictClass}${compactClass}${fullWidthClass}`}
       style={colourStyle}
       title={description}
     >

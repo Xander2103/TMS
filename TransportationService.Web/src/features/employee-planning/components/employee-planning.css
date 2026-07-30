@@ -303,3 +303,47 @@ th.ep-today {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* All-day entries (absences carry no start/end time) read as a full-width banner rather than
+   an inline chip, so they stand out from timed shifts/trips in week and list views. */
+.schedule-chip-fullwidth {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Entry detail popover (EmployeePlanningTab) */
+.ep-entry-detail {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 16px;
+}
+
+.ep-entry-detail dt {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ep-entry-detail dd {
+  margin: 0;
+  color: var(--text-h);
+}
+
+.ep-entry-link {
+  display: inline-block;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ep-entry-approve-hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}

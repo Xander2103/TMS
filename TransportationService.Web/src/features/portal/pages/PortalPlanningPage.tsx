@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
@@ -9,34 +9,32 @@ import { apiClient } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import { useAuth } from '../../auth/authContextValue'
+import { MonthGrid } from '../../../components/calendar/MonthGrid'
+import { WeekGrid } from '../../../components/calendar/WeekGrid'
+import { CalendarToolbar, type CalendarViewMode } from '../../../components/calendar/CalendarToolbar'
+import { DAY_NAMES, dayIndexMonday } from '../../../components/calendar/dateUtils'
+import '../../../components/calendar/calendar.css'
 import { ScheduleChip, ScheduleLegend } from '../../employee-planning/components/ScheduleChip'
 import { mondayOf, toIsoDate, type ScheduleDay, type ScheduleEntry } from '../../employee-planning/types'
 import { PersonalNoteDialog } from '../components/PersonalNoteDialog'
 import type { PersonalCalendarNote } from '../api/calendarNotesApi'
 import './portal.css'
 
-const DAY_NAMES = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo']
-const MONTH_NAMES = [
-  'januari', 'februari', 'maart', 'april', 'mei', 'juni',
-  'juli', 'augustus', 'september', 'oktober', 'november', 'december',
-]
-
-type ViewMode = 'week' | 'month' | 'list'
-
 function addDays(iso: string, days: number): string {
   return toIsoDate(new Date(new Date(`${iso}T00:00:00`).getTime() + days * 86_400_000))
 }
 
 /**
- * Personal planning as a real calendar: week view (days side by side), compact month view
- * and the original agenda list — plus an iCalendar export for Google/Outlook import.
+ * Personal planning as a real calendar: week view (days side by side), month view (shared
+ * calendar grid) and the original agenda list — plus an iCalendar export for Google/Outlook
+ * import.
  */
 export function PortalPlanningPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { hasPermission } = useAuth()
 
-  const [view, setView] = useState<ViewMode>('week')
+  const [view, setView] = useState<CalendarViewMode>('week')
   const [anchor, setAnchor] = useState(() => toIsoDate(mondayOf(new Date())))
   const [loadedDays, setLoadedDays] = useState<{ key: string; days: ScheduleDay[] } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -70,14 +68,7 @@ export function PortalPlanningPage() {
     }
   }, [from, to, reloadToken])
 
-  function shift(direction: -1 | 1) {
-    if (view === 'month') {
-      const next = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + direction, 1)
-      setAnchor(toIsoDate(mondayOf(next)) <= toIsoDate(next) ? toIsoDate(next) : toIsoDate(next))
-    } else {
-      setAnchor(addDays(anchor, direction * (view === 'week' ? 7 : 14)))
-    }
-  }
+  const entriesByDate = useMemo(() => new Map((days ?? []).map((day) => [day.date, day.entries])), [days])
 
   function chipAction(entry: ScheduleEntry, date: string): (() => void) | undefined {
     if (entry.noteId) {
@@ -102,6 +93,11 @@ export function PortalPlanningPage() {
     return undefined
   }
 
+  function selectMonthDate(iso: string) {
+    setView('week')
+    setAnchor(toIsoDate(mondayOf(new Date(`${iso}T00:00:00`))))
+  }
+
   async function downloadIcs() {
     try {
       const response = await fetch(`${apiBaseUrl}/api/me/planning/ics?from=${from}&to=${to}`, {
@@ -123,10 +119,6 @@ export function PortalPlanningPage() {
   if (loadError) return <ErrorState message={loadError} />
 
   const today = toIsoDate(new Date())
-  const periodLabel =
-    view === 'month'
-      ? `${MONTH_NAMES[anchorDate.getMonth()]} ${anchorDate.getFullYear()}`
-      : `${from} – ${to}`
 
   return (
     <div>
@@ -143,96 +135,44 @@ export function PortalPlanningPage() {
         }
       />
 
-      <div className="portal-week-nav">
-        <button type="button" onClick={() => shift(-1)} aria-label="Vorige periode">
-          ‹ vorige
-        </button>
-        <span>{periodLabel}</span>
-        <button type="button" onClick={() => shift(1)} aria-label="Volgende periode">
-          volgende ›
-        </button>
-        <span className="portal-view-switch" role="group" aria-label="Weergave">
-          {(['week', 'month', 'list'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className={view === mode ? 'portal-view-active' : undefined}
-              onClick={() => setView(mode)}
-            >
-              {mode === 'week' ? 'Week' : mode === 'month' ? 'Maand' : 'Lijst'}
-            </button>
-          ))}
-        </span>
-      </div>
+      <CalendarToolbar
+        anchor={anchorDate}
+        view={view}
+        onViewChange={setView}
+        onNavigate={(next) => setAnchor(toIsoDate(next))}
+      />
 
       {!days && <LoadingState message="Planning laden..." />}
 
       {days && view === 'week' && (
-        <div className="portal-calendar-week">
-          {days.map((day) => {
-            const dayIndex = (new Date(`${day.date}T00:00:00`).getDay() + 6) % 7
-            return (
-              <div key={day.date} className={`portal-calendar-day ${day.date === today ? 'portal-planning-today' : ''}`}>
-                <div className="portal-planning-date">
-                  {DAY_NAMES[dayIndex]} {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
-                </div>
-                <div className="portal-calendar-entries">
-                  {day.entries.length === 0 && <span className="portal-planning-free">vrij</span>}
-                  {day.entries.map((entry, index) => (
-                    <ScheduleChip key={index} entry={entry} onClick={chipAction(entry, day.date)} />
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+        <WeekGrid
+          anchor={anchorDate}
+          entriesByDate={entriesByDate}
+          renderEntry={(entry, ctx) => <ScheduleChip entry={entry} onClick={chipAction(entry, ctx.date)} />}
+        />
       )}
 
       {days && view === 'month' && (
-        <div className="portal-calendar-month">
-          {DAY_NAMES.map((name) => (
-            <div key={name} className="portal-month-header">
-              {name}
-            </div>
-          ))}
-          {/* Leading offset so the 1st lands on its weekday column. */}
-          {Array.from({ length: (new Date(`${monthStart}T00:00:00`).getDay() + 6) % 7 }).map((_, index) => (
-            <div key={`pad-${index}`} />
-          ))}
-          {days.map((day) => (
-            <button
-              key={day.date}
-              type="button"
-              className={`portal-month-cell ${day.date === today ? 'portal-planning-today' : ''}`}
-              onClick={() => {
-                setView('week')
-                setAnchor(toIsoDate(mondayOf(new Date(`${day.date}T00:00:00`))))
-              }}
-              title={day.entries.map((entry) => entry.label).join(', ') || 'vrij'}
-            >
-              <span className="portal-month-daynr">{Number(day.date.slice(8, 10))}</span>
-              {/* Compact chips keep the colour language of week/list in the month grid. */}
-              {day.entries.slice(0, 2).map((entry, index) => (
-                <ScheduleChip key={index} entry={entry} compact />
-              ))}
-              {day.entries.length > 2 && <span className="portal-month-more">+{day.entries.length - 2}</span>}
-            </button>
-          ))}
-        </div>
+        <MonthGrid
+          anchor={anchorDate}
+          entriesByDate={entriesByDate}
+          onSelectDate={selectMonthDate}
+          renderEntry={(entry) => <ScheduleChip entry={entry} compact />}
+        />
       )}
 
       {days && view === 'list' && (
-        <ul className="portal-planning">
+        <ul className="cal-list">
           {days.map((day) => {
-            const dayIndex = (new Date(`${day.date}T00:00:00`).getDay() + 6) % 7
+            const dayIndex = dayIndexMonday(new Date(`${day.date}T00:00:00`))
             return (
-              <li key={day.date} className={`portal-planning-day ${day.date === today ? 'portal-planning-today' : ''}`}>
-                <div className="portal-planning-date">
+              <li key={day.date} className={`cal-list-day ${day.date === today ? 'cal-today' : ''}`}>
+                <div className="cal-list-date">
                   {DAY_NAMES[dayIndex]} {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
                   {day.date === today && ' · vandaag'}
                 </div>
-                <div className="portal-planning-entries">
-                  {day.entries.length === 0 && <span className="portal-planning-free">vrij</span>}
+                <div className="cal-list-entries">
+                  {day.entries.length === 0 && <span className="cal-list-free">vrij</span>}
                   {day.entries.map((entry, index) => (
                     <ScheduleChip key={index} entry={entry} onClick={chipAction(entry, day.date)} />
                   ))}
