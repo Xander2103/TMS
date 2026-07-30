@@ -544,9 +544,8 @@ public class DefaultRoleSeederTests
 
         await DefaultRoleSeeder.SyncAsync(db.Context);
 
-        Assert.Equal(21, DefaultRoleUpgrades.CurrentVersion);
         var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
-        Assert.Equal(21, state.AppliedVersion);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
 
         var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
         var managementCodes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "management").Id);
@@ -572,6 +571,26 @@ public class DefaultRoleSeederTests
         foreach (var other in others)
         {
             Assert.DoesNotContain(PermissionCodes.PeppolView, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version22_GrantsMedicalAbsenceView_OnlyToHr()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        var hrCodes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == "hr").Id);
+        Assert.Contains(PermissionCodes.AbsencesViewMedical, hrCodes);
+
+        // Planning-side templates keep absences.view (who is absent, when) but never the
+        // health data behind it (GDPR art. 9).
+        foreach (var other in roles.Where(r => r.TemplateCode is not null and not "hr" and not "administrator"))
+        {
+            Assert.DoesNotContain(PermissionCodes.AbsencesViewMedical, await CodesOfAsync(db, other.Id));
         }
     }
 

@@ -89,6 +89,13 @@ public class LeaveWorkflowTests
             tenantId, employeeId, colleagueId, employeeUserId, driverId);
     }
 
+    /// <summary>HR-style caller: holds every permission, including absences.view_medical.</summary>
+    private sealed class AllowAllPermissions : Api.Modules.Identity.Services.IPermissionAuthorizationService
+    {
+        public Task<bool> UserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken)
+            => Task.FromResult(true);
+    }
+
     private static AbsenceService CreateSut(
         SqliteTestDbContext db, Guid tenantId, ICalendarSyncService calendarSync, string storageRoot)
     {
@@ -100,7 +107,8 @@ public class LeaveWorkflowTests
             new NotificationService(db.Context, tenant, user, new TestClock(Now)),
             new LocalFileStorageService(storageRoot),
             calendarSync,
-            new TestClock(Now));
+            new TestClock(Now),
+            authorization: new AllowAllPermissions());
     }
 
     private static CreateAbsenceRequest Request(
@@ -206,7 +214,8 @@ public class LeaveWorkflowTests
 
             var open = await h.Sut.OpenDocumentAsync(absence.Id, CancellationToken.None);
             Assert.NotNull(open);
-            using var reader = new StreamReader(open!.Value.Content);
+            Assert.False(open!.MedicalRestricted);
+            using var reader = new StreamReader(open.Content!);
             Assert.Equal("ziektebriefje", await reader.ReadToEndAsync());
 
             var exeRefused = await h.Sut.AttachDocumentAsync(absence.Id, "virus.exe", new MemoryStream([1]), CancellationToken.None);

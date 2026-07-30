@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Profitability.Dtos;
@@ -16,13 +17,16 @@ public class ProfitabilityController : ControllerBase
 {
     private readonly IProfitabilityQueryService _queryService;
     private readonly IProfitabilityExportService _exportService;
+    private readonly IAuditService _auditService;
 
     public ProfitabilityController(
         IProfitabilityQueryService queryService,
-        IProfitabilityExportService exportService)
+        IProfitabilityExportService exportService,
+        IAuditService auditService)
     {
         _queryService = queryService;
         _exportService = exportService;
+        _auditService = auditService;
     }
 
     [HttpGet("trips")]
@@ -59,6 +63,7 @@ public class ProfitabilityController : ControllerBase
         [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
     {
         var (content, fileName) = await _exportService.BuildAsync(from, to, cancellationToken);
+        await _auditService.RecordExportAsync("profitability", new { from, to }, cancellationToken);
         return File(content, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
     }
 }

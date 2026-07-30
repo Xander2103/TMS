@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
 using TransportationService.Api.Modules.Reporting.Dtos;
@@ -15,11 +16,13 @@ public class KpiController : ControllerBase
 
     private readonly IKpiQueryService _service;
     private readonly IKpiExportService _exportService;
+    private readonly IAuditService _auditService;
 
-    public KpiController(IKpiQueryService service, IKpiExportService exportService)
+    public KpiController(IKpiQueryService service, IKpiExportService exportService, IAuditService auditService)
     {
         _service = service;
         _exportService = exportService;
+        _auditService = auditService;
     }
 
     private static string? ValidateRange(DateOnly from, DateOnly to) =>
@@ -81,6 +84,9 @@ public class KpiController : ControllerBase
                 message = $"Onbekend rapport '{report}'. Beschikbaar: {string.Join(", ", _exportService.ReportKeys)}.",
             });
         }
+
+        await _auditService.RecordExportAsync(
+            $"kpi:{report}", new { from, to, customerId, driverId, vehicleId }, cancellationToken);
 
         return File(result.Value.Content,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

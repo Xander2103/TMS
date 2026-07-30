@@ -222,7 +222,17 @@ public class PortalService : IPortalService
         var belongsToMe = await _dbContext.Absences.AsNoTracking()
             .AnyAsync(a => a.Id == absenceId && a.TenantId == _tenantContext.TenantId
                            && a.EmployeeId == employeeId, cancellationToken);
-        return belongsToMe ? await _absenceService.OpenDocumentAsync(absenceId, cancellationToken) : null;
+        if (!belongsToMe)
+        {
+            return null;
+        }
+
+        // Own certificate: the data subject is always allowed to see their own upload, so a
+        // MedicalRestricted result cannot occur on this path (the service self-exempts).
+        var document = await _absenceService.OpenDocumentAsync(absenceId, cancellationToken);
+        return document is { MedicalRestricted: false, Content: { } content, FileName: { } fileName }
+            ? (content, fileName)
+            : null;
     }
 
     public async Task<PortalAbsenceResult> CreateMyAbsenceAsync(

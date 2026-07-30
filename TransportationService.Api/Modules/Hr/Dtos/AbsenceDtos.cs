@@ -75,6 +75,17 @@ public enum AbsenceOperationOutcome
     ValidationFailed,
 }
 
+/// <summary>
+/// Opened absence attachment. <see cref="MedicalRestricted"/> distinguishes "exists but the
+/// caller may not see health data" (403) from "no attachment" (null result, 404).
+/// </summary>
+public sealed record AbsenceAttachmentResult(Stream? Content, string? FileName, bool MedicalRestricted)
+{
+    public static readonly AbsenceAttachmentResult MedicalAccessDenied = new(null, null, true);
+
+    public static AbsenceAttachmentResult Open(Stream content, string fileName) => new(content, fileName, false);
+}
+
 public record AbsenceOperationResult(AbsenceOperationOutcome Outcome, AbsenceDto? Absence, string? Error = null)
 {
     public static AbsenceOperationResult Success(AbsenceDto absence) => new(AbsenceOperationOutcome.Success, absence);

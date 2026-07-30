@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 21;
+    public const int CurrentVersion = 22;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -418,6 +418,17 @@ public static class DefaultRoleUpgrades
                     PermissionCodes.PeppolView, PermissionCodes.PeppolValidate,
                     PermissionCodes.PeppolSend, PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
                 ],
+            }),
+
+        new(22,
+            "Health-data gating 2026-07-31: sick-leave reasons, HR-internal notes on sick leave and "
+            + "medical certificates now require absences.view_medical (GDPR art. 9). Granted to HR, "
+            + "which already held employee_documents.view_sensitive and so already saw this data. "
+            + "Deliberately NOT granted to planning-side templates: they keep absences.view, which "
+            + "still shows who is absent and between which dates.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["hr"] = [PermissionCodes.AbsencesViewMedical],
             }),
     ];
 }

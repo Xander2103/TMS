@@ -107,14 +107,19 @@ public class AbsencesController : ControllerBase
             return NotFound();
         }
 
-        var contentType = Path.GetExtension(document.Value.FileName).ToLowerInvariant() switch
+        if (document.MedicalRestricted)
+        {
+            return Forbid();
+        }
+
+        var contentType = Path.GetExtension(document.FileName!).ToLowerInvariant() switch
         {
             ".pdf" => "application/pdf",
             ".jpg" or ".jpeg" => "image/jpeg",
             ".png" => "image/png",
             _ => "application/octet-stream",
         };
-        return File(document.Value.Content, contentType, document.Value.FileName);
+        return File(document.Content!, contentType, document.FileName!);
     }
 
     [HttpPost("api/absences/{id:guid}/cancel")]

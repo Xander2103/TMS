@@ -327,6 +327,13 @@ public static class PermissionCodes
     public const string AbsencesDelete = "absences.delete";
     public const string AbsencesApprove = "absences.approve";
 
+    /// <summary>
+    /// GDPR art. 9 special category. Sick-leave reasons, HR-internal notes on sick leave and
+    /// medical certificates are health data; absences.view alone only shows that someone is
+    /// absent and between which dates, which is what planning actually needs.
+    /// </summary>
+    public const string AbsencesViewMedical = "absences.view_medical";
+
     // --- Leave balances (verlofsaldo) ---
     public const string LeaveBalancesView = "leave_balances.view";
     public const string LeaveBalancesManage = "leave_balances.manage";
@@ -562,6 +569,7 @@ public static class PermissionCodes
         (AbsencesEdit, "absences", "edit", "Afwezigheden bewerken en annuleren"),
         (AbsencesDelete, "absences", "delete", "Afwezigheden verwijderen"),
         (AbsencesApprove, "absences", "approve", "Afwezigheden goedkeuren of afwijzen"),
+        (AbsencesViewMedical, "absences", "view_medical", "Medische gegevens bij ziekteverzuim bekijken (reden, HR-notitie, attest)"),
         (LeaveBalancesView, "leave_balances", "view", "Verlofsaldo van medewerkers bekijken"),
         (LeaveBalancesManage, "leave_balances", "manage", "Jaarrecht en overdracht van verlofsaldo beheren"),
         (LeaveBalancesAdjust, "leave_balances", "adjust", "Verlofsaldo handmatig aanpassen (met reden)"),

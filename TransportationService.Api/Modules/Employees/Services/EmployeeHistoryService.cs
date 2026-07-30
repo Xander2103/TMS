@@ -7,6 +7,17 @@ using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Employees.Services;
 
+/// <summary>
+/// What the caller may see in the dossier history (M14): confidential identifiers
+/// (employees.view_confidential), health data on sick leave (absences.view_medical) and
+/// sensitive-category documents (employee_documents.view_sensitive). The history mirrors the
+/// live screens — a field someone cannot read today must not be readable through its history.
+/// </summary>
+public sealed record EmployeeHistoryAccess(bool ConfidentialFields, bool MedicalData, bool SensitiveDocuments)
+{
+    public static readonly EmployeeHistoryAccess Full = new(true, true, true);
+}
+
 public interface IEmployeeHistoryService
 {
     /// <summary>
@@ -17,7 +28,8 @@ public interface IEmployeeHistoryService
     /// (Profiel, Kwalificaties, …) — an unknown value is a validation error, not a silent no-op.
     /// </summary>
     Task<EmployeeHistoryPageDto?> GetHistoryAsync(
-        Guid employeeId, int page, int pageSize, string? category, CancellationToken cancellationToken);
+        Guid employeeId, int page, int pageSize, string? category, EmployeeHistoryAccess access,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -278,8 +290,21 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         FieldLabels["AanpassingenTotaal"],
     };
 
+    /// <summary>Field keys whose diffs are confidential identifiers (employees.view_confidential).</summary>
+    private static readonly HashSet<string> ConfidentialFieldKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "NationalRegisterNumber", "IdentityCardNumber", "Iban", "Bic",
+    };
+
+    /// <summary>Field keys on a sick absence that are health data (absences.view_medical).</summary>
+    private static readonly HashSet<string> MedicalAbsenceFieldKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Reason", "InternalNote",
+    };
+
     public async Task<EmployeeHistoryPageDto?> GetHistoryAsync(
-        Guid employeeId, int page, int pageSize, string? category, CancellationToken cancellationToken)
+        Guid employeeId, int page, int pageSize, string? category, EmployeeHistoryAccess access,
+        CancellationToken cancellationToken)
     {
         if (category is not null && !KnownCategories.Contains(category))
         {
@@ -301,18 +326,28 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         var qualificationIds = Keys(await _db.EmployeeQualifications.AsNoTracking()
             .Where(q => q.TenantId == tenantId && q.EmployeeId == employeeId)
             .Select(q => q.Id).ToListAsync(cancellationToken));
-        var documentIds = Keys(await _db.EmployeeDocuments.IgnoreQueryFilters().AsNoTracking()
+        var documentRows = await _db.EmployeeDocuments.IgnoreQueryFilters().AsNoTracking()
             .Where(d => d.TenantId == tenantId && d.EmployeeId == employeeId)
-            .Select(d => d.Id).ToListAsync(cancellationToken));
+            .Select(d => new { d.Id, d.Category }).ToListAsync(cancellationToken);
+        var documentIds = Keys(documentRows.Select(d => d.Id));
+        var sensitiveDocumentKeys = documentRows
+            .Where(d => EmployeeDocumentService.IsSensitiveCategory(d.Category))
+            .Select(d => d.Id.ToString())
+            .ToHashSet(StringComparer.Ordinal);
         var noteIds = Keys(await _db.EmployeeNotes.IgnoreQueryFilters().AsNoTracking()
             .Where(n => n.TenantId == tenantId && n.EmployeeId == employeeId)
             .Select(n => n.Id).ToListAsync(cancellationToken));
         var issuedItemIds = Keys(await _db.EmployeeIssuedItems.IgnoreQueryFilters().AsNoTracking()
             .Where(i => i.TenantId == tenantId && i.EmployeeId == employeeId)
             .Select(i => i.Id).ToListAsync(cancellationToken));
-        var absenceIds = Keys(await _db.Absences.IgnoreQueryFilters().AsNoTracking()
+        var absenceRows = await _db.Absences.IgnoreQueryFilters().AsNoTracking()
             .Where(a => a.TenantId == tenantId && a.EmployeeId == employeeId)
-            .Select(a => a.Id).ToListAsync(cancellationToken));
+            .Select(a => new { a.Id, a.Type }).ToListAsync(cancellationToken);
+        var absenceIds = Keys(absenceRows.Select(a => a.Id));
+        var sickAbsenceKeys = absenceRows
+            .Where(a => a.Type == Hr.Entities.AbsenceType.Sick)
+            .Select(a => a.Id.ToString())
+            .ToHashSet(StringComparer.Ordinal);
         var balanceRowIds = await _db.EmployeeLeaveBalances.IgnoreQueryFilters().AsNoTracking()
             .Where(b => b.TenantId == tenantId && b.EmployeeId == employeeId)
             .Select(b => b.Id).ToListAsync(cancellationToken);
@@ -341,7 +376,25 @@ public class EmployeeHistoryService : IEmployeeHistoryService
             .ToListAsync(cancellationToken);
 
         var pendingEntries = rows
-            .Select(row => ProjectPending(row.Id, row.EntityType, row.Action, row.OldValuesJson, row.NewValuesJson, row.Timestamp, row.UserId))
+            // Sensitive-category documents are hidden from the document LIST without
+            // employee_documents.view_sensitive — their history entries stay hidden too.
+            .Where(row => access.SensitiveDocuments
+                || row.EntityType != "EmployeeDocument" || !sensitiveDocumentKeys.Contains(row.EntityId))
+            .Select(row =>
+            {
+                var entry = ProjectPending(row.Id, row.EntityType, row.Action, row.OldValuesJson, row.NewValuesJson, row.Timestamp, row.UserId);
+                if (!access.ConfidentialFields)
+                {
+                    entry.Changes.RemoveAll(c => ConfidentialFieldKeys.Contains(c.FieldKey));
+                }
+
+                if (!access.MedicalData && row.EntityType == "Absence" && sickAbsenceKeys.Contains(row.EntityId))
+                {
+                    entry.Changes.RemoveAll(c => MedicalAbsenceFieldKeys.Contains(c.FieldKey));
+                }
+
+                return entry;
+            })
             // A save that changed nothing meaningful never becomes a misleading "Gewijzigd" card.
             .Where(e => e.Changes.Count > 0 || e.Action is not "Updated")
             .Where(e => category is null || e.Category == category)

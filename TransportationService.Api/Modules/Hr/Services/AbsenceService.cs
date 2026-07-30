@@ -35,6 +35,7 @@ public class AbsenceService : IAbsenceService
     private readonly TimeProvider _timeProvider;
     private readonly INotificationEventService? _notificationEvents;
     private readonly Microsoft.Extensions.Logging.ILogger<AbsenceService>? _logger;
+    private readonly IPermissionAuthorizationService? _authorization;
 
     public AbsenceService(
         TransportationDbContext dbContext,
@@ -46,7 +47,8 @@ public class AbsenceService : IAbsenceService
         ICalendarSyncService calendarSyncService,
         TimeProvider timeProvider,
         INotificationEventService? notificationEvents = null,
-        Microsoft.Extensions.Logging.ILogger<AbsenceService>? logger = null)
+        Microsoft.Extensions.Logging.ILogger<AbsenceService>? logger = null,
+        IPermissionAuthorizationService? authorization = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -58,6 +60,36 @@ public class AbsenceService : IAbsenceService
         _timeProvider = timeProvider;
         _notificationEvents = notificationEvents;
         _logger = logger;
+        _authorization = authorization;
+    }
+
+    /// <summary>
+    /// GDPR art. 9 gate (M7): sick-leave reasons, the HR-internal note and the medical
+    /// certificate are health data. A caller sees them only when holding
+    /// <see cref="PermissionCodes.AbsencesViewMedical"/> or when the absence is their own
+    /// (the data subject always sees what they submitted themselves). A missing authorization
+    /// service means fail-closed: nobody but the subject sees health fields.
+    /// </summary>
+    private sealed record MedicalScope(bool CanViewMedical, Guid? OwnEmployeeId)
+    {
+        public bool CanSee(Guid absenceEmployeeId) =>
+            CanViewMedical || (OwnEmployeeId is { } own && own == absenceEmployeeId);
+    }
+
+    private async Task<MedicalScope> MedicalScopeAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUserContext.CurrentUserId is not { } userId)
+        {
+            return new MedicalScope(false, null);
+        }
+
+        var canViewMedical = _authorization is not null
+            && await _authorization.UserHasPermissionAsync(userId, PermissionCodes.AbsencesViewMedical, cancellationToken);
+        var ownEmployeeId = await _dbContext.Users.AsNoTracking()
+            .Where(u => u.TenantId == _tenantContext.TenantId && u.Id == userId)
+            .Select(u => u.EmployeeId)
+            .FirstOrDefaultAsync(cancellationToken);
+        return new MedicalScope(canViewMedical, ownEmployeeId);
     }
 
     /// <summary>Fire-and-forget event publication: a notification failure never breaks the
@@ -100,10 +132,12 @@ public class AbsenceService : IAbsenceService
         var rows = await Joined(TenantScoped().AsNoTracking().Where(a => a.EmployeeId == employeeId))
             .ToListAsync(cancellationToken);
 
+        var scope = await MedicalScopeAsync(cancellationToken);
+
         // Bounded per-employee set; ordering through the record projection does not translate to SQL.
         return rows
             .OrderByDescending(r => r.Absence.StartDate)
-            .Select(Map)
+            .Select(r => Map(r, scope))
             .ToList();
     }
 
@@ -133,10 +167,12 @@ public class AbsenceService : IAbsenceService
 
         var rows = await Joined(query).ToListAsync(cancellationToken);
 
+        var scope = await MedicalScopeAsync(cancellationToken);
+
         // Window-bounded set; ordering through the record projection does not translate to SQL.
         return rows
             .OrderBy(r => r.Absence.StartDate).ThenBy(r => r.EmployeeName)
-            .Select(Map)
+            .Select(r => Map(r, scope))
             .ToList();
     }
 
@@ -476,7 +512,13 @@ public class AbsenceService : IAbsenceService
             return a.PartDay == AbsencePartDay.FullDay ? days : days - 0;
         });
 
-        return new AbsenceReviewContextDto(shifts, trips, colleagueRows, usedDays, absence.AttachmentPath is not null);
+        // The certificate on a sick absence is health data: its existence is only shown to
+        // callers who are allowed to open it (M7).
+        var hasVisibleAttachment = absence.AttachmentPath is not null
+            && (absence.Type != AbsenceType.Sick
+                || (await MedicalScopeAsync(cancellationToken)).CanSee(absence.EmployeeId));
+
+        return new AbsenceReviewContextDto(shifts, trips, colleagueRows, usedDays, hasVisibleAttachment);
     }
 
     public async Task<AbsenceOperationResult> AttachDocumentAsync(
@@ -510,7 +552,7 @@ public class AbsenceService : IAbsenceService
         return AbsenceOperationResult.Success(await RequireDtoAsync(absence.Id, cancellationToken));
     }
 
-    public async Task<(Stream Content, string FileName)?> OpenDocumentAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<AbsenceAttachmentResult?> OpenDocumentAsync(Guid id, CancellationToken cancellationToken)
     {
         var absence = await TenantScoped().AsNoTracking().FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
         if (absence?.AttachmentPath is not { } path)
@@ -518,8 +560,30 @@ public class AbsenceService : IAbsenceService
             return null;
         }
 
+        var isMedical = absence.Type == AbsenceType.Sick;
+        var scope = await MedicalScopeAsync(cancellationToken);
+        if (isMedical && !scope.CanSee(absence.EmployeeId))
+        {
+            return AbsenceAttachmentResult.MedicalAccessDenied;
+        }
+
         var stream = await _fileStorageService.OpenReadAsync(path, cancellationToken);
-        return (stream, absence.AttachmentFileName ?? "bijlage");
+
+        // Read-audit (M6/M14): a medical certificate opened by anyone but the data subject leaves
+        // a HealthDataViewed trace — for health data, who LOOKED matters as much as who changed it.
+        if (isMedical && scope.OwnEmployeeId != absence.EmployeeId)
+        {
+            await _auditService.RecordAsync(EntityType, absence.Id.ToString(),
+                SecurityAuditEvents.HealthDataViewed, null,
+                new
+                {
+                    absence.EmployeeId,
+                    FileName = absence.AttachmentFileName,
+                    Classification = SecurityAuditEvents.Classification.Health,
+                }, cancellationToken);
+        }
+
+        return AbsenceAttachmentResult.Open(stream, absence.AttachmentFileName ?? "bijlage");
     }
 
     private async Task<Guid?> EmployeeUserIdAsync(Guid employeeId, CancellationToken cancellationToken) =>
@@ -598,12 +662,17 @@ public class AbsenceService : IAbsenceService
             e.EmployeeNumber,
             _dbContext.Drivers.Any(d => d.TenantId == _tenantContext.TenantId && d.EmployeeId == e.Id));
 
-    private static AbsenceDto Map(JoinedAbsence r) => new(
-        r.Absence.Id, r.Absence.EmployeeId, r.EmployeeName, r.EmployeeNumber, r.IsDriver,
-        r.Absence.Type, r.Absence.StartDate, r.Absence.EndDate, r.Absence.Status,
-        r.Absence.Reason, r.Absence.DecisionNote, r.Absence.DecidedAt,
-        r.Absence.PartDay, r.Absence.InternalNote,
-        r.Absence.AttachmentPath != null, r.Absence.AttachmentFileName, r.Absence.LeaveTypeId);
+    private static AbsenceDto Map(JoinedAbsence r, MedicalScope scope)
+    {
+        var redactMedical = r.Absence.Type == AbsenceType.Sick && !scope.CanSee(r.Absence.EmployeeId);
+        return new(
+            r.Absence.Id, r.Absence.EmployeeId, r.EmployeeName, r.EmployeeNumber, r.IsDriver,
+            r.Absence.Type, r.Absence.StartDate, r.Absence.EndDate, r.Absence.Status,
+            redactMedical ? null : r.Absence.Reason, r.Absence.DecisionNote, r.Absence.DecidedAt,
+            r.Absence.PartDay, redactMedical ? null : r.Absence.InternalNote,
+            !redactMedical && r.Absence.AttachmentPath != null,
+            redactMedical ? null : r.Absence.AttachmentFileName, r.Absence.LeaveTypeId);
+    }
 
     /// <summary>
     /// Resolves an optional configurable leave type to the effective <see cref="AbsenceType"/>
@@ -631,7 +700,7 @@ public class AbsenceService : IAbsenceService
         var row = await Joined(TenantScoped().AsNoTracking().Where(a => a.Id == id))
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new InvalidOperationException($"Absence {id} disappeared after save.");
-        return Map(row);
+        return Map(row, await MedicalScopeAsync(cancellationToken));
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

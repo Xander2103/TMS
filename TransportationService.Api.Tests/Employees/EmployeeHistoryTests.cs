@@ -94,7 +94,7 @@ public class EmployeeHistoryTests
         var detail = await h.Employees.GetByIdAsync(created.Id, false, CancellationToken.None);
         Assert.Equal("Belangrijke afspraak", detail!.Notes);
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var entry = Assert.Single(history!.Items, e => e.Action == "Created");
         Assert.Equal("Profiel", entry.Category);
         Assert.Contains(entry.Changes, c => c.Field == "Notities" && c.Before is null && c.After == "Belangrijke afspraak");
@@ -109,7 +109,7 @@ public class EmployeeHistoryTests
 
         await h.Employees.UpdateAsync(created.Id, UpdateRequest(phone: "0485 98 76 54"), false, CancellationToken.None);
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var entry = history!.Items.First();
         Assert.Equal("Updated", entry.Action);
         Assert.Equal("Gewijzigd", entry.ActionLabel);
@@ -132,7 +132,7 @@ public class EmployeeHistoryTests
         await h.Employees.UpdateAsync(created.Id, UpdateRequest(
             street: "Nieuwe straat", status: EmploymentStatus.OnLeave, notes: "Nieuwe notitie"), false, CancellationToken.None);
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var entry = history!.Items.First();
         Assert.Equal(3, entry.Changes.Count);
         Assert.Contains(entry.Changes, c => c.Field == "Straat" && c.Before == "Oude straat" && c.After == "Nieuwe straat");
@@ -147,11 +147,11 @@ public class EmployeeHistoryTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var created = await h.Employees.CreateAsync(CreateRequest(), false, CancellationToken.None);
-        var before = (await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None))!.TotalCount;
+        var before = (await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None))!.TotalCount;
 
         await h.Employees.UpdateAsync(created.Id, UpdateRequest(), false, CancellationToken.None);
 
-        var after = (await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None))!.TotalCount;
+        var after = (await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None))!.TotalCount;
         Assert.Equal(before, after);
     }
 
@@ -164,7 +164,7 @@ public class EmployeeHistoryTests
 
         await h.Employees.UpdateAsync(created.Id, UpdateRequest(iban: "BE68 5390 0754 7034"), true, CancellationToken.None);
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var change = Assert.Single(history!.Items.First().Changes);
         Assert.Equal("IBAN", change.Field);
         Assert.StartsWith("•••", change.After);
@@ -187,7 +187,7 @@ public class EmployeeHistoryTests
         await h.Qualifications.UpdateAsync(qualification.Id, new UpdateEmployeeQualificationRequest(
             null, new DateOnly(2024, 1, 1), new DateOnly(2027, 1, 1), null, null), CancellationToken.None);
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var updateEntry = history!.Items.First(e => e.Category == "Kwalificaties" && e.Action == "Updated");
         Assert.Contains(updateEntry.Changes, c => c.Field == "Vervaldatum" && c.Before == "01-01-2026" && c.After == "01-01-2027");
     }
@@ -205,7 +205,7 @@ public class EmployeeHistoryTests
         await h.Notes.SetPinnedAsync(created.Id, note.Id, false, CancellationToken.None);
         await h.Notes.DeleteAsync(created.Id, note.Id, CancellationToken.None);
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, "Notities", CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, "Notities", EmployeeHistoryAccess.Full, CancellationToken.None);
         Assert.Equal(5, history!.TotalCount);
         Assert.All(history.Items, e => Assert.Equal("Notities", e.Category));
         Assert.Contains(history.Items, e => e.Action == "Created");
@@ -230,7 +230,7 @@ public class EmployeeHistoryTests
         await h.LeaveBalances.SetEntitlementAsync(created.Id, 2027, new SetLeaveEntitlementRequest(
             balanceType.Id, 20m, 0m, Reason: "Jaarlijks saldo 2027 toegekend"), CancellationToken.None);
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var entry = history!.Items.First(e => e.Category == "Verlofsaldo" && e.Action == "Updated");
         Assert.Equal("Ann HR", entry.UserName);
         Assert.Contains(entry.Changes, c => c.Field == "Basisrecht (dagen)" && c.Before == "12" && c.After == "20");
@@ -247,7 +247,7 @@ public class EmployeeHistoryTests
         var created = await h.Employees.CreateAsync(CreateRequest(), false, CancellationToken.None);
 
         var foreignHistory = new EmployeeHistoryService(h.Db.Context, new DevTenantContext(Guid.NewGuid()));
-        Assert.Null(await foreignHistory.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None));
+        Assert.Null(await foreignHistory.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None));
     }
 
     /// <summary>No 8-4-4-4-12 hex pattern anywhere — a resolved id, a formatted date, or a masked value.</summary>
@@ -281,7 +281,7 @@ public class EmployeeHistoryTests
             type.Id, null, new DateOnly(2024, 1, 1), new DateOnly(2026, 1, 1), null, null), CancellationToken.None);
         await h.Qualifications.VerifyAsync(qualification.Id, h.UserId, CancellationToken.None);
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
 
         var createdEntry = history!.Items.First(e => e.Category == "Kwalificaties" && e.Action == "Created");
         Assert.Contains(createdEntry.Changes, c => c.Field == "Kwalificatietype" && c.After == "ADR-attest");
@@ -335,7 +335,7 @@ public class EmployeeHistoryTests
         });
         await h.Db.Context.SaveChangesAsync();
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 50, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 50, null, EmployeeHistoryAccess.Full, CancellationToken.None);
 
         var absenceEntry = history!.Items.First(e => e.Category == "Afwezigheden" && e.Action == "Approved");
         Assert.Contains(absenceEntry.Changes, c => c.Field == "Verloftype" && c.After == "Ziekteverlof");
@@ -385,7 +385,7 @@ public class EmployeeHistoryTests
         });
         await h.Db.Context.SaveChangesAsync();
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 50, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 50, null, EmployeeHistoryAccess.Full, CancellationToken.None);
 
         var itemEntry = history!.Items.First(e => e.Category == "Bedrijfsmiddelen");
         Assert.Contains(itemEntry.Changes, c => c.Field == "Status" && c.Before == "Niet uitgereikt" && c.After == "Uitgereikt");
@@ -429,7 +429,7 @@ public class EmployeeHistoryTests
         });
         await h.Db.Context.SaveChangesAsync();
 
-        var history = await h.History.GetHistoryAsync(created.Id, 1, 50, null, CancellationToken.None);
+        var history = await h.History.GetHistoryAsync(created.Id, 1, 50, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var entry = history!.Items.First(e => e.Action == "Updated" && e.Category == "Afwezigheden");
         var change = Assert.Single(entry.Changes);
         Assert.Equal("Verloftype", change.Field);
@@ -449,14 +449,14 @@ public class EmployeeHistoryTests
         await h.Qualifications.CreateAsync(created.Id, new CreateEmployeeQualificationRequest(
             type.Id, null, new DateOnly(2024, 1, 1), new DateOnly(2026, 1, 1), null, null), CancellationToken.None);
 
-        var filtered = await h.History.GetHistoryAsync(created.Id, 1, 25, "Kwalificaties", CancellationToken.None);
+        var filtered = await h.History.GetHistoryAsync(created.Id, 1, 25, "Kwalificaties", EmployeeHistoryAccess.Full, CancellationToken.None);
         Assert.NotEmpty(filtered!.Items);
         Assert.All(filtered.Items, e => Assert.Equal("Kwalificaties", e.Category));
 
-        var unfiltered = await h.History.GetHistoryAsync(created.Id, 1, 25, null, CancellationToken.None);
+        var unfiltered = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         Assert.True(unfiltered!.TotalCount > filtered.TotalCount);
 
         await Assert.ThrowsAsync<DomainValidationException>(
-            () => h.History.GetHistoryAsync(created.Id, 1, 25, "GeenBestaandeCategorie", CancellationToken.None));
+            () => h.History.GetHistoryAsync(created.Id, 1, 25, "GeenBestaandeCategorie", EmployeeHistoryAccess.Full, CancellationToken.None));
     }
 }

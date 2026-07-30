@@ -112,19 +112,19 @@ public class EmployeeDocumentsController : ControllerBase
     [RequirePermission(PermissionCodes.EmployeeDocumentsView)]
     public async Task<IActionResult> Download(Guid employeeId, Guid documentId, CancellationToken cancellationToken)
     {
-        var document = await _service.OpenAsync(employeeId, documentId, cancellationToken);
-        if (document is not { } found)
+        var document = await _service.OpenAsync(
+            employeeId, documentId, await HasSensitiveAccessAsync(cancellationToken), cancellationToken);
+        if (document is null)
         {
             return NotFound();
         }
 
-        if (found.IsSensitive && !await HasSensitiveAccessAsync(cancellationToken))
+        if (document.SensitiveRestricted)
         {
-            await found.Content.DisposeAsync();
             return Forbid();
         }
 
-        return File(found.Content, found.ContentType, found.FileName);
+        return File(document.Content!, document.ContentType!, document.FileName!);
     }
 
     [HttpDelete("{documentId:guid}")]

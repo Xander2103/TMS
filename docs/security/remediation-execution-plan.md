@@ -93,35 +93,28 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 
 ---
 
-## Fase 2 — Rollen, permissions & sessie
+## Fase 2 — Rollen, permissions & sessie · **DONE**
 
-> **H2 en H3 zijn in iteratie 2 opgelost** (zie de C2/H2/H3-blokken hierboven). De resterende
-> punten van deze fase staan hieronder en zijn nog **PLANNED**.
+> H2/H3 in iteratie 2 (`f2c301d`); H4/H14 in `979c99b`; H8/M3/M4 in `36db50c`;
+> M13 (HS256-pinning + `IssuerSigningKeys` huidig+vorig) zit in dezelfde reeks
+> (`AuthenticationServiceCollectionExtensions`). Tests: `Security/Phase2SessionSecurityTests.cs`.
 
-- **H4 refresh-reuse:** `AuthService` refresh-pad — detecteer herroepen/geroteerde token, revoke de
-  familie via `ReplacedByTokenHash`, audit `RefreshReuseDetected`; per-user sessielimiet
-  (config); purge-job (Fase 7). Betrouwbare familierelaties (transactioneel). Test: reuse trekt
-  familie in.
-- **H8 account-lockout:** `User` + migratie (`FailedLoginCount`, `LockedUntil`); `AuthService` telt
-  mislukte pogingen, exponentiële lock; rate-limit-partitie ook op genormaliseerd e-mailadres;
-  audit login-events (Fase 6). Test: lock na N pogingen ook vanaf nieuw IP.
-- **H14 block/inactive:** *deels voorbereid in iteratie 2* — `User.SecurityStamp` + claim +
-  per-request verificatie (`AccountStateAuthorizationFilter`) en `RevokeAllSessionsAsync` bestaan
-  al. **Nog te doen:** `IsActive && !IsBlocked`-predicaat in `PermissionAuthorizationService`/
-  `PermissionSetService`, `SetActive`/`SetBlocked` laten revoken via `RevokeAllSessionsAsync`, en
-  access-token-TTL naar 10–15 min. Test: geblokkeerde gebruiker geweigerd bij volgende request.
-- **M3 password-hardening:** centrale `PasswordPolicy` (min 12, config), veelgebruikte-wachtwoord-
-  deny-list lokaal, `PasswordHasherOptions` expliciete iteraties (of Argon2id), rehash-on-login
-  (`AuthService` handelt `SuccessRehashNeeded`). Test: legacy-hash upgrade.
-- **M4 cross-tenant login:** expliciete tenantselectie (tenantcode/subdomein) of veilige
-  disambiguatie; geen `FirstOrDefault`; geen N×hash-amplificatie. `AuthService`.
-- **M13 JWT-hardening:** `ValidAlgorithms=[HS256]` pinnen; `IssuerSigningKeys` (huidig+vorig) +
-  `kid`; migratiepad RS256/ES256 documenteren. `AuthenticationServiceCollectionExtensions`,
-  `TokenService`.
+- **H4 refresh-reuse · DONE:** reuse-detectie + familie-revocatie + audit `RefreshReuseDetected`.
+- **H8 account-lockout · DONE:** `FailedLoginCount`/`LockedUntil` (migratie
+  `SessionAndLockoutHardening`), exponentiële lock, audit login-events.
+- **H14 block/inactive · DONE:** security-stamp per request + `RevokeAllSessionsAsync` bij
+  `SetActive`/`SetBlocked`.
+- **M3 password-hardening · DONE**, **M4 cross-tenant login · DONE** (veilige disambiguatie +
+  audit `LoginAmbiguousTenant`), **M13 JWT-hardening · DONE** (`ValidAlgorithms=[HS256]`).
 
-## Fase 3 — Tenant-isolatie & objectautorisatie · **PLANNED**
+## Fase 3 — Tenant-isolatie & objectautorisatie · **DEELS DONE (`2ff0058`)**
 
-- **H1 globale tenant-filter:** `ITenantOwnedEntity`-interface op alle tenant-entiteiten; globale
+> H7/M1/M9/M12/L8/L9 zijn **DONE** in `2ff0058` (`EnsureBelongsToTenantAsync`-guard, driver-scoping
+> POD/exception, unieke Peppol-identiteit, inactieve-klant-portalgate). Tests:
+> `Security/Phase3TenantIsolationTests.cs`. Alleen H1 (globale EF-queryfilter) staat nog open —
+> de architectuurtests (TenantId-kolom + PK op elke tenant-entiteit) liggen al klaar.
+
+- **H1 globale tenant-filter · PLANNED:** `ITenantOwnedEntity`-interface op alle tenant-entiteiten; globale
   EF `HasQueryFilter(TenantId == currentTenant && !IsDeleted)` via een ambient tenant-provider in
   `TransportationDbContext.OnModelCreating`; expliciete, geaudite bypass voor background jobs/
   migraties (`IgnoreQueryFilters` achter een helper); PostgreSQL RLS als defence-in-depth
@@ -156,7 +149,13 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 - **L4/L10 storage:** root-containment met separator-guard (`LocalFileStorageService`); globale
   request-bodylimiet; magic-byte-validatie; uitbreidbare malware-scaninterface + quarantaine.
 
-## Fase 5 — Rate limiting, headers, CORS, API-hardening · **PLANNED**
+## Fase 5 — Rate limiting, headers, CORS, API-hardening · **DEELS DONE (`59732e0`)**
+
+> H9 (forwarded headers + resolved-IP-partitie), H10 (security-headers-middleware), M15 (CORS
+> fail-closed uit config), M10/M11 (ProblemDetails zonder stacktrace, `TryParseDefined<TEnum>`)
+> zijn **DONE**; tests in `Security/Phase5ApiHardeningTests.cs`. **Nog open:** M2 webhook-HMAC is
+> deels (replay-window/rotatie ontbreken) en **L7** (`TransportOrderService._permissionService`
+> is nog nullable/fail-open).
 
 - **H9 forwarded headers:** `UseForwardedHeaders` met `KnownProxies/KnownNetworks` vóór rate
   limiting/auth; partitie op resolved client-IP + per-account (`Program.cs`,
@@ -174,18 +173,30 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 - **L7 authorization service verplicht:** `TransportOrderService._permissionService` niet-nullable;
   fail-closed.
 
-## Fase 6 — Audit, monitoring, forensics · **PLANNED**
+## Fase 6 — Audit, monitoring, forensics · **DONE**
 
-- **H12 auth-events:** `AuthService`/`AuthController` auditeren Login(Succeeded/Failed),
-  AccountLocked, TokenRefreshed, RefreshRejected, RefreshReuseDetected, Logout, PasswordChanged,
-  PasswordResetByAdmin, relevante denials (`RequirePermissionAttribute`). Nooit wachtwoord/token.
-- **M6 forensics:** `AuditService` schrijft IP (`IHttpContextAccessor`) + CorrelationId/TraceId +
-  tenant/actor/action/target/UTC/result/reden; audit transactioneel met de businesswijziging;
-  append-only via DB-`REVOKE UPDATE,DELETE` + trigger (migratie/OPS); retentie (Fase 7).
-- **M7/M8/M14 gevoelige data:** aparte permissie voor ziekte/medische data; vrije medische tekst
-  minimaliseren; IBAN/BIC-masking waar volledig zicht niet nodig; `EmployeeHistoryService`
-  categoriefiltering per permissie; read-audit op medische/personeelsdownloads + bulk-exports;
-  dataclassificatie op auditevents; audit-viewer maskeert bijzondere gegevens.
+- **H12 auth-events · DONE (in Fase 2-commits):** `SecurityAuditEvents`-catalogus;
+  Login(Succeeded/Failed/AmbiguousTenant/BlockedWhileLocked), AccountLocked, TokenRefreshed,
+  RefreshRejected, RefreshReuseDetected, Logout, PasswordResetByAdmin, UserBlocked/Deactivated,
+  SessionsRevoked — nooit wachtwoord-/tokenmateriaal.
+- **M6 forensics · DONE:** `AuditService` stempelt client-IP (na `UseForwardedHeaders`) +
+  `CorrelationId` (TraceIdentifier) op elk record; append-only door constructie via
+  PostgreSQL-trigger (migratie `20260730222437_AuditAppendOnly`; SQLite-testharness geguard).
+  Retentie/purge volgt in Fase 7; maintenance-delete = bewuste actie (checklist).
+- **M7 medische data · DONE:** permissie `absences.view_medical` (catalogus + role-upgrade v22,
+  alleen HR); `AbsenceService` redigeert ziekte-reden/HR-notitie/attest voor houders zonder de
+  permissie, met self-exemptie voor de betrokkene (portal blijft werken); attest-download 403
+  i.p.v. 404 (`AbsenceAttachmentResult`); review-context verbergt attest-bestaan.
+- **M8 IBAN/NRN · DONE (bestaand + history):** live DTO's gaten al op
+  `employees.view_confidential`; de dossierhistoriek dekt dit nu ook (zie M14).
+- **M14 history/read-audit · DONE:** `EmployeeHistoryAccess` — historiek spiegelt de
+  live-gates (vertrouwelijke velden, medische velden op ziekte, gevoelige documentcategorieën);
+  read-audits `HealthDataViewed` (attest door niet-betrokkene), `SensitiveDocumentDownloaded`
+  (ID/medisch/contract, met dataclassificatie) en `DataExported` (KPI-, boekhoud-,
+  winstgevendheids- en colli-exports, met filter).
+- **Tests:** `Security/Phase6AuditForensicsTests.cs` (14) + `DefaultRoleSeederTests.Version22…`.
+- **Open (bewust, klein):** vrije medische tekst verder minimaliseren en audit-viewer-masking
+  in de frontend; gestructureerde events → centrale sink is OPS (checklist #14/#15).
 
 ## Fase 7 — GDPR, retentie, data subject rights · **PLANNED**
 

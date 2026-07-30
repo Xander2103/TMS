@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Modules.Accounting.Dtos;
 using TransportationService.Api.Modules.Accounting.Services;
+using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
 
@@ -16,11 +17,13 @@ public class AccountingController : ControllerBase
 {
     private readonly IAccountingService _service;
     private readonly IAccountingExportService _export;
+    private readonly IAuditService _auditService;
 
-    public AccountingController(IAccountingService service, IAccountingExportService export)
+    public AccountingController(IAccountingService service, IAccountingExportService export, IAuditService auditService)
     {
         _service = service;
         _export = export;
+        _auditService = auditService;
     }
 
     [HttpGet("ledger-accounts")]
@@ -82,6 +85,7 @@ public class AccountingController : ControllerBase
         [FromQuery] DateOnly from, [FromQuery] DateOnly to, CancellationToken cancellationToken)
     {
         var bytes = await _export.ExportAsync(from, to, cancellationToken);
+        await _auditService.RecordExportAsync("accounting", new { from, to }, cancellationToken);
         return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             $"boekhoudexport-{from:yyyyMMdd}-{to:yyyyMMdd}.xlsx");
     }

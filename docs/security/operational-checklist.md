@@ -37,6 +37,7 @@ Legenda eigenaar: **Ops** = platform/infra · **Sec** = security officer · **De
 | 26 | Business continuity / DR-plan | Geen | Organisatorisch | Stel BCP/DR op + test | Ops | Ja |
 | 27 | GDPR legal review | Techniek gepland (Fase 7) | Juridisch | Valideer grondslagen, bewaartermijnen, DSR-proces | Legal | Ja |
 | 28 | ISO 27001 ISMS-documentatie | Geen | Organisatorisch | Bouw ISMS (beleid, risico's, SoA, controls) | Sec | Nee (certificeringstraject) |
+| 29 | Audit-retentie ondanks append-only-trigger | Trigger `trg_audit_logs_append_only` weigert UPDATE/DELETE (migratie `AuditAppendOnly`) | Retentie-delete vereist bewuste maintenance-actie | Draai archivering/purge als aparte DB-rol die de trigger tijdelijk disabled (`ALTER TABLE audit_logs DISABLE TRIGGER …`), gelogd en four-eyes | Ops/Sec | Nee |
 
 > **Belangrijk:** de codewijzigingen in deze sprint zijn *security hardening* en *ISO 27001-/OWASP-
 > aligned controls* / *voorbereiding op formele compliance* — geen bewijs van certificering.

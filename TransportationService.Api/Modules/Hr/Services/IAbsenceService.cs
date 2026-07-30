@@ -35,7 +35,12 @@ public interface IAbsenceService
     /// <summary>Attaches a supporting document (pdf/jpg/png); replaces an existing attachment.</summary>
     Task<AbsenceOperationResult> AttachDocumentAsync(Guid id, string fileName, Stream content, CancellationToken cancellationToken);
 
-    Task<(Stream Content, string FileName)?> OpenDocumentAsync(Guid id, CancellationToken cancellationToken);
+    /// <summary>
+    /// Opens the attachment. Null = no attachment/unknown id; a result with
+    /// <see cref="AbsenceAttachmentResult.MedicalRestricted"/> means the caller lacks
+    /// absences.view_medical for a sickness certificate (surface as 403, not 404).
+    /// </summary>
+    Task<AbsenceAttachmentResult?> OpenDocumentAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>Cancel a requested or approved absence (e.g. vacation withdrawn).</summary>
     Task<AbsenceOperationResult> CancelAsync(Guid id, CancellationToken cancellationToken);

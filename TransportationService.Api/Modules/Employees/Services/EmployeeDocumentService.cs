@@ -28,6 +28,16 @@ public record SaveEmployeeDocumentMetadata(
     DateOnly? ExpiryDate,
     string? Notes);
 
+/// <summary>
+/// Opened personnel document. <see cref="SensitiveRestricted"/> distinguishes "exists but the
+/// caller lacks employee_documents.view_sensitive" (403) from "unknown document" (null, 404).
+/// </summary>
+public sealed record EmployeeDocumentContentResult(
+    Stream? Content, string? FileName, string? ContentType, bool SensitiveRestricted)
+{
+    public static readonly EmployeeDocumentContentResult AccessDenied = new(null, null, null, true);
+}
+
 public interface IEmployeeDocumentService
 {
     Task<IReadOnlyList<EmployeeDocumentDto>?> ListAsync(Guid employeeId, bool includeSensitive, bool includeArchived, CancellationToken cancellationToken);
@@ -35,7 +45,10 @@ public interface IEmployeeDocumentService
     Task<EmployeeDocumentDto?> UpdateMetadataAsync(Guid employeeId, Guid documentId, SaveEmployeeDocumentMetadata metadata, CancellationToken cancellationToken);
     Task<EmployeeDocumentDto?> ReplaceFileAsync(Guid employeeId, Guid documentId, string fileName, string contentType, long sizeBytes, Stream content, CancellationToken cancellationToken);
     Task<EmployeeDocumentDto?> SetArchivedAsync(Guid employeeId, Guid documentId, bool archived, CancellationToken cancellationToken);
-    Task<(Stream Content, string FileName, string ContentType, bool IsSensitive)?> OpenAsync(Guid employeeId, Guid documentId, CancellationToken cancellationToken);
+
+    /// <summary>Sensitive-category documents open only with <paramref name="includeSensitive"/>;
+    /// every successful sensitive download is read-audited (SensitiveDocumentDownloaded).</summary>
+    Task<EmployeeDocumentContentResult?> OpenAsync(Guid employeeId, Guid documentId, bool includeSensitive, CancellationToken cancellationToken);
     Task<bool> DeleteAsync(Guid employeeId, Guid documentId, CancellationToken cancellationToken);
 
     bool IsSensitive(EmployeeDocumentCategory category);
@@ -70,6 +83,10 @@ public class EmployeeDocumentService : IEmployeeDocumentService
     }
 
     public bool IsSensitive(EmployeeDocumentCategory category) => SensitiveCategories.Contains(category);
+
+    /// <summary>Static variant so read-side projections (employee history) share the exact same
+    /// sensitivity definition without needing the full service.</summary>
+    public static bool IsSensitiveCategory(EmployeeDocumentCategory category) => SensitiveCategories.Contains(category);
 
     public async Task<IReadOnlyList<EmployeeDocumentDto>?> ListAsync(
         Guid employeeId, bool includeSensitive, bool includeArchived, CancellationToken cancellationToken)
@@ -191,8 +208,8 @@ public class EmployeeDocumentService : IEmployeeDocumentService
         return Map(document);
     }
 
-    public async Task<(Stream Content, string FileName, string ContentType, bool IsSensitive)?> OpenAsync(
-        Guid employeeId, Guid documentId, CancellationToken cancellationToken)
+    public async Task<EmployeeDocumentContentResult?> OpenAsync(
+        Guid employeeId, Guid documentId, bool includeSensitive, CancellationToken cancellationToken)
     {
         var document = await FindAsync(employeeId, documentId, cancellationToken);
         if (document is null)
@@ -200,8 +217,32 @@ public class EmployeeDocumentService : IEmployeeDocumentService
             return null;
         }
 
+        var sensitive = IsSensitive(document.Category);
+        if (sensitive && !includeSensitive)
+        {
+            return EmployeeDocumentContentResult.AccessDenied;
+        }
+
         var stream = await _fileStorage.OpenReadAsync(document.StorageKey, cancellationToken);
-        return (stream, document.FileName, document.ContentType, IsSensitive(document.Category));
+
+        // Read-audit (M6/M14): downloads of ID/medical/contract documents leave a trace with a
+        // data classification, so a reviewer can filter the trail down to special-category access.
+        if (sensitive)
+        {
+            await _auditService.RecordAsync(EntityType, document.Id.ToString(),
+                SecurityAuditEvents.SensitiveDocumentDownloaded, null,
+                new
+                {
+                    document.EmployeeId,
+                    document.Category,
+                    document.FileName,
+                    Classification = document.Category == EmployeeDocumentCategory.MedicalDocument
+                        ? SecurityAuditEvents.Classification.Health
+                        : SecurityAuditEvents.Classification.Confidential,
+                }, cancellationToken);
+        }
+
+        return new EmployeeDocumentContentResult(stream, document.FileName, document.ContentType, false);
     }
 
     public async Task<bool> DeleteAsync(Guid employeeId, Guid documentId, CancellationToken cancellationToken)

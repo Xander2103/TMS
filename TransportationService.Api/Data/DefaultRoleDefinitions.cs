@@ -192,6 +192,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.EmployeePlanningConflictOverride,
                 PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate, PermissionCodes.AbsencesEdit,
                 PermissionCodes.AbsencesDelete, PermissionCodes.AbsencesApprove,
+                PermissionCodes.AbsencesViewMedical,
                 PermissionCodes.EmployeeDocumentsView, PermissionCodes.EmployeeDocumentsCreate,
                 PermissionCodes.EmployeeDocumentsEdit, PermissionCodes.EmployeeDocumentsDelete,
                 PermissionCodes.EmployeeDocumentsViewSensitive, PermissionCodes.HrSettingsManage,

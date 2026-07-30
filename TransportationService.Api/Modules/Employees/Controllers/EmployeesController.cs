@@ -36,6 +36,21 @@ public class EmployeesController : ControllerBase
         => _currentUser.CurrentUserId is { } userId
            && await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeesViewConfidential, cancellationToken);
 
+    /// <summary>The dossier history mirrors the live screens: every gated field/category needs
+    /// the same permission through its history as through the screen itself (M14).</summary>
+    private async Task<EmployeeHistoryAccess> HistoryAccessAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUser.CurrentUserId is not { } userId)
+        {
+            return new EmployeeHistoryAccess(false, false, false);
+        }
+
+        return new EmployeeHistoryAccess(
+            await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeesViewConfidential, cancellationToken),
+            await _authorization.UserHasPermissionAsync(userId, PermissionCodes.AbsencesViewMedical, cancellationToken),
+            await _authorization.UserHasPermissionAsync(userId, PermissionCodes.EmployeeDocumentsViewSensitive, cancellationToken));
+    }
+
     [HttpGet]
     [RequirePermission(PermissionCodes.EmployeesView)]
     public async Task<ActionResult<PagedResult<EmployeeListItemDto>>> Search(
@@ -75,7 +90,8 @@ public class EmployeesController : ControllerBase
         [FromQuery] string? category = null, CancellationToken cancellationToken = default)
     {
         var pageRequest = PageRequest.Of(page, pageSize);
-        var history = await _historyService.GetHistoryAsync(id, pageRequest.Page, pageRequest.PageSize, category, cancellationToken);
+        var access = await HistoryAccessAsync(cancellationToken);
+        var history = await _historyService.GetHistoryAsync(id, pageRequest.Page, pageRequest.PageSize, category, access, cancellationToken);
         return history is null ? NotFound() : Ok(history);
     }
 
