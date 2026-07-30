@@ -16,7 +16,9 @@ public interface ITokenService
         string firstName,
         string lastName,
         IEnumerable<string> roles,
-        IEnumerable<string> permissions);
+        IEnumerable<string> permissions,
+        Guid securityStamp = default,
+        bool mustChangePassword = false);
 
     RefreshTokenPair CreateRefreshToken();
 

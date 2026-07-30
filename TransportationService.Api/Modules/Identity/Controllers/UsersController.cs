@@ -120,9 +120,13 @@ public class UsersController : ControllerBase
 
     public record SetPasswordRequest(string Password);
 
-    /// <summary>Administrative password (re)set so an employee/driver account can log in to the portal.</summary>
+    /// <summary>
+    /// Administrative password (re)set of ANOTHER user. Gated by the sensitive
+    /// users.reset_password permission (separate from users.edit) and fail-closed against
+    /// resetting higher-privileged or protected system accounts (see UserService).
+    /// </summary>
     [HttpPut("{id:guid}/password")]
-    [RequirePermission(PermissionCodes.UsersEdit)]
+    [RequirePermission(PermissionCodes.UsersResetPassword)]
     public async Task<IActionResult> SetPassword(Guid id, SetPasswordRequest request, CancellationToken cancellationToken)
     {
         var result = await _userService.SetPasswordAsync(id, request.Password, cancellationToken);
@@ -130,6 +134,7 @@ public class UsersController : ControllerBase
         {
             UserOperationOutcome.Success => NoContent(),
             UserOperationOutcome.NotFound => NotFound(),
+            UserOperationOutcome.Forbidden => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
             _ => BadRequest(new { message = result.Error }),
         };
     }
@@ -168,6 +173,7 @@ public class UsersController : ControllerBase
         {
             UserOperationOutcome.Success => Ok(result.User),
             UserOperationOutcome.NotFound => NotFound(),
+            UserOperationOutcome.Forbidden => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
             UserOperationOutcome.LastActiveAdministrator => Conflict("The last active administrator cannot be deactivated, blocked, or lose the administrator role."),
             _ => Conflict(),
         };

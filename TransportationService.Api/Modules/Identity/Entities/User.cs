@@ -15,6 +15,15 @@ public class User
 
     /// <summary>Forces a password change at the next login (temporary/admin-set credentials).</summary>
     public bool MustChangePassword { get; set; }
+
+    /// <summary>
+    /// Server-side session-revocation stamp. It is embedded in every access token and verified
+    /// on each authenticated request; rotating it (on an administrative password reset, and any
+    /// future block/deactivate) immediately invalidates all outstanding access tokens for this
+    /// user without waiting for their short lifetime to elapse.
+    /// </summary>
+    public Guid SecurityStamp { get; set; } = Guid.NewGuid();
+
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

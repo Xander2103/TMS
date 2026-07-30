@@ -8,6 +8,10 @@ public static class PermissionCodes
     public const string UsersDelete = "users.delete";
     public const string UsersBlock = "users.block";
 
+    /// <summary>Sensitive: administratively (re)set another user's password. Separate from users.edit
+    /// so that ordinary user-editing rights can never be leveraged into account takeover.</summary>
+    public const string UsersResetPassword = "users.reset_password";
+
     public const string RolesView = "roles.view";
     public const string RolesCreate = "roles.create";
     public const string RolesEdit = "roles.edit";
@@ -347,6 +351,7 @@ public static class PermissionCodes
         (UsersView, "users", "view", "Gebruikers bekijken"),
         (UsersCreate, "users", "create", "Gebruikers aanmaken"),
         (UsersEdit, "users", "edit", "Gebruikers bewerken"),
+        (UsersResetPassword, "users", "reset_password", "Wachtwoord van een gebruiker administratief resetten"),
         (UsersDelete, "users", "delete", "Gebruikers verwijderen"),
         (UsersBlock, "users", "block", "Gebruikers blokkeren"),
         (RolesView, "roles", "view", "Rollen bekijken"),

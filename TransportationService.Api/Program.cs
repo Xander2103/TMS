@@ -19,6 +19,9 @@ builder.Services
     {
         options.Filters.Add<TransportationService.Api.Common.InvalidTenantReferenceExceptionFilter>();
         options.Filters.Add<TransportationService.Api.Common.DomainValidationExceptionFilter>();
+        // Per-request session-revocation (security stamp) + mandatory-password-change enforcement,
+        // applied centrally to every authenticated request.
+        options.Filters.Add<TransportationService.Api.Modules.Identity.Authorization.AccountStateAuthorizationFilter>();
     })
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(
@@ -76,6 +79,7 @@ builder.Services.AddScoped<
     IPermissionAuthorizationService,
     PermissionAuthorizationService
 >();
+builder.Services.AddScoped<IAccountSecurityService, AccountSecurityService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IUserAccountFlowService, UserAccountFlowService>();
 builder.Services.AddScoped<IJobFunctionRoleMappingService, JobFunctionRoleMappingService>();

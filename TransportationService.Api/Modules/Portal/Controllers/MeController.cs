@@ -214,6 +214,7 @@ public class MeController : ControllerBase
     }
 
     [HttpPost("password")]
+    [TransportationService.Api.Modules.Identity.Authorization.PermitWhenPasswordChangeRequired]
     public async Task<IActionResult> ChangePassword(
         ChangeMyPasswordRequest request, CancellationToken cancellationToken)
     {

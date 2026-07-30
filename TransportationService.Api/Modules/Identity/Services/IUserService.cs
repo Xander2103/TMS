@@ -16,6 +16,6 @@ public interface IUserService
     Task<UserOperationResult> SetPasswordAsync(Guid id, string password, CancellationToken cancellationToken);
 }
 
-public enum UserOperationOutcome { Success, NotFound, LastActiveAdministrator, ValidationFailed }
+public enum UserOperationOutcome { Success, NotFound, LastActiveAdministrator, ValidationFailed, Forbidden }
 
 public record UserOperationResult(UserOperationOutcome Outcome, UserDto? User, string? Error = null);

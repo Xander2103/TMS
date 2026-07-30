@@ -74,6 +74,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("logout")]
     [Authorize]
+    [TransportationService.Api.Modules.Identity.Authorization.PermitWhenPasswordChangeRequired]
     public async Task<IActionResult> Logout(LogoutRequest request, CancellationToken cancellationToken)
     {
         await _authService.LogoutAsync(request.RefreshToken, cancellationToken);
@@ -82,6 +83,7 @@ public class AuthController : ControllerBase
 
     [HttpGet("me")]
     [Authorize]
+    [TransportationService.Api.Modules.Identity.Authorization.PermitWhenPasswordChangeRequired]
     public async Task<ActionResult<CurrentUserDto>> Me(CancellationToken cancellationToken)
     {
         var userId = User.GetUserId();

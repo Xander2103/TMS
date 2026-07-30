@@ -160,7 +160,8 @@ public sealed class AuthService : IAuthService
         var (roles, permissions) = await LoadRolesAndPermissionsAsync(user, cancellationToken);
 
         var access = _tokenService.CreateAccessToken(
-            user.Id, user.TenantId, user.Email, user.FirstName, user.LastName, roles, permissions);
+            user.Id, user.TenantId, user.Email, user.FirstName, user.LastName, roles, permissions,
+            user.SecurityStamp, user.MustChangePassword);
 
         var refresh = _tokenService.CreateRefreshToken();
         var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;

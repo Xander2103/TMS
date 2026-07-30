@@ -28,7 +28,9 @@ public sealed class TokenService : ITokenService
         string firstName,
         string lastName,
         IEnumerable<string> roles,
-        IEnumerable<string> permissions)
+        IEnumerable<string> permissions,
+        Guid securityStamp = default,
+        bool mustChangePassword = false)
     {
         var nowUtc = _timeProvider.GetUtcNow().UtcDateTime;
         var expiresUtc = nowUtc.AddMinutes(_options.AccessTokenMinutes);
@@ -41,7 +43,13 @@ public sealed class TokenService : ITokenService
             new(JwtRegisteredClaimNames.GivenName, firstName),
             new(JwtRegisteredClaimNames.FamilyName, lastName),
             new(AppClaimTypes.TenantId, tenantId.ToString()),
+            new(AppClaimTypes.SecurityStamp, securityStamp.ToString()),
         };
+
+        if (mustChangePassword)
+        {
+            claims.Add(new Claim(AppClaimTypes.MustChangePassword, "true"));
+        }
 
         foreach (var role in roles.Distinct())
         {

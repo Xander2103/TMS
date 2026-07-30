@@ -198,7 +198,8 @@ public class UserAccountFlowService : IUserAccountFlowService
         user.PasswordHash = _passwordHasher.Hash(newPassword);
         user.MustChangePassword = false;
 
-        // Every existing session dies with the old credential.
+        // Every existing session dies with the old credential: revoke refresh tokens AND rotate
+        // the security stamp so already-issued access tokens are rejected on their next request.
         var refreshTokens = await _dbContext.Set<RefreshToken>()
             .Where(t => t.UserId == user.Id && t.RevokedAt == null)
             .ToListAsync(cancellationToken);
@@ -206,6 +207,8 @@ public class UserAccountFlowService : IUserAccountFlowService
         {
             refreshToken.RevokedAt = now;
         }
+
+        user.SecurityStamp = Guid.NewGuid();
 
         _dbContext.AuditLogs.Add(new Modules.Auditing.Entities.AuditLog
         {
