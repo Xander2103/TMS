@@ -43,6 +43,9 @@ public interface ICustomerMessageService
 public class CustomerMessageService : ICustomerMessageService
 {
     private const string EntityType = "CustomerMessage";
+    /// <summary>Mirrors CustomerMessageConfiguration's HasMaxLength(4000) — validated before the
+    /// insert so an over-length body fails as a clean 400, never an unhandled DB error.</summary>
+    private const int MaxBodyLength = 4000;
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
@@ -117,6 +120,11 @@ public class CustomerMessageService : ICustomerMessageService
         if (string.IsNullOrWhiteSpace(request.Body))
         {
             return PortalResult<CustomerMessageDto>.Invalid("Een bericht mag niet leeg zijn.");
+        }
+
+        if (request.Body.Length > MaxBodyLength)
+        {
+            return PortalResult<CustomerMessageDto>.Invalid($"Een bericht mag maximaal {MaxBodyLength} tekens bevatten.");
         }
 
         if (request.OrderId is { } id && !await OrderBelongsToCustomerAsync(id, customer.Value.CustomerId, cancellationToken))
@@ -207,6 +215,11 @@ public class CustomerMessageService : ICustomerMessageService
         if (string.IsNullOrWhiteSpace(request.Body))
         {
             throw new Common.DomainValidationException("body", "Een bericht mag niet leeg zijn.");
+        }
+
+        if (request.Body.Length > MaxBodyLength)
+        {
+            throw new Common.DomainValidationException("body", $"Een bericht mag maximaal {MaxBodyLength} tekens bevatten.");
         }
 
         if (request.OrderId is { } id && !await OrderBelongsToCustomerAsync(id, customerId, cancellationToken))

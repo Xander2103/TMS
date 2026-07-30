@@ -184,4 +184,39 @@ public class PortalDocumentServiceTests
         var result = await h.Sut.GetDocumentContentAsync(PortalDocumentSource.OrderDocument, Guid.NewGuid(), CancellationToken.None);
         Assert.Equal(PortalOutcomeKind.NotFound, result.Outcome);
     }
+
+    /// <summary>
+    /// Fix round 1 (Important #1): PodService.CorrectAsync only flips the ORIGINAL row's
+    /// IsCurrent to false — it never clears CustomerVisible — so a customer with a bookmarked
+    /// download URL for the superseded version must still be refused. The list already filtered
+    /// on IsCurrent; the content endpoint didn't and is now aligned with it.
+    /// </summary>
+    [Fact]
+    public async Task Content_CorrectedPod_OldVersion_ReturnsNotFound_NewVersionStillDownloads()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var original = await h.Db.Context.ProofsOfDelivery.FirstAsync(p => p.CustomerVisible);
+        var replacementPath = original.SignaturePath;
+
+        // Simulate PodService.CorrectAsync: the original is superseded (IsCurrent = false,
+        // CustomerVisible left untouched) and a new current version is inserted.
+        original.IsCurrent = false;
+        var replacement = new TransportationService.Api.Modules.Pod.Entities.ProofOfDelivery
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = original.TripId, TransportOrderId = original.TransportOrderId,
+            TransportOrderStopId = original.TransportOrderStopId, Version = 2, IsCurrent = true, CustomerVisible = true,
+            RecipientName = "Gecorrigeerd", DeliveredAt = original.DeliveredAt, SignaturePath = replacementPath,
+            CorrectedFromPodId = original.Id, CorrectionReason = "Verkeerde ontvanger genoteerd",
+        };
+        h.Db.Context.ProofsOfDelivery.Add(replacement);
+        await h.Db.Context.SaveChangesAsync();
+
+        var oldResult = await h.Sut.GetDocumentContentAsync(PortalDocumentSource.Pod, original.Id, CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.NotFound, oldResult.Outcome);
+
+        var newResult = await h.Sut.GetDocumentContentAsync(PortalDocumentSource.Pod, replacement.Id, CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.Success, newResult.Outcome);
+    }
 }

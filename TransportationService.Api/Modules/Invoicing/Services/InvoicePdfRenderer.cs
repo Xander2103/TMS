@@ -185,6 +185,24 @@ public static class InvoicePdfRenderer
             .Select(g => new { Rate = g.Key, Base = g.Sum(l => l.LineTotal), Vat = Math.Round(g.Sum(l => l.LineTotal) * g.Key / 100m, 2) })
             .OrderBy(g => g.Rate)
             .ToList();
+
+        // Everything from here down (VAT breakdown, totals, payment block, notes) is one visual
+        // unit that must never straddle the fixed-position footer — estimate its height up front
+        // and start a fresh page if it would run into the footer zone (same page-break idiom as
+        // the line-item loop above, just applied to this block as a whole instead of per-line).
+        var postTableHeight =
+            (byRate.Count > 0 ? 14 + byRate.Count * 12 + 8 : 0)
+            + 3 * 15 + 4 + 12 // subtotal/btw/totaal lines + divider gap + trailing gap
+            + (invoice.SellerIban is { Length: > 0 } ? 3 * 14 : 0)
+            + (invoice.Notes is { Length: > 0 } ? 6 + 16 : 0);
+        const double footerReserve = 50;
+        if (y + postTableHeight > page.Height.Point - margin - footerReserve)
+        {
+            page = document.AddPage();
+            gfx = XGraphics.FromPdfPage(page);
+            y = margin;
+        }
+
         if (byRate.Count > 0)
         {
             gfx.DrawString("BTW-overzicht", Heading, XBrushes.Black, new XPoint(margin, y + 9));

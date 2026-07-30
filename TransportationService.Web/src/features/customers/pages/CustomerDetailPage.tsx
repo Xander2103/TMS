@@ -16,6 +16,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { changeCustomerNumber } from '../api/customersApi'
+import { getCustomerMessagesUnreadCount } from '../api/customerMessagesApi'
 import { CustomerForm } from '../components/CustomerForm'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
 import { CustomerMessagesPanel } from '../components/CustomerMessagesPanel'
@@ -60,12 +61,26 @@ export function CustomerDetailPage() {
   const [numberError, setNumberError] = useState<string | null>(null)
   const [numberFieldErrors, setNumberFieldErrors] = useState<FieldErrors>({})
   const [numberLocalErrors, setNumberLocalErrors] = useState<{ customerNumber?: string; reason?: string }>({})
+  const [unreadMessages, setUnreadMessages] = useState(0)
 
   useEffect(() => {
     if (customer) {
       addRecentItem({ category: 'Klanten', title: customer.name, route: `/customers/${customer.id}` })
     }
   }, [customer])
+
+  useEffect(() => {
+    if (!canViewMessages || !id) return
+    let mounted = true
+    getCustomerMessagesUnreadCount(id)
+      .then((data) => {
+        if (mounted) setUnreadMessages(data.count)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [id, canViewMessages])
 
   if (isLoading) return <LoadingState message="Klant laden..." />
   if (error || !customer) return <ErrorState message={error ?? 'Klant niet gevonden.'} />
@@ -245,7 +260,7 @@ export function CustomerDetailPage() {
                 ...(canViewLocations ? [{ id: 'locations', label: 'Locaties' }] : []),
                 { id: 'communication', label: 'Communicatie' },
                 ...(canViewBilling ? [{ id: 'billing', label: 'Tarieven & toeslagen' }] : []),
-                ...(canViewMessages ? [{ id: 'messages', label: 'Berichten' }] : []),
+                ...(canViewMessages ? [{ id: 'messages', label: 'Berichten', badge: unreadMessages || undefined }] : []),
               ]}
               activeId={activeTab}
               onChange={setActiveTab}
@@ -443,7 +458,7 @@ export function CustomerDetailPage() {
 
           {activeTab === 'messages' && canViewMessages && id && (
             <TabPanel tabId="messages">
-              <CustomerMessagesPanel customerId={id} />
+              <CustomerMessagesPanel customerId={id} onMarkedRead={() => setUnreadMessages(0)} />
             </TabPanel>
           )}
         </>

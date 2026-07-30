@@ -92,4 +92,30 @@ public class PortalAnnouncementServiceTests
             new SavePortalAnnouncementRequest("Titel", "Body", Now.UtcDateTime, Now.UtcDateTime.AddDays(-1), true),
             CancellationToken.None));
     }
+
+    /// <summary>Fix round 1 (Important #2): over-length Title/Body must fail as a clean
+    /// validation error, never reach SaveChanges and hit the varchar column as an unhandled 500.</summary>
+    [Fact]
+    public async Task Create_OverLengthTitle_ThrowsWithFieldPath()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var tooLong = new string('x', 201);
+        var exception = await Assert.ThrowsAsync<DomainValidationException>(() => h.Sut.CreateAsync(
+            new SavePortalAnnouncementRequest(tooLong, "Body", null, null, true), CancellationToken.None));
+        Assert.Contains("title", exception.FieldErrors!.Keys);
+    }
+
+    [Fact]
+    public async Task Create_OverLengthBody_ThrowsWithFieldPath()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var tooLong = new string('x', 4001);
+        var exception = await Assert.ThrowsAsync<DomainValidationException>(() => h.Sut.CreateAsync(
+            new SavePortalAnnouncementRequest("Titel", tooLong, null, null, true), CancellationToken.None));
+        Assert.Contains("body", exception.FieldErrors!.Keys);
+    }
 }

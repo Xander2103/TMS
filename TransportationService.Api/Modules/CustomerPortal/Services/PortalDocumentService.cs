@@ -136,7 +136,7 @@ public class PortalDocumentService : IPortalDocumentService
                     from p in _dbContext.ProofsOfDelivery.AsNoTracking()
                     join o in _dbContext.TransportOrders.AsNoTracking() on p.TransportOrderId equals o.Id
                     where p.TenantId == tenantId && o.TenantId == tenantId && p.Id == id
-                        && o.CustomerId == customerId && p.CustomerVisible
+                        && o.CustomerId == customerId && p.CustomerVisible && p.IsCurrent
                     select p.SignaturePath)
                     .FirstOrDefaultAsync(cancellationToken);
                 if (pod is not { } signaturePath)

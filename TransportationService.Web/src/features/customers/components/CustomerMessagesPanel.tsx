@@ -19,10 +19,12 @@ interface CustomerMessagesPanelProps {
   customerId: string
   /** When set, scopes the thread to one order (used from the order-detail portal panel). */
   orderId?: string
+  /** Fired once the thread has been marked read for the current user (e.g. to clear an unread badge). */
+  onMarkedRead?: () => void
 }
 
 /** Staff/customer messaging thread — customer detail "Berichten" tab and the order-detail panel. */
-export function CustomerMessagesPanel({ customerId, orderId }: CustomerMessagesPanelProps) {
+export function CustomerMessagesPanel({ customerId, orderId, onMarkedRead }: CustomerMessagesPanelProps) {
   const { hasPermission } = useAuth()
   const canSend = hasPermission('customer_messages.send')
   const [messages, setMessages] = useState<CustomerMessage[]>([])
@@ -46,7 +48,9 @@ export function CustomerMessagesPanel({ customerId, orderId }: CustomerMessagesP
 
   useEffect(() => {
     load()
-    void markCustomerMessagesRead(customerId, orderId ?? null).catch(() => {})
+    void markCustomerMessagesRead(customerId, orderId ?? null)
+      .then(() => onMarkedRead?.())
+      .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId, orderId])
 

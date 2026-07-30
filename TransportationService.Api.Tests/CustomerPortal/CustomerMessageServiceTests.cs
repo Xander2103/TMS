@@ -148,6 +148,36 @@ public class CustomerMessageServiceTests
             sut.SendToCustomerAsync(h.CustomerId, new SendCustomerMessageRequest(null, "   "), CancellationToken.None));
     }
 
+    /// <summary>Fix round 1 (Important #2): an over-length body must fail as a clean validation
+    /// error, never reach SaveChanges and hit the varchar(4000) column as an unhandled 500.</summary>
+    [Fact]
+    public async Task Internal_SendOverLengthBody_ThrowsWithFieldPath()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.For(h.StaffUserId);
+
+        var tooLong = new string('x', 4001);
+        var exception = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            sut.SendToCustomerAsync(h.CustomerId, new SendCustomerMessageRequest(null, tooLong), CancellationToken.None));
+        Assert.Contains("body", exception.FieldErrors!.Keys);
+        Assert.Empty(h.Db.Context.CustomerMessages);
+    }
+
+    [Fact]
+    public async Task Portal_SendOverLengthBody_ReturnsValidationFailed_NeverPersists()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.For(h.PortalUserId);
+
+        var tooLong = new string('x', 4001);
+        var result = await sut.SendPortalAsync(new SendCustomerMessageRequest(null, tooLong), CancellationToken.None);
+
+        Assert.Equal(PortalOutcomeKind.ValidationFailed, result.Outcome);
+        Assert.Empty(h.Db.Context.CustomerMessages);
+    }
+
     [Fact]
     public async Task UnreadCounts_TrackPerSide_AndResetOnMarkRead()
     {

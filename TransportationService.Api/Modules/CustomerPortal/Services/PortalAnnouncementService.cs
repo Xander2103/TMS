@@ -24,6 +24,10 @@ public interface IPortalAnnouncementService
 public class PortalAnnouncementService : IPortalAnnouncementService
 {
     private const string EntityType = "PortalAnnouncement";
+    /// <summary>Mirror PortalAnnouncementConfiguration's HasMaxLength calls — validated before the
+    /// insert/update so an over-length value fails as a clean 400, never an unhandled DB error.</summary>
+    private const int MaxTitleLength = 200;
+    private const int MaxBodyLength = 4000;
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
@@ -111,9 +115,19 @@ public class PortalAnnouncementService : IPortalAnnouncementService
             throw new Common.DomainValidationException("title", "De titel is verplicht.");
         }
 
+        if (request.Title.Length > MaxTitleLength)
+        {
+            throw new Common.DomainValidationException("title", $"De titel mag maximaal {MaxTitleLength} tekens bevatten.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.Body))
         {
             throw new Common.DomainValidationException("body", "De inhoud is verplicht.");
+        }
+
+        if (request.Body.Length > MaxBodyLength)
+        {
+            throw new Common.DomainValidationException("body", $"De inhoud mag maximaal {MaxBodyLength} tekens bevatten.");
         }
 
         if (request.ActiveFrom is { } from && request.ActiveUntil is { } until && until < from)
