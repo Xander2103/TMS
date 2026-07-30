@@ -129,7 +129,7 @@ public class CustomerPortalService : ICustomerPortalService
             return PortalResult<PortalOrderDetailDto>.NotFound();
         }
 
-        return PortalResult<PortalOrderDetailDto>.Success(Trim(order));
+        return PortalResult<PortalOrderDetailDto>.Success(await TrimAsync(order, cancellationToken));
     }
 
     public async Task<PortalResult<PortalOrderDetailDto>> SubmitOrderAsync(
@@ -224,7 +224,7 @@ public class CustomerPortalService : ICustomerPortalService
         }
 
         var detail = await _orderService.GetByIdAsync(entity.Id, cancellationToken);
-        return PortalResult<PortalOrderDetailDto>.Success(Trim(detail!));
+        return PortalResult<PortalOrderDetailDto>.Success(await TrimAsync(detail!, cancellationToken));
     }
 
     public async Task<PortalResult<IReadOnlyList<PortalLocationDto>>> ListMyLocationsAsync(CancellationToken cancellationToken)
@@ -288,11 +288,37 @@ public class CustomerPortalService : ICustomerPortalService
             location.City, location.CountryCode, location.IsDefaultLoadingLocation, location.IsDefaultUnloadingLocation));
     }
 
-    private static PortalOrderDetailDto Trim(TransportOrderDetailDto order) => new(
-        order.Id, order.OrderNumber, order.OrderDate, order.Status, order.CustomerReference,
-        order.GoodsDescription, order.Notes, order.CancellationReason,
-        order.Stops.Select(s => new PortalStopDto(
-            s.Sequence, s.StopType, s.LocationName, s.City, s.RequestedFrom, s.RequestedTo, s.Reference, s.Instructions)).ToList(),
-        order.CargoItems.Select(c => new PortalCargoDto(
-            c.Sequence, c.Description, c.ExpectedQuantity, c.QuantityUnit, c.UnitType, c.AdrRequired)).ToList());
+    /// <summary>Statuses a customer may ever see on their own order's timeline; "Invoiced" and any
+    /// future internal-only step stay off it (a customer sees "Afgerond", not billing state).</summary>
+    private static readonly TransportOrderStatus[] CustomerVisibleStatuses =
+    [
+        TransportOrderStatus.Submitted, TransportOrderStatus.Confirmed, TransportOrderStatus.Planned,
+        TransportOrderStatus.InProgress, TransportOrderStatus.Completed, TransportOrderStatus.Cancelled,
+    ];
+
+    private async Task<PortalOrderDetailDto> TrimAsync(TransportOrderDetailDto order, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        var timeline = await _dbContext.TransportOrderStatusHistories.AsNoTracking()
+            .Where(h => h.TenantId == tenantId && h.TransportOrderId == order.Id && CustomerVisibleStatuses.Contains(h.ToStatus))
+            .OrderBy(h => h.ChangedAt)
+            .Select(h => new PortalTimelineEventDto(h.ToStatus, h.ChangedAt, h.Reason))
+            .ToListAsync(cancellationToken);
+
+        var exceptions = await _dbContext.Set<Modules.Exceptions.Entities.ExecutionException>().AsNoTracking()
+            .Where(e => e.TenantId == tenantId && e.TransportOrderId == order.Id && e.CustomerVisible)
+            .OrderBy(e => e.OccurredAt)
+            .Select(e => new PortalExceptionDto(e.Type.ToString(), e.Description, e.Status.ToString(), e.OccurredAt))
+            .ToListAsync(cancellationToken);
+
+        return new PortalOrderDetailDto(
+            order.Id, order.OrderNumber, order.OrderDate, order.Status, order.CustomerReference,
+            order.GoodsDescription, order.Notes, order.CancellationReason,
+            order.Stops.Select(s => new PortalStopDto(
+                s.Sequence, s.StopType, s.LocationName, s.City, s.RequestedFrom, s.RequestedTo, s.Reference, s.Instructions)).ToList(),
+            order.CargoItems.Select(c => new PortalCargoDto(
+                c.Sequence, c.Description, c.ExpectedQuantity, c.QuantityUnit, c.UnitType, c.AdrRequired)).ToList(),
+            timeline, exceptions);
+    }
 }

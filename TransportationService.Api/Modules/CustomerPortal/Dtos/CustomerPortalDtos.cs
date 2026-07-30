@@ -33,6 +33,10 @@ public record PortalCargoDto(
     PackageUnitType? UnitType,
     bool AdrRequired);
 
+public record PortalTimelineEventDto(TransportOrderStatus Status, DateTime ChangedAt, string? Reason);
+
+public record PortalExceptionDto(string Type, string Description, string Status, DateTime OccurredAt);
+
 /// <summary>Customer-facing order view: deliberately NO prices or internal planning data.</summary>
 public record PortalOrderDetailDto(
     Guid Id,
@@ -44,7 +48,9 @@ public record PortalOrderDetailDto(
     string? Notes,
     string? CancellationReason,
     IReadOnlyList<PortalStopDto> Stops,
-    IReadOnlyList<PortalCargoDto> CargoItems);
+    IReadOnlyList<PortalCargoDto> CargoItems,
+    IReadOnlyList<PortalTimelineEventDto> Timeline,
+    IReadOnlyList<PortalExceptionDto> Exceptions);
 
 public record PortalStopInput(
     StopType StopType,

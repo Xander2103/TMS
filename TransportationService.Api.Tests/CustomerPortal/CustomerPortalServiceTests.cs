@@ -113,6 +113,50 @@ public class CustomerPortalServiceTests
     }
 
     [Fact]
+    public async Task GetMyOrder_IncludesTimeline_AndOnlyCustomerVisibleExceptions()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var submitted = await h.For(h.PortalUserId).SubmitOrderAsync(Request(h), CancellationToken.None);
+        var orderId = submitted.Value!.Id;
+        await h.Orders.ChangeStatusAsync(orderId, TransportOrderStatus.Confirmed, CancellationToken.None);
+
+        h.Db.Context.Trips.Add(new TransportationService.Api.Modules.Planning.Entities.Trip
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TripNumber = "TR-1", TripDate = new DateOnly(2026, 7, 21),
+        });
+        var tripId = h.Db.Context.Trips.Local.First().Id;
+        h.Db.Context.ExecutionExceptions.AddRange(
+            new TransportationService.Api.Modules.Exceptions.Entities.ExecutionException
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = tripId, TransportOrderId = orderId,
+                Type = TransportationService.Api.Modules.Exceptions.Entities.ExecutionExceptionType.Delay,
+                Status = TransportationService.Api.Modules.Exceptions.Entities.ExecutionExceptionStatus.Open,
+                CustomerVisible = true, Description = "Vertraging door verkeer", OccurredAt = Now.UtcDateTime,
+            },
+            new TransportationService.Api.Modules.Exceptions.Entities.ExecutionException
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = tripId, TransportOrderId = orderId,
+                Type = TransportationService.Api.Modules.Exceptions.Entities.ExecutionExceptionType.Other,
+                Status = TransportationService.Api.Modules.Exceptions.Entities.ExecutionExceptionStatus.Open,
+                CustomerVisible = false, Description = "Interne notitie", OccurredAt = Now.UtcDateTime,
+            });
+        await h.Db.Context.SaveChangesAsync();
+
+        var detail = await h.For(h.PortalUserId).GetMyOrderAsync(orderId, CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.Success, detail.Outcome);
+
+        // Draft->Submitted->Confirmed: both customer-visible transitions on the timeline.
+        Assert.Equal(2, detail.Value!.Timeline.Count);
+        Assert.Contains(detail.Value.Timeline, e => e.Status == TransportOrderStatus.Submitted);
+        Assert.Contains(detail.Value.Timeline, e => e.Status == TransportOrderStatus.Confirmed);
+
+        var exception = Assert.Single(detail.Value.Exceptions);
+        Assert.Equal("Vertraging door verkeer", exception.Description);
+    }
+
+    [Fact]
     public async Task Submit_WithAnotherCustomersLocation_IsRefused()
     {
         var h = await SeedAsync();
