@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
+import { Button } from '../../../components/ui/Button'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { useAuth } from '../../auth/authContextValue'
 import { UNIT_TYPE_LABELS } from '../../packages/types'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, STOP_TYPE_LABELS } from '../../transport-orders/types'
-import { getPortalOrder, type PortalOrderDetail } from '../api/customerPortalApi'
+import {
+  downloadPortalDocument,
+  getPortalOrder,
+  listPortalDocuments,
+  type PortalDocument,
+  type PortalOrderDetail,
+} from '../api/customerPortalApi'
+import './customer-portal-pages.css'
 
 function formatWindow(from: string | null, to: string | null): string {
   const fmt = (value: string) => value.slice(0, 16).replace('T', ' ')
@@ -21,8 +30,11 @@ function formatWindow(from: string | null, to: string | null): string {
 /** Customer-facing order detail: status, stops and cargo — no internal pricing or planning. */
 export function CustomerPortalOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
+  const { hasPermission } = useAuth()
   const [order, setOrder] = useState<PortalOrderDetail | null>(null)
+  const [documents, setDocuments] = useState<PortalDocument[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -33,9 +45,19 @@ export function CustomerPortalOrderDetailPage() {
       .catch(() => {
         if (mounted) setError('De opdracht kon niet worden geladen.')
       })
+    if (hasPermission('customer_portal.view_documents')) {
+      listPortalDocuments()
+        .then((rows) => {
+          if (mounted) setDocuments(rows.filter((d) => d.orderId === id))
+        })
+        .catch(() => {
+          // Non-fatal: the documents section just stays empty.
+        })
+    }
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   if (error) return <ErrorState message={error} />
@@ -48,13 +70,53 @@ export function CustomerPortalOrderDetailPage() {
       <PageHeader
         title={order.orderNumber}
         subtitle={`Ingediend voor ${order.orderDate}${order.customerReference ? ` · uw ref. ${order.customerReference}` : ''}`}
-        action={<Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>}
+        action={
+          <>
+            <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>{' '}
+            {hasPermission('customer_portal.messages') && (
+              <Link to={`/klantportaal/berichten?orderId=${order.id}`}>
+                <Button variant="secondary">Berichten over deze opdracht</Button>
+              </Link>
+            )}
+          </>
+        }
       />
 
       {order.cancellationReason && (
         <p className="to-cancel-reason" role="note">
           Geannuleerd: {order.cancellationReason}
         </p>
+      )}
+
+      {order.timeline.length > 0 && (
+        <section className="cpp-panel">
+          <h2>Status</h2>
+          <ul className="cpp-list">
+            {order.timeline.map((event, index) => (
+              <li key={index} className="cpp-row">
+                <span>
+                  <Badge tone={ORDER_STATUS_TONE[event.status]}>{ORDER_STATUS_LABELS[event.status]}</Badge>
+                  {event.reason ? ` — ${event.reason}` : ''}
+                </span>
+                <span>{event.changedAt.slice(0, 16).replace('T', ' ')}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {order.exceptions.length > 0 && (
+        <section className="cpp-panel">
+          <h2>Aandachtspunten</h2>
+          <ul className="cpp-list">
+            {order.exceptions.map((exception, index) => (
+              <li key={index} className="cpp-row">
+                <span>{exception.description}</span>
+                <Badge tone="warning">{exception.status}</Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <section className="to-section">
@@ -120,6 +182,30 @@ export function CustomerPortalOrderDetailPage() {
         <section className="to-section">
           <h2>Uw opmerkingen</h2>
           <p>{order.notes}</p>
+        </section>
+      )}
+
+      {hasPermission('customer_portal.view_documents') && documents.length > 0 && (
+        <section className="cpp-panel">
+          <h2>Documenten</h2>
+          {downloadError && <p className="placeholder-text" role="alert">{downloadError}</p>}
+          <ul className="cpp-list">
+            {documents.map((doc) => (
+              <li key={`${doc.source}-${doc.id}`}>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() =>
+                    void downloadPortalDocument(doc.source, doc.id, doc.fileName ?? doc.title).catch(() =>
+                      setDownloadError('Het document kon niet worden gedownload.'),
+                    )
+                  }
+                >
+                  {doc.title}
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
     </div>

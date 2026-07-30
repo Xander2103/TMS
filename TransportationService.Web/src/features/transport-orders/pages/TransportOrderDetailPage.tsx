@@ -29,7 +29,9 @@ import {
 } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
 import { OrderDocumentsPanel } from '../components/OrderDocumentsPanel'
+import { OrderPortalReviewPanel } from '../components/OrderPortalReviewPanel'
 import { OrderTimelinePanel } from '../components/OrderTimelinePanel'
+import { CustomerMessagesPanel } from '../../customers/components/CustomerMessagesPanel'
 import { StopExecutionPlanDialog } from '../components/StopExecutionPlanDialog'
 import { OrderPackagesPanel } from '../../packages/components/OrderPackagesPanel'
 import { UNIT_TYPE_LABELS } from '../../packages/types'
@@ -386,6 +388,10 @@ export function TransportOrderDetailPage() {
         </p>
       )}
 
+      {!editing && hasAnyPermission(['orders.change_status', 'orders.manage']) && (
+        <OrderPortalReviewPanel order={order} onReviewed={setOrder} />
+      )}
+
       {editing ? (
         <TransportOrderForm
           order={order}
@@ -664,6 +670,13 @@ export function TransportOrderDetailPage() {
             <h2>Historiek</h2>
             <OrderTimelinePanel orderId={order.id} />
           </section>
+
+          {hasPermission('customer_messages.view') && (
+            <section className="to-section">
+              <h2>Berichten (klantportaal)</h2>
+              <CustomerMessagesPanel customerId={order.customerId} orderId={order.id} />
+            </section>
+          )}
 
           <div className="to-detail-actions">
             {editable && (

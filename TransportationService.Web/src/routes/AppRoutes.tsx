@@ -83,10 +83,12 @@ const CustomerPortalNewOrderPage = lazyPage(() => import('../features/customer-p
 const CustomerPortalOrderDetailPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalOrderDetailPage'), 'CustomerPortalOrderDetailPage')
 const CustomerPortalLayout = lazyPage(() => import('../features/customer-portal/components/CustomerPortalLayout'), 'CustomerPortalLayout')
 const CustomerPortalDashboardPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalDashboardPage'), 'CustomerPortalDashboardPage')
-const CustomerPortalDocumentsPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalComingSoonPages'), 'CustomerPortalDocumentsPage')
-const CustomerPortalInvoicesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalComingSoonPages'), 'CustomerPortalInvoicesPage')
-const CustomerPortalMessagesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalComingSoonPages'), 'CustomerPortalMessagesPage')
+const CustomerPortalDocumentsPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalDocumentsPage'), 'CustomerPortalDocumentsPage')
+const CustomerPortalInvoicesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalInvoicesPage'), 'CustomerPortalInvoicesPage')
+const CustomerPortalInvoiceDetailPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalInvoiceDetailPage'), 'CustomerPortalInvoiceDetailPage')
+const CustomerPortalMessagesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalMessagesPage'), 'CustomerPortalMessagesPage')
 const CustomerPortalUsersPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalUsersPage'), 'CustomerPortalUsersPage')
+const PortalAnnouncementsSettingsPage = lazyPage(() => import('../features/customer-portal/pages/PortalAnnouncementsSettingsPage'), 'PortalAnnouncementsSettingsPage')
 const ForgotPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ForgotPasswordPage')
 const ResetPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ResetPasswordPage')
 const ActivatePage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ActivatePage')
@@ -165,6 +167,7 @@ const router = createBrowserRouter(
           <Route path="/klantportaal/orders/:id" element={<CustomerPortalOrderDetailPage />} />
           <Route path="/klantportaal/documenten" element={<CustomerPortalDocumentsPage />} />
           <Route path="/klantportaal/facturen" element={<CustomerPortalInvoicesPage />} />
+          <Route path="/klantportaal/facturen/:id" element={<CustomerPortalInvoiceDetailPage />} />
           <Route path="/klantportaal/berichten" element={<CustomerPortalMessagesPage />} />
           <Route path="/klantportaal/gebruikers" element={<CustomerPortalUsersPage />} />
         </Route>
@@ -260,6 +263,7 @@ const router = createBrowserRouter(
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
           <Route path="/settings/accounting" element={<AccountingSettingsPage />} />
           <Route path="/settings/notifications" element={<NotificationAdminPage />} />
+          <Route path="/settings/portal-announcements" element={<PortalAnnouncementsSettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
         </Route>

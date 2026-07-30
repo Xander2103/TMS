@@ -1,6 +1,9 @@
-import { apiClient } from '../../../api/apiClient'
+import { ApiError, apiClient } from '../../../api/apiClient'
+import { apiBaseUrl } from '../../../config/env'
+import { getAccessToken } from '../../auth/authStorage'
 import type { PackageUnitType } from '../../packages/types'
 import type { StopType, TransportOrderStatus } from '../../transport-orders/types'
+import type { PortalAnnouncement } from './portalAnnouncementsApi'
 
 export interface PortalContext {
   customerId: string
@@ -38,6 +41,19 @@ export interface PortalCargo {
   adrRequired: boolean
 }
 
+export interface PortalTimelineEvent {
+  status: TransportOrderStatus
+  changedAt: string
+  reason: string | null
+}
+
+export interface PortalException {
+  type: string
+  description: string
+  status: string
+  occurredAt: string
+}
+
 export interface PortalOrderDetail {
   id: string
   orderNumber: string
@@ -49,6 +65,8 @@ export interface PortalOrderDetail {
   cancellationReason: string | null
   stops: PortalStop[]
   cargoItems: PortalCargo[]
+  timeline: PortalTimelineEvent[]
+  exceptions: PortalException[]
 }
 
 export interface PortalStopInput {
@@ -185,4 +203,171 @@ export function setPortalUserGrants(id: string, grants: PortalUserGrants): Promi
     `/api/customer-portal/users/${id}/grants`,
     { grants },
   )
+}
+
+// --- Dashboard ---
+
+export interface PortalUpcomingDelivery {
+  orderId: string
+  orderNumber: string
+  plannedAt: string
+  city: string | null
+}
+
+export interface PortalRecentInvoice {
+  id: string
+  invoiceNumber: string
+  invoiceDate: string
+  status: string
+  total: number
+}
+
+export interface PortalDashboard {
+  activeOrders: number
+  upcomingDeliveries: PortalUpcomingDelivery[]
+  problemOrders: number
+  unreadMessages: number
+  recentInvoices: PortalRecentInvoice[]
+  announcements: PortalAnnouncement[]
+}
+
+export function getPortalDashboard(): Promise<PortalDashboard> {
+  return apiClient.getJson<PortalDashboard>('/api/customer-portal/dashboard')
+}
+
+// --- Announcements (portal read-only view; admin CRUD lives in portalAnnouncementsApi.ts) ---
+
+export function listPortalAnnouncements(): Promise<PortalAnnouncement[]> {
+  return apiClient.getJson<PortalAnnouncement[]>('/api/customer-portal/announcements')
+}
+
+// --- Messages ---
+
+export interface CustomerMessage {
+  id: string
+  transportOrderId: string | null
+  orderNumber: string | null
+  authorIsStaff: boolean
+  authorName: string
+  body: string
+  createdAt: string
+}
+
+export function listPortalMessages(orderId?: string): Promise<CustomerMessage[]> {
+  const query = orderId ? `?orderId=${orderId}` : ''
+  return apiClient.getJson<CustomerMessage[]>(`/api/customer-portal/messages${query}`)
+}
+
+export function sendPortalMessage(orderId: string | null, body: string): Promise<CustomerMessage> {
+  return apiClient.postJson<CustomerMessage, { orderId: string | null; body: string }>(
+    '/api/customer-portal/messages',
+    { orderId, body },
+  )
+}
+
+export function markPortalMessagesRead(orderId: string | null): Promise<void> {
+  return apiClient.postJson<void, { orderId: string | null }>('/api/customer-portal/messages/read', { orderId })
+}
+
+export function getPortalMessagesUnreadCount(): Promise<{ count: number }> {
+  return apiClient.getJson<{ count: number }>('/api/customer-portal/messages/unread-count')
+}
+
+// --- Invoices ---
+
+export interface PortalInvoiceListItem {
+  id: string
+  invoiceNumber: string
+  invoiceDate: string
+  dueDate: string
+  status: string
+  total: number
+  currency: string
+  peppolStatus: string | null
+}
+
+export interface PortalInvoiceLine {
+  description: string
+  quantity: number
+  unitPrice: number
+  vatRatePercent: number
+  lineTotal: number
+}
+
+export interface PortalInvoiceAttachment {
+  id: string
+  fileName: string
+  sizeBytes: number
+}
+
+export interface PortalInvoiceDetail {
+  id: string
+  invoiceNumber: string
+  invoiceDate: string
+  dueDate: string
+  status: string
+  currency: string
+  purchaseOrderNumber: string | null
+  lines: PortalInvoiceLine[]
+  subtotal: number
+  vatAmount: number
+  total: number
+  attachments: PortalInvoiceAttachment[]
+  peppolStatus: string | null
+}
+
+export function listPortalInvoices(): Promise<PortalInvoiceListItem[]> {
+  return apiClient.getJson<PortalInvoiceListItem[]>('/api/customer-portal/invoices')
+}
+
+export function getPortalInvoice(id: string): Promise<PortalInvoiceDetail> {
+  return apiClient.getJson<PortalInvoiceDetail>(`/api/customer-portal/invoices/${id}`)
+}
+
+async function downloadBlob(path: string, fileName: string): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+  })
+  if (!response.ok) {
+    throw new ApiError('Het bestand kon niet worden gedownload.', response.status)
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+export function downloadPortalInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
+  return downloadBlob(`/api/customer-portal/invoices/${id}/pdf`, `factuur-${invoiceNumber}.pdf`)
+}
+
+export function downloadPortalInvoiceAttachment(invoiceId: string, attachmentId: string, fileName: string): Promise<void> {
+  return downloadBlob(`/api/customer-portal/invoices/${invoiceId}/attachments/${attachmentId}/content`, fileName)
+}
+
+// --- Documents ---
+
+export type PortalDocumentSource = 'OrderDocument' | 'Pod' | 'InvoiceAttachment'
+
+export interface PortalDocument {
+  id: string
+  source: PortalDocumentSource
+  title: string
+  fileName: string | null
+  createdAt: string
+  orderId: string | null
+  orderNumber: string | null
+  invoiceId: string | null
+  invoiceNumber: string | null
+}
+
+export function listPortalDocuments(): Promise<PortalDocument[]> {
+  return apiClient.getJson<PortalDocument[]>('/api/customer-portal/documents')
+}
+
+export function downloadPortalDocument(source: PortalDocumentSource, id: string, fileName: string): Promise<void> {
+  return downloadBlob(`/api/customer-portal/documents/${source}/${id}/content`, fileName)
 }

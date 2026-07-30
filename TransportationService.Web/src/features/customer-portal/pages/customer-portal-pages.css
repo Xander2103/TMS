@@ -1,0 +1,202 @@
+/* Shared styling for the Phase 9 portal pages (dashboard/documents/invoices/messages). */
+
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-button:hover {
+  opacity: 0.8;
+}
+
+.cpp-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.cpp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.cpp-card:hover {
+  border-color: var(--accent);
+}
+
+.cpp-card-alert {
+  border-color: #d9534f;
+}
+
+.cpp-card-label {
+  font-size: 0.78rem;
+  opacity: 0.7;
+}
+
+.cpp-card-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.cpp-panel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+
+.cpp-panel h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+}
+
+.cpp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.cpp-table th,
+.cpp-table td {
+  text-align: left;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.cpp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.cpp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  text-decoration: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cpp-row:hover {
+  border-color: var(--accent);
+}
+
+.cpp-announcement {
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  margin-bottom: 0.5rem;
+}
+
+.cpp-announcement h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.cpp-announcement p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+/* Messages thread */
+
+.cpp-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 55vh;
+  overflow-y: auto;
+  padding: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.cpp-message {
+  max-width: 80%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 10px;
+  background: var(--border);
+  align-self: flex-start;
+}
+
+.cpp-message-staff {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.cpp-message-meta {
+  display: block;
+  font-size: 0.72rem;
+  opacity: 0.7;
+  margin-bottom: 0.2rem;
+}
+
+.cpp-message-body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.cpp-thread-picker {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.cpp-compose {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.cpp-compose textarea {
+  flex: 1;
+  min-height: 3rem;
+  font: inherit;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.cpp-unread-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #d9534f;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-left: 0.35rem;
+}

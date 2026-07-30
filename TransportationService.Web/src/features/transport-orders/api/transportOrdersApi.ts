@@ -111,6 +111,20 @@ export function deleteTransportOrder(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/transport-orders/${id}`)
 }
 
+/** Internal accept/reject/request-info decision on a customer-submitted (Submitted-status) order. */
+export type PortalReviewAction = 'Accept' | 'Reject' | 'RequestInfo'
+
+export function reviewPortalOrder(
+  id: string,
+  action: PortalReviewAction,
+  reason: string | null,
+): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, { action: PortalReviewAction; reason: string | null }>(
+    `/api/transport-orders/${id}/portal-review`,
+    { action, reason },
+  )
+}
+
 export interface OrderTimelineEvent {
   timestamp: string
   category: 'order' | 'status' | 'package' | 'stop' | 'invoice' | string

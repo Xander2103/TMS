@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/authContextValue'
-import { getPortalContext } from '../api/customerPortalApi'
+import { getPortalContext, getPortalMessagesUnreadCount } from '../api/customerPortalApi'
 import './customer-portal-layout.css'
 
 interface NavItem {
   label: string
   to: string
   permission?: string
+  badgeKey?: 'messages'
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -15,9 +16,11 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Opdrachten', to: '/klantportaal', permission: 'customer_portal.view' },
   { label: 'Documenten', to: '/klantportaal/documenten', permission: 'customer_portal.view_documents' },
   { label: 'Facturen', to: '/klantportaal/facturen', permission: 'customer_portal.view_invoices' },
-  { label: 'Berichten', to: '/klantportaal/berichten', permission: 'customer_portal.messages' },
+  { label: 'Berichten', to: '/klantportaal/berichten', permission: 'customer_portal.messages', badgeKey: 'messages' },
   { label: 'Gebruikers', to: '/klantportaal/gebruikers', permission: 'customer_portal.manage_users' },
 ]
+
+const UNREAD_POLL_MS = 60_000
 
 /**
  * Dedicated shell for customer-portal users — the mirror of DriverLayout for the mobile driver
@@ -27,6 +30,8 @@ const NAV_ITEMS: NavItem[] = [
 export function CustomerPortalLayout() {
   const { user, logout, hasPermission } = useAuth()
   const [companyName, setCompanyName] = useState<string | null>(null)
+  const [unreadMessages, setUnreadMessages] = useState(0)
+  const canSeeMessages = hasPermission('customer_portal.messages')
 
   useEffect(() => {
     let mounted = true
@@ -41,6 +46,26 @@ export function CustomerPortalLayout() {
       mounted = false
     }
   }, [])
+
+  // Light poll so the "Berichten" badge stays roughly current without a push channel — the
+  // same idiom as the internal Sidebar's notification badge.
+  useEffect(() => {
+    if (!canSeeMessages) return
+    let mounted = true
+    const load = () => {
+      getPortalMessagesUnreadCount()
+        .then((data) => {
+          if (mounted) setUnreadMessages(data.count)
+        })
+        .catch(() => {})
+    }
+    load()
+    const timer = window.setInterval(load, UNREAD_POLL_MS)
+    return () => {
+      mounted = false
+      window.clearInterval(timer)
+    }
+  }, [canSeeMessages])
 
   return (
     <div className="cpl-shell">
@@ -62,6 +87,9 @@ export function CustomerPortalLayout() {
             className={({ isActive }) => (isActive ? 'cpl-nav-active' : undefined)}
           >
             {item.label}
+            {item.badgeKey === 'messages' && unreadMessages > 0 && (
+              <span className="cpl-nav-badge">{unreadMessages}</span>
+            )}
           </NavLink>
         ))}
       </nav>

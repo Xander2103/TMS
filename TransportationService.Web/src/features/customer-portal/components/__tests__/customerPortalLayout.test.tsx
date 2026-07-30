@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { CustomerPortalLayout } from '../CustomerPortalLayout'
@@ -19,8 +19,11 @@ vi.mock('../../../auth/authContextValue', () => ({
   }),
 }))
 
+const unreadCount = vi.hoisted(() => ({ value: 0 }))
+
 vi.mock('../../api/customerPortalApi', () => ({
   getPortalContext: () => Promise.resolve({ customerId: 'cust-1', customerName: 'Haven BV' }),
+  getPortalMessagesUnreadCount: () => Promise.resolve({ count: unreadCount.value }),
 }))
 
 function renderLayout() {
@@ -36,6 +39,10 @@ function renderLayout() {
 }
 
 describe('CustomerPortalLayout', () => {
+  beforeEach(() => {
+    unreadCount.value = 0
+  })
+
   it('always shows Dashboard and Opdrachten, and hides every optional nav item without its permission', async () => {
     auth.permissions = ['customer_portal.view']
     renderLayout()
@@ -58,5 +65,15 @@ describe('CustomerPortalLayout', () => {
     expect(screen.getByRole('link', { name: 'Gebruikers' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Berichten' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Documenten' })).not.toBeInTheDocument()
+  })
+
+  it('shows an unread-count badge on Berichten when there are unread messages', async () => {
+    auth.permissions = ['customer_portal.view', 'customer_portal.messages']
+    unreadCount.value = 3
+    renderLayout()
+
+    await waitFor(() => expect(screen.getByText('Haven BV')).toBeInTheDocument())
+    const berichtenLink = await screen.findByRole('link', { name: /Berichten/ })
+    expect(berichtenLink).toHaveTextContent('3')
   })
 })

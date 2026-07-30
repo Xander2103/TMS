@@ -18,6 +18,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { changeCustomerNumber } from '../api/customersApi'
 import { CustomerForm } from '../components/CustomerForm'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
+import { CustomerMessagesPanel } from '../components/CustomerMessagesPanel'
 import { CustomerLocationsPanel } from '../components/CustomerLocationsPanel'
 import { CustomerCommunicationPanel } from '../components/CustomerCommunicationPanel'
 import { CustomerBillingPanel } from '../components/CustomerBillingPanel'
@@ -43,6 +44,7 @@ export function CustomerDetailPage() {
   const canViewLocations = hasPermission('locations.view')
   const canViewBilling = hasAnyPermission(['customers.view'])
   const canOverrideNumber = hasPermission('customers.override_number')
+  const canViewMessages = hasPermission('customer_messages.view')
 
   const [activeTab, setActiveTab] = useState('general')
   const [isEditing, setIsEditing] = useState(false)
@@ -243,6 +245,7 @@ export function CustomerDetailPage() {
                 ...(canViewLocations ? [{ id: 'locations', label: 'Locaties' }] : []),
                 { id: 'communication', label: 'Communicatie' },
                 ...(canViewBilling ? [{ id: 'billing', label: 'Tarieven & toeslagen' }] : []),
+                ...(canViewMessages ? [{ id: 'messages', label: 'Berichten' }] : []),
               ]}
               activeId={activeTab}
               onChange={setActiveTab}
@@ -435,6 +438,12 @@ export function CustomerDetailPage() {
               <CustomerPriceAdjustmentsPanel customerId={id} />
               <CombinedDiscountsPanel customerId={id} />
               <CustomerBillingPanel customerId={id} />
+            </TabPanel>
+          )}
+
+          {activeTab === 'messages' && canViewMessages && id && (
+            <TabPanel tabId="messages">
+              <CustomerMessagesPanel customerId={id} />
             </TabPanel>
           )}
         </>
