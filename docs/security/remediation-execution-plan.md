@@ -66,21 +66,25 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 - **Tests:** systeemrol-mutatie geweigerd, permissie buiten actor-set 403, portalrol weigert
   interne permissie (ook andere casing), portalrol accepteert portal-permissie, onbekende code 400.
 
-### C3 — Raw tokens in responses/outbox/bestanden · **DEELS DONE**
+### C3 — Raw tokens in responses/outbox/bestanden · **DONE** (retentie/purge → Fase 7)
 - **DONE (responselek dicht):** sink alleen in Development geregistreerd; prod = fail-closed
   `UnconfiguredEmailProvider` + `StartupSecurityValidator` weigert te booten zonder echte provider.
   Hierdoor is `IsRawTokenSafeToReturn` (die op de sink-provider keyt) in productie altijd `false`,
   en worden ruwe activatie-/invite-tokens niet meer in prod-responses teruggegeven.
   `Program.cs`, `Modules/Messaging/Services/UnconfiguredMessageProviders.cs`. Test:
   `UnconfiguredEmailProvider_Throws…`, `StartupValidator_Throws_WhenNoRealEmailProvider…`.
-- **PLANNED (token-persistentie-hygiëne):** stop met het opslaan van de ruwe token in
-  `OutboxMessage.Body` en `IdempotencyKey` (`Modules/CustomerPortal/Services/CustomerPortalUserService.cs`
-  `QueueInviteEmailAsync`, `Modules/Identity/Services/UserAccountFlowService.cs`): sla alleen een
-  token-hash/-referentie op en render de link bij dispatch; verwijder de tokenprefix uit
-  `IdempotencyKey`; roteer de dev-sinkbestanden; markeer bestaande open tokens als gecompromitteerd
-  (invalidatie-migratie). Retentie/purge = Fase 7.
-- **Tests (planned):** outbox-rij bevat na verzending geen bruikbare token; idempotencykey bevat
-  geen tokenmateriaal.
+- **DONE (token-persistentie-hygiëne):** `IdempotencyKey` gebruikt nu een one-way
+  SHA-256-referentie i.p.v. een ruwe-tokenprefix (`CustomerPortalUserService.TokenReference`);
+  de dispatcher scrubt de body van credential-dragende kinds
+  (`MessageKinds.CarriesOneTimeCredential`) zodra bezorging beslist is — bij Sent én bij
+  permanente Failed (vóór de fallback wordt gespawnd, dus die erft de gescrubde body); retries
+  behouden de link tot de beslissing. Migratie `20260730231233_TokenPersistenceHygiene` scrubt
+  historische invite-rijen en revoked alle nog-open activatietokens (als gecompromitteerd
+  beschouwd). `UserAccountFlowService` bleek al schoon (alleen hashes in DB; sink alleen in
+  Development). Retentie/purge van outbox/sink = Fase 7; sink-rotatie = dev-hygiëne (checklist).
+- **Tests:** `Security/Phase1TokenHygieneTests.cs` (scrub bij Sent/Failed, behoud bij retry,
+  non-credential mails onaangeroerd) + `CustomerPortalUserServiceTests.Invite_IdempotencyKey_
+  ContainsNoRawTokenMaterial`.
 
 ### H15 — Gecommitte development secrets · **DONE (repo-deel) + OPS**
 - **Code/Config:** `appsettings.Development.json` (lege signing key + lege connection string +

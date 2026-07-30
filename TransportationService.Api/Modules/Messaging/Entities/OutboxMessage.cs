@@ -100,6 +100,14 @@ public static class MessageKinds
         FleetMaintenanceDue, FleetInspectionDue, FleetDocumentExpiry, FleetDamageCreated,
         PortalUserInvited, CustomerMessageReceived, CustomerMessageReply,
     ];
+
+    /// <summary>
+    /// Kinds whose rendered body embeds a one-time credential (activation/reset link). The
+    /// dispatcher scrubs the body of these rows as soon as delivery is decided (sent or
+    /// permanently failed), so the raw token never outlives its one send attempt window in
+    /// durable storage (C3).
+    /// </summary>
+    public static bool CarriesOneTimeCredential(string kind) => kind == PortalUserInvited;
 }
 
 /// <summary>

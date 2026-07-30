@@ -376,6 +376,11 @@ public class CustomerPortalUserService : ICustomerPortalUserService
         }
     }
 
+    /// <summary>One-way reference to a raw token: usable for uniqueness, useless for activation.</summary>
+    private static string TokenReference(string rawToken) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(rawToken)))[..12].ToLowerInvariant();
+
     private async Task QueueInviteEmailAsync(
         User user, Guid customerId, string customerName, string rawToken, CancellationToken cancellationToken)
     {
@@ -406,7 +411,9 @@ public class CustomerPortalUserService : ICustomerPortalUserService
                 RelatedEntityType: "User",
                 RelatedEntityId: user.Id.ToString(),
                 // Varies per issuance (invite + every resend) so each mail is its own outbox row.
-                IdempotencyKey: $"portal_user_invited:User:{user.Id}:{rawToken[..12]}",
+                // A one-way hash prefix keeps the key unique per token WITHOUT persisting token
+                // material (C3); the dispatcher scrubs the rendered link from Body after delivery.
+                IdempotencyKey: $"portal_user_invited:User:{user.Id}:{TokenReference(rawToken)}",
                 OverrideAddress: user.Email,
                 OverrideName: $"{user.FirstName} {user.LastName}".Trim(),
                 CustomerIdForTemplate: customerId), cancellationToken);

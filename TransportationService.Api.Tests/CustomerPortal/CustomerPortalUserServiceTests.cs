@@ -124,6 +124,25 @@ public class CustomerPortalUserServiceTests
     }
 
     [Fact]
+    public async Task Invite_IdempotencyKey_ContainsNoRawTokenMaterial()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.For(h.CallerUserId).InviteAsync(Invite("hygiene@haven.be"), CancellationToken.None);
+        var token = result.Value!.ActivationToken!;
+        Assert.False(string.IsNullOrWhiteSpace(token));
+
+        // Unique per issuance, but via a one-way reference — no window of the raw token may
+        // appear in the durable key (C3).
+        var mail = h.Db.Context.OutboxMessages.Single(m => m.Kind == MessageKinds.PortalUserInvited);
+        for (var i = 0; i + 12 <= token.Length; i++)
+        {
+            Assert.DoesNotContain(token.Substring(i, 12), mail.IdempotencyKey);
+        }
+    }
+
+    [Fact]
     public async Task Invite_WithALiveEmailProviderRegistered_NeverReturnsTheRawToken()
     {
         var h = await SeedAsync();

@@ -90,6 +90,7 @@ public class MessageDispatcher
                 message.Status = OutboxStatus.Sent;
                 message.SentAt = now;
                 message.FailureReason = null;
+                ScrubCredentialBody(message);
                 sent += 1;
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
@@ -98,6 +99,7 @@ public class MessageDispatcher
                 if (message.AttemptCount >= MaxAttempts)
                 {
                     message.Status = OutboxStatus.Failed;
+                    ScrubCredentialBody(message);
                     await HandlePermanentFailureAsync(message, cancellationToken);
                 }
                 else
@@ -114,6 +116,21 @@ public class MessageDispatcher
         }
 
         return sent;
+    }
+
+    /// <summary>Marker left in place of a scrubbed one-time-credential body.</summary>
+    public const string ScrubbedBodyMarker = "[inhoud met eenmalige link verwijderd na afhandeling]";
+
+    /// <summary>
+    /// C3 token-persistence hygiene: once delivery is decided, an activation/reset link has no
+    /// business staying in the database. The row itself remains as the audit trail of the send.
+    /// </summary>
+    private static void ScrubCredentialBody(OutboxMessage message)
+    {
+        if (MessageKinds.CarriesOneTimeCredential(message.Kind))
+        {
+            message.Body = ScrubbedBodyMarker;
+        }
     }
 
     private async Task HandlePermanentFailureAsync(OutboxMessage message, CancellationToken cancellationToken)
