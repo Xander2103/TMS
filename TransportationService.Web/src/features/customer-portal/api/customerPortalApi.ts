@@ -283,7 +283,9 @@ export interface PortalInvoiceListItem {
   status: string
   total: number
   currency: string
+  /** Ruwe Peppol-transmissiestatus (bv. "Delivered"), of null zolang niet via Peppol verzonden. */
   peppolStatus: string | null
+  kind: 'Invoice' | 'CreditNote'
 }
 
 export interface PortalInvoiceLine {
@@ -313,7 +315,9 @@ export interface PortalInvoiceDetail {
   vatAmount: number
   total: number
   attachments: PortalInvoiceAttachment[]
+  /** See PortalInvoiceListItem.peppolStatus. */
   peppolStatus: string | null
+  kind: 'Invoice' | 'CreditNote'
 }
 
 export function listPortalInvoices(): Promise<PortalInvoiceListItem[]> {

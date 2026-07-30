@@ -55,6 +55,7 @@ const PortalPlanningPage = lazyPage(() => import('../features/portal/pages/Porta
 const EmployeePlanningPage = lazyPage(() => import('../features/employee-planning/pages/EmployeePlanningPage'), 'EmployeePlanningPage')
 const MessagingPage = lazyPage(() => import('../features/messaging/pages/MessagingPage'), 'MessagingPage')
 const EdiPage = lazyPage(() => import('../features/edi/pages/EdiPage'), 'EdiPage')
+const PeppolPage = lazyPage(() => import('../features/peppol/pages/PeppolPage'), 'PeppolPage')
 const IntegrationsPage = lazyPage(() => import('../features/integrations/pages/IntegrationsPage'), 'IntegrationsPage')
 const PortalAbsencesPage = lazyPage(() => import('../features/portal/pages/PortalAbsencesPage'), 'PortalAbsencesPage')
 const PortalQualificationsPage = lazyPage(() => import('../features/portal/pages/PortalQualificationsPage'), 'PortalQualificationsPage')
@@ -194,6 +195,7 @@ const router = createBrowserRouter(
           <Route path="/employee-planning" element={<EmployeePlanningPage />} />
           <Route path="/messaging" element={<MessagingPage />} />
           <Route path="/edi" element={<EdiPage />} />
+          <Route path="/peppol" element={<PeppolPage />} />
           <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/portal/absences" element={<PortalAbsencesPage />} />
           <Route path="/portal/qualifications" element={<PortalQualificationsPage />} />

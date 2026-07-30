@@ -63,6 +63,76 @@ public record PeppolPreviewLineDto(
 
 public record PeppolPreviewVatGroupDto(string VatCategoryCode, decimal VatRatePercent, decimal TaxableAmount, decimal VatAmount);
 
+public record PeppolTransmissionEventDto(string Status, DateTime Timestamp, string? Detail);
+
+public record PeppolTransmissionDto(
+    Guid Id,
+    Guid InvoiceId,
+    string DocumentKind,
+    string Status,
+    string Environment,
+    string ProviderKey,
+    string? ProviderMessageId,
+    int PayloadVersion,
+    string? PayloadHash,
+    string? ErrorDetail,
+    int RetryCount,
+    DateTime CreatedAt,
+    IReadOnlyList<PeppolTransmissionEventDto> Events);
+
+public record PeppolTransmissionListItemDto(
+    Guid Id,
+    Guid InvoiceId,
+    string InvoiceNumber,
+    string DocumentKind,
+    string CustomerName,
+    decimal Total,
+    string Currency,
+    DateOnly InvoiceDate,
+    string Status,
+    string Environment,
+    string? ProviderMessageId,
+    string? ErrorDetail,
+    int RetryCount,
+    int PayloadVersion,
+    DateTime CreatedAt);
+
+public record PeppolIncomingDocumentDto(
+    Guid Id,
+    string DocumentKind,
+    string SupplierParticipant,
+    string? SupplierName,
+    string DocumentNumber,
+    DateOnly? DocumentDate,
+    decimal? Amount,
+    string? Currency,
+    string Status,
+    string? ReviewNote,
+    DateTime ReceivedAt);
+
+public record PeppolIncomingDecisionRequest(string? Note);
+
+/// <summary>One provider callback: a transmission status update or an inbound document.</summary>
+public record PeppolWebhookRequest(
+    string ProviderMessageId,
+    string Kind,
+    string? Status = null,
+    string? Detail = null,
+    PeppolWebhookIncomingDocument? Document = null);
+
+public record PeppolWebhookIncomingDocument(
+    string ReceiverParticipant,
+    string? SupplierParticipant = null,
+    string? SupplierName = null,
+    string? DocumentKind = null,
+    string? DocumentNumber = null,
+    DateOnly? DocumentDate = null,
+    decimal? Amount = null,
+    string? Currency = null,
+    string? PayloadXml = null);
+
+public record PeppolWebhookOutcomeDto(bool Accepted, string? Reason);
+
 /// <summary>Structured summary of what the UBL document will contain (no XML parsing in the UI).</summary>
 public record PeppolInvoicePreviewDto(
     string InvoiceNumber,

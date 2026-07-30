@@ -24,6 +24,7 @@ import {
   type InvoiceAttachment,
 } from '../api/invoiceAttachmentsApi'
 import { formatFileSize } from '../utils/fileSize'
+import { InvoicePeppolPanel } from '../components/InvoicePeppolPanel'
 import { listSalesCategories, type SalesCategory } from '../../accounting/api/accountingApi'
 import {
   euro,
@@ -457,6 +458,10 @@ export function InvoiceDetailPage() {
           canManage={hasPermission('invoice_attachments.manage')}
           isDraft={invoice.status === 'Draft'}
         />
+      )}
+
+      {hasAnyPermission(['peppol.view', 'peppol.validate']) && (
+        <InvoicePeppolPanel invoiceId={invoice.id} invoiceNumber={invoice.invoiceNumber} invoiceStatus={invoice.status} />
       )}
 
       {overrideOpen && (

@@ -43,6 +43,34 @@ public class PortalInvoiceService : IPortalInvoiceService
         _attachmentService = attachmentService;
     }
 
+    /// <summary>Dutch label of the newest non-cancelled Peppol transmission per invoice; null = none.</summary>
+    private async Task<Dictionary<Guid, string?>> LatestPeppolStatusesAsync(
+        IReadOnlyList<Guid> invoiceIds, CancellationToken cancellationToken)
+    {
+        if (invoiceIds.Count == 0)
+        {
+            return [];
+        }
+
+        var transmissions = await _dbContext.PeppolTransmissions.AsNoTracking()
+            .Where(t => t.TenantId == _tenantContext.TenantId && invoiceIds.Contains(t.InvoiceId)
+                        && t.Status != Modules.Peppol.Entities.PeppolTransmissionStatus.Cancelled)
+            .Select(t => new { t.InvoiceId, t.Status, t.PayloadVersion })
+            .ToListAsync(cancellationToken);
+        return transmissions
+            .GroupBy(t => t.InvoiceId)
+            .ToDictionary(g => g.Key, g =>
+            {
+                var latest = g.OrderByDescending(t => t.PayloadVersion).First().Status;
+                // Internal delivery failures are an internal matter; customers only see
+                // progress and delivery, never Failed/Rejected.
+                return latest is Modules.Peppol.Entities.PeppolTransmissionStatus.Failed
+                    or Modules.Peppol.Entities.PeppolTransmissionStatus.Rejected
+                    ? null
+                    : (string?)latest.ToString();
+            });
+    }
+
     private async Task<Guid?> MyCustomerIdAsync(CancellationToken cancellationToken)
     {
         if (_currentUserContext.CurrentUserId is not { } userId)
@@ -65,11 +93,12 @@ public class PortalInvoiceService : IPortalInvoiceService
         }
 
         var page = await _invoiceService.SearchAsync(null, null, customerId, PageRequest.Of(1, 200), cancellationToken);
-        var items = page.Items
-            .Where(i => i.Status != InvoiceStatus.Draft)
+        var visible = page.Items.Where(i => i.Status != InvoiceStatus.Draft).ToList();
+        var peppolStatuses = await LatestPeppolStatusesAsync(visible.Select(i => i.Id).ToList(), cancellationToken);
+        var items = visible
             .Select(i => new PortalInvoiceListItemDto(
                 i.Id, i.InvoiceNumber, i.InvoiceDate, i.DueDate, i.Status, i.Total, i.Currency,
-                Kind: i.Kind.ToString()))
+                peppolStatuses.GetValueOrDefault(i.Id), i.Kind.ToString()))
             .ToList();
         return PortalResult<IReadOnlyList<PortalInvoiceListItemDto>>.Success(items);
     }
@@ -99,7 +128,8 @@ public class PortalInvoiceService : IPortalInvoiceService
             invoice.PurchaseOrderNumber,
             invoice.Lines.Select(l => new PortalInvoiceLineDto(l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent, l.LineTotal)).ToList(),
             invoice.Subtotal, invoice.VatAmount, invoice.Total, visibleAttachments,
-            Kind: invoice.Kind.ToString()));
+            (await LatestPeppolStatusesAsync([invoice.Id], cancellationToken)).GetValueOrDefault(invoice.Id),
+            invoice.Kind.ToString()));
     }
 
     public async Task<PortalResult<PortalFileDto>> GetInvoicePdfAsync(Guid invoiceId, CancellationToken cancellationToken)

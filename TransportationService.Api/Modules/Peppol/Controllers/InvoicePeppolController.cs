@@ -16,11 +16,29 @@ namespace TransportationService.Api.Modules.Peppol.Controllers;
 public class InvoicePeppolController : ControllerBase
 {
     private readonly IPeppolInvoiceService _service;
+    private readonly IPeppolTransmissionService _transmissions;
 
-    public InvoicePeppolController(IPeppolInvoiceService service)
+    public InvoicePeppolController(IPeppolInvoiceService service, IPeppolTransmissionService transmissions)
     {
         _service = service;
+        _transmissions = transmissions;
     }
+
+    /// <summary>Queues the invoice for Peppol sending; the dispatcher contacts the provider.</summary>
+    [HttpPost("send")]
+    [RequirePermission(PermissionCodes.PeppolSend)]
+    public async Task<ActionResult<PeppolTransmissionDto>> Send(Guid id, CancellationToken cancellationToken)
+    {
+        var transmission = await _transmissions.QueueAsync(id, cancellationToken);
+        return transmission is null ? NotFound() : Ok(transmission);
+    }
+
+    /// <summary>Transmission history (newest first) with per-transmission event timelines.</summary>
+    [HttpGet("transmissions")]
+    [RequirePermission(PermissionCodes.PeppolView, PermissionCodes.PeppolValidate)]
+    public async Task<ActionResult<IReadOnlyList<PeppolTransmissionDto>>> Transmissions(
+        Guid id, CancellationToken cancellationToken)
+        => Ok(await _transmissions.ListForInvoiceAsync(id, cancellationToken));
 
     [HttpPost("validate")]
     [RequirePermission(PermissionCodes.PeppolValidate)]

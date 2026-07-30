@@ -1,0 +1,252 @@
+/* Peppol-module — leunt op de edi/kpi-vocabulaire voor secties en stat-tegels. */
+
+.peppol-warning {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--danger, #b3261e);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.peppol-info-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.peppol-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.peppol-checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.peppol-checklist-name {
+  font-weight: 600;
+  min-width: 180px;
+  color: var(--text-h);
+}
+
+.peppol-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.peppol-check-ok {
+  color: var(--success, #1b7d3e);
+}
+
+.peppol-check-missing {
+  color: var(--danger, #b3261e);
+  font-weight: 600;
+}
+
+.peppol-settings {
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.peppol-settings select,
+.peppol-settings input:not([type='checkbox']),
+.peppol-settings textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.peppol-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.peppol-enabled-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.peppol-entity-facts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 13px;
+}
+
+.peppol-entity-facts-hint {
+  color: var(--text);
+}
+
+.peppol-settings-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.peppol-test-result {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.peppol-test-doctypes {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.peppol-note-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.peppol-note-label textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  resize: vertical;
+}
+
+.peppol-explain {
+  font-size: 14px;
+  color: var(--text);
+  max-width: 72ch;
+}
+
+.peppol-issue-list {
+  margin: 6px 0;
+  padding-left: 20px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Factuurdetail-paneel */
+
+.peppol-panel-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+.peppol-panel-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.peppol-validation-ok {
+  color: var(--success, #1b7d3e);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.peppol-validation-issues {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.peppol-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.peppol-history-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.peppol-history-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.peppol-history-events {
+  list-style: none;
+  margin: 8px 0 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.peppol-preview-parties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.peppol-preview-party h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.peppol-preview-party p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.peppol-preview-totals {
+  margin-top: 12px;
+  font-size: 14px;
+  text-align: right;
+}
+
+.peppol-preview-meta {
+  font-size: 13px;
+  color: var(--text);
+  margin: 8px 0 0;
+}

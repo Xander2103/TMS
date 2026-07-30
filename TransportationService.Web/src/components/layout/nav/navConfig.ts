@@ -132,6 +132,7 @@ export function getNavModules(): NavModule[] {
       items: [
         { label: 'Klanten', to: '/customers', permissions: ['customers.view'] },
         { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
+        { label: 'Peppol', to: '/peppol', permissions: ['peppol.view'] },
         { label: 'Kostentarieven', to: '/cost-rates', permissions: ['trip_costs.view', 'trip_costs.manage'] },
       ],
     },

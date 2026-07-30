@@ -33,7 +33,9 @@ public class PeppolTransmissionConfiguration : IEntityTypeConfiguration<PeppolTr
         builder.ToTable("peppol_transmissions");
         builder.HasKey(t => t.Id);
         builder.Property(t => t.DocumentKind).HasConversion<string>().HasMaxLength(20);
-        builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(30);
+        // Concurrency token: a cancel racing the dispatcher's submit (or vice versa) conflicts
+        // at SaveChanges instead of silently overwriting the other side's transition.
+        builder.Property(t => t.Status).HasConversion<string>().HasMaxLength(30).IsConcurrencyToken();
         builder.Property(t => t.Environment).HasConversion<string>().HasMaxLength(20);
         builder.Property(t => t.ProviderKey).IsRequired().HasMaxLength(50);
         builder.Property(t => t.ProviderMessageId).HasMaxLength(100);

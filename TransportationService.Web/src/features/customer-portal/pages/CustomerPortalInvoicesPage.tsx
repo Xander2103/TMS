@@ -5,7 +5,9 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { euro, INVOICE_STATUS_LABELS, INVOICE_STATUS_TONE, type InvoiceStatus } from '../../invoices/types'
+import { peppolStatusLabel } from '../../peppol/api/peppolApi'
 import { listPortalInvoices, type PortalInvoiceListItem } from '../api/customerPortalApi'
+import './customer-portal-pages.css'
 
 /** Customer-portal invoice overview: own customer's non-Draft invoices only. */
 export function CustomerPortalInvoicesPage() {
@@ -35,7 +37,12 @@ export function CustomerPortalInvoicesPage() {
     {
       key: 'number',
       header: 'Factuur',
-      render: (row) => <Link to={`/klantportaal/facturen/${row.id}`}>{row.invoiceNumber}</Link>,
+      render: (row) => (
+        <>
+          <Link to={`/klantportaal/facturen/${row.id}`}>{row.invoiceNumber}</Link>{' '}
+          {row.kind === 'CreditNote' && <Badge tone="warning">Creditnota</Badge>}
+        </>
+      ),
     },
     { key: 'date', header: 'Datum', render: (row) => row.invoiceDate },
     { key: 'due', header: 'Vervaldatum', render: (row) => row.dueDate },
@@ -52,8 +59,8 @@ export function CustomerPortalInvoicesPage() {
     {
       key: 'peppol',
       header: 'Peppol',
-      // TODO(Phase 13): real Peppol transmission status; the backend field is a placeholder for now.
-      render: (row) => (row.peppolStatus ? <Badge tone="info">{row.peppolStatus}</Badge> : '—'),
+      render: (row) =>
+        row.peppolStatus ? <span className="cpp-peppol-status">{peppolStatusLabel(row.peppolStatus)}</span> : '—',
     },
   ]
 

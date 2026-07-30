@@ -739,6 +739,7 @@ public class InvoiceService : IInvoiceService
         if (target == InvoiceStatus.Cancelled)
         {
             await ReleaseOrdersAsync(invoice, cancellationToken);
+            await CancelQueuedPeppolTransmissionsAsync(invoice, cancellationToken);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -894,6 +895,33 @@ public class InvoiceService : IInvoiceService
         return year * 12 + month > maxIndex
             ? "De factuurperiode mag niet in de toekomst liggen."
             : null;
+    }
+
+    /// <summary>
+    /// A cancelled invoice must never leave the building: any Peppol transmission still in the
+    /// queue is withdrawn with it. Transmissions already at the provider are left alone — the
+    /// dispatcher refuses to submit for non-Sent/Paid invoices as the second belt.
+    /// </summary>
+    private async Task CancelQueuedPeppolTransmissionsAsync(Invoice invoice, CancellationToken cancellationToken)
+    {
+        var queued = await _dbContext.PeppolTransmissions
+            .Where(t => t.TenantId == _tenantContext.TenantId && t.InvoiceId == invoice.Id
+                        && t.Status == Modules.Peppol.Entities.PeppolTransmissionStatus.Queued)
+            .ToListAsync(cancellationToken);
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        foreach (var transmission in queued)
+        {
+            transmission.Status = Modules.Peppol.Entities.PeppolTransmissionStatus.Cancelled;
+            _dbContext.PeppolTransmissionEvents.Add(new Modules.Peppol.Entities.PeppolTransmissionEvent
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                TransmissionId = transmission.Id,
+                Status = Modules.Peppol.Entities.PeppolTransmissionStatus.Cancelled,
+                Timestamp = now,
+                Detail = "Factuur geannuleerd; verzending vervallen.",
+            });
+        }
     }
 
     private async Task ReleaseOrdersAsync(Invoice invoice, CancellationToken cancellationToken)

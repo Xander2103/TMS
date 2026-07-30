@@ -35,6 +35,9 @@ public class PeppolTransmission : AuditableTenantEntity
     public string? ResponseCode { get; set; }
     public int RetryCount { get; set; }
 
+    /// <summary>Dispatcher backoff: Queued rows are only picked up once this moment has passed.</summary>
+    public DateTime? NextAttemptAt { get; set; }
+
     /// <summary>Stable id correlating this transmission's provider calls end-to-end.</summary>
     public Guid CorrelationId { get; set; } = Guid.NewGuid();
 

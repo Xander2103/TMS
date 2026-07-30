@@ -200,3 +200,8 @@
   font-weight: 700;
   margin-left: 0.35rem;
 }
+
+.cpp-peppol-status {
+  font-size: 0.85rem;
+  color: var(--text);
+}

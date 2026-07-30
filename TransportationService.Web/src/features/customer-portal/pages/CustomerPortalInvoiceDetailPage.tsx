@@ -8,6 +8,7 @@ import { Button } from '../../../components/ui/Button'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { euro, INVOICE_STATUS_LABELS, INVOICE_STATUS_TONE, type InvoiceStatus } from '../../invoices/types'
+import { peppolStatusLabel } from '../../peppol/api/peppolApi'
 import {
   downloadPortalInvoiceAttachment,
   downloadPortalInvoicePdf,
@@ -58,6 +59,7 @@ export function CustomerPortalInvoiceDetailPage() {
         subtitle={`${invoice.invoiceDate} · vervaldatum ${invoice.dueDate}`}
         action={
           <>
+            {invoice.kind === 'CreditNote' && <Badge tone="warning">Creditnota</Badge>}{' '}
             <Badge tone={INVOICE_STATUS_TONE[invoice.status as InvoiceStatus] ?? 'neutral'}>
               {INVOICE_STATUS_LABELS[invoice.status as InvoiceStatus] ?? invoice.status}
             </Badge>{' '}
@@ -66,6 +68,7 @@ export function CustomerPortalInvoiceDetailPage() {
         }
       />
       {downloadError && <p className="placeholder-text" role="alert">{downloadError}</p>}
+      {invoice.peppolStatus && <p className="cpp-peppol-status">Peppol: {peppolStatusLabel(invoice.peppolStatus)}</p>}
       {invoice.purchaseOrderNumber && <p>PO-nummer: {invoice.purchaseOrderNumber}</p>}
 
       <section className="cpp-panel">
