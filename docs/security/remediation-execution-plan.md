@@ -269,7 +269,25 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 - **Tests:** `Security/Phase9DataAtRestTests.cs` (roundtrip, legacy, rotatie, tamper,
   key-validatie, DB-ziet-alleen-ciphertext) + validatortest.
 
-## Fase 10 — Systematische securitytestsuite · **PLANNED**
+## Fase 10 — Systematische securitytestsuite · **DONE**
 
-- Reflectie (auth/permissie per actie — deel al in Fase 1), tenant-isolatie (geparametriseerd),
-  privilege-escalatie, sessie, upload/XSS, API-hardening, audit/GDPR. Zie originele opdracht §Fase 10.
+- **Structurele invarianten** (`Security/Phase10SystematicSecurityTests.cs`): elk endpoint is
+  bewust geclassificeerd — `[RequirePermission]`, `[AllowAnonymous]`-allowlist (Fase 1) of de
+  gereviewde authenticated-only-allowlist (self-scoped portal/notificaties/lookups); elke
+  attribute-gecheckte permissie bestaat in de catalogus; templates granten alleen
+  cataloguscodes; historische upgrade-stappen alleen catalogus- of expliciet-retired codes.
+- **Gedragstests per fase:** Phase1 (config/auth/token-hygiëne), Phase2 (escalatie + sessie),
+  Phase3 (tenant-isolatie incl. globale filter), Phase4 (upload/XSS), Phase5 (API-hardening),
+  Phase6 (audit/medisch), Phase7 (GDPR), Phase8 (supply chain/permissiehygiëne), Phase9
+  (encryptie-at-rest). Samen met de rest van de suite: **1553 backend- + 549 frontendtests**.
+
+---
+
+## Eindstatus sprint (2026-07-31)
+
+Alle niet-geblokkeerde fasen zijn afgerond met code + groene tests. **Open blijven uitsluitend:**
+1. de operationele punten in `operational-checklist.md` (OPS/BLOCKED — nooit als DONE gemarkeerd);
+2. bewust gedocumenteerde hardeningpunten: recente re-authenticatie bij administratieve reset
+   (C2-alternatief gekozen), M2-webhookrest (replay-window/rotatie), per-code backend-afdwinging
+   voor de frontend-gated lookup-permissies (Fase 8-testlijst), RLS-activatie (sjablonen klaar,
+   Fase 9/OPS), audit-viewer-masking in de frontend en juridische GDPR-validatie (gdpr.md §5).
