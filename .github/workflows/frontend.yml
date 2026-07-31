@@ -42,5 +42,7 @@ jobs:
         run: npm run build
 
       # Release gate: high/critical advisories in production dependencies fail the build.
+      # scripts/audit-gate.mjs wraps `npm audit --omit=dev` with a documented allowlist for
+      # advisories that provably do not apply AND have no published fix (rationale in-file).
       - name: Audit npm dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: node scripts/audit-gate.mjs

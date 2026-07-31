@@ -170,8 +170,18 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 > fail-closed uit config), M10/M11 (ProblemDetails zonder stacktrace, `TryParseDefined<TEnum>`)
 > zijn **DONE**; tests in `Security/Phase5ApiHardeningTests.cs`. **L7 is inmiddels DONE**: de
 > permissiechecks in `TransportOrderService` (prijs-override, prijsstatus) zijn fail-closed —
-> een ontbrekende authorization service weigert, nooit stilzwijgend toestaan. **Nog open:** M2
-> webhook-HMAC is deels (replay-window/rotatie ontbreken).
+> een ontbrekende authorization service weigert, nooit stilzwijgend toestaan. **M2 is nu ook
+> DONE (repo-deel):** `PeppolWebhookAuthenticator` — constant-time shared secret (baseline),
+> zero-downtime secretrotatie (`PreviousSecrets`-ring), strikte per-provider scoping
+> (`Peppol:Webhook:Providers:{key}` vervangt het globale materiaal volledig) en een
+> HMAC-modus (verplicht zodra `Hmac:Secret` is geconfigureerd): hex-HMAC-SHA256 over
+> `"{timestamp}.{rawBody}"` met replay-window (`Hmac:ToleranceSeconds`, default 300 s); replays
+> binnen het window worden geneutraliseerd door de idempotente verwerking (dedupe op
+> provider-message-id). De controller leest de raw body (HMAC dekt de exacte bytes) en weigert
+> zonder geconfigureerd secretmateriaal alles. Tests: `PeppolTransmissionTests`
+> (`WebhookController_*` — shared secret, rotatie, provider-scoping, HMAC + replay-window,
+> HMAC-rotatie, malformed payloads). *Provider-side activatie (echte secrets/signing bij de
+> gekozen provider) blijft OPS (checklist #2/#19).*
 
 - **H9 forwarded headers:** `UseForwardedHeaders` met `KnownProxies/KnownNetworks` vóór rate
   limiting/auth; partitie op resolved client-IP + per-account (`Program.cs`,
@@ -179,8 +189,9 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 - **H10 security headers:** middleware met HSTS (niet-dev), CSP (React-compatibel, geen
   unsafe-inline waar mogelijk), `frame-ancestors 'none'`, nosniff, Referrer-Policy,
   Permissions-Policy, cache-control op gevoelige responses, serveridentificatie verwijderen.
-- **M2 webhook:** HMAC over raw body + timestamp/replay-window + rotatie + per-provider/tenant
-  secret + rate limit; constant-time; idempotent (`PeppolWebhookController`/`Service`).
+- **M2 webhook:** `PeppolWebhookAuthenticator` + `PeppolWebhookController` — constant-time
+  shared secret, rotatiering, per-provider scoping, optionele-maar-afdwingbare HMAC over
+  timestamp+raw body met replay-window; rate limit + size limit + idempotente verwerking.
 - **M15 CORS:** origins uit `Cors:AllowedOrigins` (al toegevoegd aan config); fail-closed
   buiten Development; integratietest.
 - **M10/M11 errors/parsing:** `UseExceptionHandler`/ProblemDetails-flow (geen stacktrace in prod);
@@ -211,8 +222,12 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
   (ID/medisch/contract, met dataclassificatie) en `DataExported` (KPI-, boekhoud-,
   winstgevendheids- en colli-exports, met filter).
 - **Tests:** `Security/Phase6AuditForensicsTests.cs` (14) + `DefaultRoleSeederTests.Version22…`.
-- **Open (bewust, klein):** vrije medische tekst verder minimaliseren en audit-viewer-masking
-  in de frontend; gestructureerde events → centrale sink is OPS (checklist #14/#15).
+- **Audit-viewer-masking · DONE:** `formatAuditValues` maskeert gevoelige sleutels
+  (wachtwoord/token/secret/IBAN/BIC/rijksregister/identiteitskaart) in de frontend-historiek als
+  tweede laag bovenop de write-time masking in `EmployeeService` (frontend-tests
+  `formatAuditValues.test.ts`).
+- **Open (bewust, klein):** vrije medische tekst verder minimaliseren; gestructureerde events →
+  centrale sink is OPS (checklist #14/#15).
 
 ## Fase 7 — GDPR, retentie, data subject rights · **DONE (repo-deel)**
 
@@ -244,8 +259,12 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
   (historische upgrade-stap houdt de literal; seeder slaat onbekende codes over);
   `PermissionCatalogSeeder` **retired** nu ook DB-rijen + grants van codes die uit de catalogus
   verdwenen; architectuurtest `EveryCataloguePermission_IsActuallyCheckedSomewhere` (attribute-
-  checks via reflectie + gedocumenteerde service-side- en frontend-gated-lijsten — die laatste
-  categorie is een benoemd open hardeningpunt). `orders.assign` bleek runtime-gecheckt
+  checks via reflectie + gedocumenteerde service-side-lijst). De vroegere "frontend-gated"-
+  categorie is **gesloten**: alle lookup-/settings-codes worden server-side afgedwongen door
+  `LookupControllerBase` (View op Search/Options/GetById, Manage op Create/Update/Delete,
+  fail-closed 401/403) en de resterende codes door runtime-gates (`CustomersController` fiscaal,
+  `TripsController` release, `DockPlanningController` conflict-override); de lijst moet leeg
+  blijven (`NoPermission_IsOnlyFrontendGated`). `orders.assign` bleek runtime-gecheckt
   (TripsController) en blijft.
 - **L6 · DONE:** `DevAdminSeeder` logt het wachtwoord niet meer; conventietest op `{Password}`.
 - **L11 · DONE (bestaand):** mail én sms hebben fail-closed `Unconfigured*Provider`-placeholders
@@ -272,8 +291,10 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 ## Fase 10 — Systematische securitytestsuite · **DONE**
 
 - **Structurele invarianten** (`Security/Phase10SystematicSecurityTests.cs`): elk endpoint is
-  bewust geclassificeerd — `[RequirePermission]`, `[AllowAnonymous]`-allowlist (Fase 1) of de
-  gereviewde authenticated-only-allowlist (self-scoped portal/notificaties/lookups); elke
+  bewust geclassificeerd — `[RequirePermission]`, `[AllowAnonymous]`-allowlist (Fase 1),
+  service-side gegate lookup-controllers (`LookupControllerBase`, View/Manage fail-closed) of de
+  gereviewde authenticated-only-allowlist (self-scoped portal/notificaties); de scan enumereert
+  óók overgeërfde acties (een DeclaredOnly-scan zou de lookup-endpoints missen); elke
   attribute-gecheckte permissie bestaat in de catalogus; templates granten alleen
   cataloguscodes; historische upgrade-stappen alleen catalogus- of expliciet-retired codes.
 - **Gedragstests per fase:** Phase1 (config/auth/token-hygiëne), Phase2 (escalatie + sessie),
@@ -285,9 +306,14 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 
 ## Eindstatus sprint (2026-07-31)
 
-Alle niet-geblokkeerde fasen zijn afgerond met code + groene tests. **Open blijven uitsluitend:**
+Alle niet-geblokkeerde fasen zijn afgerond met code + groene tests. In de afsluitronde van
+2026-07-31 zijn bovendien gesloten: M2-webhookrest (rotatie, per-provider scoping, HMAC +
+replay-window), de per-code backend-afdwinging van de vroegere frontend-gated lookup-permissies
+(bleek al afgedwongen door `LookupControllerBase`/runtime-gates; nu aantoonbaar in Fase 8/10-
+tests, inclusief het dichten van de DeclaredOnly-blinde vlek in de endpoint-scan) en de
+audit-viewer-masking in de frontend. **Open blijven uitsluitend:**
 1. de operationele punten in `operational-checklist.md` (OPS/BLOCKED — nooit als DONE gemarkeerd);
 2. bewust gedocumenteerde hardeningpunten: recente re-authenticatie bij administratieve reset
-   (C2-alternatief gekozen), M2-webhookrest (replay-window/rotatie), per-code backend-afdwinging
-   voor de frontend-gated lookup-permissies (Fase 8-testlijst), RLS-activatie (sjablonen klaar,
-   Fase 9/OPS), audit-viewer-masking in de frontend en juridische GDPR-validatie (gdpr.md §5).
+   (C2-alternatief gekozen), RLS-activatie (sjablonen klaar in `db-hardening.sql`; activatie
+   vereist DB-rollen + app-sessieparameter — Fase 9/OPS), provider-side webhooksigning-activatie
+   (checklist #2/#19) en juridische GDPR-validatie (gdpr.md §5, checklist #20/#27).
