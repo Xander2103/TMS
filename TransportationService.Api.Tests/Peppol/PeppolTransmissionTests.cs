@@ -456,37 +456,164 @@ public class PeppolTransmissionTests
         Assert.Equal(1, await h.Db.Context.PeppolIncomingDocuments.CountAsync());
     }
 
+    private static IConfiguration WebhookConfig(params (string Key, string Value)[] pairs) =>
+        new ConfigurationBuilder()
+            .AddInMemoryCollection(pairs.ToDictionary(p => p.Key, p => (string?)p.Value))
+            .Build();
+
+    private static PeppolWebhookController WebhookController(Harness h, IConfiguration configuration) =>
+        new(h.Webhook, configuration, h.Clock)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+
+    /// <summary>Stamps the JSON body onto the request (fresh stream per call) and invokes Receive.</summary>
+    private static Task<IActionResult> ReceiveAsync(PeppolWebhookController controller, string providerKey, string rawBody)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(rawBody);
+        controller.HttpContext.Request.Body = new MemoryStream(bytes);
+        controller.HttpContext.Request.ContentLength = bytes.Length;
+        return controller.Receive(providerKey, CancellationToken.None);
+    }
+
+    private const string StatusBody = """{"providerMessageId":"sbx-1","kind":"status","status":"Delivered"}""";
+
     [Fact]
     public async Task WebhookController_EnforcesSharedSecret()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?> { ["Peppol:Webhook:Secret"] = "s3cret" })
-            .Build();
-        var controller = new PeppolWebhookController(h.Webhook, configuration)
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
-        };
-        var request = new PeppolWebhookRequest("sbx-1", "status", "Delivered");
+        var controller = WebhookController(h, WebhookConfig(("Peppol:Webhook:Secret", "s3cret")));
 
         // Missing and wrong secrets → 401.
-        Assert.IsType<UnauthorizedResult>(await controller.Receive("sandbox", request, CancellationToken.None));
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
         controller.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "wrong";
-        Assert.IsType<UnauthorizedResult>(await controller.Receive("sandbox", request, CancellationToken.None));
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
 
         // Correct secret → 200 with an outcome body (unknown message: acknowledged, not accepted).
         controller.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "s3cret";
-        var ok = Assert.IsType<OkObjectResult>(await controller.Receive("sandbox", request, CancellationToken.None));
+        var ok = Assert.IsType<OkObjectResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
         Assert.IsType<PeppolWebhookOutcomeDto>(ok.Value);
 
+        // Authenticated but malformed/empty payloads are rejected, not processed.
+        Assert.IsType<BadRequestResult>(await ReceiveAsync(controller, "sandbox", "not json"));
+        Assert.IsType<BadRequestResult>(await ReceiveAsync(controller, "sandbox", """{"kind":"status"}"""));
+
         // Without ANY configured secret the endpoint refuses everything (secure default).
-        var unconfigured = new PeppolWebhookController(h.Webhook, new ConfigurationBuilder().Build())
-        {
-            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
-        };
+        var unconfigured = WebhookController(h, new ConfigurationBuilder().Build());
         unconfigured.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "s3cret";
-        Assert.IsType<UnauthorizedResult>(await unconfigured.Receive("sandbox", request, CancellationToken.None));
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(unconfigured, "sandbox", StatusBody));
+    }
+
+    [Fact]
+    public async Task WebhookController_AcceptsThePreviousSecret_DuringRotation()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var controller = WebhookController(h, WebhookConfig(
+            ("Peppol:Webhook:Secret", "new-secret"),
+            ("Peppol:Webhook:PreviousSecrets:0", "old-secret")));
+
+        controller.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "old-secret";
+        Assert.IsType<OkObjectResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
+
+        controller.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "new-secret";
+        Assert.IsType<OkObjectResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
+
+        controller.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "retired-secret";
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
+    }
+
+    [Fact]
+    public async Task WebhookController_ProviderScopedSecret_IsStrictlyScoped()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var configuration = WebhookConfig(
+            ("Peppol:Webhook:Secret", "global-secret"),
+            ("Peppol:Webhook:Providers:sandbox:Secret", "sandbox-only"));
+
+        // The provider-scoped secret replaces the global one on that provider's route entirely.
+        var controller = WebhookController(h, configuration);
+        controller.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "global-secret";
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
+        controller.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "sandbox-only";
+        Assert.IsType<OkObjectResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
+
+        // Providers without their own material still use the global secret — and never the
+        // sandbox-scoped one.
+        var other = WebhookController(h, configuration);
+        other.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "sandbox-only";
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(other, "other", StatusBody));
+        other.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "global-secret";
+        Assert.IsType<OkObjectResult>(await ReceiveAsync(other, "other", StatusBody));
+    }
+
+    [Fact]
+    public async Task WebhookController_HmacMode_RequiresAFreshValidSignature()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        // Once HMAC is configured it is REQUIRED — the plain shared-secret header no longer
+        // authenticates anything on this scope.
+        var controller = WebhookController(h, WebhookConfig(
+            ("Peppol:Webhook:Secret", "s3cret"),
+            ("Peppol:Webhook:Hmac:Secret", "hmac-key-1")));
+        var now = h.Clock.GetUtcNow().ToUnixTimeSeconds();
+
+        // Valid signature over "{timestamp}.{rawBody}" within the replay window → 200.
+        controller.HttpContext.Request.Headers[PeppolWebhookAuthenticator.TimestampHeaderName] =
+            now.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        controller.HttpContext.Request.Headers[PeppolWebhookAuthenticator.SignatureHeaderName] =
+            PeppolWebhookAuthenticator.ComputeSignature("hmac-key-1", now, StatusBody);
+        Assert.IsType<OkObjectResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
+
+        // Same signature, tampered body → 401.
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(
+            controller, "sandbox", StatusBody.Replace("Delivered", "Rejected")));
+
+        // Timestamp outside the replay window (default 300s) → 401 even with a valid signature.
+        var stale = now - 3600;
+        controller.HttpContext.Request.Headers[PeppolWebhookAuthenticator.TimestampHeaderName] =
+            stale.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        controller.HttpContext.Request.Headers[PeppolWebhookAuthenticator.SignatureHeaderName] =
+            PeppolWebhookAuthenticator.ComputeSignature("hmac-key-1", stale, StatusBody);
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
+
+        // Wrong key → 401.
+        controller.HttpContext.Request.Headers[PeppolWebhookAuthenticator.TimestampHeaderName] =
+            now.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        controller.HttpContext.Request.Headers[PeppolWebhookAuthenticator.SignatureHeaderName] =
+            PeppolWebhookAuthenticator.ComputeSignature("wrong-key", now, StatusBody);
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
+
+        // Only the legacy shared-secret header, no signature → 401 in HMAC mode.
+        var sharedOnly = WebhookController(h, WebhookConfig(
+            ("Peppol:Webhook:Secret", "s3cret"),
+            ("Peppol:Webhook:Hmac:Secret", "hmac-key-1")));
+        sharedOnly.HttpContext.Request.Headers[PeppolWebhookController.SecretHeaderName] = "s3cret";
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(sharedOnly, "sandbox", StatusBody));
+    }
+
+    [Fact]
+    public async Task WebhookController_HmacRotation_AcceptsThePreviousKey()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var controller = WebhookController(h, WebhookConfig(
+            ("Peppol:Webhook:Hmac:Secret", "hmac-key-2"),
+            ("Peppol:Webhook:Hmac:PreviousSecrets:0", "hmac-key-1")));
+        var now = h.Clock.GetUtcNow().ToUnixTimeSeconds();
+
+        controller.HttpContext.Request.Headers[PeppolWebhookAuthenticator.TimestampHeaderName] =
+            now.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        controller.HttpContext.Request.Headers[PeppolWebhookAuthenticator.SignatureHeaderName] =
+            PeppolWebhookAuthenticator.ComputeSignature("hmac-key-1", now, StatusBody);
+        Assert.IsType<OkObjectResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
+
+        controller.HttpContext.Request.Headers[PeppolWebhookAuthenticator.SignatureHeaderName] =
+            PeppolWebhookAuthenticator.ComputeSignature("retired-key", now, StatusBody);
+        Assert.IsType<UnauthorizedResult>(await ReceiveAsync(controller, "sandbox", StatusBody));
     }
 
     // --- Incoming review queue ---
