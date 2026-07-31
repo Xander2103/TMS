@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { apiClient } from '../../../api/apiClient'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useAuth } from '../../auth/authContextValue'
+import { formatAuditValues } from '../formatAuditValues'
 import './AuditHistoryPanel.css'
 
 interface AuditLogEntry {
@@ -33,18 +34,6 @@ const ACTION_LABELS: Record<string, string> = {
   Cancelled: 'Geannuleerd',
   StatusChanged: 'Status gewijzigd',
   AssignmentChanged: 'Toewijzing gewijzigd',
-}
-
-function formatValues(json: string | null): string {
-  if (!json) return ''
-  try {
-    const parsed = JSON.parse(json) as Record<string, unknown>
-    return Object.entries(parsed)
-      .map(([key, value]) => `${key}: ${value ?? '—'}`)
-      .join(' · ')
-  } catch {
-    return json
-  }
 }
 
 /**
@@ -90,8 +79,8 @@ export function AuditHistoryPanel({ entityType, entityId }: { entityType: string
       header: 'Wijziging',
       render: (row) => (
         <div className="audit-history-values">
-          {row.oldValuesJson && <div className="audit-history-old">Voor: {formatValues(row.oldValuesJson)}</div>}
-          {row.newValuesJson && <div>Na: {formatValues(row.newValuesJson)}</div>}
+          {row.oldValuesJson && <div className="audit-history-old">Voor: {formatAuditValues(row.oldValuesJson)}</div>}
+          {row.newValuesJson && <div>Na: {formatAuditValues(row.newValuesJson)}</div>}
         </div>
       ),
     },
