@@ -32,28 +32,40 @@ public class Phase8SupplyChainTests
         [PermissionCodes.InventoryOverrideNegativeStock] = "IssuedItemService negative-stock override",
         [PermissionCodes.InventoryLowStockAlerts] = "LowStockNotifier recipient selector",
         [PermissionCodes.OrdersAssign] = "TripsController order-to-trip assignment gate",
+
+        // Lookup-/settings-screens: enforced fail-closed inside LookupControllerBase (View on
+        // Search/Options/GetById, Manage on Create/Update/Delete) — the code varies per concrete
+        // controller, hence no attribute. Phase 10 classifies these controllers accordingly.
+        [PermissionCodes.DepartmentsView] = "DepartmentsController : LookupControllerBase.ViewPermission",
+        [PermissionCodes.DepartmentsManage] = "DepartmentsController : LookupControllerBase.ManagePermission",
+        [PermissionCodes.JobFunctionsView] = "JobFunctionsController : LookupControllerBase.ViewPermission",
+        [PermissionCodes.JobFunctionsManage] = "JobFunctionsController : LookupControllerBase.ManagePermission",
+        [PermissionCodes.VehicleCategoriesView] = "VehicleCategoriesController : LookupControllerBase.ViewPermission",
+        [PermissionCodes.VehicleCategoriesManage] = "VehicleCategoriesController : LookupControllerBase.ManagePermission",
+        [PermissionCodes.TrailerCategoriesView] = "TrailerCategoriesController : LookupControllerBase.ViewPermission",
+        [PermissionCodes.TrailerCategoriesManage] = "TrailerCategoriesController : LookupControllerBase.ManagePermission",
+        [PermissionCodes.DriverCategoriesView] = "DriverCategoriesController : LookupControllerBase.ViewPermission",
+        [PermissionCodes.DriverCategoriesManage] = "DriverCategoriesController : LookupControllerBase.ManagePermission",
+        [PermissionCodes.CustomerCategoriesView] = "CustomerCategoriesController : LookupControllerBase.ViewPermission",
+        [PermissionCodes.CustomerCategoriesManage] = "CustomerCategoriesController : LookupControllerBase.ManagePermission",
+        [PermissionCodes.ContactDepartmentsView] = "ContactDepartmentsController : LookupControllerBase.ViewPermission",
+        [PermissionCodes.ContactDepartmentsManage] = "ContactDepartmentsController : LookupControllerBase.ManagePermission",
+        [PermissionCodes.ReferenceDataView] = "Languages-/Nationalities-/ContractTypesController : LookupControllerBase.ViewPermission",
+        [PermissionCodes.ReferenceDataManage] = "Languages-/Nationalities-/ContractTypesController : LookupControllerBase.ManagePermission",
+
+        // Runtime-checked gates outside attributes.
+        [PermissionCodes.CustomersManageFiscal] = "CustomersController fiscal-section gate (UserHasPermissionAsync)",
+        [PermissionCodes.WarehouseReleaseTrip] = "TripsController release gate (UserHasPermissionAsync)",
+        [PermissionCodes.WarehouseConflictOverride] = "DockPlanningController conflict-override gate (UserHasPermissionAsync)",
     };
 
     /// <summary>
-    /// Codes whose enforcement today lives in FRONTEND feature gating (hasPermission), typically
-    /// lookup-/settings-screens whose endpoints are covered by the authentication fallback policy
-    /// but not by a per-code backend attribute. They are functional (they shape what users see
-    /// and can configure), not dead — but per-code BACKEND enforcement for these screens is a
-    /// known open hardening point. New codes should not land here.
+    /// Historically this held codes enforced only by frontend feature gating. That hardening gap
+    /// is closed: every former entry is enforced server-side (LookupControllerBase or a runtime
+    /// gate, see <see cref="ServiceSideEnforcedCodes"/>). The set stays to keep the invariant
+    /// explicit — it must remain EMPTY; new frontend-only codes are not acceptable.
     /// </summary>
-    private static readonly HashSet<string> FrontendGatedCodes = new(StringComparer.Ordinal)
-    {
-        PermissionCodes.DepartmentsView, PermissionCodes.DepartmentsManage,
-        PermissionCodes.JobFunctionsView, PermissionCodes.JobFunctionsManage,
-        PermissionCodes.VehicleCategoriesView, PermissionCodes.VehicleCategoriesManage,
-        PermissionCodes.TrailerCategoriesView, PermissionCodes.TrailerCategoriesManage,
-        PermissionCodes.DriverCategoriesView, PermissionCodes.DriverCategoriesManage,
-        PermissionCodes.CustomerCategoriesView, PermissionCodes.CustomerCategoriesManage,
-        PermissionCodes.ContactDepartmentsView, PermissionCodes.ContactDepartmentsManage,
-        PermissionCodes.ReferenceDataView, PermissionCodes.ReferenceDataManage,
-        PermissionCodes.CustomersManageFiscal,
-        PermissionCodes.WarehouseReleaseTrip, PermissionCodes.WarehouseConflictOverride,
-    };
+    private static readonly HashSet<string> FrontendGatedCodes = new(StringComparer.Ordinal);
 
     private static IReadOnlyList<string> AttributeCheckedCodes()
     {
@@ -73,6 +85,12 @@ public class Phase8SupplyChainTests
         }
 
         return codes;
+    }
+
+    [Fact]
+    public void NoPermission_IsOnlyFrontendGated()
+    {
+        Assert.Empty(FrontendGatedCodes);
     }
 
     [Fact]

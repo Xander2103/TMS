@@ -76,6 +76,10 @@ public class Phase10SystematicSecurityTests
         "LegalEntitiesController.SetActiveSelection",
     };
 
+    /// <summary>
+    /// All HTTP actions, INCLUDING those inherited from an abstract controller base — a
+    /// DeclaredOnly scan would silently skip every LookupControllerBase-derived endpoint.
+    /// </summary>
     private static IEnumerable<(Type Controller, MethodInfo Action)> HttpActions()
     {
         var assembly = typeof(TransportationDbContext).Assembly;
@@ -83,12 +87,32 @@ public class Phase10SystematicSecurityTests
                      .Where(t => typeof(ControllerBase).IsAssignableFrom(t) && !t.IsAbstract))
         {
             foreach (var method in controller
-                         .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                         .GetMethods(BindingFlags.Public | BindingFlags.Instance)
                          .Where(m => m.GetCustomAttributes<HttpMethodAttribute>().Any()))
             {
                 yield return (controller, method);
             }
         }
+    }
+
+    /// <summary>
+    /// Lookup controllers enforce their per-controller View-/ManagePermission codes inside
+    /// <see cref="TransportationService.Api.Common.Lookups.LookupControllerBase{TEntity}"/>
+    /// (fail-closed, 401/403) rather than via attributes — the code varies per concrete
+    /// controller. Phase 8 registers those codes as service-side enforced.
+    /// </summary>
+    private static bool IsServiceSideGatedLookupController(Type controller)
+    {
+        for (var type = controller.BaseType; type is not null; type = type.BaseType)
+        {
+            if (type.IsGenericType
+                && type.GetGenericTypeDefinition() == typeof(TransportationService.Api.Common.Lookups.LookupControllerBase<>))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     [Fact]
@@ -103,7 +127,8 @@ public class Phase10SystematicSecurityTests
             var permissionGated = controller.GetCustomAttributes<RequirePermissionAttribute>(true).Any()
                 || action.GetCustomAttributes<RequirePermissionAttribute>(true).Any();
 
-            if (anonymous || permissionGated || ReviewedAuthenticatedOnlyEndpoints.Contains(name))
+            if (anonymous || permissionGated || IsServiceSideGatedLookupController(controller)
+                || ReviewedAuthenticatedOnlyEndpoints.Contains(name))
             {
                 continue;
             }
