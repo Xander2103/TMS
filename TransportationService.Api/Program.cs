@@ -534,6 +534,12 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.
 
 var app = builder.Build();
 
+// Column-encryption key ring (Fase 9): keys come from env/vault, never from the repo. Without a
+// key the layer is pass-through — the validator below refuses that outside Development.
+TransportationService.Api.Modules.Security.ColumnEncryption.Initialize(
+    app.Configuration["ColumnEncryption:Key"],
+    app.Configuration.GetSection("ColumnEncryption:PreviousKeys").Get<string[]>());
+
 // Fail-fast on production-unsafe configuration (impersonation headers enabled, no real mail
 // provider, etc.) before the host starts serving.
 TransportationService.Api.Modules.Security.StartupSecurityValidator.Validate(

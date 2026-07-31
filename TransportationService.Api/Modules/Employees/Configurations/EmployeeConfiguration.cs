@@ -15,7 +15,9 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.LastName).IsRequired().HasMaxLength(100);
         builder.Property(e => e.PlaceOfBirth).HasMaxLength(100);
         builder.Property(e => e.NationalityCode).HasMaxLength(10);
-        builder.Property(e => e.NationalRegisterNumber).HasMaxLength(15);
+        // Widened for application-level encryption (enc:v1:<base64>): ciphertext of a 15-char
+        // NRN is ~90 chars. Plaintext legacy rows still fit.
+        builder.Property(e => e.NationalRegisterNumber).HasMaxLength(200);
         builder.Property(e => e.PreferredLanguageCode).HasMaxLength(10);
         builder.Property(e => e.Street).IsRequired().HasMaxLength(150);
         builder.Property(e => e.HouseNumber).IsRequired().HasMaxLength(20);
@@ -32,7 +34,7 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         builder.Property(e => e.Notes).HasMaxLength(2000);
         builder.Property(e => e.EmploymentStatus).HasConversion<string>();
         builder.Property(e => e.CivilStatus).HasConversion<string>().HasMaxLength(30);
-        builder.Property(e => e.IdentityCardNumber).HasMaxLength(30);
+        builder.Property(e => e.IdentityCardNumber).HasMaxLength(200); // widened for encryption, see NRN
         builder.Property(e => e.DimonaNumber).HasMaxLength(30);
 
         builder.HasIndex(e => new { e.TenantId, e.EmployeeNumber }).IsUnique();

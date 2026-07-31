@@ -249,10 +249,24 @@ public class Phase1ConfigAndAuthTests
     [Fact]
     public void StartupValidator_Passes_InProductionWithRealProviderAndNoImpersonation()
     {
-        var config = new ConfigurationBuilder().Build();
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            // Fase 9: a non-Development host also needs the column-encryption key.
+            ["ColumnEncryption:Key"] = Convert.ToBase64String(new byte[32]),
+        }).Build();
 
         // Should not throw.
         StartupSecurityValidator.Validate(new TestEnvironment("Production"), config, ServicesWith(new RealEmailProvider()));
+    }
+
+    [Fact]
+    public void StartupValidator_Throws_WithoutColumnEncryptionKeyOutsideDevelopment()
+    {
+        var config = new ConfigurationBuilder().Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            StartupSecurityValidator.Validate(new TestEnvironment("Production"), config, ServicesWith(new RealEmailProvider())));
+        Assert.Contains("ColumnEncryption", exception.Message);
     }
 
     [Fact]

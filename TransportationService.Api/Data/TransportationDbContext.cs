@@ -239,6 +239,23 @@ public class TransportationDbContext : DbContext
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TransportationDbContext).Assembly);
         ApplyGlobalTenantFilters(modelBuilder);
+        ApplyColumnEncryption(modelBuilder);
+    }
+
+    /// <summary>
+    /// Fase 9: special-category identifiers are encrypted at the application boundary, so the
+    /// database (and its backups/exports) only ever sees ciphertext. Pass-through when no key is
+    /// configured (Development); legacy plaintext keeps reading either way.
+    /// </summary>
+    private static void ApplyColumnEncryption(ModelBuilder modelBuilder)
+    {
+        var converter = new Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<string, string>(
+            value => Modules.Security.ColumnEncryption.Protect(value),
+            stored => Modules.Security.ColumnEncryption.Unprotect(stored));
+
+        var employee = modelBuilder.Entity<Employee>();
+        employee.Property(e => e.NationalRegisterNumber).HasConversion(converter!);
+        employee.Property(e => e.IdentityCardNumber).HasConversion(converter!);
     }
 
     /// <summary>

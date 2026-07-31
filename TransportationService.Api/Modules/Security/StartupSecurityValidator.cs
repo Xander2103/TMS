@@ -37,5 +37,14 @@ public static class StartupSecurityValidator
                 + (email?.GetType().Name ?? "none")
                 + "). Configure a real IEmailProvider; refusing to start to avoid exposing security tokens.");
         }
+
+        // Fase 9: special-category identifiers (NRN, identity-card number) must never reach a
+        // non-Development database as plaintext — pass-through mode is a Development affordance.
+        if (string.IsNullOrWhiteSpace(configuration["ColumnEncryption:Key"]))
+        {
+            throw new InvalidOperationException(
+                "ColumnEncryption:Key is not configured. Special-category identifiers would be stored "
+                + "as plaintext. Provide a 32-byte base64 key from the vault; refusing to start.");
+        }
     }
 }

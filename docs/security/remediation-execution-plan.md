@@ -253,12 +253,21 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
   (provider-neutraal domein).
 - **Tests:** `Security/Phase8SupplyChainTests.cs`.
 
-## Fase 9 — DB / data-at-rest-hardening · **PLANNED + OPS**
+## Fase 9 — DB / data-at-rest-hardening · **DONE (repo-deel) + OPS**
 
-- Kolomencryptie voor NRN/medische/bijzondere identifiers (pgcrypto of .NET Data Protection) met
-  key-rotation, aparte keys per omgeving, keys buiten DB/repo, migratie + backwards-compatibele
-  decrypt/migrate; DB least-privilege (aparte migratie- en runtime-accounts); append-only
-  audit-privileges; RLS-voorbereiding; veilige connectionstring (OPS); TLS naar DB (OPS).
+- **Kolomencryptie · DONE:** `Modules/Security/ColumnEncryption` — AES-256-GCM met
+  versie-prefix (`enc:v1:`) op `Employee.NationalRegisterNumber` en `IdentityCardNumber` via
+  EF-value-converters; keys uit `ColumnEncryption:Key`/`PreviousKeys` (vault/env, buiten
+  repo/DB); key-rotation door ring-fallback bij decrypt; legacy plaintext leest door en wordt
+  bij de eerstvolgende write versleuteld (geen big-bang-migratie); tampering → GCM-weigering.
+  Pass-through alleen in Development — `StartupSecurityValidator` weigert een non-dev host
+  zonder key. Migratie `20260731001510_ColumnEncryptionPreparation` (kolomverbreding, additief).
+- **DB least-privilege / RLS · VOORBEREID (OPS):** `docs/security/db-hardening.sql` —
+  migrator/runtime-rolsplitsing, `REVOKE UPDATE,DELETE,TRUNCATE` op `audit_logs` voor runtime,
+  maintenance-rol-runbook (checklist #29) en RLS-policysjablonen (activatie gefaseerd zodra de
+  app de tenant als sessieparameter zet). Veilige connectionstring/TLS naar DB = checklist.
+- **Tests:** `Security/Phase9DataAtRestTests.cs` (roundtrip, legacy, rotatie, tamper,
+  key-validatie, DB-ziet-alleen-ciphertext) + validatortest.
 
 ## Fase 10 — Systematische securitytestsuite · **PLANNED**
 
