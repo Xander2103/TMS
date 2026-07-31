@@ -25,6 +25,18 @@ public class AccountFlowTests
                 new AuditService(Db.Context, tenant, new DevCurrentUserContext(null)),
                 new TestClock(at), new HostingEnvironment { EnvironmentName = "Production" });
         }
+
+        /// <summary>The service as an ANONYMOUS request sees it: no resolved tenant at all.</summary>
+        public UserAccountFlowService AnonymousFlow(DateTimeOffset at)
+        {
+            var tenant = new DevTenantContext(TenantId);
+            return new UserAccountFlowService(
+                Db.Context,
+                new RequestTenantAccessor(new Microsoft.AspNetCore.Http.HttpContextAccessor()),
+                new PasswordHasher(),
+                new AuditService(Db.Context, tenant, new DevCurrentUserContext(null)),
+                new TestClock(at), new HostingEnvironment { EnvironmentName = "Production" });
+        }
     }
 
     private static async Task<Harness> SeedAsync()
@@ -118,6 +130,38 @@ public class AccountFlowTests
 
         // Audit trail exists but never contains a token value.
         Assert.True(h.Db.Context.AuditLogs.Count(a => a.Action == "PasswordResetRequested") >= 1);
+    }
+
+    [Fact]
+    public async Task StartActivation_WithoutResolvedTenant_IsFailClosed_NeverPicksATenant()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        // The service CONSTRUCTS fine without a tenant (that is what anonymous requests need) —
+        // but the tenant-bound administrative flow refuses to run.
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => h.AnonymousFlow(Now).StartActivationAsync(h.UserId, CancellationToken.None));
+        Assert.Empty(h.Db.Context.UserSecurityTokens.ToList());
+    }
+
+    [Fact]
+    public async Task ForgotAndResetPassword_WorkWithoutAnyResolvedTenant()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var flow = h.AnonymousFlow(Now);
+
+        // The full anonymous journey: request a reset, then consume the token — no tenant context.
+        await flow.RequestPasswordResetAsync("jan@acme.be", CancellationToken.None);
+        var token = h.Db.Context.UserSecurityTokens.Single();
+        Assert.Equal(h.TenantId, token.TenantId); // stamped with the USER's own tenant, not a guessed one
+
+        // The raw token is not persisted; complete via a fresh token from a second request instead.
+        var replacement = await h.Flow(Now).StartActivationAsync(h.UserId, CancellationToken.None);
+        var error = await flow.CompleteWithTokenAsync(replacement!.Token, "NieuwWachtwoord1", CancellationToken.None);
+        Assert.Null(error);
+        Assert.NotNull(h.Db.Context.Users.Single().PasswordHash);
     }
 
     [Fact]

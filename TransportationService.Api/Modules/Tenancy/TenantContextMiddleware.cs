@@ -84,20 +84,19 @@ public class TenantContextMiddleware
 
 public static class TenantContextServiceCollectionExtensions
 {
+    /// <summary>
+    /// The mandatory contexts are lazy proxies (<see cref="Services.RequestTenantContext"/>):
+    /// resolving them from DI always succeeds — the fail-closed exception moves to the moment
+    /// tenant/user data is actually READ without a resolved principal. Throwing at resolution
+    /// time made every [AllowAnonymous] endpoint 500 whose controller merely depends on a
+    /// tenant-aware service. <see cref="Services.ITenantAccessor"/> is the optional counterpart
+    /// for identity flows that legitimately run without a tenant.
+    /// </summary>
     public static IServiceCollection AddTenantContextAccessors(this IServiceCollection services)
     {
-        services.AddScoped<ITenantContext>(sp =>
-            (ITenantContext?)sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.Items[nameof(ITenantContext)]
-            ?? throw new InvalidOperationException(
-                "Tenant context was not resolved for this request. This is fail-closed behaviour: the "
-                + "endpoint requires an authenticated principal with a tenant claim (see TenantContextMiddleware)."));
-
-        services.AddScoped<ICurrentUserContext>(sp =>
-            (ICurrentUserContext?)sp.GetRequiredService<IHttpContextAccessor>().HttpContext?.Items[nameof(ICurrentUserContext)]
-            ?? throw new InvalidOperationException(
-                "Current user context was not resolved for this request. This is fail-closed behaviour: the "
-                + "endpoint requires an authenticated principal (see TenantContextMiddleware)."));
-
+        services.AddScoped<ITenantContext, Services.RequestTenantContext>();
+        services.AddScoped<ICurrentUserContext, Services.RequestCurrentUserContext>();
+        services.AddScoped<Services.ITenantAccessor, Services.RequestTenantAccessor>();
         return services;
     }
 }

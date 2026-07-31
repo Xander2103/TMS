@@ -41,22 +41,25 @@ public class UserAccountFlowService : IUserAccountFlowService
     private const int MinPasswordLength = 8;
 
     private readonly TransportationDbContext _dbContext;
-    private readonly ITenantContext _tenantContext;
+    private readonly ITenantAccessor _tenantAccessor;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
     private readonly IHostEnvironment _environment;
 
+    // Deliberately the OPTIONAL tenant accessor, not ITenantContext: forgot-password and
+    // reset-password are anonymous and tenant-neutral by design (they scope by the token/email's
+    // own user row), while StartActivationAsync demands a resolved tenant explicitly below.
     public UserAccountFlowService(
         TransportationDbContext dbContext,
-        ITenantContext tenantContext,
+        ITenantAccessor tenantAccessor,
         IPasswordHasher passwordHasher,
         IAuditService auditService,
         TimeProvider timeProvider,
         IHostEnvironment environment)
     {
         _dbContext = dbContext;
-        _tenantContext = tenantContext;
+        _tenantAccessor = tenantAccessor;
         _passwordHasher = passwordHasher;
         _auditService = auditService;
         _timeProvider = timeProvider;
@@ -71,8 +74,16 @@ public class UserAccountFlowService : IUserAccountFlowService
 
     public async Task<StartedTokenDto?> StartActivationAsync(Guid userId, CancellationToken cancellationToken)
     {
+        // Administrative flow: always runs inside an authenticated tenant scope. Fail-closed —
+        // without a resolved tenant no account may be targeted, and no tenant is ever assumed.
+        if (!_tenantAccessor.TryGetTenantId(out var tenantId))
+        {
+            throw new InvalidOperationException(
+                "Account activation requires a resolved tenant context; the request is not tenant-authenticated.");
+        }
+
         var user = await _dbContext.Users
-            .FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == _tenantContext.TenantId, cancellationToken);
+            .FirstOrDefaultAsync(u => u.Id == userId && u.TenantId == tenantId, cancellationToken);
         if (user is null)
         {
             return null;
