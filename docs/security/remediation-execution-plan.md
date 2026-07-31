@@ -214,14 +214,21 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
 - **Open (bewust, klein):** vrije medische tekst verder minimaliseren en audit-viewer-masking
   in de frontend; gestructureerde events → centrale sink is OPS (checklist #14/#15).
 
-## Fase 7 — GDPR, retentie, data subject rights · **PLANNED**
+## Fase 7 — GDPR, retentie, data subject rights · **DONE (repo-deel)**
 
-- **H13:** configureerbaar retentiebeleid + hosted purge-sweep (audit/outbox/tokens/sink/Peppol-EDI-
-  payloads/documenten/tijdelijke exports) met legal-hold; data-subject-export (tenant-aware,
-  bevoegd, geaudit, korte TTL); anonimisering/pseudonimisering (NRN/IBAN/BIC/DOB/privécontact/
-  vrije medische tekst) met behoud van referentiële integriteit en wettelijke financiële records;
-  dataminimalisatie-review op DTO's/exports/logs; conceptdocumentatie (retentiebeleid,
-  anonimiseringsmatrix, DSR-procedure, databronnenlijst, open juridische vragen).
+- **H13 · DONE:** `Modules/Gdpr` — configureerbaar retentiebeleid (`Retention`-sectie, defaults
+  365d outbox / 30d securitytokens / 14d dev-sink) met **legal hold** die alle purges bevriest;
+  dagelijkse `GdprRetentionHostedService` naast de bestaande refresh-token-sweep; audit-logs
+  bewust NIET in-app gepurged (append-only, checklist #29); data-subject-export
+  (`GET /api/employees/{id}/gdpr-export`, permissie `employees.view_confidential`,
+  read-audit `DataExported` classificatie Health); anonimisering
+  (`POST /api/employees/{id}/anonymize`, nieuwe permissie `employees.anonymize` in géén enkel
+  default-template) — identificerende + bijzondere gegevens gewist, dossiers/attesten HARD
+  verwijderd (ExecuteDelete voorbij de soft-delete-interceptor, bestanden uit storage), account
+  gedeactiveerd + sessies dood, businessstructuur behouden; auditrij zonder oude waarden.
+- **Documentatie:** `docs/security/gdpr.md` — retentiebeleid, anonimiseringsmatrix,
+  DSR-procedure, databronnenlijst, open juridische vragen (Legal/DPO, checklist #20/#27).
+- **Tests:** `Security/Phase7GdprTests.cs` (sweep/legal hold/export/anonimisering).
 
 ## Fase 8 — CI/CD & supply chain · **PLANNED**
 

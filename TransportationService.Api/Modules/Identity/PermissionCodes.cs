@@ -24,6 +24,10 @@ public static class PermissionCodes
     public const string EmployeesDeactivate = "employees.deactivate";
     public const string EmployeesViewConfidential = "employees.view_confidential";
 
+    /// <summary>GDPR art. 17: irreversible erasure of a deactivated employee's personal data.
+    /// Deliberately in NO default template — administrators grant it explicitly when needed.</summary>
+    public const string EmployeesAnonymize = "employees.anonymize";
+
     public const string EmployeeDocumentsView = "employee_documents.view";
     public const string EmployeeDocumentsCreate = "employee_documents.create";
     public const string EmployeeDocumentsEdit = "employee_documents.edit";
@@ -371,6 +375,7 @@ public static class PermissionCodes
         (EmployeesEdit, "employees", "edit", "Personeel bewerken"),
         (EmployeesDeactivate, "employees", "deactivate", "Personeel deactiveren"),
         (EmployeesViewConfidential, "employees", "view_confidential", "Vertrouwelijke personeelsgegevens bekijken"),
+        (EmployeesAnonymize, "employees", "anonymize", "Persoonsgegevens van een ex-medewerker definitief anonimiseren (GDPR)"),
         (EmployeeDocumentsView, "employee_documents", "view", "Personeelsdocumenten bekijken"),
         (EmployeeDocumentsCreate, "employee_documents", "create", "Personeelsdocumenten toevoegen"),
         (EmployeeDocumentsEdit, "employee_documents", "edit", "Personeelsdocumenten bewerken"),

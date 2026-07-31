@@ -167,6 +167,13 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.ILowStockNotifier,
     TransportationService.Api.Modules.Employees.Services.LowStockNotifier>();
 
+// GDPR (H13): configurable retention + daily purge sweep, and data-subject export/anonymisation.
+builder.Services.Configure<TransportationService.Api.Modules.Gdpr.RetentionOptions>(
+    builder.Configuration.GetSection(TransportationService.Api.Modules.Gdpr.RetentionOptions.SectionName));
+builder.Services.AddHostedService<TransportationService.Api.Modules.Gdpr.GdprRetentionHostedService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Gdpr.IDataSubjectService,
+    TransportationService.Api.Modules.Gdpr.DataSubjectService>();
+
 // Upload malware-scan seam (L10): pass-through until a real engine is attached — see
 // docs/security/operational-checklist.md #18.
 builder.Services.AddSingleton<TransportationService.Api.Modules.Security.IUploadScanner,
