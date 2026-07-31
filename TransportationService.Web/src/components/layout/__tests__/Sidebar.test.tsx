@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
+import { NotificationsProvider } from '../../../features/notifications/notificationsContext'
 import { Sidebar } from '../Sidebar'
 
 const auth = vi.hoisted(() => ({
@@ -36,7 +37,9 @@ vi.mock('../../../features/legal-entities/api/legalEntitiesApi', () => ({
 function renderSidebar(path = '/dashboard') {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Sidebar onNavigate={vi.fn()} />
+      <NotificationsProvider>
+        <Sidebar onNavigate={vi.fn()} />
+      </NotificationsProvider>
     </MemoryRouter>,
   )
 }
@@ -82,7 +85,9 @@ describe('Sidebar', () => {
     const onNavigate = vi.fn()
     render(
       <MemoryRouter initialEntries={['/vehicles']}>
-        <Sidebar onNavigate={onNavigate} />
+        <NotificationsProvider>
+          <Sidebar onNavigate={onNavigate} />
+        </NotificationsProvider>
       </MemoryRouter>,
     )
     await userEvent.click(screen.getByRole('link', { name: 'Voertuigen' }))

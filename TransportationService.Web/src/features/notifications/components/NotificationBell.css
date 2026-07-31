@@ -1,0 +1,142 @@
+.ntf-bell {
+  position: relative;
+  display: inline-block;
+}
+
+.ntf-bell-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.ntf-bell-button:hover {
+  border-color: var(--accent);
+}
+
+.ntf-bell-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 9px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.ntf-bell-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 60;
+  width: 340px;
+  /* Mobiel: nooit breder dan het scherm minus wat marge. */
+  max-width: min(340px, calc(100vw - 16px));
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ntf-bell-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.ntf-bell-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.ntf-bell-item:hover {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.ntf-bell-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ntf-bell-item-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.ntf-bell-item-time {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.ntf-bell-empty {
+  margin: 0;
+  padding: 14px 12px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.ntf-bell-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.ntf-bell-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.ntf-bell-footer a:hover {
+  text-decoration: underline;
+}
+
+.ntf-bell-mark-all {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+}
+
+.ntf-bell-mark-all:hover {
+  text-decoration: underline;
+}

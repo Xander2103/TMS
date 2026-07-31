@@ -58,6 +58,7 @@ public class Phase10SystematicSecurityTests
         "NotificationsController.UnreadCount",
         "NotificationsController.MarkRead",
         "NotificationsController.MarkAllRead",
+        "NotificationsController.Acknowledge",
         "NotificationsController.Archive",
         "NotificationsController.Preferences",
         "NotificationsController.SetPreference",

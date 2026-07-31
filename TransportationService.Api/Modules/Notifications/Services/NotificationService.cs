@@ -8,9 +8,19 @@ namespace TransportationService.Api.Modules.Notifications.Services;
 
 public record NotificationDto(
     Guid Id, string Type, NotificationCategory Category, NotificationSeverity Severity,
-    string Title, string Message, string? LinkPath, bool IsRead, bool IsArchived, DateTime CreatedAt);
+    string Title, string Message, string? LinkPath, bool IsRead, bool IsArchived, DateTime CreatedAt,
+    bool RequiresAcknowledgement = false, DateTime? AcknowledgedAt = null,
+    DateTime? ResolvedAt = null, DateTime? ExpiresAt = null);
 
 public record NotificationQuery(bool UnreadOnly, NotificationCategory? Category, bool IncludeArchived, int Take);
+
+/// <summary>
+/// Optional lifecycle behaviour for a produced notification. DedupeKey suppresses the insert
+/// while an unresolved notification with the same key exists for the recipient; resolving
+/// (stock recovered, task completed) re-arms the key for the next occurrence.
+/// </summary>
+public record NotificationOptions(
+    string? DedupeKey = null, bool RequiresAcknowledgement = false, DateTime? ExpiresAt = null);
 
 public record NotificationPreferenceDto(NotificationCategory Category, bool Enabled);
 
@@ -46,6 +56,12 @@ public static class NotificationTypeCatalog
             ["package_completion_override"] = (NotificationCategory.Execution, NotificationSeverity.Warning),
             ["package_returned_depot"] = (NotificationCategory.Execution, NotificationSeverity.Info),
             ["inventory_low_stock"] = (NotificationCategory.System, NotificationSeverity.Warning),
+
+            // Inventory status transitions (inventory-tasks-notifications sprint).
+            ["inventory_status_low"] = (NotificationCategory.Inventory, NotificationSeverity.Warning),
+            ["inventory_status_critical"] = (NotificationCategory.Inventory, NotificationSeverity.Warning),
+            ["inventory_status_out"] = (NotificationCategory.Inventory, NotificationSeverity.Warning),
+            ["inventory_status_negative"] = (NotificationCategory.Inventory, NotificationSeverity.Critical),
 
             // Notification-event catalog (corrections wave 4, phase 6) — keys match
             // Messaging.Services.NotificationEventCatalog.EventKey / MessageKinds 1:1.
@@ -90,16 +106,25 @@ public interface INotificationService
 {
     /// <summary>Queues a notification; silently skipped when the recipient is null (no linked user)
     /// or has disabled the resolved category (Critical always delivers).</summary>
-    Task NotifyAsync(Guid? userId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+    Task NotifyAsync(Guid? userId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken, NotificationOptions? options = null);
 
     /// <summary>Notifies every active user of the tenant that holds the given permission.</summary>
-    Task NotifyPermissionHoldersAsync(string permissionCode, string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+    Task NotifyPermissionHoldersAsync(string permissionCode, string type, string title, string message, string? linkPath, CancellationToken cancellationToken, NotificationOptions? options = null);
 
     /// <summary>Notifies every active member of one role.</summary>
-    Task NotifyRoleAsync(Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+    Task NotifyRoleAsync(Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken, NotificationOptions? options = null);
 
     /// <summary>Notifies every active user of the tenant.</summary>
-    Task NotifyTenantAsync(string type, string title, string message, string? linkPath, CancellationToken cancellationToken);
+    Task NotifyTenantAsync(string type, string title, string message, string? linkPath, CancellationToken cancellationToken, NotificationOptions? options = null);
+
+    /// <summary>
+    /// Marks every unresolved notification with this dedupe key (whole tenant, all recipients)
+    /// as resolved, re-arming the key. Call sites own the semantics of "the condition cleared".
+    /// </summary>
+    Task ResolveByDedupeKeyAsync(string dedupeKey, CancellationToken cancellationToken);
+
+    /// <summary>Acknowledges one of the caller's notifications (also marks it read).</summary>
+    Task<bool> AcknowledgeAsync(Guid id, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<NotificationDto>> ListMineAsync(NotificationQuery query, CancellationToken cancellationToken);
 
@@ -138,21 +163,23 @@ public class NotificationService : INotificationService
     }
 
     public async Task NotifyAsync(
-        Guid? userId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        Guid? userId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken,
+        NotificationOptions? options = null)
     {
         if (userId is not { } recipient)
         {
             return;
         }
 
-        if (await AddIfEnabledAsync(recipient, type, title, message, linkPath, cancellationToken))
+        if (await AddIfEnabledAsync(recipient, type, title, message, linkPath, options, cancellationToken))
         {
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
     }
 
     public async Task NotifyPermissionHoldersAsync(
-        string permissionCode, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        string permissionCode, string type, string title, string message, string? linkPath, CancellationToken cancellationToken,
+        NotificationOptions? options = null)
     {
         var tenantId = _tenantContext.TenantId;
         var recipients = await (from ur in _dbContext.UserRoles.AsNoTracking()
@@ -167,11 +194,12 @@ public class NotificationService : INotificationService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        await NotifyManyAsync(recipients, type, title, message, linkPath, cancellationToken);
+        await NotifyManyAsync(recipients, type, title, message, linkPath, options, cancellationToken);
     }
 
     public async Task NotifyRoleAsync(
-        Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        Guid roleId, string type, string title, string message, string? linkPath, CancellationToken cancellationToken,
+        NotificationOptions? options = null)
     {
         var tenantId = _tenantContext.TenantId;
         var recipients = await (from ur in _dbContext.UserRoles.AsNoTracking().Where(ur => ur.RoleId == roleId)
@@ -183,28 +211,68 @@ public class NotificationService : INotificationService
             .Distinct()
             .ToListAsync(cancellationToken);
 
-        await NotifyManyAsync(recipients, type, title, message, linkPath, cancellationToken);
+        await NotifyManyAsync(recipients, type, title, message, linkPath, options, cancellationToken);
     }
 
     public async Task NotifyTenantAsync(
-        string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        string type, string title, string message, string? linkPath, CancellationToken cancellationToken,
+        NotificationOptions? options = null)
     {
         var recipients = await _dbContext.Users.AsNoTracking()
             .Where(u => u.TenantId == _tenantContext.TenantId && u.IsActive)
             .Select(u => u.Id)
             .ToListAsync(cancellationToken);
 
-        await NotifyManyAsync(recipients, type, title, message, linkPath, cancellationToken);
+        await NotifyManyAsync(recipients, type, title, message, linkPath, options, cancellationToken);
+    }
+
+    public async Task ResolveByDedupeKeyAsync(string dedupeKey, CancellationToken cancellationToken)
+    {
+        var open = await _dbContext.Notifications
+            .Where(n => n.TenantId == _tenantContext.TenantId && n.DedupeKey == dedupeKey && n.ResolvedAt == null)
+            .ToListAsync(cancellationToken);
+        if (open.Count == 0)
+        {
+            return;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        foreach (var notification in open)
+        {
+            notification.ResolvedAt = now;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<bool> AcknowledgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var notification = await Mine().FirstOrDefaultAsync(n => n.Id == id, cancellationToken);
+        if (notification is null)
+        {
+            return false;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!notification.IsRead)
+        {
+            notification.IsRead = true;
+            notification.ReadAt = now;
+        }
+
+        notification.AcknowledgedAt ??= now;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     private async Task NotifyManyAsync(
         IReadOnlyList<Guid> recipients, string type, string title, string message, string? linkPath,
-        CancellationToken cancellationToken)
+        NotificationOptions? options, CancellationToken cancellationToken)
     {
         var added = false;
         foreach (var recipient in recipients)
         {
-            added |= await AddIfEnabledAsync(recipient, type, title, message, linkPath, cancellationToken);
+            added |= await AddIfEnabledAsync(recipient, type, title, message, linkPath, options, cancellationToken);
         }
 
         if (added)
@@ -213,9 +281,11 @@ public class NotificationService : INotificationService
         }
     }
 
-    /// <summary>Adds the row unless the recipient disabled the category (Critical always goes through).</summary>
+    /// <summary>Adds the row unless the recipient disabled the category (Critical always goes through)
+    /// or an unresolved notification with the same dedupe key already exists for them.</summary>
     private async Task<bool> AddIfEnabledAsync(
-        Guid recipient, string type, string title, string message, string? linkPath, CancellationToken cancellationToken)
+        Guid recipient, string type, string title, string message, string? linkPath,
+        NotificationOptions? options, CancellationToken cancellationToken)
     {
         var (category, severity) = NotificationTypeCatalog.Resolve(type);
 
@@ -225,6 +295,21 @@ public class NotificationService : INotificationService
                 .AnyAsync(p => p.TenantId == _tenantContext.TenantId && p.UserId == recipient
                                && p.Category == category && !p.Enabled, cancellationToken);
             if (disabled)
+            {
+                return false;
+            }
+        }
+
+        if (options?.DedupeKey is { } dedupeKey)
+        {
+            // Pending (unsaved) rows of the same fan-out batch count too, so two recipients in
+            // one batch each get exactly one row and a re-publish within the batch is a no-op.
+            var pendingDuplicate = _dbContext.ChangeTracker.Entries<Notification>().Any(e =>
+                e.State == EntityState.Added && e.Entity.UserId == recipient && e.Entity.DedupeKey == dedupeKey);
+            var storedDuplicate = !pendingDuplicate && await _dbContext.Notifications.AsNoTracking()
+                .AnyAsync(n => n.TenantId == _tenantContext.TenantId && n.UserId == recipient
+                               && n.DedupeKey == dedupeKey && n.ResolvedAt == null, cancellationToken);
+            if (pendingDuplicate || storedDuplicate)
             {
                 return false;
             }
@@ -241,6 +326,9 @@ public class NotificationService : INotificationService
             Title = title,
             Message = message,
             LinkPath = linkPath,
+            DedupeKey = options?.DedupeKey,
+            RequiresAcknowledgement = options?.RequiresAcknowledgement ?? false,
+            ExpiresAt = options?.ExpiresAt,
         });
         return true;
     }
@@ -271,17 +359,29 @@ public class NotificationService : INotificationService
             rows = rows.Where(n => n.Category == category);
         }
 
+        // Expired notifications behave like archived ones: hidden unless explicitly requested.
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        if (!query.IncludeArchived)
+        {
+            rows = rows.Where(n => n.ExpiresAt == null || n.ExpiresAt > now);
+        }
+
         return await rows
             .OrderByDescending(n => n.CreatedAt)
             .Take(Math.Clamp(query.Take, 1, 100))
             .Select(n => new NotificationDto(
                 n.Id, n.Type, n.Category, n.Severity, n.Title, n.Message, n.LinkPath,
-                n.IsRead, n.IsArchived, n.CreatedAt))
+                n.IsRead, n.IsArchived, n.CreatedAt,
+                n.RequiresAcknowledgement, n.AcknowledgedAt, n.ResolvedAt, n.ExpiresAt))
             .ToListAsync(cancellationToken);
     }
 
-    public Task<int> UnreadCountAsync(CancellationToken cancellationToken) =>
-        Mine().AsNoTracking().CountAsync(n => !n.IsRead && !n.IsArchived, cancellationToken);
+    public Task<int> UnreadCountAsync(CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        return Mine().AsNoTracking()
+            .CountAsync(n => !n.IsRead && !n.IsArchived && (n.ExpiresAt == null || n.ExpiresAt > now), cancellationToken);
+    }
 
     public async Task<bool> MarkReadAsync(Guid id, CancellationToken cancellationToken)
     {

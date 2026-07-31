@@ -1,7 +1,19 @@
 import { apiClient } from '../../../api/apiClient'
 
-export type NotificationCategory = 'General' | 'Orders' | 'Planning' | 'Execution' | 'Hr' | 'System'
-export type NotificationSeverity = 'Info' | 'Warning' | 'Critical'
+export type NotificationCategory =
+  | 'General'
+  | 'Orders'
+  | 'Planning'
+  | 'Execution'
+  | 'Hr'
+  | 'System'
+  | 'Inventory'
+  | 'Task'
+  | 'CustomerPortal'
+  | 'Fleet'
+  | 'Document'
+  | 'Approval'
+export type NotificationSeverity = 'Info' | 'Warning' | 'Critical' | 'Success'
 
 export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> = {
   General: 'Algemeen',
@@ -10,6 +22,12 @@ export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> 
   Execution: 'Uitvoering',
   Hr: 'HR',
   System: 'Systeem',
+  Inventory: 'Voorraad',
+  Task: 'Taken',
+  CustomerPortal: 'Klantportaal',
+  Fleet: 'Wagenpark',
+  Document: 'Documenten',
+  Approval: 'Goedkeuringen',
 }
 
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
@@ -19,12 +37,19 @@ export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   'Execution',
   'Hr',
   'System',
+  'Inventory',
+  'Task',
+  'CustomerPortal',
+  'Fleet',
+  'Document',
+  'Approval',
 ]
 
 export const NOTIFICATION_SEVERITY_ICONS: Record<NotificationSeverity, string> = {
   Info: 'ℹ',
   Warning: '⚠',
   Critical: '⛔',
+  Success: '✅',
 }
 
 export interface Notification {
@@ -38,6 +63,10 @@ export interface Notification {
   isRead: boolean
   isArchived: boolean
   createdAt: string
+  requiresAcknowledgement: boolean
+  acknowledgedAt: string | null
+  resolvedAt: string | null
+  expiresAt: string | null
 }
 
 export interface NotificationPreference {
@@ -66,6 +95,10 @@ export function markNotificationRead(id: string): Promise<void> {
 
 export function markAllNotificationsRead(): Promise<void> {
   return apiClient.postJson<void, Record<string, never>>('/api/notifications/read-all', {})
+}
+
+export function acknowledgeNotification(id: string): Promise<void> {
+  return apiClient.postJson<void, Record<string, never>>(`/api/notifications/${id}/acknowledge`, {})
 }
 
 export function archiveNotification(id: string): Promise<void> {

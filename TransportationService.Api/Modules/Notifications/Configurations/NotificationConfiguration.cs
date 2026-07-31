@@ -19,9 +19,14 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.Property(n => n.Title).IsRequired().HasMaxLength(200);
         builder.Property(n => n.Message).IsRequired().HasMaxLength(1000);
         builder.Property(n => n.LinkPath).HasMaxLength(300);
+        builder.Property(n => n.DedupeKey).HasMaxLength(200);
 
         builder.HasIndex(n => new { n.TenantId, n.UserId, n.IsRead });
         builder.HasIndex(n => new { n.TenantId, n.UserId, n.IsArchived });
+        // Non-unique: fan-out writes one row per recipient under the same key; dedupe filters
+        // on unresolved rows in the service.
+        builder.HasIndex(n => new { n.TenantId, n.DedupeKey });
+        builder.HasIndex(n => new { n.TenantId, n.ExpiresAt });
 
         builder.HasOne<User>().WithMany().HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
 

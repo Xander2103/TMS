@@ -9,6 +9,7 @@ import {
   NOTIFICATION_CATEGORIES,
   NOTIFICATION_CATEGORY_LABELS,
   NOTIFICATION_SEVERITY_ICONS,
+  acknowledgeNotification,
   archiveNotification,
   getNotificationPreferences,
   listNotifications,
@@ -33,6 +34,8 @@ export function NotificationsPage() {
   const [reloadToken, setReloadToken] = useState(0)
   const [categoryFilter, setCategoryFilter] = useState<NotificationCategory | ''>('')
   const [includeArchived, setIncludeArchived] = useState(false)
+  // Opgeloste meldingen zijn ruis voor de dagelijkse werklijst; standaard verborgen (client-side).
+  const [hideResolved, setHideResolved] = useState(true)
   const [preferences, setPreferences] = useState<NotificationPreference[] | null>(null)
 
   useEffect(() => {
@@ -92,6 +95,15 @@ export function NotificationsPage() {
     }
   }
 
+  async function acknowledge(notification: Notification) {
+    try {
+      await acknowledgeNotification(notification.id)
+      setReloadToken((t) => t + 1)
+    } catch {
+      showError('De melding kon niet worden bevestigd.')
+    }
+  }
+
   async function markAll() {
     try {
       await markAllNotificationsRead()
@@ -114,6 +126,7 @@ export function NotificationsPage() {
   }
 
   const hasUnread = (notifications ?? []).some((n) => !n.isRead)
+  const visibleNotifications = (notifications ?? []).filter((n) => !hideResolved || n.resolvedAt === null)
 
   return (
     <div>
@@ -146,21 +159,31 @@ export function NotificationsPage() {
           <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />{' '}
           Archief tonen
         </label>
+        <label>
+          <input type="checkbox" checked={hideResolved} onChange={(e) => setHideResolved(e.target.checked)} />{' '}
+          Opgeloste verbergen
+        </label>
       </div>
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
       {!loadError && notifications === null && <p className="placeholder-text">Meldingen laden…</p>}
-      {!loadError && notifications !== null && notifications.length === 0 && (
+      {!loadError && notifications !== null && visibleNotifications.length === 0 && (
         <p className="placeholder-text">Geen meldingen.</p>
       )}
 
-      {!loadError && notifications !== null && notifications.length > 0 && (
+      {!loadError && notifications !== null && visibleNotifications.length > 0 && (
         <ul className="ntf-list">
-          {notifications.map((notification) => (
+          {visibleNotifications.map((notification) => (
             <li key={notification.id} className="ntf-row">
               <button
                 type="button"
-                className={notification.isRead ? 'ntf-item' : 'ntf-item ntf-unread'}
+                className={[
+                  'ntf-item',
+                  !notification.isRead && 'ntf-unread',
+                  notification.resolvedAt !== null && 'ntf-resolved',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 onClick={() => void open(notification)}
               >
                 <span className="ntf-title">
@@ -172,11 +195,25 @@ export function NotificationsPage() {
                   <Badge tone={notification.severity === 'Critical' ? 'danger' : 'neutral'}>
                     {NOTIFICATION_CATEGORY_LABELS[notification.category]}
                   </Badge>
+                  {notification.resolvedAt !== null && <Badge tone="success">Opgelost</Badge>}
                   {notification.isArchived && <Badge tone="neutral">gearchiveerd</Badge>}
                 </span>
                 <span className="ntf-message">{notification.message}</span>
+                {notification.requiresAcknowledgement && notification.acknowledgedAt !== null && (
+                  <span className="ntf-ack-info">Bevestigd op {formatMoment(notification.acknowledgedAt)}</span>
+                )}
                 <span className="ntf-time">{formatMoment(notification.createdAt)}</span>
               </button>
+              {notification.requiresAcknowledgement && notification.acknowledgedAt === null && (
+                <button
+                  type="button"
+                  className="ntf-ack"
+                  onClick={() => void acknowledge(notification)}
+                  aria-label={`Melding "${notification.title}" bevestigen`}
+                >
+                  Bevestigen
+                </button>
+              )}
               {!notification.isArchived && (
                 <button
                   type="button"

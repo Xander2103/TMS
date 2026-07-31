@@ -7,6 +7,7 @@ public enum NotificationSeverity
     Info,
     Warning,
     Critical,
+    Success,
 }
 
 public enum NotificationCategory
@@ -17,6 +18,12 @@ public enum NotificationCategory
     Execution,
     Hr,
     System,
+    Inventory,
+    Task,
+    CustomerPortal,
+    Fleet,
+    Document,
+    Approval,
 }
 
 /// <summary>
@@ -45,6 +52,23 @@ public class Notification : AuditableTenantEntity
 
     public bool IsArchived { get; set; }
     public DateTime? ArchivedAt { get; set; }
+
+    /// <summary>
+    /// Producer-chosen stable key (e.g. "inventory_status:{templateId}:{variantId}"): while an
+    /// unresolved notification with the same key exists for the recipient, duplicates are
+    /// suppressed; resolving clears the way for the next occurrence.
+    /// </summary>
+    public string? DedupeKey { get; set; }
+
+    /// <summary>Recipient must explicitly acknowledge (stronger than read).</summary>
+    public bool RequiresAcknowledgement { get; set; }
+    public DateTime? AcknowledgedAt { get; set; }
+
+    /// <summary>Set when the underlying condition cleared (e.g. stock recovered).</summary>
+    public DateTime? ResolvedAt { get; set; }
+
+    /// <summary>After this moment the notification no longer surfaces or counts as unread.</summary>
+    public DateTime? ExpiresAt { get; set; }
 }
 
 /// <summary>Per-user opt-out per category; absent row means enabled. Critical always delivers.</summary>
