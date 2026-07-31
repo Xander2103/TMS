@@ -1,0 +1,22 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /TransportationService.Api
+    schedule:
+      interval: weekly
+    groups:
+      dotnet-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /TransportationService.Web
+    schedule:
+      interval: weekly
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -37,6 +37,23 @@ public static class PermissionCatalogSeeder
             }
         }
 
+        // Retire (L5): a permission that no longer exists in the source catalog is dead weight —
+        // nothing checks it, so a grant only suggests capabilities that aren't there. Grants are
+        // removed with it. Permissions are exclusively catalog-seeded, so anything unknown here
+        // can only be a retired code.
+        var validCodes = PermissionCodes.All.Select(p => p.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var retired = existing.Where(p => !validCodes.Contains(p.Code)).ToList();
+        if (retired.Count > 0)
+        {
+            var retiredIds = retired.Select(p => p.Id).ToList();
+            var orphanedGrants = await dbContext.RolePermissions
+                .Where(rp => retiredIds.Contains(rp.PermissionId))
+                .ToListAsync(cancellationToken);
+            dbContext.RemoveRange(orphanedGrants);
+            dbContext.RemoveRange(retired);
+            existing.RemoveAll(p => !validCodes.Contains(p.Code));
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
 
         await GrantFullCatalogToSystemRolesAsync(dbContext, existing, cancellationToken);

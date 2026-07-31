@@ -230,17 +230,28 @@ vastgelegd, nog te implementeren · `OPS` = (deels) buiten de repository, zie ch
   DSR-procedure, databronnenlijst, open juridische vragen (Legal/DPO, checklist #20/#27).
 - **Tests:** `Security/Phase7GdprTests.cs` (sweep/legal hold/export/anonimisering).
 
-## Fase 8 — CI/CD & supply chain · **PLANNED**
+## Fase 8 — CI/CD & supply chain · **DONE (repo-deel)**
 
-- **H11:** GitHub Actions — backend restore/build (warnings-as-errors waar haalbaar)/test/coverage/
-  `dotnet list package --vulnerable`/analyzers; frontend `npm ci`/typecheck/lint/test/build/
-  `npm audit`; security gitleaks + CodeQL + dependency-review + SBOM; geen deploy bij kritieke/hoge
-  bevindingen; Dependabot/Renovate; `SECURITY.md`, PR- en release-securitychecklist.
-- **L5 dode permissies:** `packages.export`/`users.delete`/`qualification_types.manage` verwijderen
-  of handhaven; architectuurtest catalogus vs. daadwerkelijke checks.
-- **L6 credential-logging:** `DevAdminSeeder` logt geen wachtwoord; conventietest op gevoelige termen.
-- **L11 provider-credentials:** tenant-aware providerinterfaces; geen singleton met globale
-  credentials; fail-fast placeholder (nu al voor mail via `UnconfiguredEmailProvider`).
+- **H11 · DONE:** `.github/workflows/backend.yml` (restore/build/test + `dotnet list package
+  --vulnerable --include-transitive` als release-gate), `frontend.yml` (`npm ci`/tsc/eslint/
+  vitest/build + `npm audit --audit-level=high`), `security.yml` (gitleaks over volledige
+  historie, CodeQL C#+TS incl. wekelijkse sweep, dependency-review fail-on high bij PR's,
+  SBOM via anchore); `.github/dependabot.yml` (nuget/npm/actions, wekelijks); `SECURITY.md` +
+  PR-securitychecklist (`pull_request_template.md`). Frontend-lint bleek weer groen en is
+  blocking. *Activatie van de workflows vereist een GitHub-remote/push — OPS.*
+- **L5 dode permissies · DONE:** `users.delete`, `qualification_types.manage`,
+  `qualification_types.view` en `packages.export` verwijderd uit catalogus + templates
+  (historische upgrade-stap houdt de literal; seeder slaat onbekende codes over);
+  `PermissionCatalogSeeder` **retired** nu ook DB-rijen + grants van codes die uit de catalogus
+  verdwenen; architectuurtest `EveryCataloguePermission_IsActuallyCheckedSomewhere` (attribute-
+  checks via reflectie + gedocumenteerde service-side- en frontend-gated-lijsten — die laatste
+  categorie is een benoemd open hardeningpunt). `orders.assign` bleek runtime-gecheckt
+  (TripsController) en blijft.
+- **L6 · DONE:** `DevAdminSeeder` logt het wachtwoord niet meer; conventietest op `{Password}`.
+- **L11 · DONE (bestaand):** mail én sms hebben fail-closed `Unconfigured*Provider`-placeholders
+  + `StartupSecurityValidator`-bootweigering; Peppol is per-tenant/legal-entity geconfigureerd
+  (provider-neutraal domein).
+- **Tests:** `Security/Phase8SupplyChainTests.cs`.
 
 ## Fase 9 — DB / data-at-rest-hardening · **PLANNED + OPS**
 

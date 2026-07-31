@@ -64,7 +64,11 @@ public static class DefaultRoleUpgrades
                 ["planner"] =
                 [
                     PermissionCodes.PackagesView, PermissionCodes.PackagesCreate, PermissionCodes.PackagesManage,
-                    PermissionCodes.PackagesCancel, PermissionCodes.PackagesRelabel, PermissionCodes.PackagesExport,
+                    PermissionCodes.PackagesCancel, PermissionCodes.PackagesRelabel,
+                    // Historische stap: "packages.export" is uit de catalogus verwijderd (L5);
+                    // de literal blijft zodat de stap zelf onveranderd is — de seeder slaat
+                    // codes over die niet meer bestaan.
+                    "packages.export",
                     PermissionCodes.PackageExceptionsCreate, PermissionCodes.PackageExceptionsManage,
                     PermissionCodes.ScanningOverride,
                     PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,

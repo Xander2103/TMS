@@ -19,8 +19,10 @@ public class DefaultRoleSeederTests
 
     private static readonly string[] Version3Codes =
     [
+        // packages.export is uit de catalogus verwijderd (L5): de historische upgrade-stap
+        // vermeldt hem nog, maar de seeder slaat onbekende codes over.
         PermissionCodes.PackagesView, PermissionCodes.PackagesCreate, PermissionCodes.PackagesManage,
-        PermissionCodes.PackagesCancel, PermissionCodes.PackagesRelabel, PermissionCodes.PackagesExport,
+        PermissionCodes.PackagesCancel, PermissionCodes.PackagesRelabel,
         PermissionCodes.PackageExceptionsCreate, PermissionCodes.PackageExceptionsManage,
         PermissionCodes.ScanningOverride,
         PermissionCodes.WarehouseView, PermissionCodes.WarehouseReleaseTrip,

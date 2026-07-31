@@ -1,0 +1,58 @@
+name: backend
+
+on:
+  push:
+    branches: [main, nav-redesign]
+    paths: ['TransportationService.Api/**', 'TransportationService.Api.Tests/**', '.github/workflows/backend.yml']
+  pull_request:
+    paths: ['TransportationService.Api/**', 'TransportationService.Api.Tests/**', '.github/workflows/backend.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore TransportationService.Api.Tests/TransportationService.Api.Tests.csproj
+
+      - name: Build (warnings visible, errors fatal)
+        run: dotnet build TransportationService.Api.Tests/TransportationService.Api.Tests.csproj --no-restore -c Release
+
+      - name: Test
+        run: dotnet test TransportationService.Api.Tests/TransportationService.Api.Tests.csproj --no-build -c Release --logger "trx" --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: TestResults
+
+  vulnerable-packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore TransportationService.Api/TransportationService.Api.csproj
+
+      # Release gate: a known-vulnerable dependency (direct or transitive) fails the build.
+      - name: Audit NuGet dependencies
+        run: |
+          dotnet list TransportationService.Api/TransportationService.Api.csproj package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q "has the following vulnerable packages" vulnerable.txt; then
+            echo "::error::Vulnerable NuGet packages found."
+            exit 1
+          fi

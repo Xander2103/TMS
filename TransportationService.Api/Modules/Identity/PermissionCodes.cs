@@ -5,7 +5,8 @@ public static class PermissionCodes
     public const string UsersView = "users.view";
     public const string UsersCreate = "users.create";
     public const string UsersEdit = "users.edit";
-    public const string UsersDelete = "users.delete";
+    // users.delete verwijderd (L5): nooit door een endpoint gecontroleerd — gebruikers worden
+    // gedeactiveerd/geblokkeerd, nooit verwijderd.
     public const string UsersBlock = "users.block";
 
     /// <summary>Sensitive: administratively (re)set another user's password. Separate from users.edit
@@ -124,8 +125,8 @@ public static class PermissionCodes
     public const string CompanySettingsManage = "company_settings.manage";
 
     // --- Qualification types (catalog) ---
-    public const string QualificationTypesView = "qualification_types.view";
-    public const string QualificationTypesManage = "qualification_types.manage";
+    // qualification_types.view/.manage verwijderd (L5): lezen valt onder de HR-schermen,
+    // beheer loopt via hr_settings.manage.
 
     // --- Vehicles (fleet) ---
     public const string VehiclesView = "vehicles.view";
@@ -194,6 +195,7 @@ public static class PermissionCodes
     public const string OrdersChangeStatus = "orders.change_status";
     public const string OrdersCorrectStatus = "orders.correct_status";
     public const string OrdersCancel = "orders.cancel";
+    /// <summary>Runtime-gecheckt in TripsController (order↔rit-koppeling).</summary>
     public const string OrdersAssign = "orders.assign";
     public const string OrdersExport = "orders.export";
     /// <summary>Umbrella: every order action (checked as an any-of alternative on order endpoints).</summary>
@@ -294,7 +296,7 @@ public static class PermissionCodes
     public const string PackagesManage = "packages.manage";
     public const string PackagesCancel = "packages.cancel";
     public const string PackagesRelabel = "packages.relabel";
-    public const string PackagesExport = "packages.export";
+    // packages.export verwijderd (L5): rapportexports lopen via package_reports.export.
     public const string ScanningOverride = "scanning.override";
     public const string PackageExceptionsCreate = "package_exceptions.create";
     public const string PackageExceptionsManage = "package_exceptions.manage";
@@ -363,7 +365,6 @@ public static class PermissionCodes
         (UsersCreate, "users", "create", "Gebruikers aanmaken"),
         (UsersEdit, "users", "edit", "Gebruikers bewerken"),
         (UsersResetPassword, "users", "reset_password", "Wachtwoord van een gebruiker administratief resetten"),
-        (UsersDelete, "users", "delete", "Gebruikers verwijderen"),
         (UsersBlock, "users", "block", "Gebruikers blokkeren"),
         (RolesView, "roles", "view", "Rollen bekijken"),
         (RolesCreate, "roles", "create", "Rollen aanmaken"),
@@ -441,8 +442,6 @@ public static class PermissionCodes
         (DriversBlock, "drivers", "block", "Chauffeurs blokkeren"),
         (CompanySettingsView, "company_settings", "view", "Bedrijfsinstellingen bekijken"),
         (CompanySettingsManage, "company_settings", "manage", "Bedrijfsinstellingen beheren"),
-        (QualificationTypesView, "qualification_types", "view", "Kwalificatietypes bekijken"),
-        (QualificationTypesManage, "qualification_types", "manage", "Kwalificatietypes beheren"),
         (VehiclesView, "vehicles", "view", "Voertuigen bekijken"),
         (VehiclesCreate, "vehicles", "create", "Voertuigen aanmaken"),
         (VehiclesEdit, "vehicles", "edit", "Voertuigen bewerken"),
@@ -483,13 +482,13 @@ public static class PermissionCodes
         (FuelEdit, "fuel", "edit", "Tankbeurten bewerken"),
         (FuelDelete, "fuel", "delete", "Tankbeurten verwijderen"),
         (OrdersView, "orders", "view", "Transportopdrachten bekijken"),
+        (OrdersAssign, "orders", "assign", "Transportopdrachten aan ritten koppelen"),
         (OrdersCreate, "orders", "create", "Transportopdrachten aanmaken"),
         (OrdersEdit, "orders", "edit", "Transportopdrachten bewerken"),
         (OrdersDelete, "orders", "delete", "Transportopdrachten verwijderen"),
         (OrdersChangeStatus, "orders", "change_status", "Status van transportopdrachten wijzigen"),
         (OrdersCorrectStatus, "orders", "correct_status", "Status van transportopdrachten corrigeren (terugdraaien met reden)"),
         (OrdersCancel, "orders", "cancel", "Transportopdrachten annuleren"),
-        (OrdersAssign, "orders", "assign", "Transportopdrachten aan ritten koppelen"),
         (OrdersExport, "orders", "export", "Transportopdrachten exporteren"),
         (OrdersOverridePrice, "orders", "override_price", "Berekende orderprijs handmatig overschrijven"),
         (OrdersLockPrice, "orders", "lock_price", "Prijs van transportopdrachten vergrendelen en ontgrendelen"),
@@ -550,7 +549,6 @@ public static class PermissionCodes
         (PackagesManage, "packages", "manage", "Colli beheren (gegevens, groepen, disposities)"),
         (PackagesCancel, "packages", "cancel", "Colli annuleren"),
         (PackagesRelabel, "packages", "relabel", "Colli heretiketteren en etiketten herafdrukken"),
-        (PackagesExport, "packages", "export", "Collilijsten exporteren"),
         (ScanningOverride, "scanning", "override", "Scanblokkades en stopafronding overrulen"),
         (PackageExceptionsCreate, "package_exceptions", "create", "Pakketafwijkingen melden (ontbrekend/verkeerd/beschadigd)"),
         (PackageExceptionsManage, "package_exceptions", "manage", "Pakketafwijkingen toewijzen en afhandelen"),

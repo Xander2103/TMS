@@ -1,0 +1,46 @@
+name: frontend
+
+on:
+  push:
+    branches: [main, nav-redesign]
+    paths: ['TransportationService.Web/**', '.github/workflows/frontend.yml']
+  pull_request:
+    paths: ['TransportationService.Web/**', '.github/workflows/frontend.yml']
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: TransportationService.Web
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: TransportationService.Web/package-lock.json
+
+      - name: Install (clean, lockfile-exact)
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Release gate: high/critical advisories in production dependencies fail the build.
+      - name: Audit npm dependencies
+        run: npm audit --omit=dev --audit-level=high

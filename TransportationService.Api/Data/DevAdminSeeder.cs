@@ -32,9 +32,11 @@ public static class DevAdminSeeder
         {
             admin.PasswordHash = passwordHasher.Hash(DevPassword);
             await dbContext.SaveChangesAsync(cancellationToken);
+            // L6: credentials never go to a log — logs get shipped/retained far beyond the
+            // console. The dev password is documented in docs/security/dev-setup.md.
             logger.LogWarning(
-                "Development administrator password initialised. Login: {Email} / {Password}",
-                Email, DevPassword);
+                "Development administrator password initialised for {Email} (see docs/security/dev-setup.md).",
+                Email);
         }
         else
         {
