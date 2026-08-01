@@ -67,6 +67,7 @@ function masterDataModule(): NavModule {
         label: 'Templates',
         items: [
           { label: 'Bedrijfsmiddelen (sjablonen)', to: '/settings/issued-item-templates', permissions: ['issued_items.manage_templates'] },
+          { label: 'Taaksjablonen', to: '/settings/task-templates', permissions: ['tasks.manage_templates', 'tasks.manage_recurring'] },
         ],
       },
     ],
@@ -151,6 +152,7 @@ export function getNavModules(): NavModule[] {
       icon: UsersRound,
       items: [
         { label: 'Medewerkers', to: '/employees', permissions: ['employees.view'] },
+        { label: 'Taken', to: '/tasks', permissions: ['tasks.view_own', 'tasks.view_team', 'tasks.view_all'] },
         { label: 'Personeelsplanning', to: '/employee-planning', permissions: ['employee_planning.view', 'employee_planning.manage'] },
         { label: 'Afwezigheden', to: '/absences', permissions: ['absences.view'] },
         { label: 'Kwalificaties', to: '/qualifications', permissions: ['employee_documents.view'] },

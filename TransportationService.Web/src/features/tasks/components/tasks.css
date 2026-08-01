@@ -1,0 +1,245 @@
+/* Shared styles for the tasks feature (list, detail panel, dialogs, employee tab). */
+
+.task-category-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.task-title-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.task-due-overdue {
+  color: var(--color-danger, #b91c1c);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.task-filter-toggles {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.task-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- detail panel */
+
+.task-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0.75rem 0;
+}
+
+.task-detail-grid dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.7;
+  margin-bottom: 0.15rem;
+}
+
+.task-detail-grid dd {
+  margin: 0;
+}
+
+.task-detail-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.task-detail-description {
+  white-space: pre-wrap;
+  margin: 0.5rem 0;
+}
+
+.task-detail-note {
+  border-left: 3px solid var(--border-color, #d1d5db);
+  padding: 0.4rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.task-detail-note.is-danger {
+  border-left-color: var(--color-danger, #b91c1c);
+}
+
+.task-detail-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+.task-detail-section {
+  margin-top: 1.25rem;
+}
+
+.task-detail-section h4 {
+  margin: 0 0 0.5rem;
+}
+
+/* ---------------------------------------------------------------- attachments */
+
+.task-attachment-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.task-attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.task-attachment-meta {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.task-attachment-upload {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- summary badges */
+
+.task-summary-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+/* ---------------------------------------------------------------- employee multiselect */
+
+.task-employee-chips {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.task-employee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: var(--surface-muted, #eef2f7);
+  font-size: 0.85rem;
+}
+
+.task-employee-chip button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0;
+}
+
+/* ---------------------------------------------------------------- templates page */
+
+.task-template-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.task-template-item {
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.task-template-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.task-template-item-head strong {
+  font-size: 0.9rem;
+}
+
+.task-template-item-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.task-template-item-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: 0.5rem 1rem;
+}
+
+.task-template-checks {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+
+.task-check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.task-settings-section {
+  margin-top: 1.5rem;
+}
+
+.task-settings-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.task-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+}
+
+@media (max-width: 40rem) {
+  .task-form-row {
+    grid-template-columns: 1fr;
+  }
+}

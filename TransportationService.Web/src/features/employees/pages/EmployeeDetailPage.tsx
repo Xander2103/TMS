@@ -18,6 +18,9 @@ import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { DriverProfilePanel } from '../../drivers/components/DriverProfilePanel'
 import { IssuedItemsTab } from '../../issued-items/IssuedItemsTab'
 import { LeaveBalanceTab } from '../../leave-balance/components/LeaveBalanceTab'
+import { EmployeeTasksTab } from '../../tasks/components/EmployeeTasksTab'
+import { RedistributeTasksDialog } from '../../tasks/components/RedistributeTasksDialog'
+import { getEmployeeOpenTaskSummary } from '../../tasks/api/tasksApi'
 import { CreateUserAccountDialog } from '../components/CreateUserAccountDialog'
 import { EmployeeDocumentsTab } from '../components/EmployeeDocumentsTab'
 import { EmployeeForm } from '../components/EmployeeForm'
@@ -29,7 +32,7 @@ import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
 
-const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlof', 'ritten', 'bedrijfsmiddelen', 'historiek'] as const
+const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlof', 'taken', 'ritten', 'bedrijfsmiddelen', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 /**
@@ -58,6 +61,8 @@ export function EmployeeDetailPage() {
   const [offerDriverDeactivation, setOfferDriverDeactivation] = useState(false)
   const [driverBusy, setDriverBusy] = useState(false)
   const [showAccountDialog, setShowAccountDialog] = useState(false)
+  // Offered (never forced) after a successful deactivation when the employee still has open tasks.
+  const [offerTaskRedistribution, setOfferTaskRedistribution] = useState(false)
 
   const requestedTab = searchParams.get('tab')
   const alias = requestedTab ? TAB_ALIASES[requestedTab] : undefined
@@ -72,6 +77,9 @@ export function EmployeeDetailPage() {
   const canViewIssuedItems = hasPermission('issued_items.view') || hasPermission('issued_items.manage')
   const canViewLeaveBalance = hasPermission('leave_balances.view')
   const canViewAbsences = hasPermission('absences.view')
+  const canViewTasks =
+    hasPermission('tasks.view_own') || hasPermission('tasks.view_team') || hasPermission('tasks.view_all')
+  const canAssignTasks = hasPermission('tasks.assign')
 
   // Redirect a legacy `?tab=` alias to its new home so the URL never keeps a retired id.
   useEffect(() => {
@@ -228,6 +236,7 @@ export function EmployeeDetailPage() {
           { id: 'kwalificaties', label: 'Kwalificaties' },
           ...(canViewDocuments ? [{ id: 'documenten', label: 'Documenten' }] : []),
           ...(canViewLeaveBalance || canViewAbsences ? [{ id: 'verlof', label: 'Verlof & afwezigheden' }] : []),
+          ...(canViewTasks ? [{ id: 'taken', label: 'Taken' }] : []),
           ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: 'Ritten' }] : []),
           ...(canViewIssuedItems ? [{ id: 'bedrijfsmiddelen', label: 'Bedrijfsmiddelen' }] : []),
           { id: 'historiek', label: 'Historiek' },
@@ -358,6 +367,12 @@ export function EmployeeDetailPage() {
         </TabPanel>
       )}
 
+      {tab === 'taken' && canViewTasks && (
+        <TabPanel tabId="taken">
+          <EmployeeTasksTab employeeId={employee.id} />
+        </TabPanel>
+      )}
+
       {tab === 'ritten' && employee.driverId && canViewTrips && (
         <TabPanel tabId="ritten">
           <EmployeeTripsTab driverId={employee.driverId} />
@@ -419,9 +434,29 @@ export function EmployeeDetailPage() {
               toast.showSuccess('Medewerker gedeactiveerd.')
               setConfirmLifecycle(null)
               reload()
+              // Offer (never force) redistributing any open tasks left behind — only meaningful
+              // for users who may reassign them.
+              if (canAssignTasks) {
+                getEmployeeOpenTaskSummary(employee.id)
+                  .then((summary) => {
+                    const openCount = summary.todo + summary.inProgress + summary.blocked + summary.waitingForReview
+                    if (openCount > 0) setOfferTaskRedistribution(true)
+                  })
+                  .catch(() => {
+                    /* takenoverzicht is optioneel; deactivatie is al gelukt */
+                  })
+              }
             }
           }}
           onCancel={() => setConfirmLifecycle(null)}
+        />
+      )}
+
+      {offerTaskRedistribution && (
+        <RedistributeTasksDialog
+          employeeId={employee.id}
+          employeeName={`${employee.firstName} ${employee.lastName}`}
+          onClose={() => setOfferTaskRedistribution(false)}
         />
       )}
 

@@ -133,6 +133,8 @@ const DossiersPage = lazyPage(() => import('../features/dossiers/pages/DossiersP
 const DossierDetailPage = lazyPage(() => import('../features/dossiers/pages/DossierDetailPage'), 'DossierDetailPage')
 const IncidentsPage = lazyPage(() => import('../features/incidents/pages/IncidentsPage'), 'IncidentsPage')
 const IncidentDetailPage = lazyPage(() => import('../features/incidents/pages/IncidentDetailPage'), 'IncidentDetailPage')
+const TasksPage = lazyPage(() => import('../features/tasks/pages/TasksPage'), 'TasksPage')
+const TaskTemplatesPage = lazyPage(() => import('../features/tasks/pages/TaskTemplatesPage'), 'TaskTemplatesPage')
 
 /** Root layout route: providers that need to live inside the router render an Outlet. */
 function RootProviders() {
@@ -255,6 +257,8 @@ const router = createBrowserRouter(
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
           <Route path="/absences" element={<AbsencesPage />} />
           <Route path="/qualifications" element={<QualificationsOverviewPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
+          <Route path="/settings/task-templates" element={<TaskTemplatesPage />} />
           <Route
             path="/master-data"
             element={<Navigate to={`/master-data/${LOOKUP_RESOURCES[0].slug}`} replace />}
