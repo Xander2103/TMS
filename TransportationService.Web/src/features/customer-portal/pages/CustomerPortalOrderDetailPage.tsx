@@ -8,8 +8,8 @@ import { Button } from '../../../components/ui/Button'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { useAuth } from '../../auth/authContextValue'
-import { UNIT_TYPE_LABELS } from '../../packages/types'
-import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE, STOP_TYPE_LABELS } from '../../transport-orders/types'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
+import { ORDER_STATUS_TONE } from '../../transport-orders/types'
 import {
   downloadPortalDocument,
   getPortalOrder,
@@ -17,13 +17,14 @@ import {
   type PortalDocument,
   type PortalOrderDetail,
 } from '../api/customerPortalApi'
+import { orderStatusLabel, stopTypeLabel, unitTypeLabel } from './portalStatusLabels'
 import './customer-portal-pages.css'
 
-function formatWindow(from: string | null, to: string | null): string {
+function formatWindow(t: TranslateFn, from: string | null, to: string | null): string {
   const fmt = (value: string) => value.slice(0, 16).replace('T', ' ')
   if (from && to) return `${fmt(from)} – ${fmt(to)}`
-  if (from) return `vanaf ${fmt(from)}`
-  if (to) return `tot ${fmt(to)}`
+  if (from) return t('orders.detail.windowFrom', { time: fmt(from) })
+  if (to) return t('orders.detail.windowTo', { time: fmt(to) })
   return '—'
 }
 
@@ -31,10 +32,11 @@ function formatWindow(from: string | null, to: string | null): string {
 export function CustomerPortalOrderDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const { hasPermission } = useAuth()
+  const { t, formatDate } = useLocale()
   const [order, setOrder] = useState<PortalOrderDetail | null>(null)
   const [documents, setDocuments] = useState<PortalDocument[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [downloadError, setDownloadError] = useState<string | null>(null)
+  const [error, setError] = useState(false)
+  const [downloadError, setDownloadError] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -43,7 +45,7 @@ export function CustomerPortalOrderDetailPage() {
         if (mounted) setOrder(data)
       })
       .catch(() => {
-        if (mounted) setError('De opdracht kon niet worden geladen.')
+        if (mounted) setError(true)
       })
     if (hasPermission('customer_portal.view_documents')) {
       listPortalDocuments()
@@ -60,22 +62,26 @@ export function CustomerPortalOrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  if (error) return <ErrorState message={error} />
-  if (!order) return <LoadingState message="Opdracht laden..." />
+  if (error) return <ErrorState message={t('orders.detail.loadError')} />
+  if (!order) return <LoadingState message={t('orders.detail.loading')} />
+
+  const subtitle = `${t('orders.detail.submittedFor', { date: formatDate(order.orderDate) })}${
+    order.customerReference ? ` · ${t('orders.detail.yourRef', { reference: order.customerReference })}` : ''
+  }`
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klantportaal', to: '/klantportaal' }, { label: order.orderNumber }]} />
-      <BackButton to="/klantportaal" label="Terug naar mijn opdrachten" />
+      <Breadcrumbs items={[{ label: t('navigation.portalName'), to: '/klantportaal' }, { label: order.orderNumber }]} />
+      <BackButton to="/klantportaal" label={t('orders.detail.back')} />
       <PageHeader
         title={order.orderNumber}
-        subtitle={`Ingediend voor ${order.orderDate}${order.customerReference ? ` · uw ref. ${order.customerReference}` : ''}`}
+        subtitle={subtitle}
         action={
           <>
-            <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>{' '}
+            <Badge tone={ORDER_STATUS_TONE[order.status]}>{orderStatusLabel(t, order.status)}</Badge>{' '}
             {hasPermission('customer_portal.messages') && (
               <Link to={`/klantportaal/berichten?orderId=${order.id}`}>
-                <Button variant="secondary">Berichten over deze opdracht</Button>
+                <Button variant="secondary">{t('orders.detail.messagesButton')}</Button>
               </Link>
             )}
           </>
@@ -84,18 +90,18 @@ export function CustomerPortalOrderDetailPage() {
 
       {order.cancellationReason && (
         <p className="to-cancel-reason" role="note">
-          Geannuleerd: {order.cancellationReason}
+          {t('orders.detail.cancelledReason', { reason: order.cancellationReason })}
         </p>
       )}
 
       {order.timeline.length > 0 && (
         <section className="cpp-panel">
-          <h2>Status</h2>
+          <h2>{t('orders.detail.statusTitle')}</h2>
           <ul className="cpp-list">
             {order.timeline.map((event, index) => (
               <li key={index} className="cpp-row">
                 <span>
-                  <Badge tone={ORDER_STATUS_TONE[event.status]}>{ORDER_STATUS_LABELS[event.status]}</Badge>
+                  <Badge tone={ORDER_STATUS_TONE[event.status]}>{orderStatusLabel(t, event.status)}</Badge>
                   {event.reason ? ` — ${event.reason}` : ''}
                 </span>
                 <span>{event.changedAt.slice(0, 16).replace('T', ' ')}</span>
@@ -107,7 +113,7 @@ export function CustomerPortalOrderDetailPage() {
 
       {order.exceptions.length > 0 && (
         <section className="cpp-panel">
-          <h2>Aandachtspunten</h2>
+          <h2>{t('orders.detail.attentionTitle')}</h2>
           <ul className="cpp-list">
             {order.exceptions.map((exception, index) => (
               <li key={index} className="cpp-row">
@@ -120,27 +126,27 @@ export function CustomerPortalOrderDetailPage() {
       )}
 
       <section className="to-section">
-        <h2>Stops</h2>
+        <h2>{t('orders.detail.stopsTitle')}</h2>
         <table className="to-stops-table">
           <thead>
             <tr>
               <th>#</th>
-              <th>Type</th>
-              <th>Locatie</th>
-              <th>Gevraagd venster</th>
-              <th>Referentie</th>
+              <th>{t('orders.detail.stopColumns.type')}</th>
+              <th>{t('orders.detail.stopColumns.location')}</th>
+              <th>{t('orders.detail.stopColumns.window')}</th>
+              <th>{t('orders.detail.stopColumns.reference')}</th>
             </tr>
           </thead>
           <tbody>
             {order.stops.map((stop) => (
               <tr key={stop.sequence}>
                 <td>{stop.sequence}</td>
-                <td>{STOP_TYPE_LABELS[stop.stopType]}</td>
+                <td>{stopTypeLabel(t, stop.stopType)}</td>
                 <td>
                   {stop.locationName}
                   {stop.city ? `, ${stop.city}` : ''}
                 </td>
-                <td>{formatWindow(stop.requestedFrom, stop.requestedTo)}</td>
+                <td>{formatWindow(t, stop.requestedFrom, stop.requestedTo)}</td>
                 <td>{stop.reference ?? '—'}</td>
               </tr>
             ))}
@@ -150,15 +156,15 @@ export function CustomerPortalOrderDetailPage() {
 
       {order.cargoItems.length > 0 && (
         <section className="to-section">
-          <h2>Goederen</h2>
+          <h2>{t('orders.detail.goodsTitle')}</h2>
           <table className="to-stops-table">
             <thead>
               <tr>
                 <th>#</th>
-                <th>Omschrijving</th>
-                <th>Aantal</th>
-                <th>Type</th>
-                <th>ADR</th>
+                <th>{t('orders.detail.goodsColumns.description')}</th>
+                <th>{t('orders.detail.goodsColumns.quantity')}</th>
+                <th>{t('orders.detail.goodsColumns.type')}</th>
+                <th>{t('orders.detail.goodsColumns.adr')}</th>
               </tr>
             </thead>
             <tbody>
@@ -169,7 +175,7 @@ export function CustomerPortalOrderDetailPage() {
                   <td>
                     {item.expectedQuantity} {item.quantityUnit ?? ''}
                   </td>
-                  <td>{item.unitType ? UNIT_TYPE_LABELS[item.unitType] : '—'}</td>
+                  <td>{item.unitType ? unitTypeLabel(t, item.unitType) : '—'}</td>
                   <td>{item.adrRequired ? <Badge tone="danger">ADR</Badge> : '—'}</td>
                 </tr>
               ))}
@@ -180,15 +186,15 @@ export function CustomerPortalOrderDetailPage() {
 
       {order.notes && (
         <section className="to-section">
-          <h2>Uw opmerkingen</h2>
+          <h2>{t('orders.detail.remarksTitle')}</h2>
           <p>{order.notes}</p>
         </section>
       )}
 
       {hasPermission('customer_portal.view_documents') && documents.length > 0 && (
         <section className="cpp-panel">
-          <h2>Documenten</h2>
-          {downloadError && <p className="placeholder-text" role="alert">{downloadError}</p>}
+          <h2>{t('orders.detail.documentsTitle')}</h2>
+          {downloadError && <p className="placeholder-text" role="alert">{t('errors.documentDownload')}</p>}
           <ul className="cpp-list">
             {documents.map((doc) => (
               <li key={`${doc.source}-${doc.id}`}>
@@ -197,7 +203,7 @@ export function CustomerPortalOrderDetailPage() {
                   className="link-button"
                   onClick={() =>
                     void downloadPortalDocument(doc.source, doc.id, doc.fileName ?? doc.title).catch(() =>
-                      setDownloadError('Het document kon niet worden gedownload.'),
+                      setDownloadError(true),
                     )
                   }
                 >

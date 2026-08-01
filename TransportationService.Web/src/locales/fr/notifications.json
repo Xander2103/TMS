@@ -1,0 +1,21 @@
+{
+  "title": "Communications",
+  "subtitle": "Messages de votre transporteur.",
+  "loading": "Chargement des communications...",
+  "loadError": "Les communications n'ont pas pu être chargées.",
+  "empty": "Il n'y a pas encore de communications.",
+  "unread": "Non lu",
+  "priority": {
+    "high": "Haute",
+    "urgent": "Urgent"
+  },
+  "toAcknowledge": "à confirmer",
+  "acknowledged": "confirmé",
+  "acknowledge": "Confirmer",
+  "acknowledging": "Confirmation…",
+  "ackFailed": "Le message n'a pas pu être confirmé.",
+  "publishedOn": "Publié le {date}",
+  "acknowledgedOn": "Confirmé le {date}",
+  "viewOrder": "Voir la commande",
+  "viewInvoice": "Voir la facture"
+}

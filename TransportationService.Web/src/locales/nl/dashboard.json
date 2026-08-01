@@ -1,0 +1,18 @@
+{
+  "welcome": "Welkom",
+  "welcomeNamed": "Welkom, {name}",
+  "loading": "Dashboard laden...",
+  "loadError": "Het dashboard kon niet worden geladen.",
+  "acknowledge": "Ik bevestig",
+  "acknowledging": "Bevestigen…",
+  "cards": {
+    "activeOrders": "Actieve opdrachten",
+    "attention": "Aandachtspunten",
+    "unreadMessages": "Ongelezen berichten",
+    "recentInvoices": "Recente facturen"
+  },
+  "upcomingTitle": "Aankomende leveringen (7 dagen)",
+  "noDeliveries": "Geen leveringen gepland.",
+  "recentInvoicesTitle": "Recente facturen",
+  "noInvoices": "Nog geen facturen."
+}

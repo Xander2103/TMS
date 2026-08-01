@@ -1,0 +1,12 @@
+{
+  "portalName": "Klantportaal",
+  "navLabel": "Klantportaalnavigatie",
+  "logout": "Uitloggen",
+  "dashboard": "Dashboard",
+  "notices": "Mededelingen",
+  "orders": "Opdrachten",
+  "documents": "Documenten",
+  "invoices": "Facturen",
+  "messages": "Berichten",
+  "users": "Gebruikers"
+}

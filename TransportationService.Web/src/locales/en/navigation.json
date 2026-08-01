@@ -1,0 +1,12 @@
+{
+  "portalName": "Customer portal",
+  "navLabel": "Customer portal navigation",
+  "logout": "Sign out",
+  "dashboard": "Dashboard",
+  "notices": "Notices",
+  "orders": "Orders",
+  "documents": "Documents",
+  "invoices": "Invoices",
+  "messages": "Messages",
+  "users": "Users"
+}

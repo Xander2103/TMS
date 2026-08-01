@@ -6,6 +6,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { LoadingState } from '../../../components/feedback/LoadingState'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   acknowledgePortalFeedMessage,
   listPortalFeedMessages,
@@ -15,21 +16,18 @@ import {
 } from '../api/customerPortalApi'
 import './customer-portal-pages.css'
 
-function formatDateTime(iso: string): string {
-  const date = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`)
-  return date.toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
-}
-
 /** Hoog/Dringend get a pill; Normal renders nothing. */
 function PriorityBadge({ priority }: { priority: PortalFeedPriority }) {
-  if (priority === 'High') return <Badge tone="warning">Hoog</Badge>
-  if (priority === 'Urgent') return <Badge tone="danger">Dringend</Badge>
+  const { t } = useLocale()
+  if (priority === 'High') return <Badge tone="warning">{t('notifications.priority.high')}</Badge>
+  if (priority === 'Urgent') return <Badge tone="danger">{t('notifications.priority.urgent')}</Badge>
   return null
 }
 
 /** Staff-authored announcements feed for the customer portal (route /klantportaal/mededelingen). */
 export function CustomerPortalNoticesPage() {
   const navigate = useNavigate()
+  const { t, formatDateTime } = useLocale()
   const [messages, setMessages] = useState<PortalFeedMessage[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,12 +44,13 @@ export function CustomerPortalNoticesPage() {
       })
       .catch(() => {
         if (!mounted) return
-        setError('De mededelingen konden niet worden geladen.')
+        setError(t('notifications.loadError'))
         setLoaded(true)
       })
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function openMessageDetail(message: PortalFeedMessage) {
@@ -75,7 +74,7 @@ export function CustomerPortalNoticesPage() {
       setMessages((current) => current.map((m) => (m.id === message.id ? { ...m, acknowledgedAt } : m)))
       setOpenMessage((current) => (current && current.id === message.id ? { ...current, acknowledgedAt } : current))
     } catch {
-      setError('Het bericht kon niet worden bevestigd.')
+      setError(t('notifications.ackFailed'))
     } finally {
       setAckBusy(false)
     }
@@ -87,7 +86,7 @@ export function CustomerPortalNoticesPage() {
       message.relatedEntityType === 'order'
         ? `/klantportaal/orders/${message.relatedEntityId}`
         : `/klantportaal/facturen/${message.relatedEntityId}`
-    const label = message.relatedEntityType === 'order' ? 'Bekijk opdracht' : 'Bekijk factuur'
+    const label = message.relatedEntityType === 'order' ? t('notifications.viewOrder') : t('notifications.viewInvoice')
     return (
       <Button variant="secondary" onClick={() => navigate(to)}>
         {label}
@@ -97,12 +96,12 @@ export function CustomerPortalNoticesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klantportaal', to: '/klantportaal' }, { label: 'Mededelingen' }]} />
-      <PageHeader title="Mededelingen" subtitle="Berichten van uw transporteur." />
+      <Breadcrumbs items={[{ label: t('navigation.portalName'), to: '/klantportaal' }, { label: t('notifications.title') }]} />
+      <PageHeader title={t('notifications.title')} subtitle={t('notifications.subtitle')} />
 
       {error && <p className="placeholder-text" role="alert">{error}</p>}
-      {!loaded && <LoadingState message="Mededelingen laden..." />}
-      {loaded && messages.length === 0 && <p className="placeholder-text">Er zijn nog geen mededelingen.</p>}
+      {!loaded && <LoadingState message={t('notifications.loading')} />}
+      {loaded && messages.length === 0 && <p className="placeholder-text">{t('notifications.empty')}</p>}
 
       {loaded && messages.length > 0 && (
         <ul className="cpp-list">
@@ -114,13 +113,13 @@ export function CustomerPortalNoticesPage() {
                 onClick={() => openMessageDetail(message)}
               >
                 <span className="cpp-notice-title">
-                  {message.readAt === null && <span className="cpp-notice-dot" aria-label="Ongelezen" />}
+                  {message.readAt === null && <span className="cpp-notice-dot" aria-label={t('notifications.unread')} />}
                   <PriorityBadge priority={message.priority} />
                   {message.requiresAcknowledgement &&
                     (message.acknowledgedAt === null ? (
-                      <Badge tone="warning">te bevestigen</Badge>
+                      <Badge tone="warning">{t('notifications.toAcknowledge')}</Badge>
                     ) : (
-                      <Badge tone="success">bevestigd</Badge>
+                      <Badge tone="success">{t('notifications.acknowledged')}</Badge>
                     ))}
                   <strong>{message.title}</strong>
                 </span>
@@ -141,21 +140,24 @@ export function CustomerPortalNoticesPage() {
               {relatedLink(openMessage)}
               {openMessage.requiresAcknowledgement && openMessage.acknowledgedAt === null && (
                 <Button onClick={() => void handleAcknowledge(openMessage)} disabled={ackBusy}>
-                  {ackBusy ? 'Bevestigen…' : 'Bevestigen'}
+                  {ackBusy ? t('notifications.acknowledging') : t('notifications.acknowledge')}
                 </Button>
               )}
               <Button variant="secondary" onClick={() => setOpenMessage(null)} disabled={ackBusy}>
-                Sluiten
+                {t('common.actions.close')}
               </Button>
             </>
           }
         >
           <p className="cpp-message-meta">
-            Gepubliceerd op {formatDateTime(openMessage.publishedAt)} <PriorityBadge priority={openMessage.priority} />
+            {t('notifications.publishedOn', { date: formatDateTime(openMessage.publishedAt) })}{' '}
+            <PriorityBadge priority={openMessage.priority} />
           </p>
           <p className="cpp-notice-body">{openMessage.body}</p>
           {openMessage.requiresAcknowledgement && openMessage.acknowledgedAt !== null && (
-            <p className="cpp-message-meta">Bevestigd op {formatDateTime(openMessage.acknowledgedAt)}</p>
+            <p className="cpp-message-meta">
+              {t('notifications.acknowledgedOn', { date: formatDateTime(openMessage.acknowledgedAt) })}
+            </p>
           )}
         </Modal>
       )}

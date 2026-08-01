@@ -6,11 +6,27 @@ import { ValidationSummary } from '../../components/ui/ValidationSummary'
 import { useToast } from '../../components/ui/toastContext'
 import { apiClient } from '../../api/apiClient'
 import { describeApiError } from '../../api/problemDetails'
+import { LocaleProvider } from '../../i18n/LocaleProvider'
+import { useLocale } from '../../i18n/localeContext'
 import { useAuth } from './authContextValue'
 import './LoginPage.css'
 
+// These flow pages are public (or pre-preference) and are also used by customer-portal users,
+// so each exported page mounts its own standalone LocaleProvider: language = browser language
+// (nl*/fr*/en*, otherwise Dutch). Persisting a preference is impossible here — the visitor is
+// anonymous. The internal app behind these pages stays Dutch.
+
 /** Anonymous: request a reset link. The response NEVER reveals whether the account exists. */
 export function ForgotPasswordPage() {
+  return (
+    <LocaleProvider>
+      <ForgotPasswordContent />
+    </LocaleProvider>
+  )
+}
+
+function ForgotPasswordContent() {
+  const { t } = useLocale()
   const [email, setEmail] = useState('')
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -30,24 +46,21 @@ export function ForgotPasswordPage() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit} noValidate>
-        <h1>Wachtwoord vergeten</h1>
+        <h1>{t('auth.forgot.title')}</h1>
         {done ? (
           <>
-            <p>
-              Als er een account bestaat voor dit e-mailadres, is er een herstellink verstuurd. De link is 2 uur
-              geldig.
-            </p>
-            <Link to="/login">Terug naar aanmelden</Link>
+            <p>{t('auth.forgot.done')}</p>
+            <Link to="/login">{t('auth.backToLogin')}</Link>
           </>
         ) : (
           <>
-            <FormField label="E-mailadres" htmlFor="fp-email" required>
+            <FormField label={t('auth.forgot.email')} htmlFor="fp-email" required>
               <input id="fp-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus disabled={busy} />
             </FormField>
             <Button type="submit" disabled={busy || !email.trim()}>
-              {busy ? 'Versturen…' : 'Herstellink aanvragen'}
+              {busy ? t('auth.forgot.submitting') : t('auth.forgot.submit')}
             </Button>
-            <Link to="/login">Terug naar aanmelden</Link>
+            <Link to="/login">{t('auth.backToLogin')}</Link>
           </>
         )}
       </form>
@@ -57,6 +70,15 @@ export function ForgotPasswordPage() {
 
 /** Anonymous: complete a reset/activation with the single-use token from the link. */
 export function ResetPasswordPage() {
+  return (
+    <LocaleProvider>
+      <ResetPasswordContent />
+    </LocaleProvider>
+  )
+}
+
+function ResetPasswordContent() {
+  const { t } = useLocale()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const toast = useToast()
@@ -69,7 +91,7 @@ export function ResetPasswordPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (password !== confirm) {
-      setError('De wachtwoorden komen niet overeen.')
+      setError(t('auth.passwordMismatch'))
       return
     }
     setBusy(true)
@@ -79,10 +101,10 @@ export function ResetPasswordPage() {
         token,
         newPassword: password,
       })
-      toast.showSuccess('Je wachtwoord is ingesteld. Meld je aan met je nieuwe wachtwoord.')
+      toast.showSuccess(t('auth.reset.success'))
       navigate('/login')
     } catch (err) {
-      setError(describeApiError(err, 'Het wachtwoord kon niet worden ingesteld.').message)
+      setError(describeApiError(err, t('auth.reset.failed')).message)
       setBusy(false)
     }
   }
@@ -90,18 +112,18 @@ export function ResetPasswordPage() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit} noValidate>
-        <h1>Nieuw wachtwoord instellen</h1>
+        <h1>{t('auth.reset.title')}</h1>
         <ValidationSummary message={error} />
-        <FormField label="Nieuw wachtwoord" htmlFor="rp-password" required hint="Minstens 8 tekens.">
+        <FormField label={t('auth.reset.newPassword')} htmlFor="rp-password" required hint={t('auth.passwordHint')}>
           <input id="rp-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus disabled={busy} />
         </FormField>
-        <FormField label="Bevestig wachtwoord" htmlFor="rp-confirm" required>
+        <FormField label={t('auth.reset.confirmPassword')} htmlFor="rp-confirm" required>
           <input id="rp-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={busy} />
         </FormField>
         <Button type="submit" disabled={busy || password.length === 0}>
-          {busy ? 'Opslaan…' : 'Wachtwoord instellen'}
+          {busy ? t('auth.reset.submitting') : t('auth.reset.submit')}
         </Button>
-        <Link to="/login">Terug naar aanmelden</Link>
+        <Link to="/login">{t('auth.backToLogin')}</Link>
       </form>
     </div>
   )
@@ -114,6 +136,15 @@ export function ResetPasswordPage() {
  * PasswordReset kind, so no separate activation endpoint exists (see AuthController.ResetPassword).
  */
 export function ActivatePage() {
+  return (
+    <LocaleProvider>
+      <ActivateContent />
+    </LocaleProvider>
+  )
+}
+
+function ActivateContent() {
+  const { t } = useLocale()
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const toast = useToast()
@@ -127,11 +158,11 @@ export function ActivatePage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!token) {
-      setError('Deze activeringslink is ongeldig.')
+      setError(t('auth.activate.invalidLink'))
       return
     }
     if (password !== confirm) {
-      setError('De wachtwoorden komen niet overeen.')
+      setError(t('auth.passwordMismatch'))
       return
     }
     setBusy(true)
@@ -141,10 +172,10 @@ export function ActivatePage() {
         token,
         newPassword: password,
       })
-      toast.showSuccess('Uw account is geactiveerd. Meld u aan met uw nieuwe wachtwoord.')
+      toast.showSuccess(t('auth.activate.success'))
       navigate('/login')
     } catch (err) {
-      setError(describeApiError(err, 'Het account kon niet worden geactiveerd.').message)
+      setError(describeApiError(err, t('auth.activate.failed')).message)
       setBusy(false)
     }
   }
@@ -152,13 +183,13 @@ export function ActivatePage() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit} noValidate>
-        <h1>Klantportaal activeren</h1>
+        <h1>{t('auth.activate.title')}</h1>
         <p>
-          {email ? `Welkom, ${email}. ` : ''}
-          Stel hieronder uw wachtwoord in om uw account te activeren.
+          {email ? `${t('auth.activate.welcome', { email })} ` : ''}
+          {t('auth.activate.intro')}
         </p>
         <ValidationSummary message={error} />
-        <FormField label="Wachtwoord" htmlFor="act-password" required hint="Minstens 8 tekens.">
+        <FormField label={t('auth.activate.password')} htmlFor="act-password" required hint={t('auth.passwordHint')}>
           <input
             id="act-password"
             type="password"
@@ -168,13 +199,13 @@ export function ActivatePage() {
             disabled={busy}
           />
         </FormField>
-        <FormField label="Bevestig wachtwoord" htmlFor="act-confirm" required>
+        <FormField label={t('auth.activate.confirmPassword')} htmlFor="act-confirm" required>
           <input id="act-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={busy} />
         </FormField>
         <Button type="submit" disabled={busy || password.length === 0}>
-          {busy ? 'Bezig...' : 'Account activeren'}
+          {busy ? t('auth.activate.submitting') : t('auth.activate.submit')}
         </Button>
-        <Link to="/login">Terug naar aanmelden</Link>
+        <Link to="/login">{t('auth.backToLogin')}</Link>
       </form>
     </div>
   )
@@ -182,6 +213,15 @@ export function ActivatePage() {
 
 /** Forced first-login change: reachable only via the RequireAuth redirect while the flag is set. */
 export function ChangePasswordPage() {
+  return (
+    <LocaleProvider>
+      <ChangePasswordContent />
+    </LocaleProvider>
+  )
+}
+
+function ChangePasswordContent() {
+  const { t } = useLocale()
   const navigate = useNavigate()
   const toast = useToast()
   const { logout } = useAuth()
@@ -194,7 +234,7 @@ export function ChangePasswordPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (password !== confirm) {
-      setError('De wachtwoorden komen niet overeen.')
+      setError(t('auth.passwordMismatch'))
       return
     }
     setBusy(true)
@@ -204,11 +244,11 @@ export function ChangePasswordPage() {
         currentPassword,
         newPassword: password,
       })
-      toast.showSuccess('Je wachtwoord is gewijzigd. Meld je opnieuw aan.')
+      toast.showSuccess(t('auth.change.success'))
       await logout()
       navigate('/login')
     } catch (err) {
-      setError(describeApiError(err, 'Het wachtwoord kon niet worden gewijzigd.').message)
+      setError(describeApiError(err, t('auth.change.failed')).message)
       setBusy(false)
     }
   }
@@ -216,20 +256,20 @@ export function ChangePasswordPage() {
   return (
     <div className="login-page">
       <form className="login-card" onSubmit={handleSubmit} noValidate>
-        <h1>Kies je eigen wachtwoord</h1>
-        <p>Je gebruikt een tijdelijk wachtwoord. Kies eerst een eigen wachtwoord om verder te gaan.</p>
+        <h1>{t('auth.change.title')}</h1>
+        <p>{t('auth.change.intro')}</p>
         <ValidationSummary message={error} />
-        <FormField label="Tijdelijk (huidig) wachtwoord" htmlFor="cp-current" required>
+        <FormField label={t('auth.change.currentPassword')} htmlFor="cp-current" required>
           <input id="cp-current" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoFocus disabled={busy} />
         </FormField>
-        <FormField label="Nieuw wachtwoord" htmlFor="cp-new" required hint="Minstens 8 tekens.">
+        <FormField label={t('auth.change.newPassword')} htmlFor="cp-new" required hint={t('auth.passwordHint')}>
           <input id="cp-new" type="password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
         </FormField>
-        <FormField label="Bevestig nieuw wachtwoord" htmlFor="cp-confirm" required>
+        <FormField label={t('auth.change.confirmPassword')} htmlFor="cp-confirm" required>
           <input id="cp-confirm" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={busy} />
         </FormField>
         <Button type="submit" disabled={busy || password.length === 0}>
-          {busy ? 'Opslaan…' : 'Wachtwoord wijzigen'}
+          {busy ? t('auth.change.submitting') : t('auth.change.submit')}
         </Button>
       </form>
     </div>

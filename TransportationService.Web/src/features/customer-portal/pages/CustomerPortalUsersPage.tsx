@@ -7,6 +7,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   deactivatePortalUser,
   invitePortalUser,
@@ -22,6 +23,7 @@ const EMPTY_GRANTS: PortalUserGrants = { documents: false, invoices: false, mana
 
 export function CustomerPortalUsersPage() {
   const toast = useToast()
+  const { t } = useLocale()
   const [users, setUsers] = useState<PortalUserListItem[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -35,7 +37,7 @@ export function CustomerPortalUsersPage() {
       setUsers(rows)
       setError(null)
     } catch (err) {
-      setError(describeApiError(err, 'De gebruikers konden niet worden geladen.').message)
+      setError(describeApiError(err, t('common.users.loadError')).message)
     } finally {
       setLoaded(true)
     }
@@ -51,7 +53,7 @@ export function CustomerPortalUsersPage() {
       })
       .catch((err: unknown) => {
         if (!mounted) return
-        setError(describeApiError(err, 'De gebruikers konden niet worden geladen.').message)
+        setError(describeApiError(err, t('common.users.loadError')).message)
       })
       .finally(() => {
         if (mounted) setLoaded(true)
@@ -59,16 +61,17 @@ export function CustomerPortalUsersPage() {
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleDeactivate(user: PortalUserListItem) {
     setBusyId(user.id)
     try {
       await deactivatePortalUser(user.id)
-      toast.showSuccess(`${user.firstName} ${user.lastName} is gedeactiveerd.`)
+      toast.showSuccess(t('common.users.toasts.deactivated', { name: `${user.firstName} ${user.lastName}` }))
       await reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'Deactiveren is mislukt.').message)
+      toast.showError(describeApiError(err, t('common.users.errors.deactivateFailed')).message)
     } finally {
       setBusyId(null)
     }
@@ -78,10 +81,10 @@ export function CustomerPortalUsersPage() {
     setBusyId(user.id)
     try {
       await reactivatePortalUser(user.id)
-      toast.showSuccess(`${user.firstName} ${user.lastName} is opnieuw actief.`)
+      toast.showSuccess(t('common.users.toasts.reactivated', { name: `${user.firstName} ${user.lastName}` }))
       await reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'Reactiveren is mislukt.').message)
+      toast.showError(describeApiError(err, t('common.users.errors.reactivateFailed')).message)
     } finally {
       setBusyId(null)
     }
@@ -91,7 +94,7 @@ export function CustomerPortalUsersPage() {
     setBusyId(user.id)
     try {
       const result = await resendPortalUserInvite(user.id)
-      toast.showSuccess(`Uitnodiging opnieuw verstuurd naar ${user.email}.`)
+      toast.showSuccess(t('common.users.toasts.inviteResent', { email: user.email }))
       // The backend only ever includes activationToken while its mail provider is the
       // development sink (no real SMTP/SendGrid configured) — see customerPortalApi.ts. Once a
       // live provider is registered, this is null and the normal "sent" toast above is the only
@@ -103,7 +106,7 @@ export function CustomerPortalUsersPage() {
       }
       await reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'Opnieuw uitnodigen is mislukt.').message)
+      toast.showError(describeApiError(err, t('common.users.errors.resendFailed')).message)
     } finally {
       setBusyId(null)
     }
@@ -115,30 +118,30 @@ export function CustomerPortalUsersPage() {
       await setPortalUserGrants(user.id, { ...user.grants, [key]: !user.grants[key] })
       await reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'De rechten konden niet worden aangepast.').message)
+      toast.showError(describeApiError(err, t('common.users.errors.grantsFailed')).message)
     } finally {
       setBusyId(null)
     }
   }
 
   const columns: Column<PortalUserListItem>[] = [
-    { key: 'name', header: 'Naam', render: (row) => `${row.firstName} ${row.lastName}` },
-    { key: 'email', header: 'E-mailadres', render: (row) => row.email },
+    { key: 'name', header: t('common.users.columns.name'), render: (row) => `${row.firstName} ${row.lastName}` },
+    { key: 'email', header: t('common.users.columns.email'), render: (row) => row.email },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.users.columns.status'),
       render: (row) =>
         !row.isActive ? (
-          <Badge tone="neutral">Gedeactiveerd</Badge>
+          <Badge tone="neutral">{t('common.users.status.deactivated')}</Badge>
         ) : row.hasPendingActivation ? (
-          <Badge tone="warning">Uitnodiging openstaand</Badge>
+          <Badge tone="warning">{t('common.users.status.pendingInvite')}</Badge>
         ) : (
-          <Badge tone="success">Actief</Badge>
+          <Badge tone="success">{t('common.users.status.active')}</Badge>
         ),
     },
     {
       key: 'grants',
-      header: 'Extra rechten',
+      header: t('common.users.columns.grants'),
       render: (row) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.85rem' }}>
           <label>
@@ -148,7 +151,7 @@ export function CustomerPortalUsersPage() {
               disabled={busyId === row.id}
               onChange={() => void handleToggleGrant(row, 'documents')}
             />{' '}
-            Documenten
+            {t('common.users.grants.documents')}
           </label>
           <label>
             <input
@@ -157,7 +160,7 @@ export function CustomerPortalUsersPage() {
               disabled={busyId === row.id}
               onChange={() => void handleToggleGrant(row, 'invoices')}
             />{' '}
-            Facturen
+            {t('common.users.grants.invoices')}
           </label>
           <label>
             <input
@@ -166,7 +169,7 @@ export function CustomerPortalUsersPage() {
               disabled={busyId === row.id}
               onChange={() => void handleToggleGrant(row, 'manageUsers')}
             />{' '}
-            Gebruikersbeheer
+            {t('common.users.grants.manageUsers')}
           </label>
         </div>
       ),
@@ -178,16 +181,16 @@ export function CustomerPortalUsersPage() {
         <div style={{ display: 'flex', gap: '0.4rem' }}>
           {row.isActive ? (
             <Button variant="secondary" disabled={busyId === row.id} onClick={() => void handleDeactivate(row)}>
-              Deactiveren
+              {t('common.users.actions.deactivate')}
             </Button>
           ) : (
             <Button variant="secondary" disabled={busyId === row.id} onClick={() => void handleReactivate(row)}>
-              Reactiveren
+              {t('common.users.actions.reactivate')}
             </Button>
           )}
           {row.hasPendingActivation && (
             <Button variant="ghost" disabled={busyId === row.id} onClick={() => void handleResend(row)}>
-              Uitnodiging opnieuw sturen
+              {t('common.users.actions.resendInvite')}
             </Button>
           )}
         </div>
@@ -198,9 +201,9 @@ export function CustomerPortalUsersPage() {
   return (
     <div>
       <PageHeader
-        title="Gebruikers"
-        subtitle="Beheer wie namens uw bedrijf toegang heeft tot het klantportaal."
-        action={<Button onClick={() => setInviteOpen(true)}>Gebruiker uitnodigen</Button>}
+        title={t('common.users.title')}
+        subtitle={t('common.users.subtitle')}
+        action={<Button onClick={() => setInviteOpen(true)}>{t('common.users.invite')}</Button>}
       />
       <DataTable
         columns={columns}
@@ -208,12 +211,12 @@ export function CustomerPortalUsersPage() {
         rowKey={(row) => row.id}
         isLoading={!loaded}
         error={error}
-        emptyMessage="Nog geen gebruikers uitgenodigd."
-        loadingMessage="Gebruikers laden..."
+        emptyMessage={t('common.users.empty')}
+        loadingMessage={t('common.users.loading')}
       />
       {lastToken && (
         <p style={{ fontSize: '0.85rem', opacity: 0.75 }}>
-          Ontwikkelomgeving: activeringslink voor {lastToken.email} — <code>{lastToken.link}</code>
+          {t('common.users.devActivationLink', { email: lastToken.email })} <code>{lastToken.link}</code>
         </p>
       )}
       {inviteOpen && (
@@ -231,7 +234,7 @@ export function CustomerPortalUsersPage() {
                   }
                 : null,
             )
-            toast.showSuccess(`Uitnodiging verstuurd naar ${result.user.email}.`)
+            toast.showSuccess(t('common.users.toasts.inviteSent', { email: result.user.email }))
             void reload()
           }}
         />
@@ -247,6 +250,7 @@ function InviteUserModal({
   onClose: () => void
   onInvited: (result: Awaited<ReturnType<typeof invitePortalUser>>) => void
 }) {
+  const { t } = useLocale()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
@@ -257,7 +261,7 @@ function InviteUserModal({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!firstName.trim() || !lastName.trim() || !email.trim()) {
-      setError('Vul voornaam, achternaam en e-mailadres in.')
+      setError(t('common.users.errors.validation'))
       return
     }
     setBusy(true)
@@ -271,29 +275,29 @@ function InviteUserModal({
       })
       onInvited(result)
     } catch (err) {
-      setError(describeApiError(err, 'De uitnodiging kon niet worden verstuurd.').message)
+      setError(describeApiError(err, t('common.users.errors.inviteFailed')).message)
       setBusy(false)
     }
   }
 
   return (
-    <Modal title="Gebruiker uitnodigen" onClose={onClose} busy={busy}>
+    <Modal title={t('common.users.inviteModal.title')} onClose={onClose} busy={busy}>
       <form onSubmit={handleSubmit} noValidate>
         {error && (
           <p role="alert" style={{ color: 'var(--danger, #b3261e)' }}>
             {error}
           </p>
         )}
-        <FormField label="Voornaam" htmlFor="piu-first" required>
+        <FormField label={t('common.users.inviteModal.firstName')} htmlFor="piu-first" required>
           <input id="piu-first" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={busy} autoFocus />
         </FormField>
-        <FormField label="Achternaam" htmlFor="piu-last" required>
+        <FormField label={t('common.users.inviteModal.lastName')} htmlFor="piu-last" required>
           <input id="piu-last" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={busy} />
         </FormField>
-        <FormField label="E-mailadres" htmlFor="piu-email" required>
+        <FormField label={t('common.users.inviteModal.email')} htmlFor="piu-email" required>
           <input id="piu-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={busy} />
         </FormField>
-        <FormField label="Extra rechten" hint="Opdrachten indienen en berichten zijn altijd beschikbaar.">
+        <FormField label={t('common.users.inviteModal.extraRights')} hint={t('common.users.inviteModal.extraRightsHint')}>
           <label style={{ display: 'block' }}>
             <input
               type="checkbox"
@@ -301,7 +305,7 @@ function InviteUserModal({
               onChange={(e) => setGrants((g) => ({ ...g, documents: e.target.checked }))}
               disabled={busy}
             />{' '}
-            Documenten bekijken
+            {t('common.users.inviteModal.viewDocuments')}
           </label>
           <label style={{ display: 'block' }}>
             <input
@@ -310,7 +314,7 @@ function InviteUserModal({
               onChange={(e) => setGrants((g) => ({ ...g, invoices: e.target.checked }))}
               disabled={busy}
             />{' '}
-            Facturen bekijken
+            {t('common.users.inviteModal.viewInvoices')}
           </label>
           <label style={{ display: 'block' }}>
             <input
@@ -319,15 +323,15 @@ function InviteUserModal({
               onChange={(e) => setGrants((g) => ({ ...g, manageUsers: e.target.checked }))}
               disabled={busy}
             />{' '}
-            Gebruikers beheren
+            {t('common.users.inviteModal.manageUsers')}
           </label>
         </FormField>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '1rem' }}>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('common.actions.cancel')}
           </Button>
           <Button type="submit" disabled={busy}>
-            {busy ? 'Bezig...' : 'Uitnodigen'}
+            {busy ? t('common.actions.busy') : t('common.users.inviteModal.submit')}
           </Button>
         </div>
       </form>

@@ -11,6 +11,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
 import { UNIT_TYPE_LABELS, type PackageUnitType } from '../../packages/types'
 import type { StopType } from '../../transport-orders/types'
@@ -21,6 +22,7 @@ import {
   type PortalLocation,
   type PortalStopInput,
 } from '../api/customerPortalApi'
+import { stopTypeLabel, unitTypeLabel } from './portalStatusLabels'
 
 interface StopRow {
   key: string
@@ -66,6 +68,7 @@ export function CustomerPortalNewOrderPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const canManageLocations = hasPermission('customer_portal.manage_locations')
 
   const [locations, setLocations] = useState<PortalLocation[]>([])
@@ -106,7 +109,7 @@ export function CustomerPortalNewOrderPage() {
     setFieldErrors({})
     for (const stop of stops) {
       if (!stop.locationId && !stop.city.trim()) {
-        setError('Elke stop heeft een locatie of minstens een plaatsnaam nodig.')
+        setError(t('orders.new.stopNeedsLocation'))
         return
       }
     }
@@ -144,10 +147,10 @@ export function CustomerPortalNewOrderPage() {
           })),
       }
       const created = await submitPortalOrder(payload)
-      toast.showSuccess(`Opdracht ${created.orderNumber} ingediend. Onze planning neemt deze in behandeling.`)
+      toast.showSuccess(t('orders.new.submitted', { orderNumber: created.orderNumber }))
       navigate('/klantportaal')
     } catch (err) {
-      const described = describeApiError(err, 'De opdracht kon niet worden ingediend.')
+      const described = describeApiError(err, t('orders.new.submitFailed'))
       setError(described.message)
       setFieldErrors(described.fieldErrors)
       setSaving(false)
@@ -156,85 +159,92 @@ export function CustomerPortalNewOrderPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klantportaal', to: '/klantportaal' }, { label: 'Nieuwe opdracht' }]} />
-      <BackButton to="/klantportaal" label="Terug naar mijn opdrachten" />
-      <PageHeader title="Nieuwe transportopdracht indienen" subtitle="Na indiening beoordeelt onze planning uw aanvraag." />
+      <Breadcrumbs items={[{ label: t('navigation.portalName'), to: '/klantportaal' }, { label: t('orders.new.breadcrumb') }]} />
+      <BackButton to="/klantportaal" label={t('orders.detail.back')} />
+      <PageHeader title={t('orders.new.title')} subtitle={t('orders.new.subtitle')} />
 
       <form onSubmit={handleSubmit} noValidate>
         <ValidationSummary message={error} fieldErrors={fieldErrors} />
 
-        <FormSection title="Algemeen" columns={3}>
-          <FormField label="Uw referentie" htmlFor="cp-ref" hint="PO-nummer of eigen kenmerk.">
+        <FormSection title={t('orders.new.generalSection')} columns={3}>
+          <FormField label={t('orders.new.yourReference')} htmlFor="cp-ref" hint={t('orders.new.yourReferenceHint')}>
             <input id="cp-ref" value={customerReference} onChange={(e) => setCustomerReference(e.target.value)} maxLength={100} disabled={saving} />
           </FormField>
-          <FormField label="Gewenste datum" htmlFor="cp-date">
+          <FormField label={t('orders.new.desiredDate')} htmlFor="cp-date">
             <input id="cp-date" type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} disabled={saving} />
           </FormField>
-          <FormField label="Omschrijving goederen" htmlFor="cp-goods">
+          <FormField label={t('orders.new.goodsDescription')} htmlFor="cp-goods">
             <input id="cp-goods" value={goodsDescription} onChange={(e) => setGoodsDescription(e.target.value)} maxLength={1000} disabled={saving} />
           </FormField>
-          <FormField label="Opmerkingen / instructies" htmlFor="cp-remarks" className="form-span-all">
+          <FormField label={t('orders.new.remarks')} htmlFor="cp-remarks" className="form-span-all">
             <textarea id="cp-remarks" rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={4000} disabled={saving} />
           </FormField>
         </FormSection>
 
-        <FormSection title="Stops" columns={1} description="Kies uw eigen locaties of vul een vrij adres in.">
+        <FormSection title={t('orders.new.stopsSection')} columns={1} description={t('orders.new.stopsDescription')}>
           <div className="form-span-all">
             {stops.map((stop, index) => (
               <fieldset key={stop.key} className="ui-form-section" style={{ marginBottom: 12 }}>
                 <legend>
-                  {index + 1}. {stop.stopType === 'Loading' ? 'Laden' : 'Lossen'}
+                  {index + 1}. {stopTypeLabel(t, stop.stopType)}
                 </legend>
                 <div className="ui-form-section-grid ui-form-section-grid-3">
-                  <FormField label="Locatie" htmlFor={`cp-loc-${stop.key}`} hint="Leeg = vrij adres hieronder.">
+                  <FormField label={t('orders.new.location')} htmlFor={`cp-loc-${stop.key}`} hint={t('orders.new.locationHint')}>
                     <select
                       id={`cp-loc-${stop.key}`}
                       value={stop.locationId}
                       onChange={(e) => setStop(stop.key, { locationId: e.target.value })}
                       disabled={saving}
                     >
-                      <option value="">— Vrij adres —</option>
+                      <option value="">{t('orders.new.freeAddress')}</option>
                       {locations.map((location) => (
                         <option key={location.id} value={location.id}>
                           {location.name}
                           {location.city ? ` (${location.city})` : ''}
-                          {stop.stopType === 'Loading' && location.isDefaultLoadingLocation ? ' — standaard laden' : ''}
-                          {stop.stopType === 'Unloading' && location.isDefaultUnloadingLocation ? ' — standaard lossen' : ''}
+                          {stop.stopType === 'Loading' && location.isDefaultLoadingLocation
+                            ? ` ${t('orders.new.defaultLoadingSuffix')}`
+                            : ''}
+                          {stop.stopType === 'Unloading' && location.isDefaultUnloadingLocation
+                            ? ` ${t('orders.new.defaultUnloadingSuffix')}`
+                            : ''}
                         </option>
                       ))}
                     </select>
                     {canManageLocations && (
                       <button type="button" className="tof-link" onClick={() => setNewLocationFor(stop.key)} disabled={saving}>
-                        + Nieuwe locatie
+                        {t('orders.new.addLocation')}
                       </button>
                     )}
                   </FormField>
                   {stop.locationId === '' && (
                     <>
-                      <FormField label="Naam / bedrijf" htmlFor={`cp-name-${stop.key}`}>
+                      <FormField label={t('orders.new.nameCompany')} htmlFor={`cp-name-${stop.key}`}>
                         <input id={`cp-name-${stop.key}`} value={stop.locationName} onChange={(e) => setStop(stop.key, { locationName: e.target.value })} maxLength={200} disabled={saving} />
                       </FormField>
-                      <FormField label="Adres" htmlFor={`cp-addr-${stop.key}`}>
+                      <FormField label={t('orders.new.address')} htmlFor={`cp-addr-${stop.key}`}>
                         <input id={`cp-addr-${stop.key}`} value={stop.address} onChange={(e) => setStop(stop.key, { address: e.target.value })} maxLength={200} disabled={saving} />
                       </FormField>
-                      <FormField label="Postcode" htmlFor={`cp-postal-${stop.key}`}>
+                      <FormField label={t('orders.new.postalCode')} htmlFor={`cp-postal-${stop.key}`}>
                         <input id={`cp-postal-${stop.key}`} value={stop.postalCode} onChange={(e) => setStop(stop.key, { postalCode: e.target.value })} maxLength={20} disabled={saving} />
                       </FormField>
-                      <FormField label="Plaats" htmlFor={`cp-city-${stop.key}`} required>
+                      <FormField label={t('orders.new.city')} htmlFor={`cp-city-${stop.key}`} required>
                         <input id={`cp-city-${stop.key}`} value={stop.city} onChange={(e) => setStop(stop.key, { city: e.target.value })} maxLength={100} disabled={saving} />
                       </FormField>
                     </>
                   )}
-                  <FormField label={stop.stopType === 'Loading' ? 'Laden vanaf' : 'Lossen vanaf'} htmlFor={`cp-from-${stop.key}`}>
+                  <FormField
+                    label={stop.stopType === 'Loading' ? t('orders.new.loadingFrom') : t('orders.new.unloadingFrom')}
+                    htmlFor={`cp-from-${stop.key}`}
+                  >
                     <input id={`cp-from-${stop.key}`} type="datetime-local" value={stop.requestedFrom} onChange={(e) => setStop(stop.key, { requestedFrom: e.target.value })} disabled={saving} />
                   </FormField>
-                  <FormField label="Tot" htmlFor={`cp-to-${stop.key}`}>
+                  <FormField label={t('orders.new.until')} htmlFor={`cp-to-${stop.key}`}>
                     <input id={`cp-to-${stop.key}`} type="datetime-local" value={stop.requestedTo} onChange={(e) => setStop(stop.key, { requestedTo: e.target.value })} disabled={saving} />
                   </FormField>
-                  <FormField label="Referentie" htmlFor={`cp-stopref-${stop.key}`}>
+                  <FormField label={t('orders.new.reference')} htmlFor={`cp-stopref-${stop.key}`}>
                     <input id={`cp-stopref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} maxLength={100} disabled={saving} />
                   </FormField>
-                  <FormField label="Instructies" htmlFor={`cp-instr-${stop.key}`}>
+                  <FormField label={t('orders.new.instructions')} htmlFor={`cp-instr-${stop.key}`}>
                     <input id={`cp-instr-${stop.key}`} value={stop.instructions} onChange={(e) => setStop(stop.key, { instructions: e.target.value })} maxLength={2000} disabled={saving} />
                   </FormField>
                 </div>
@@ -245,52 +255,52 @@ export function CustomerPortalNewOrderPage() {
                     onClick={() => setStops((rows) => rows.filter((row) => row.key !== stop.key))}
                     disabled={saving}
                   >
-                    Stop verwijderen
+                    {t('orders.new.removeStop')}
                   </button>
                 )}
               </fieldset>
             ))}
             <span className="customer-locations-actions">
               <Button variant="secondary" onClick={() => setStops((rows) => [...rows, emptyStop('Loading')])} disabled={saving}>
-                + Laadstop
+                {t('orders.new.addLoadingStop')}
               </Button>
               <Button variant="secondary" onClick={() => setStops((rows) => [...rows, emptyStop('Unloading')])} disabled={saving}>
-                + Losstop
+                {t('orders.new.addUnloadingStop')}
               </Button>
             </span>
           </div>
         </FormSection>
 
-        <FormSection title="Goederen (optioneel)" columns={1} collapsible defaultOpen={cargo.length > 0}>
+        <FormSection title={t('orders.new.cargoSection')} columns={1} collapsible defaultOpen={cargo.length > 0}>
           <div className="form-span-all">
             {cargo.map((row, index) => (
               <div key={row.key} className="ne-qualification-row">
-                <FormField label={`Lijn ${index + 1} — omschrijving`} htmlFor={`cp-cg-desc-${row.key}`}>
+                <FormField label={t('orders.new.cargoLine', { number: index + 1 })} htmlFor={`cp-cg-desc-${row.key}`}>
                   <input id={`cp-cg-desc-${row.key}`} value={row.description} onChange={(e) => setCargoRow(row.key, { description: e.target.value })} maxLength={300} disabled={saving} />
                 </FormField>
-                <FormField label="Aantal" htmlFor={`cp-cg-qty-${row.key}`}>
+                <FormField label={t('orders.new.quantity')} htmlFor={`cp-cg-qty-${row.key}`}>
                   <input id={`cp-cg-qty-${row.key}`} type="number" min={0.01} step="0.01" value={row.expectedQuantity} onChange={(e) => setCargoRow(row.key, { expectedQuantity: e.target.value })} disabled={saving} />
                 </FormField>
-                <FormField label="Type" htmlFor={`cp-cg-type-${row.key}`}>
+                <FormField label={t('orders.new.type')} htmlFor={`cp-cg-type-${row.key}`}>
                   <select id={`cp-cg-type-${row.key}`} value={row.unitType} onChange={(e) => setCargoRow(row.key, { unitType: e.target.value as PackageUnitType | '' })} disabled={saving}>
-                    <option value="">— Kies —</option>
-                    {Object.entries(UNIT_TYPE_LABELS).map(([value, label]) => (
+                    <option value="">{t('orders.new.choose')}</option>
+                    {(Object.keys(UNIT_TYPE_LABELS) as PackageUnitType[]).map((value) => (
                       <option key={value} value={value}>
-                        {label}
+                        {unitTypeLabel(t, value)}
                       </option>
                     ))}
                   </select>
                 </FormField>
-                <FormField label="Gewicht (kg)" htmlFor={`cp-cg-weight-${row.key}`}>
+                <FormField label={t('orders.new.weight')} htmlFor={`cp-cg-weight-${row.key}`}>
                   <input id={`cp-cg-weight-${row.key}`} type="number" min={0} step="0.01" value={row.totalWeightKg} onChange={(e) => setCargoRow(row.key, { totalWeightKg: e.target.value })} disabled={saving} />
                 </FormField>
                 <span>
                   <label className="customer-form-checkbox">
                     <input type="checkbox" checked={row.adrRequired} onChange={(e) => setCargoRow(row.key, { adrRequired: e.target.checked })} disabled={saving} />
-                    ADR
+                    {t('orders.new.adr')}
                   </label>
                   <Button variant="ghost" onClick={() => setCargo((rows) => rows.filter((r) => r.key !== row.key))} disabled={saving}>
-                    Verwijderen
+                    {t('orders.new.remove')}
                   </Button>
                 </span>
               </div>
@@ -305,17 +315,17 @@ export function CustomerPortalNewOrderPage() {
                 ])
               }
             >
-              + Goederenlijn
+              {t('orders.new.addCargoLine')}
             </Button>
           </div>
         </FormSection>
 
         <FormActions>
           <Button variant="secondary" onClick={() => navigate('/klantportaal')} disabled={saving}>
-            Annuleren
+            {t('common.actions.cancel')}
           </Button>
           <Button type="submit" disabled={saving}>
-            {saving ? 'Indienen…' : 'Opdracht indienen'}
+            {saving ? t('orders.new.submitting') : t('orders.new.submit')}
           </Button>
         </FormActions>
       </form>
@@ -336,6 +346,7 @@ export function CustomerPortalNewOrderPage() {
 }
 
 function PortalLocationDialog({ onClose }: { onClose: (created: PortalLocation | null) => void }) {
+  const { t } = useLocale()
   const [name, setName] = useState('')
   const [street, setStreet] = useState('')
   const [houseNumber, setHouseNumber] = useState('')
@@ -347,7 +358,7 @@ function PortalLocationDialog({ onClose }: { onClose: (created: PortalLocation |
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!name.trim()) {
-      setError('Een naam is verplicht.')
+      setError(t('orders.locationDialog.nameRequired'))
       return
     }
     setSaving(true)
@@ -362,42 +373,42 @@ function PortalLocationDialog({ onClose }: { onClose: (created: PortalLocation |
       })
       onClose(created)
     } catch (err) {
-      setError(describeApiError(err, 'De locatie kon niet worden aangemaakt.').message)
+      setError(describeApiError(err, t('orders.locationDialog.createFailed')).message)
       setSaving(false)
     }
   }
 
   return (
     <Modal
-      title="Nieuwe locatie"
+      title={t('orders.locationDialog.title')}
       onClose={() => onClose(null)}
       busy={saving}
       footer={
         <>
           <Button variant="secondary" onClick={() => onClose(null)} disabled={saving}>
-            Annuleren
+            {t('common.actions.cancel')}
           </Button>
           <Button type="submit" form="cp-location-form" disabled={saving}>
-            {saving ? 'Aanmaken…' : 'Locatie aanmaken'}
+            {saving ? t('orders.locationDialog.creating') : t('orders.locationDialog.create')}
           </Button>
         </>
       }
     >
       <form id="cp-location-form" onSubmit={handleSubmit} noValidate>
         <ValidationSummary message={error} />
-        <FormField label="Naam" htmlFor="cpl-name" required>
+        <FormField label={t('orders.locationDialog.name')} htmlFor="cpl-name" required>
           <input id="cpl-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} disabled={saving} />
         </FormField>
-        <FormField label="Straat" htmlFor="cpl-street">
+        <FormField label={t('orders.locationDialog.street')} htmlFor="cpl-street">
           <input id="cpl-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} disabled={saving} />
         </FormField>
-        <FormField label="Nummer" htmlFor="cpl-house">
+        <FormField label={t('orders.locationDialog.houseNumber')} htmlFor="cpl-house">
           <input id="cpl-house" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} maxLength={20} disabled={saving} />
         </FormField>
-        <FormField label="Postcode" htmlFor="cpl-postal">
+        <FormField label={t('orders.locationDialog.postalCode')} htmlFor="cpl-postal">
           <input id="cpl-postal" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} maxLength={20} disabled={saving} />
         </FormField>
-        <FormField label="Plaats" htmlFor="cpl-city">
+        <FormField label={t('orders.locationDialog.city')} htmlFor="cpl-city">
           <input id="cpl-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} disabled={saving} />
         </FormField>
       </form>

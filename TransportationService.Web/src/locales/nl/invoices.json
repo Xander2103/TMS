@@ -1,0 +1,57 @@
+{
+  "status": {
+    "Draft": "Concept",
+    "Sent": "Verzonden",
+    "Paid": "Betaald",
+    "Cancelled": "Geannuleerd"
+  },
+  "peppolStatus": {
+    "Draft": "Concept",
+    "Validated": "Gevalideerd",
+    "Queued": "In wachtrij",
+    "SubmittedToProvider": "Aangeboden aan provider",
+    "AcceptedByProvider": "Aanvaard door provider",
+    "Delivered": "Afgeleverd",
+    "Failed": "Mislukt",
+    "Rejected": "Geweigerd",
+    "Cancelled": "Geannuleerd"
+  },
+  "creditNote": "Creditnota",
+  "list": {
+    "title": "Facturen",
+    "columns": {
+      "invoice": "Factuur",
+      "date": "Datum",
+      "dueDate": "Vervaldatum",
+      "amount": "Bedrag",
+      "status": "Status",
+      "peppol": "Peppol"
+    },
+    "empty": "Nog geen facturen beschikbaar.",
+    "loading": "Facturen laden...",
+    "loadError": "De facturen konden niet worden geladen."
+  },
+  "detail": {
+    "back": "Terug naar facturen",
+    "subtitle": "{date} · vervaldatum {dueDate}",
+    "downloadPdf": "PDF downloaden",
+    "pdfError": "De factuur-PDF kon niet worden gedownload.",
+    "attachmentError": "De bijlage kon niet worden gedownload.",
+    "peppolLabel": "Peppol: {status}",
+    "poNumber": "PO-nummer: {number}",
+    "linesTitle": "Regels",
+    "lineColumns": {
+      "description": "Omschrijving",
+      "quantity": "Aantal",
+      "price": "Prijs",
+      "vat": "BTW%",
+      "total": "Totaal"
+    },
+    "subtotal": "Subtotaal",
+    "vatAmount": "BTW",
+    "total": "Totaal",
+    "attachmentsTitle": "Bijlagen",
+    "loading": "Factuur laden...",
+    "loadError": "De factuur kon niet worden geladen."
+  }
+}

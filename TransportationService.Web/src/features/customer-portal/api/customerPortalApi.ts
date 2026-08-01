@@ -8,6 +8,8 @@ import type { PortalAnnouncement } from './portalAnnouncementsApi'
 export interface PortalContext {
   customerId: string
   customerName: string
+  /** Saved UI-language preference of the portal user; null until the user ever picked one. */
+  preferredLanguage: 'nl' | 'fr' | 'en' | null
 }
 
 export interface PortalOrderListItem {

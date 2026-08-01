@@ -4,13 +4,15 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
-import { euro, INVOICE_STATUS_LABELS, INVOICE_STATUS_TONE, type InvoiceStatus } from '../../invoices/types'
-import { peppolStatusLabel } from '../../peppol/api/peppolApi'
+import { useLocale } from '../../../i18n/localeContext'
+import { INVOICE_STATUS_TONE, type InvoiceStatus } from '../../invoices/types'
 import { listPortalInvoices, type PortalInvoiceListItem } from '../api/customerPortalApi'
+import { invoiceStatusLabel, peppolStatusLabel } from './portalStatusLabels'
 import './customer-portal-pages.css'
 
 /** Customer-portal invoice overview: own customer's non-Draft invoices only. */
 export function CustomerPortalInvoicesPage() {
+  const { t, formatDate, formatCurrency } = useLocale()
   const [invoices, setInvoices] = useState<PortalInvoiceListItem[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -25,57 +27,58 @@ export function CustomerPortalInvoicesPage() {
       })
       .catch(() => {
         if (!mounted) return
-        setError('De facturen konden niet worden geladen.')
+        setError(t('invoices.list.loadError'))
         setLoaded(true)
       })
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const columns: Column<PortalInvoiceListItem>[] = [
     {
       key: 'number',
-      header: 'Factuur',
+      header: t('invoices.list.columns.invoice'),
       render: (row) => (
         <>
           <Link to={`/klantportaal/facturen/${row.id}`}>{row.invoiceNumber}</Link>{' '}
-          {row.kind === 'CreditNote' && <Badge tone="warning">Creditnota</Badge>}
+          {row.kind === 'CreditNote' && <Badge tone="warning">{t('invoices.creditNote')}</Badge>}
         </>
       ),
     },
-    { key: 'date', header: 'Datum', render: (row) => row.invoiceDate },
-    { key: 'due', header: 'Vervaldatum', render: (row) => row.dueDate },
-    { key: 'amount', header: 'Bedrag', render: (row) => euro(row.total, row.currency) },
+    { key: 'date', header: t('invoices.list.columns.date'), render: (row) => formatDate(row.invoiceDate) },
+    { key: 'due', header: t('invoices.list.columns.dueDate'), render: (row) => formatDate(row.dueDate) },
+    { key: 'amount', header: t('invoices.list.columns.amount'), render: (row) => formatCurrency(row.total, row.currency) },
     {
       key: 'status',
-      header: 'Status',
+      header: t('invoices.list.columns.status'),
       render: (row) => (
         <Badge tone={INVOICE_STATUS_TONE[row.status as InvoiceStatus] ?? 'neutral'}>
-          {INVOICE_STATUS_LABELS[row.status as InvoiceStatus] ?? row.status}
+          {invoiceStatusLabel(t, row.status)}
         </Badge>
       ),
     },
     {
       key: 'peppol',
-      header: 'Peppol',
+      header: t('invoices.list.columns.peppol'),
       render: (row) =>
-        row.peppolStatus ? <span className="cpp-peppol-status">{peppolStatusLabel(row.peppolStatus)}</span> : '—',
+        row.peppolStatus ? <span className="cpp-peppol-status">{peppolStatusLabel(t, row.peppolStatus)}</span> : '—',
     },
   ]
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klantportaal', to: '/klantportaal' }, { label: 'Facturen' }]} />
-      <PageHeader title="Facturen" subtitle="Klantportaal" />
+      <Breadcrumbs items={[{ label: t('navigation.portalName'), to: '/klantportaal' }, { label: t('invoices.list.title') }]} />
+      <PageHeader title={t('invoices.list.title')} subtitle={t('navigation.portalName')} />
       <DataTable
         columns={columns}
         rows={invoices}
         rowKey={(row) => row.id}
         isLoading={!loaded}
         error={error}
-        emptyMessage="Nog geen facturen beschikbaar."
-        loadingMessage="Facturen laden..."
+        emptyMessage={t('invoices.list.empty')}
+        loadingMessage={t('invoices.list.loading')}
       />
     </div>
   )

@@ -1,0 +1,21 @@
+{
+  "title": "Mededelingen",
+  "subtitle": "Berichten van uw transporteur.",
+  "loading": "Mededelingen laden...",
+  "loadError": "De mededelingen konden niet worden geladen.",
+  "empty": "Er zijn nog geen mededelingen.",
+  "unread": "Ongelezen",
+  "priority": {
+    "high": "Hoog",
+    "urgent": "Dringend"
+  },
+  "toAcknowledge": "te bevestigen",
+  "acknowledged": "bevestigd",
+  "acknowledge": "Bevestigen",
+  "acknowledging": "Bevestigen…",
+  "ackFailed": "Het bericht kon niet worden bevestigd.",
+  "publishedOn": "Gepubliceerd op {date}",
+  "acknowledgedOn": "Bevestigd op {date}",
+  "viewOrder": "Bekijk opdracht",
+  "viewInvoice": "Bekijk factuur"
+}

@@ -1,0 +1,18 @@
+{
+  "title": "Documents",
+  "source": {
+    "OrderDocument": "Order document",
+    "Pod": "Proof of delivery",
+    "InvoiceAttachment": "Invoice attachment"
+  },
+  "columns": {
+    "document": "Document",
+    "type": "Type",
+    "order": "Order",
+    "invoice": "Invoice",
+    "date": "Date"
+  },
+  "empty": "No documents available yet.",
+  "loading": "Loading documents...",
+  "loadError": "The documents could not be loaded."
+}

@@ -4,6 +4,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
 import { LoadingState } from '../../../components/feedback/LoadingState'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   listPortalMessages,
   markPortalMessagesRead,
@@ -12,15 +13,11 @@ import {
 } from '../api/customerPortalApi'
 import './customer-portal-pages.css'
 
-function formatDateTime(iso: string): string {
-  const date = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`)
-  return date.toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
-}
-
 /** Portal messages: general thread by default, or a specific order's thread via ?orderId=. */
 export function CustomerPortalMessagesPage() {
   const [searchParams] = useSearchParams()
   const orderId = searchParams.get('orderId') ?? undefined
+  const { t, formatDateTime } = useLocale()
 
   const [messages, setMessages] = useState<CustomerMessage[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -36,7 +33,7 @@ export function CustomerPortalMessagesPage() {
         setError(null)
       })
       .catch(() => {
-        setError('De berichten konden niet worden geladen.')
+        setError(t('messages.loadError'))
         setLoaded(true)
       })
   }
@@ -56,7 +53,7 @@ export function CustomerPortalMessagesPage() {
       setBody('')
       load()
     } catch {
-      setError('Het bericht kon niet worden verstuurd.')
+      setError(t('messages.sendError'))
     } finally {
       setSending(false)
     }
@@ -64,18 +61,21 @@ export function CustomerPortalMessagesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klantportaal', to: '/klantportaal' }, { label: 'Berichten' }]} />
-      <PageHeader title="Berichten" subtitle={orderId ? `Opdracht ${orderId}` : 'Algemeen'} />
+      <Breadcrumbs items={[{ label: t('navigation.portalName'), to: '/klantportaal' }, { label: t('messages.title') }]} />
+      <PageHeader
+        title={t('messages.title')}
+        subtitle={orderId ? t('messages.orderSubtitle', { orderId }) : t('messages.general')}
+      />
 
-      {!loaded && <LoadingState message="Berichten laden..." />}
+      {!loaded && <LoadingState message={t('messages.loading')} />}
       {loaded && (
         <>
-          <div className="cpp-thread" role="log" aria-label="Berichtenoverzicht">
-            {messages.length === 0 && <p className="placeholder-text">Nog geen berichten in dit gesprek.</p>}
+          <div className="cpp-thread" role="log" aria-label={t('messages.threadLabel')}>
+            {messages.length === 0 && <p className="placeholder-text">{t('messages.empty')}</p>}
             {messages.map((m) => (
               <div key={m.id} className={m.authorIsStaff ? 'cpp-message cpp-message-staff' : 'cpp-message'}>
                 <span className="cpp-message-meta">
-                  {m.authorIsStaff ? m.authorName : 'U'} · {formatDateTime(m.createdAt)}
+                  {m.authorIsStaff ? m.authorName : t('messages.you')} · {formatDateTime(m.createdAt)}
                 </span>
                 <span className="cpp-message-body">{m.body}</span>
               </div>
@@ -86,15 +86,15 @@ export function CustomerPortalMessagesPage() {
 
           <form className="cpp-compose" onSubmit={(e) => void handleSend(e)}>
             <textarea
-              aria-label="Nieuw bericht"
+              aria-label={t('messages.newMessageLabel')}
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Typ uw bericht..."
+              placeholder={t('messages.placeholder')}
               maxLength={4000}
               disabled={sending}
             />
             <Button type="submit" disabled={sending || !body.trim()}>
-              Versturen
+              {t('messages.send')}
             </Button>
           </form>
         </>

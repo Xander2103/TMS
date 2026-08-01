@@ -103,3 +103,12 @@
   margin: 0 auto;
   padding: 1.25rem;
 }
+
+.cpl-footer {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+

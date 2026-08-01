@@ -1,0 +1,57 @@
+{
+  "status": {
+    "Draft": "Brouillon",
+    "Sent": "Envoyée",
+    "Paid": "Payée",
+    "Cancelled": "Annulée"
+  },
+  "peppolStatus": {
+    "Draft": "Brouillon",
+    "Validated": "Validée",
+    "Queued": "En file d'attente",
+    "SubmittedToProvider": "Transmise au prestataire",
+    "AcceptedByProvider": "Acceptée par le prestataire",
+    "Delivered": "Remise",
+    "Failed": "Échec",
+    "Rejected": "Refusée",
+    "Cancelled": "Annulée"
+  },
+  "creditNote": "Note de crédit",
+  "list": {
+    "title": "Factures",
+    "columns": {
+      "invoice": "Facture",
+      "date": "Date",
+      "dueDate": "Échéance",
+      "amount": "Montant",
+      "status": "Statut",
+      "peppol": "Peppol"
+    },
+    "empty": "Pas encore de factures disponibles.",
+    "loading": "Chargement des factures...",
+    "loadError": "Les factures n'ont pas pu être chargées."
+  },
+  "detail": {
+    "back": "Retour aux factures",
+    "subtitle": "{date} · échéance {dueDate}",
+    "downloadPdf": "Télécharger le PDF",
+    "pdfError": "Le PDF de la facture n'a pas pu être téléchargé.",
+    "attachmentError": "La pièce jointe n'a pas pu être téléchargée.",
+    "peppolLabel": "Peppol : {status}",
+    "poNumber": "Numéro de bon de commande : {number}",
+    "linesTitle": "Lignes",
+    "lineColumns": {
+      "description": "Description",
+      "quantity": "Quantité",
+      "price": "Prix",
+      "vat": "TVA %",
+      "total": "Total"
+    },
+    "subtotal": "Sous-total",
+    "vatAmount": "TVA",
+    "total": "Total",
+    "attachmentsTitle": "Pièces jointes",
+    "loading": "Chargement de la facture...",
+    "loadError": "La facture n'a pas pu être chargée."
+  }
+}

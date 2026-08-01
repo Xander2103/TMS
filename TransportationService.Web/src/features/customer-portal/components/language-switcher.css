@@ -1,0 +1,34 @@
+.cpl-lang {
+  display: inline-flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.cpl-lang-button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  opacity: 0.75;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  min-height: 2rem; /* comfortable touch target on mobile */
+}
+
+.cpl-lang-button:hover {
+  opacity: 1;
+}
+
+.cpl-lang-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cpl-lang-button.cpl-lang-active {
+  opacity: 1;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}

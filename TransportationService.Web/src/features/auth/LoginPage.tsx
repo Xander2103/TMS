@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { FormField } from '../../components/ui/FormField'
+import { LocaleProvider } from '../../i18n/LocaleProvider'
+import { useLocale } from '../../i18n/localeContext'
 import { useAuth } from './authContextValue'
 import { LoginError } from './authApi'
 import './LoginPage.css'
@@ -10,8 +12,23 @@ interface LocationState {
   from?: Location
 }
 
+/**
+ * Public entry point, also used by customer-portal users. Before signing in there is no saved
+ * language preference, so a standalone LocaleProvider starts from the browser language
+ * (nl/fr/en prefixes, otherwise Dutch); persisting is impossible while anonymous. The internal app
+ * behind this page stays Dutch.
+ */
 export function LoginPage() {
+  return (
+    <LocaleProvider>
+      <LoginPageContent />
+    </LocaleProvider>
+  )
+}
+
+function LoginPageContent() {
   const { login, status } = useAuth()
+  const { t } = useLocale()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -32,7 +49,7 @@ export function LoginPage() {
     setError(null)
 
     if (!email.trim() || !password) {
-      setError('Vul zowel je e-mailadres als wachtwoord in.')
+      setError(t('auth.login.missingFields'))
       return
     }
 
@@ -41,7 +58,7 @@ export function LoginPage() {
       await login(email.trim(), password)
       navigate(from, { replace: true })
     } catch (err) {
-      setError(err instanceof LoginError ? err.message : 'Inloggen is mislukt. Probeer het opnieuw.')
+      setError(err instanceof LoginError ? err.message : t('auth.login.failed'))
       setSubmitting(false)
     }
   }
@@ -52,7 +69,7 @@ export function LoginPage() {
         <div className="login-brand">
           <span className="login-brand-mark" aria-hidden="true" />
           <h1 className="login-title">Transportation Service</h1>
-          <p className="login-subtitle">Meld je aan om verder te gaan</p>
+          <p className="login-subtitle">{t('auth.login.subtitle')}</p>
         </div>
 
         <form className="login-form" onSubmit={handleSubmit} noValidate>
@@ -62,7 +79,7 @@ export function LoginPage() {
             </div>
           )}
 
-          <FormField label="E-mailadres" htmlFor="login-email" required>
+          <FormField label={t('auth.login.email')} htmlFor="login-email" required>
             <input
               id="login-email"
               type="email"
@@ -74,7 +91,7 @@ export function LoginPage() {
             />
           </FormField>
 
-          <FormField label="Wachtwoord" htmlFor="login-password" required>
+          <FormField label={t('auth.login.password')} htmlFor="login-password" required>
             <input
               id="login-password"
               type="password"
@@ -86,10 +103,10 @@ export function LoginPage() {
           </FormField>
 
           <Button type="submit" variant="primary" className="login-submit" disabled={submitting}>
-            {submitting ? 'Bezig met aanmelden…' : 'Inloggen'}
+            {submitting ? t('auth.login.submitting') : t('auth.login.submit')}
           </Button>
           <Link to="/forgot-password" className="login-forgot">
-            Wachtwoord vergeten?
+            {t('auth.login.forgot')}
           </Link>
         </form>
       </div>

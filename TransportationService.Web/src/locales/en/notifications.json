@@ -1,0 +1,21 @@
+{
+  "title": "Notices",
+  "subtitle": "Messages from your carrier.",
+  "loading": "Loading notices...",
+  "loadError": "The notices could not be loaded.",
+  "empty": "There are no notices yet.",
+  "unread": "Unread",
+  "priority": {
+    "high": "High",
+    "urgent": "Urgent"
+  },
+  "toAcknowledge": "to confirm",
+  "acknowledged": "confirmed",
+  "acknowledge": "Confirm",
+  "acknowledging": "Confirming…",
+  "ackFailed": "The message could not be confirmed.",
+  "publishedOn": "Published on {date}",
+  "acknowledgedOn": "Confirmed on {date}",
+  "viewOrder": "View order",
+  "viewInvoice": "View invoice"
+}

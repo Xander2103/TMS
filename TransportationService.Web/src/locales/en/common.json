@@ -1,0 +1,67 @@
+{
+  "actions": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "back": "Back",
+    "busy": "Please wait..."
+  },
+  "languageSwitcher": {
+    "label": "Language selection"
+  },
+  "users": {
+    "title": "Users",
+    "subtitle": "Manage who can access the customer portal on behalf of your company.",
+    "invite": "Invite user",
+    "empty": "No users invited yet.",
+    "loading": "Loading users...",
+    "loadError": "The users could not be loaded.",
+    "columns": {
+      "name": "Name",
+      "email": "Email address",
+      "status": "Status",
+      "grants": "Additional rights"
+    },
+    "status": {
+      "active": "Active",
+      "deactivated": "Deactivated",
+      "pendingInvite": "Invitation pending"
+    },
+    "grants": {
+      "documents": "Documents",
+      "invoices": "Invoices",
+      "manageUsers": "User management"
+    },
+    "actions": {
+      "deactivate": "Deactivate",
+      "reactivate": "Reactivate",
+      "resendInvite": "Resend invitation"
+    },
+    "toasts": {
+      "deactivated": "{name} has been deactivated.",
+      "reactivated": "{name} is active again.",
+      "inviteResent": "Invitation resent to {email}.",
+      "inviteSent": "Invitation sent to {email}."
+    },
+    "errors": {
+      "deactivateFailed": "Deactivation failed.",
+      "reactivateFailed": "Reactivation failed.",
+      "resendFailed": "Resending the invitation failed.",
+      "grantsFailed": "The rights could not be updated.",
+      "inviteFailed": "The invitation could not be sent.",
+      "validation": "Please fill in the first name, surname and email address."
+    },
+    "devActivationLink": "Development environment: activation link for {email} —",
+    "inviteModal": {
+      "title": "Invite user",
+      "firstName": "First name",
+      "lastName": "Surname",
+      "email": "Email address",
+      "extraRights": "Additional rights",
+      "extraRightsHint": "Submitting orders and messaging are always available.",
+      "viewDocuments": "View documents",
+      "viewInvoices": "View invoices",
+      "manageUsers": "Manage users",
+      "submit": "Invite"
+    }
+  }
+}

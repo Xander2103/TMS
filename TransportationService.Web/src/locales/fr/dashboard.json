@@ -1,0 +1,18 @@
+{
+  "welcome": "Bienvenue",
+  "welcomeNamed": "Bienvenue, {name}",
+  "loading": "Chargement du tableau de bord...",
+  "loadError": "Le tableau de bord n'a pas pu être chargé.",
+  "acknowledge": "Je confirme",
+  "acknowledging": "Confirmation…",
+  "cards": {
+    "activeOrders": "Commandes en cours",
+    "attention": "Points d'attention",
+    "unreadMessages": "Messages non lus",
+    "recentInvoices": "Factures récentes"
+  },
+  "upcomingTitle": "Livraisons à venir (7 jours)",
+  "noDeliveries": "Aucune livraison planifiée.",
+  "recentInvoicesTitle": "Factures récentes",
+  "noInvoices": "Pas encore de factures."
+}

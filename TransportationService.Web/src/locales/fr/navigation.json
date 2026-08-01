@@ -1,0 +1,12 @@
+{
+  "portalName": "Portail client",
+  "navLabel": "Navigation du portail client",
+  "logout": "Se déconnecter",
+  "dashboard": "Tableau de bord",
+  "notices": "Communications",
+  "orders": "Commandes",
+  "documents": "Documents",
+  "invoices": "Factures",
+  "messages": "Messages",
+  "users": "Utilisateurs"
+}

@@ -1,0 +1,57 @@
+{
+  "status": {
+    "Draft": "Draft",
+    "Sent": "Sent",
+    "Paid": "Paid",
+    "Cancelled": "Cancelled"
+  },
+  "peppolStatus": {
+    "Draft": "Draft",
+    "Validated": "Validated",
+    "Queued": "Queued",
+    "SubmittedToProvider": "Submitted to provider",
+    "AcceptedByProvider": "Accepted by provider",
+    "Delivered": "Delivered",
+    "Failed": "Failed",
+    "Rejected": "Rejected",
+    "Cancelled": "Cancelled"
+  },
+  "creditNote": "Credit note",
+  "list": {
+    "title": "Invoices",
+    "columns": {
+      "invoice": "Invoice",
+      "date": "Date",
+      "dueDate": "Due date",
+      "amount": "Amount",
+      "status": "Status",
+      "peppol": "Peppol"
+    },
+    "empty": "No invoices available yet.",
+    "loading": "Loading invoices...",
+    "loadError": "The invoices could not be loaded."
+  },
+  "detail": {
+    "back": "Back to invoices",
+    "subtitle": "{date} · due {dueDate}",
+    "downloadPdf": "Download PDF",
+    "pdfError": "The invoice PDF could not be downloaded.",
+    "attachmentError": "The attachment could not be downloaded.",
+    "peppolLabel": "Peppol: {status}",
+    "poNumber": "PO number: {number}",
+    "linesTitle": "Lines",
+    "lineColumns": {
+      "description": "Description",
+      "quantity": "Quantity",
+      "price": "Price",
+      "vat": "VAT %",
+      "total": "Total"
+    },
+    "subtotal": "Subtotal",
+    "vatAmount": "VAT",
+    "total": "Total",
+    "attachmentsTitle": "Attachments",
+    "loading": "Loading invoice...",
+    "loadError": "The invoice could not be loaded."
+  }
+}
