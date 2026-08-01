@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 22;
+    public const int CurrentVersion = 23;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -433,6 +433,50 @@ public static class DefaultRoleUpgrades
             new Dictionary<string, IReadOnlyList<string>>
             {
                 ["hr"] = [PermissionCodes.AbsencesViewMedical],
+            }),
+
+        new(23,
+            "Inventory/tasks/notifications sprint 2026-08-01: every employee-facing template gets "
+            + "personal tasks (view_own/manage_own). Magazijn additionally operates the reorder "
+            + "flow and sees movements/loans but never sets thresholds or overrides negative "
+            + "stock; management owns thresholds, the full task surface, bulk/portal messaging "
+            + "and escalation rules; HR coordinates team tasks and bulk employee messages.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["magazijn"] =
+                [
+                    PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn,
+                    PermissionCodes.InventoryViewMovements, PermissionCodes.InventoryReorderView,
+                    PermissionCodes.InventoryReorderManage, PermissionCodes.InventoryLoansView,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn,
+                    PermissionCodes.TasksViewTeam, PermissionCodes.TasksViewAll,
+                    PermissionCodes.TasksAssign, PermissionCodes.TasksEdit, PermissionCodes.TasksCancel,
+                    PermissionCodes.TasksReview, PermissionCodes.TasksReopen,
+                    PermissionCodes.TasksManageCategories, PermissionCodes.TasksManageTemplates,
+                    PermissionCodes.TasksManageRecurring,
+                    PermissionCodes.InventoryManageThresholds, PermissionCodes.InventoryViewMovements,
+                    PermissionCodes.InventoryReorderView, PermissionCodes.InventoryReorderManage,
+                    PermissionCodes.InventoryLoansView,
+                    PermissionCodes.MessagesSendBulk, PermissionCodes.MessagesViewDeliveryStatus,
+                    PermissionCodes.MessagesCancel,
+                    PermissionCodes.PortalMessagesView, PermissionCodes.PortalMessagesSend,
+                    PermissionCodes.PortalMessagesSendBulk, PermissionCodes.PortalMessagesCancel,
+                    PermissionCodes.EscalationsManage,
+                ],
+                ["hr"] =
+                [
+                    PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn,
+                    PermissionCodes.TasksViewTeam, PermissionCodes.TasksAssign, PermissionCodes.TasksReview,
+                    PermissionCodes.InventoryLoansView,
+                    PermissionCodes.MessagesSendBulk, PermissionCodes.MessagesViewDeliveryStatus,
+                ],
+                ["planner"] = [PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn],
+                ["dispatcher"] = [PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn],
+                ["boekhouding"] = [PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn],
+                ["chauffeur"] = [PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn],
             }),
     ];
 }

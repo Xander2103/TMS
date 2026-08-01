@@ -212,6 +212,8 @@ public class DefaultRoleSeederTests
             {
                 PermissionCodes.EmployeePlanningConflictOverride, PermissionCodes.TripCostsView,
                 PermissionCodes.OrdersOverridePrice, PermissionCodes.OrdersLockPrice,
+                // v23 (sprint): personal tasks for every employee-facing template.
+                PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn,
             }
                 .Concat(Version3Codes).OrderBy(c => c),
             plannerAfter.Except(plannerBefore).OrderBy(c => c));
@@ -593,6 +595,66 @@ public class DefaultRoleSeederTests
         foreach (var other in roles.Where(r => r.TemplateCode is not null and not "hr" and not "administrator"))
         {
             Assert.DoesNotContain(PermissionCodes.AbsencesViewMedical, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version23_GrantsSprintPermissions_PerTemplateScope()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        Guid RoleId(string code) => roles.Single(r => r.TemplateCode == code).Id;
+
+        // Every employee-facing template can work its own tasks.
+        foreach (var code in new[] { "magazijn", "management", "hr", "planner", "dispatcher", "boekhouding", "chauffeur" })
+        {
+            var codes = await CodesOfAsync(db, RoleId(code));
+            Assert.Contains(PermissionCodes.TasksViewOwn, codes);
+            Assert.Contains(PermissionCodes.TasksManageOwn, codes);
+        }
+
+        // Magazijn operates the reorder flow but never sets thresholds or overrides negative stock.
+        var magazijn = await CodesOfAsync(db, RoleId("magazijn"));
+        Assert.Contains(PermissionCodes.InventoryReorderManage, magazijn);
+        Assert.Contains(PermissionCodes.InventoryLoansView, magazijn);
+        Assert.DoesNotContain(PermissionCodes.InventoryManageThresholds, magazijn);
+        Assert.DoesNotContain(PermissionCodes.InventoryOverrideNegativeStock, magazijn);
+        Assert.DoesNotContain(PermissionCodes.TasksViewAll, magazijn);
+
+        // Management owns thresholds, the full task surface, bulk/portal messaging and escalations.
+        var management = await CodesOfAsync(db, RoleId("management"));
+        Assert.Contains(PermissionCodes.InventoryManageThresholds, management);
+        Assert.Contains(PermissionCodes.TasksViewAll, management);
+        Assert.Contains(PermissionCodes.TasksReopen, management);
+        Assert.Contains(PermissionCodes.MessagesSendBulk, management);
+        Assert.Contains(PermissionCodes.PortalMessagesSendBulk, management);
+        Assert.Contains(PermissionCodes.EscalationsManage, management);
+
+        // HR coordinates team tasks and bulk employee messages, but no stock thresholds and
+        // no tenant-wide task visibility.
+        var hr = await CodesOfAsync(db, RoleId("hr"));
+        Assert.Contains(PermissionCodes.TasksViewTeam, hr);
+        Assert.Contains(PermissionCodes.TasksAssign, hr);
+        Assert.Contains(PermissionCodes.MessagesSendBulk, hr);
+        Assert.DoesNotContain(PermissionCodes.TasksViewAll, hr);
+        Assert.DoesNotContain(PermissionCodes.InventoryManageThresholds, hr);
+
+        // Drivers stay personal-scope only; portal templates get nothing from this sprint.
+        var chauffeur = await CodesOfAsync(db, RoleId("chauffeur"));
+        Assert.DoesNotContain(PermissionCodes.TasksViewTeam, chauffeur);
+        Assert.DoesNotContain(PermissionCodes.MessagesSendBulk, chauffeur);
+        foreach (var portal in roles.Where(r => r.TemplateCode != null && r.TemplateCode.StartsWith("klantportaal")))
+        {
+            var codes = await CodesOfAsync(db, portal.Id);
+            Assert.DoesNotContain(PermissionCodes.TasksViewOwn, codes);
+            Assert.DoesNotContain(PermissionCodes.PortalMessagesSend, codes);
         }
     }
 
