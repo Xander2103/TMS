@@ -49,6 +49,25 @@ public class InternalMessagesController : ControllerBase
     public async Task<IActionResult> MarkRead(Guid id, CancellationToken cancellationToken) =>
         await _service.MarkReadAsync(id, cancellationToken) ? NoContent() : NotFound();
 
+    [HttpPost("{id:guid}/acknowledge")]
+    [Authorize]
+    public async Task<IActionResult> Acknowledge(Guid id, CancellationToken cancellationToken) =>
+        await _service.AcknowledgeAsync(id, cancellationToken) ? NoContent() : NotFound();
+
+    [HttpGet("{id:guid}/delivery-status")]
+    [RequirePermission(PermissionCodes.MessagesSend, PermissionCodes.MessagesViewDeliveryStatus)]
+    public async Task<ActionResult<MessageDeliveryStatusDto>> DeliveryStatus(Guid id, CancellationToken cancellationToken)
+    {
+        // Service scopes to own messages unless the caller holds messages.view_delivery_status.
+        var status = await _service.GetDeliveryStatusAsync(id, cancellationToken);
+        return status is null ? NotFound() : Ok(status);
+    }
+
+    [HttpPost("{id:guid}/cancel")]
+    [RequirePermission(PermissionCodes.MessagesSend, PermissionCodes.MessagesCancel)]
+    public async Task<IActionResult> Cancel(Guid id, CancellationToken cancellationToken) =>
+        await _service.CancelAsync(id, cancellationToken) ? NoContent() : NotFound();
+
     [HttpGet("recipients")]
     [RequirePermission(PermissionCodes.MessagesSend)]
     public async Task<ActionResult<IReadOnlyList<MessageRecipientOptionDto>>> Recipients(CancellationToken cancellationToken) =>

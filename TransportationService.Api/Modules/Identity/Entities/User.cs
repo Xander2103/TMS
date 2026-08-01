@@ -13,6 +13,12 @@ public class User
     public bool IsActive { get; set; } = true;
     public bool IsBlocked { get; set; }
 
+    /// <summary>
+    /// UI/e-mail language preference (nl/fr/en). Null = not chosen yet; display falls back to
+    /// the browser language (portal frontend) → customer default language → nl.
+    /// </summary>
+    public string? PreferredLanguageCode { get; set; }
+
     /// <summary>Forces a password change at the next login (temporary/admin-set credentials).</summary>
     public bool MustChangePassword { get; set; }
 

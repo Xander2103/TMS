@@ -15,8 +15,10 @@ public class InternalMessageConfiguration : IEntityTypeConfiguration<InternalMes
         builder.Property(m => m.Body).IsRequired().HasMaxLength(8000);
         builder.Property(m => m.RelatedEntityType).HasMaxLength(50);
         builder.Property(m => m.RelatedEntityId).HasMaxLength(50);
+        builder.Property(m => m.Priority).HasConversion<string>().HasMaxLength(20);
 
         builder.HasIndex(m => new { m.TenantId, m.SenderUserId });
+        builder.HasIndex(m => new { m.TenantId, m.VisibleFrom });
 
         builder.HasQueryFilter(m => !m.IsDeleted);
     }

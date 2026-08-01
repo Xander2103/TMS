@@ -273,6 +273,46 @@ export function getPortalMessagesUnreadCount(): Promise<{ count: number }> {
   return apiClient.getJson<{ count: number }>('/api/customer-portal/messages/unread-count')
 }
 
+// --- Portal-messages feed (staff-authored, multi-language; admin side lives in
+// features/portal-messages). Content arrives already resolved to the caller's language. ---
+
+export type PortalFeedPriority = 'Normal' | 'High' | 'Urgent'
+
+export type PortalFeedDisplayMode = 'Notification' | 'DashboardBanner' | 'BlockingAcknowledgement'
+
+/** Mirrors PortalMessageFeedItemDto (camelCase JSON). */
+export interface PortalFeedMessage {
+  id: string
+  title: string
+  body: string
+  language: string
+  priority: PortalFeedPriority
+  displayMode: PortalFeedDisplayMode
+  requiresAcknowledgement: boolean
+  relatedEntityType: 'order' | 'invoice' | null
+  relatedEntityId: string | null
+  publishedAt: string
+  expiresAt: string | null
+  readAt: string | null
+  acknowledgedAt: string | null
+}
+
+export function listPortalFeedMessages(): Promise<PortalFeedMessage[]> {
+  return apiClient.getJson<PortalFeedMessage[]>('/api/customer-portal/portal-messages')
+}
+
+export function getPortalFeedUnreadCount(): Promise<{ count: number }> {
+  return apiClient.getJson<{ count: number }>('/api/customer-portal/portal-messages/unread-count')
+}
+
+export function markPortalFeedMessageRead(id: string): Promise<void> {
+  return apiClient.postJson<void, Record<string, never>>(`/api/customer-portal/portal-messages/${id}/read`, {})
+}
+
+export function acknowledgePortalFeedMessage(id: string): Promise<void> {
+  return apiClient.postJson<void, Record<string, never>>(`/api/customer-portal/portal-messages/${id}/acknowledge`, {})
+}
+
 // --- Invoices ---
 
 export interface PortalInvoiceListItem {

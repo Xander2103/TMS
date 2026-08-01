@@ -42,6 +42,55 @@ public class CustomerMessageReadConfiguration : IEntityTypeConfiguration<Custome
     }
 }
 
+public class PortalMessageConfiguration : IEntityTypeConfiguration<PortalMessage>
+{
+    public void Configure(EntityTypeBuilder<PortalMessage> builder)
+    {
+        builder.ToTable("portal_messages");
+        builder.HasKey(m => m.Id);
+
+        builder.Property(m => m.TitleNl).IsRequired().HasMaxLength(200);
+        builder.Property(m => m.TitleFr).HasMaxLength(200);
+        builder.Property(m => m.TitleEn).HasMaxLength(200);
+        builder.Property(m => m.BodyNl).IsRequired().HasMaxLength(8000);
+        builder.Property(m => m.BodyFr).HasMaxLength(8000);
+        builder.Property(m => m.BodyEn).HasMaxLength(8000);
+        builder.Property(m => m.Priority).HasConversion<string>().HasMaxLength(20);
+        builder.Property(m => m.DisplayMode).HasConversion<string>().HasMaxLength(30);
+        builder.Property(m => m.RelatedEntityType).HasMaxLength(30);
+
+        builder.HasIndex(m => new { m.TenantId, m.VisibleFrom, m.ExpiresAt });
+        builder.HasQueryFilter(m => !m.IsDeleted);
+    }
+}
+
+public class PortalMessageRecipientConfiguration : IEntityTypeConfiguration<PortalMessageRecipient>
+{
+    public void Configure(EntityTypeBuilder<PortalMessageRecipient> builder)
+    {
+        builder.ToTable("portal_message_recipients");
+        builder.HasKey(r => r.Id);
+
+        builder.HasIndex(r => new { r.TenantId, r.CustomerId, r.PortalMessageId });
+        builder.HasOne<PortalMessage>().WithMany()
+            .HasForeignKey(r => r.PortalMessageId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class PortalMessageReceiptConfiguration : IEntityTypeConfiguration<PortalMessageReceipt>
+{
+    public void Configure(EntityTypeBuilder<PortalMessageReceipt> builder)
+    {
+        builder.ToTable("portal_message_receipts");
+        builder.HasKey(r => r.Id);
+
+        builder.HasIndex(r => new { r.PortalMessageId, r.UserId }).IsUnique();
+        builder.HasIndex(r => new { r.TenantId, r.UserId, r.ReadAt });
+        builder.HasOne<PortalMessage>().WithMany()
+            .HasForeignKey(r => r.PortalMessageId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public class PortalAnnouncementConfiguration : IEntityTypeConfiguration<PortalAnnouncement>
 {
     public void Configure(EntityTypeBuilder<PortalAnnouncement> builder)

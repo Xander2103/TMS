@@ -21,9 +21,12 @@ vi.mock('../../../auth/authContextValue', () => ({
 
 const unreadCount = vi.hoisted(() => ({ value: 0 }))
 
+const unreadNotices = vi.hoisted(() => ({ value: 0 }))
+
 vi.mock('../../api/customerPortalApi', () => ({
   getPortalContext: () => Promise.resolve({ customerId: 'cust-1', customerName: 'Haven BV' }),
   getPortalMessagesUnreadCount: () => Promise.resolve({ count: unreadCount.value }),
+  getPortalFeedUnreadCount: () => Promise.resolve({ count: unreadNotices.value }),
 }))
 
 function renderLayout() {
@@ -41,6 +44,7 @@ function renderLayout() {
 describe('CustomerPortalLayout', () => {
   beforeEach(() => {
     unreadCount.value = 0
+    unreadNotices.value = 0
   })
 
   it('always shows Dashboard and Opdrachten, and hides every optional nav item without its permission', async () => {

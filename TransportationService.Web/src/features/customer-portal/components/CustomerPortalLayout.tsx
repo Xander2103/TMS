@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../auth/authContextValue'
-import { getPortalContext, getPortalMessagesUnreadCount } from '../api/customerPortalApi'
+import { getPortalContext, getPortalFeedUnreadCount, getPortalMessagesUnreadCount } from '../api/customerPortalApi'
 import './customer-portal-layout.css'
 
 interface NavItem {
   label: string
   to: string
   permission?: string
-  badgeKey?: 'messages'
+  badgeKey?: 'messages' | 'notices'
 }
 
 const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', to: '/klantportaal/dashboard' },
+  { label: 'Mededelingen', to: '/klantportaal/mededelingen', permission: 'customer_portal.view', badgeKey: 'notices' },
   { label: 'Opdrachten', to: '/klantportaal', permission: 'customer_portal.view' },
   { label: 'Documenten', to: '/klantportaal/documenten', permission: 'customer_portal.view_documents' },
   { label: 'Facturen', to: '/klantportaal/facturen', permission: 'customer_portal.view_invoices' },
@@ -31,7 +32,9 @@ export function CustomerPortalLayout() {
   const { user, logout, hasPermission } = useAuth()
   const [companyName, setCompanyName] = useState<string | null>(null)
   const [unreadMessages, setUnreadMessages] = useState(0)
+  const [unreadNotices, setUnreadNotices] = useState(0)
   const canSeeMessages = hasPermission('customer_portal.messages')
+  const canSeeNotices = hasPermission('customer_portal.view')
 
   useEffect(() => {
     let mounted = true
@@ -67,6 +70,25 @@ export function CustomerPortalLayout() {
     }
   }, [canSeeMessages])
 
+  // Same poll idiom for the staff-authored "Mededelingen" feed badge.
+  useEffect(() => {
+    if (!canSeeNotices) return
+    let mounted = true
+    const load = () => {
+      getPortalFeedUnreadCount()
+        .then((data) => {
+          if (mounted) setUnreadNotices(data.count)
+        })
+        .catch(() => {})
+    }
+    load()
+    const timer = window.setInterval(load, UNREAD_POLL_MS)
+    return () => {
+      mounted = false
+      window.clearInterval(timer)
+    }
+  }, [canSeeNotices])
+
   return (
     <div className="cpl-shell">
       <header className="cpl-topbar">
@@ -89,6 +111,9 @@ export function CustomerPortalLayout() {
             {item.label}
             {item.badgeKey === 'messages' && unreadMessages > 0 && (
               <span className="cpl-nav-badge">{unreadMessages}</span>
+            )}
+            {item.badgeKey === 'notices' && unreadNotices > 0 && (
+              <span className="cpl-nav-badge">{unreadNotices}</span>
             )}
           </NavLink>
         ))}

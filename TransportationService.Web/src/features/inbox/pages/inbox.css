@@ -37,6 +37,57 @@
   white-space: pre-wrap;
 }
 
+.inbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inbox-row .inbox-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.inbox-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.inbox-cancelled .inbox-item {
+  opacity: 0.55;
+}
+
+.inbox-ack-note {
+  color: var(--text);
+  font-size: 13.5px;
+  font-style: italic;
+}
+
+.inbox-target-note {
+  color: var(--text);
+  font-size: 13.5px;
+  margin: 0 0 12px;
+}
+
+.inbox-status-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.inbox-status-table th,
+.inbox-status-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.inbox-email-failure {
+  color: var(--text);
+  font-style: italic;
+}
+
 .inbox-recipients {
   max-height: 180px;
   overflow-y: auto;

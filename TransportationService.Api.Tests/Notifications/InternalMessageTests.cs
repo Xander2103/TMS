@@ -22,7 +22,8 @@ public class InternalMessageTests
             var clock = new TestClock(Now);
             return new InternalMessageService(Db.Context, tenant, user,
                 new NotificationService(Db.Context, tenant, user, clock),
-                new AuditService(Db.Context, tenant, user), clock);
+                new AuditService(Db.Context, tenant, user), clock,
+                new InventoryTestFactory.AllowAllPermissionService());
         }
     }
 

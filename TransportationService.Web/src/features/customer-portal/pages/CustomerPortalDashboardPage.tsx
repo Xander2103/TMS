@@ -2,12 +2,19 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
+import { Button } from '../../../components/ui/Button'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { useAuth } from '../../auth/authContextValue'
 import { euro } from '../../invoices/types'
 import { INVOICE_STATUS_LABELS, INVOICE_STATUS_TONE, type InvoiceStatus } from '../../invoices/types'
-import { getPortalDashboard, type PortalDashboard } from '../api/customerPortalApi'
+import {
+  acknowledgePortalFeedMessage,
+  getPortalDashboard,
+  listPortalFeedMessages,
+  type PortalDashboard,
+  type PortalFeedMessage,
+} from '../api/customerPortalApi'
 import './customer-portal-pages.css'
 
 function formatDateTime(iso: string): string {
@@ -20,7 +27,9 @@ export function CustomerPortalDashboardPage() {
   const { user, hasPermission } = useAuth()
   const navigate = useNavigate()
   const [dashboard, setDashboard] = useState<PortalDashboard | null>(null)
+  const [feedMessages, setFeedMessages] = useState<PortalFeedMessage[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [ackBusy, setAckBusy] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -31,16 +40,42 @@ export function CustomerPortalDashboardPage() {
       .catch(() => {
         if (mounted) setError('Het dashboard kon niet worden geladen.')
       })
+    // Staff-authored portal messages drive the dashboard banners and the blocking overlay;
+    // a failure here must never take the dashboard down.
+    listPortalFeedMessages()
+      .then((rows) => {
+        if (mounted) setFeedMessages(rows)
+      })
+      .catch(() => {})
     return () => {
       mounted = false
     }
   }, [])
 
+  async function handleBlockingAcknowledge(message: PortalFeedMessage) {
+    setAckBusy(true)
+    try {
+      await acknowledgePortalFeedMessage(message.id)
+      const acknowledgedAt = new Date().toISOString()
+      setFeedMessages((current) => current.map((m) => (m.id === message.id ? { ...m, acknowledgedAt } : m)))
+    } catch {
+      // Keep the overlay: the confirmation did not reach the server.
+    } finally {
+      setAckBusy(false)
+    }
+  }
+
   if (error) return <ErrorState message={error} />
   if (!dashboard) return <LoadingState message="Dashboard laden..." />
 
+  const bannerMessages = feedMessages.filter((m) => m.displayMode === 'DashboardBanner')
+  // Only the dashboard is covered; the portal navigation around it stays usable.
+  const blockingMessage = feedMessages.find(
+    (m) => m.displayMode === 'BlockingAcknowledgement' && m.acknowledgedAt === null,
+  )
+
   return (
-    <div>
+    <div className="cpp-dashboard">
       <PageHeader title={`Welkom${user?.firstName ? `, ${user.firstName}` : ''}`} subtitle="Klantportaal" />
 
       {dashboard.announcements.map((a) => (
@@ -49,6 +84,25 @@ export function CustomerPortalDashboardPage() {
           <p>{a.body}</p>
         </div>
       ))}
+
+      {bannerMessages.map((m) => (
+        <div key={m.id} className={m.priority === 'Urgent' ? 'cpp-announcement cpp-announcement-urgent' : 'cpp-announcement'}>
+          <h3>{m.title}</h3>
+          <p>{m.body}</p>
+        </div>
+      ))}
+
+      {blockingMessage && (
+        <div className="cpp-blocking-overlay" role="alertdialog" aria-modal="true" aria-label={blockingMessage.title}>
+          <div className="cpp-blocking-card">
+            <h2>{blockingMessage.title}</h2>
+            <p>{blockingMessage.body}</p>
+            <Button onClick={() => void handleBlockingAcknowledge(blockingMessage)} disabled={ackBusy}>
+              {ackBusy ? 'Bevestigen…' : 'Ik bevestig'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <div className="cpp-cards">
         <button type="button" className="cpp-card" onClick={() => navigate('/klantportaal')}>

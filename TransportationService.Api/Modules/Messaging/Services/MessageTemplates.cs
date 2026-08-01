@@ -101,6 +101,13 @@ public static class BuiltInMessageTemplates
             "Nieuw bericht van {{companyName}}",
             "Beste {{customerName}},\n\nU heeft een nieuw bericht ontvangen via het klantportaal:\n\n\"{{preview}}\"\n\n"
             + "Log in op het klantportaal om te reageren.\n\nMet vriendelijke groeten,\n{{companyName}}"),
+        [MessageKinds.EmployeeMessageReceived] = new(
+            "Nieuw intern bericht: {{subject}}",
+            "Beste {{employeeName}},\n\nJe hebt een nieuw intern bericht van {{senderName}}:\n\n\"{{preview}}\"\n\n"
+            + "Meld je aan om het volledige bericht te lezen.\n\n{{companyName}}"),
+        [MessageKinds.PortalMessagePublished] = new(
+            "{{title}}",
+            "Beste {{recipientName}},\n\n{{body}}\n\nMet vriendelijke groeten,\n{{companyName}}"),
         [MessageKinds.PortalUserInvited] = new(
             "Uitnodiging voor het klantportaal van {{companyName}}",
             "Beste {{firstName}},\n\nU bent uitgenodigd voor het klantportaal van {{companyName}}. "

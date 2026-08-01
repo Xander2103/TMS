@@ -86,6 +86,13 @@ public static class MessageKinds
     /// <summary>Staff replied to a customer via the portal messages thread — e-mail to the customer.</summary>
     public const string CustomerMessageReply = "customer_message_reply";
 
+    // Inventory-tasks-notifications sprint: broadcast messages (direct queue calls, like
+    // PortalUserInvited — the recipient is intrinsic, not resolved via the event service).
+    /// <summary>E-mail copy of an internal employee message.</summary>
+    public const string EmployeeMessageReceived = "employee_message_received";
+    /// <summary>E-mail copy of a published customer-portal message, in the recipient's language.</summary>
+    public const string PortalMessagePublished = "portal_message_published";
+
     public static readonly IReadOnlyList<string> All =
     [
         OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate, Delay, DeliveryCompleted,
@@ -99,6 +106,7 @@ public static class MessageKinds
         LeaveRequested, LeaveDecided, EmployeeNotePinned,
         FleetMaintenanceDue, FleetInspectionDue, FleetDocumentExpiry, FleetDamageCreated,
         PortalUserInvited, CustomerMessageReceived, CustomerMessageReply,
+        EmployeeMessageReceived, PortalMessagePublished,
     ];
 
     /// <summary>
