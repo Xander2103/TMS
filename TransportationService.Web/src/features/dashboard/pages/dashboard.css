@@ -44,6 +44,20 @@
   color: var(--text);
 }
 
+.db-kpi-section {
+  max-width: 1200px;
+  margin-bottom: 24px;
+}
+
+.db-kpi-section h2 {
+  font-size: 16px;
+  margin: 0 0 10px;
+}
+
+.db-kpi-section .db-kpis {
+  margin-bottom: 0;
+}
+
 .db-panel-alert {
   border-color: rgba(220, 38, 38, 0.5);
   max-width: 1200px;

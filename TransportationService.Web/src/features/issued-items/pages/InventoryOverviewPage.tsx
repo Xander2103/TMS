@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { CircleMinus, OctagonAlert, PackageX, TriangleAlert, type LucideIcon } from 'lucide-react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
@@ -26,11 +26,16 @@ function formatLevel(value: number | null): string {
   return value != null ? String(value) : '—'
 }
 
-/** Voorraadoverzicht over alle sjablonen/varianten met statusfilters en drempelkolommen. */
+/** Voorraadoverzicht over alle sjablonen/varianten met statusfilters en drempelkolommen.
+ * `?status=` (bijv. vanaf de dashboardtegels) activeert het statusfilter vooraf. */
 export function InventoryOverviewPage() {
+  const [searchParams] = useSearchParams()
   const [rows, setRows] = useState<InventoryOverviewRow[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [statusFilter, setStatusFilter] = useState<InventoryStatus | ''>('')
+  const [statusFilter, setStatusFilter] = useState<InventoryStatus | ''>(() => {
+    const requested = searchParams.get('status')
+    return INVENTORY_STATUSES.includes(requested as InventoryStatus) ? (requested as InventoryStatus) : ''
+  })
   const [search, setSearch] = useState('')
 
   useEffect(() => {

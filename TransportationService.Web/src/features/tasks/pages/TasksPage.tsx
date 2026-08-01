@@ -25,7 +25,8 @@ const PAGE_SIZE = 25
 
 /**
  * Central task list. Visibility is server-side (own / team / all); `?taskId=` deep-links a
- * detail (notifications link this way) and `?mine=1` pre-activates the own-tasks filter.
+ * detail (notifications link this way) and `?mine=1`, `?overdue=1`, `?review=1` and
+ * `?status=` (dashboardtegels) pre-activate the matching filters.
  */
 export function TasksPage() {
   const { hasPermission } = useAuth()
@@ -34,13 +35,16 @@ export function TasksPage() {
   const { options: categories } = useLookupOptions('/api/task-categories')
 
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<'' | TaskStatus>('')
+  const [status, setStatus] = useState<'' | TaskStatus>(() => {
+    const requested = searchParams.get('status')
+    return requested && requested in TASK_STATUS_LABELS ? (requested as TaskStatus) : ''
+  })
   const [priority, setPriority] = useState<'' | TaskPriority>('')
   const [categoryId, setCategoryId] = useState('')
   const [mine, setMine] = useState(searchParams.get('mine') === '1')
   const [createdByMe, setCreatedByMe] = useState(false)
-  const [overdueOnly, setOverdueOnly] = useState(false)
-  const [waitingForReviewOnly, setWaitingForReviewOnly] = useState(false)
+  const [overdueOnly, setOverdueOnly] = useState(searchParams.get('overdue') === '1')
+  const [waitingForReviewOnly, setWaitingForReviewOnly] = useState(searchParams.get('review') === '1')
   const [page, setPage] = useState(1)
 
   const [tasks, setTasks] = useState<EmployeeTask[]>([])

@@ -37,9 +37,9 @@ function makeRow(overrides: Partial<InventoryOverviewRow>): InventoryOverviewRow
   }
 }
 
-function renderPage() {
+function renderPage(initialEntry = '/inventory') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <InventoryOverviewPage />
     </MemoryRouter>,
   )
@@ -105,6 +105,27 @@ describe('InventoryOverviewPage', () => {
     await userEvent.click(negativeTile)
     expect(negativeTile).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByText('Handschoenen')).toBeInTheDocument()
+  })
+
+  it('pre-activates the status filter from the ?status= query parameter', async () => {
+    overview.value = [
+      makeRow({ templateId: 't-1', name: 'Handschoenen', status: 'Normal' }),
+      makeRow({ templateId: 't-2', name: 'Veiligheidsbril', status: 'LowStock' }),
+    ]
+    renderPage('/inventory?status=LowStock')
+
+    await waitFor(() => expect(screen.getByText('Veiligheidsbril')).toBeInTheDocument())
+    expect(screen.queryByText('Handschoenen')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Statusfilter')).toHaveValue('LowStock')
+    expect(screen.getByRole('button', { name: /Lage voorraad/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('ignores an unknown ?status= value', async () => {
+    overview.value = [makeRow({ templateId: 't-1', name: 'Handschoenen', status: 'Normal' })]
+    renderPage('/inventory?status=Onzin')
+
+    await waitFor(() => expect(screen.getByText('Handschoenen')).toBeInTheDocument())
+    expect(screen.getByLabelText('Statusfilter')).toHaveValue('')
   })
 
   it('searches by article name client-side', async () => {

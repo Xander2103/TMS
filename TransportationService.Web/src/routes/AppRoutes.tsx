@@ -115,6 +115,7 @@ const InventoryOverviewPage = lazyPage(() => import('../features/issued-items/pa
 const LeaveSettingsPage = lazyPage(() => import('../features/leave-balance/pages/LeaveSettingsPage'), 'LeaveSettingsPage')
 const AccountingSettingsPage = lazyPage(() => import('../features/accounting/pages/AccountingSettingsPage'), 'AccountingSettingsPage')
 const NotificationAdminPage = lazyPage(() => import('../features/notification-admin/pages/NotificationAdminPage'), 'NotificationAdminPage')
+const EscalationSettingsPage = lazyPage(() => import('../features/escalations/pages/EscalationSettingsPage'), 'EscalationSettingsPage')
 const UsersPage = lazyPage(() => import('../features/users/pages/UsersPage'), 'UsersPage')
 const NewUserPage = lazyPage(() => import('../features/users/pages/NewUserPage'), 'NewUserPage')
 const UserDetailPage = lazyPage(() => import('../features/users/pages/UserDetailPage'), 'UserDetailPage')
@@ -274,6 +275,7 @@ const router = createBrowserRouter(
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
           <Route path="/settings/accounting" element={<AccountingSettingsPage />} />
           <Route path="/settings/notifications" element={<NotificationAdminPage />} />
+          <Route path="/settings/escalations" element={<EscalationSettingsPage />} />
           <Route path="/settings/portal-announcements" element={<PortalAnnouncementsSettingsPage />} />
           <Route path="/settings/portal-messages" element={<PortalMessagesPage />} />
           <Route path="*" element={<NotFoundPage />} />

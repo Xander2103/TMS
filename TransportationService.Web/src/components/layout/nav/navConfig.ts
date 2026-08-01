@@ -182,6 +182,7 @@ export function getNavModules(): NavModule[] {
         { label: 'Berichten', to: '/inbox' },
         { label: 'Meldingen', to: '/notifications', badge: 'notifications' },
         { label: 'Meldingen en e-mails', to: '/settings/notifications', permissions: ['notification_rules.view'] },
+        { label: 'Escalatieregels', to: '/settings/escalations', permissions: ['escalations.manage'] },
         { label: 'EDI', to: '/edi', permissions: ['edi.view', 'edi.manage'] },
         { label: 'Integraties', to: '/integrations', permissions: ['integrations.manage'] },
       ],

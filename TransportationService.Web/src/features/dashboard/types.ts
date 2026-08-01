@@ -22,6 +22,28 @@ export interface PinnedEmployeeNote {
   authorName: string | null
 }
 
+/** Only populated for a caller holding inventory.view/manage; null otherwise. */
+export interface DashboardInventory {
+  lowStock: number
+  criticalStock: number
+  outOfStock: number
+  negativeStock: number
+  openReorderProposals: number
+  overdueReturns: number
+}
+
+/** Only populated for a caller with task permissions; team fields need tasks.view_team/view_all. */
+export interface DashboardTasks {
+  myOpen: number
+  myDueToday: number
+  myOverdue: number
+  myToAcknowledge: number
+  teamOpen: number | null
+  teamOverdue: number | null
+  teamBlocked: number | null
+  teamWaitingReview: number | null
+}
+
 export interface Dashboard {
   ordersOpenCount: number
   ordersInExecutionCount: number
@@ -44,6 +66,9 @@ export interface Dashboard {
   missingPodCount: number
   failedScanCount: number
   overdueMaintenanceCount: number
+  inventory: DashboardInventory | null
+  tasks: DashboardTasks | null
+  unreadInternalMessages: number
   recentOrders: RecentOrder[]
   tripsToday: TripListItem[]
   pinnedEmployeeNotes: PinnedEmployeeNote[]

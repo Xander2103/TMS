@@ -79,4 +79,24 @@ describe('TasksPage', () => {
     expect(screen.getByLabelText('Mijn taken')).toBeChecked()
     await waitFor(() => expect(api.listTasks).toHaveBeenCalledWith(expect.objectContaining({ mine: true })))
   })
+
+  it('pre-activates overdue, review and status filters from the query string', async () => {
+    renderPage('/tasks?mine=1&overdue=1&review=1&status=Blocked')
+    await screen.findByText('Rijbewijs controleren')
+
+    expect(screen.getByLabelText('Achterstallig')).toBeChecked()
+    expect(screen.getByLabelText('Wacht op controle')).toBeChecked()
+    expect(screen.getByLabelText('Status')).toHaveValue('Blocked')
+    await waitFor(() =>
+      expect(api.listTasks).toHaveBeenCalledWith(
+        expect.objectContaining({ mine: true, overdueOnly: true, waitingForReviewOnly: true, status: 'Blocked' }),
+      ),
+    )
+  })
+
+  it('ignores an unknown ?status= value', async () => {
+    renderPage('/tasks?status=Onzin')
+    await screen.findByText('Rijbewijs controleren')
+    expect(screen.getByLabelText('Status')).toHaveValue('')
+  })
 })

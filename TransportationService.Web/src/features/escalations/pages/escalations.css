@@ -1,0 +1,15 @@
+.escalations-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.escalations-hours-input {
+  width: 90px;
+}
+
+.escalations-permission-select {
+  max-width: 340px;
+  width: 100%;
+}

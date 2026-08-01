@@ -22,6 +22,26 @@ function formatPinnedAt(iso: string): string {
   return date.toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
 }
 
+/** One clickable KPI tile-grid, reused by the main block and the Voorraad/Taken sections. */
+function KpiGrid({ kpis, onNavigate }: { kpis: Kpi[]; onNavigate: (to: string) => void }) {
+  return (
+    <div className="db-kpis">
+      {kpis.map((kpi) => (
+        <button
+          key={kpi.label}
+          type="button"
+          className={kpi.alert ? 'db-kpi db-kpi-alert' : 'db-kpi'}
+          onClick={() => onNavigate(kpi.to)}
+        >
+          <span className="db-kpi-label">{kpi.label}</span>
+          <span className="db-kpi-value">{kpi.value}</span>
+          {kpi.hint && <span className="db-kpi-hint">{kpi.hint}</span>}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function DashboardPage() {
   const navigate = useNavigate()
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
@@ -138,21 +158,88 @@ export function DashboardPage() {
       to: '/fleet',
       alert: dashboard.overdueMaintenanceCount > 0,
     },
+    {
+      label: 'Nieuwe berichten',
+      value: String(dashboard.unreadInternalMessages),
+      hint: 'ongelezen interne berichten',
+      to: '/inbox',
+    },
   ]
+
+  const inventory = dashboard.inventory
+  const inventoryKpis: Kpi[] = inventory
+    ? [
+        { label: 'Lage voorraad', value: String(inventory.lowStock), to: '/inventory?status=LowStock' },
+        {
+          label: 'Kritieke voorraad',
+          value: String(inventory.criticalStock),
+          to: '/inventory?status=CriticalStock',
+          alert: inventory.criticalStock > 0,
+        },
+        { label: 'Niet op voorraad', value: String(inventory.outOfStock), to: '/inventory?status=OutOfStock' },
+        {
+          label: 'Negatieve voorraad',
+          value: String(inventory.negativeStock),
+          to: '/inventory?status=NegativeStock',
+          alert: inventory.negativeStock > 0,
+        },
+        { label: 'Open bestelvoorstellen', value: String(inventory.openReorderProposals), to: '/inventory' },
+        {
+          label: 'Achterstallige retouren',
+          value: String(inventory.overdueReturns),
+          to: '/inventory',
+          alert: inventory.overdueReturns > 0,
+        },
+      ]
+    : []
+
+  const tasks = dashboard.tasks
+  const taskKpis: Kpi[] = tasks
+    ? [
+        { label: 'Mijn open taken', value: String(tasks.myOpen), to: '/tasks?mine=1' },
+        { label: 'Vandaag te doen', value: String(tasks.myDueToday), to: '/tasks?mine=1' },
+        {
+          label: 'Achterstallig',
+          value: String(tasks.myOverdue),
+          to: '/tasks?mine=1&overdue=1',
+          alert: tasks.myOverdue > 0,
+        },
+        { label: 'Te bevestigen berichten', value: String(tasks.myToAcknowledge), to: '/inbox' },
+        ...(tasks.teamOpen != null
+          ? ([
+              { label: 'Open teamtaken', value: String(tasks.teamOpen), to: '/tasks' },
+              {
+                label: 'Team achterstallig',
+                value: String(tasks.teamOverdue ?? 0),
+                to: '/tasks?overdue=1',
+                alert: (tasks.teamOverdue ?? 0) > 0,
+              },
+              { label: 'Geblokkeerd', value: String(tasks.teamBlocked ?? 0), to: '/tasks?status=Blocked' },
+              { label: 'Wacht op controle', value: String(tasks.teamWaitingReview ?? 0), to: '/tasks?review=1' },
+            ] satisfies Kpi[])
+          : []),
+      ]
+    : []
 
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Overzicht van vandaag en deze maand." />
 
-      <div className="db-kpis">
-        {kpis.map((kpi) => (
-          <button key={kpi.label} type="button" className={kpi.alert ? 'db-kpi db-kpi-alert' : 'db-kpi'} onClick={() => navigate(kpi.to)}>
-            <span className="db-kpi-label">{kpi.label}</span>
-            <span className="db-kpi-value">{kpi.value}</span>
-            {kpi.hint && <span className="db-kpi-hint">{kpi.hint}</span>}
-          </button>
-        ))}
-      </div>
+      <KpiGrid kpis={kpis} onNavigate={navigate} />
+
+      {inventoryKpis.length > 0 && (
+        <section className="db-kpi-section" aria-label="Voorraad">
+          <h2>Voorraad</h2>
+          <KpiGrid kpis={inventoryKpis} onNavigate={navigate} />
+        </section>
+      )}
+
+      {taskKpis.length > 0 && (
+        <section className="db-kpi-section" aria-label="Taken">
+          <h2>Taken</h2>
+          <KpiGrid kpis={taskKpis} onNavigate={navigate} />
+        </section>
+      )}
 
       {dashboard.pinnedEmployeeNotes.length > 0 && (
         <section className="db-panel db-panel-alert" aria-label="Aandachtspunten personeel">
