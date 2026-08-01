@@ -179,6 +179,16 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Tasks.Services.ITas
     TransportationService.Api.Modules.Tasks.Services.TaskTemplateService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Tasks.Services.ITaskAttachmentService,
     TransportationService.Api.Modules.Tasks.Services.TaskAttachmentService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Notifications.Services.IEscalationPolicyService,
+    TransportationService.Api.Modules.Notifications.Services.EscalationPolicyService>();
+
+// Sprint sweeps (inventory status/returns/escalations, tasks/recurrence, notification retention).
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.InventorySweepWorker>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Tasks.Services.TaskSweepWorker>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Notifications.Services.NotificationMaintenanceWorker>();
+builder.Services.AddHostedService<TransportationService.Api.Modules.Employees.Services.InventorySweepHostedService>();
+builder.Services.AddHostedService<TransportationService.Api.Modules.Tasks.Services.TaskSweepHostedService>();
+builder.Services.AddHostedService<TransportationService.Api.Modules.Notifications.Services.NotificationMaintenanceHostedService>();
 
 // GDPR (H13): configurable retention + daily purge sweep, and data-subject export/anonymisation.
 builder.Services.Configure<TransportationService.Api.Modules.Gdpr.RetentionOptions>(

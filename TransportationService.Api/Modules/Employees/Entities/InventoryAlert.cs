@@ -40,5 +40,10 @@ public class InventoryAlert : AuditableTenantEntity
     public int? MinimumSnapshot { get; set; }
 
     public DateTime LastSeenAt { get; set; }
+
+    /// <summary>Start of the CURRENT active episode (reset on re-activation); escalation
+    /// delays are measured from here, never from the row's first creation.</summary>
+    public DateTime ActivatedAt { get; set; }
+
     public DateTime? ResolvedAt { get; set; }
 }

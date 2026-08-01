@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using TransportationService.Api.Common;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.CustomerPortal.Dtos;
@@ -19,6 +20,8 @@ namespace TransportationService.Api.Modules.CustomerPortal.Services;
 public interface ICustomerPortalService
 {
     Task<PortalResult<PortalContextDto>> GetContextAsync(CancellationToken cancellationToken);
+
+    Task<PortalResult<PortalContextDto>> SetLanguageAsync(string language, CancellationToken cancellationToken);
 
     Task<PortalResult<IReadOnlyList<PortalOrderListItemDto>>> ListMyOrdersAsync(CancellationToken cancellationToken);
 
@@ -89,9 +92,47 @@ public class CustomerPortalService : ICustomerPortalService
     public async Task<PortalResult<PortalContextDto>> GetContextAsync(CancellationToken cancellationToken)
     {
         var customer = await MyCustomerAsync(cancellationToken);
-        return customer is null
-            ? PortalResult<PortalContextDto>.NoCustomerLink()
-            : PortalResult<PortalContextDto>.Success(new PortalContextDto(customer.Value.CustomerId, customer.Value.CustomerName));
+        if (customer is null)
+        {
+            return PortalResult<PortalContextDto>.NoCustomerLink();
+        }
+
+        var preferredLanguage = await _dbContext.Users.AsNoTracking()
+            .Where(u => u.Id == _currentUserContext.CurrentUserId && u.TenantId == _tenantContext.TenantId)
+            .Select(u => u.PreferredLanguageCode)
+            .FirstOrDefaultAsync(cancellationToken);
+        return PortalResult<PortalContextDto>.Success(
+            new PortalContextDto(customer.Value.CustomerId, customer.Value.CustomerName, preferredLanguage));
+    }
+
+    /// <summary>Persists the portal user's UI/e-mail language (nl/fr/en); audited.</summary>
+    public async Task<PortalResult<PortalContextDto>> SetLanguageAsync(string language, CancellationToken cancellationToken)
+    {
+        var normalized = (language ?? "").Trim().ToLowerInvariant();
+        if (normalized is not ("nl" or "fr" or "en"))
+        {
+            throw new DomainValidationException("language", "Kies nl, fr of en.");
+        }
+
+        var customer = await MyCustomerAsync(cancellationToken);
+        if (customer is null || _currentUserContext.CurrentUserId is not { } userId)
+        {
+            return PortalResult<PortalContextDto>.NoCustomerLink();
+        }
+
+        var user = await _dbContext.Users
+            .FirstAsync(u => u.Id == userId && u.TenantId == _tenantContext.TenantId, cancellationToken);
+        var old = user.PreferredLanguageCode;
+        if (old != normalized)
+        {
+            user.PreferredLanguageCode = normalized;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await _auditService.RecordAsync("User", userId.ToString(), "LanguageChanged",
+                new { Language = old }, new { Language = normalized }, cancellationToken);
+        }
+
+        return PortalResult<PortalContextDto>.Success(
+            new PortalContextDto(customer.Value.CustomerId, customer.Value.CustomerName, normalized));
     }
 
     public async Task<PortalResult<IReadOnlyList<PortalOrderListItemDto>>> ListMyOrdersAsync(CancellationToken cancellationToken)

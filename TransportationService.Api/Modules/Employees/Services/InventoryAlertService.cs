@@ -65,12 +65,16 @@ public class InventoryAlertService : IInventoryAlertService
                 alert.LastSeenAt = now;
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 await _notificationService.ResolveByDedupeKeyAsync(dedupeKey, cancellationToken);
+                // Re-arm escalations for the next episode too.
+                await _notificationService.ResolveByDedupeKeyAsync($"escalation:negative_stock:{alert.Id}", cancellationToken);
+                await _notificationService.ResolveByDedupeKeyAsync($"escalation:critical_stock:{alert.Id}", cancellationToken);
             }
 
             return;
         }
 
         var isTransition = alert is null || alert.Status == InventoryAlertStatus.Resolved || alert.Kind != status;
+        var isReactivation = alert is null || alert.Status == InventoryAlertStatus.Resolved;
         var previousKind = alert?.Status == InventoryAlertStatus.Active ? alert.Kind : (InventoryStatus?)null;
 
         var current = variant?.CurrentStock ?? template.CurrentStock;
@@ -89,6 +93,11 @@ public class InventoryAlertService : IInventoryAlertService
 
         alert.Kind = status;
         alert.Status = InventoryAlertStatus.Active;
+        if (isReactivation)
+        {
+            alert.ActivatedAt = now;
+        }
+
         alert.ResolvedAt = null;
         alert.StockSnapshot = current;
         alert.WarningSnapshot = warning;

@@ -34,6 +34,19 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
     }
 }
 
+public class EscalationPolicyConfiguration : IEntityTypeConfiguration<EscalationPolicy>
+{
+    public void Configure(EntityTypeBuilder<EscalationPolicy> builder)
+    {
+        builder.ToTable("escalation_policies");
+        builder.HasKey(p => p.Id);
+        builder.Property(p => p.Kind).HasConversion<string>().HasMaxLength(40);
+        builder.Property(p => p.TargetPermissionCode).IsRequired().HasMaxLength(100);
+        builder.HasIndex(p => new { p.TenantId, p.Kind }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        builder.HasQueryFilter(p => !p.IsDeleted);
+    }
+}
+
 public class NotificationPreferenceConfiguration : IEntityTypeConfiguration<NotificationPreference>
 {
     public void Configure(EntityTypeBuilder<NotificationPreference> builder)

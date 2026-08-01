@@ -199,7 +199,174 @@ public class DashboardService : IDashboardService
             overdueMaintenanceCount,
             recentOrders,
             tripsToday,
-            pinnedEmployeeNotes);
+            pinnedEmployeeNotes,
+            await GetInventorySectionAsync(tenantId, today, cancellationToken),
+            await GetTaskSectionAsync(tenantId, cancellationToken),
+            await GetUnreadInternalMessagesAsync(tenantId, cancellationToken));
+    }
+
+    /// <summary>Inventory tiles, only for holders of inventory.view/manage (frontend also gates).</summary>
+    private async Task<InventoryDashboardSectionDto?> GetInventorySectionAsync(
+        Guid tenantId, DateOnly today, CancellationToken cancellationToken)
+    {
+        if (_currentUser.CurrentUserId is not { } userId
+            || (!await _authorization.UserHasPermissionAsync(userId, PermissionCodes.InventoryView, cancellationToken)
+                && !await _authorization.UserHasPermissionAsync(userId, PermissionCodes.InventoryManage, cancellationToken)))
+        {
+            return null;
+        }
+
+        var templates = await _dbContext.IssuedItemTemplates.AsNoTracking()
+            .Where(t => t.TenantId == tenantId && t.IsActive && t.StockTrackingEnabled)
+            .Select(t => new { t.Id, t.VariantsEnabled, t.CurrentStock, t.LowStockThreshold, t.MinimumStock })
+            .ToListAsync(cancellationToken);
+        var templateIds = templates.Select(t => t.Id).ToList();
+        var variants = await _dbContext.IssuedItemVariants.AsNoTracking()
+            .Where(v => v.TenantId == tenantId && templateIds.Contains(v.TemplateId) && v.IsActive)
+            .Select(v => new { v.TemplateId, v.CurrentStock, v.LowStockThreshold })
+            .ToListAsync(cancellationToken);
+        var variantsByTemplate = variants.ToLookup(v => v.TemplateId);
+
+        int low = 0, critical = 0, outOf = 0, negative = 0;
+        void Tally(Employees.Entities.InventoryStatus status)
+        {
+            switch (status)
+            {
+                case Employees.Entities.InventoryStatus.LowStock: low++; break;
+                case Employees.Entities.InventoryStatus.CriticalStock: critical++; break;
+                case Employees.Entities.InventoryStatus.OutOfStock: outOf++; break;
+                case Employees.Entities.InventoryStatus.NegativeStock: negative++; break;
+            }
+        }
+
+        foreach (var template in templates)
+        {
+            if (template.VariantsEnabled)
+            {
+                foreach (var variant in variantsByTemplate[template.Id])
+                {
+                    Tally(Employees.Services.InventoryStatusCalculator.Compute(
+                        variant.CurrentStock, variant.LowStockThreshold ?? template.LowStockThreshold, template.MinimumStock));
+                }
+            }
+            else
+            {
+                Tally(Employees.Services.InventoryStatusCalculator.Compute(
+                    template.CurrentStock, template.LowStockThreshold, template.MinimumStock));
+            }
+        }
+
+        var openProposals = await _dbContext.ReorderProposals.AsNoTracking()
+            .CountAsync(p => p.TenantId == tenantId
+                             && (p.Status == Employees.Entities.ReorderProposalStatus.Proposed
+                                 || p.Status == Employees.Entities.ReorderProposalStatus.Reviewed
+                                 || p.Status == Employees.Entities.ReorderProposalStatus.Approved
+                                 || p.Status == Employees.Entities.ReorderProposalStatus.Ordered), cancellationToken);
+        var overdueReturns = await _dbContext.EmployeeIssuedItems.AsNoTracking()
+            .CountAsync(i => i.TenantId == tenantId && i.Status == Employees.Entities.IssuedItemStatus.Issued
+                             && i.ExpectedReturnDate != null && i.ExpectedReturnDate < today, cancellationToken);
+        return new InventoryDashboardSectionDto(low, critical, outOf, negative, openProposals, overdueReturns);
+    }
+
+    /// <summary>Personal task tiles for anyone with a task-view permission; team tiles need view_team/all.</summary>
+    private async Task<TaskDashboardSectionDto?> GetTaskSectionAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        if (_currentUser.CurrentUserId is not { } userId)
+        {
+            return null;
+        }
+
+        var viewOwn = await _authorization.UserHasPermissionAsync(userId, PermissionCodes.TasksViewOwn, cancellationToken);
+        var viewTeam = await _authorization.UserHasPermissionAsync(userId, PermissionCodes.TasksViewTeam, cancellationToken);
+        var viewAll = await _authorization.UserHasPermissionAsync(userId, PermissionCodes.TasksViewAll, cancellationToken);
+        if (!viewOwn && !viewTeam && !viewAll)
+        {
+            return null;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var todayEnd = now.Date.AddDays(1);
+        var myEmployeeId = await _dbContext.Users.AsNoTracking()
+            .Where(u => u.Id == userId && u.TenantId == tenantId)
+            .Select(u => u.EmployeeId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var open = Tasks.Services.TaskStatusMachine.OpenStatuses;
+        int myOpen = 0, myDueToday = 0, myOverdue = 0;
+        if (myEmployeeId is { } mine)
+        {
+            var myTasks = await _dbContext.EmployeeTasks.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && t.AssignedEmployeeId == mine && open.Contains(t.Status))
+                .Select(t => new { t.DueAt })
+                .ToListAsync(cancellationToken);
+            myOpen = myTasks.Count;
+            myDueToday = myTasks.Count(t => t.DueAt >= now && t.DueAt < todayEnd);
+            myOverdue = myTasks.Count(t => t.DueAt is { } due && due < now);
+        }
+
+        var myToAcknowledge = await _dbContext.Set<Notifications.Entities.InternalMessageRecipient>().AsNoTracking()
+            .Where(r => r.TenantId == tenantId && r.UserId == userId && r.AcknowledgedAt == null)
+            .Join(_dbContext.Set<Notifications.Entities.InternalMessage>().AsNoTracking()
+                    .Where(m => m.RequiresAcknowledgement && m.CancelledAt == null
+                                && (m.VisibleFrom == null || m.VisibleFrom <= now)
+                                && (m.ExpiresAt == null || m.ExpiresAt > now)),
+                r => r.MessageId, m => m.Id, (r, m) => r.Id)
+            .CountAsync(cancellationToken);
+
+        int? teamOpen = null, teamOverdue = null, teamBlocked = null, teamWaitingReview = null;
+        if (viewAll || viewTeam)
+        {
+            IQueryable<Tasks.Entities.EmployeeTask> teamTasks = _dbContext.EmployeeTasks.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && open.Contains(t.Status));
+            if (!viewAll)
+            {
+                var myDepartment = myEmployeeId is { } employeeId
+                    ? await _dbContext.Employees.AsNoTracking()
+                        .Where(e => e.TenantId == tenantId && e.Id == employeeId)
+                        .Select(e => e.DepartmentId)
+                        .FirstOrDefaultAsync(cancellationToken)
+                    : null;
+                if (myDepartment is { } department)
+                {
+                    var teamIds = _dbContext.Employees.AsNoTracking()
+                        .Where(e => e.TenantId == tenantId && e.DepartmentId == department)
+                        .Select(e => e.Id);
+                    teamTasks = teamTasks.Where(t => teamIds.Contains(t.AssignedEmployeeId));
+                }
+                else
+                {
+                    teamTasks = teamTasks.Where(t => false);
+                }
+            }
+
+            var rows = await teamTasks.Select(t => new { t.Status, t.DueAt }).ToListAsync(cancellationToken);
+            teamOpen = rows.Count;
+            teamOverdue = rows.Count(t => t.DueAt is { } due && due < now);
+            teamBlocked = rows.Count(t => t.Status == Tasks.Entities.EmployeeTaskStatus.Blocked);
+            teamWaitingReview = rows.Count(t => t.Status == Tasks.Entities.EmployeeTaskStatus.WaitingForReview);
+        }
+
+        return new TaskDashboardSectionDto(
+            myOpen, myDueToday, myOverdue, myToAcknowledge,
+            teamOpen, teamOverdue, teamBlocked, teamWaitingReview);
+    }
+
+    private async Task<int> GetUnreadInternalMessagesAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        if (_currentUser.CurrentUserId is not { } userId)
+        {
+            return 0;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        return await _dbContext.Set<Notifications.Entities.InternalMessageRecipient>().AsNoTracking()
+            .Where(r => r.TenantId == tenantId && r.UserId == userId && r.ReadAt == null)
+            .Join(_dbContext.Set<Notifications.Entities.InternalMessage>().AsNoTracking()
+                    .Where(m => m.CancelledAt == null
+                                && (m.VisibleFrom == null || m.VisibleFrom <= now)
+                                && (m.ExpiresAt == null || m.ExpiresAt > now)),
+                r => r.MessageId, m => m.Id, (r, m) => r.Id)
+            .CountAsync(cancellationToken);
     }
 
     private const int PinnedNoteExcerptLength = 160;

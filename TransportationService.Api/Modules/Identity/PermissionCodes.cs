@@ -62,6 +62,9 @@ public static class PermissionCodes
     public const string InventoryReorderManage = "inventory.reorder_manage";
     public const string InventoryLoansView = "inventory.loans_view";
 
+    /// <summary>Configure the bounded escalation rules (delay/target/active per condition).</summary>
+    public const string EscalationsManage = "escalations.manage";
+
     // --- Employee tasks ---
     public const string TasksViewOwn = "tasks.view_own";
     public const string TasksManageOwn = "tasks.manage_own";
@@ -436,6 +439,7 @@ public static class PermissionCodes
         (InventoryReorderView, "inventory", "reorder_view", "Bestelvoorstellen bekijken"),
         (InventoryReorderManage, "inventory", "reorder_manage", "Bestelvoorstellen aanmaken en behandelen"),
         (InventoryLoansView, "inventory", "loans_view", "Uitgeleend materiaal en retourtermijnen bekijken"),
+        (EscalationsManage, "escalations", "manage", "Escalatieregels beheren"),
         (TasksViewOwn, "tasks", "view_own", "Eigen taken bekijken"),
         (TasksManageOwn, "tasks", "manage_own", "Eigen taken aanmaken, starten, blokkeren en voltooien"),
         (TasksViewTeam, "tasks", "view_team", "Taken van de eigen afdeling bekijken"),

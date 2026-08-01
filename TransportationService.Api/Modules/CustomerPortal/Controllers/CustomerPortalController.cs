@@ -42,6 +42,14 @@ public class CustomerPortalController : ControllerBase
     public async Task<ActionResult<PortalContextDto>> Context(CancellationToken cancellationToken) =>
         Handle(await _service.GetContextAsync(cancellationToken));
 
+    public record SetLanguageRequest(string Language);
+
+    [HttpPut("profile/language")]
+    [RequirePermission(PermissionCodes.CustomerPortalView)]
+    public async Task<ActionResult<PortalContextDto>> SetLanguage(
+        SetLanguageRequest request, CancellationToken cancellationToken) =>
+        Handle(await _service.SetLanguageAsync(request.Language, cancellationToken));
+
     [HttpGet("orders")]
     [RequirePermission(PermissionCodes.CustomerPortalView)]
     public async Task<ActionResult<IReadOnlyList<PortalOrderListItemDto>>> Orders(CancellationToken cancellationToken) =>

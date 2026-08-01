@@ -3,7 +3,7 @@ using TransportationService.Api.Modules.Packages.Entities;
 
 namespace TransportationService.Api.Modules.CustomerPortal.Dtos;
 
-public record PortalContextDto(Guid CustomerId, string CustomerName);
+public record PortalContextDto(Guid CustomerId, string CustomerName, string? PreferredLanguage = null);
 
 public record PortalOrderListItemDto(
     Guid Id,
