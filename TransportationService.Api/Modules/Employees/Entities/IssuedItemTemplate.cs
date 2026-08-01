@@ -41,13 +41,28 @@ public class IssuedItemTemplate : AuditableTenantEntity
     /// <summary>On = stock lives on the variants; issuance requires a variant choice.</summary>
     public bool VariantsEnabled { get; set; }
 
-    /// <summary>Allows issuing below zero without the override permission.</summary>
+    /// <summary>
+    /// Off = a mutation may never push stock below zero. On = it may, but only through the
+    /// explicit confirmation flow (override permission + fresh Version + reason when
+    /// <see cref="NegativeStockRequiresReason"/> is set).
+    /// </summary>
     public bool AllowNegativeStock { get; set; }
 
-    /// <summary>Warn when total available drops to or below this value.</summary>
+    /// <summary>Warning level: status LowStock when stock drops to or below this value.</summary>
     public int? LowStockThreshold { get; set; }
 
+    /// <summary>Minimum level: status CriticalStock when stock drops to or below this value.</summary>
     public int? MinimumStock { get; set; }
+
+    /// <summary>Desired level; reorder proposals suggest TargetStockLevel − current stock.</summary>
+    public int? TargetStockLevel { get; set; }
+
+    /// <summary>Pack/order size: suggested reorder quantities round up to a multiple of this.</summary>
+    public int? ReorderQuantity { get; set; }
+
+    /// <summary>Require a reason when a confirmed mutation pushes stock below zero.</summary>
+    public bool NegativeStockRequiresReason { get; set; } = true;
+
     public string? StorageLocation { get; set; }
 
     /// <summary>

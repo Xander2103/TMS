@@ -65,6 +65,7 @@ public class Phase10SystematicSecurityTests
         "InternalMessagesController.Inbox",
         "InternalMessagesController.UnreadCount",
         "InternalMessagesController.MarkRead",
+        "InternalMessagesController.Acknowledge",
 
         // Shared, non-sensitive tenant context: results are filtered by the caller's own
         // permissions (search) or are plain reference data (countries, legal-entity options/logo).

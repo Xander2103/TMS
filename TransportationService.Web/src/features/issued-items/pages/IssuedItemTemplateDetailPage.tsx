@@ -23,6 +23,7 @@ import {
   listCurrentHolders,
   listStockMovements,
   receiveStock,
+  parseNegativeStockPayload,
   setTemplateAttributes,
   updateVariant,
   STOCK_MOVEMENT_LABELS,
@@ -30,10 +31,14 @@ import {
   type IssuedItemAttributeDefinition,
   type IssuedItemTemplateDetail,
   type IssuedItemVariant,
+  type NegativeStockPayload,
+  type StockCorrectionInput,
   type StockMovement,
   type VariantValueInput,
 } from '../inventoryApi'
 import { TemplateFormModal } from '../TemplateFormModal'
+import { NegativeStockConfirmModal } from '../components/NegativeStockConfirmModal'
+import { StockThresholdsCard } from '../components/StockThresholdsCard'
 import '../issued-items.css'
 
 interface VariantEditorState {
@@ -72,6 +77,7 @@ export function IssuedItemTemplateDetailPage() {
   const { hasPermission } = useAuth()
   const canManageInventory = hasPermission('inventory.manage') || hasPermission('issued_items.manage_templates')
   const canAdjustStock = hasPermission('inventory.adjust') || hasPermission('inventory.manage')
+  const canOverrideNegative = hasPermission('inventory.override_negative_stock')
 
   const [detail, setDetail] = useState<IssuedItemTemplateDetail | null>(null)
   const [allDefinitions, setAllDefinitions] = useState<IssuedItemAttributeDefinition[]>([])
@@ -89,6 +95,8 @@ export function IssuedItemTemplateDetailPage() {
   const [variantDeleteTarget, setVariantDeleteTarget] = useState<IssuedItemVariant | null>(null)
   const [stockDialog, setStockDialog] = useState<StockDialogState | null>(null)
   const [stockError, setStockError] = useState<string | null>(null)
+  // 409-bevestigingsflow bij correcties die onder nul gaan.
+  const [stockNegative, setStockNegative] = useState<{ payload: NegativeStockPayload; input: StockCorrectionInput } | null>(null)
   const [generateDialog, setGenerateDialog] = useState<Record<string, string[]> | null>(null)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -272,15 +280,39 @@ export function IssuedItemTemplateDetailPage() {
       setStockError('Geef een geldig aantal op.')
       return
     }
-    const ok = await run(
-      () =>
-        stockDialog.kind === 'receipt'
-          ? receiveStock(id, { variantId: stockDialog.variantId, quantity, notes: stockDialog.notes.trim() || null })
-          : correctStock(id, { variantId: stockDialog.variantId, newQuantity: quantity, reason: stockDialog.reason.trim() }),
-      stockDialog.kind === 'receipt' ? 'Voorraad toegevoegd.' : 'Voorraad gecorrigeerd.',
-      setStockError,
-    )
-    if (ok) setStockDialog(null)
+    if (stockDialog.kind === 'receipt') {
+      const ok = await run(
+        () => receiveStock(id, { variantId: stockDialog.variantId, quantity, notes: stockDialog.notes.trim() || null }),
+        'Voorraad toegevoegd.',
+        setStockError,
+      )
+      if (ok) setStockDialog(null)
+      return
+    }
+    await submitCorrection({ variantId: stockDialog.variantId, newQuantity: quantity, reason: stockDialog.reason.trim() })
+  }
+
+  /** Correcties lopen buiten run(): een 409 opent de bevestigingsmodal in plaats van een foutmelding. */
+  async function submitCorrection(input: StockCorrectionInput) {
+    setBusy(true)
+    try {
+      await correctStock(id, input)
+      showSuccess('Voorraad gecorrigeerd.')
+      setStockNegative(null)
+      setStockDialog(null)
+      reload()
+    } catch (err) {
+      const conflict = parseNegativeStockPayload(err)
+      if (conflict) {
+        // Bij versionMismatch bevat de nieuwe payload de nieuwe cijfers + version.
+        setStockNegative({ payload: conflict, input })
+        return
+      }
+      setStockNegative(null)
+      setStockError(describeApiError(err, 'De bewerking is mislukt.').message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function handleGenerateSubmit(event: FormEvent) {
@@ -319,7 +351,12 @@ export function IssuedItemTemplateDetailPage() {
   ]
   const rawTab = searchParams.get('tab') ?? 'algemeen'
   const requestedTab = (TAB_ALIASES[rawTab] ?? rawTab) as DetailTab
-  const activeTab: DetailTab = tabs.some((t) => t.id === requestedTab) ? requestedTab : 'algemeen'
+  const activeTab: DetailTab = tabs.some((t) => t.id === requestedTab)
+    ? requestedTab
+    : // Deep links naar ?tab=voorraad (bv. vanuit het voorraadoverzicht) landen bij variantsjablonen op Varianten.
+      requestedTab === 'voorraad' && tabs.some((t) => t.id === 'varianten')
+      ? 'varianten'
+      : 'algemeen'
   const setActiveTab = (tabId: string) => {
     const next = new URLSearchParams(searchParams)
     next.set('tab', tabId)
@@ -579,6 +616,7 @@ export function IssuedItemTemplateDetailPage() {
             </table>
           )}
         </section>
+        <StockThresholdsCard template={template} onSaved={reload} />
       </TabPanel>
       )}
 
@@ -619,6 +657,7 @@ export function IssuedItemTemplateDetailPage() {
             <p className="issued-items-computed-stock">Lage-voorraadgrens: {template.lowStockThreshold}</p>
           )}
         </section>
+        <StockThresholdsCard template={template} onSaved={reload} />
       </TabPanel>
       )}
 
@@ -977,6 +1016,24 @@ export function IssuedItemTemplateDetailPage() {
             ))}
           </form>
         </Modal>
+      )}
+
+      {stockNegative && (
+        <NegativeStockConfirmModal
+          payload={stockNegative.payload}
+          kind="correction"
+          storageLocation={template.storageLocation}
+          canConfirm={canOverrideNegative}
+          busy={busy}
+          onConfirm={() =>
+            void submitCorrection({
+              ...stockNegative.input,
+              confirmNegativeStock: true,
+              expectedVersion: stockNegative.payload.version,
+            })
+          }
+          onCancel={() => setStockNegative(null)}
+        />
       )}
 
       {variantDeleteTarget && (

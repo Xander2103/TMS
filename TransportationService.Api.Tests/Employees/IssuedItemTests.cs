@@ -39,8 +39,8 @@ public class IssuedItemTests
         var tenant = new DevTenantContext(tenantId);
         var currentUser = new DevCurrentUserContext(null);
         var audit = new AuditService(db.Context, tenant, currentUser);
-        var inventory = new InventoryService(db.Context, tenant, currentUser, audit);
-        var sut = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions());
+        var inventory = new InventoryService(db.Context, tenant, currentUser, audit, InventoryTestFactory.Guard(currentUser));
+        var sut = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions(), InventoryTestFactory.Guard(currentUser));
         return new Harness(db, sut, tenantId, employeeId);
     }
 

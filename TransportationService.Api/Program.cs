@@ -24,6 +24,7 @@ builder.Services
     {
         options.Filters.Add<TransportationService.Api.Common.InvalidTenantReferenceExceptionFilter>();
         options.Filters.Add<TransportationService.Api.Common.DomainValidationExceptionFilter>();
+        options.Filters.Add<TransportationService.Api.Common.NegativeStockConfirmationFilter>();
         // Per-request session-revocation (security stamp) + mandatory-password-change enforcement,
         // applied centrally to every authenticated request.
         options.Filters.Add<TransportationService.Api.Modules.Identity.Authorization.AccountStateAuthorizationFilter>();
@@ -164,8 +165,20 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.
     TransportationService.Api.Modules.Employees.Services.IssuedItemService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IInventoryService,
     TransportationService.Api.Modules.Employees.Services.InventoryService>();
-builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.ILowStockNotifier,
-    TransportationService.Api.Modules.Employees.Services.LowStockNotifier>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IInventoryAlertService,
+    TransportationService.Api.Modules.Employees.Services.InventoryAlertService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.INegativeStockGuard,
+    TransportationService.Api.Modules.Employees.Services.NegativeStockGuard>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IInventoryInsightsService,
+    TransportationService.Api.Modules.Employees.Services.InventoryInsightsService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IReorderProposalService,
+    TransportationService.Api.Modules.Employees.Services.ReorderProposalService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Tasks.Services.IEmployeeTaskService,
+    TransportationService.Api.Modules.Tasks.Services.EmployeeTaskService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Tasks.Services.ITaskTemplateService,
+    TransportationService.Api.Modules.Tasks.Services.TaskTemplateService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Tasks.Services.ITaskAttachmentService,
+    TransportationService.Api.Modules.Tasks.Services.TaskAttachmentService>();
 
 // GDPR (H13): configurable retention + daily purge sweep, and data-subject export/anonymisation.
 builder.Services.Configure<TransportationService.Api.Modules.Gdpr.RetentionOptions>(
@@ -360,6 +373,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Serv
     TransportationService.Api.Modules.CustomerPortal.Services.CustomerMessageService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.IPortalAnnouncementService,
     TransportationService.Api.Modules.CustomerPortal.Services.PortalAnnouncementService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.IPortalMessageService,
+    TransportationService.Api.Modules.CustomerPortal.Services.PortalMessageService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.IPortalDashboardService,
     TransportationService.Api.Modules.CustomerPortal.Services.PortalDashboardService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.CustomerPortal.Services.IPortalInvoiceService,

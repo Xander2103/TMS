@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TransportationService.Api.Data;
@@ -11,9 +12,11 @@ using TransportationService.Api.Data;
 namespace TransportationService.Api.Migrations
 {
     [DbContext(typeof(TransportationDbContext))]
-    partial class TransportationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731224943_InventoryControls")]
+    partial class InventoryControls
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -411,159 +414,6 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("TenantId", "IsActive", "ActiveFrom", "ActiveUntil");
 
                     b.ToTable("portal_announcements", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessage", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BodyEn")
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
-
-                    b.Property<string>("BodyFr")
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
-
-                    b.Property<string>("BodyNl")
-                        .IsRequired()
-                        .HasMaxLength(8000)
-                        .HasColumnType("character varying(8000)");
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("DisplayMode")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<bool>("EmailRequested")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<Guid?>("RelatedEntityId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RelatedEntityType")
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<bool>("RequiresAcknowledgement")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("TitleEn")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("TitleFr")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("TitleNl")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("VisibleFrom")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "VisibleFrom", "ExpiresAt");
-
-                    b.ToTable("portal_messages", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessageReceipt", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("AcknowledgedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("PortalMessageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("ReadAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PortalMessageId", "UserId")
-                        .IsUnique();
-
-                    b.HasIndex("TenantId", "UserId", "ReadAt");
-
-                    b.ToTable("portal_message_receipts", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessageRecipient", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("PortalMessageId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PortalMessageId");
-
-                    b.HasIndex("TenantId", "CustomerId", "PortalMessageId");
-
-                    b.ToTable("portal_message_recipients", (string)null);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Dossiers.Entities.DossierOrder", b =>
@@ -1707,10 +1557,6 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
-                    b.Property<string>("ConditionAtIssue")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1725,9 +1571,6 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uuid");
-
-                    b.Property<DateOnly?>("ExpectedReturnDate")
-                        .HasColumnType("date");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
@@ -1747,9 +1590,6 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<DateTime?>("OverdueNotifiedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
@@ -1759,10 +1599,6 @@ namespace TransportationService.Api.Migrations
                     b.Property<string>("ReturnCondition")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
-
-                    b.Property<string>("ReturnDisposition")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
 
                     b.Property<DateOnly?>("ReturnedDate")
                         .HasColumnType("date");
@@ -1804,8 +1640,6 @@ namespace TransportationService.Api.Migrations
                     b.HasIndex("VariantId");
 
                     b.HasIndex("TenantId", "EmployeeId");
-
-                    b.HasIndex("TenantId", "Status", "ExpectedReturnDate");
 
                     b.ToTable("employee_issued_items", (string)null);
                 });
@@ -2431,88 +2265,6 @@ namespace TransportationService.Api.Migrations
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("issued_item_variant_values", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Employees.Entities.ReorderProposal", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("ApprovedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("ApprovedQuantity")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("CurrentStockSnapshot")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime?>("ResolvedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<int>("SuggestedQuantity")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("TargetStockSnapshot")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TemplateId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("VariantId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TemplateId");
-
-                    b.HasIndex("VariantId");
-
-                    b.HasIndex("TenantId", "Status");
-
-                    b.HasIndex("TenantId", "TemplateId")
-                        .IsUnique()
-                        .HasFilter("\"VariantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" IN ('Proposed','Reviewed','Approved','Ordered')");
-
-                    b.HasIndex("TenantId", "TemplateId", "VariantId")
-                        .IsUnique()
-                        .HasFilter("\"VariantId\" IS NOT NULL AND \"IsDeleted\" = false AND \"Status\" IN ('Proposed','Reviewed','Approved','Ordered')");
-
-                    b.ToTable("reorder_proposals", (string)null);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Employees.Entities.StockMovement", b =>
@@ -5006,10 +4758,6 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<string>("PreferredLanguageCode")
-                        .HasMaxLength(5)
-                        .HasColumnType("character varying(5)");
-
                     b.Property<Guid>("SecurityStamp")
                         .HasColumnType("uuid");
 
@@ -6254,9 +6002,6 @@ namespace TransportationService.Api.Migrations
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
 
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -6269,22 +6014,8 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("EmailRequested")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("NotifiedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("RelatedEntityId")
                         .HasMaxLength(50)
@@ -6293,9 +6024,6 @@ namespace TransportationService.Api.Migrations
                     b.Property<string>("RelatedEntityType")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
-
-                    b.Property<bool>("RequiresAcknowledgement")
-                        .HasColumnType("boolean");
 
                     b.Property<Guid>("SenderUserId")
                         .HasColumnType("uuid");
@@ -6314,14 +6042,9 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid?>("UpdatedByUserId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("VisibleFrom")
-                        .HasColumnType("timestamp with time zone");
-
                     b.HasKey("Id");
 
                     b.HasIndex("TenantId", "SenderUserId");
-
-                    b.HasIndex("TenantId", "VisibleFrom");
 
                     b.ToTable("internal_messages", (string)null);
                 });
@@ -6330,12 +6053,6 @@ namespace TransportationService.Api.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("AcknowledgedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("EmailOutboxMessageId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("MessageId")
@@ -11871,482 +11588,6 @@ namespace TransportationService.Api.Migrations
                     b.ToTable("service_option_conditions", (string)null);
                 });
 
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.EmployeeTask", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AssignedEmployeeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("BatchId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("BlockedReason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime?>("CancelledAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CategoryId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CategorySnapshot")
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CompletionNote")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<DateTime?>("DueAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("DueSoonNotifiedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime?>("OverdueNotifiedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("RecurrenceDedupeKey")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid?>("RecurrenceId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("RelatedEntityId")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("RelatedEntityType")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<DateTime?>("ReopenedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("RequiresCompletionNote")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("RequiresEvidence")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("RequiresReview")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("ReviewNote")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("ReviewedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("StartAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Version")
-                        .IsConcurrencyToken()
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignedEmployeeId");
-
-                    b.HasIndex("CategoryId");
-
-                    b.HasIndex("TenantId", "CreatedByUserId");
-
-                    b.HasIndex("TenantId", "DueAt");
-
-                    b.HasIndex("TenantId", "RecurrenceDedupeKey")
-                        .IsUnique()
-                        .HasFilter("\"RecurrenceDedupeKey\" IS NOT NULL AND \"IsDeleted\" = false");
-
-                    b.HasIndex("TenantId", "AssignedEmployeeId", "Status");
-
-                    b.HasIndex("TenantId", "RelatedEntityType", "RelatedEntityId");
-
-                    b.ToTable("employee_tasks", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.TaskAttachment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ContentType")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("FileName")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<long>("SizeBytes")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("StorageKey")
-                        .IsRequired()
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<Guid>("TaskId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TaskId");
-
-                    b.HasIndex("TenantId", "TaskId");
-
-                    b.ToTable("task_attachments", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.TaskCategory", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("Color")
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId");
-
-                    b.HasIndex("TenantId", "Code")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
-                    b.HasIndex("TenantId", "IsActive");
-
-                    b.ToTable("task_categories", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.TaskRecurrence", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AssignedEmployeeId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("CustomIntervalDays")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateOnly?>("EndDate")
-                        .HasColumnType("date");
-
-                    b.Property<string>("Interval")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateOnly?>("LastGeneratedPeriod")
-                        .HasColumnType("date");
-
-                    b.Property<DateOnly>("StartDate")
-                        .HasColumnType("date");
-
-                    b.Property<Guid>("TemplateId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignedEmployeeId");
-
-                    b.HasIndex("TemplateId");
-
-                    b.HasIndex("TenantId", "IsActive");
-
-                    b.ToTable("task_recurrences", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.TaskTemplate", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(150)
-                        .HasColumnType("character varying(150)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("TenantId", "IsActive");
-
-                    b.ToTable("task_templates", (string)null);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.TaskTemplateItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("CategoryId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("CreatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("DeletedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<int?>("DueInDays")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Priority")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<bool>("RequiresCompletionNote")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("RequiresEvidence")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("RequiresReview")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("TemplateId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("UpdatedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CategoryId");
-
-                    b.HasIndex("TemplateId");
-
-                    b.HasIndex("TenantId", "TemplateId");
-
-                    b.ToTable("task_template_items", (string)null);
-                });
-
             modelBuilder.Entity("TransportationService.Api.Modules.Tenancy.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -13228,24 +12469,6 @@ namespace TransportationService.Api.Migrations
                     b.Navigation("LedgerAccount");
                 });
 
-            modelBuilder.Entity("TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessageReceipt", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessage", null)
-                        .WithMany()
-                        .HasForeignKey("PortalMessageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessageRecipient", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessage", null)
-                        .WithMany()
-                        .HasForeignKey("PortalMessageId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("TransportationService.Api.Modules.Dossiers.Entities.DossierOrder", b =>
                 {
                     b.HasOne("TransportationService.Api.Modules.Dossiers.Entities.TransportDossier", null)
@@ -13479,20 +12702,6 @@ namespace TransportationService.Api.Migrations
                         .HasForeignKey("VariantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Employees.Entities.ReorderProposal", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.Employees.Entities.IssuedItemTemplate", null)
-                        .WithMany()
-                        .HasForeignKey("TemplateId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("TransportationService.Api.Modules.Employees.Entities.IssuedItemVariant", null)
-                        .WithMany()
-                        .HasForeignKey("VariantId")
-                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("TransportationService.Api.Modules.Employees.Entities.StockMovement", b =>
@@ -14394,58 +13603,6 @@ namespace TransportationService.Api.Migrations
                     b.HasOne("TransportationService.Api.Modules.Tarification.Entities.ServiceOption", null)
                         .WithMany()
                         .HasForeignKey("ServiceOptionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.EmployeeTask", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.Employees.Entities.Employee", null)
-                        .WithMany()
-                        .HasForeignKey("AssignedEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("TransportationService.Api.Modules.Tasks.Entities.TaskCategory", null)
-                        .WithMany()
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.SetNull);
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.TaskAttachment", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.Tasks.Entities.EmployeeTask", null)
-                        .WithMany()
-                        .HasForeignKey("TaskId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.TaskRecurrence", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.Employees.Entities.Employee", null)
-                        .WithMany()
-                        .HasForeignKey("AssignedEmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("TransportationService.Api.Modules.Tasks.Entities.TaskTemplate", null)
-                        .WithMany()
-                        .HasForeignKey("TemplateId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TransportationService.Api.Modules.Tasks.Entities.TaskTemplateItem", b =>
-                {
-                    b.HasOne("TransportationService.Api.Modules.Tasks.Entities.TaskCategory", null)
-                        .WithMany()
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("TransportationService.Api.Modules.Tasks.Entities.TaskTemplate", null)
-                        .WithMany()
-                        .HasForeignKey("TemplateId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

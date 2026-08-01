@@ -32,18 +32,20 @@ public class TemplateStockFieldTests
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);
-        var currentUser = new DevCurrentUserContext(null);
+        var currentUser = new DevCurrentUserContext(Guid.NewGuid());
         var audit = new AuditService(db.Context, tenant, currentUser);
-        var inventory = new InventoryService(db.Context, tenant, currentUser, audit);
-        var sut = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions());
+        var inventory = new InventoryService(db.Context, tenant, currentUser, audit, InventoryTestFactory.Guard(currentUser));
+        var sut = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions(), InventoryTestFactory.Guard(currentUser));
         return new Harness(db, sut, inventory, tenantId);
     }
 
     private static SaveIssuedItemTemplateRequest StockTemplate(
-        string name = "Handschoenen", int? stock = null, string? reason = null, bool variants = false, bool allowNegative = false) =>
+        string name = "Handschoenen", int? stock = null, string? reason = null, bool variants = false, bool allowNegative = false,
+        Guid? expectedVersion = null, bool confirmNegative = false) =>
         new(name, "Algemeen", null, 1, false, true, true, true, 0,
             StockTrackingEnabled: true, VariantsEnabled: variants, AllowNegativeStock: allowNegative,
-            Stock: stock, StockCorrectionReason: reason);
+            Stock: stock, StockCorrectionReason: reason,
+            ExpectedVersion: expectedVersion, ConfirmNegativeStock: confirmNegative);
 
     [Fact]
     public async Task Create_WithStock_WritesInitialStockMovement()
@@ -101,7 +103,7 @@ public class TemplateStockFieldTests
     }
 
     [Fact]
-    public async Task NegativeStockTarget_RequiresAllowNegative()
+    public async Task NegativeStockTarget_RequiresAllowNegative_AndConfirmation()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
@@ -110,8 +112,15 @@ public class TemplateStockFieldTests
         await Assert.ThrowsAsync<DomainValidationException>(() =>
             h.Sut.UpdateTemplateAsync(created.Id, StockTemplate(stock: -2, reason: "Correctie"), CancellationToken.None));
 
+        // Allowed but unconfirmed → the guard demands the confirmation flow (sprint fase 1).
+        await Assert.ThrowsAsync<NegativeStockConfirmationRequiredException>(() =>
+            h.Sut.UpdateTemplateAsync(created.Id,
+                StockTemplate(stock: -2, reason: "Correctie", allowNegative: true), CancellationToken.None));
+
+        var version = (await h.Db.Context.IssuedItemTemplates.AsNoTracking().SingleAsync(t => t.Id == created.Id)).Version;
         var allowed = await h.Sut.UpdateTemplateAsync(created.Id,
-            StockTemplate(stock: -2, reason: "Correctie", allowNegative: true), CancellationToken.None);
+            StockTemplate(stock: -2, reason: "Correctie", allowNegative: true, expectedVersion: version, confirmNegative: true),
+            CancellationToken.None);
         Assert.Equal(-2, allowed!.CurrentStock);
     }
 

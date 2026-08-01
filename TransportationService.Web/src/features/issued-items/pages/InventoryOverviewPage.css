@@ -1,0 +1,55 @@
+.inventory-overview-tiles {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.inventory-overview-tile {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.inventory-overview-tile:hover {
+  border-color: var(--accent, #2563eb);
+}
+
+.inventory-overview-tile-active {
+  border-color: var(--accent, #2563eb);
+  box-shadow: 0 0 0 1px var(--accent, #2563eb);
+}
+
+.inventory-overview-tile-warning svg {
+  color: #b45309;
+}
+
+.inventory-overview-tile-danger svg {
+  color: #b91c1c;
+}
+
+.inventory-overview-tile-label {
+  font-weight: 600;
+}
+
+.inventory-overview-tile-count {
+  min-width: 24px;
+  text-align: center;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-weight: 600;
+  font-size: 13px;
+  background: var(--border, #e5e7eb);
+}
+
+.inventory-overview-variant {
+  color: var(--muted, #6b7280);
+}

@@ -63,6 +63,23 @@ public static class NotificationTypeCatalog
             ["inventory_status_out"] = (NotificationCategory.Inventory, NotificationSeverity.Warning),
             ["inventory_status_negative"] = (NotificationCategory.Inventory, NotificationSeverity.Critical),
 
+            // Employee tasks (inventory-tasks-notifications sprint).
+            ["task_assigned"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["task_due_changed"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["task_due_soon"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_overdue"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_blocked"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_waiting_review"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["task_review_approved"] = (NotificationCategory.Task, NotificationSeverity.Success),
+            ["task_review_rejected"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_reopened"] = (NotificationCategory.Task, NotificationSeverity.Warning),
+            ["task_cancelled"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["task_redistributed"] = (NotificationCategory.Task, NotificationSeverity.Info),
+            ["escalation_raised"] = (NotificationCategory.Approval, NotificationSeverity.Critical),
+            ["inventory_return_due"] = (NotificationCategory.Inventory, NotificationSeverity.Info),
+            ["inventory_return_overdue"] = (NotificationCategory.Inventory, NotificationSeverity.Warning),
+            ["inventory_reorder_proposed"] = (NotificationCategory.Inventory, NotificationSeverity.Info),
+
             // Notification-event catalog (corrections wave 4, phase 6) — keys match
             // Messaging.Services.NotificationEventCatalog.EventKey / MessageKinds 1:1.
             ["order_created"] = (NotificationCategory.Orders, NotificationSeverity.Info),

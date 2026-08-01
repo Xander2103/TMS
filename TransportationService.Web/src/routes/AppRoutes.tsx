@@ -88,6 +88,8 @@ const CustomerPortalDocumentsPage = lazyPage(() => import('../features/customer-
 const CustomerPortalInvoicesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalInvoicesPage'), 'CustomerPortalInvoicesPage')
 const CustomerPortalInvoiceDetailPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalInvoiceDetailPage'), 'CustomerPortalInvoiceDetailPage')
 const CustomerPortalMessagesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalMessagesPage'), 'CustomerPortalMessagesPage')
+const CustomerPortalNoticesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalNoticesPage'), 'CustomerPortalNoticesPage')
+const PortalMessagesPage = lazyPage(() => import('../features/portal-messages/pages/PortalMessagesPage'), 'PortalMessagesPage')
 const CustomerPortalUsersPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalUsersPage'), 'CustomerPortalUsersPage')
 const PortalAnnouncementsSettingsPage = lazyPage(() => import('../features/customer-portal/pages/PortalAnnouncementsSettingsPage'), 'PortalAnnouncementsSettingsPage')
 const ForgotPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ForgotPasswordPage')
@@ -109,6 +111,7 @@ const SettingsPage = lazyPage(() => import('../features/settings/pages/SettingsP
 const LegalEntitiesPage = lazyPage(() => import('../features/legal-entities/pages/LegalEntitiesPage'), 'LegalEntitiesPage')
 const IssuedItemTemplatesPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemTemplatesPage'), 'IssuedItemTemplatesPage')
 const IssuedItemTemplateDetailPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemTemplateDetailPage'), 'IssuedItemTemplateDetailPage')
+const InventoryOverviewPage = lazyPage(() => import('../features/issued-items/pages/InventoryOverviewPage'), 'InventoryOverviewPage')
 const LeaveSettingsPage = lazyPage(() => import('../features/leave-balance/pages/LeaveSettingsPage'), 'LeaveSettingsPage')
 const AccountingSettingsPage = lazyPage(() => import('../features/accounting/pages/AccountingSettingsPage'), 'AccountingSettingsPage')
 const NotificationAdminPage = lazyPage(() => import('../features/notification-admin/pages/NotificationAdminPage'), 'NotificationAdminPage')
@@ -170,6 +173,7 @@ const router = createBrowserRouter(
           <Route path="/klantportaal/facturen" element={<CustomerPortalInvoicesPage />} />
           <Route path="/klantportaal/facturen/:id" element={<CustomerPortalInvoiceDetailPage />} />
           <Route path="/klantportaal/berichten" element={<CustomerPortalMessagesPage />} />
+          <Route path="/klantportaal/mededelingen" element={<CustomerPortalNoticesPage />} />
           <Route path="/klantportaal/gebruikers" element={<CustomerPortalUsersPage />} />
         </Route>
         <Route element={<InternalOnly />}>
@@ -262,10 +266,12 @@ const router = createBrowserRouter(
           <Route path="/settings/legal-entities" element={<LegalEntitiesPage />} />
           <Route path="/settings/issued-item-templates" element={<IssuedItemTemplatesPage />} />
           <Route path="/settings/issued-item-templates/:id" element={<IssuedItemTemplateDetailPage />} />
+          <Route path="/inventory" element={<InventoryOverviewPage />} />
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
           <Route path="/settings/accounting" element={<AccountingSettingsPage />} />
           <Route path="/settings/notifications" element={<NotificationAdminPage />} />
           <Route path="/settings/portal-announcements" element={<PortalAnnouncementsSettingsPage />} />
+          <Route path="/settings/portal-messages" element={<PortalMessagesPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
         </Route>

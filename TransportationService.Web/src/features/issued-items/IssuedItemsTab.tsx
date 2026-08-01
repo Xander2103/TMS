@@ -22,7 +22,13 @@ import {
   type IssuedItemTemplate,
   type ReturnDisposition,
 } from './issuedItemsApi'
-import { getTemplateDetail, type IssuedItemVariant } from './inventoryApi'
+import {
+  getTemplateDetail,
+  parseNegativeStockPayload,
+  type IssuedItemVariant,
+  type NegativeStockPayload,
+} from './inventoryApi'
+import { NegativeStockConfirmModal } from './components/NegativeStockConfirmModal'
 import './issued-items.css'
 
 const STATUS_TONE: Record<IssuedItemStatus, BadgeTone> = {
@@ -48,13 +54,12 @@ function emptyForm(): EmployeeIssuedItemInput {
     variantId: null,
     returnDisposition: null,
     restoreStock: null,
-    overrideInsufficientStock: false,
     overrideReason: null,
   }
 }
 
 /** Employee "Bedrijfsmiddelen" checklist: stock-aware issue/return flow, PDF acknowledgement. */
-export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
+export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: string; employeeName?: string }) {
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('issued_items.manage')
@@ -72,6 +77,8 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
   const [formError, setFormError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<EmployeeIssuedItem | null>(null)
+  // 409-bevestigingsflow: payload van de server + de payload die opnieuw verstuurd moet worden.
+  const [negativeStock, setNegativeStock] = useState<{ payload: NegativeStockPayload; input: EmployeeIssuedItemInput } | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -178,7 +185,6 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
       variantId: item.variantId,
       returnDisposition: item.status === 'Returned' ? 'good' : null,
       restoreStock: null,
-      overrideInsufficientStock: false,
       overrideReason: null,
     })
     setVariants([])
@@ -213,6 +219,41 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
       setEditorOpen(false)
       setReloadToken((t) => t + 1)
     } catch (err) {
+      const conflict = parseNegativeStockPayload(err)
+      if (conflict) {
+        setNegativeStock({ payload: conflict, input: payload })
+        return
+      }
+      setFormError(describeApiError(err, 'Het bedrijfsmiddel kon niet worden opgeslagen.').message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /** Verstuurt dezelfde save opnieuw, met de bevestigingsvelden uit de 409-payload. */
+  async function handleNegativeStockConfirm(reason: string) {
+    if (!negativeStock) return
+    const retry: EmployeeIssuedItemInput = {
+      ...negativeStock.input,
+      confirmNegativeStock: true,
+      expectedVersion: negativeStock.payload.version,
+      overrideReason: reason.trim() === '' ? null : reason.trim(),
+    }
+    setSaving(true)
+    try {
+      await saveEmployeeIssuedItem(employeeId, editingId, retry)
+      showSuccess(editingId ? 'Bedrijfsmiddel bijgewerkt.' : 'Bedrijfsmiddel toegevoegd.')
+      setNegativeStock(null)
+      setEditorOpen(false)
+      setReloadToken((t) => t + 1)
+    } catch (err) {
+      // Nieuwe 409 (bv. versionMismatch): toon de nieuwe cijfers en laat opnieuw bevestigen.
+      const conflict = parseNegativeStockPayload(err)
+      if (conflict) {
+        setNegativeStock({ payload: conflict, input: negativeStock.input })
+        return
+      }
+      setNegativeStock(null)
       setFormError(describeApiError(err, 'Het bedrijfsmiddel kon niet worden opgeslagen.').message)
     } finally {
       setSaving(false)
@@ -392,30 +433,6 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
                 <input id="ii-serial" value={form.serialNumber ?? ''} onChange={(e) => set('serialNumber', e.target.value || null)} disabled={saving} maxLength={100} />
               </FormField>
             </div>
-            {stockShortage && canOverrideStock && (
-              <>
-                <label className="issued-items-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={form.overrideInsufficientStock ?? false}
-                    onChange={(e) => set('overrideInsufficientStock', e.target.checked)}
-                    disabled={saving}
-                  />
-                  <span>Toch uitreiken zonder voldoende voorraad (override)</span>
-                </label>
-                {form.overrideInsufficientStock && (
-                  <FormField label="Reden voor override" htmlFor="ii-override-reason" required>
-                    <input
-                      id="ii-override-reason"
-                      value={form.overrideReason ?? ''}
-                      onChange={(e) => set('overrideReason', e.target.value || null)}
-                      disabled={saving}
-                      maxLength={300}
-                    />
-                  </FormField>
-                )}
-              </>
-            )}
             {(form.status === 'Returned' || form.status === 'Damaged') && (
               <div className="issued-items-form-row">
                 <FormField label="Datum teruggave" htmlFor="ii-retdate">
@@ -470,6 +487,19 @@ export function IssuedItemsTab({ employeeId }: { employeeId: string }) {
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {negativeStock && (
+        <NegativeStockConfirmModal
+          payload={negativeStock.payload}
+          kind="issue"
+          employeeName={employeeName}
+          storageLocation={selectedTemplate?.storageLocation}
+          canConfirm={canOverrideStock}
+          busy={saving}
+          onConfirm={(reason) => void handleNegativeStockConfirm(reason)}
+          onCancel={() => setNegativeStock(null)}
         />
       )}
     </section>

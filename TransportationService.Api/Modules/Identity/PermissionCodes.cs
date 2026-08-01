@@ -55,6 +55,27 @@ public static class PermissionCodes
     public const string InventoryOverrideNegativeStock = "inventory.override_negative_stock";
     public const string InventoryLowStockAlerts = "inventory.low_stock_alerts";
 
+    /// <summary>Change warning/minimum/target levels, reorder quantity and the negative-stock policy.</summary>
+    public const string InventoryManageThresholds = "inventory.manage_thresholds";
+    public const string InventoryViewMovements = "inventory.view_movements";
+    public const string InventoryReorderView = "inventory.reorder_view";
+    public const string InventoryReorderManage = "inventory.reorder_manage";
+    public const string InventoryLoansView = "inventory.loans_view";
+
+    // --- Employee tasks ---
+    public const string TasksViewOwn = "tasks.view_own";
+    public const string TasksManageOwn = "tasks.manage_own";
+    public const string TasksViewTeam = "tasks.view_team";
+    public const string TasksViewAll = "tasks.view_all";
+    public const string TasksAssign = "tasks.assign";
+    public const string TasksEdit = "tasks.edit";
+    public const string TasksCancel = "tasks.cancel";
+    public const string TasksReview = "tasks.review";
+    public const string TasksReopen = "tasks.reopen";
+    public const string TasksManageCategories = "tasks.manage_categories";
+    public const string TasksManageTemplates = "tasks.manage_templates";
+    public const string TasksManageRecurring = "tasks.manage_recurring";
+
     public const string PlanningView = "planning.view";
     public const string PlanningCreate = "planning.create";
     public const string PlanningEdit = "planning.edit";
@@ -209,6 +230,12 @@ public static class PermissionCodes
 
     public const string MessagesSend = "messages.send";
 
+    /// <summary>Bulk fan-out (role/department/everyone); enforced service-side in
+    /// InternalMessageService.SendAsync because the controller cannot see the targeting shape.</summary>
+    public const string MessagesSendBulk = "messages.send_bulk";
+    public const string MessagesViewDeliveryStatus = "messages.view_delivery_status";
+    public const string MessagesCancel = "messages.cancel";
+
     // --- Transport dossiers ---
     public const string DossiersView = "dossiers.view";
     public const string DossiersManage = "dossiers.manage";
@@ -237,6 +264,15 @@ public static class PermissionCodes
     // --- Customer messages (internal side of the portal's Berichten module) ---
     public const string CustomerMessagesView = "customer_messages.view";
     public const string CustomerMessagesSend = "customer_messages.send";
+
+    // --- Portal messages (staff-authored multilingual announcements to portal users) ---
+    public const string PortalMessagesView = "portal_messages.view";
+    public const string PortalMessagesSend = "portal_messages.send";
+
+    /// <summary>Fan-out to more than one customer; enforced service-side in
+    /// PortalMessageService.SendAsync (the controller cannot see the targeting shape).</summary>
+    public const string PortalMessagesSendBulk = "portal_messages.send_bulk";
+    public const string PortalMessagesCancel = "portal_messages.cancel";
 
     // --- Portal announcements (broadcast notices shown in the customer portal) ---
     public const string PortalAnnouncementsManage = "portal_announcements.manage";
@@ -395,6 +431,23 @@ public static class PermissionCodes
         (InventoryAdjust, "inventory", "adjust", "Voorraad toevoegen en corrigeren"),
         (InventoryOverrideNegativeStock, "inventory", "override_negative_stock", "Uitgifte bij onvoldoende voorraad toestaan"),
         (InventoryLowStockAlerts, "inventory", "low_stock_alerts", "Ontvangt meldingen bij lage voorraad"),
+        (InventoryManageThresholds, "inventory", "manage_thresholds", "Voorraaddrempels en negatieve-voorraadregels beheren"),
+        (InventoryViewMovements, "inventory", "view_movements", "Voorraadmutatiehistoriek bekijken"),
+        (InventoryReorderView, "inventory", "reorder_view", "Bestelvoorstellen bekijken"),
+        (InventoryReorderManage, "inventory", "reorder_manage", "Bestelvoorstellen aanmaken en behandelen"),
+        (InventoryLoansView, "inventory", "loans_view", "Uitgeleend materiaal en retourtermijnen bekijken"),
+        (TasksViewOwn, "tasks", "view_own", "Eigen taken bekijken"),
+        (TasksManageOwn, "tasks", "manage_own", "Eigen taken aanmaken, starten, blokkeren en voltooien"),
+        (TasksViewTeam, "tasks", "view_team", "Taken van de eigen afdeling bekijken"),
+        (TasksViewAll, "tasks", "view_all", "Alle taken bekijken"),
+        (TasksAssign, "tasks", "assign", "Taken toewijzen aan medewerkers (binnen scope) en herverdelen"),
+        (TasksEdit, "tasks", "edit", "Taken van anderen bewerken en uitvoeren"),
+        (TasksCancel, "tasks", "cancel", "Taken van anderen annuleren"),
+        (TasksReview, "tasks", "review", "Ingediende taken controleren (goed-/afkeuren)"),
+        (TasksReopen, "tasks", "reopen", "Voltooide of geannuleerde taken heropenen"),
+        (TasksManageCategories, "tasks", "manage_categories", "Taakcategorieën beheren"),
+        (TasksManageTemplates, "tasks", "manage_templates", "Taaksjablonen beheren"),
+        (TasksManageRecurring, "tasks", "manage_recurring", "Terugkerende taken beheren"),
         (PlanningView, "planning", "view", "Planning bekijken"),
         (PlanningCreate, "planning", "create", "Planning aanmaken"),
         (PlanningEdit, "planning", "edit", "Planning bewerken"),
@@ -495,6 +548,9 @@ public static class PermissionCodes
         (OrdersManage, "orders", "manage", "Volledig beheer van transportopdrachten"),
         (DashboardView, "dashboard", "view", "Bedrijfsdashboard bekijken"),
         (MessagesSend, "messages", "send", "Interne berichten versturen"),
+        (MessagesSendBulk, "messages", "send_bulk", "Interne berichten naar rol, afdeling of iedereen versturen"),
+        (MessagesViewDeliveryStatus, "messages", "view_delivery_status", "Bezorg- en leesstatus van interne berichten bekijken"),
+        (MessagesCancel, "messages", "cancel", "Interne berichten van anderen intrekken"),
         (DossiersView, "dossiers", "view", "Transportdossiers bekijken"),
         (DossiersManage, "dossiers", "manage", "Transportdossiers beheren (aanmaken, koppelen, sluiten)"),
         (IncidentsView, "incidents", "view", "Incidenten bekijken"),
@@ -512,6 +568,10 @@ public static class PermissionCodes
         (CustomerPortalManageUsers, "customer_portal", "manage_users", "Klantportaal: klantgebruikers beheren (uitnodigen, blokkeren, rechten)"),
         (CustomerMessagesView, "customer_messages", "view", "Berichten van klanten via het klantportaal bekijken"),
         (CustomerMessagesSend, "customer_messages", "send", "Berichten naar klanten via het klantportaal versturen"),
+        (PortalMessagesView, "portal_messages", "view", "Portaalberichten en hun bezorgstatus bekijken"),
+        (PortalMessagesSend, "portal_messages", "send", "Portaalberichten naar één klant versturen"),
+        (PortalMessagesSendBulk, "portal_messages", "send_bulk", "Portaalberichten naar meerdere klanten versturen"),
+        (PortalMessagesCancel, "portal_messages", "cancel", "Portaalberichten van anderen intrekken"),
         (PortalAnnouncementsManage, "portal_announcements", "manage", "Mededelingen in het klantportaal beheren"),
         (InvoicesView, "invoices", "view", "Facturen bekijken"),
         (InvoicesCreate, "invoices", "create", "Facturen aanmaken"),

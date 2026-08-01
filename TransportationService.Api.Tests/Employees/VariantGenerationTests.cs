@@ -32,8 +32,8 @@ public class VariantGenerationTests
         var tenant = new DevTenantContext(tenantId);
         var currentUser = new DevCurrentUserContext(null);
         var audit = new AuditService(db.Context, tenant, currentUser);
-        var inventory = new InventoryService(db.Context, tenant, currentUser, audit);
-        var templates = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions());
+        var inventory = new InventoryService(db.Context, tenant, currentUser, audit, InventoryTestFactory.Guard(currentUser));
+        var templates = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions(), InventoryTestFactory.Guard(currentUser));
         return new Harness(db, inventory, templates, tenantId);
     }
 

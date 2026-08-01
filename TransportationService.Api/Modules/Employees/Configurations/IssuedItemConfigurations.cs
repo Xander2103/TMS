@@ -122,6 +122,58 @@ public class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement
     }
 }
 
+public class ReorderProposalConfiguration : IEntityTypeConfiguration<ReorderProposal>
+{
+    public void Configure(EntityTypeBuilder<ReorderProposal> builder)
+    {
+        builder.ToTable("reorder_proposals");
+        builder.HasKey(p => p.Id);
+        builder.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(p => p.Notes).HasMaxLength(1000);
+
+        // At most one OPEN proposal per stock target (NULL variant split like inventory_alerts).
+        builder.HasIndex(p => new { p.TenantId, p.TemplateId, p.VariantId })
+            .IsUnique()
+            .HasFilter("\"VariantId\" IS NOT NULL AND \"IsDeleted\" = false AND \"Status\" IN ('Proposed','Reviewed','Approved','Ordered')");
+        builder.HasIndex(p => new { p.TenantId, p.TemplateId })
+            .IsUnique()
+            .HasFilter("\"VariantId\" IS NULL AND \"IsDeleted\" = false AND \"Status\" IN ('Proposed','Reviewed','Approved','Ordered')");
+        builder.HasIndex(p => new { p.TenantId, p.Status });
+
+        builder.HasOne<IssuedItemTemplate>().WithMany()
+            .HasForeignKey(p => p.TemplateId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<IssuedItemVariant>().WithMany()
+            .HasForeignKey(p => p.VariantId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasQueryFilter(p => !p.IsDeleted);
+    }
+}
+
+public class InventoryAlertConfiguration : IEntityTypeConfiguration<InventoryAlert>
+{
+    public void Configure(EntityTypeBuilder<InventoryAlert> builder)
+    {
+        builder.ToTable("inventory_alerts");
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.Kind).HasConversion<string>().HasMaxLength(20);
+        builder.Property(a => a.Status).HasConversion<string>().HasMaxLength(20);
+
+        // One state row per stock target. Postgres treats NULLs as distinct, so the
+        // template-level rows (VariantId IS NULL) need their own filtered unique index —
+        // same split as message_templates.
+        builder.HasIndex(a => new { a.TenantId, a.TemplateId, a.VariantId })
+            .IsUnique().HasFilter("\"VariantId\" IS NOT NULL AND \"IsDeleted\" = false");
+        builder.HasIndex(a => new { a.TenantId, a.TemplateId })
+            .IsUnique().HasFilter("\"VariantId\" IS NULL AND \"IsDeleted\" = false");
+        builder.HasIndex(a => new { a.TenantId, a.Status });
+
+        builder.HasOne<IssuedItemTemplate>().WithMany()
+            .HasForeignKey(a => a.TemplateId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<IssuedItemVariant>().WithMany()
+            .HasForeignKey(a => a.VariantId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasQueryFilter(a => !a.IsDeleted);
+    }
+}
+
 public class EmployeeIssuedItemConfiguration : IEntityTypeConfiguration<EmployeeIssuedItem>
 {
     public void Configure(EntityTypeBuilder<EmployeeIssuedItem> builder)
@@ -135,10 +187,13 @@ public class EmployeeIssuedItemConfiguration : IEntityTypeConfiguration<Employee
         builder.Property(i => i.SerialNumber).HasMaxLength(100);
         builder.Property(i => i.Notes).HasMaxLength(1000);
         builder.Property(i => i.ReturnCondition).HasMaxLength(200);
+        builder.Property(i => i.ConditionAtIssue).HasMaxLength(200);
+        builder.Property(i => i.ReturnDisposition).HasMaxLength(20);
 
         builder.Property(i => i.VariantSnapshot).HasMaxLength(200);
 
         builder.HasIndex(i => new { i.TenantId, i.EmployeeId });
+        builder.HasIndex(i => new { i.TenantId, i.Status, i.ExpectedReturnDate });
 
         builder.HasOne<Employee>().WithMany()
             .HasForeignKey(i => i.EmployeeId).OnDelete(DeleteBehavior.Cascade);

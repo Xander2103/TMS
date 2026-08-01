@@ -33,8 +33,8 @@ public class VariantEditFlowTests
         var tenant = new DevTenantContext(tenantId);
         var currentUser = new DevCurrentUserContext(null);
         var audit = new AuditService(db.Context, tenant, currentUser);
-        var inventory = new InventoryService(db.Context, tenant, currentUser, audit);
-        var templates = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions());
+        var inventory = new InventoryService(db.Context, tenant, currentUser, audit, InventoryTestFactory.Guard(currentUser));
+        var templates = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions(), InventoryTestFactory.Guard(currentUser));
         return new Harness(db, inventory, templates, tenantId);
     }
 
@@ -184,7 +184,8 @@ public class VariantEditFlowTests
 
         var foreignTenant = new DevTenantContext(Guid.NewGuid());
         var foreignInventory = new InventoryService(h.Db.Context, foreignTenant, new DevCurrentUserContext(null),
-            new AuditService(h.Db.Context, foreignTenant, new DevCurrentUserContext(null)));
+            new AuditService(h.Db.Context, foreignTenant, new DevCurrentUserContext(null)),
+            InventoryTestFactory.Guard(new DevCurrentUserContext(null)));
 
         Assert.Null(await foreignInventory.UpdateVariantAsync(s.TemplateId, variant.Id, new SaveVariantRequest(
             [], true, 0, null, Label: "Gekaapt"), CancellationToken.None));

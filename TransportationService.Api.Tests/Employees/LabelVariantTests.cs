@@ -36,8 +36,8 @@ public class LabelVariantTests
         var tenant = new DevTenantContext(tenantId);
         var currentUser = new DevCurrentUserContext(null);
         var audit = new AuditService(db.Context, tenant, currentUser);
-        var inventory = new InventoryService(db.Context, tenant, currentUser, audit);
-        var templates = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions());
+        var inventory = new InventoryService(db.Context, tenant, currentUser, audit, InventoryTestFactory.Guard(currentUser));
+        var templates = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions(), InventoryTestFactory.Guard(currentUser));
         return new Harness(db, inventory, templates, tenantId);
     }
 
@@ -160,8 +160,10 @@ public class LabelVariantTests
         var audit = new AuditService(h.Db.Context, tenant, currentUser);
         var notifications = new NotificationService(h.Db.Context, tenant, currentUser, TimeProvider.System);
         var inventory = new InventoryService(h.Db.Context, tenant, currentUser, audit,
-            new LowStockNotifier(h.Db.Context, tenant, notifications));
-        var templates = new IssuedItemService(h.Db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions());
+            InventoryTestFactory.Guard(currentUser),
+            new InventoryAlertService(h.Db.Context, tenant, notifications, TimeProvider.System));
+        var templates = new IssuedItemService(h.Db.Context, tenant, currentUser, audit, inventory,
+            new AllowAllPermissions(), InventoryTestFactory.Guard(currentUser));
         var template = await templates.CreateTemplateAsync(
             new SaveIssuedItemTemplateRequest("Werkshirt", "Kleding", null, 1, false, true, true, true, 0,
                 StockTrackingEnabled: true, VariantsEnabled: true, LowStockThreshold: 1),
@@ -172,8 +174,8 @@ public class LabelVariantTests
         await inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(variant!.Id, 4, "Test"), CancellationToken.None);
 
         var notification = await h.Db.Context.Notifications
-            .Where(n => n.TenantId == h.TenantId && n.Type == LowStockNotifier.NotificationType)
+            .Where(n => n.TenantId == h.TenantId && n.Type == "inventory_status_low")
             .ToListAsync();
-        Assert.Contains(notification, n => n.Message.Contains("Small") && n.Message.Contains("grens: 5"));
+        Assert.Contains(notification, n => n.Message.Contains("Small") && n.Message.Contains("waarschuwingsgrens: 5"));
     }
 }

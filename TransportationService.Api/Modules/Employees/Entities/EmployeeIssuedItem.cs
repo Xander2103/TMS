@@ -39,7 +39,20 @@ public class EmployeeIssuedItem : AuditableTenantEntity
     public string? Notes { get; set; }
     public Guid? IssuedByUserId { get; set; }
 
+    /// <summary>Loan deadline: when set and passed while still issued, the loan is overdue.</summary>
+    public DateOnly? ExpectedReturnDate { get; set; }
+
+    /// <summary>Condition noted at issue time (baseline for damage assessment at return).</summary>
+    public string? ConditionAtIssue { get; set; }
+
     public DateOnly? ReturnedDate { get; set; }
     public string? ReturnCondition { get; set; }
+
+    /// <summary>Persisted structured outcome of the return: good/damaged/lost/disposed.</summary>
+    public string? ReturnDisposition { get; set; }
+
     public Guid? ReceivedBackByUserId { get; set; }
+
+    /// <summary>Set once when the overdue-return reminder went out (anti-spam).</summary>
+    public DateTime? OverdueNotifiedAt { get; set; }
 }

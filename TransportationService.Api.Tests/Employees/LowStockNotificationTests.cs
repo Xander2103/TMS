@@ -13,8 +13,10 @@ using TransportationService.Api.Tests.TestSupport;
 namespace TransportationService.Api.Tests.Employees;
 
 /// <summary>
-/// Spec 1.4: low-stock notifications fire on a threshold crossing (not on every read or
-/// mutation), reach only holders of inventory.low_stock_alerts, and dedupe within a window.
+/// Inventory status alerts (sprint fase 2): a transition into a non-normal status notifies
+/// the inventory.low_stock_alerts holders exactly once; staying there is silent; recovery
+/// resolves alert + notifications; a later new drop notifies again. Backed by the
+/// InventoryAlert state row, not a time window.
 /// </summary>
 public class LowStockNotificationTests
 {
@@ -56,63 +58,97 @@ public class LowStockNotificationTests
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);
-        var currentUser = new DevCurrentUserContext(null);
+        var currentUser = new DevCurrentUserContext(Guid.NewGuid());
         var audit = new AuditService(db.Context, tenant, currentUser);
         var notifications = new NotificationService(db.Context, tenant, currentUser, TimeProvider.System);
-        var lowStock = new LowStockNotifier(db.Context, tenant, notifications);
-        var inventory = new InventoryService(db.Context, tenant, currentUser, audit, lowStock);
-        var items = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions(), lowStock);
+        var alerts = new InventoryAlertService(db.Context, tenant, notifications, TimeProvider.System);
+        var guard = InventoryTestFactory.Guard(currentUser);
+        var inventory = new InventoryService(db.Context, tenant, currentUser, audit, guard, alerts);
+        var items = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions(), guard, alerts);
         return new Harness(db, items, inventory, tenantId, employeeId, alertUserId, otherUserId);
     }
 
-    private static SaveIssuedItemTemplateRequest StockTemplate(int stock, int threshold) =>
+    private static SaveIssuedItemTemplateRequest StockTemplate(int stock, int? warning, int? minimum = null) =>
         new("Handschoenen", "Algemeen", null, 1, false, true, true, true, 0,
-            StockTrackingEnabled: true, LowStockThreshold: threshold, Stock: stock);
+            StockTrackingEnabled: true, LowStockThreshold: warning, MinimumStock: minimum, Stock: stock);
 
     private static SaveEmployeeIssuedItemRequest Issue(Guid templateId, int quantity) =>
-        new(templateId, null, null, IssuedItemStatus.Issued, new DateOnly(2026, 7, 24), quantity, null, null, null, null);
+        new(templateId, null, null, IssuedItemStatus.Issued, new DateOnly(2026, 8, 1), quantity, null, null, null, null);
+
+    private static Task<List<TransportationService.Api.Modules.Notifications.Entities.Notification>> NotificationsOfType(
+        Harness h, string type) =>
+        h.Db.Context.Notifications.Where(n => n.TenantId == h.TenantId && n.Type == type).ToListAsync();
 
     [Fact]
-    public async Task Crossing_NotifiesOnlyPermissionHolders()
+    public async Task TransitionToLow_NotifiesOnlyPermissionHolders_AndOpensAlert()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 5, threshold: 3), CancellationToken.None);
+        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 5, warning: 3), CancellationToken.None);
 
-        // 5 -> 2 crosses the threshold of 3.
+        // 5 -> 2 enters LowStock.
         await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 3), CancellationToken.None);
 
-        var notifications = await h.Db.Context.Notifications.Where(n => n.Type == "inventory_low_stock").ToListAsync();
+        var notifications = await NotificationsOfType(h, "inventory_status_low");
         Assert.Single(notifications);
         Assert.Equal(h.AlertUserId, notifications[0].UserId);
         Assert.Contains("Handschoenen", notifications[0].Message);
-        Assert.Contains($"#{template.Id}", notifications[0].LinkPath);
+
+        var alert = Assert.Single(await h.Db.Context.InventoryAlerts.Where(a => a.TemplateId == template.Id).ToListAsync());
+        Assert.Equal(InventoryStatus.LowStock, alert.Kind);
+        Assert.Equal(InventoryAlertStatus.Active, alert.Status);
+        Assert.Equal(2, alert.StockSnapshot);
     }
 
     [Fact]
-    public async Task NoCrossing_NoNotification()
+    public async Task StayingLow_DoesNotNotifyAgain()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 10, threshold: 3), CancellationToken.None);
-
-        // 10 -> 5 stays above the threshold; already-below mutations don't re-fire either.
-        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 5), CancellationToken.None);
-        Assert.Empty(await h.Db.Context.Notifications.Where(n => n.Type == "inventory_low_stock").ToListAsync());
-    }
-
-    [Fact]
-    public async Task RepeatedCrossings_WithinWindow_AreDeduplicated()
-    {
-        var h = await SeedAsync();
-        using var _ = h.Db;
-        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 5, threshold: 3), CancellationToken.None);
+        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 5, warning: 3), CancellationToken.None);
 
         await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 3), CancellationToken.None); // 5 -> 2: fires
-        await h.Inventory.ReceiveStockAsync(template.Id, new StockReceiptRequest(null, 5, null), CancellationToken.None); // 2 -> 7
-        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 5), CancellationToken.None); // 7 -> 2: crossing again, deduped
+        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 1), CancellationToken.None); // 2 -> 1: still LowStock
 
-        Assert.Single(await h.Db.Context.Notifications.Where(n => n.Type == "inventory_low_stock").ToListAsync());
+        Assert.Single(await NotificationsOfType(h, "inventory_status_low"));
+    }
+
+    [Fact]
+    public async Task Recovery_ResolvesAlertAndNotifications_NewDropNotifiesAgain()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 5, warning: 3), CancellationToken.None);
+
+        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 3), CancellationToken.None); // 5 -> 2: fires
+        await h.Inventory.ReceiveStockAsync(template.Id, new StockReceiptRequest(null, 5, null), CancellationToken.None); // 2 -> 7: recovered
+
+        var alert = Assert.Single(await h.Db.Context.InventoryAlerts.Where(a => a.TemplateId == template.Id).ToListAsync());
+        Assert.Equal(InventoryAlertStatus.Resolved, alert.Status);
+        Assert.All(await NotificationsOfType(h, "inventory_status_low"), n => Assert.NotNull(n.ResolvedAt));
+
+        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 5), CancellationToken.None); // 7 -> 2: new episode
+        var notifications = await NotificationsOfType(h, "inventory_status_low");
+        Assert.Equal(2, notifications.Count);
+        Assert.Single(notifications, n => n.ResolvedAt == null);
+    }
+
+    [Fact]
+    public async Task WorseningStatus_ResolvesOldAndNotifiesNewKind()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 5, warning: 3, minimum: 1), CancellationToken.None);
+
+        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 3), CancellationToken.None); // 5 -> 2: LowStock
+        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 1), CancellationToken.None); // 2 -> 1: CriticalStock
+
+        var low = await NotificationsOfType(h, "inventory_status_low");
+        Assert.All(low, n => Assert.NotNull(n.ResolvedAt));
+        Assert.Single(await NotificationsOfType(h, "inventory_status_critical"));
+
+        var alert = Assert.Single(await h.Db.Context.InventoryAlerts.Where(a => a.TemplateId == template.Id).ToListAsync());
+        Assert.Equal(InventoryStatus.CriticalStock, alert.Kind);
     }
 
     [Fact]
@@ -120,10 +156,36 @@ public class LowStockNotificationTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 10, threshold: 3), CancellationToken.None);
+        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 10, warning: 3), CancellationToken.None);
 
         await h.Inventory.CorrectStockAsync(template.Id, new StockCorrectionRequest(null, 2, "Telling"), CancellationToken.None);
 
-        Assert.Single(await h.Db.Context.Notifications.Where(n => n.Type == "inventory_low_stock").ToListAsync());
+        Assert.Single(await NotificationsOfType(h, "inventory_status_low"));
+    }
+
+    [Fact]
+    public async Task OutOfStock_WithoutThresholds_OpensAlertButStaysSilent()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 2, warning: null), CancellationToken.None);
+
+        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 2), CancellationToken.None); // 2 -> 0
+
+        var alert = Assert.Single(await h.Db.Context.InventoryAlerts.Where(a => a.TemplateId == template.Id).ToListAsync());
+        Assert.Equal(InventoryStatus.OutOfStock, alert.Kind);
+        Assert.Empty(await NotificationsOfType(h, "inventory_status_out"));
+    }
+
+    [Fact]
+    public async Task OutOfStock_WithThresholds_Notifies()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var template = await h.Items.CreateTemplateAsync(StockTemplate(stock: 2, warning: 5), CancellationToken.None);
+
+        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 2), CancellationToken.None); // 2 -> 0
+
+        Assert.Single(await NotificationsOfType(h, "inventory_status_out"));
     }
 }

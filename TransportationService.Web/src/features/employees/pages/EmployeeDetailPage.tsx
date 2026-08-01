@@ -166,7 +166,7 @@ export function EmployeeDetailPage() {
       panel: true,
       render: () =>
         canViewIssuedItems ? (
-          <IssuedItemsTab employeeId={employee.id} />
+          <IssuedItemsTab employeeId={employee.id} employeeName={`${employee.firstName} ${employee.lastName}`} />
         ) : (
           <p className="placeholder-text">Je hebt geen rechten om bedrijfsmiddelen te bekijken.</p>
         ),
@@ -366,7 +366,7 @@ export function EmployeeDetailPage() {
 
       {tab === 'bedrijfsmiddelen' && canViewIssuedItems && (
         <TabPanel tabId="bedrijfsmiddelen">
-          <IssuedItemsTab employeeId={employee.id} />
+          <IssuedItemsTab employeeId={employee.id} employeeName={`${employee.firstName} ${employee.lastName}`} />
         </TabPanel>
       )}
 

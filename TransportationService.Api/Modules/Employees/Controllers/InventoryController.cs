@@ -153,8 +153,26 @@ public class InventoryController : ControllerBase
         return movement is null ? NotFound() : Ok(movement);
     }
 
+    [HttpPost("api/issued-item-templates/{id:guid}/stock/preflight")]
+    [RequirePermission(PermissionCodes.InventoryAdjust, PermissionCodes.InventoryManage, PermissionCodes.IssuedItemsManage)]
+    public async Task<ActionResult<StockPreflightDto>> PreflightStock(
+        Guid id, StockPreflightRequest request, CancellationToken cancellationToken)
+    {
+        var preflight = await _service.PreflightAsync(id, request, cancellationToken);
+        return preflight is null ? NotFound() : Ok(preflight);
+    }
+
+    [HttpPut("api/issued-item-templates/{id:guid}/thresholds")]
+    [RequirePermission(PermissionCodes.InventoryManageThresholds, PermissionCodes.IssuedItemsManageTemplates)]
+    public async Task<ActionResult<IssuedItemTemplateDto>> UpdateThresholds(
+        Guid id, UpdateThresholdsRequest request, CancellationToken cancellationToken)
+    {
+        var template = await _service.UpdateThresholdsAsync(id, request, cancellationToken);
+        return template is null ? NotFound() : Ok(template);
+    }
+
     [HttpGet("api/issued-item-templates/{id:guid}/stock/movements")]
-    [RequirePermission(PermissionCodes.InventoryView, PermissionCodes.InventoryManage, PermissionCodes.InventoryAdjust)]
+    [RequirePermission(PermissionCodes.InventoryViewMovements, PermissionCodes.InventoryView, PermissionCodes.InventoryManage, PermissionCodes.InventoryAdjust)]
     public async Task<ActionResult<IReadOnlyList<StockMovementDto>>> ListMovements(Guid id, CancellationToken cancellationToken)
     {
         var movements = await _service.ListMovementsAsync(id, cancellationToken);

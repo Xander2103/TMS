@@ -1,6 +1,7 @@
 import { ApiError, apiClient } from '../../api/apiClient'
 import { apiBaseUrl } from '../../config/env'
 import { getAccessToken } from '../auth/authStorage'
+import type { InventoryStatus } from './inventoryStatus'
 
 export type IssuedItemStatus = 'NotIssued' | 'Issued' | 'Returned' | 'Missing' | 'Damaged'
 
@@ -44,6 +45,10 @@ export interface IssuedItemTemplate {
   allowNegativeStock: boolean
   lowStockThreshold: number | null
   minimumStock: number | null
+  targetStockLevel: number | null
+  reorderQuantity: number | null
+  negativeStockRequiresReason: boolean
+  stockStatus: InventoryStatus
   storageLocation: string | null
   currentStock: number
   totalAvailable: number
@@ -109,8 +114,11 @@ export interface EmployeeIssuedItemInput {
   variantId?: string | null
   returnDisposition?: ReturnDisposition | null
   restoreStock?: boolean | null
-  overrideInsufficientStock?: boolean
   overrideReason?: string | null
+  /** Resend flag after a negative_stock_confirmation_required 409. */
+  confirmNegativeStock?: boolean
+  /** Stock version (guid) uit de 409-payload; server weigert bij tussentijdse wijziging. */
+  expectedVersion?: string | null
 }
 
 // ---- Stock units (managed master data for the "Voorraadeenheid" dropdown) ----

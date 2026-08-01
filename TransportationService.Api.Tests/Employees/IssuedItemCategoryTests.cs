@@ -45,8 +45,8 @@ public class IssuedItemCategoryTests
         var tenant = new DevTenantContext(tenantId);
         var currentUser = new DevCurrentUserContext(null);
         var audit = new AuditService(db.Context, tenant, currentUser);
-        var inventory = new InventoryService(db.Context, tenant, currentUser, audit);
-        return new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions());
+        var inventory = new InventoryService(db.Context, tenant, currentUser, audit, InventoryTestFactory.Guard(currentUser));
+        return new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions(), InventoryTestFactory.Guard(currentUser));
     }
 
     private static SaveIssuedItemTemplateRequest Template(string name = "Werkbroek", Guid? categoryId = null) =>

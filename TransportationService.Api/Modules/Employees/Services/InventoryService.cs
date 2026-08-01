@@ -45,7 +45,26 @@ public record StockMovementDto(
 
 public record StockReceiptRequest(Guid? VariantId, int Quantity, string? Notes);
 
-public record StockCorrectionRequest(Guid? VariantId, int NewQuantity, string Reason);
+public record StockCorrectionRequest(
+    Guid? VariantId, int NewQuantity, string Reason,
+    Guid? ExpectedVersion = null, bool ConfirmNegativeStock = false);
+
+public record StockPreflightRequest(Guid? VariantId, int QuantityDelta);
+
+/// <summary>
+/// Projection for the confirmation modal: Blocked = the mutation can never proceed
+/// (negative not allowed); RequiresConfirmation = proceed only via the confirmed flow
+/// carrying <see cref="Version"/>.
+/// </summary>
+public record StockPreflightDto(
+    int CurrentStock, int ProjectedStock, bool AllowNegativeStock,
+    bool Blocked, bool RequiresConfirmation, bool RequiresReason, Guid Version,
+    InventoryStatus CurrentStatus, InventoryStatus ProjectedStatus,
+    int? WarningLevel, int? MinimumLevel);
+
+public record UpdateThresholdsRequest(
+    int? LowStockThreshold, int? MinimumStock, int? TargetStockLevel, int? ReorderQuantity,
+    bool AllowNegativeStock, bool NegativeStockRequiresReason);
 
 public record CurrentHolderDto(
     Guid EmployeeId, string EmployeeName, string EmployeeNumber, Guid ItemId,
@@ -78,6 +97,8 @@ public interface IInventoryService
     // Stock.
     Task<StockMovementDto?> ReceiveStockAsync(Guid templateId, StockReceiptRequest request, CancellationToken cancellationToken);
     Task<StockMovementDto?> CorrectStockAsync(Guid templateId, StockCorrectionRequest request, CancellationToken cancellationToken);
+    Task<StockPreflightDto?> PreflightAsync(Guid templateId, StockPreflightRequest request, CancellationToken cancellationToken);
+    Task<IssuedItemTemplateDto?> UpdateThresholdsAsync(Guid templateId, UpdateThresholdsRequest request, CancellationToken cancellationToken);
     Task<IReadOnlyList<StockMovementDto>?> ListMovementsAsync(Guid templateId, CancellationToken cancellationToken);
     Task<IReadOnlyList<CurrentHolderDto>?> ListCurrentHoldersAsync(Guid templateId, CancellationToken cancellationToken);
 
@@ -101,16 +122,19 @@ public class InventoryService : IInventoryService
     private readonly ITenantContext _tenantContext;
     private readonly ICurrentUserContext _currentUser;
     private readonly IAuditService _auditService;
-    private readonly ILowStockNotifier? _lowStockNotifier;
+    private readonly INegativeStockGuard _negativeStockGuard;
+    private readonly IInventoryAlertService? _alertService;
 
     public InventoryService(TransportationDbContext dbContext, ITenantContext tenantContext,
-        ICurrentUserContext currentUser, IAuditService auditService, ILowStockNotifier? lowStockNotifier = null)
+        ICurrentUserContext currentUser, IAuditService auditService,
+        INegativeStockGuard negativeStockGuard, IInventoryAlertService? alertService = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _currentUser = currentUser;
         _auditService = auditService;
-        _lowStockNotifier = lowStockNotifier;
+        _negativeStockGuard = negativeStockGuard;
+        _alertService = alertService;
     }
 
     // --- Attribute definitions ---
@@ -613,6 +637,7 @@ public class InventoryService : IInventoryService
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(MovementEntity, movement.Id.ToString(), "StockReceived",
             null, new { template.Name, variant?.Label, movement.Quantity, movement.ResultingStock }, cancellationToken);
+        await SyncAlertsAsync(template, variant, cancellationToken);
         return await MapMovementAsync(movement, cancellationToken);
     }
 
@@ -629,11 +654,6 @@ public class InventoryService : IInventoryService
             throw new DomainValidationException("reason", "Een reden is verplicht bij een voorraadcorrectie.");
         }
 
-        if (request.NewQuantity < 0 && !template.AllowNegativeStock)
-        {
-            throw new DomainValidationException("newQuantity", "Negatieve voorraad is niet toegestaan voor dit sjabloon.");
-        }
-
         var current = variant?.CurrentStock ?? template.CurrentStock;
         var delta = request.NewQuantity - current;
         if (delta == 0)
@@ -641,16 +661,126 @@ public class InventoryService : IInventoryService
             throw new DomainValidationException("newQuantity", "De nieuwe voorraad is gelijk aan de huidige voorraad.");
         }
 
+        await _negativeStockGuard.EnsureAllowedAsync(template, variant, delta,
+            new NegativeStockConfirmation(request.ConfirmNegativeStock, request.ExpectedVersion, request.Reason),
+            cancellationToken);
+
         var movement = ApplyMovement(template, variant, StockMovementType.Correction, delta, request.Reason.Trim(), null, null);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync(MovementEntity, movement.Id.ToString(), "StockCorrected",
             new { Previous = current }, new { template.Name, variant?.Label, movement.ResultingStock, movement.Reason }, cancellationToken);
-        if (_lowStockNotifier is not null)
+        if (movement.ResultingStock < 0)
         {
-            await _lowStockNotifier.NotifyIfCrossedAsync(template, variant, current, cancellationToken);
+            await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "NegativeStockConfirmed",
+                new { Previous = current },
+                new { template.Name, variant?.Label, movement.ResultingStock, movement.Reason, Confirmed = true },
+                cancellationToken);
         }
 
+        await SyncAlertsAsync(template, variant, cancellationToken);
         return await MapMovementAsync(movement, cancellationToken);
+    }
+
+    public async Task<StockPreflightDto?> PreflightAsync(Guid templateId, StockPreflightRequest request, CancellationToken cancellationToken)
+    {
+        var (template, variant) = await ResolveStockTargetAsync(templateId, request.VariantId, cancellationToken);
+        if (template is null)
+        {
+            return null;
+        }
+
+        var current = variant?.CurrentStock ?? template.CurrentStock;
+        var projected = current + request.QuantityDelta;
+        var warning = variant?.LowStockThreshold ?? template.LowStockThreshold;
+        var goesNegative = projected < 0;
+        return new StockPreflightDto(
+            current, projected, template.AllowNegativeStock,
+            Blocked: goesNegative && !template.AllowNegativeStock,
+            RequiresConfirmation: goesNegative && template.AllowNegativeStock,
+            RequiresReason: template.NegativeStockRequiresReason,
+            Version: variant?.Version ?? template.Version,
+            CurrentStatus: InventoryStatusCalculator.Compute(current, warning, template.MinimumStock),
+            ProjectedStatus: InventoryStatusCalculator.Compute(projected, warning, template.MinimumStock),
+            WarningLevel: warning, MinimumLevel: template.MinimumStock);
+    }
+
+    public async Task<IssuedItemTemplateDto?> UpdateThresholdsAsync(
+        Guid templateId, UpdateThresholdsRequest request, CancellationToken cancellationToken)
+    {
+        var template = await FindTemplateAsync(templateId, cancellationToken);
+        if (template is null)
+        {
+            return null;
+        }
+
+        if (request.LowStockThreshold is < 0 || request.MinimumStock is < 0 || request.TargetStockLevel is < 0)
+        {
+            throw new DomainValidationException("Drempels kunnen niet negatief zijn.");
+        }
+
+        if (request.ReorderQuantity is < 1)
+        {
+            throw new DomainValidationException("reorderQuantity", "De bestelhoeveelheid moet minstens 1 zijn.");
+        }
+
+        if (request.MinimumStock is { } minimum && request.LowStockThreshold is { } warning && minimum > warning)
+        {
+            throw new DomainValidationException("minimumStock",
+                "Het minimumniveau kan niet boven de waarschuwingsgrens liggen.");
+        }
+
+        var old = new
+        {
+            template.LowStockThreshold, template.MinimumStock, template.TargetStockLevel,
+            template.ReorderQuantity, template.AllowNegativeStock, template.NegativeStockRequiresReason,
+        };
+        template.LowStockThreshold = request.LowStockThreshold;
+        template.MinimumStock = request.MinimumStock;
+        template.TargetStockLevel = request.TargetStockLevel;
+        template.ReorderQuantity = request.ReorderQuantity;
+        template.AllowNegativeStock = request.AllowNegativeStock;
+        template.NegativeStockRequiresReason = request.NegativeStockRequiresReason;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "ThresholdsChanged",
+            old,
+            new
+            {
+                template.Name, template.LowStockThreshold, template.MinimumStock, template.TargetStockLevel,
+                template.ReorderQuantity, template.AllowNegativeStock, template.NegativeStockRequiresReason,
+            },
+            cancellationToken);
+
+        // New thresholds can change the status of the template and of every variant that
+        // falls back to the template's warning level.
+        if (template.VariantsEnabled)
+        {
+            var variants = await _dbContext.IssuedItemVariants
+                .Where(v => v.TenantId == _tenantContext.TenantId && v.TemplateId == template.Id && v.IsActive)
+                .ToListAsync(cancellationToken);
+            foreach (var variant in variants)
+            {
+                await SyncAlertsAsync(template, variant, cancellationToken);
+            }
+        }
+        else
+        {
+            await SyncAlertsAsync(template, null, cancellationToken);
+        }
+
+        var aggregate = await _dbContext.IssuedItemVariants.AsNoTracking()
+            .Where(v => v.TenantId == _tenantContext.TenantId && v.TemplateId == templateId)
+            .GroupBy(v => v.TemplateId)
+            .Select(g => new { Count = g.Count(), ActiveStock = g.Where(v => v.IsActive).Sum(v => v.CurrentStock) })
+            .FirstOrDefaultAsync(cancellationToken);
+        return IssuedItemService.MapTemplate(template, aggregate?.ActiveStock ?? 0, aggregate?.Count ?? 0);
+    }
+
+    private async Task SyncAlertsAsync(IssuedItemTemplate template, IssuedItemVariant? variant, CancellationToken cancellationToken)
+    {
+        if (_alertService is not null)
+        {
+            await _alertService.SyncAsync(template, variant, cancellationToken);
+        }
     }
 
     public async Task<IReadOnlyList<StockMovementDto>?> ListMovementsAsync(Guid templateId, CancellationToken cancellationToken)

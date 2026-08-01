@@ -29,13 +29,16 @@ public class Phase8SupplyChainTests
         [PermissionCodes.EmployeePlanningConflictOverride] = "planning conflict-override flow",
         [PermissionCodes.ScanningOverride] = "scan pipeline override gate",
         [PermissionCodes.PackagesRelabel] = "PackagesController.PrintLabels reprint gate",
-        [PermissionCodes.InventoryOverrideNegativeStock] = "IssuedItemService negative-stock override",
-        [PermissionCodes.InventoryLowStockAlerts] = "LowStockNotifier recipient selector",
+        [PermissionCodes.InventoryOverrideNegativeStock] = "NegativeStockGuard.EnsureAllowedAsync confirmation gate",
+        [PermissionCodes.InventoryLowStockAlerts] = "InventoryAlertService recipient selector",
+        [PermissionCodes.MessagesSendBulk] = "InternalMessageService.SendAsync bulk-targeting gate",
+        [PermissionCodes.PortalMessagesSendBulk] = "PortalMessageService.SendAsync multi-customer gate",
         [PermissionCodes.OrdersAssign] = "TripsController order-to-trip assignment gate",
 
         // Lookup-/settings-screens: enforced fail-closed inside LookupControllerBase (View on
         // Search/Options/GetById, Manage on Create/Update/Delete) — the code varies per concrete
         // controller, hence no attribute. Phase 10 classifies these controllers accordingly.
+        [PermissionCodes.TasksManageCategories] = "TaskCategoriesController : LookupControllerBase.ManagePermission",
         [PermissionCodes.DepartmentsView] = "DepartmentsController : LookupControllerBase.ViewPermission",
         [PermissionCodes.DepartmentsManage] = "DepartmentsController : LookupControllerBase.ManagePermission",
         [PermissionCodes.JobFunctionsView] = "JobFunctionsController : LookupControllerBase.ViewPermission",

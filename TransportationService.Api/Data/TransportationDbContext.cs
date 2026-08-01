@@ -133,6 +133,21 @@ public class TransportationDbContext : DbContext
     public DbSet<IssuedItemVariant> IssuedItemVariants => Set<IssuedItemVariant>();
     public DbSet<IssuedItemVariantValue> IssuedItemVariantValues => Set<IssuedItemVariantValue>();
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<InventoryAlert> InventoryAlerts => Set<InventoryAlert>();
+    public DbSet<ReorderProposal> ReorderProposals => Set<ReorderProposal>();
+
+    public DbSet<TransportationService.Api.Modules.Tasks.Entities.TaskCategory> TaskCategories =>
+        Set<TransportationService.Api.Modules.Tasks.Entities.TaskCategory>();
+    public DbSet<TransportationService.Api.Modules.Tasks.Entities.EmployeeTask> EmployeeTasks =>
+        Set<TransportationService.Api.Modules.Tasks.Entities.EmployeeTask>();
+    public DbSet<TransportationService.Api.Modules.Tasks.Entities.TaskAttachment> TaskAttachments =>
+        Set<TransportationService.Api.Modules.Tasks.Entities.TaskAttachment>();
+    public DbSet<TransportationService.Api.Modules.Tasks.Entities.TaskTemplate> TaskTemplates =>
+        Set<TransportationService.Api.Modules.Tasks.Entities.TaskTemplate>();
+    public DbSet<TransportationService.Api.Modules.Tasks.Entities.TaskTemplateItem> TaskTemplateItems =>
+        Set<TransportationService.Api.Modules.Tasks.Entities.TaskTemplateItem>();
+    public DbSet<TransportationService.Api.Modules.Tasks.Entities.TaskRecurrence> TaskRecurrences =>
+        Set<TransportationService.Api.Modules.Tasks.Entities.TaskRecurrence>();
 
     public DbSet<QualificationType> QualificationTypes => Set<QualificationType>();
     public DbSet<EmployeeQualification> EmployeeQualifications => Set<EmployeeQualification>();
@@ -191,6 +206,12 @@ public class TransportationDbContext : DbContext
         Set<TransportationService.Api.Modules.CustomerPortal.Entities.CustomerMessageRead>();
     public DbSet<TransportationService.Api.Modules.CustomerPortal.Entities.PortalAnnouncement> PortalAnnouncements =>
         Set<TransportationService.Api.Modules.CustomerPortal.Entities.PortalAnnouncement>();
+    public DbSet<TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessage> PortalMessages =>
+        Set<TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessage>();
+    public DbSet<TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessageRecipient> PortalMessageRecipients =>
+        Set<TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessageRecipient>();
+    public DbSet<TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessageReceipt> PortalMessageReceipts =>
+        Set<TransportationService.Api.Modules.CustomerPortal.Entities.PortalMessageReceipt>();
 
     // Locations
     public DbSet<Location> Locations => Set<Location>();

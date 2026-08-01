@@ -42,8 +42,10 @@ public class InventoryStockTests
         var currentUser = new DevCurrentUserContext(Guid.NewGuid());
         var audit = new AuditService(db.Context, tenant, currentUser);
         var permissions = new PermissionStub();
-        var inventory = new InventoryService(db.Context, tenant, currentUser, audit);
-        var items = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, permissions);
+        var inventory = new InventoryService(db.Context, tenant, currentUser, audit,
+            new NegativeStockGuard(currentUser, permissions));
+        var items = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, permissions,
+            new NegativeStockGuard(currentUser, permissions));
         return new Harness(db, items, inventory, permissions, tenantId, employeeId);
     }
 
@@ -56,9 +58,10 @@ public class InventoryStockTests
 
     private static SaveEmployeeIssuedItemRequest Issue(
         Guid templateId, int quantity = 1, Guid? variantId = null,
-        bool overrideStock = false, string? overrideReason = null) =>
+        bool overrideStock = false, string? overrideReason = null, Guid? expectedVersion = null) =>
         new(templateId, null, null, IssuedItemStatus.Issued, new DateOnly(2026, 7, 1), quantity, null, null, null, null,
-            VariantId: variantId, OverrideInsufficientStock: overrideStock, OverrideReason: overrideReason);
+            VariantId: variantId, OverrideInsufficientStock: overrideStock, OverrideReason: overrideReason,
+            ExpectedVersion: expectedVersion);
 
     private static SaveEmployeeIssuedItemRequest Return(
         Guid templateId, int quantity, string disposition, Guid? variantId = null, bool? restoreStock = null) =>
@@ -124,37 +127,37 @@ public class InventoryStockTests
     }
 
     [Fact]
-    public async Task InsufficientStock_OverrideRequiresPermissionAndReason()
+    public async Task InsufficientStock_WithoutAllowNegative_OverrideIsAlwaysRefused()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
         var template = await h.Items.CreateTemplateAsync(Template(stock: true), CancellationToken.None);
 
-        // Without the permission the override flag is refused.
-        h.Permissions.Allow = false;
-        await Assert.ThrowsAsync<DomainValidationException>(() =>
-            h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 1, overrideStock: true, overrideReason: "Spoed"), CancellationToken.None));
-
-        // With permission but without a reason it is still refused.
+        // Sprint fase 1: when the template forbids negative stock, no permission or override
+        // flag can push below zero anymore.
         h.Permissions.Allow = true;
+        var version = (await h.Db.Context.IssuedItemTemplates.AsNoTracking().SingleAsync()).Version;
         await Assert.ThrowsAsync<DomainValidationException>(() =>
-            h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 1, overrideStock: true), CancellationToken.None));
-
-        // Permission + reason → allowed, stock goes negative.
-        var item = await h.Items.UpsertAsync(h.EmployeeId, null,
-            Issue(template.Id, 1, overrideStock: true, overrideReason: "Spoedlevering nieuwe collega"), CancellationToken.None);
-        Assert.NotNull(item);
-        Assert.Equal(-1, (await h.Db.Context.IssuedItemTemplates.SingleAsync()).CurrentStock);
+            h.Items.UpsertAsync(h.EmployeeId, null,
+                Issue(template.Id, 1, overrideStock: true, overrideReason: "Spoed", expectedVersion: version), CancellationToken.None));
+        Assert.Equal(0, (await h.Db.Context.IssuedItemTemplates.SingleAsync()).CurrentStock);
     }
 
     [Fact]
-    public async Task AllowNegativeStock_SkipsTheGuard()
+    public async Task AllowNegativeStock_RequiresConfirmedOverride_ThenBooksNegative()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
+        h.Permissions.Allow = true;
         var template = await h.Items.CreateTemplateAsync(Template(stock: true, allowNegative: true), CancellationToken.None);
 
-        await h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 2), CancellationToken.None);
+        // Unconfirmed: the guard demands the explicit confirmation flow.
+        await Assert.ThrowsAsync<NegativeStockConfirmationRequiredException>(() =>
+            h.Items.UpsertAsync(h.EmployeeId, null, Issue(template.Id, 2), CancellationToken.None));
+
+        var version = (await h.Db.Context.IssuedItemTemplates.AsNoTracking().SingleAsync()).Version;
+        await h.Items.UpsertAsync(h.EmployeeId, null,
+            Issue(template.Id, 2, overrideStock: true, overrideReason: "Spoed", expectedVersion: version), CancellationToken.None);
 
         Assert.Equal(-2, (await h.Db.Context.IssuedItemTemplates.SingleAsync()).CurrentStock);
     }

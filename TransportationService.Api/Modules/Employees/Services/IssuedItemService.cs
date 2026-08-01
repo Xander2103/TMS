@@ -17,7 +17,10 @@ public record IssuedItemTemplateDto(
     bool StockTrackingEnabled, bool VariantsEnabled, bool AllowNegativeStock,
     int? LowStockThreshold, int? MinimumStock, string? StorageLocation,
     int CurrentStock, int TotalAvailable, bool LowStock, int VariantCount,
-    Guid? CategoryId = null);
+    Guid? CategoryId = null,
+    int? TargetStockLevel = null, int? ReorderQuantity = null,
+    bool NegativeStockRequiresReason = true,
+    InventoryStatus StockStatus = InventoryStatus.Normal);
 
 public record SaveIssuedItemTemplateRequest(
     string Name, string Category, string? ApplicableJobFunctionCodes,
@@ -27,13 +30,16 @@ public record SaveIssuedItemTemplateRequest(
     bool StockTrackingEnabled = false, bool VariantsEnabled = false, bool AllowNegativeStock = false,
     int? LowStockThreshold = null, int? MinimumStock = null, string? StorageLocation = null,
     Guid? CategoryId = null,
-    int? Stock = null, string? StockCorrectionReason = null);
+    int? Stock = null, string? StockCorrectionReason = null,
+    Guid? ExpectedVersion = null, bool ConfirmNegativeStock = false);
 
 public record EmployeeIssuedItemDto(
     Guid Id, Guid? TemplateId, string Name, string Category, IssuedItemStatus Status,
     DateOnly? IssuedDate, int Quantity, string? SerialNumber, string? Notes, Guid? IssuedByUserId,
     DateOnly? ReturnedDate, string? ReturnCondition, Guid? ReceivedBackByUserId,
-    Guid? VariantId = null, string? VariantLabel = null);
+    Guid? VariantId = null, string? VariantLabel = null,
+    DateOnly? ExpectedReturnDate = null, string? ConditionAtIssue = null,
+    string? ReturnDisposition = null, bool IsReturnOverdue = false);
 
 public record SaveEmployeeIssuedItemRequest(
     Guid? TemplateId, string? Name, string? Category, IssuedItemStatus Status,
@@ -43,7 +49,11 @@ public record SaveEmployeeIssuedItemRequest(
     string? ReturnDisposition = null,
     bool? RestoreStock = null,
     bool OverrideInsufficientStock = false,
-    string? OverrideReason = null);
+    string? OverrideReason = null,
+    Guid? ExpectedVersion = null,
+    bool ConfirmNegativeStock = false,
+    DateOnly? ExpectedReturnDate = null,
+    string? ConditionAtIssue = null);
 
 public interface IIssuedItemService
 {
@@ -72,12 +82,13 @@ public class IssuedItemService : IIssuedItemService
     private readonly IAuditService _auditService;
     private readonly IInventoryService _inventoryService;
     private readonly IPermissionAuthorizationService _permissionService;
-    private readonly ILowStockNotifier? _lowStockNotifier;
+    private readonly INegativeStockGuard _negativeStockGuard;
+    private readonly IInventoryAlertService? _alertService;
 
     public IssuedItemService(TransportationDbContext dbContext, ITenantContext tenantContext,
         ICurrentUserContext currentUser, IAuditService auditService,
         IInventoryService inventoryService, IPermissionAuthorizationService permissionService,
-        ILowStockNotifier? lowStockNotifier = null)
+        INegativeStockGuard negativeStockGuard, IInventoryAlertService? alertService = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -85,7 +96,8 @@ public class IssuedItemService : IIssuedItemService
         _auditService = auditService;
         _inventoryService = inventoryService;
         _permissionService = permissionService;
-        _lowStockNotifier = lowStockNotifier;
+        _negativeStockGuard = negativeStockGuard;
+        _alertService = alertService;
     }
 
     public async Task<IReadOnlyList<IssuedItemTemplateDto>> ListTemplatesAsync(bool includeInactive, CancellationToken cancellationToken, Guid? categoryId = null)
@@ -150,12 +162,11 @@ public class IssuedItemService : IIssuedItemService
             }
         }
 
-        var stockBeforeTarget = template.CurrentStock;
         await ApplyStockTargetAsync(template, request, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
-        if (_lowStockNotifier is not null && !template.VariantsEnabled)
+        if (_alertService is not null && !template.VariantsEnabled)
         {
-            await _lowStockNotifier.NotifyIfCrossedAsync(template, null, stockBeforeTarget, cancellationToken);
+            await _alertService.SyncAsync(template, null, cancellationToken);
         }
 
         await _auditService.RecordAsync(TemplateEntity, template.Id.ToString(), "Updated", null,
@@ -262,20 +273,33 @@ public class IssuedItemService : IIssuedItemService
         var stockBefore = template is { StockTrackingEnabled: true }
             ? variant?.CurrentStock ?? template.CurrentStock
             : (int?)null;
-        ApplyItemState(item, request);
+        ApplyItemState(item, request, oldStatus);
         await ApplyStockTransitionAsync(item, template, variant, oldStatus, oldQuantity, request, cancellationToken);
 
         // Item + movement + cached stock commit in ONE SaveChanges/transaction: a failed
         // employee-item write can never consume stock.
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        if (_lowStockNotifier is not null && template is not null && stockBefore is { } previousStock)
+        if (_alertService is not null && template is not null && stockBefore is not null)
         {
-            await _lowStockNotifier.NotifyIfCrossedAsync(template, variant, previousStock, cancellationToken);
+            await _alertService.SyncAsync(template, variant, cancellationToken);
         }
 
         await _auditService.RecordAsync(ItemEntity, item.Id.ToString(), AuditAction(item.Status), null,
             new { item.EmployeeId, item.NameSnapshot, item.Status, item.VariantSnapshot, request.ReturnDisposition }, cancellationToken);
+        if (stockBefore is { } previous && template is not null
+            && (variant?.CurrentStock ?? template.CurrentStock) < 0 && previous >= 0)
+        {
+            await _auditService.RecordAsync(ItemEntity, item.Id.ToString(), "NegativeStockConfirmed",
+                new { Previous = previous },
+                new
+                {
+                    item.EmployeeId, item.NameSnapshot, item.VariantSnapshot,
+                    ResultingStock = variant?.CurrentStock ?? template.CurrentStock,
+                    Reason = request.OverrideReason,
+                },
+                cancellationToken);
+        }
 
         return Map(item);
     }
@@ -452,30 +476,20 @@ public class IssuedItemService : IIssuedItemService
         }
     }
 
-    private async Task EnsureAvailableAsync(
+    /// <summary>
+    /// Negative-stock policy for an issue of <paramref name="requested"/> units. The legacy
+    /// OverrideInsufficientStock flag still counts as "confirmed" for API compatibility, but
+    /// the guard additionally demands the current Version token — a bare boolean can no
+    /// longer push stock below zero.
+    /// </summary>
+    private Task EnsureAvailableAsync(
         IssuedItemTemplate template, IssuedItemVariant? variant, int requested,
-        SaveEmployeeIssuedItemRequest request, CancellationToken cancellationToken)
-    {
-        var available = variant?.CurrentStock ?? template.CurrentStock;
-        if (available - requested >= 0 || template.AllowNegativeStock)
-        {
-            return;
-        }
-
-        var userId = _currentUser.CurrentUserId;
-        var mayOverride = request.OverrideInsufficientStock && userId is { } id
-            && await _permissionService.UserHasPermissionAsync(id, PermissionCodes.InventoryOverrideNegativeStock, cancellationToken);
-        if (!mayOverride)
-        {
-            throw new DomainValidationException("quantity",
-                $"Onvoldoende voorraad (beschikbaar: {available}). Vul de voorraad aan of gebruik een override.");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.OverrideReason))
-        {
-            throw new DomainValidationException("overrideReason", "Een reden is verplicht bij uitgifte zonder voldoende voorraad.");
-        }
-    }
+        SaveEmployeeIssuedItemRequest request, CancellationToken cancellationToken) =>
+        _negativeStockGuard.EnsureAllowedAsync(template, variant, -requested,
+            new NegativeStockConfirmation(
+                request.ConfirmNegativeStock || request.OverrideInsufficientStock,
+                request.ExpectedVersion, request.OverrideReason),
+            cancellationToken);
 
     private static StockMovementType DispositionMovement(string disposition) => disposition switch
     {
@@ -509,15 +523,33 @@ public class IssuedItemService : IIssuedItemService
         _dbContext.IssuedItemVariants.FirstOrDefaultAsync(
             v => v.TenantId == _tenantContext.TenantId && v.TemplateId == templateId && v.Id == variantId, cancellationToken);
 
-    private static void ApplyItemState(EmployeeIssuedItem item, SaveEmployeeIssuedItemRequest request)
+    /// <summary>oldStatus drives the who-did-it stamps: the user who flips a row INTO Issued
+    /// is the issuer; the one who flips it out of Issued received the goods back.</summary>
+    private void ApplyItemState(EmployeeIssuedItem item, SaveEmployeeIssuedItemRequest request, IssuedItemStatus oldStatus)
     {
         item.Status = request.Status;
         item.IssuedDate = request.IssuedDate;
         item.Quantity = Math.Max(1, request.Quantity);
         item.SerialNumber = Trim(request.SerialNumber);
         item.Notes = Trim(request.Notes);
+        item.ExpectedReturnDate = request.ExpectedReturnDate;
+        item.ConditionAtIssue = Trim(request.ConditionAtIssue) ?? item.ConditionAtIssue;
         item.ReturnedDate = request.ReturnedDate;
         item.ReturnCondition = Trim(request.ReturnCondition);
+
+        if (request.Status == IssuedItemStatus.Issued && oldStatus != IssuedItemStatus.Issued)
+        {
+            item.IssuedByUserId = _currentUser.CurrentUserId;
+            item.ReturnDisposition = null;
+            item.OverdueNotifiedAt = null;
+        }
+        else if (oldStatus == IssuedItemStatus.Issued && request.Status != IssuedItemStatus.Issued)
+        {
+            item.ReceivedBackByUserId = _currentUser.CurrentUserId;
+            item.ReturnDisposition = request.Status == IssuedItemStatus.Returned
+                ? (request.ReturnDisposition ?? "good").ToLowerInvariant()
+                : item.ReturnDisposition;
+        }
     }
 
     private void Apply(IssuedItemTemplate template, SaveIssuedItemTemplateRequest request)
@@ -575,10 +607,9 @@ public class IssuedItemService : IIssuedItemService
             return;
         }
 
-        if (target < 0 && !template.AllowNegativeStock)
-        {
-            throw new DomainValidationException("stock", "Negatieve voorraad is niet toegestaan voor dit sjabloon.");
-        }
+        await _negativeStockGuard.EnsureAllowedAsync(template, null, target - template.CurrentStock,
+            new NegativeStockConfirmation(request.ConfirmNegativeStock, request.ExpectedVersion, request.StockCorrectionReason),
+            cancellationToken);
 
         var hasMovements = await _dbContext.StockMovements.AnyAsync(
             m => m.TenantId == _tenantContext.TenantId && m.TemplateId == template.Id && m.VariantId == null,
@@ -627,6 +658,9 @@ public class IssuedItemService : IIssuedItemService
     public static IssuedItemTemplateDto MapTemplate(IssuedItemTemplate t, int variantStockSum, int variantCount = 0)
     {
         var total = t.VariantsEnabled ? variantStockSum : t.CurrentStock;
+        var status = t.StockTrackingEnabled
+            ? InventoryStatusCalculator.Compute(total, t.LowStockThreshold, t.MinimumStock)
+            : InventoryStatus.Normal;
         var low = t.StockTrackingEnabled && t.LowStockThreshold is { } threshold && total <= threshold;
         return new(
             t.Id, t.Name, t.Category, t.ApplicableJobFunctionCodes,
@@ -635,14 +669,18 @@ public class IssuedItemService : IIssuedItemService
             t.StockTrackingEnabled, t.VariantsEnabled, t.AllowNegativeStock,
             t.LowStockThreshold, t.MinimumStock, t.StorageLocation,
             t.CurrentStock, total, low, variantCount,
-            t.CategoryId);
+            t.CategoryId,
+            t.TargetStockLevel, t.ReorderQuantity, t.NegativeStockRequiresReason, status);
     }
 
     private static EmployeeIssuedItemDto Map(EmployeeIssuedItem i) => new(
         i.Id, i.TemplateId, i.NameSnapshot, i.CategorySnapshot, i.Status,
         i.IssuedDate, i.Quantity, i.SerialNumber, i.Notes, i.IssuedByUserId,
         i.ReturnedDate, i.ReturnCondition, i.ReceivedBackByUserId,
-        i.VariantId, i.VariantSnapshot);
+        i.VariantId, i.VariantSnapshot,
+        i.ExpectedReturnDate, i.ConditionAtIssue, i.ReturnDisposition,
+        IsReturnOverdue: i.Status == IssuedItemStatus.Issued
+            && i.ExpectedReturnDate is { } due && due < DateOnly.FromDateTime(DateTime.UtcNow));
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
