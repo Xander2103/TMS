@@ -260,19 +260,30 @@ deduplicatie via `Notification.DedupeKey` + `InventoryAlert`/`ReminderDispatchLo
 - Scope: het klantenportaal (layout, login/activatie, dashboard, orders, documenten,
   facturen, berichten, gebruikers, foutmeldingen). De interne app blijft NL.
 
-## 9. Migratieplan
+## 9. Migratieplan (definitief)
 
-Additieve migraties, in fasevolgorde:
-1. `InventoryThresholdsAndReturns` — kolommen op `issued_item_templates`,
-   `employee_issued_items`; tabellen `inventory_alerts`, `reorder_proposals` + indexen.
-2. `NotificationLifecycle` — kolommen op `notifications` + index `(TenantId, DedupeKey)`.
-3. `EmployeeMessageDelivery` — kolommen op `internal_messages`/`internal_message_recipients`.
-4. `PortalMessages` — 3 tabellen + indexen; `users.PreferredLanguageCode`.
-5. `EmployeeTasks` — taken, categorieën, templates, recurrences, attachments, escalatiepolicies.
-Indexen conform Fase 21-lijst (o.a. `(TenantId, AssignedEmployeeId, Status)`, `(TenantId, DueAt)`,
-`(TenantId, RecurrenceDedupeKey)` uniek gefilterd, `(TenantId, DedupeKey)` op alerts uniek gefilterd).
-Rollbackrisico: puur additief; nieuwe kolommen nullable of met veilige defaults; droppen van de
-nieuwe tabellen is de omkeerroute. Apply wordt getest op verse én bestaande database.
+Additieve migraties, in uitvoeringsvolgorde:
+1. `20260731223702_NotificationLifecycle` — dedupe/ack/resolve/expiry-kolommen op
+   `notifications` + indexen `(TenantId, DedupeKey)` en `(TenantId, ExpiresAt)`.
+2. `20260731224943_InventoryControls` — drempel-/beleidkolommen op `issued_item_templates`,
+   tabel `inventory_alerts` (unieke gefilterde indexen per target, NULL-variant gesplitst).
+3. `20260731230641_EmployeeAndPortalMessages` — berichtvelden op `internal_messages`/
+   `internal_message_recipients`; tabellen `portal_messages`/`_recipients`/`_receipts`;
+   `users.PreferredLanguageCode`.
+4. `20260731232110_EmployeeTasks` — `task_categories`, `employee_tasks` (indexen
+   `(TenantId, AssignedEmployeeId, Status)`, `(TenantId, DueAt)`, `(TenantId,
+   CreatedByUserId)`, related-entity, uniek gefilterde `(TenantId, RecurrenceDedupeKey)`),
+   `task_attachments`, `task_templates`, `task_template_items`, `task_recurrences`.
+5. `20260801074257_ReturnsAndReorders` — retourvelden op `employee_issued_items` (+ index
+   `(TenantId, Status, ExpectedReturnDate)`); tabel `reorder_proposals` (max één open
+   voorstel per target via gefilterde unieke indexen).
+6. `20260801075801_EscalationPoliciesAndAlertEpisodes` — `escalation_policies` (uniek
+   `(TenantId, Kind)`), `inventory_alerts.ActivatedAt`.
+
+Rollbackrisico: puur additief (nieuwe kolommen nullable of met veilige defaults); droppen
+van de nieuwe tabellen/kolommen is de omkeerroute; geen dataconversies. **Geverifieerd**:
+apply op de bestaande dev-database én op een verse database (170 tabellen, scratch-DB
+`ts_fresh_check`, daarna verwijderd).
 
 ## 10. Testplan
 
@@ -305,18 +316,15 @@ nieuwe tabellen is de omkeerroute. Apply wordt getest op verse én bestaande dat
   domeinfout; approval-wachtrij is een latere uitbreiding.
 - Digest-mails (alleen immediate).
 
-## 12. Verwachte commits
+## 12. Commits (definitief)
 
-1. `feat(inventory): negative stock confirmation, thresholds and status model`
+1. `docs: add inventory/tasks/notifications sprint specification (phase 0)`
 2. `feat(notifications): notification lifecycle (ack/resolve/dedupe/expiry) and bell`
-3. `feat(messaging): employee broadcast messages with delivery tracking`
-4. `feat(portal): multilingual portal messages`
-5. `feat(tasks): employee task management with status machine and review`
-6. `feat(tasks): categories, templates, recurring generation and redistribution`
-7. `feat(inventory): returns tracking and reorder proposals`
-8. `feat(portal): NL/FR/EN localization with language preference`
-9. `feat(dashboard): inventory, task and message widgets; escalation policies`
-10. `security: permissions catalogue v23, role upgrades, guards and audit coverage`
-11. `test/docs`-afsluiting + dit document bijgewerkt.
-
-(Volgorde kan per afhankelijkheid licht schuiven; alleen groene fasen worden gecommit.)
+3. `feat(inventory): negative-stock confirmation, status alerts, returns and reorder proposals`
+   — fasen 1-2 en 12-13 samen: de voorraadfasen delen entiteiten/services/DTO's en zijn als
+   één samenhangende wijziging gecommit.
+4. `feat(messaging): employee broadcast messages and multilingual portal messages` (fasen 4-5)
+5. `feat(tasks): employee task management with status machine, templates and recurrence` (fasen 6-11 backend)
+6. `feat(platform): tenant-aware sweeps, escalation policies, dashboard sections and portal language` (fasen 2/8/14-backend/16/22)
+7. `security: role-template upgrade v23 with sprint permission defaults and guard tests` (fase 17)
+8. Frontend-afsluiting: taken-UI, portaal-i18n NL/FR/EN, dashboardtegels + docs.

@@ -106,3 +106,34 @@ Gate `notification_rules.view`; tabs verbergen zich zonder de vereiste permissie
   klant-scoping of taal-terugval — het volgt dus niet de volledige resolutieketen van
   echte verzending. De uitnodigingsmail van het klantportaal passeert de
   ontvanger-resolutie niet (direct gequeued); alleen event-uit wordt gerespecteerd.
+
+## Sprint 2026-08-01: levenscyclus, berichten en portaalfeed
+
+- **Notification-levenscyclus**: `DedupeKey` (insert onderdrukt zolang een onopgeloste
+  melding met dezelfde sleutel bij dezelfde ontvanger bestaat; `ResolveByDedupeKeyAsync`
+  herwapent), `RequiresAcknowledgement`/`AcknowledgedAt` (bevestigen ≠ lezen;
+  `POST api/notifications/{id}/acknowledge`), `ResolvedAt` (conditie geklaard) en
+  `ExpiresAt` (verlopen meldingen tellen niet meer als ongelezen; onderhoudsjob archiveert
+  en ruimt op — zie docs/background-jobs.md). Nieuwe categorieën Inventory/Task/
+  CustomerPortal/Fleet/Document/Approval en ernst `Success`. Bel-icoon met dropdown
+  rechtsboven (`NotificationBell`), gedeelde 60s-poll via `NotificationsProvider`.
+- **Medewerkerberichten** (`InternalMessage`): prioriteit, bevestigingsplicht (per ontvanger
+  `AcknowledgedAt`), zichtbaarheidsvenster (`VisibleFrom`/`ExpiresAt`; de task-sweep
+  kondigt toekomstig zichtbare berichten exact één keer aan), intrekken (`CancelledAt`),
+  en optionele e-mailkopie per ontvanger via de outbox (`employee_message_received`,
+  idempotentiesleutel `employee_message:{messageId}:{userId}`; de outboxrij hangt aan de
+  ontvanger voor de bezorgstatus). Bulk-targeting (rol/afdeling/iedereen) vereist
+  `messages.send_bulk` — service-side afgedwongen omdat de controller de targeting-vorm
+  niet ziet. Bezorgstatus (gelezen/bevestigd/e-mail) voor de afzender of houders van
+  `messages.view_delivery_status`; intrekken door de afzender of `messages.cancel`.
+- **Portaalberichten** (`PortalMessage`, klantportaal): meertalig NL/FR/EN, display modes
+  Notification/DashboardBanner/BlockingAcknowledgement (blocking impliceert
+  bevestigingsplicht), targeting per klant of individuele portalgebruiker, receipts per
+  gebruiker, e-mail in de voorkeurstaal — zie docs/features/multilingual-customer-portal.md.
+  De feed is strikt klant-gescoped: vreemde id's zijn 404.
+- **Escalaties**: beperkte, configureerbare laag (géén workflow-engine) — zie
+  docs/background-jobs.md.
+- **Voorkeuren**: het bestaande model blijft — `NotificationPreference` per categorie
+  (in-app; Critical levert altijd) en `MessagingProfile`/`NotificationRule` voor e-mail.
+  De nieuwe categorieën verschijnen automatisch in de voorkeuren-UI. Digest-mails bewust
+  niet gebouwd (sprintdocument §11).
