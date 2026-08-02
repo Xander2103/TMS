@@ -810,6 +810,11 @@ public class TransportOrderService : ITransportOrderService
                 "Alleen concept- of geannuleerde opdrachten kunnen worden verwijderd.");
         }
 
+        var cargo = await _dbContext.CargoItems
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
+            .ToListAsync(cancellationToken);
+        _dbContext.RemoveRange(cargo); // interceptor converts to IsDeleted = true
+
         _dbContext.RemoveRange(order.Stops);
         _dbContext.Remove(order); // soft delete via interceptor
         await _dbContext.SaveChangesAsync(cancellationToken);

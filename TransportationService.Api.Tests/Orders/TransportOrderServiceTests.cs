@@ -546,6 +546,26 @@ public class TransportOrderServiceTests
     }
 
     [Fact]
+    public async Task Delete_SoftDeletesCargoItems()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "COLLI")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        await h.Sut.DeleteAsync(created.Order!.Id, CancellationToken.None);
+
+        var cargo = await h.Db.Context.CargoItems.IgnoreQueryFilters()
+            .SingleAsync(c => c.TransportOrderId == created.Order!.Id);
+        Assert.True(cargo.IsDeleted);
+    }
+
+    [Fact]
     public async Task Search_FiltersAndSummarizesRoute_TenantIsolated()
     {
         var h = await SeedAsync();

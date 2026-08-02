@@ -353,6 +353,16 @@ export function TransportOrderDetailPage() {
         action={
           <span className="to-header-actions">
             <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
+            {editable && !editing && (
+              <Button variant="secondary" onClick={() => setEditing(true)} disabled={busy}>
+                Bewerken
+              </Button>
+            )}
+            {deletable && (
+              <Button variant="danger" onClick={() => setConfirmDelete(true)} disabled={busy || editing}>
+                Verwijderen
+              </Button>
+            )}
             {hasAnyPermission(['orders.change_status', 'orders.manage']) &&
               order.allowedTransitions.map((target) => (
                 <Button key={target} onClick={() => void applyTransition(target)} disabled={busy || editing}>
@@ -783,8 +793,8 @@ export function TransportOrderDetailPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Opdracht verwijderen"
-          message={`Weet je zeker dat je opdracht ${order.orderNumber} wilt verwijderen?`}
+          title={`Transportopdracht ${order.orderNumber} verwijderen?`}
+          message={`Deze actie kan niet ongedaan worden gemaakt. De opdracht van ${order.customerName} wordt verwijderd; gekoppelde goederenlijnen, prijsregels en conceptplanning worden behandeld volgens de bestaande domeinregels.`}
           confirmLabel="Verwijderen"
           destructive
           onConfirm={handleDelete}
