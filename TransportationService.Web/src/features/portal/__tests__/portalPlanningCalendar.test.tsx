@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { PortalPlanningPage } from '../pages/PortalPlanningPage'
 import type { ScheduleDay } from '../../employee-planning/types'
+import { toIsoDate } from '../../../components/calendar/dateUtils'
 
 vi.mock('../../../components/ui/toastContext', () => ({
   useToast: () => ({ showToast: vi.fn(), showSuccess: vi.fn(), showError: vi.fn() }),
@@ -59,8 +60,12 @@ function entry(overrides: Partial<ScheduleDay['entries'][number]>): ScheduleDay[
   }
 }
 
+// Must match the app's own local-date logic (`dateUtils.toIsoDate`), not UTC: the week grid is
+// anchored on `mondayOf(new Date())` (local calendar day), so a UTC-based "today" can land in
+// the wrong week (or even the wrong month) whenever local and UTC dates briefly disagree near
+// midnight UTC — which happens every day in timezones ahead of UTC.
 function isoToday(): string {
-  return new Date().toISOString().slice(0, 10)
+  return toIsoDate(new Date())
 }
 
 describe('PortalPlanningPage calendar colours + notes', () => {
