@@ -215,7 +215,33 @@ describe('TransportOrderDetailPage pricing lines', () => {
     expect(cell('Onbekende berekening').textContent).toBe('—')
   })
 
-  it('excludes informational lines from the price table and lists them under "Niet toegepast"', async () => {
+  it('shows "—" in Berekening (not a contradicting formula) when a stored quantity/unitPrice no longer reproduces the amount', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingLines: [
+          {
+            id: 'l1',
+            label: 'Auto line met bedrag-only aanpassing',
+            amount: 50,
+            source: 'Automatisch',
+            informational: false,
+            kind: 'AutoAdjusted',
+            lineKey: 'service:s3',
+            quantity: 3,
+            unitPrice: 1.25,
+          },
+        ],
+      }),
+    )
+    renderPage()
+    await screen.findByText('Auto line met bedrag-only aanpassing')
+
+    const row = screen.getByText('Auto line met bedrag-only aanpassing').closest('tr')!
+    const cell = within(row).getAllByRole('cell')[2]
+    expect(cell.textContent).toBe('—')
+  })
+
+  it('excludes zero-amount informational lines from the price table and lists them under "Niet toegepast"', async () => {
     api.getTransportOrder.mockResolvedValue(
       baseOrder({
         pricingLines: [
@@ -231,6 +257,33 @@ describe('TransportOrderDetailPage pricing lines', () => {
     const heading = screen.getByRole('heading', { name: 'Niet toegepast' })
     const list = heading.closest('div')!
     expect(within(list).getByText('Pipeline picking: geen Colli op deze order').tagName).toBe('LI')
+  })
+
+  it('renders an amount-bearing informational line (e.g. diesel surcharge) as a dimmed table row with its amount, not under "Niet toegepast"', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingLines: [
+          { id: 'l1', label: 'Basisregel', amount: 90, source: 'Regel X', informational: false, kind: 'Auto', lineKey: 'rule:r1', quantity: 3, unitPrice: 30 },
+          {
+            id: 'l2',
+            label: 'Dieseltoeslag 8% (wordt bij facturatie toegevoegd)',
+            amount: 7.2,
+            source: 'Dieseltoeslag',
+            informational: true,
+            kind: 'Auto',
+            lineKey: 'diesel',
+          },
+        ],
+      }),
+    )
+    renderPage()
+    await screen.findByText('Basisregel')
+
+    const row = screen.getByText('Dieseltoeslag 8% (wordt bij facturatie toegevoegd)').closest('tr')!
+    expect(row).toBeTruthy()
+    expect(row.className).toContain('tof-price-informational')
+    expect(within(row).getByText(`€ ${(7.2).toFixed(2)}`)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Niet toegepast' })).not.toBeInTheDocument()
   })
 
   it('posts the adjusted quantity and reason when editing an auto line', async () => {

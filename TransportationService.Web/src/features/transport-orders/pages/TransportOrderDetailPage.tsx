@@ -67,11 +67,20 @@ function money(amount: number): string {
   return amount.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
 }
 
-/** Label for the Berekening column: quantity x unit x unit price when known, else a flat-amount or unknown fallback. */
+/**
+ * Label for the Berekening column: quantity x unit x unit price when known AND consistent with
+ * the shown Bedrag, else a flat-amount or unknown fallback. An amount-only adjustment (e.g.
+ * Aantal cleared, Bedrag typed directly) legitimately leaves a stale quantity/unitPrice on the
+ * stored line — showing the stale formula next to the real amount would contradict it, so the
+ * formula is only rendered when it actually reproduces the amount (rounding-tolerant).
+ */
 function calculationLabel(line: OrderPricingLine): string {
   if (line.quantity != null && line.unitPrice != null) {
-    const unit = line.unit ? ` ${line.unit}` : ''
-    return `${line.quantity.toLocaleString('nl-BE')}${unit} × ${money(line.unitPrice)}`
+    const computed = Math.round(line.quantity * line.unitPrice * 100) / 100
+    if (computed === line.amount) {
+      const unit = line.unit ? ` ${line.unit}` : ''
+      return `${line.quantity.toLocaleString('nl-BE')}${unit} × ${money(line.unitPrice)}`
+    }
   }
   return line.kind === 'Manual' ? 'Vast bedrag' : '—'
 }
@@ -415,8 +424,11 @@ export function TransportOrderDetailPage() {
   const canLockPrice = hasAnyPermission(['orders.lock_price', 'orders.manage'])
   const pricingStatus = order.pricingSnapshot?.status ?? 'Draft'
   const pricingLocked = pricingStatus === 'Locked' || pricingStatus === 'Invoiced'
-  const invoiceLines = (order.pricingLines ?? []).filter((l) => !l.informational)
-  const notAppliedLines = (order.pricingLines ?? []).filter((l) => l.informational)
+  // Informational lines with a non-zero amount (e.g. the diesel surcharge) still carry a real
+  // amount that will be applied at invoicing — they stay as a (dimmed) table row. Only
+  // zero-amount informational lines (e.g. "no matching rule") are pure notices under "Niet toegepast".
+  const invoiceLines = (order.pricingLines ?? []).filter((l) => !l.informational || l.amount !== 0)
+  const notAppliedLines = (order.pricingLines ?? []).filter((l) => l.informational && l.amount === 0)
 
   const addQuantityNum = parseNum(addQuantity)
   const addUnitPriceNum = parseNum(addUnitPrice)
@@ -621,7 +633,10 @@ export function TransportOrderDetailPage() {
                 </thead>
                 <tbody>
                   {invoiceLines.map((line, index) => (
-                    <tr key={line.id ?? line.lineKey ?? index}>
+                    <tr
+                      key={line.id ?? line.lineKey ?? index}
+                      className={line.informational ? 'tof-price-informational' : undefined}
+                    >
                       <td>
                         {line.label}
                         {line.kind === 'AutoAdjusted' && (
