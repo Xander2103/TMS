@@ -1170,7 +1170,7 @@ public class TransportOrderService : ITransportOrderService
                 l.Label, l.Amount, l.Source, l.Informational,
                 l.RuleName, l.AgreementName, l.ActualQuantity, l.BillableQuantity, l.Proposed,
                 l.Id, l.Kind, l.Quantity, l.UnitPrice, l.OriginalQuantity, l.OriginalUnitPrice, l.OriginalAmount,
-                l.AdjustReason, l.LineKey))
+                l.AdjustReason, l.LineKey, l.Unit, l.ServiceOptionId))
             .ToListAsync(cancellationToken);
         // Recomputed from the persisted lines (never separately snapshotted) so it can never drift
         // from CalculatedPrice/pricingLines — a proposed extra-time charge is never invoiceable on its own.
@@ -1813,6 +1813,12 @@ public class TransportOrderService : ITransportOrderService
                     return TransportOrderOperationResult.Invalid("Een omschrijving is verplicht voor een vrije regel.");
                 }
 
+                var contradiction = ValidateQuantityAmountConsistency(request.Quantity, request.UnitPrice, request.Amount);
+                if (contradiction is not null)
+                {
+                    return TransportOrderOperationResult.Invalid(contradiction);
+                }
+
                 var amount = ResolveAmount(request.Quantity, request.UnitPrice, request.Amount);
                 if (amount is null)
                 {
@@ -1824,7 +1830,7 @@ public class TransportOrderService : ITransportOrderService
                     Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = orderId,
                     Sequence = ++maxSequence, Label = request.Label.Trim(), Amount = decimal.Round(amount.Value, 2),
                     Source = "Manueel", Kind = OrderPriceLineKind.Manual,
-                    Quantity = request.Quantity, UnitPrice = request.UnitPrice,
+                    Quantity = request.Quantity, UnitPrice = request.UnitPrice, Unit = NormalizeUnitCode(request.Unit),
                     AdjustReason = Trim(request.AdjustReason),
                     AdjustedByUserId = _currentUser?.CurrentUserId, AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime,
                     LineKey = $"manual:{Guid.NewGuid()}",
@@ -1879,6 +1885,12 @@ public class TransportOrderService : ITransportOrderService
                 SetKind(existing, OrderPriceLineKind.AutoAdjusted);
             }
 
+            var updateContradiction = ValidateQuantityAmountConsistency(request.Quantity, request.UnitPrice, request.Amount);
+            if (updateContradiction is not null)
+            {
+                return TransportOrderOperationResult.Invalid(updateContradiction);
+            }
+
             var effectiveQuantity = request.Quantity ?? existing.Quantity;
             var effectiveUnitPrice = request.UnitPrice ?? existing.UnitPrice;
             var newAmount = request.Amount ?? ResolveAmount(effectiveQuantity, effectiveUnitPrice, null);
@@ -1890,6 +1902,11 @@ public class TransportOrderService : ITransportOrderService
             existing.Quantity = effectiveQuantity;
             existing.UnitPrice = effectiveUnitPrice;
             existing.Amount = decimal.Round(newAmount.Value, 2);
+            if (!string.IsNullOrWhiteSpace(request.Unit))
+            {
+                existing.Unit = NormalizeUnitCode(request.Unit);
+            }
+
             if (!string.IsNullOrWhiteSpace(request.Label))
             {
                 existing.Label = request.Label.Trim();
@@ -1915,6 +1932,28 @@ public class TransportOrderService : ITransportOrderService
     /// <summary>Amount = explicit Amount, else Round(quantity × unitPrice, 2), else null (never invented).</summary>
     private static decimal? ResolveAmount(decimal? quantity, decimal? unitPrice, decimal? amount) =>
         amount ?? (quantity is { } q && unitPrice is { } p ? decimal.Round(q * p, 2) : (decimal?)null);
+
+    /// <summary>
+    /// Manual price-line guard (Task 5): when quantity, unit price AND amount are all explicitly
+    /// provided on the same request, they must agree; and an explicit quantity must be positive.
+    /// Operates on the request's own values only — never combined with a stored line's values, so
+    /// a partial update (e.g. Amount alone) never gets falsely flagged against unrelated stored
+    /// Quantity/UnitPrice.
+    /// </summary>
+    private static string? ValidateQuantityAmountConsistency(decimal? quantity, decimal? unitPrice, decimal? amount)
+    {
+        if (quantity is { } q && unitPrice is { } up && amount is { } a && Math.Round(q * up, 2) != Math.Round(a, 2))
+        {
+            return "Het totaalbedrag komt niet overeen met aantal × eenheidsprijs. Laat het bedrag leeg of corrigeer de waarden.";
+        }
+
+        if (quantity is <= 0)
+        {
+            return "Aantal moet groter zijn dan nul.";
+        }
+
+        return null;
+    }
 
     /// <summary>Snapshots Quantity/UnitPrice/Amount into Original* the first time a line is adjusted; a second edit never overwrites the engine baseline.</summary>
     private static void CaptureOriginalIfFirstAdjustment(TransportOrderPricingLine line)

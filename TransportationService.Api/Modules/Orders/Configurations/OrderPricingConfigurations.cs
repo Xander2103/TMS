@@ -20,6 +20,7 @@ public class TransportOrderPricingLineConfiguration : IEntityTypeConfiguration<T
         builder.Property(l => l.Kind).HasConversion<string>().HasMaxLength(20);
         builder.Property(l => l.Quantity).HasPrecision(12, 3);
         builder.Property(l => l.UnitPrice).HasPrecision(14, 4);
+        builder.Property(l => l.Unit).HasMaxLength(30);
         builder.Property(l => l.OriginalQuantity).HasPrecision(12, 3);
         builder.Property(l => l.OriginalUnitPrice).HasPrecision(14, 4);
         builder.Property(l => l.OriginalAmount).HasPrecision(12, 2);

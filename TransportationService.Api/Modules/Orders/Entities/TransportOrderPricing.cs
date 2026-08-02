@@ -73,6 +73,9 @@ public class TransportOrderPricingLine : AuditableTenantEntity
     /// <summary>Current unit price, when derivable/editable (never invented for bracket/base-amount lines).</summary>
     public decimal? UnitPrice { get; set; }
 
+    /// <summary>Managed unit code for the line's Quantity (e.g. "COLLI", "EUROPALLET"), editable on manual lines.</summary>
+    public string? Unit { get; set; }
+
     /// <summary>Quantity as last produced/refreshed by the engine, preserved once a line is adjusted.</summary>
     public decimal? OriginalQuantity { get; set; }
 

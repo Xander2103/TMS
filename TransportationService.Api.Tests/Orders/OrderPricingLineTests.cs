@@ -464,6 +464,65 @@ public class OrderPricingLineTests
         Assert.NotEqual(1099m, recalculated.Order.AgreedPrice);
     }
 
+    // --- Task 5: Unit field + Q×UP vs Amount contradiction guard on manual price lines ---------
+
+    [Fact]
+    public async Task ManualLine_QuantityTimesUnitPrice_ComputesAmount_AndStoresUnit()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedRulesAsync(h);
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3), CancellationToken.None);
+
+        var saved = await h.Sut.SaveOrderPriceLinesAsync(
+            created.Order!.Id,
+            [new SaveOrderPriceLineRequest(null, "Extra handling", Quantity: 3, UnitPrice: 1.25m, Amount: null, AdjustReason: null, Unit: "COLLI")],
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, saved.Outcome);
+        var manualLine = saved.Order!.PricingLines!.Single(l => l.Kind == OrderPriceLineKind.Manual);
+        Assert.Equal(3.75m, manualLine.Amount);
+        Assert.Equal("COLLI", manualLine.Unit);
+    }
+
+    [Fact]
+    public async Task ManualLine_ContradictoryAmount_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedRulesAsync(h);
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3), CancellationToken.None);
+
+        var saved = await h.Sut.SaveOrderPriceLinesAsync(
+            created.Order!.Id,
+            [new SaveOrderPriceLineRequest(null, "Extra handling", Quantity: 2, UnitPrice: 10m, Amount: 50m, AdjustReason: null)],
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, saved.Outcome);
+        Assert.Contains("aantal × eenheidsprijs", saved.Error);
+    }
+
+    [Fact]
+    public async Task ManualLine_FixedAmount_WithoutQuantity_IsAccepted()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedRulesAsync(h);
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3), CancellationToken.None);
+
+        var saved = await h.Sut.SaveOrderPriceLinesAsync(
+            created.Order!.Id,
+            [new SaveOrderPriceLineRequest(null, "Manual handling", Quantity: null, UnitPrice: null, Amount: 10m, AdjustReason: null)],
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, saved.Outcome);
+        var manualLine = saved.Order!.PricingLines!.Single(l => l.Kind == OrderPriceLineKind.Manual);
+        Assert.Equal(10m, manualLine.Amount);
+        Assert.Null(manualLine.Quantity);
+        Assert.Null(manualLine.UnitPrice);
+        Assert.Null(manualLine.Unit);
+    }
+
     // --- Tenant isolation on every new endpoint --------------------------------------------------
 
     [Fact]

@@ -108,7 +108,11 @@ public record OrderPricingLineDto(
     decimal? Quantity = null, decimal? UnitPrice = null,
     decimal? OriginalQuantity = null, decimal? OriginalUnitPrice = null, decimal? OriginalAmount = null,
     string? AdjustReason = null,
-    string? LineKey = null);
+    string? LineKey = null,
+    /// <summary>Managed unit code for Quantity (e.g. "COLLI"), editable on manual lines (spec Task 5).</summary>
+    string? Unit = null,
+    /// <summary>Frozen identity of the service option, for merge-matching (see LineKey too).</summary>
+    Guid? ServiceOptionId = null);
 
 /// <summary>Frozen header of the order's pricing snapshot (spec ch. 21).</summary>
 public record OrderPricingSnapshotDto(
@@ -129,7 +133,9 @@ public record OrderPricingSnapshotDto(
 /// </summary>
 public record SaveOrderPriceLineRequest(
     string? LineKey, string Label, decimal? Quantity, decimal? UnitPrice, decimal? Amount,
-    string? AdjustReason, bool Remove = false);
+    string? AdjustReason, bool Remove = false,
+    /// <summary>Managed unit code for Quantity (e.g. "COLLI"); normalized like <c>QuantityUnitCode</c>.</summary>
+    string? Unit = null);
 
 /// <summary>Body for the pricing status transition endpoint (spec ch. 24-26).</summary>
 public record SetOrderPricingStatusRequest(OrderPricingStatus Status);
