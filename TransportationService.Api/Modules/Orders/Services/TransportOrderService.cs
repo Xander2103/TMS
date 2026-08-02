@@ -1188,7 +1188,7 @@ public class TransportOrderService : ITransportOrderService
         var serviceLines = await _dbContext.TransportOrderServiceLines.AsNoTracking()
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .OrderBy(l => l.NameSnapshot)
-            .Select(l => new OrderServiceLineDto(l.ServiceOptionId, l.NameSnapshot, l.Kind, l.Value, l.Amount, l.Quantity, l.PalletCount, l.DayCount))
+            .Select(l => new OrderServiceLineDto(l.ServiceOptionId, l.NameSnapshot, l.Kind, l.Value, l.Amount, l.Quantity, l.PalletCount, l.DayCount, l.Note))
             .ToListAsync(cancellationToken);
 
         return new TransportOrderDetailDto(
@@ -1550,6 +1550,7 @@ public class TransportOrderService : ITransportOrderService
                 PalletCount = selection?.PalletCount,
                 DayCount = selection?.DayCount,
                 InvoiceDescriptionSnapshot = serviceLine.InvoiceLabel,
+                Note = selection?.Note,
             });
         }
 
@@ -2003,7 +2004,7 @@ public class TransportOrderService : ITransportOrderService
             .ToListAsync(cancellationToken);
         var serviceSelections = existingServiceLines
             .Where(l => l.ServiceOptionId is not null)
-            .Select(l => new OrderServiceInput(l.ServiceOptionId!.Value, l.Quantity, l.PalletCount, l.DayCount))
+            .Select(l => new OrderServiceInput(l.ServiceOptionId!.Value, l.Quantity, l.PalletCount, l.DayCount, l.Note))
             .ToList();
 
         var pricingError = await ApplyPricingAsync(

@@ -145,7 +145,7 @@ public record OrderServiceLineDto(
     Guid? ServiceOptionId, string Name,
     TransportationService.Api.Modules.Tarification.Entities.SurchargeKind Kind,
     decimal Value, decimal Amount, decimal? Quantity = null,
-    decimal? PalletCount = null, decimal? DayCount = null);
+    decimal? PalletCount = null, decimal? DayCount = null, string? Note = null);
 
 /// <summary>
 /// A selected service with the entered quantity where applicable (hours / stops / days /
@@ -154,7 +154,8 @@ public record OrderServiceLineDto(
 /// correction and always wins. For per-day services a lone DayCount doubles as the quantity.
 /// </summary>
 public record OrderServiceInput(
-    Guid ServiceOptionId, decimal? Quantity = null, decimal? PalletCount = null, decimal? DayCount = null);
+    Guid ServiceOptionId, decimal? Quantity = null, decimal? PalletCount = null, decimal? DayCount = null,
+    string? Note = null);
 
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);

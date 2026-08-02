@@ -339,4 +339,30 @@ public class OrderPricingTests
         Assert.Equal(115m, created.Order!.AgreedPrice); // base only; disabled service ignored
         Assert.Empty(created.Order.ServiceLines!);
     }
+
+    [Fact]
+    public async Task ManualService_Note_PersistsAndSurvivesRecalculation()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        var picking = await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "PICK", "Picking", SurchargeKind.PerUnit, 1.25m, true, 0, UnitTypeId: h.PalletUnitId), CancellationToken.None);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3) with
+        {
+            Services = [new OrderServiceInput(picking.Id, Quantity: 3m, Note: "Afgesproken met klant")],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var serviceLine = Assert.Single(created.Order!.ServiceLines!);
+        Assert.Equal("Afgesproken met klant", serviceLine.Note);
+        var stored = await h.Db.Context.TransportOrderServiceLines.SingleAsync();
+        Assert.Equal("Afgesproken met klant", stored.Note);
+
+        var recalculated = await h.Sut.RecalculateOrderPricingAsync(created.Order.Id, CancellationToken.None);
+        Assert.NotNull(recalculated);
+        var storedAfter = await h.Db.Context.TransportOrderServiceLines.SingleAsync();
+        Assert.Equal("Afgesproken met klant", storedAfter.Note);
+    }
 }

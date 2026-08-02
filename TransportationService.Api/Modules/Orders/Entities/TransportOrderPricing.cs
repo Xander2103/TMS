@@ -178,4 +178,7 @@ public class TransportOrderServiceLine : AuditableTenantEntity
 
     /// <summary>Frozen effective invoice description (customer override > global > name).</summary>
     public string? InvoiceDescriptionSnapshot { get; set; }
+
+    /// <summary>Optional free-text note the user attaches to a manually selected service (e.g. "Afgesproken met klant").</summary>
+    public string? Note { get; set; }
 }

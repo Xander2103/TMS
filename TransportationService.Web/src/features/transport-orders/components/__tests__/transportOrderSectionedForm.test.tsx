@@ -161,19 +161,66 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(unitSelect.querySelectorAll('option').length).toBeGreaterThan(2)
   })
 
-  it('shows effective service prices with their source and asks a quantity for hourly services', async () => {
+  it('renders the four service group headings and the add-service button', async () => {
+    renderForm()
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    expect(screen.getByRole('heading', { name: 'Automatisch toegepast' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Handmatig geselecteerd' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Niet toegepast' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' })).toBeInTheDocument()
+  })
+
+  it('lists an informational not-applied service line from the preview under "Niet toegepast"', async () => {
+    previewSpy.mockResolvedValueOnce({
+      lines: [
+        { label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false },
+        { label: 'Wachttijd: geef het aantal uur op', amount: 0, source: 'Algemene standaard', informational: true },
+        { label: 'Dieseltoeslag 8%', amount: 11.6, source: 'Dieseltoeslag', informational: true },
+      ],
+      total: 145,
+      totalWithInformational: 156.6,
+      currency: 'EUR',
+      zoneCode: 'Z3',
+      zoneName: 'Zone 3',
+      requiresManualPrice: false,
+      serviceLines: [],
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    await waitFor(() => expect(screen.getByText('Wachttijd: geef het aantal uur op')).toBeInTheDocument())
+    // Non-service informational lines (e.g. the diesel surcharge) never show up in this list.
+    expect(screen.queryByText(/Dieseltoeslag 8%/)).not.toBeInTheDocument()
+  })
+
+  it('the add panel shows the calculation method, a live price indication and asks a quantity for hourly services', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
     await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
     await userEvent.click(screen.getByRole('tab', { name: /Services/ }))
 
-    // Prices come from the API (global default / customer tariff) — never hardcoded here.
-    expect(await screen.findByText(/€ 25\.00 — Algemene standaard/)).toBeInTheDocument()
-    expect(screen.getByText(/€ 45\.00\/uur — Algemene standaard/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
+    await userEvent.selectOptions(screen.getByLabelText('Dienst of toeslag'), 'opt-wacht')
 
-    await userEvent.click(screen.getByRole('checkbox', { name: /Wachttijd/ }))
+    // Berekeningswijze + prices come from the API (global default / customer tariff) — never
+    // hardcoded here.
+    expect(screen.getByLabelText('Berekeningswijze')).toHaveValue('Per uur')
     const quantityInput = await screen.findByLabelText('Aantal uur — Wachttijd')
     await userEvent.type(quantityInput, '3')
+    expect(screen.getByText(/Prijsindicatie: € 135\.00/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Toevoegen' }))
+
+    // Moved into "Handmatig geselecteerd": MANUEEL badge, Verwijderen control, quantity retained.
+    const row = screen.getByText('Wachttijd').closest('.tof-service-option') as HTMLElement
+    expect(within(row).getByText('MANUEEL')).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Verwijderen' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Aantal uur — Wachttijd')).toHaveValue(3)
 
     await waitFor(() => expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
       services: expect.arrayContaining([
@@ -189,8 +236,10 @@ describe('TransportOrderForm sections + pricing', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Services/ }))
 
     // Per-day: a lone day-count input; sent as the billable quantity + dayCount.
-    await userEvent.click(await screen.findByRole('checkbox', { name: /^Opslag/ }))
+    await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
+    await userEvent.selectOptions(screen.getByLabelText('Dienst of toeslag'), 'opt-opslag')
     await userEvent.type(await screen.findByLabelText('Aantal dagen — Opslag'), '12')
+    await userEvent.click(screen.getByRole('button', { name: 'Toevoegen' }))
     await waitFor(() => expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
       services: expect.arrayContaining([
         expect.objectContaining({ serviceOptionId: 'opt-opslag', quantity: 12, dayCount: 12 }),
@@ -198,10 +247,12 @@ describe('TransportOrderForm sections + pricing', () => {
     })), { timeout: 3000 })
 
     // Per-pallet-day: pallets × days auto-fills the (still editable) pallet-days quantity.
-    await userEvent.click(screen.getByRole('checkbox', { name: /Palletopslag/ }))
+    await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
+    await userEvent.selectOptions(screen.getByLabelText('Dienst of toeslag'), 'opt-paldag')
     await userEvent.type(await screen.findByLabelText('Pallets — Palletopslag'), '4')
     await userEvent.type(screen.getByLabelText('Dagen — Palletopslag'), '12')
     expect(screen.getByLabelText('Pallet-dagen — Palletopslag')).toHaveValue(48)
+    await userEvent.click(screen.getByRole('button', { name: 'Toevoegen' }))
     await waitFor(() => expect(previewSpy).toHaveBeenCalledWith(expect.objectContaining({
       services: expect.arrayContaining([
         expect.objectContaining({ serviceOptionId: 'opt-paldag', quantity: 48, palletCount: 4, dayCount: 12 }),
@@ -217,6 +268,26 @@ describe('TransportOrderForm sections + pricing', () => {
         expect.objectContaining({ serviceOptionId: 'opt-paldag', quantity: 50 }),
       ]),
     })), { timeout: 3000 })
+  })
+
+  it('removing a manually selected service unticks it and clears its entered inputs', async () => {
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Services/ }))
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
+    await userEvent.selectOptions(screen.getByLabelText('Dienst of toeslag'), 'opt-8')
+    await userEvent.click(screen.getByRole('button', { name: 'Toevoegen' }))
+    expect(screen.getByText('MANUEEL')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Verwijderen' }))
+    expect(screen.queryByText('MANUEEL')).not.toBeInTheDocument()
+
+    // Back in the add panel's dropdown, offered again.
+    await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
+    const select = screen.getByLabelText('Dienst of toeslag') as HTMLSelectElement
+    expect(Array.from(select.options).map((o) => o.textContent)).toContain('Levering vóór 08:00')
   })
 
   it('shows the customer label with a favourite star in the unit selector', async () => {
@@ -302,14 +373,18 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(screen.getByLabelText(/Handmatige prijs \(overschrijft/)).toBeInTheDocument()
   })
 
-  it('selecting a service option shows its price', async () => {
+  it('the add panel shows the calculation method and a price indication for the selected service option', async () => {
     renderForm()
     await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
-    await waitFor(() => expect(screen.getByText(/Levering vóór 08:00/)).toBeInTheDocument())
-    expect(screen.getByText(/€ 25.00/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
+    await waitFor(() => expect(screen.getByLabelText('Dienst of toeslag')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Dienst of toeslag'), 'opt-8')
+
+    expect(screen.getByLabelText('Berekeningswijze')).toHaveValue('Vast bedrag')
+    expect(screen.getByText(/Prijsindicatie: € 25\.00/)).toBeInTheDocument()
   })
 
-  it('shows an auto-applied (contract) service as a read-only checked row with an Automatisch badge', async () => {
+  it('shows an auto-applied (contract) service as a read-only checked row with an AUTO badge', async () => {
     previewSpy.mockResolvedValueOnce({
       lines: [
         { label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false },
@@ -337,17 +412,17 @@ describe('TransportOrderForm sections + pricing', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
     await waitFor(() => expect(screen.getByText('Picking')).toBeInTheDocument())
-    expect(screen.getByText('Automatisch')).toBeInTheDocument()
+    expect(screen.getByText('AUTO')).toBeInTheDocument()
     const row = screen.getByText('Picking').closest('.tof-service-option') as HTMLElement
     const checkbox = within(row).getByRole('checkbox') as HTMLInputElement
     expect(checkbox.checked).toBe(true)
     expect(checkbox).toBeDisabled()
   })
 
-  it('does not duplicate a service option that is both selectable and currently auto-applied', async () => {
+  it('does not offer a service option in the add panel when it is already auto-applied', async () => {
     // "Levering vóór 08:00" (opt-8) is a normal selectable option in listServiceOptions, but the
     // preview reports it as auto-applied for this customer/order — it must render only once, as
-    // the read-only "Automatisch" row, not also as a manual checkbox.
+    // the read-only "AUTO" row, never again as an addable option.
     previewSpy.mockResolvedValueOnce({
       lines: [
         { label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false },
@@ -375,16 +450,22 @@ describe('TransportOrderForm sections + pricing', () => {
 
     await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
     // Wait for the debounced preview to resolve and mark the option as auto-applied — until then
-    // the plain (pre-preview) selectable row is still showing, same text but not yet deduped.
-    await waitFor(() => expect(screen.getByText('Automatisch')).toBeInTheDocument(), { timeout: 3000 })
+    // the plain (pre-preview) row is still showing, same text but not yet deduped.
+    await waitFor(() => expect(screen.getByText('AUTO')).toBeInTheDocument(), { timeout: 3000 })
     expect(screen.getAllByText(/Levering vóór 08:00/)).toHaveLength(1)
     const row = screen.getByText(/Levering vóór 08:00/).closest('.tof-service-option') as HTMLElement
-    expect(within(row).getByText('Automatisch')).toBeInTheDocument()
+    expect(within(row).getByText('AUTO')).toBeInTheDocument()
     const checkbox = within(row).getByRole('checkbox') as HTMLInputElement
     expect(checkbox.checked).toBe(true)
     expect(checkbox).toBeDisabled()
-    // The still-manual option (Wachttijd) keeps rendering normally alongside it.
-    expect(screen.getByRole('checkbox', { name: /Wachttijd/ })).not.toBeDisabled()
+
+    // The add panel must not offer the auto-applied option again — the still-manual option
+    // (Wachttijd) keeps being offered alongside it.
+    await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
+    const select = screen.getByLabelText('Dienst of toeslag') as HTMLSelectElement
+    const optionTexts = Array.from(select.options).map((o) => o.textContent)
+    expect(optionTexts).not.toContain('Levering vóór 08:00')
+    expect(optionTexts).toContain('Wachttijd')
   })
 
   it('switches to the one-off fieldset and includes the one-off fields in the preview payload', async () => {

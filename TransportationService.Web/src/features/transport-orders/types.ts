@@ -309,6 +309,8 @@ export interface OrderServiceLine {
   palletCount?: number | null
   /** Per-day / per-pallet-day input: number of days. */
   dayCount?: number | null
+  /** Optional free-text note the user attached to a manually selected service. */
+  note?: string | null
 }
 
 export interface StopInput {
@@ -376,7 +378,14 @@ export interface TransportOrderInput {
   /** Selected delivery services/supplements; priced by the engine and snapshotted. */
   serviceOptionIds?: string[]
   /** Preferred over serviceOptionIds: selections incl. quantities (per-hour/per-stop/per-day/per-pallet-day services). */
-  services?: { serviceOptionId: string; quantity: number | null; palletCount?: number | null; dayCount?: number | null }[]
+  services?: {
+    serviceOptionId: string
+    quantity: number | null
+    palletCount?: number | null
+    dayCount?: number | null
+    /** Optional free-text note the user attaches to a manually selected service. */
+    note?: string | null
+  }[]
   /** Explicit authorized override of the calculated price (orders.override_price). */
   priceIsManual?: boolean
   priceOverrideReason?: string | null

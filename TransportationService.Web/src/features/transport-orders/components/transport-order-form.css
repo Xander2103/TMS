@@ -223,6 +223,40 @@
   padding: 8px 12px;
 }
 
+.tof-service-group {
+  margin-bottom: 20px;
+}
+
+.tof-service-group h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.tof-service-option-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tof-service-add-panel {
+  border: 1px dashed var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tof-service-not-applied {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text, #6b7280);
+  font-size: 14px;
+}
+
 .tof-price-breakdown {
   margin-bottom: 12px;
 }
