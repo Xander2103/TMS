@@ -724,9 +724,19 @@ public class PricingEngine : IPricingEngine
             }
             else if (option.Kind == SurchargeKind.PerUnit)
             {
-                // Entered quantity always wins; otherwise derived from the matching order line(s).
+                // Entered quantity always wins; otherwise derived from the matching order line(s)
+                // — or, when the caller supplies cargo-detail groups (combined-unit degression
+                // input), from those instead: Lines only ever carries the order's single primary
+                // unit, while Groups reflects every unit type actually present across the order's
+                // cargo lines. A service bound to a unit type that isn't the order's primary unit
+                // (e.g. a Colli-bound service on a Pallet order) must still see cargo quantified in
+                // that unit. Groups is always a superset of/mirrors Lines when the caller populates
+                // it (TransportOrderService falls back to a Lines-derived group otherwise), so the
+                // two are never summed together — that would double-count the common case.
                 var derived = option.UnitTypeId is { } unitTypeId
-                    ? request.Lines.Where(l => l.UnitTypeId == unitTypeId).Sum(l => l.Quantity)
+                    ? (request.Groups is { Count: > 0 } groupsForDerivation
+                        ? groupsForDerivation.SelectMany(g => g.Units).Where(u => u.UnitTypeId == unitTypeId).Sum(u => u.Quantity)
+                        : request.Lines.Where(l => l.UnitTypeId == unitTypeId).Sum(l => l.Quantity))
                     : 0m;
                 var qty = enteredQuantity is { } q1 && q1 > 0 ? q1 : derived;
                 var unitName = option.UnitTypeId is { } uid ? serviceUnitNames.GetValueOrDefault(uid, "eenheid") : "eenheid";

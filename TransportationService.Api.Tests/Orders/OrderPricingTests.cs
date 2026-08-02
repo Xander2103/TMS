@@ -365,4 +365,94 @@ public class OrderPricingTests
         var storedAfter = await h.Db.Context.TransportOrderServiceLines.SingleAsync();
         Assert.Equal("Afgesproken met klant", storedAfter.Note);
     }
+
+    /// <summary>Spec 7 closing requirement: a PerUnit auto-apply service bound to a unit type that is
+    /// not the order's own primary unit stays informational until a cargo line in that unit shows up
+    /// on the order, then becomes a real, quantified service line (Tasks 1-2 make cargo units and ids
+    /// survive an update; this proves the pricing engine actually consumes them).</summary>
+    [Fact]
+    public async Task AddingColliLine_OnUpdate_MakesPerUnitAutoServiceApply()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+
+        var colliUnitId = Guid.NewGuid();
+        h.Db.Context.UnitTypes.Add(new UnitType { Id = colliUnitId, TenantId = h.TenantId, Code = "COLLI", Name = "colli", IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+
+        var picking = await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "PICK", "Picking", SurchargeKind.PerUnit, 1.25m, true, 0,
+            UnitTypeId: colliUnitId, AutoApply: true), CancellationToken.None);
+        var serviceLineKey = $"service:{picking.Id}";
+
+        // 1. Create WITHOUT any Colli cargo — order is priced purely on pallets; the Colli-bound
+        // auto-apply service has nothing to quantify itself from and stays informational at €0.
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 3), CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Equal(115m, created.Order!.AgreedPrice);
+
+        // The informational line carries no LineKey (only real service lines do) — locate it by label.
+        var informational = Assert.Single(created.Order.PricingLines!,
+            l => l.Informational && l.Label.Contains("geen", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(0m, informational.Amount);
+        Assert.Contains("colli", informational.Label, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Picking", informational.Label[..informational.Label.IndexOf(':')]);
+        Assert.DoesNotContain(created.Order.PricingLines!, l => l.LineKey == serviceLineKey);
+        Assert.Empty(created.Order.ServiceLines!);
+
+        // 2. Update: add a Colli cargo line (order's own primary unit stays Europallet).
+        h.Db.Context.ChangeTracker.Clear();
+        var update = BuildUpdateFrom(created.Order) with
+        {
+            CargoItems = [new CargoItemInput("Kleine dozen", null, 3, null, null, QuantityUnitCode: "COLLI")],
+        };
+        var updated = await h.Sut.UpdateAsync(created.Order.Id, update, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+
+        // 3. A real, non-informational service line now exists, quantified from the Colli cargo line.
+        var realLine = Assert.Single(updated.Order!.PricingLines!, l => l.LineKey == serviceLineKey);
+        Assert.False(realLine.Informational);
+        Assert.Equal(3m, realLine.BillableQuantity);
+        Assert.Equal(3.75m, realLine.Amount); // 3 × €1.25
+        var storedLine = await h.Db.Context.TransportOrderPricingLines.SingleAsync(l => l.LineKey == serviceLineKey);
+        Assert.False(storedLine.Informational);
+        Assert.Equal(3m, storedLine.BillableQuantity);
+        Assert.Equal(3.75m, storedLine.Amount);
+
+        // 4. The old informational "geen colli" line is gone (merged/replaced by the real line above).
+        Assert.DoesNotContain(updated.Order.PricingLines!,
+            l => l.Informational && l.Label.Contains("geen", StringComparison.OrdinalIgnoreCase)
+                 && l.Label.Contains("colli", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d)
+    {
+        var stopIndexById = d.Stops
+            .Select((s, i) => (s.Id, Index: i))
+            .ToDictionary(x => x.Id, x => x.Index);
+
+        return new UpdateTransportOrderRequest(
+            d.CustomerId, d.CustomerReference, d.OrderDate, d.GoodsDescription, d.Quantity,
+            d.QuantityUnit, d.WeightKg, d.VolumeM3, d.PalletCount, d.AdrRequired, d.CraneRequired,
+            d.AgreedPrice, d.Notes,
+            d.Stops.Select(s => new TransportOrderStopInput(
+                    s.StopType, s.LocationId, s.LocationName, s.Address, s.PostalCode, s.City, s.CountryCode,
+                    s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions))
+                .ToList(),
+            CargoItems: d.CargoItems.Select(c => new CargoItemInput(
+                    c.Description, c.Barcode, c.ExpectedQuantity, c.QuantityUnit, c.Notes,
+                    c.UnitType, c.UnitTypeLabel, c.TotalWeightKg, c.WeightPerUnitKg,
+                    c.LengthMeters, c.WidthMeters, c.HeightMeters, c.VolumeM3, c.VolumeIsManual,
+                    c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference,
+                    c.LoadingStopId is { } lid && stopIndexById.TryGetValue(lid, out var li) ? li : null,
+                    c.UnloadingStopId is { } uid && stopIndexById.TryGetValue(uid, out var ui) ? ui : null,
+                    c.QuantityUnitCode, Id: c.Id))
+                .ToList(),
+            QuantityUnitCode: d.QuantityUnitCode,
+            ServiceOptionIds: null,
+            Services: d.ServiceLines?.Select(s => new OrderServiceInput(s.ServiceOptionId ?? Guid.Empty, s.Quantity, Note: s.Note)).ToList(),
+            PriceIsManual: d.PriceIsManual,
+            PriceOverrideReason: d.PriceOverrideReason);
+    }
 }
