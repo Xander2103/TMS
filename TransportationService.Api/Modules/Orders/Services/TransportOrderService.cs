@@ -977,6 +977,14 @@ public class TransportOrderService : ITransportOrderService
             return "Een barcode mag maar één keer voorkomen binnen dezelfde opdracht.";
         }
 
+        // A repeated Id would otherwise apply two inputs to the same tracked line during the
+        // update sync (one silently lost) and double-count that line in pricing.
+        var ids = items.Select(i => i.Id).Where(id => id is not null).ToList();
+        if (ids.Count != ids.Distinct().Count())
+        {
+            return "Dezelfde goederenlijn mag maar één keer voorkomen.";
+        }
+
         return null;
     }
 

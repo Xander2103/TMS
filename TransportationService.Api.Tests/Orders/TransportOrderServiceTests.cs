@@ -184,6 +184,36 @@ public class TransportOrderServiceTests
     }
 
     [Fact]
+    public async Task Update_DuplicateCargoId_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        var lineId = created.Order!.CargoItems.Single().Id;
+        h.Db.Context.ChangeTracker.Clear();
+
+        var update = BuildUpdateFrom(created.Order!) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET", Id: lineId),
+                new CargoItemInput("Andere lijn", null, 1, null, null, QuantityUnitCode: "COLLI", Id: lineId),
+            ],
+        };
+        var result = await h.Sut.UpdateAsync(created.Order!.Id, update, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+        // The rejected request must never touch the existing line.
+        var entity = await h.Db.Context.CargoItems.SingleAsync(c => c.Id == lineId);
+        Assert.Equal("EUROPALLET", entity.QuantityUnitCode);
+    }
+
+    [Fact]
     public async Task Priority_DefaultsToNormal_InlineChangeIsAuditedAndGuarded()
     {
         var h = await SeedAsync();
