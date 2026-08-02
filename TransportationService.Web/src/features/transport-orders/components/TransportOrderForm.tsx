@@ -1511,10 +1511,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     : includedTimeInfo?.source === 'Contract'
       ? 'Bron: Klantcontract'
       : 'Bron: Geen contractwaarde'
-  // The contract's combined allowance is only shown as one row while nothing overrides it — an
-  // override always targets loading/unloading separately, so setting one switches the display to
-  // the two per-activity rows too (mirrors PricingEngine.ResolveIncludedTime).
-  const includedCombinedMinutes = !hasIncludedTimeOverride ? includedTimeInfo?.includedCombinedMinutes ?? null : null
+  // Mirrors PricingEngine.ResolveIncludedTime: the combined allowance only survives while NEITHER
+  // per-activity minutes override is set — an override to the rate/rounding/minimum alone does not
+  // switch the agreement out of combined mode, so the combined row must still show.
+  const hasIncludedTimeMinutesOverride = includedLoadingMinutesOverride.trim() !== '' || includedUnloadingMinutesOverride.trim() !== ''
+  const includedCombinedMinutes = !hasIncludedTimeMinutesOverride ? includedTimeInfo?.includedCombinedMinutes ?? null : null
   const effectiveIncludedLoadingMinutes = includedLoadingMinutesOverride.trim() !== ''
     ? Number(includedLoadingMinutesOverride)
     : includedTimeInfo?.includedLoadingMinutes ?? null

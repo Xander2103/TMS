@@ -304,6 +304,43 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(screen.queryByText(/^Inbegrepen lostijd:/)).not.toBeInTheDocument()
   })
 
+  it('keeps showing the combined row when only the rate is overridden — a minutes-only override switches the mode', async () => {
+    previewSpy.mockResolvedValueOnce({
+      lines: [{ label: '3 × Europallet', amount: 90, source: 'Pallets klant X', informational: false }],
+      total: 90,
+      totalWithInformational: 90,
+      currency: 'EUR',
+      zoneCode: null,
+      zoneName: null,
+      requiresManualPrice: false,
+      serviceLines: [],
+      includedTimeInfo: {
+        includedLoadingMinutes: null, includedUnloadingMinutes: null, includedCombinedMinutes: 60,
+        extraHourlyRate: 75, source: 'Contract',
+      },
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    await waitFor(() => expect(screen.getByText(/Inbegrepen laad- en lostijd \(gecombineerd\): 60 minuten/)).toBeInTheDocument(), { timeout: 3000 })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Afwijken voor deze order' }))
+    await userEvent.type(screen.getByLabelText('Uurtarief extra tijd (€)'), '90')
+
+    // Rate-only override: still combined mode on the backend (ResolveIncludedTime only switches
+    // to per-activity when a minutes override is set) — the combined row must keep showing, now
+    // sourced from the order.
+    expect(screen.getByText(/Inbegrepen laad- en lostijd \(gecombineerd\): 60 minuten/)).toBeInTheDocument()
+    expect(screen.getByText('Bron: Afwijking op order')).toBeInTheDocument()
+    expect(screen.queryByText(/^Inbegrepen laadtijd:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Inbegrepen lostijd:/)).not.toBeInTheDocument()
+  })
+
   it('disables the "Laad- en lostijd" section with a hint when pricing is a one-off agreement', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
