@@ -12,7 +12,7 @@ public class CargoItemConfiguration : IEntityTypeConfiguration<CargoItem>
 
         builder.HasKey(c => c.Id);
 
-        builder.Property(c => c.Description).IsRequired().HasMaxLength(300);
+        builder.Property(c => c.Description).HasMaxLength(300);
         builder.Property(c => c.Barcode).HasMaxLength(100);
         builder.Property(c => c.ExpectedQuantity).HasPrecision(12, 2);
         builder.Property(c => c.QuantityUnit).HasMaxLength(50);

@@ -564,7 +564,7 @@ public class ScanService : IScanService
                 : scanned == item.ExpectedQuantity ? CargoScanState.Complete
                 : CargoScanState.Over;
             return new CargoItemScanSummaryDto(
-                item.Id, item.Sequence, item.Description, item.Barcode,
+                item.Id, item.Sequence, LineDescription(item), item.Barcode,
                 item.ExpectedQuantity, item.QuantityUnit, scanned, damaged, state);
         }).ToList();
 
@@ -593,4 +593,10 @@ public class ScanService : IScanService
     };
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Falls back to a generated label ("2 × EUROPALLET") when the line has no description.</summary>
+    private static string LineDescription(CargoItem item) =>
+        string.IsNullOrWhiteSpace(item.Description)
+            ? $"{item.ExpectedQuantity:0.##} × {item.QuantityUnitCode ?? item.UnitTypeLabel ?? "stuks"}"
+            : item.Description;
 }

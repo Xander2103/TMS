@@ -656,7 +656,7 @@ export function TransportOrderDetailPage() {
                   {order.cargoItems.map((item) => (
                     <tr key={item.id}>
                       <td>{item.sequence}</td>
-                      <td>{item.description}</td>
+                      <td>{item.description ?? `${item.expectedQuantity} × ${unitLabel(item.quantityUnitCode, item.quantityUnit)}`}</td>
                       <td>{item.unitType ? (item.unitTypeLabel ?? UNIT_TYPE_LABELS[item.unitType]) : '—'}</td>
                       <td>{item.barcode ? <code>{item.barcode}</code> : '—'}</td>
                       <td>

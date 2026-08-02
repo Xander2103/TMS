@@ -110,7 +110,7 @@ export interface TransportOrderStop {
 export interface CargoItem {
   id: string
   sequence: number
-  description: string
+  description: string | null
   barcode: string | null
   expectedQuantity: number
   quantityUnit: string | null
@@ -136,7 +136,7 @@ export interface CargoItem {
 export interface CargoItemInput {
   /** Matches an existing cargo line on update (id-preserving sync); omitted/unmatched = new line. */
   id?: string | null
-  description: string
+  description: string | null
   barcode: string | null
   expectedQuantity: number
   quantityUnit: string | null

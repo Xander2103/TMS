@@ -111,7 +111,7 @@ public class PackageGenerationService : IPackageGenerationService
                         TenantId = tenantId,
                         TransportOrderId = transportOrderId,
                         CargoItemId = line.Id,
-                        Description = line.Description,
+                        Description = LineDescription(line),
                         Quantity = 1m,
                         UnitType = line.UnitType ?? PackageUnitType.Colli,
                         UnitTypeLabel = line.UnitTypeLabel,
@@ -208,6 +208,12 @@ public class PackageGenerationService : IPackageGenerationService
                 ? "Eén of meer overtollige colli hebben al scanhistoriek; los ze op via de afwijkingenflow."
                 : null);
     }
+
+    /// <summary>Falls back to a generated label ("2 × EUROPALLET") when the line has no description.</summary>
+    private static string LineDescription(CargoItem line) =>
+        string.IsNullOrWhiteSpace(line.Description)
+            ? $"{line.ExpectedQuantity:0.##} × {line.QuantityUnitCode ?? line.UnitTypeLabel ?? "stuks"}"
+            : line.Description;
 
     private static string GeneratePackageNumber(Modules.Tenancy.Entities.TenantSettings? settings)
     {

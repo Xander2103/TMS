@@ -359,7 +359,11 @@ public class CustomerPortalService : ICustomerPortalService
             order.Stops.Select(s => new PortalStopDto(
                 s.Sequence, s.StopType, s.LocationName, s.City, s.RequestedFrom, s.RequestedTo, s.Reference, s.Instructions)).ToList(),
             order.CargoItems.Select(c => new PortalCargoDto(
-                c.Sequence, c.Description, c.ExpectedQuantity, c.QuantityUnit, c.UnitType, c.AdrRequired)).ToList(),
+                c.Sequence,
+                string.IsNullOrWhiteSpace(c.Description)
+                    ? $"{c.ExpectedQuantity:0.##} × {c.QuantityUnitCode ?? c.UnitTypeLabel ?? "stuks"}"
+                    : c.Description,
+                c.ExpectedQuantity, c.QuantityUnit, c.UnitType, c.AdrRequired)).ToList(),
             timeline, exceptions);
     }
 }

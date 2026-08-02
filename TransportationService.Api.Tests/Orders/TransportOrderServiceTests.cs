@@ -748,18 +748,80 @@ public class TransportOrderServiceTests
         Assert.Equal(TransportOrderOperationOutcome.InvalidState, result.Outcome);
     }
 
+    /// <summary>
+    /// Was "Create_WithoutGoodsDescription_Succeeds": an order with no description anywhere
+    /// (general blank, no cargo lines) used to be accepted. This is the wave's one deliberate
+    /// behavior change — see Create_NoDescriptionAnywhere_IsRejected below — so this test now
+    /// carries one described cargo line to keep proving the general field stays optional.
+    /// </summary>
     [Fact]
-    public async Task Create_WithoutGoodsDescription_Succeeds()
+    public async Task Create_WithoutGoodsDescription_ButWithDescribedLine_Succeeds()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
 
         var created = await h.Sut.CreateAsync(Request(h.CustomerId,
-            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with { GoodsDescription = "  " },
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = "  ",
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        },
             CancellationToken.None);
 
         Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
         Assert.Null(created.Order!.GoodsDescription);
+    }
+
+    [Fact]
+    public async Task Create_LineDescriptionOnly_Succeeds_GeneralOptional()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = null,
+            CargoItems = [new CargoItemInput("2 europallets onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+    }
+
+    [Fact]
+    public async Task Create_GeneralDescriptionOnly_WithDescriptionlessLine_Succeeds()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = "Gemengde goederen",
+            CargoItems = [new CargoItemInput(null, null, 4, null, null, QuantityUnitCode: "COLLI")],
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, result.Outcome);
+    }
+
+    [Fact]
+    public async Task Create_NoDescriptionAnywhere_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            GoodsDescription = null,
+            CargoItems = [new CargoItemInput(null, null, 4, null, null, QuantityUnitCode: "COLLI")],
+        },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+        Assert.Contains("omschrijving", result.Error!, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

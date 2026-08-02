@@ -196,6 +196,7 @@ public class TransportOrderService : ITransportOrderService
         CreateTransportOrderRequest request, CancellationToken cancellationToken)
     {
         var validation = await ValidateAsync(request.CustomerId, request.CustomerReference, request.GoodsDescription,
+            request.CargoItems?.Select(c => c.Description).ToList(),
             request.Stops, enforceCustomerIntake: true, cancellationToken);
         if (validation is not null)
         {
@@ -304,8 +305,16 @@ public class TransportOrderService : ITransportOrderService
 
         // Switching an order TO a blocked customer is refused; editing an existing order whose
         // customer became blocked afterwards stays possible (dispatch still needs to manage it).
+        // Null CargoItems means "leave unchanged" (API contract), so the description rule falls
+        // back to the currently persisted lines in that case.
+        var cargoDescriptions = request.CargoItems is not null
+            ? request.CargoItems.Select(c => c.Description).ToList()
+            : await _dbContext.CargoItems.AsNoTracking()
+                .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
+                .Select(c => c.Description)
+                .ToListAsync(cancellationToken);
         var validation = await ValidateAsync(request.CustomerId, request.CustomerReference, request.GoodsDescription,
-            request.Stops, enforceCustomerIntake: request.CustomerId != order.CustomerId, cancellationToken);
+            cargoDescriptions, request.Stops, enforceCustomerIntake: request.CustomerId != order.CustomerId, cancellationToken);
         if (validation is not null)
         {
             return validation;
@@ -855,9 +864,19 @@ public class TransportOrderService : ITransportOrderService
     /// <summary>Shared shape validation for create/update. Returns null when valid.</summary>
     private async Task<TransportOrderOperationResult?> ValidateAsync(
         Guid customerId, string? customerReference, string? goodsDescription,
+        IReadOnlyList<string?>? cargoDescriptions,
         IReadOnlyList<TransportOrderStopInput> stops, bool enforceCustomerIntake,
         CancellationToken cancellationToken)
     {
+        // At least one description must exist somewhere: general, or on any cargo line.
+        var hasAnyDescription = !string.IsNullOrWhiteSpace(goodsDescription)
+            || cargoDescriptions?.Any(d => !string.IsNullOrWhiteSpace(d)) == true;
+        if (!hasAnyDescription)
+        {
+            return TransportOrderOperationResult.Invalid(
+                "Geef minstens één omschrijving van de goederen op: algemeen of op een goederenlijn.");
+        }
+
         var customer = await _dbContext.Customers
             .Where(c => c.Id == customerId && c.TenantId == _tenantContext.TenantId)
             .Select(c => new { c.IsBlocked, c.IsActive, c.CustomerReferenceRequired })
@@ -925,17 +944,16 @@ public class TransportOrderService : ITransportOrderService
         return null;
     }
 
-    /// <summary>Validates the cargo list: description + positive quantity per item, barcode unambiguous within the order.</summary>
+    /// <summary>
+    /// Validates the cargo list: positive quantity per item, barcode unambiguous within the order.
+    /// Line descriptions are optional (see <see cref="ValidateAsync"/> for the "at least one
+    /// description somewhere" rule).
+    /// </summary>
     private static string? CargoItemsError(IReadOnlyList<CargoItemInput>? items, IReadOnlyList<TransportOrderStopInput> stops)
     {
         if (items is null || items.Count == 0)
         {
             return null;
-        }
-
-        if (items.Any(i => string.IsNullOrWhiteSpace(i.Description)))
-        {
-            return "Elke goederenlijn heeft een omschrijving nodig.";
         }
 
         if (items.Any(i => i.ExpectedQuantity <= 0))
@@ -1025,7 +1043,7 @@ public class TransportOrderService : ITransportOrderService
             field: $"cargoItems[{sequence - 1}].volumeM3");
 
         target.Sequence = sequence;
-        target.Description = input.Description.Trim();
+        target.Description = Trim(input.Description);
         target.Barcode = Trim(input.Barcode);
         target.ExpectedQuantity = input.ExpectedQuantity;
         target.QuantityUnit = Trim(input.QuantityUnit);

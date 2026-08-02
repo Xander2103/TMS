@@ -232,7 +232,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       return {
         key: nextStopKey(),
         id: c.id,
-        description: c.description,
+        description: c.description ?? '',
         barcode: c.barcode ?? '',
         expectedQuantity: String(c.expectedQuantity),
         quantityUnit: c.quantityUnit ?? '',
@@ -595,14 +595,14 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       }
     }
     for (const cargo of cargoItems) {
-      if (!cargo.description.trim()) {
-        setFormError('Elke goederenlijn heeft een omschrijving nodig.')
-        return
-      }
       if (cargo.expectedQuantity === '' || Number(cargo.expectedQuantity) <= 0) {
         setFormError('De verwachte hoeveelheid van een goederenlijn moet groter dan nul zijn.')
         return
       }
+    }
+    if (!goodsDescription.trim() && !cargoItems.some((c) => c.description.trim())) {
+      setFormError('Geef minstens één omschrijving van de goederen op: algemeen of per goederenlijn.')
+      return
     }
     const barcodes = cargoItems.map((c) => c.barcode.trim().toLowerCase()).filter(Boolean)
     if (barcodes.length !== new Set(barcodes).size) {
@@ -686,7 +686,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       })),
       cargoItems: cargoItems.map((cargo) => ({
         id: cargo.id,
-        description: cargo.description.trim(),
+        description: cargo.description.trim() || null,
         barcode: cargo.barcode.trim() || null,
         expectedQuantity: Number(cargo.expectedQuantity),
         quantityUnit: cargo.quantityUnit.trim() || null,
@@ -998,7 +998,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
 
   const goederenContent = (
     <>
-      <FormField label="Omschrijving goederen" htmlFor="to-goods" hint="Optioneel — gestructureerde gegevens horen bij de goederenlijnen.">
+      <FormField label="Omschrijving goederen" htmlFor="to-goods" hint="Optioneel wanneer de goederen hieronder per lijn worden beschreven.">
         <textarea id="to-goods" rows={2} value={goodsDescription} onChange={(e) => setGoodsDescription(e.target.value)} disabled={saving} maxLength={1000} />
       </FormField>
 
@@ -1093,7 +1093,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         <fieldset key={cargo.key} className="tof-stop">
           <legend>Lijn {index + 1}</legend>
           <div className="tof-row tof-row-4">
-            <FormField label="Omschrijving" htmlFor={`cg-desc-${cargo.key}`} required>
+            <FormField label="Omschrijving" htmlFor={`cg-desc-${cargo.key}`} hint="Optioneel als de algemene omschrijving is ingevuld.">
               <input id={`cg-desc-${cargo.key}`} value={cargo.description} onChange={(e) => setCargo(cargo.key, { description: e.target.value })} disabled={saving} maxLength={300} />
             </FormField>
             <FormField label="Barcode" htmlFor={`cg-bc-${cargo.key}`}>

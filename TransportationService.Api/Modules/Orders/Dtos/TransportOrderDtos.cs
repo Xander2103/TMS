@@ -167,7 +167,7 @@ public record OrderTimelineEventDto(
 public record CargoItemDto(
     Guid Id,
     int Sequence,
-    string Description,
+    string? Description,
     string? Barcode,
     decimal ExpectedQuantity,
     string? QuantityUnit,
@@ -195,7 +195,7 @@ public record CargoItemDto(
 /// unloading stop; otherwise the line stays unlinked until assigned.
 /// </summary>
 public record CargoItemInput(
-    string Description,
+    string? Description,
     string? Barcode,
     decimal ExpectedQuantity,
     string? QuantityUnit,

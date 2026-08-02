@@ -102,12 +102,24 @@ vi.mock('../../../tarification/api/pricingApi', async () => {
   }
 })
 
-function renderForm() {
-  return render(
+function renderForm(onSubmit = vi.fn().mockResolvedValue(undefined)) {
+  render(
     <MemoryRouter>
-      <TransportOrderForm submitLabel="Opdracht aanmaken" onSubmit={vi.fn()} />
+      <TransportOrderForm submitLabel="Opdracht aanmaken" onSubmit={onSubmit} />
     </MemoryRouter>,
   )
+  return { onSubmit }
+}
+
+/** Fills customer + both stop cities so submission only depends on the goods-description rule. */
+async function fillMinimalRouteAndCustomer() {
+  await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+  await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+
+  await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
+  for (const cityInput of screen.getAllByLabelText('Plaats *')) {
+    await userEvent.type(cityInput, 'Gent')
+  }
 }
 
 describe('TransportOrderForm sections + pricing', () => {
@@ -431,5 +443,37 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(screen.getByText('VOORSTEL')).toBeInTheDocument()
     expect(screen.getByText('Totaal incl. voorstellen')).toBeInTheDocument()
     expect(screen.getByText('€ 487.50')).toBeInTheDocument()
+  })
+})
+
+describe('TransportOrderForm goods-description rule', () => {
+  beforeEach(() => {
+    auth.permissions = new Set(['locations.create'])
+  })
+
+  it('submits with an empty general description when a cargo line has one', async () => {
+    const { onSubmit } = renderForm()
+    await fillMinimalRouteAndCustomer()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
+    await userEvent.type(screen.getByLabelText('Omschrijving'), '2 europallets onderdelen')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ goodsDescription: null }))
+  })
+
+  it('rejects submission when neither the general nor any line description is filled in', async () => {
+    const { onSubmit } = renderForm()
+    await fillMinimalRouteAndCustomer()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
+
+    expect(await screen.findByText(
+      'Geef minstens één omschrijving van de goederen op: algemeen of per goederenlijn.',
+    )).toBeInTheDocument()
+    expect(onSubmit).not.toHaveBeenCalled()
   })
 })
