@@ -56,6 +56,65 @@ public class TransportOrderServiceTests
         customerId, "PO-777", new DateOnly(2026, 7, 20), "20 paletten bouwmateriaal",
         20, "paletten", 12500, null, 20, false, false, 1450m, null, stops);
 
+    /// <summary>
+    /// Maps a detail DTO back into an update request, carrying stops AND cargo items (reused by
+    /// later tasks). Cargo stop links are re-resolved from ids to indexes via the detail DTO's
+    /// stop list order, since CargoItemInput addresses stops by index.
+    /// </summary>
+    private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d)
+    {
+        var stopIndexById = d.Stops
+            .Select((s, i) => (s.Id, Index: i))
+            .ToDictionary(x => x.Id, x => x.Index);
+
+        return new UpdateTransportOrderRequest(
+            d.CustomerId, d.CustomerReference, d.OrderDate, d.GoodsDescription, d.Quantity,
+            d.QuantityUnit, d.WeightKg, d.VolumeM3, d.PalletCount, d.AdrRequired, d.CraneRequired,
+            d.AgreedPrice, d.Notes,
+            d.Stops.Select(s => new TransportOrderStopInput(
+                    s.StopType, s.LocationId, s.LocationName, s.Address, s.PostalCode, s.City, s.CountryCode,
+                    s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions))
+                .ToList(),
+            CargoItems: d.CargoItems.Select(c => new CargoItemInput(
+                    c.Description, c.Barcode, c.ExpectedQuantity, c.QuantityUnit, c.Notes,
+                    c.UnitType, c.UnitTypeLabel, c.TotalWeightKg, c.WeightPerUnitKg,
+                    c.LengthMeters, c.WidthMeters, c.HeightMeters, c.VolumeM3, c.VolumeIsManual,
+                    c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference,
+                    c.LoadingStopId is { } lid && stopIndexById.TryGetValue(lid, out var li) ? li : null,
+                    c.UnloadingStopId is { } uid && stopIndexById.TryGetValue(uid, out var ui) ? ui : null,
+                    c.QuantityUnitCode))
+                .ToList(),
+            QuantityUnitCode: d.QuantityUnitCode);
+    }
+
+    [Fact]
+    public async Task Update_ChangedCargoUnit_RoundTripsThroughDetailDto()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Equal("EUROPALLET", Assert.Single(created.Order!.CargoItems).QuantityUnitCode);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var update = BuildUpdateFrom(created.Order!) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "COLLI")],
+        };
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id, update, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        Assert.Equal("COLLI", Assert.Single(updated.Order!.CargoItems).QuantityUnitCode);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var reloaded = await h.Sut.GetByIdAsync(created.Order!.Id, CancellationToken.None);
+        Assert.Equal("COLLI", Assert.Single(reloaded!.CargoItems).QuantityUnitCode);
+    }
+
     [Fact]
     public async Task Priority_DefaultsToNormal_InlineChangeIsAuditedAndGuarded()
     {

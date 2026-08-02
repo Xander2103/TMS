@@ -1085,7 +1085,8 @@ public class TransportOrderService : ITransportOrderService
                 c.Id, c.Sequence, c.Description, c.Barcode, c.ExpectedQuantity, c.QuantityUnit, c.Notes,
                 c.UnitType, c.UnitTypeLabel, c.TotalWeightKg, c.WeightPerUnitKg,
                 c.LengthMeters, c.WidthMeters, c.HeightMeters, c.VolumeM3, c.VolumeIsManual,
-                c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference, c.LoadingStopId, c.UnloadingStopId))
+                c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference, c.LoadingStopId, c.UnloadingStopId,
+                c.QuantityUnitCode))
             .ToListAsync(cancellationToken);
 
         var pricingLines = await _dbContext.TransportOrderPricingLines.AsNoTracking()
