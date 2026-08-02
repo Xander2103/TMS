@@ -306,4 +306,80 @@ public class PricingEngineTests
                 Guid.NewGuid(), h.PalletUnitId, PriceRuleBasis.PerUnit, null,
                 "Vreemde klant", Today, null, true, 10, null, null), CancellationToken.None));
     }
+
+    // --- Task 11: IncludedTimeInfo (effective included-time value + source, for the order UI) ---
+
+    [Fact]
+    public async Task IncludedTimeInfo_EngagedAgreementWithIncludedTime_ReportsContractSource()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerId, "Contract A", Today.AddMonths(-1), null, true,
+            null, null, null,
+            IncludedLoadingMinutes: 30, ExtraHourlyRate: 75m), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            "Pallets Contract A", Today.AddMonths(-1), null, true, 30m, null, null,
+            AgreementId: agreement.Id), CancellationToken.None);
+
+        var request = Request(h, 3) with { ActualLoadingMinutes = 50m };
+        var result = await h.Engine.CalculateAsync(request, CancellationToken.None);
+
+        Assert.NotNull(result.IncludedTimeInfo);
+        Assert.Equal("Contract", result.IncludedTimeInfo!.Source);
+        Assert.Equal(30, result.IncludedTimeInfo.IncludedLoadingMinutes);
+        Assert.Null(result.IncludedTimeInfo.IncludedUnloadingMinutes);
+        Assert.Null(result.IncludedTimeInfo.IncludedCombinedMinutes);
+        Assert.Equal(75m, result.IncludedTimeInfo.ExtraHourlyRate);
+    }
+
+    [Fact]
+    public async Task IncludedTimeInfo_OrderOverridesSet_ReportsOrderSource_WithOverrideMinutes()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerId, "Contract B", Today.AddMonths(-1), null, true,
+            null, null, null,
+            IncludedLoadingMinutes: 30, ExtraHourlyRate: 75m), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            "Pallets Contract B", Today.AddMonths(-1), null, true, 30m, null, null,
+            AgreementId: agreement.Id), CancellationToken.None);
+
+        var request = Request(h, 3) with
+        {
+            ActualLoadingMinutes = 50m,
+            IncludedTimeOverrides = new IncludedTimeOverrideInput(
+                IncludedLoadingMinutes: 60, IncludedUnloadingMinutes: null, ExtraHourlyRate: null,
+                RoundingStepMinutes: null, MinimumBillableMinutes: null),
+        };
+        var result = await h.Engine.CalculateAsync(request, CancellationToken.None);
+
+        Assert.NotNull(result.IncludedTimeInfo);
+        Assert.Equal("Order", result.IncludedTimeInfo!.Source);
+        Assert.Equal(60, result.IncludedTimeInfo.IncludedLoadingMinutes);
+        // Agreement's own rate (75) still applies — only the loading minutes were overridden.
+        Assert.Equal(75m, result.IncludedTimeInfo.ExtraHourlyRate);
+    }
+
+    [Fact]
+    public async Task IncludedTimeInfo_NoEngagedAgreementAndNoOverrides_ReportsGeenSource()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            "Pallets zonder inbegrepen tijd", Today.AddMonths(-1), null, true, 30m, null, null), CancellationToken.None);
+
+        var result = await h.Engine.CalculateAsync(Request(h, 3), CancellationToken.None);
+
+        Assert.NotNull(result.IncludedTimeInfo);
+        Assert.Equal("Geen", result.IncludedTimeInfo!.Source);
+        Assert.Null(result.IncludedTimeInfo.IncludedLoadingMinutes);
+        Assert.Null(result.IncludedTimeInfo.IncludedUnloadingMinutes);
+        Assert.Null(result.IncludedTimeInfo.IncludedCombinedMinutes);
+        Assert.Null(result.IncludedTimeInfo.ExtraHourlyRate);
+    }
 }

@@ -484,6 +484,10 @@ public class PricingEngine : IPricingEngine
             }
         }
 
+        // Task 11: effective included-time info for the order form, filled below alongside the
+        // winning agreement's extra-time proposal so it can never disagree with the actual charge.
+        IncludedTimeInfoDto? includedTimeInfo = null;
+
         foreach (var agreement in engagedAgreementsWithLines)
         {
             var subtotal = lines.Where(l => !l.Informational && l.AgreementId == agreement.Id).Sum(l => l.Amount);
@@ -583,10 +587,24 @@ public class PricingEngine : IPricingEngine
                     agreement.IncludedLoadingMinutes, agreement.IncludedUnloadingMinutes, agreement.IncludedCombinedMinutes,
                     agreement.ExtraHourlyRate, request.ActualLoadingMinutes, request.ActualUnloadingMinutes,
                     request.IncludedTimeOverrides));
+                includedTimeInfo = BuildIncludedTimeInfo(
+                    agreement.IncludedLoadingMinutes, agreement.IncludedUnloadingMinutes, agreement.IncludedCombinedMinutes,
+                    agreement.ExtraHourlyRate, request.IncludedTimeOverrides);
             }
         }
 
-        return await FinalizeAsync(request, lines, requiresManual, configurationError, zone, unitNames, cancellationToken);
+        // No engaged agreement carries included time. An order override with nothing to override
+        // is still a corner case worth reflecting as "Order" (rather than silently no-op'ing to
+        // "Geen") — but the common case is genuinely nothing configured anywhere.
+        var hasOrderOverride = request.IncludedTimeOverrides is { } overridesOnly
+            && (overridesOnly.IncludedLoadingMinutes is not null || overridesOnly.IncludedUnloadingMinutes is not null
+                || overridesOnly.ExtraHourlyRate is not null || overridesOnly.RoundingStepMinutes is not null
+                || overridesOnly.MinimumBillableMinutes is not null);
+        includedTimeInfo ??= hasOrderOverride
+            ? BuildIncludedTimeInfo(null, null, null, null, request.IncludedTimeOverrides)
+            : new IncludedTimeInfoDto(null, null, null, null, "Geen");
+
+        return await FinalizeAsync(request, lines, requiresManual, configurationError, zone, unitNames, cancellationToken, includedTimeInfo);
     }
 
     private static string RuleLineKey(Guid ruleId) => $"rule:{ruleId}";
@@ -600,7 +618,8 @@ public class PricingEngine : IPricingEngine
     /// </summary>
     private async Task<PriceCalculationResult> FinalizeAsync(
         PriceCalculationRequest request, List<PriceBreakdownLine> lines, bool requiresManual, string? configurationError,
-        PricingZone? zone, IReadOnlyDictionary<Guid, string> unitNames, CancellationToken cancellationToken)
+        PricingZone? zone, IReadOnlyDictionary<Guid, string> unitNames, CancellationToken cancellationToken,
+        IncludedTimeInfoDto? includedTimeInfo = null)
     {
         var tenantId = _tenantContext.TenantId;
         var subtotalBeforeServices = lines.Where(l => !l.Informational && !l.Proposed).Sum(l => l.Amount);
@@ -883,7 +902,55 @@ public class PricingEngine : IPricingEngine
             lines, decimal.Round(total, 2), decimal.Round(totalWithInformational, 2), "EUR",
             zone?.Code, zone?.Name, requiresManual, serviceLines,
             TariffDate: request.Date, ConfigurationError: configurationError, Diagnostics: diagnostics,
-            TotalWithProposed: decimal.Round(totalWithProposed, 2));
+            TotalWithProposed: decimal.Round(totalWithProposed, 2), IncludedTimeInfo: includedTimeInfo);
+    }
+
+    /// <summary>
+    /// Task 11: resolves the effective included loading/unloading/combined minutes and extra-time
+    /// rate (order override ?? agreement value) plus whether any of the 5 order overrides is set —
+    /// the single source of truth shared by <see cref="ComputeExtraTimeLines"/> (the pricing math)
+    /// and <see cref="BuildIncludedTimeInfo"/> (the order form's read-only summary), so the two can
+    /// never disagree on what "effective" means. See <see cref="ComputeExtraTimeLines"/> for the
+    /// exact combined-vs-per-activity switching rule.
+    /// </summary>
+    private static (int? Loading, int? Unloading, int? Combined, decimal? Rate, bool AnyOverrideSet) ResolveIncludedTime(
+        int? includedLoadingMinutes, int? includedUnloadingMinutes, int? includedCombinedMinutes,
+        decimal? extraHourlyRate, IncludedTimeOverrideInput? overrides)
+    {
+        var loadingOverrideSet = overrides?.IncludedLoadingMinutes is not null;
+        var unloadingOverrideSet = overrides?.IncludedUnloadingMinutes is not null;
+        var anyOverrideSet = loadingOverrideSet || unloadingOverrideSet
+            || overrides?.ExtraHourlyRate is not null || overrides?.RoundingStepMinutes is not null
+            || overrides?.MinimumBillableMinutes is not null;
+        var effectiveRate = overrides?.ExtraHourlyRate ?? extraHourlyRate;
+
+        if (includedCombinedMinutes is { } combined && !loadingOverrideSet && !unloadingOverrideSet)
+        {
+            return (null, null, combined, effectiveRate, anyOverrideSet);
+        }
+
+        // Either the agreement is per-activity already, or it is combined but got switched to
+        // per-activity by one of the overrides above — the non-overridden side then falls back to
+        // 0 included minutes rather than the (no longer applicable) combined figure.
+        var agreementIsCombined = includedCombinedMinutes is not null;
+        var effectiveLoading = overrides?.IncludedLoadingMinutes ?? (agreementIsCombined ? 0 : includedLoadingMinutes);
+        var effectiveUnloading = overrides?.IncludedUnloadingMinutes ?? (agreementIsCombined ? 0 : includedUnloadingMinutes);
+        return (effectiveLoading, effectiveUnloading, null, effectiveRate, anyOverrideSet);
+    }
+
+    /// <summary>
+    /// Task 11: the effective included-time info shown on the order form ("Laad- en lostijd"
+    /// section) — same resolution as <see cref="ComputeExtraTimeLines"/>, without needing actual
+    /// measured minutes. Source is "Order" as soon as any of the 5 order overrides is set,
+    /// otherwise "Contract".
+    /// </summary>
+    private static IncludedTimeInfoDto BuildIncludedTimeInfo(
+        int? includedLoadingMinutes, int? includedUnloadingMinutes, int? includedCombinedMinutes,
+        decimal? extraHourlyRate, IncludedTimeOverrideInput? overrides)
+    {
+        var (loading, unloading, combined, rate, anyOverrideSet) = ResolveIncludedTime(
+            includedLoadingMinutes, includedUnloadingMinutes, includedCombinedMinutes, extraHourlyRate, overrides);
+        return new IncludedTimeInfoDto(loading, unloading, combined, rate, anyOverrideSet ? "Order" : "Contract");
     }
 
     /// <summary>
@@ -911,14 +978,12 @@ public class PricingEngine : IPricingEngine
         IncludedTimeOverrideInput? overrides = null)
     {
         var lines = new List<PriceBreakdownLine>();
-
-        var loadingOverrideSet = overrides?.IncludedLoadingMinutes is not null;
-        var unloadingOverrideSet = overrides?.IncludedUnloadingMinutes is not null;
-        var effectiveRate = overrides?.ExtraHourlyRate ?? extraHourlyRate;
         var roundingStep = overrides?.RoundingStepMinutes;
         var minimumBillable = overrides?.MinimumBillableMinutes;
+        var (effectiveLoading, effectiveUnloading, effectiveCombined, effectiveRate, _) = ResolveIncludedTime(
+            includedLoadingMinutes, includedUnloadingMinutes, includedCombinedMinutes, extraHourlyRate, overrides);
 
-        if (includedCombinedMinutes is { } combined && !loadingOverrideSet && !unloadingOverrideSet)
+        if (effectiveCombined is { } combined)
         {
             if (actualLoadingMinutes is null && actualUnloadingMinutes is null)
             {
@@ -936,13 +1001,6 @@ public class PricingEngine : IPricingEngine
 
             return lines;
         }
-
-        // Either the agreement is per-activity already, or it is combined but got switched to
-        // per-activity by one of the overrides above — the non-overridden side then falls back to
-        // 0 included minutes rather than the (no longer applicable) combined figure.
-        var agreementIsCombined = includedCombinedMinutes is not null;
-        var effectiveLoading = overrides?.IncludedLoadingMinutes ?? (agreementIsCombined ? 0 : includedLoadingMinutes);
-        var effectiveUnloading = overrides?.IncludedUnloadingMinutes ?? (agreementIsCombined ? 0 : includedUnloadingMinutes);
 
         if (effectiveLoading is { } includedLoading && actualLoadingMinutes is { } actualLoading)
         {

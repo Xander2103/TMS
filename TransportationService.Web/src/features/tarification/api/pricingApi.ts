@@ -649,6 +649,20 @@ export interface PricePreviewServiceLine {
   autoApplied?: boolean
 }
 
+/**
+ * Task 11: the effective included loading/unloading time and extra-time rate actually applied
+ * (order override ?? winning agreement value), plus where it came from — drives the order form's
+ * "Laad- en lostijd" section. "Contract" = agreement value, no order override; "Order" = any of
+ * the 5 order overrides set; "Geen" = no engaged agreement with included time and no overrides.
+ */
+export interface IncludedTimeInfo {
+  includedLoadingMinutes: number | null
+  includedUnloadingMinutes: number | null
+  includedCombinedMinutes: number | null
+  extraHourlyRate: number | null
+  source: 'Contract' | 'Order' | 'Geen'
+}
+
 export interface PriceCalculationResult {
   lines: PriceBreakdownLine[]
   total: number
@@ -663,6 +677,8 @@ export interface PriceCalculationResult {
   diagnostics: string[] | null
   /** Total + proposed (unconfirmed) extra-time charges — never silently invoiceable on its own. */
   totalWithProposed: number
+  /** Null for a one-off order (see OneOffPricingInput, which has its own included-time fields). */
+  includedTimeInfo?: IncludedTimeInfo | null
 }
 
 export const previewPrice = (input: PricePreviewInput): Promise<PriceCalculationResult> =>

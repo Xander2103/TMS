@@ -211,6 +211,12 @@ export interface TransportOrderDetail {
   oneOffNotes: string | null
   /** CalculatedPrice + proposed (unconfirmed) extra-time charges; null when nothing could be calculated. */
   totalWithProposed: number | null
+  /** Task 11: order-level overrides of the engaged contract agreement's included time/rate (contract mode only). */
+  includedLoadingMinutesOverride: number | null
+  includedUnloadingMinutesOverride: number | null
+  extraTimeHourlyRateOverride: number | null
+  extraTimeRoundingStepMinutes: number | null
+  extraTimeMinimumBillableMinutes: number | null
 }
 
 /** Manual-editing lifecycle of a pricing line (spec ch. 24-26). */
@@ -397,4 +403,10 @@ export interface TransportOrderInput {
   oneOffIncludedCombinedMinutes?: number | null
   oneOffExtraHourlyRate?: number | null
   oneOffNotes?: string | null
+  /** Task 11: order-level overrides of the engaged contract agreement's included time/rate (contract mode only). */
+  includedLoadingMinutesOverride?: number | null
+  includedUnloadingMinutesOverride?: number | null
+  extraTimeHourlyRateOverride?: number | null
+  extraTimeRoundingStepMinutes?: number | null
+  extraTimeMinimumBillableMinutes?: number | null
 }

@@ -369,4 +369,20 @@ public record PriceCalculationResult(
     /// <summary>Diagnostic context shown when no valid tariff was found.</summary>
     IReadOnlyList<string>? Diagnostics = null,
     /// <summary>Total + proposed (unconfirmed) extra-time charges — never silently invoiceable on its own.</summary>
-    decimal TotalWithProposed = 0m);
+    decimal TotalWithProposed = 0m,
+    /// <summary>
+    /// Task 11: the effective included loading/unloading time and extra-time rate actually applied
+    /// (order override ?? winning agreement value), plus where it came from — drives the order
+    /// form's "Laad- en lostijd" section. Null for a one-off order (see <see cref="OneOffPricingInput"/>,
+    /// which has its own included-time fields).
+    /// </summary>
+    IncludedTimeInfoDto? IncludedTimeInfo = null);
+
+/// <summary>
+/// Task 11: effective included-time info for the order form (spec 2026-08-02 §11). Source is
+/// "Contract" (agreement value, no order override), "Order" (any of the 5 order overrides set) or
+/// "Geen" (no engaged agreement with included time and no overrides — nothing to show).
+/// </summary>
+public record IncludedTimeInfoDto(
+    int? IncludedLoadingMinutes, int? IncludedUnloadingMinutes, int? IncludedCombinedMinutes,
+    decimal? ExtraHourlyRate, string Source);

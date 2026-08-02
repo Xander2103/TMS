@@ -352,6 +352,29 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   )
   const [oneOffNotes, setOneOffNotes] = useState(order?.oneOffNotes ?? '')
 
+  // --- Task 11: order-level included-time overrides (contract mode) — "Laad- en lostijd" ---
+  const [includedLoadingMinutesOverride, setIncludedLoadingMinutesOverride] = useState(
+    order?.includedLoadingMinutesOverride == null ? '' : String(order.includedLoadingMinutesOverride),
+  )
+  const [includedUnloadingMinutesOverride, setIncludedUnloadingMinutesOverride] = useState(
+    order?.includedUnloadingMinutesOverride == null ? '' : String(order.includedUnloadingMinutesOverride),
+  )
+  const [extraTimeHourlyRateOverride, setExtraTimeHourlyRateOverride] = useState(
+    order?.extraTimeHourlyRateOverride == null ? '' : String(order.extraTimeHourlyRateOverride),
+  )
+  const [extraTimeRoundingStepMinutes, setExtraTimeRoundingStepMinutes] = useState(
+    order?.extraTimeRoundingStepMinutes == null ? '' : String(order.extraTimeRoundingStepMinutes),
+  )
+  const [extraTimeMinimumBillableMinutes, setExtraTimeMinimumBillableMinutes] = useState(
+    order?.extraTimeMinimumBillableMinutes == null ? '' : String(order.extraTimeMinimumBillableMinutes),
+  )
+  // "Afwijken voor deze order" panel: starts open when the order already carries an override.
+  const [includedTimeOverrideOpen, setIncludedTimeOverrideOpen] = useState(
+    () => order?.includedLoadingMinutesOverride != null || order?.includedUnloadingMinutesOverride != null
+      || order?.extraTimeHourlyRateOverride != null || order?.extraTimeRoundingStepMinutes != null
+      || order?.extraTimeMinimumBillableMinutes != null,
+  )
+
   useEffect(() => {
     let mounted = true
     // Only active services that are selectable during order entry (spec §20).
@@ -717,6 +740,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         : null,
       oneOffExtraHourlyRate: pricingSource === 'OneOff' && oneOffExtraHourlyRate.trim() ? Number(oneOffExtraHourlyRate) : null,
       oneOffNotes: pricingSource === 'OneOff' ? oneOffNotes.trim() || null : null,
+      includedLoadingMinutesOverride: pricingSource === 'OneOff' ? null : numberOrNullFrom(includedLoadingMinutesOverride),
+      includedUnloadingMinutesOverride: pricingSource === 'OneOff' ? null : numberOrNullFrom(includedUnloadingMinutesOverride),
+      extraTimeHourlyRateOverride: pricingSource === 'OneOff' ? null : numberOrNullFrom(extraTimeHourlyRateOverride),
+      extraTimeRoundingStepMinutes: pricingSource === 'OneOff' ? null : numberOrNullFrom(extraTimeRoundingStepMinutes),
+      extraTimeMinimumBillableMinutes: pricingSource === 'OneOff' ? null : numberOrNullFrom(extraTimeMinimumBillableMinutes),
       stops: stops.map((stop) => ({
         stopType: stop.stopType,
         locationId: stop.locationId || null,
@@ -1472,6 +1500,35 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     (line) => line.informational && serviceOptions.some((option) => line.label.startsWith(`${option.name}: `)),
   )
 
+  // --- Task 11: "Laad- en lostijd" — effective included time + source, order override ---
+  const includedTimeInfo = preview?.includedTimeInfo ?? null
+  const hasIncludedTimeOverride = [
+    includedLoadingMinutesOverride, includedUnloadingMinutesOverride, extraTimeHourlyRateOverride,
+    extraTimeRoundingStepMinutes, extraTimeMinimumBillableMinutes,
+  ].some((value) => value.trim() !== '')
+  const includedTimeSourceLabel = hasIncludedTimeOverride
+    ? 'Bron: Afwijking op order'
+    : includedTimeInfo?.source === 'Contract'
+      ? 'Bron: Klantcontract'
+      : 'Bron: Geen contractwaarde'
+  // The contract's combined allowance is only shown as one row while nothing overrides it — an
+  // override always targets loading/unloading separately, so setting one switches the display to
+  // the two per-activity rows too (mirrors PricingEngine.ResolveIncludedTime).
+  const includedCombinedMinutes = !hasIncludedTimeOverride ? includedTimeInfo?.includedCombinedMinutes ?? null : null
+  const effectiveIncludedLoadingMinutes = includedLoadingMinutesOverride.trim() !== ''
+    ? Number(includedLoadingMinutesOverride)
+    : includedTimeInfo?.includedLoadingMinutes ?? null
+  const effectiveIncludedUnloadingMinutes = includedUnloadingMinutesOverride.trim() !== ''
+    ? Number(includedUnloadingMinutesOverride)
+    : includedTimeInfo?.includedUnloadingMinutes ?? null
+  const resetIncludedTimeOverrides = () => {
+    setIncludedLoadingMinutesOverride('')
+    setIncludedUnloadingMinutesOverride('')
+    setExtraTimeHourlyRateOverride('')
+    setExtraTimeRoundingStepMinutes('')
+    setExtraTimeMinimumBillableMinutes('')
+  }
+
   const servicesContent = (
     <>
       <p className="ui-form-section-description">
@@ -1627,6 +1684,110 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               <li key={`${line.label}-${index}`}>{line.label}</li>
             ))}
           </ul>
+        )}
+      </div>
+
+      <div className="tof-service-group">
+        <h4>Laad- en lostijd</h4>
+        {pricingSource === 'OneOff' ? (
+          <p className="ui-form-field-hint">
+            Bij een eenmalige prijsafspraak gebruik je de eenmalige laad- en lostijdvelden.
+          </p>
+        ) : (
+          <>
+            {includedCombinedMinutes != null ? (
+              <p>Inbegrepen laad- en lostijd (gecombineerd): {includedCombinedMinutes} minuten</p>
+            ) : (
+              <>
+                <p>
+                  Inbegrepen laadtijd: {effectiveIncludedLoadingMinutes != null ? `${effectiveIncludedLoadingMinutes} minuten` : '—'}
+                </p>
+                <p>
+                  Inbegrepen lostijd: {effectiveIncludedUnloadingMinutes != null ? `${effectiveIncludedUnloadingMinutes} minuten` : '—'}
+                </p>
+              </>
+            )}
+            <p className="customer-form-muted">{includedTimeSourceLabel}</p>
+
+            {!includedTimeOverrideOpen && (
+              <div className="tof-stop-toolbar">
+                <Button variant="secondary" onClick={() => setIncludedTimeOverrideOpen(true)} disabled={saving}>
+                  Afwijken voor deze order
+                </Button>
+              </div>
+            )}
+
+            {includedTimeOverrideOpen && (
+              <div className="tof-stop">
+                <div className="tof-row">
+                  <FormField label="Inbegrepen laadtijd (minuten)" htmlFor="to-included-loading-override">
+                    <input
+                      id="to-included-loading-override"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={includedLoadingMinutesOverride}
+                      onChange={(e) => setIncludedLoadingMinutesOverride(e.target.value)}
+                      disabled={saving}
+                    />
+                  </FormField>
+                  <FormField label="Inbegrepen lostijd (minuten)" htmlFor="to-included-unloading-override">
+                    <input
+                      id="to-included-unloading-override"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={includedUnloadingMinutesOverride}
+                      onChange={(e) => setIncludedUnloadingMinutesOverride(e.target.value)}
+                      disabled={saving}
+                    />
+                  </FormField>
+                </div>
+                <div className="tof-row">
+                  <FormField label="Uurtarief extra tijd (€)" htmlFor="to-extra-rate-override">
+                    <input
+                      id="to-extra-rate-override"
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={extraTimeHourlyRateOverride}
+                      onChange={(e) => setExtraTimeHourlyRateOverride(e.target.value)}
+                      disabled={saving}
+                    />
+                  </FormField>
+                  <FormField label="Afronding (minuten)" htmlFor="to-extra-rounding-override">
+                    <input
+                      id="to-extra-rounding-override"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={extraTimeRoundingStepMinutes}
+                      onChange={(e) => setExtraTimeRoundingStepMinutes(e.target.value)}
+                      disabled={saving}
+                    />
+                  </FormField>
+                  <FormField label="Minimum extra tijd (minuten)" htmlFor="to-extra-minimum-override">
+                    <input
+                      id="to-extra-minimum-override"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={extraTimeMinimumBillableMinutes}
+                      onChange={(e) => setExtraTimeMinimumBillableMinutes(e.target.value)}
+                      disabled={saving}
+                    />
+                  </FormField>
+                </div>
+                {hasIncludedTimeOverride && (
+                  <div className="tof-stop-toolbar">
+                    <Button variant="secondary" onClick={resetIncludedTimeOverrides} disabled={saving}>
+                      Terugzetten naar contractwaarde
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

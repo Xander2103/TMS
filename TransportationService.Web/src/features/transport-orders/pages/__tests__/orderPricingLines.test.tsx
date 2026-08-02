@@ -121,6 +121,11 @@ function baseOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrde
     oneOffExtraHourlyRate: null,
     oneOffNotes: null,
     totalWithProposed: 145,
+    includedLoadingMinutesOverride: null,
+    includedUnloadingMinutesOverride: null,
+    extraTimeHourlyRateOverride: null,
+    extraTimeRoundingStepMinutes: null,
+    extraTimeMinimumBillableMinutes: null,
     ...overrides,
   }
 }

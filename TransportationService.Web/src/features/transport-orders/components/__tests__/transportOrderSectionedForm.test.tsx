@@ -39,6 +39,22 @@ vi.mock('../../../reference/components/CountryCombobox', () => ({
 }))
 
 const previewSpy = vi.hoisted(() => vi.fn())
+// Default previewPrice() response, restored in beforeEach (via mockReset + mockResolvedValue)
+// so a test that installs its own persistent `previewSpy.mockResolvedValue(...)` can never leak
+// into a later test — only `mockResolvedValueOnce` is safe to leave unconsumed across tests.
+const defaultPreviewResult = vi.hoisted(() => ({
+  lines: [
+    { label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false },
+    { label: 'Dieseltoeslag 8%', amount: 11.6, source: 'Dieseltoeslag', informational: true },
+  ],
+  total: 145,
+  totalWithInformational: 156.6,
+  currency: 'EUR',
+  zoneCode: 'Z3',
+  zoneName: 'Zone 3',
+  requiresManualPrice: false,
+  serviceLines: [],
+}))
 
 vi.mock('../../../tarification/api/pricingApi', async () => {
   const actual = await vi.importActual<typeof import('../../../tarification/api/pricingApi')>(
@@ -86,19 +102,7 @@ vi.mock('../../../tarification/api/pricingApi', async () => {
           defaultLoadingMeters: null, defaultPalletPlaces: null,
         },
       ]),
-    previewPrice: previewSpy.mockResolvedValue({
-      lines: [
-        { label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false },
-        { label: 'Dieseltoeslag 8%', amount: 11.6, source: 'Dieseltoeslag', informational: true },
-      ],
-      total: 145,
-      totalWithInformational: 156.6,
-      currency: 'EUR',
-      zoneCode: 'Z3',
-      zoneName: 'Zone 3',
-      requiresManualPrice: false,
-      serviceLines: [],
-    }),
+    previewPrice: previewSpy.mockResolvedValue(defaultPreviewResult),
   }
 })
 
@@ -125,7 +129,8 @@ async function fillMinimalRouteAndCustomer() {
 describe('TransportOrderForm sections + pricing', () => {
   beforeEach(() => {
     auth.permissions = new Set(['locations.create'])
-    previewSpy.mockClear()
+    previewSpy.mockReset()
+    previewSpy.mockResolvedValue(defaultPreviewResult)
   })
 
   it('renders the seven tabs and preserves values across switches', async () => {
@@ -168,6 +173,174 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(screen.getByRole('heading', { name: 'Handmatig geselecteerd' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Niet toegepast' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' })).toBeInTheDocument()
+  })
+
+  it('renders the "Laad- en lostijd" section with the effective value and source from the preview', async () => {
+    previewSpy.mockResolvedValueOnce({
+      lines: [{ label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false }],
+      total: 145,
+      totalWithInformational: 145,
+      currency: 'EUR',
+      zoneCode: 'Z3',
+      zoneName: 'Zone 3',
+      requiresManualPrice: false,
+      serviceLines: [],
+      includedTimeInfo: {
+        includedLoadingMinutes: 30, includedUnloadingMinutes: null, includedCombinedMinutes: null,
+        extraHourlyRate: 75, source: 'Contract',
+      },
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    expect(screen.getByRole('heading', { name: 'Laad- en lostijd' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText(/Inbegrepen laadtijd: 30 minuten/)).toBeInTheDocument())
+    expect(screen.getByText('Bron: Klantcontract')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Afwijken voor deze order' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Inbegrepen laadtijd (minuten)')).not.toBeInTheDocument()
+  })
+
+  it('reveals the five override inputs, marks the source as an order override, and resets on "Terugzetten"', async () => {
+    previewSpy.mockResolvedValue({
+      lines: [{ label: '3 × Europallet (zone Z3)', amount: 145, source: 'Pallets klant X', informational: false }],
+      total: 145,
+      totalWithInformational: 145,
+      currency: 'EUR',
+      zoneCode: 'Z3',
+      zoneName: 'Zone 3',
+      requiresManualPrice: false,
+      serviceLines: [],
+      includedTimeInfo: {
+        includedLoadingMinutes: 30, includedUnloadingMinutes: null, includedCombinedMinutes: null,
+        extraHourlyRate: 75, source: 'Contract',
+      },
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    await waitFor(() => expect(screen.getByText('Bron: Klantcontract')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Afwijken voor deze order' }))
+    expect(screen.getByLabelText('Inbegrepen laadtijd (minuten)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Inbegrepen lostijd (minuten)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Uurtarief extra tijd (€)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Afronding (minuten)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Minimum extra tijd (minuten)')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Terugzetten naar contractwaarde' })).not.toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('Inbegrepen laadtijd (minuten)'), '45')
+    expect(screen.getByText('Bron: Afwijking op order')).toBeInTheDocument()
+    const resetButton = screen.getByRole('button', { name: 'Terugzetten naar contractwaarde' })
+
+    await userEvent.click(resetButton)
+    expect(screen.getByLabelText('Inbegrepen laadtijd (minuten)')).toHaveValue(null)
+    expect(screen.getByText('Bron: Klantcontract')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Terugzetten naar contractwaarde' })).not.toBeInTheDocument()
+  })
+
+  it('shows "Bron: Geen contractwaarde" with a dash when nothing is configured and no override is set', async () => {
+    previewSpy.mockResolvedValueOnce({
+      lines: [{ label: '3 × Europallet', amount: 90, source: 'Pallets klant X', informational: false }],
+      total: 90,
+      totalWithInformational: 90,
+      currency: 'EUR',
+      zoneCode: null,
+      zoneName: null,
+      requiresManualPrice: false,
+      serviceLines: [],
+      includedTimeInfo: {
+        includedLoadingMinutes: null, includedUnloadingMinutes: null, includedCombinedMinutes: null,
+        extraHourlyRate: null, source: 'Geen',
+      },
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    await waitFor(() => expect(screen.getByText('Bron: Geen contractwaarde')).toBeInTheDocument())
+    expect(screen.getByText(/Inbegrepen laadtijd: —/)).toBeInTheDocument()
+    expect(screen.getByText(/Inbegrepen lostijd: —/)).toBeInTheDocument()
+  })
+
+  it('shows a single combined row when the contract configures a combined included time', async () => {
+    previewSpy.mockResolvedValueOnce({
+      lines: [{ label: '3 × Europallet', amount: 90, source: 'Pallets klant X', informational: false }],
+      total: 90,
+      totalWithInformational: 90,
+      currency: 'EUR',
+      zoneCode: null,
+      zoneName: null,
+      requiresManualPrice: false,
+      serviceLines: [],
+      includedTimeInfo: {
+        includedLoadingMinutes: null, includedUnloadingMinutes: null, includedCombinedMinutes: 60,
+        extraHourlyRate: 75, source: 'Contract',
+      },
+    })
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    await waitFor(() => expect(screen.getByText(/Inbegrepen laad- en lostijd \(gecombineerd\): 60 minuten/)).toBeInTheDocument(), { timeout: 3000 })
+    expect(screen.queryByText(/^Inbegrepen laadtijd:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Inbegrepen lostijd:/)).not.toBeInTheDocument()
+  })
+
+  it('disables the "Laad- en lostijd" section with a hint when pricing is a one-off agreement', async () => {
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.selectOptions(screen.getByLabelText('Klant *'), 'cust-1')
+    await userEvent.click(screen.getByRole('tab', { name: /^Prijs$/ }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Eenmalige prijsafspraak' }))
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    expect(screen.getByRole('heading', { name: 'Laad- en lostijd' })).toBeInTheDocument()
+    expect(screen.getByText('Bij een eenmalige prijsafspraak gebruik je de eenmalige laad- en lostijdvelden.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Afwijken voor deze order' })).not.toBeInTheDocument()
+  })
+
+  it('includes the included-time override fields in the submit payload, mapping empty strings to null', async () => {
+    const { onSubmit } = renderForm()
+    await fillMinimalRouteAndCustomer()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
+    await userEvent.type(screen.getByLabelText('Omschrijving'), '2 europallets onderdelen')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Afwijken voor deze order' }))
+    await userEvent.type(screen.getByLabelText('Inbegrepen laadtijd (minuten)'), '45')
+    await userEvent.type(screen.getByLabelText('Uurtarief extra tijd (€)'), '80')
+    await userEvent.type(screen.getByLabelText('Afronding (minuten)'), '15')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      includedLoadingMinutesOverride: 45,
+      includedUnloadingMinutesOverride: null,
+      extraTimeHourlyRateOverride: 80,
+      extraTimeRoundingStepMinutes: 15,
+      extraTimeMinimumBillableMinutes: null,
+    }))
   })
 
   it('lists an informational not-applied service line from the preview under "Niet toegepast"', async () => {
