@@ -290,6 +290,36 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(Array.from(select.options).map((o) => o.textContent)).toContain('Levering vóór 08:00')
   })
 
+  it('carries a manually entered Notitie through promotion to the manual row and into the submitted payload', async () => {
+    const { onSubmit } = renderForm()
+    await fillMinimalRouteAndCustomer()
+
+    // Satisfy the goods-description rule so submission isn't blocked by an unrelated validation.
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
+    await userEvent.type(screen.getByLabelText('Omschrijving'), '2 europallets onderdelen')
+
+    await userEvent.click(screen.getByRole('tab', { name: /Services & toeslagen/ }))
+    await userEvent.click(screen.getByRole('button', { name: '+ Dienst of toeslag toevoegen' }))
+    await userEvent.selectOptions(screen.getByLabelText('Dienst of toeslag'), 'opt-wacht')
+    await userEvent.type(await screen.findByLabelText('Aantal uur — Wachttijd'), '3')
+    await userEvent.type(screen.getByLabelText('Notitie — Wachttijd'), 'Afgesproken met klant')
+    await userEvent.click(screen.getByRole('button', { name: 'Toevoegen' }))
+
+    // Promoted to the manual row: the panel closes and the same note is still visible there.
+    expect(screen.getByText('MANUEEL')).toBeInTheDocument()
+    expect(screen.getByLabelText('Notitie — Wachttijd')).toHaveValue('Afgesproken met klant')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      services: expect.arrayContaining([
+        expect.objectContaining({ serviceOptionId: 'opt-wacht', note: 'Afgesproken met klant' }),
+      ]),
+    }))
+  })
+
   it('shows the customer label with a favourite star in the unit selector', async () => {
     renderForm()
     await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
