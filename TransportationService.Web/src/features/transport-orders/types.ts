@@ -131,6 +131,8 @@ export interface CargoItem {
   reference: string | null
   loadingStopId: string | null
   unloadingStopId: string | null
+  /** Optional per-line pallet count; a commercial detail, independent of scanable colli. */
+  palletCount: number | null
 }
 
 export interface CargoItemInput {
@@ -158,6 +160,8 @@ export interface CargoItemInput {
   /** Index into the submitted stops list (stops get fresh ids on every save). */
   loadingStopIndex: number | null
   unloadingStopIndex: number | null
+  /** Optional per-line pallet count; a commercial detail, independent of scanable colli. */
+  palletCount?: number | null
 }
 
 export type OrderPricingSource = 'Contract' | 'OneOff'

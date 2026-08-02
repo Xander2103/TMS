@@ -87,6 +87,17 @@ export function TransportOrderDetailPage() {
   const unitLabel = (code: string | null, legacy: string | null): string =>
     (code ? unitTypes.find((u) => u.code === code)?.name ?? code : null) ?? legacy ?? ''
 
+  // Commercial "Lading" summary: cargo lines grouped by unit, quantities summed per group —
+  // distinct from the scanable colli generated per line on confirmation.
+  const aggregateCargo = (items: TransportOrderDetail['cargoItems']): { unit: string; total: number }[] => {
+    const totals = new Map<string, number>()
+    for (const item of items) {
+      const unit = unitLabel(item.quantityUnitCode, item.quantityUnit) || 'stuks'
+      totals.set(unit, (totals.get(unit) ?? 0) + item.expectedQuantity)
+    }
+    return Array.from(totals, ([unit, total]) => ({ unit, total }))
+  }
+
   const [order, setOrder] = useState<TransportOrderDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
@@ -506,10 +517,23 @@ export function TransportOrderDetailPage() {
                 <dt>Goederen</dt>
                 <dd>{order.goodsDescription ?? '—'}</dd>
               </div>
-              <div>
-                <dt>Aantal</dt>
-                <dd>{order.quantity !== null ? `${order.quantity} ${unitLabel(order.quantityUnitCode, order.quantityUnit)}`.trim() : '—'}</dd>
-              </div>
+              {order.cargoItems.length > 0 ? (
+                <div>
+                  <dt>Lading</dt>
+                  <dd>
+                    <ul className="to-lading-list">
+                      {aggregateCargo(order.cargoItems).map(({ unit, total }) => (
+                        <li key={unit}>{total.toLocaleString('nl-BE')} {unit}</li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+              ) : (
+                <div>
+                  <dt>Aantal</dt>
+                  <dd>{order.quantity !== null ? `${order.quantity} ${unitLabel(order.quantityUnitCode, order.quantityUnit)}`.trim() : '—'}</dd>
+                </div>
+              )}
               <div>
                 <dt>Gewicht</dt>
                 <dd>{order.weightKg !== null ? `${order.weightKg.toLocaleString('nl-BE')} kg` : '—'}</dd>

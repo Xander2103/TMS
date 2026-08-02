@@ -559,6 +559,25 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(screen.getByLabelText('Lengte (m)')).not.toBeDisabled()
   })
 
+  it('shows the plain "Goederenlijnen" heading with the commercial-vs-scanable hint, and a Paletten field per line', async () => {
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+
+    expect(screen.getByRole('heading', { name: 'Goederenlijnen' })).toBeInTheDocument()
+    expect(screen.queryByText('Goederenlijnen (scanbaar)')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Commerciële hoeveelheden voor inhoud en prijs. Scanbare colli worden bij bevestiging per lijn gegenereerd en zijn een apart begrip.',
+      ),
+    ).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
+    // "Paletten" also labels the order-level field (Algemeen tab); the cargo-line one carries a cg- id.
+    const palletInputs = screen.getAllByLabelText('Paletten') as HTMLInputElement[]
+    expect(palletInputs.some((el) => el.id.startsWith('cg-pallets-'))).toBe(true)
+  })
+
   it('shows the no-tariff diagnostics when nothing could be priced', async () => {
     previewSpy.mockResolvedValueOnce({
       lines: [{ label: 'Geen geldig tarief gevonden voor deze order.', amount: 0, source: 'Ontbrekend', informational: false }],

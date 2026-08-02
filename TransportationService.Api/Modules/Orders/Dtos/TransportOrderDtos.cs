@@ -203,7 +203,8 @@ public record CargoItemDto(
     string? Reference = null,
     Guid? LoadingStopId = null,
     Guid? UnloadingStopId = null,
-    string? QuantityUnitCode = null);
+    string? QuantityUnitCode = null,
+    decimal? PalletCount = null);
 
 /// <summary>
 /// Stop links use INDEXES into the request's stop list (stops receive fresh ids on every
@@ -233,7 +234,8 @@ public record CargoItemInput(
     int? UnloadingStopIndex = null,
     string? QuantityUnitCode = null,
     // Id-preserving update sync: null/unmatched Id => treated as a new line. Ignored on create.
-    Guid? Id = null);
+    Guid? Id = null,
+    decimal? PalletCount = null);
 
 public record TransportOrderStopInput(
     StopType StopType,

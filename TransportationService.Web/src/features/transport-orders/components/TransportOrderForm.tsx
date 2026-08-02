@@ -75,6 +75,8 @@ interface CargoFormRow {
   /** '' = automatic (unambiguous orders link themselves server-side). */
   loadingStopIndex: string
   unloadingStopIndex: string
+  /** Optional commercial pallet count for this line; independent of scanable colli. */
+  palletCount: string
 }
 
 function numberOrNullFrom(value: string): number | null {
@@ -268,6 +270,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         reference: c.reference ?? '',
         loadingStopIndex: loadingIndex >= 0 ? String(loadingIndex) : '',
         unloadingStopIndex: unloadingIndex >= 0 ? String(unloadingIndex) : '',
+        palletCount: c.palletCount !== null && c.palletCount !== undefined ? String(c.palletCount) : '',
       }
     }),
   )
@@ -798,6 +801,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         reference: cargo.reference.trim() || null,
         loadingStopIndex: cargo.loadingStopIndex === '' ? null : Number(cargo.loadingStopIndex),
         unloadingStopIndex: cargo.unloadingStopIndex === '' ? null : Number(cargo.unloadingStopIndex),
+        palletCount: numberOrNullFrom(cargo.palletCount),
       })),
     }
 
@@ -1129,7 +1133,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       </div>
 
       <div className="tof-stops-header">
-        <h3>Goederenlijnen (scanbaar)</h3>
+        <h3>Goederenlijnen</h3>
         <div className="tof-stops-actions">
           <Button
             variant="secondary"
@@ -1160,6 +1164,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
                   reference: '',
                   loadingStopIndex: '',
                   unloadingStopIndex: '',
+                  palletCount: '',
                 },
               ])
             }
@@ -1169,6 +1174,10 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           </Button>
         </div>
       </div>
+      <p className="tof-cargo-hint">
+        Commerciële hoeveelheden voor inhoud en prijs. Scanbare colli worden bij bevestiging per lijn gegenereerd en
+        zijn een apart begrip.
+      </p>
       {cargoItems.length === 0 && (
         <p className="tof-cargo-hint">
           Zonder goederenlijnen kan de chauffeur niet scannen; de opdracht blijft wel gewoon uitvoerbaar.
@@ -1266,6 +1275,9 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               </FormField>
               <FormField label="Gewicht per stuk (kg)" htmlFor={`cg-unitweight-${cargo.key}`}>
                 <input id={`cg-unitweight-${cargo.key}`} type="number" min={0} step="0.001" value={cargo.weightPerUnitKg} onChange={(e) => setCargo(cargo.key, { weightPerUnitKg: e.target.value })} disabled={saving} />
+              </FormField>
+              <FormField label="Paletten" htmlFor={`cg-pallets-${cargo.key}`} hint="Optioneel; commercieel aantal, los van scanbare colli.">
+                <input id={`cg-pallets-${cargo.key}`} type="number" min={0} step="0.01" value={cargo.palletCount} onChange={(e) => setCargo(cargo.key, { palletCount: e.target.value })} disabled={saving} />
               </FormField>
               <FormField label="Referentie" htmlFor={`cg-ref-${cargo.key}`}>
                 <input id={`cg-ref-${cargo.key}`} value={cargo.reference} onChange={(e) => setCargo(cargo.key, { reference: e.target.value })} disabled={saving} maxLength={100} />

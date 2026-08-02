@@ -29,6 +29,7 @@ public class CargoItemConfiguration : IEntityTypeConfiguration<CargoItem>
         builder.Property(c => c.VolumeM3).HasPrecision(12, 3);
         builder.Property(c => c.AdrDetails).HasMaxLength(500);
         builder.Property(c => c.Reference).HasMaxLength(100);
+        builder.Property(c => c.PalletCount).HasPrecision(12, 2);
 
         builder.HasOne<TransportOrderStop>().WithMany().HasForeignKey(c => c.LoadingStopId).OnDelete(DeleteBehavior.SetNull);
         builder.HasOne<TransportOrderStop>().WithMany().HasForeignKey(c => c.UnloadingStopId).OnDelete(DeleteBehavior.SetNull);

@@ -82,7 +82,7 @@ public class TransportOrderServiceTests
                     c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference,
                     c.LoadingStopId is { } lid && stopIndexById.TryGetValue(lid, out var li) ? li : null,
                     c.UnloadingStopId is { } uid && stopIndexById.TryGetValue(uid, out var ui) ? ui : null,
-                    c.QuantityUnitCode, Id: c.Id))
+                    c.QuantityUnitCode, Id: c.Id, PalletCount: c.PalletCount))
                 .ToList(),
             QuantityUnitCode: d.QuantityUnitCode);
     }
@@ -113,6 +113,46 @@ public class TransportOrderServiceTests
         h.Db.Context.ChangeTracker.Clear();
         var reloaded = await h.Sut.GetByIdAsync(created.Order!.Id, CancellationToken.None);
         Assert.Equal("COLLI", Assert.Single(reloaded!.CargoItems).QuantityUnitCode);
+    }
+
+    [Fact]
+    public async Task Create_CargoWithPalletCount_RoundTripsThroughDetailDto_AndSurvivesUpdate()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput("Pallets", null, 2, null, null, QuantityUnitCode: "EUROPALLET", PalletCount: 2),
+                new CargoItemInput("Dozen", null, 4, null, null, QuantityUnitCode: "COLLI"),
+            ],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var createdEuro = created.Order!.CargoItems.Single(c => c.QuantityUnitCode == "EUROPALLET");
+        var createdColli = created.Order!.CargoItems.Single(c => c.QuantityUnitCode == "COLLI");
+        Assert.Equal(2m, createdEuro.PalletCount);
+        Assert.Null(createdColli.PalletCount);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var baseUpdate = BuildUpdateFrom(created.Order!);
+        var update = baseUpdate with
+        {
+            CargoItems = baseUpdate.CargoItems!.Select(c =>
+                    c.QuantityUnitCode == "EUROPALLET" ? c with { PalletCount = 3m } : c)
+                .ToList(),
+        };
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id, update, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        var updatedEuro = updated.Order!.CargoItems.Single(c => c.QuantityUnitCode == "EUROPALLET");
+        Assert.Equal(3m, updatedEuro.PalletCount);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var reloaded = await h.Sut.GetByIdAsync(created.Order!.Id, CancellationToken.None);
+        var reloadedEuro = reloaded!.CargoItems.Single(c => c.QuantityUnitCode == "EUROPALLET");
+        Assert.Equal(3m, reloadedEuro.PalletCount);
     }
 
     [Fact]

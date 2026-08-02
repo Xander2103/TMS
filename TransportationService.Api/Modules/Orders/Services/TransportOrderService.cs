@@ -1132,6 +1132,7 @@ public class TransportOrderService : ITransportOrderService
         target.AdrDetails = Trim(input.AdrDetails);
         target.Stackable = input.Stackable;
         target.Reference = Trim(input.Reference);
+        target.PalletCount = NonNegative(input.PalletCount);
         target.LoadingStopId = input.LoadingStopIndex is { } load ? stops[load].Id : defaultLoading;
         target.UnloadingStopId = input.UnloadingStopIndex is { } unload ? stops[unload].Id : defaultUnloading;
     }
@@ -1230,7 +1231,7 @@ public class TransportOrderService : ITransportOrderService
                 c.UnitType, c.UnitTypeLabel, c.TotalWeightKg, c.WeightPerUnitKg,
                 c.LengthMeters, c.WidthMeters, c.HeightMeters, c.VolumeM3, c.VolumeIsManual,
                 c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference, c.LoadingStopId, c.UnloadingStopId,
-                c.QuantityUnitCode))
+                c.QuantityUnitCode, c.PalletCount))
             .ToListAsync(cancellationToken);
 
         var pricingLines = await _dbContext.TransportOrderPricingLines.AsNoTracking()

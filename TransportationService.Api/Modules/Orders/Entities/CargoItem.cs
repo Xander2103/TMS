@@ -54,6 +54,9 @@ public class CargoItem : AuditableTenantEntity
     /// <summary>Line-level reference (SSCC range, customer line number, ...).</summary>
     public string? Reference { get; set; }
 
+    /// <summary>Optional per-line pallet count; a commercial detail, independent of the scanable colli generated on confirmation.</summary>
+    public decimal? PalletCount { get; set; }
+
     /// <summary>The stops this line travels between; resolved from the request's stop list on every save.</summary>
     public Guid? LoadingStopId { get; set; }
     public Guid? UnloadingStopId { get; set; }
