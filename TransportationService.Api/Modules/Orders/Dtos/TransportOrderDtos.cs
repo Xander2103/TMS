@@ -92,7 +92,16 @@ public record TransportOrderDetailDto(
     decimal? OneOffExtraHourlyRate = null,
     string? OneOffNotes = null,
     /// <summary>CalculatedPrice + proposed (unconfirmed) extra-time charges; null when nothing could be calculated.</summary>
-    decimal? TotalWithProposed = null);
+    decimal? TotalWithProposed = null,
+    /// <summary>
+    /// Task 10: order-level overrides of the engaged contract agreement's included loading/
+    /// unloading time and extra-time rate/rounding/minimum. Contract pricing only.
+    /// </summary>
+    int? IncludedLoadingMinutesOverride = null,
+    int? IncludedUnloadingMinutesOverride = null,
+    decimal? ExtraTimeHourlyRateOverride = null,
+    int? ExtraTimeRoundingStepMinutes = null,
+    int? ExtraTimeMinimumBillableMinutes = null);
 
 /// <summary>Snapshot line of the price calculation stored on the order.</summary>
 public record OrderPricingLineDto(
@@ -300,7 +309,17 @@ public record CreateTransportOrderRequest(
     int? OneOffIncludedUnloadingMinutes = null,
     int? OneOffIncludedCombinedMinutes = null,
     decimal? OneOffExtraHourlyRate = null,
-    string? OneOffNotes = null);
+    string? OneOffNotes = null,
+    /// <summary>
+    /// Task 10: order-level overrides of the engaged contract agreement's included loading/
+    /// unloading time and extra-time rate/rounding/minimum. Contract pricing only — rejected in
+    /// combination with PricingSource == OneOff.
+    /// </summary>
+    int? IncludedLoadingMinutesOverride = null,
+    int? IncludedUnloadingMinutesOverride = null,
+    decimal? ExtraTimeHourlyRateOverride = null,
+    int? ExtraTimeRoundingStepMinutes = null,
+    int? ExtraTimeMinimumBillableMinutes = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -336,7 +355,17 @@ public record UpdateTransportOrderRequest(
     int? OneOffIncludedUnloadingMinutes = null,
     int? OneOffIncludedCombinedMinutes = null,
     decimal? OneOffExtraHourlyRate = null,
-    string? OneOffNotes = null);
+    string? OneOffNotes = null,
+    /// <summary>
+    /// Task 10: order-level overrides of the engaged contract agreement's included loading/
+    /// unloading time and extra-time rate/rounding/minimum. Contract pricing only — rejected in
+    /// combination with PricingSource == OneOff.
+    /// </summary>
+    int? IncludedLoadingMinutesOverride = null,
+    int? IncludedUnloadingMinutesOverride = null,
+    decimal? ExtraTimeHourlyRateOverride = null,
+    int? ExtraTimeRoundingStepMinutes = null,
+    int? ExtraTimeMinimumBillableMinutes = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

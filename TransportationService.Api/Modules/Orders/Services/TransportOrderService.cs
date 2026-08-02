@@ -216,6 +216,14 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(oneOffError);
         }
 
+        if (IncludedTimeOverrideError(
+                request.PricingSource, request.IncludedLoadingMinutesOverride, request.IncludedUnloadingMinutesOverride,
+                request.ExtraTimeHourlyRateOverride, request.ExtraTimeRoundingStepMinutes, request.ExtraTimeMinimumBillableMinutes)
+            is { } includedTimeOverrideError)
+        {
+            return TransportOrderOperationResult.Invalid(includedTimeOverrideError);
+        }
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
@@ -244,6 +252,9 @@ public class TransportOrderService : ITransportOrderService
         ApplyOneOffPricing(order, request.PricingSource, request.OneOffFixedAmount,
             request.OneOffIncludedLoadingMinutes, request.OneOffIncludedUnloadingMinutes, request.OneOffIncludedCombinedMinutes,
             request.OneOffExtraHourlyRate, request.OneOffNotes);
+        ApplyIncludedTimeOverrides(order,
+            request.IncludedLoadingMinutesOverride, request.IncludedUnloadingMinutesOverride,
+            request.ExtraTimeHourlyRateOverride, request.ExtraTimeRoundingStepMinutes, request.ExtraTimeMinimumBillableMinutes);
         ApplyDieselSurchargeOverride(order,
             request.DieselSurchargeOverride, request.DieselSurchargePercentOverride, request.DieselSurchargeOverrideReason);
         // Selling entity: explicit request value else the customer's default entity.
@@ -339,6 +350,14 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(oneOffError);
         }
 
+        if (IncludedTimeOverrideError(
+                request.PricingSource, request.IncludedLoadingMinutesOverride, request.IncludedUnloadingMinutesOverride,
+                request.ExtraTimeHourlyRateOverride, request.ExtraTimeRoundingStepMinutes, request.ExtraTimeMinimumBillableMinutes)
+            is { } includedTimeOverrideError)
+        {
+            return TransportOrderOperationResult.Invalid(includedTimeOverrideError);
+        }
+
         // Cargo: id-matched in-place sync (loaded up front so both the audit "before" snapshot
         // and the sync below share one query). null = leave unchanged (API contract); [] = clear.
         var existingCargo = await _dbContext.CargoItems
@@ -348,7 +367,11 @@ public class TransportOrderService : ITransportOrderService
         var cargoBefore = existingCargo
             .Select(c => new { c.Description, c.ExpectedQuantity, c.QuantityUnitCode }).ToList();
 
-        var before = new { order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count, Cargo = cargoBefore };
+        var before = new {
+            order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count, Cargo = cargoBefore,
+            order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
+            order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
+        };
 
         order.CustomerId = request.CustomerId;
         order.CustomerReference = Trim(request.CustomerReference);
@@ -368,6 +391,9 @@ public class TransportOrderService : ITransportOrderService
         ApplyOneOffPricing(order, request.PricingSource, request.OneOffFixedAmount,
             request.OneOffIncludedLoadingMinutes, request.OneOffIncludedUnloadingMinutes, request.OneOffIncludedCombinedMinutes,
             request.OneOffExtraHourlyRate, request.OneOffNotes);
+        ApplyIncludedTimeOverrides(order,
+            request.IncludedLoadingMinutesOverride, request.IncludedUnloadingMinutesOverride,
+            request.ExtraTimeHourlyRateOverride, request.ExtraTimeRoundingStepMinutes, request.ExtraTimeMinimumBillableMinutes);
 
         var surchargeBefore = new { order.DieselSurchargeOverride, order.DieselSurchargePercentOverride };
         ApplyDieselSurchargeOverride(order,
@@ -434,7 +460,11 @@ public class TransportOrderService : ITransportOrderService
         var cargoAfter = replacementCargo
             .Select(c => new { c.Description, c.ExpectedQuantity, c.QuantityUnitCode }).ToList();
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Updated", before,
-            new { order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count, Cargo = cargoAfter }, cancellationToken);
+            new {
+                order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count, Cargo = cargoAfter,
+                order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
+                order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
+            }, cancellationToken);
 
         if (surchargeChanged)
         {
@@ -525,6 +555,46 @@ public class TransportOrderService : ITransportOrderService
         order.OneOffIncludedCombinedMinutes = includedCombinedMinutes;
         order.OneOffExtraHourlyRate = NonNegative(extraHourlyRate);
         order.OneOffNotes = Trim(notes);
+    }
+
+    /// <summary>
+    /// Validates order-level included-time overrides (Task 10): all five values must be
+    /// non-negative when provided, and the feature is exclusive to contract pricing — a one-off
+    /// order carries its own included-time fields (see <see cref="OneOffPricingError"/>) and never
+    /// consults the engaged agreement these overrides target.
+    /// </summary>
+    private static string? IncludedTimeOverrideError(
+        OrderPricingSource pricingSource,
+        int? includedLoadingOverride, int? includedUnloadingOverride, decimal? extraHourlyRateOverride,
+        int? roundingStepMinutes, int? minimumBillableMinutes)
+    {
+        if (includedLoadingOverride is < 0 || includedUnloadingOverride is < 0 || extraHourlyRateOverride is < 0
+            || roundingStepMinutes is < 0 || minimumBillableMinutes is < 0)
+        {
+            return "Afwijkende laad-/lostijdwaarden mogen niet negatief zijn.";
+        }
+
+        var anySet = includedLoadingOverride is not null || includedUnloadingOverride is not null
+            || extraHourlyRateOverride is not null || roundingStepMinutes is not null || minimumBillableMinutes is not null;
+        if (anySet && pricingSource == OrderPricingSource.OneOff)
+        {
+            return "Laad-/lostijdafwijkingen gelden alleen bij contractprijzen; gebruik de eenmalige prijsvelden.";
+        }
+
+        return null;
+    }
+
+    /// <summary>Sets the order's included-time overrides (Task 10) verbatim; null means "use the agreement's own value".</summary>
+    private static void ApplyIncludedTimeOverrides(
+        TransportOrder order,
+        int? includedLoadingOverride, int? includedUnloadingOverride, decimal? extraHourlyRateOverride,
+        int? roundingStepMinutes, int? minimumBillableMinutes)
+    {
+        order.IncludedLoadingMinutesOverride = includedLoadingOverride;
+        order.IncludedUnloadingMinutesOverride = includedUnloadingOverride;
+        order.ExtraTimeHourlyRateOverride = extraHourlyRateOverride;
+        order.ExtraTimeRoundingStepMinutes = roundingStepMinutes;
+        order.ExtraTimeMinimumBillableMinutes = minimumBillableMinutes;
     }
 
     /// <summary>Override requires an explicit percentage and a reason; clearing wipes both.</summary>
@@ -1207,7 +1277,9 @@ public class TransportOrderService : ITransportOrderService
             pricingLines, serviceLines, pricingSnapshot,
             order.PricingSource, order.OneOffFixedAmount,
             order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes, order.OneOffIncludedCombinedMinutes,
-            order.OneOffExtraHourlyRate, order.OneOffNotes, totalWithProposed);
+            order.OneOffExtraHourlyRate, order.OneOffNotes, totalWithProposed,
+            order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
+            order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes);
     }
 
     /// <summary>
@@ -1355,6 +1427,18 @@ public class TransportOrderService : ITransportOrderService
                     order.OneOffFixedAmount ?? 0m, order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes,
                     order.OneOffIncludedCombinedMinutes, order.OneOffExtraHourlyRate, order.OneOffNotes)
                 : null;
+            // Task 10: order-level included-time overrides, contract mode only (never built for a
+            // one-off order — ValidateAsync/IncludedTimeOverrideError already rejects that
+            // combination, but this stays a belt-and-braces guard against ever feeding them into
+            // the one-off branch of PricingEngine.CalculateAsync).
+            var includedTimeOverrides = order.PricingSource != OrderPricingSource.OneOff
+                && (order.IncludedLoadingMinutesOverride is not null || order.IncludedUnloadingMinutesOverride is not null
+                    || order.ExtraTimeHourlyRateOverride is not null || order.ExtraTimeRoundingStepMinutes is not null
+                    || order.ExtraTimeMinimumBillableMinutes is not null)
+                ? new IncludedTimeOverrideInput(
+                    order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
+                    order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes)
+                : null;
             // Warehouses the order touches (stop at the warehouse's master location) — feeds
             // warehouse-conditioned service options (wave 2026-07-27 §2.4).
             var stopLocationIds = order.Stops
@@ -1392,7 +1476,8 @@ public class TransportOrderService : ITransportOrderService
                 ActualLoadingMinutes: actualLoadingMinutes,
                 ActualUnloadingMinutes: actualUnloadingMinutes,
                 Groups: groups.Count > 0 ? groups : null,
-                WarehouseIds: warehouseIds), cancellationToken);
+                WarehouseIds: warehouseIds,
+                IncludedTimeOverrides: includedTimeOverrides), cancellationToken);
         }
 
         var calculated = result is { RequiresManualPrice: false } && result.Lines.Any(l => !l.Informational)
@@ -1688,7 +1773,12 @@ public class TransportOrderService : ITransportOrderService
             || OneOffChanged(nameof(TransportOrder.OneOffIncludedUnloadingMinutes))
             || OneOffChanged(nameof(TransportOrder.OneOffIncludedCombinedMinutes))
             || OneOffChanged(nameof(TransportOrder.OneOffExtraHourlyRate))
-            || OneOffChanged(nameof(TransportOrder.OneOffNotes)))
+            || OneOffChanged(nameof(TransportOrder.OneOffNotes))
+            || OneOffChanged(nameof(TransportOrder.IncludedLoadingMinutesOverride))
+            || OneOffChanged(nameof(TransportOrder.IncludedUnloadingMinutesOverride))
+            || OneOffChanged(nameof(TransportOrder.ExtraTimeHourlyRateOverride))
+            || OneOffChanged(nameof(TransportOrder.ExtraTimeRoundingStepMinutes))
+            || OneOffChanged(nameof(TransportOrder.ExtraTimeMinimumBillableMinutes)))
         {
             return true;
         }

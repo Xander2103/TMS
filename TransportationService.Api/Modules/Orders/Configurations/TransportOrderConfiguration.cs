@@ -34,6 +34,7 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
         builder.Property(o => o.OneOffFixedAmount).HasPrecision(12, 2);
         builder.Property(o => o.OneOffExtraHourlyRate).HasPrecision(10, 2);
         builder.Property(o => o.OneOffNotes).HasMaxLength(1000);
+        builder.Property(o => o.ExtraTimeHourlyRateOverride).HasPrecision(10, 2);
 
         builder.HasIndex(o => new { o.TenantId, o.OrderNumber })
             .IsUnique()

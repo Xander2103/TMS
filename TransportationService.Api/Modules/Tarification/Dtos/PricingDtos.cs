@@ -306,12 +306,28 @@ public record PriceCalculationRequest(
     /// Warehouses the order touches (a stop at the warehouse's master location), for
     /// warehouse-conditioned service options. Null/empty = the order touches no known warehouse.
     /// </summary>
-    IReadOnlyList<Guid>? WarehouseIds = null);
+    IReadOnlyList<Guid>? WarehouseIds = null,
+    /// <summary>
+    /// Task 10: order-level overrides of the engaged contract agreement's included loading/
+    /// unloading time and extra-time rate/rounding/minimum. Contract mode only — never set for a
+    /// one-off order (see <see cref="OneOff"/>, which carries its own included-time fields).
+    /// </summary>
+    IncludedTimeOverrideInput? IncludedTimeOverrides = null);
 
 /// <summary>A one-off order's own price agreement: no contract is consulted (spec Phase 6).</summary>
 public record OneOffPricingInput(
     decimal FixedAmount, int? IncludedLoadingMinutes, int? IncludedUnloadingMinutes, int? IncludedCombinedMinutes,
     decimal? ExtraHourlyRate, string? Notes);
+
+/// <summary>
+/// Task 10: order-level overrides applied on top of the engaged contract agreement's included-time
+/// configuration. Any field left null falls back to the agreement's own value (or, for
+/// RoundingStepMinutes/MinimumBillableMinutes, to "no rounding"/"no minimum"). See
+/// PricingEngine.ComputeExtraTimeLines for the exact resolution/rounding/minimum rules.
+/// </summary>
+public record IncludedTimeOverrideInput(
+    int? IncludedLoadingMinutes, int? IncludedUnloadingMinutes, decimal? ExtraHourlyRate,
+    int? RoundingStepMinutes, int? MinimumBillableMinutes);
 
 public record PriceBreakdownLine(
     string Label, decimal Amount, string Source, bool Informational = false,

@@ -132,6 +132,20 @@ public class TransportOrder : AuditableTenantEntity
     /// <summary>OneOff only: free-text context for how the one-off price was agreed (e.g. "Afgesproken via telefoon").</summary>
     public string? OneOffNotes { get; set; }
 
+    /// <summary>
+    /// Task 10: order-level overrides of the ENGAGED CONTRACT AGREEMENT's included loading/
+    /// unloading time and extra-time rate/rounding/minimum. Contract pricing only — rejected in
+    /// combination with <see cref="OrderPricingSource.OneOff"/> (which has its own included-time
+    /// fields above). Resolution rule (order override wins over the agreement value, per activity;
+    /// switching a combined-mode agreement to per-activity when only one side is overridden) lives
+    /// in <c>PricingEngine.ComputeExtraTimeLines</c>. Stop-level overrides are a deferred limitation.
+    /// </summary>
+    public int? IncludedLoadingMinutesOverride { get; set; }
+    public int? IncludedUnloadingMinutesOverride { get; set; }
+    public decimal? ExtraTimeHourlyRateOverride { get; set; }
+    public int? ExtraTimeRoundingStepMinutes { get; set; }
+    public int? ExtraTimeMinimumBillableMinutes { get; set; }
+
     // Diesel-surcharge override (customer config is the default). Overriding requires a
     // reason; the inherited value, override, actor and timestamp are audited.
     public bool DieselSurchargeOverride { get; set; }

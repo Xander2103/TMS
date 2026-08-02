@@ -581,7 +581,8 @@ public class PricingEngine : IPricingEngine
             {
                 lines.AddRange(ComputeExtraTimeLines(
                     agreement.IncludedLoadingMinutes, agreement.IncludedUnloadingMinutes, agreement.IncludedCombinedMinutes,
-                    agreement.ExtraHourlyRate, request.ActualLoadingMinutes, request.ActualUnloadingMinutes));
+                    agreement.ExtraHourlyRate, request.ActualLoadingMinutes, request.ActualUnloadingMinutes,
+                    request.IncludedTimeOverrides));
             }
         }
 
@@ -893,13 +894,31 @@ public class PricingEngine : IPricingEngine
     /// are mutually exclusive; combined wins when both are somehow set. A configured excess with no
     /// rate yields an informational "geef het uurtarief op" line instead of a charge.
     /// </summary>
+    /// <param name="overrides">
+    /// Task 10 (contract mode only — never passed for a one-off order): order-level overrides of
+    /// the agreement's included minutes/rate/rounding/minimum. Resolution rule: per-activity
+    /// included = override ?? agreement value. The agreement's COMBINED allowance survives only
+    /// when NEITHER per-activity override is set; as soon as either per-activity override is
+    /// present, the calculation switches from combined to per-activity mode, and the activity that
+    /// was NOT overridden falls back to 0 included minutes (the combined allowance was never split
+    /// per activity, so there is no partial figure to inherit for it). Rate = override ?? agreement
+    /// rate. Rounding step and minimum billable minutes have no agreement-level equivalent — they
+    /// only ever come from the order override.
+    /// </param>
     public static List<PriceBreakdownLine> ComputeExtraTimeLines(
         int? includedLoadingMinutes, int? includedUnloadingMinutes, int? includedCombinedMinutes,
-        decimal? extraHourlyRate, decimal? actualLoadingMinutes, decimal? actualUnloadingMinutes)
+        decimal? extraHourlyRate, decimal? actualLoadingMinutes, decimal? actualUnloadingMinutes,
+        IncludedTimeOverrideInput? overrides = null)
     {
         var lines = new List<PriceBreakdownLine>();
 
-        if (includedCombinedMinutes is { } combined)
+        var loadingOverrideSet = overrides?.IncludedLoadingMinutes is not null;
+        var unloadingOverrideSet = overrides?.IncludedUnloadingMinutes is not null;
+        var effectiveRate = overrides?.ExtraHourlyRate ?? extraHourlyRate;
+        var roundingStep = overrides?.RoundingStepMinutes;
+        var minimumBillable = overrides?.MinimumBillableMinutes;
+
+        if (includedCombinedMinutes is { } combined && !loadingOverrideSet && !unloadingOverrideSet)
         {
             if (actualLoadingMinutes is null && actualUnloadingMinutes is null)
             {
@@ -911,29 +930,39 @@ public class PricingEngine : IPricingEngine
             if (extra > 0)
             {
                 AddExtraTimeLine(lines,
-                    $"Extra laad-/lostijd: {actualTotal:0.##} min (inbegrepen {combined} min)", extra, extraHourlyRate, "combined");
+                    $"Extra laad-/lostijd: {actualTotal:0.##} min (inbegrepen {combined} min)", extra, effectiveRate,
+                    "combined", roundingStep, minimumBillable);
             }
 
             return lines;
         }
 
-        if (includedLoadingMinutes is { } includedLoading && actualLoadingMinutes is { } actualLoading)
+        // Either the agreement is per-activity already, or it is combined but got switched to
+        // per-activity by one of the overrides above — the non-overridden side then falls back to
+        // 0 included minutes rather than the (no longer applicable) combined figure.
+        var agreementIsCombined = includedCombinedMinutes is not null;
+        var effectiveLoading = overrides?.IncludedLoadingMinutes ?? (agreementIsCombined ? 0 : includedLoadingMinutes);
+        var effectiveUnloading = overrides?.IncludedUnloadingMinutes ?? (agreementIsCombined ? 0 : includedUnloadingMinutes);
+
+        if (effectiveLoading is { } includedLoading && actualLoadingMinutes is { } actualLoading)
         {
             var extra = Math.Max(0m, actualLoading - includedLoading);
             if (extra > 0)
             {
                 AddExtraTimeLine(lines,
-                    $"Extra laadtijd: {actualLoading:0.##} min (inbegrepen {includedLoading} min)", extra, extraHourlyRate, "loading");
+                    $"Extra laadtijd: {actualLoading:0.##} min (inbegrepen {includedLoading} min)", extra, effectiveRate,
+                    "loading", roundingStep, minimumBillable);
             }
         }
 
-        if (includedUnloadingMinutes is { } includedUnloading && actualUnloadingMinutes is { } actualUnloading)
+        if (effectiveUnloading is { } includedUnloading && actualUnloadingMinutes is { } actualUnloading)
         {
             var extra = Math.Max(0m, actualUnloading - includedUnloading);
             if (extra > 0)
             {
                 AddExtraTimeLine(lines,
-                    $"Extra lostijd: {actualUnloading:0.##} min (inbegrepen {includedUnloading} min)", extra, extraHourlyRate, "unloading");
+                    $"Extra lostijd: {actualUnloading:0.##} min (inbegrepen {includedUnloading} min)", extra, effectiveRate,
+                    "unloading", roundingStep, minimumBillable);
             }
         }
 
@@ -943,7 +972,8 @@ public class PricingEngine : IPricingEngine
     private const string MissingExtraTimeRateLabel = "Extra tijd: geef het uurtarief voor extra tijd op";
 
     private static void AddExtraTimeLine(
-        List<PriceBreakdownLine> lines, string label, decimal extraMinutes, decimal? rate, string discriminator)
+        List<PriceBreakdownLine> lines, string label, decimal extraMinutes, decimal? rate, string discriminator,
+        int? roundingStepMinutes = null, int? minimumBillableMinutes = null)
     {
         if (rate is null)
         {
@@ -958,7 +988,15 @@ public class PricingEngine : IPricingEngine
             return;
         }
 
-        lines.Add(new PriceBreakdownLine(label, decimal.Round(extraMinutes / 60m * rate.Value, 2), "Extra tijd",
+        // Task 10: raw excess minutes (extraMinutes, always > 0 here) round UP to the configured
+        // step (e.g. 17 min @ step 15 -> 30 min; no step = no rounding), then the configured
+        // minimum billable minutes applies as a floor on top of that.
+        var rounded = roundingStepMinutes is { } step && step > 0
+            ? Math.Ceiling(extraMinutes / step) * step
+            : extraMinutes;
+        var billedMinutes = Math.Max(rounded, minimumBillableMinutes ?? 0);
+
+        lines.Add(new PriceBreakdownLine(label, decimal.Round(billedMinutes / 60m * rate.Value, 2), "Extra tijd",
             Proposed: true, LineKey: $"extratime:{discriminator}"));
     }
 

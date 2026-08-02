@@ -26,8 +26,16 @@ public class OneOffPricingTests
 {
     private static readonly DateTimeOffset Now = new(2026, 07, 26, 12, 0, 0, TimeSpan.Zero);
 
+    /// <summary>Grants only the permission codes explicitly added by a test (fail-closed default, matching production).</summary>
+    private sealed class PermissionSet : IPermissionAuthorizationService
+    {
+        public HashSet<string> Codes { get; } = new();
+        public Task<bool> UserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken) =>
+            Task.FromResult(Codes.Contains(permissionCode));
+    }
+
     private sealed record Harness(
-        SqliteTestDbContext Db, TransportOrderService Sut, PricingAdminService Admin,
+        SqliteTestDbContext Db, TransportOrderService Sut, PricingAdminService Admin, PermissionSet Permissions,
         Guid TenantId, Guid CustomerId, Guid PalletUnitId);
 
     private static async Task<Harness> SeedAsync()
@@ -51,8 +59,9 @@ public class OneOffPricingTests
         var audit = new AuditService(db.Context, tenant, currentUser);
         var admin = new PricingAdminService(db.Context, tenant, audit);
         var engine = new PricingEngine(db.Context, tenant);
-        var sut = new TransportOrderService(db.Context, tenant, audit, new TestClock(Now), engine, currentUser, permissionService: null);
-        return new Harness(db, sut, admin, tenantId, customerId, palletUnitId);
+        var permissions = new PermissionSet();
+        var sut = new TransportOrderService(db.Context, tenant, audit, new TestClock(Now), engine, currentUser, permissions);
+        return new Harness(db, sut, admin, permissions, tenantId, customerId, palletUnitId);
     }
 
     private static TransportOrderStopInput Stop(StopType type, string city, string? postalCode = null) =>
@@ -78,6 +87,27 @@ public class OneOffPricingTests
         null, null,
         [Stop(StopType.Loading, "Antwerpen"), Stop(StopType.Unloading, "Hasselt", "3500")],
         QuantityUnitCode: "EUROPALLET");
+
+    /// <summary>
+    /// Task 10 test fixture: an engaged customer agreement (a PriceRule on the pallet unit ties it
+    /// to the order built by <see cref="ContractRequest"/>) carrying the given included-time
+    /// configuration, so extra-time proposals have a winning agreement to compare against.
+    /// </summary>
+    private static async Task<Guid> CreateEngagedAgreementAsync(
+        Harness h, string name, int? includedLoadingMinutes = null, int? includedUnloadingMinutes = null,
+        int? includedCombinedMinutes = null, decimal? extraHourlyRate = null)
+    {
+        var agreement = await h.Admin.CreateAgreementAsync(new SavePricingAgreementRequest(
+            h.CustomerId, name, new DateOnly(2026, 1, 1), null, true,
+            null, null, null,
+            IncludedLoadingMinutes: includedLoadingMinutes, IncludedUnloadingMinutes: includedUnloadingMinutes,
+            IncludedCombinedMinutes: includedCombinedMinutes, ExtraHourlyRate: extraHourlyRate), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, h.PalletUnitId, PriceRuleBasis.PerUnit, null,
+            $"Pallets {name}", new DateOnly(2026, 1, 1), null, true, 30m, null, null,
+            AgreementId: agreement.Id), CancellationToken.None);
+        return agreement.Id;
+    }
 
     /// <summary>Seeds a Trip + StopExecution rows so the order's actual loading/unloading minutes can be measured.</summary>
     private static async Task SeedStopExecutionsAsync(
@@ -138,6 +168,49 @@ public class OneOffPricingTests
         await h.Db.Context.SaveChangesAsync();
         return await h.Sut.GetByIdAsync(orderId, CancellationToken.None) ?? throw new InvalidOperationException("Order not found.");
     }
+
+    /// <summary>
+    /// Task 10: sets the order-level included-time override fields directly on the tracked entity
+    /// and saves — bypassing the public UpdateAsync, which wholesale-replaces stops (see
+    /// RepriceAsync's doc comment) and would orphan any StopExecution rows seeded against them.
+    /// Used by tests that only care about the engine's resolution/rounding/minimum behaviour, not
+    /// the update endpoint's own validation/audit (covered separately, via UpdateAsync, below).
+    /// </summary>
+    private static async Task SetIncludedTimeOverridesAsync(
+        Harness h, Guid orderId,
+        int? includedLoading = null, int? includedUnloading = null, decimal? extraHourlyRate = null,
+        int? roundingStepMinutes = null, int? minimumBillableMinutes = null)
+    {
+        var order = await h.Db.Context.TransportOrders.SingleAsync(o => o.Id == orderId);
+        order.IncludedLoadingMinutesOverride = includedLoading;
+        order.IncludedUnloadingMinutesOverride = includedUnloading;
+        order.ExtraTimeHourlyRateOverride = extraHourlyRate;
+        order.ExtraTimeRoundingStepMinutes = roundingStepMinutes;
+        order.ExtraTimeMinimumBillableMinutes = minimumBillableMinutes;
+        await h.Db.Context.SaveChangesAsync();
+    }
+
+    /// <summary>Rebuilds an UpdateTransportOrderRequest from a detail DTO (spec: round-trip a loaded order through the update endpoint).</summary>
+    private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d) => new(
+        d.CustomerId, d.CustomerReference, d.OrderDate, d.GoodsDescription, d.Quantity,
+        d.QuantityUnit, d.WeightKg, d.VolumeM3, d.PalletCount, d.AdrRequired, d.CraneRequired,
+        d.AgreedPrice, d.Notes,
+        d.Stops.Select(s => new TransportOrderStopInput(
+                s.StopType, s.LocationId, s.LocationName, s.Address, s.PostalCode, s.City, s.CountryCode,
+                s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions))
+            .ToList(),
+        QuantityUnitCode: d.QuantityUnitCode,
+        PriceIsManual: d.PriceIsManual, PriceOverrideReason: d.PriceOverrideReason,
+        PricingSource: d.PricingSource, OneOffFixedAmount: d.OneOffFixedAmount,
+        OneOffIncludedLoadingMinutes: d.OneOffIncludedLoadingMinutes,
+        OneOffIncludedUnloadingMinutes: d.OneOffIncludedUnloadingMinutes,
+        OneOffIncludedCombinedMinutes: d.OneOffIncludedCombinedMinutes,
+        OneOffExtraHourlyRate: d.OneOffExtraHourlyRate, OneOffNotes: d.OneOffNotes,
+        IncludedLoadingMinutesOverride: d.IncludedLoadingMinutesOverride,
+        IncludedUnloadingMinutesOverride: d.IncludedUnloadingMinutesOverride,
+        ExtraTimeHourlyRateOverride: d.ExtraTimeHourlyRateOverride,
+        ExtraTimeRoundingStepMinutes: d.ExtraTimeRoundingStepMinutes,
+        ExtraTimeMinimumBillableMinutes: d.ExtraTimeMinimumBillableMinutes);
 
     // --- S10: one-off order, no contract at all ---------------------------------------------
 
@@ -624,5 +697,117 @@ public class OneOffPricingTests
         Assert.True(proposedIndex > surchargeIndex);
         Assert.Equal(37.50m, result.Lines[proposedIndex].Amount);
         Assert.Equal(137.50m, result.TotalWithProposed);
+    }
+
+    // --- Task 10: order-level included loading/unloading time overrides -----------------------
+
+    /// <summary>The order override wins over the contract's included minutes, per activity.</summary>
+    [Fact]
+    public async Task OrderOverride_IncludedLoadingMinutes_ReducesOrRemovesExtraTimeProposal()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await CreateEngagedAgreementAsync(h, "Contract Override 1", includedLoadingMinutes: 30, extraHourlyRate: 75m);
+
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+        await SeedStopExecutionsAsync(h, created.Order!.Id, loadingMinutes: 50, unloadingMinutes: null);
+        var reloaded = await RepriceAsync(h, created.Order.Id);
+
+        var proposed = Assert.Single(reloaded.PricingLines!, l => l.Proposed);
+        Assert.Equal("Extra laadtijd: 50 min (inbegrepen 30 min)", proposed.Label);
+        Assert.Equal(25.00m, proposed.Amount); // (50 - 30) / 60 × 75
+
+        // Order override raises the included allowance to 60 min — actual 50 min no longer exceeds it.
+        await SetIncludedTimeOverridesAsync(h, created.Order.Id, includedLoading: 60);
+        var overridden = await RepriceAsync(h, created.Order.Id);
+
+        Assert.DoesNotContain(overridden.PricingLines!, l => l.Proposed);
+    }
+
+    /// <summary>The order's rounding step and minimum billable minutes apply on top of the raw excess.</summary>
+    [Fact]
+    public async Task OrderOverride_RoundingAndMinimum_ApplyToExtraTime()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await CreateEngagedAgreementAsync(h, "Contract Override 2", includedLoadingMinutes: 30, extraHourlyRate: 60m);
+
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+        await SeedStopExecutionsAsync(h, created.Order!.Id, loadingMinutes: 47, unloadingMinutes: null);
+        await SetIncludedTimeOverridesAsync(h, created.Order.Id, roundingStepMinutes: 15, minimumBillableMinutes: 30);
+        var reloaded = await RepriceAsync(h, created.Order.Id);
+
+        // raw = 47 - 30 = 17 -> ceil(17/15)×15 = 30 -> max(30, minimum 30) = 30 billed minutes.
+        var proposed = Assert.Single(reloaded.PricingLines!, l => l.Proposed);
+        Assert.Equal("Extra laadtijd: 47 min (inbegrepen 30 min)", proposed.Label);
+        Assert.Equal(30.00m, proposed.Amount); // 30 / 60 × 60
+    }
+
+    /// <summary>Clearing the override (setting it back to null) restores the plain contract-based proposal.</summary>
+    [Fact]
+    public async Task OrderOverride_Reset_ReturnsToContractValues()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await CreateEngagedAgreementAsync(h, "Contract Override 3", includedLoadingMinutes: 30, extraHourlyRate: 75m);
+
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+        await SeedStopExecutionsAsync(h, created.Order!.Id, loadingMinutes: 50, unloadingMinutes: null);
+        var baseline = await RepriceAsync(h, created.Order.Id);
+        var baselineProposed = Assert.Single(baseline.PricingLines!, l => l.Proposed);
+        Assert.Equal(25.00m, baselineProposed.Amount);
+
+        await SetIncludedTimeOverridesAsync(h, created.Order.Id, includedLoading: 60);
+        var overridden = await RepriceAsync(h, created.Order.Id);
+        Assert.DoesNotContain(overridden.PricingLines!, l => l.Proposed);
+
+        await SetIncludedTimeOverridesAsync(h, created.Order.Id); // every field null = cleared
+        var reset = await RepriceAsync(h, created.Order.Id);
+
+        var resetProposed = Assert.Single(reset.PricingLines!, l => l.Proposed);
+        Assert.Equal(baselineProposed.Label, resetProposed.Label);
+        Assert.Equal(baselineProposed.Amount, resetProposed.Amount);
+    }
+
+    /// <summary>A Locked pricing snapshot refuses a save that changes an included-time override, like every other pricing-relevant input.</summary>
+    [Fact]
+    public async Task LockedPricing_RejectsIncludedTimeOverrideChange()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        h.Permissions.Codes.Add("orders.lock_price");
+        await CreateEngagedAgreementAsync(h, "Contract Override 4", includedLoadingMinutes: 30, extraHourlyRate: 75m);
+
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+        await h.Sut.SetOrderPricingStatusAsync(created.Order!.Id, OrderPricingStatus.Locked, CancellationToken.None);
+
+        var update = BuildUpdateFrom(created.Order) with { IncludedLoadingMinutesOverride = 60 };
+        await Assert.ThrowsAsync<DomainValidationException>(
+            () => h.Sut.UpdateAsync(created.Order.Id, update, CancellationToken.None));
+    }
+
+    /// <summary>Changing an included-time override is audited on the Updated entry, with the old and new value both present.</summary>
+    [Fact]
+    public async Task IncludedTimeOverride_Change_IsAudited_WithOldAndNew()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(
+            ContractRequest(h.CustomerId, quantity: 3) with { IncludedLoadingMinutesOverride = 30 },
+            CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Equal(30, created.Order!.IncludedLoadingMinutesOverride);
+
+        var update = BuildUpdateFrom(created.Order) with { IncludedLoadingMinutesOverride = 60 };
+        var updated = await h.Sut.UpdateAsync(created.Order.Id, update, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        Assert.Equal(60, updated.Order!.IncludedLoadingMinutesOverride);
+
+        var audit = await h.Db.Context.AuditLogs
+            .Where(a => a.EntityType == "TransportOrder" && a.Action == "Updated" && a.EntityId == created.Order.Id.ToString())
+            .OrderByDescending(a => a.Id).FirstAsync();
+        Assert.Contains("30", audit.OldValuesJson);
+        Assert.Contains("60", audit.NewValuesJson);
     }
 }
