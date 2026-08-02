@@ -151,6 +151,8 @@ export interface SaveOrderPriceLineInput {
   amount: number | null
   adjustReason: string | null
   remove?: boolean
+  /** Managed unit code for quantity (e.g. "COLLI"); normalized like quantityUnitCode. */
+  unit?: string | null
 }
 
 export function saveOrderPriceLines(orderId: string, lines: SaveOrderPriceLineInput[]): Promise<TransportOrderDetail> {

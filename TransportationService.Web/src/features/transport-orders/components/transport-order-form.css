@@ -29,6 +29,24 @@
   grid-template-columns: 1fr 1fr 1fr 1fr;
 }
 
+.tof-radio-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tof-radio-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.tof-radio-row input[type='radio'] {
+  width: auto;
+}
+
 .tof-checkbox {
   display: flex;
   align-items: center;

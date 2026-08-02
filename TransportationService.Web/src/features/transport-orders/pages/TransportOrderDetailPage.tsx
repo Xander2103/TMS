@@ -28,6 +28,7 @@ import {
   type SaveOrderPriceLineInput,
 } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
+import { UnitSelect } from '../components/UnitSelect'
 import { OrderDocumentsPanel } from '../components/OrderDocumentsPanel'
 import { OrderPortalReviewPanel } from '../components/OrderPortalReviewPanel'
 import { OrderTimelinePanel } from '../components/OrderTimelinePanel'
@@ -94,8 +95,10 @@ export function TransportOrderDetailPage() {
   const [removeLine, setRemoveLine] = useState<OrderPricingLine | null>(null)
   const [removeReason, setRemoveReason] = useState('')
   const [addLineOpen, setAddLineOpen] = useState(false)
+  const [addMode, setAddMode] = useState<'perUnit' | 'fixed'>('perUnit')
   const [addLabel, setAddLabel] = useState('')
   const [addQuantity, setAddQuantity] = useState('')
+  const [addUnit, setAddUnit] = useState<string | null>(null)
   const [addUnitPrice, setAddUnitPrice] = useState('')
   const [addAmount, setAddAmount] = useState('')
   const [addReason, setAddReason] = useState('')
@@ -197,6 +200,30 @@ export function TransportOrderDetailPage() {
     return Number.isFinite(n) ? n : null
   }
 
+  function round2(n: number): number {
+    return Math.round(n * 100) / 100
+  }
+
+  function resetAddLine() {
+    setAddMode('perUnit')
+    setAddLabel('')
+    setAddQuantity('')
+    setAddUnit(null)
+    setAddUnitPrice('')
+    setAddAmount('')
+    setAddReason('')
+  }
+
+  function openAddLine() {
+    resetAddLine()
+    setAddLineOpen(true)
+  }
+
+  function closeAddLine() {
+    setAddLineOpen(false)
+    resetAddLine()
+  }
+
   async function submitPriceLine(payload: SaveOrderPriceLineInput) {
     if (!order) return
     setPricingBusy(true)
@@ -207,12 +234,7 @@ export function TransportOrderDetailPage() {
       setEditLine(null)
       setRemoveLine(null)
       setRemoveReason('')
-      setAddLineOpen(false)
-      setAddLabel('')
-      setAddQuantity('')
-      setAddUnitPrice('')
-      setAddAmount('')
-      setAddReason('')
+      closeAddLine()
     } catch (err) {
       showError(err instanceof ApiError ? err.message : 'De prijsregel kon niet worden opgeslagen.')
     } finally {
@@ -234,12 +256,15 @@ export function TransportOrderDetailPage() {
       showError('Een reden is verplicht bij het aanpassen van een prijsregel.')
       return
     }
+    const quantity = parseNum(editQuantity)
+    const unitPrice = parseNum(editUnitPrice)
+    const computedAmount = quantity !== null && unitPrice !== null ? round2(quantity * unitPrice) : null
     await submitPriceLine({
       lineKey: editLine.lineKey ?? null,
       label: editLine.label,
-      quantity: parseNum(editQuantity),
-      unitPrice: parseNum(editUnitPrice),
-      amount: parseNum(editAmount),
+      quantity,
+      unitPrice,
+      amount: computedAmount !== null ? null : parseNum(editAmount),
       adjustReason: editReason.trim(),
     })
   }
@@ -266,14 +291,38 @@ export function TransportOrderDetailPage() {
       showError('Een omschrijving is verplicht voor een vrije regel.')
       return
     }
-    await submitPriceLine({
-      lineKey: null,
-      label: addLabel.trim(),
-      quantity: parseNum(addQuantity),
-      unitPrice: parseNum(addUnitPrice),
-      amount: parseNum(addAmount),
-      adjustReason: addReason.trim() || null,
-    })
+    if (addMode === 'perUnit') {
+      const quantity = parseNum(addQuantity)
+      const unitPrice = parseNum(addUnitPrice)
+      if (quantity === null || quantity <= 0 || unitPrice === null || unitPrice < 0) {
+        showError('Geef een aantal en eenheidsprijs op.')
+        return
+      }
+      await submitPriceLine({
+        lineKey: null,
+        label: addLabel.trim(),
+        quantity,
+        unitPrice,
+        unit: addUnit,
+        amount: null,
+        adjustReason: addReason.trim() || null,
+      })
+    } else {
+      const amount = parseNum(addAmount)
+      if (amount === null) {
+        showError('Geef een totaalbedrag op.')
+        return
+      }
+      await submitPriceLine({
+        lineKey: null,
+        label: addLabel.trim(),
+        quantity: null,
+        unitPrice: null,
+        unit: null,
+        amount,
+        adjustReason: addReason.trim() || null,
+      })
+    }
   }
 
   async function handleConfirmLine(line: OrderPricingLine) {
@@ -342,6 +391,23 @@ export function TransportOrderDetailPage() {
   const canLockPrice = hasAnyPermission(['orders.lock_price', 'orders.manage'])
   const pricingStatus = order.pricingSnapshot?.status ?? 'Draft'
   const pricingLocked = pricingStatus === 'Locked' || pricingStatus === 'Invoiced'
+
+  const addQuantityNum = parseNum(addQuantity)
+  const addUnitPriceNum = parseNum(addUnitPrice)
+  const computedAddTotal =
+    addMode === 'perUnit' && addQuantityNum !== null && addUnitPriceNum !== null
+      ? round2(addQuantityNum * addUnitPriceNum)
+      : null
+  const computedAddTotalDisplay =
+    computedAddTotal !== null ? computedAddTotal.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' }) : '—'
+
+  const editQuantityNum = parseNum(editQuantity)
+  const editUnitPriceNum = parseNum(editUnitPrice)
+  const computedEditAmount =
+    editQuantityNum !== null && editUnitPriceNum !== null ? round2(editQuantityNum * editUnitPriceNum) : null
+  const editAmountIsComputed = computedEditAmount !== null
+  const computedEditAmountDisplay =
+    computedEditAmount !== null ? computedEditAmount.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' }) : '—'
 
   return (
     <div>
@@ -494,7 +560,7 @@ export function TransportOrderDetailPage() {
                   </Button>
                 )}
                 {canEditPricingLines && !pricingLocked && (
-                  <Button variant="secondary" onClick={() => setAddLineOpen(true)} disabled={pricingBusy}>
+                  <Button variant="secondary" onClick={openAddLine} disabled={pricingBusy}>
                     + Vrije regel
                   </Button>
                 )}
@@ -841,15 +907,23 @@ export function TransportOrderDetailPage() {
               />
             </FormField>
           </div>
-          <FormField label="Bedrag (€)" htmlFor="price-line-amount" hint="Leeg = aantal × eenheidsprijs.">
-            <input
-              id="price-line-amount"
-              type="number"
-              step="0.01"
-              value={editAmount}
-              onChange={(e) => setEditAmount(e.target.value)}
-              disabled={pricingBusy}
-            />
+          <FormField
+            label="Bedrag (€)"
+            htmlFor="price-line-amount"
+            hint={editAmountIsComputed ? 'Berekend als aantal × eenheidsprijs.' : 'Leeg = aantal × eenheidsprijs.'}
+          >
+            {editAmountIsComputed ? (
+              <input id="price-line-amount" readOnly value={computedEditAmountDisplay} />
+            ) : (
+              <input
+                id="price-line-amount"
+                type="number"
+                step="0.01"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                disabled={pricingBusy}
+              />
+            )}
           </FormField>
           <FormField label="Reden" htmlFor="price-line-reason" required hint="Verplicht bij een aanpassing.">
             <input
@@ -901,11 +975,11 @@ export function TransportOrderDetailPage() {
       {addLineOpen && (
         <Modal
           title="Vrije prijsregel toevoegen"
-          onClose={() => setAddLineOpen(false)}
+          onClose={closeAddLine}
           busy={pricingBusy}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setAddLineOpen(false)} disabled={pricingBusy}>
+              <Button variant="secondary" onClick={closeAddLine} disabled={pricingBusy}>
                 Terug
               </Button>
               <Button onClick={() => void handleAddLine()} disabled={pricingBusy}>
@@ -917,24 +991,84 @@ export function TransportOrderDetailPage() {
           <FormField label="Omschrijving" htmlFor="add-line-label" required>
             <input id="add-line-label" value={addLabel} onChange={(e) => setAddLabel(e.target.value)} disabled={pricingBusy} maxLength={300} autoFocus />
           </FormField>
-          <div className="tof-row">
-            <FormField label="Aantal" htmlFor="add-line-qty" hint="Optioneel.">
-              <input id="add-line-qty" type="number" step="0.01" value={addQuantity} onChange={(e) => setAddQuantity(e.target.value)} disabled={pricingBusy} />
-            </FormField>
-            <FormField label="Eenheidsprijs (€)" htmlFor="add-line-unit-price" hint="Optioneel.">
+          <FormField label="Berekeningswijze" htmlFor="add-line-mode">
+            <div role="radiogroup" className="tof-radio-row" id="add-line-mode">
+              <label>
+                <input
+                  type="radio"
+                  name="add-line-mode"
+                  checked={addMode === 'perUnit'}
+                  onChange={() => setAddMode('perUnit')}
+                  disabled={pricingBusy}
+                />{' '}
+                Berekenen op basis van aantal en eenheidsprijs
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="add-line-mode"
+                  checked={addMode === 'fixed'}
+                  onChange={() => setAddMode('fixed')}
+                  disabled={pricingBusy}
+                />{' '}
+                Vast bedrag
+              </label>
+            </div>
+          </FormField>
+          {addMode === 'perUnit' && (
+            <>
+              <div className="tof-row">
+                <FormField label="Aantal" htmlFor="add-line-qty">
+                  <input
+                    id="add-line-qty"
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    value={addQuantity}
+                    onChange={(e) => setAddQuantity(e.target.value)}
+                    disabled={pricingBusy}
+                  />
+                </FormField>
+                <FormField label="Eenheid" htmlFor="add-line-unit" hint="Optioneel.">
+                  <UnitSelect
+                    id="add-line-unit"
+                    value={addUnit}
+                    onChange={setAddUnit}
+                    units={unitTypes}
+                    preferredUnits={[]}
+                    disabled={pricingBusy}
+                  />
+                </FormField>
+              </div>
+              <div className="tof-row">
+                <FormField label="Eenheidsprijs (€)" htmlFor="add-line-price">
+                  <input
+                    id="add-line-price"
+                    type="number"
+                    step="any"
+                    value={addUnitPrice}
+                    onChange={(e) => setAddUnitPrice(e.target.value)}
+                    disabled={pricingBusy}
+                  />
+                </FormField>
+                <FormField label="Totaalbedrag" htmlFor="add-line-total">
+                  <input id="add-line-total" readOnly value={computedAddTotalDisplay} />
+                </FormField>
+              </div>
+            </>
+          )}
+          {addMode === 'fixed' && (
+            <FormField label="Totaalbedrag (€)" htmlFor="add-line-amount">
               <input
-                id="add-line-unit-price"
+                id="add-line-amount"
                 type="number"
-                step="0.01"
-                value={addUnitPrice}
-                onChange={(e) => setAddUnitPrice(e.target.value)}
+                step="any"
+                value={addAmount}
+                onChange={(e) => setAddAmount(e.target.value)}
                 disabled={pricingBusy}
               />
             </FormField>
-          </div>
-          <FormField label="Bedrag (€)" htmlFor="add-line-amount" hint="Leeg = aantal × eenheidsprijs.">
-            <input id="add-line-amount" type="number" step="0.01" value={addAmount} onChange={(e) => setAddAmount(e.target.value)} disabled={pricingBusy} />
-          </FormField>
+          )}
           <FormField label="Reden" htmlFor="add-line-reason" hint="Optioneel.">
             <input id="add-line-reason" value={addReason} onChange={(e) => setAddReason(e.target.value)} disabled={pricingBusy} maxLength={500} />
           </FormField>

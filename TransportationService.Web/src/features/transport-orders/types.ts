@@ -269,6 +269,10 @@ export interface OrderPricingLine {
   adjustReason?: string | null
   /** Stable merge key ("rule:{id}", "service:{id}", "manual:{guid}", ...); null only for a brand-new free line. */
   lineKey?: string | null
+  /** Managed unit code for quantity (e.g. "COLLI"), editable on manual lines (spec Task 5/6). */
+  unit?: string | null
+  /** Frozen identity of the service option, for merge-matching (see lineKey too). */
+  serviceOptionId?: string | null
 }
 
 /** Frozen header of the order's pricing snapshot (spec ch. 21, extended ch. 24-26). */

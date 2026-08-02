@@ -24,7 +24,15 @@ vi.mock('../../../../components/ui/toastContext', () => ({
 }))
 
 vi.mock('../../../master-data/hooks/useLookupOptions', () => ({
-  useLookupOptions: () => ({ options: [], isLoading: false, error: null }),
+  useLookupOptions: () => ({
+    options: [
+      { id: 'u-pallet', code: 'EUROPALLET', name: 'Europallet' },
+      { id: 'u-colli', code: 'COLLI', name: 'Colli' },
+      { id: 'u-kg', code: 'KG', name: 'Kilogram' },
+    ],
+    isLoading: false,
+    error: null,
+  }),
 }))
 vi.mock('../../components/OrderDocumentsPanel', () => ({ OrderDocumentsPanel: () => <div /> }))
 vi.mock('../../components/OrderTimelinePanel', () => ({ OrderTimelinePanel: () => <div /> }))
@@ -233,5 +241,81 @@ describe('TransportOrderDetailPage pricing lines', () => {
     const dialog = screen.getByRole('dialog')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Herberekenen' }))
     await waitFor(() => expect(api.recalculateOrderPricing).toHaveBeenCalledWith('order-1'))
+  })
+})
+
+describe('TransportOrderDetailPage add price line modal — berekeningswijze', () => {
+  async function openAddModal() {
+    renderPage()
+    await screen.findByText('Basisregel')
+    await userEvent.click(screen.getByRole('button', { name: '+ Vrije regel' }))
+  }
+
+  it('shows a Berekeningswijze radio group defaulting to per-unit mode with the per-unit fields', async () => {
+    await openAddModal()
+
+    const perUnitRadio = screen.getByRole('radio', { name: 'Berekenen op basis van aantal en eenheidsprijs' })
+    const fixedRadio = screen.getByRole('radio', { name: 'Vast bedrag' })
+    expect(perUnitRadio).toBeChecked()
+    expect(fixedRadio).not.toBeChecked()
+
+    expect(screen.getByLabelText('Omschrijving', { exact: false })).toBeInTheDocument()
+    expect(screen.getByLabelText('Aantal')).toBeInTheDocument()
+    expect(screen.getByLabelText('Eenheid')).toBeInTheDocument()
+    expect(screen.getByLabelText('Eenheidsprijs (€)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Totaalbedrag')).toBeInTheDocument()
+    expect(screen.getByLabelText('Totaalbedrag')).toHaveValue('—')
+  })
+
+  it('computes a read-only total in per-unit mode and submits {quantity, unitPrice, unit, amount: null}', async () => {
+    api.saveOrderPriceLines.mockResolvedValue(baseOrder())
+    await openAddModal()
+
+    await userEvent.type(screen.getByLabelText('Omschrijving', { exact: false }), 'Extra stop')
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'COLLI')
+    await userEvent.type(screen.getByLabelText('Eenheidsprijs (€)'), '1.25')
+
+    const expectedTotal = (3 * 1.25).toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
+    const totalField = screen.getByLabelText('Totaalbedrag')
+    expect(totalField).toHaveValue(expectedTotal)
+    expect(totalField).toHaveAttribute('readonly')
+
+    // Reden left empty on purpose: it is optional.
+    await userEvent.click(screen.getByRole('button', { name: 'Toevoegen' }))
+
+    await waitFor(() => expect(api.saveOrderPriceLines).toHaveBeenCalledTimes(1))
+    expect(toast.error).not.toHaveBeenCalled()
+    const [orderId, lines] = api.saveOrderPriceLines.mock.calls[0]
+    expect(orderId).toBe('order-1')
+    expect(lines).toEqual([
+      expect.objectContaining({ label: 'Extra stop', quantity: 3, unitPrice: 1.25, unit: 'COLLI', amount: null }),
+    ])
+  })
+
+  it('hides Aantal/Eenheid/Eenheidsprijs in fixed mode, keeps Totaalbedrag editable, and submits {amount, quantity: null, unitPrice: null}', async () => {
+    api.saveOrderPriceLines.mockResolvedValue(baseOrder())
+    await openAddModal()
+
+    await userEvent.type(screen.getByLabelText('Omschrijving', { exact: false }), 'Vaste kost')
+    await userEvent.click(screen.getByRole('radio', { name: 'Vast bedrag' }))
+
+    expect(screen.queryByLabelText('Aantal')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Eenheid')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Eenheidsprijs (€)')).not.toBeInTheDocument()
+
+    const totalField = screen.getByLabelText('Totaalbedrag (€)')
+    expect(totalField).not.toHaveAttribute('readonly')
+    await userEvent.type(totalField, '10')
+
+    // Reden left empty on purpose: it is optional in both modes.
+    await userEvent.click(screen.getByRole('button', { name: 'Toevoegen' }))
+
+    await waitFor(() => expect(api.saveOrderPriceLines).toHaveBeenCalledTimes(1))
+    expect(toast.error).not.toHaveBeenCalled()
+    const [, lines] = api.saveOrderPriceLines.mock.calls[0]
+    expect(lines).toEqual([
+      expect.objectContaining({ label: 'Vaste kost', amount: 10, quantity: null, unitPrice: null, unit: null }),
+    ])
   })
 })
