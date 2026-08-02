@@ -724,19 +724,22 @@ public class PricingEngine : IPricingEngine
             }
             else if (option.Kind == SurchargeKind.PerUnit)
             {
-                // Entered quantity always wins; otherwise derived from the matching order line(s)
-                // — or, when the caller supplies cargo-detail groups (combined-unit degression
-                // input), from those instead: Lines only ever carries the order's single primary
-                // unit, while Groups reflects every unit type actually present across the order's
-                // cargo lines. A service bound to a unit type that isn't the order's primary unit
-                // (e.g. a Colli-bound service on a Pallet order) must still see cargo quantified in
-                // that unit. Groups is always a superset of/mirrors Lines when the caller populates
-                // it (TransportOrderService falls back to a Lines-derived group otherwise), so the
-                // two are never summed together — that would double-count the common case.
+                // Entered quantity always wins; otherwise derived from the matching order line(s) —
+                // per unit type, Lines wins when it has that unit (the order's own primary unit,
+                // driven by order.Quantity — the authoritative source for that unit even when cargo
+                // detail for it is partial/absent), else fall back to the cargo-detail Groups
+                // (combined-unit degression input, which reflects every OTHER unit type actually
+                // present across the order's cargo lines, e.g. a Colli-bound service on a Pallet
+                // order). This is a per-unit-type choice, not a wholesale Groups-vs-Lines
+                // preference: Groups is only ever built from cargo items carrying a
+                // QuantityUnitCode, so it never contains the order's own primary unit unless a
+                // cargo line happens to share that same code — preferring Groups wholesale would
+                // silently drop a primary-unit service back to zero whenever cargo detail exists
+                // only for a different unit.
                 var derived = option.UnitTypeId is { } unitTypeId
-                    ? (request.Groups is { Count: > 0 } groupsForDerivation
-                        ? groupsForDerivation.SelectMany(g => g.Units).Where(u => u.UnitTypeId == unitTypeId).Sum(u => u.Quantity)
-                        : request.Lines.Where(l => l.UnitTypeId == unitTypeId).Sum(l => l.Quantity))
+                    ? (request.Lines.Any(l => l.UnitTypeId == unitTypeId)
+                        ? request.Lines.Where(l => l.UnitTypeId == unitTypeId).Sum(l => l.Quantity)
+                        : (request.Groups ?? []).SelectMany(g => g.Units).Where(u => u.UnitTypeId == unitTypeId).Sum(u => u.Quantity))
                     : 0m;
                 var qty = enteredQuantity is { } q1 && q1 > 0 ? q1 : derived;
                 var unitName = option.UnitTypeId is { } uid ? serviceUnitNames.GetValueOrDefault(uid, "eenheid") : "eenheid";

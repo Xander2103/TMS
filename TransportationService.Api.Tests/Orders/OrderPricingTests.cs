@@ -426,6 +426,44 @@ public class OrderPricingTests
                  && l.Label.Contains("colli", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>Regression guard for the fix above: a PerUnit auto-apply service bound to the
+    /// order's OWN primary unit (Europallet, driven by order.Quantity) must still bill from that
+    /// quantity even when the order also carries cargo detail in a completely different unit
+    /// (Colli) and no cargo item at all shares the order's own unit code. BuildPricingGroupsAsync
+    /// only ever builds Groups from cargo items that carry a QuantityUnitCode, so Groups here
+    /// contains Colli only — a Groups-preferring (wholesale) derivation would incorrectly find zero
+    /// pallets and silently drop this service to €0/informational instead of billing 2 × value.</summary>
+    [Fact]
+    public async Task PerUnitService_BoundToOrdersOwnUnit_StillBills_WhenCargoDetailExistsOnlyInAnotherUnit()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+
+        var colliUnitId = Guid.NewGuid();
+        h.Db.Context.UnitTypes.Add(new UnitType { Id = colliUnitId, TenantId = h.TenantId, Code = "COLLI", Name = "colli", IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+
+        // Bound to the order's OWN primary unit (Europallet), not Colli.
+        await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "PICK", "Picking", SurchargeKind.PerUnit, 1.25m, true, 0,
+            UnitTypeId: h.PalletUnitId, AutoApply: true), CancellationToken.None);
+
+        // Cargo detail exists only for Colli — no cargo item shares "EUROPALLET", so it never
+        // reaches Groups. The order's own primary-unit quantity (2 pallets) must still come from
+        // Lines (order.Quantity), the authoritative source for the order's own unit.
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 2, cargoItems:
+        [
+            new CargoItemInput("Kleine dozen", null, 5, null, null, QuantityUnitCode: "COLLI"),
+        ]), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var serviceLine = Assert.Single(created.Order!.ServiceLines!);
+        Assert.Equal("Picking", serviceLine.Name);
+        Assert.Equal(2m, serviceLine.Quantity);
+        Assert.Equal(2.5m, serviceLine.Amount); // 2 pallets × €1.25 — NOT €0/informational
+    }
+
     private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d)
     {
         var stopIndexById = d.Stops
