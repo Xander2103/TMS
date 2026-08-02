@@ -165,6 +165,63 @@ public class TransportOrderServiceTests
         Assert.Single(updated.Order!.CargoItems); // not wiped
     }
 
+    /// <summary>
+    /// The description rule must fall back to the PERSISTED cargo lines when CargoItems is null
+    /// (= "leave unchanged" per the API contract) rather than only looking at the request — the
+    /// persisted line here carries the only description left once GoodsDescription is cleared.
+    /// </summary>
+    [Fact]
+    public async Task Update_ClearsGoodsDescription_WithNullCargoItems_SucceedsWhenPersistedLineHasDescription()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with { GoodsDescription = null, CargoItems = null },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        Assert.Null(updated.Order!.GoodsDescription);
+    }
+
+    /// <summary>
+    /// Mirror of the above with no description anywhere once the general field is cleared: the
+    /// persisted line has none either, so the fallback query must still catch it and reject —
+    /// and the persisted GoodsDescription must stay untouched by the rejected update.
+    /// </summary>
+    [Fact]
+    public async Task Update_ClearsGoodsDescription_WithNullCargoItems_IsRejectedWhenPersistedLineHasNoDescription()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput(null, null, 4, null, null, QuantityUnitCode: "COLLI")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        var originalGoodsDescription = created.Order!.GoodsDescription;
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with { GoodsDescription = null, CargoItems = null },
+            CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, updated.Outcome);
+        Assert.Contains("omschrijving", updated.Error!, StringComparison.OrdinalIgnoreCase);
+
+        var persisted = await h.Db.Context.TransportOrders.AsNoTracking()
+            .SingleAsync(o => o.Id == created.Order.Id);
+        Assert.Equal(originalGoodsDescription, persisted.GoodsDescription);
+    }
+
     [Fact]
     public async Task Update_EmptyCargoItems_ClearsLines()
     {
