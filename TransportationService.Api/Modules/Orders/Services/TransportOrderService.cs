@@ -446,6 +446,10 @@ public class TransportOrderService : ITransportOrderService
         else
         {
             // null = leave cargo unchanged; still feed the (unmodified) current lines to pricing.
+            // Stops were just wholesale-replaced above (old rows soft-deleted, new rows added),
+            // so the preserved cargo's stop links must be re-resolved against the new stops or
+            // they'd dangle on soft-deleted rows (soft delete never fires the SetNull FK).
+            RelinkCargoToReplacedStops(existingCargo, order.Stops);
             replacementCargo = existingCargo;
         }
 
@@ -1103,10 +1107,7 @@ public class TransportOrderService : ITransportOrderService
     /// </summary>
     private static void ApplyCargoInput(CargoItem target, CargoItemInput input, int sequence, IReadOnlyList<TransportOrderStop> stops)
     {
-        var loadingStops = stops.Where(s => s.StopType == StopType.Loading).ToList();
-        var unloadingStops = stops.Where(s => s.StopType == StopType.Unloading).ToList();
-        var defaultLoading = loadingStops.Count == 1 ? loadingStops[0].Id : (Guid?)null;
-        var defaultUnloading = unloadingStops.Count == 1 ? unloadingStops[0].Id : (Guid?)null;
+        var (defaultLoading, defaultUnloading) = DefaultCargoStopLinks(stops);
 
         var (volume, volumeIsManual) = Modules.Fleet.Services.FleetFieldRules.ResolveVolume(
             input.LengthMeters, input.WidthMeters, input.HeightMeters, input.VolumeM3, input.VolumeIsManual,
@@ -1135,6 +1136,38 @@ public class TransportOrderService : ITransportOrderService
         target.PalletCount = NonNegative(input.PalletCount);
         target.LoadingStopId = input.LoadingStopIndex is { } load ? stops[load].Id : defaultLoading;
         target.UnloadingStopId = input.UnloadingStopIndex is { } unload ? stops[unload].Id : defaultUnloading;
+    }
+
+    /// <summary>
+    /// Unambiguous-order auto-link rule shared by <see cref="ApplyCargoInput"/> and the
+    /// leave-unchanged cargo relink below: exactly one loading + one unloading stop auto-links;
+    /// otherwise the link is left to the caller (null by default).
+    /// </summary>
+    private static (Guid? DefaultLoading, Guid? DefaultUnloading) DefaultCargoStopLinks(IReadOnlyList<TransportOrderStop> stops)
+    {
+        var loadingStops = stops.Where(s => s.StopType == StopType.Loading).ToList();
+        var unloadingStops = stops.Where(s => s.StopType == StopType.Unloading).ToList();
+        return (
+            loadingStops.Count == 1 ? loadingStops[0].Id : (Guid?)null,
+            unloadingStops.Count == 1 ? unloadingStops[0].Id : (Guid?)null);
+    }
+
+    /// <summary>
+    /// Re-links preserved cargo rows to the freshly-replaced stops when CargoItems is omitted
+    /// (leave-unchanged). Stops are wholesale-replaced with new ids on every update, and soft
+    /// delete never fires the SetNull FK, so without this the preserved cargo would keep
+    /// pointing at just-soft-deleted stop rows. Reuses the same unambiguous-order auto-link rule
+    /// as ApplyCargoInput/BuildCargoItems: exactly one loading + one unloading stop auto-links;
+    /// otherwise the link is cleared.
+    /// </summary>
+    private static void RelinkCargoToReplacedStops(IEnumerable<CargoItem> cargoItems, IReadOnlyList<TransportOrderStop> stops)
+    {
+        var (defaultLoading, defaultUnloading) = DefaultCargoStopLinks(stops);
+        foreach (var item in cargoItems)
+        {
+            item.LoadingStopId = defaultLoading;
+            item.UnloadingStopId = defaultUnloading;
+        }
     }
 
     private static string? WindowError(DateTime? from, DateTime? to) =>

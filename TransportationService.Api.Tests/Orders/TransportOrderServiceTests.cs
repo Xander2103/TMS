@@ -206,6 +206,50 @@ public class TransportOrderServiceTests
     }
 
     /// <summary>
+    /// Stops are wholesale-replaced with fresh ids on every update (old rows soft-deleted, new
+    /// rows inserted), including when CargoItems is null (leave-unchanged). Soft delete never
+    /// fires the SetNull FK, so without a fix the preserved cargo row would keep pointing at the
+    /// just-deleted old stop ids. With exactly one loading + one unloading stop (unambiguous),
+    /// the fix must re-resolve the cargo's links to the NEW stop ids.
+    /// </summary>
+    [Fact]
+    public async Task Update_NullCargoItems_RelinksCargoToReplacedStops()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        var cargoLine = created.Order!.CargoItems.Single();
+        var oldLoadingStopId = created.Order.Stops.Single(s => s.StopType == StopType.Loading).Id;
+        var oldUnloadingStopId = created.Order.Stops.Single(s => s.StopType == StopType.Unloading).Id;
+        Assert.Equal(oldLoadingStopId, cargoLine.LoadingStopId); // auto-linked on create (unambiguous)
+        Assert.Equal(oldUnloadingStopId, cargoLine.UnloadingStopId);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order.Id,
+            BuildUpdateFrom(created.Order) with { CargoItems = null }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        var newLoadingStopId = updated.Order!.Stops.Single(s => s.StopType == StopType.Loading).Id;
+        var newUnloadingStopId = updated.Order.Stops.Single(s => s.StopType == StopType.Unloading).Id;
+        Assert.NotEqual(oldLoadingStopId, newLoadingStopId); // stops were indeed replaced
+        Assert.NotEqual(oldUnloadingStopId, newUnloadingStopId);
+
+        var preservedCargo = Assert.Single(updated.Order.CargoItems);
+        Assert.Equal(cargoLine.Id, preservedCargo.Id);
+        Assert.Equal(newLoadingStopId, preservedCargo.LoadingStopId);
+        Assert.Equal(newUnloadingStopId, preservedCargo.UnloadingStopId);
+
+        var persistedCargo = await h.Db.Context.CargoItems.AsNoTracking().SingleAsync(c => c.Id == cargoLine.Id);
+        Assert.Equal(newLoadingStopId, persistedCargo.LoadingStopId);
+        Assert.Equal(newUnloadingStopId, persistedCargo.UnloadingStopId);
+    }
+
+    /// <summary>
     /// The description rule must fall back to the PERSISTED cargo lines when CargoItems is null
     /// (= "leave unchanged" per the API contract) rather than only looking at the request — the
     /// persisted line here carries the only description left once GoodsDescription is cleared.
