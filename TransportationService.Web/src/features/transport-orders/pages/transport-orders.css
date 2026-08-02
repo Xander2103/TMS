@@ -124,6 +124,23 @@
   white-space: nowrap;
 }
 
+.to-price-not-applied {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-muted, var(--text));
+}
+
+.to-price-not-applied h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.to-price-not-applied ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .to-calc-explanation {
   white-space: pre-wrap;
   font-size: 13px;

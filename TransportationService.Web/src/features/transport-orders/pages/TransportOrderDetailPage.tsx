@@ -39,7 +39,6 @@ import { UNIT_TYPE_LABELS } from '../../packages/types'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CustomerPackagesSummary } from '../../packages/components/CustomerPackagesSummary'
 import {
-  ORDER_PRICE_LINE_KIND_LABELS,
   ORDER_PRICE_LINE_KIND_TONE,
   ORDER_PRICING_STATUS_LABELS,
   ORDER_PRICING_STATUS_TONE,
@@ -47,6 +46,7 @@ import {
   ORDER_STATUS_TONE,
   ORDER_TRANSITION_LABELS,
   STOP_TYPE_LABELS,
+  lineBadge,
   type OrderPricingLine,
   type OrderPricingStatus,
   type TransportOrderDetail,
@@ -61,6 +61,19 @@ function formatWindow(from: string | null, to: string | null): string {
   if (from) return `vanaf ${fmt(from)}`
   if (to) return `tot ${fmt(to)}`
   return '—'
+}
+
+function money(amount: number): string {
+  return amount.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
+}
+
+/** Label for the Berekening column: quantity x unit x unit price when known, else a flat-amount or unknown fallback. */
+function calculationLabel(line: OrderPricingLine): string {
+  if (line.quantity != null && line.unitPrice != null) {
+    const unit = line.unit ? ` ${line.unit}` : ''
+    return `${line.quantity.toLocaleString('nl-BE')}${unit} × ${money(line.unitPrice)}`
+  }
+  return line.kind === 'Manual' ? 'Vast bedrag' : '—'
 }
 
 export function TransportOrderDetailPage() {
@@ -391,6 +404,8 @@ export function TransportOrderDetailPage() {
   const canLockPrice = hasAnyPermission(['orders.lock_price', 'orders.manage'])
   const pricingStatus = order.pricingSnapshot?.status ?? 'Draft'
   const pricingLocked = pricingStatus === 'Locked' || pricingStatus === 'Invoiced'
+  const invoiceLines = (order.pricingLines ?? []).filter((l) => !l.informational)
+  const notAppliedLines = (order.pricingLines ?? []).filter((l) => l.informational)
 
   const addQuantityNum = parseNum(addQuantity)
   const addUnitPriceNum = parseNum(addUnitPrice)
@@ -575,13 +590,14 @@ export function TransportOrderDetailPage() {
                   <tr>
                     <th>Omschrijving</th>
                     <th>Type</th>
+                    <th>Berekening</th>
                     <th className="tof-price-amount">Bedrag</th>
-                    {canEditPricingLines && !pricingLocked && <th aria-label="Acties" />}
+                    {canEditPricingLines && !pricingLocked && <th>Acties</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {order.pricingLines.map((line, index) => (
-                    <tr key={line.id ?? line.lineKey ?? index} className={line.informational ? 'tof-price-informational' : undefined}>
+                  {invoiceLines.map((line, index) => (
+                    <tr key={line.id ?? line.lineKey ?? index}>
                       <td>
                         {line.label}
                         {line.kind === 'AutoAdjusted' && (
@@ -599,8 +615,9 @@ export function TransportOrderDetailPage() {
                         )}
                       </td>
                       <td>
-                        <Badge tone={ORDER_PRICE_LINE_KIND_TONE[line.kind]}>{ORDER_PRICE_LINE_KIND_LABELS[line.kind]}</Badge>
+                        <Badge tone={ORDER_PRICE_LINE_KIND_TONE[line.kind]}>{lineBadge(line)}</Badge>
                       </td>
+                      <td>{calculationLabel(line)}</td>
                       <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
                       {canEditPricingLines && !pricingLocked && (
                         <td className="to-price-line-actions">
@@ -627,6 +644,7 @@ export function TransportOrderDetailPage() {
                   <tr>
                     <th>Totaal</th>
                     <th />
+                    <th />
                     <th className="tof-price-amount">
                       € {(order.pricingSnapshot?.linesTotal ?? order.agreedPrice ?? 0).toFixed(2)}
                     </th>
@@ -634,6 +652,16 @@ export function TransportOrderDetailPage() {
                   </tr>
                 </tfoot>
               </table>
+              {notAppliedLines.length > 0 && (
+                <div className="to-price-not-applied">
+                  <h3>Niet toegepast</h3>
+                  <ul>
+                    {notAppliedLines.map((line, index) => (
+                      <li key={line.id ?? line.lineKey ?? index}>{line.label}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </section>
           )}
 

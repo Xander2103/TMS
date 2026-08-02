@@ -218,7 +218,7 @@ export type OrderPriceLineKind = 'Auto' | 'AutoAdjusted' | 'Manual' | 'Proposed'
 
 export const ORDER_PRICE_LINE_KIND_LABELS: Record<OrderPriceLineKind, string> = {
   Auto: 'AUTO',
-  AutoAdjusted: 'AANGEPAST',
+  AutoAdjusted: 'OVERRIDE',
   Manual: 'MANUEEL',
   Proposed: 'VOORSTEL',
 }
@@ -273,6 +273,11 @@ export interface OrderPricingLine {
   unit?: string | null
   /** Frozen identity of the service option, for merge-matching (see lineKey too). */
   serviceOptionId?: string | null
+}
+
+/** Badge text for a pricing line: an Auto line tied to a service option reads as DIENST rather than AUTO. */
+export function lineBadge(line: Pick<OrderPricingLine, 'kind' | 'serviceOptionId'>): string {
+  return line.kind === 'Auto' && line.serviceOptionId ? 'DIENST' : ORDER_PRICE_LINE_KIND_LABELS[line.kind]
 }
 
 /** Frozen header of the order's pricing snapshot (spec ch. 21, extended ch. 24-26). */

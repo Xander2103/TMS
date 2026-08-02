@@ -145,15 +145,87 @@ beforeEach(() => {
   api.getTransportOrder.mockResolvedValue(baseOrder())
 })
 
+function money(amount: number): string {
+  return amount.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
+}
+
 describe('TransportOrderDetailPage pricing lines', () => {
   it('renders a badge per line kind', async () => {
     renderPage()
     await screen.findByText('Basisregel')
 
     expect(screen.getByText('AUTO')).toBeInTheDocument()
-    expect(screen.getByText('AANGEPAST')).toBeInTheDocument()
+    expect(screen.getByText('OVERRIDE')).toBeInTheDocument()
     expect(screen.getByText('MANUEEL')).toBeInTheDocument()
     expect(screen.getByText('VOORSTEL')).toBeInTheDocument()
+  })
+
+  it('renders the price table headers exactly: Omschrijving, Type, Berekening, Bedrag, Acties', async () => {
+    renderPage()
+    await screen.findByText('Basisregel')
+
+    const table = screen.getByText('Basisregel').closest('table')!
+    const thead = table.querySelector('thead')!
+    const headers = within(thead).getAllByRole('columnheader').map((h) => h.textContent)
+    expect(headers).toEqual(['Omschrijving', 'Type', 'Berekening', 'Bedrag', 'Acties'])
+  })
+
+  it('shows DIENST for an Auto line with a serviceOptionId, AUTO for one without', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingLines: [
+          { id: 'l1', label: 'Diensttarief', amount: 20, source: 'Dienst', informational: false, kind: 'Auto', lineKey: 'service:s2', serviceOptionId: 'svc-1' },
+          { id: 'l2', label: 'Basistarief', amount: 30, source: 'Regel', informational: false, kind: 'Auto', lineKey: 'rule:r2' },
+        ],
+      }),
+    )
+    renderPage()
+    await screen.findByText('Diensttarief')
+
+    const dienstRow = screen.getByText('Diensttarief').closest('tr')!
+    expect(within(dienstRow).getByText('DIENST')).toBeInTheDocument()
+    const autoRow = screen.getByText('Basistarief').closest('tr')!
+    expect(within(autoRow).getByText('AUTO')).toBeInTheDocument()
+  })
+
+  it('renders the Berekening cell: quantity x unit x unitPrice, "Vast bedrag" for manual-amount-only, "—" for auto without quantity/unitPrice', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingLines: [
+          { id: 'l1', label: 'Picking', amount: 3.75, source: 'Regel', informational: false, kind: 'Auto', lineKey: 'rule:r3', quantity: 3, unit: 'COLLI', unitPrice: 1.25 },
+          { id: 'l2', label: 'Vaste kost', amount: 10, source: 'Manueel', informational: false, kind: 'Manual', lineKey: 'manual:m2' },
+          { id: 'l3', label: 'Onbekende berekening', amount: 5, source: 'Regel', informational: false, kind: 'Auto', lineKey: 'rule:r4' },
+        ],
+      }),
+    )
+    renderPage()
+    await screen.findByText('Picking')
+
+    const cell = (label: string) => {
+      const row = screen.getByText(label).closest('tr')!
+      return within(row).getAllByRole('cell')[2]
+    }
+    expect(cell('Picking').textContent).toBe(`3 COLLI × ${money(1.25)}`)
+    expect(cell('Vaste kost').textContent).toBe('Vast bedrag')
+    expect(cell('Onbekende berekening').textContent).toBe('—')
+  })
+
+  it('excludes informational lines from the price table and lists them under "Niet toegepast"', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingLines: [
+          { id: 'l1', label: 'Basisregel', amount: 90, source: 'Regel X', informational: false, kind: 'Auto', lineKey: 'rule:r1', quantity: 3, unitPrice: 30 },
+          { id: 'l2', label: 'Pipeline picking: geen Colli op deze order', amount: 0, source: 'Regel', informational: true, kind: 'Auto', lineKey: 'rule:r5' },
+        ],
+      }),
+    )
+    renderPage()
+    await screen.findByText('Basisregel')
+
+    expect(screen.queryByText('Pipeline picking: geen Colli op deze order')?.closest('tr')).toBeFalsy()
+    const heading = screen.getByRole('heading', { name: 'Niet toegepast' })
+    const list = heading.closest('div')!
+    expect(within(list).getByText('Pipeline picking: geen Colli op deze order').tagName).toBe('LI')
   })
 
   it('posts the adjusted quantity and reason when editing an auto line', async () => {
