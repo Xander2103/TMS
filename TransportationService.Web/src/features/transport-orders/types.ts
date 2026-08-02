@@ -134,6 +134,8 @@ export interface CargoItem {
 }
 
 export interface CargoItemInput {
+  /** Matches an existing cargo line on update (id-preserving sync); omitted/unmatched = new line. */
+  id?: string | null
   description: string
   barcode: string | null
   expectedQuantity: number

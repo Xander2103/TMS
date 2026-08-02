@@ -82,7 +82,7 @@ public class TransportOrderServiceTests
                     c.AdrRequired, c.AdrDetails, c.Stackable, c.Reference,
                     c.LoadingStopId is { } lid && stopIndexById.TryGetValue(lid, out var li) ? li : null,
                     c.UnloadingStopId is { } uid && stopIndexById.TryGetValue(uid, out var ui) ? ui : null,
-                    c.QuantityUnitCode))
+                    c.QuantityUnitCode, Id: c.Id))
                 .ToList(),
             QuantityUnitCode: d.QuantityUnitCode);
     }
@@ -113,6 +113,74 @@ public class TransportOrderServiceTests
         h.Db.Context.ChangeTracker.Clear();
         var reloaded = await h.Sut.GetByIdAsync(created.Order!.Id, CancellationToken.None);
         Assert.Equal("COLLI", Assert.Single(reloaded!.CargoItems).QuantityUnitCode);
+    }
+
+    [Fact]
+    public async Task Update_MatchingCargoId_UpdatesInPlace_KeepsGuid_AndAuditsUnitChange()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        var lineId = created.Order!.CargoItems.Single().Id;
+        h.Db.Context.ChangeTracker.Clear();
+
+        var update = BuildUpdateFrom(created.Order!) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null,
+                QuantityUnitCode: "COLLI", Id: lineId)],
+        };
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id, update, CancellationToken.None);
+
+        Assert.Equal(lineId, Assert.Single(updated.Order!.CargoItems).Id); // id preserved
+        var entity = await h.Db.Context.CargoItems.SingleAsync(c => c.Id == lineId);
+        Assert.Equal("COLLI", entity.QuantityUnitCode);
+
+        var audit = await h.Db.Context.AuditLogs
+            .Where(a => a.EntityType == "TransportOrder" && a.Action == "Updated")
+            .OrderByDescending(a => a.Id).FirstAsync();
+        Assert.Contains("EUROPALLET", audit.OldValuesJson);
+        Assert.Contains("COLLI", audit.NewValuesJson);
+    }
+
+    [Fact]
+    public async Task Update_NullCargoItems_LeavesExistingLinesUntouched()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with { CargoItems = null }, CancellationToken.None);
+        Assert.Single(updated.Order!.CargoItems); // not wiped
+    }
+
+    [Fact]
+    public async Task Update_EmptyCargoItems_ClearsLines()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId), Stop(StopType.Unloading, city: "Gent")) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")],
+        };
+        var created = await h.Sut.CreateAsync(create, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order!.Id,
+            BuildUpdateFrom(created.Order!) with { CargoItems = [] }, CancellationToken.None);
+        Assert.Empty(updated.Order!.CargoItems);
     }
 
     [Fact]

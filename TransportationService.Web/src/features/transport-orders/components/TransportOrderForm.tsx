@@ -36,6 +36,8 @@ import './transport-order-form.css'
 
 interface CargoFormRow {
   key: string
+  /** Existing cargo line id (id-preserving update sync); null for a new/unsaved row. */
+  id: string | null
   description: string
   barcode: string
   expectedQuantity: string
@@ -229,6 +231,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       const unloadingIndex = order?.stops.findIndex((s) => s.id === c.unloadingStopId) ?? -1
       return {
         key: nextStopKey(),
+        id: c.id,
         description: c.description,
         barcode: c.barcode ?? '',
         expectedQuantity: String(c.expectedQuantity),
@@ -682,6 +685,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         unloadingInstructions: stop.unloadingInstructions.trim() || null,
       })),
       cargoItems: cargoItems.map((cargo) => ({
+        id: cargo.id,
         description: cargo.description.trim(),
         barcode: cargo.barcode.trim() || null,
         expectedQuantity: Number(cargo.expectedQuantity),
@@ -1049,6 +1053,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
                 ...rows,
                 {
                   key: nextStopKey(),
+                  id: null,
                   description: '',
                   barcode: '',
                   expectedQuantity: '1',

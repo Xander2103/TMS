@@ -215,7 +215,9 @@ public record CargoItemInput(
     string? Reference = null,
     int? LoadingStopIndex = null,
     int? UnloadingStopIndex = null,
-    string? QuantityUnitCode = null);
+    string? QuantityUnitCode = null,
+    // Id-preserving update sync: null/unmatched Id => treated as a new line. Ignored on create.
+    Guid? Id = null);
 
 public record TransportOrderStopInput(
     StopType StopType,

@@ -330,7 +330,16 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(oneOffError);
         }
 
-        var before = new { order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count };
+        // Cargo: id-matched in-place sync (loaded up front so both the audit "before" snapshot
+        // and the sync below share one query). null = leave unchanged (API contract); [] = clear.
+        var existingCargo = await _dbContext.CargoItems
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
+            .OrderBy(c => c.Sequence)
+            .ToListAsync(cancellationToken);
+        var cargoBefore = existingCargo
+            .Select(c => new { c.Description, c.ExpectedQuantity, c.QuantityUnitCode }).ToList();
+
+        var before = new { order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count, Cargo = cargoBefore };
 
         order.CustomerId = request.CustomerId;
         order.CustomerReference = Trim(request.CustomerReference);
@@ -375,13 +384,35 @@ public class TransportOrderService : ITransportOrderService
         // Modified (phantom UPDATE). Mark them Added explicitly.
         _dbContext.AddRange(order.Stops);
 
-        // Cargo items follow the same wholesale-replacement model as stops (soft delete).
-        var existingCargo = await _dbContext.CargoItems
-            .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
-            .ToListAsync(cancellationToken);
-        _dbContext.RemoveRange(existingCargo);
-        var replacementCargo = BuildCargoItems(order.Id, request.CargoItems, order.Stops);
-        _dbContext.AddRange(replacementCargo);
+        List<CargoItem> replacementCargo;
+        if (request.CargoItems is not null)
+        {
+            var byId = existingCargo.ToDictionary(c => c.Id);
+            var seen = new HashSet<Guid>();
+            var sequence = 1;
+            replacementCargo = new List<CargoItem>(request.CargoItems.Count);
+            foreach (var input in request.CargoItems)
+            {
+                if (input.Id is { } lineId && byId.TryGetValue(lineId, out var entity))
+                {
+                    ApplyCargoInput(entity, input, sequence++, order.Stops);
+                    seen.Add(lineId);
+                    replacementCargo.Add(entity);
+                }
+                else
+                {
+                    var added = BuildCargoItem(order.Id, input, sequence++, order.Stops);
+                    _dbContext.Add(added);
+                    replacementCargo.Add(added);
+                }
+            }
+            _dbContext.RemoveRange(existingCargo.Where(c => !seen.Contains(c.Id)));
+        }
+        else
+        {
+            // null = leave cargo unchanged; still feed the (unmodified) current lines to pricing.
+            replacementCargo = existingCargo;
+        }
 
         if (await ApplyPricingAsync(order, request.AgreedPrice, ResolveServiceSelections(request.Services, request.ServiceOptionIds),
                 request.PriceIsManual, request.PriceOverrideReason, replacementCargo, cancellationToken) is { } pricingError)
@@ -391,8 +422,10 @@ public class TransportOrderService : ITransportOrderService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        var cargoAfter = replacementCargo
+            .Select(c => new { c.Description, c.ExpectedQuantity, c.QuantityUnitCode }).ToList();
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Updated", before,
-            new { order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count }, cancellationToken);
+            new { order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count, Cargo = cargoAfter }, cancellationToken);
 
         if (surchargeChanged)
         {
@@ -947,49 +980,59 @@ public class TransportOrderService : ITransportOrderService
         return null;
     }
 
-    private List<CargoItem> BuildCargoItems(Guid orderId, IReadOnlyList<CargoItemInput>? inputs, IReadOnlyList<TransportOrderStop> stops)
+    private List<CargoItem> BuildCargoItems(Guid orderId, IReadOnlyList<CargoItemInput>? inputs, IReadOnlyList<TransportOrderStop> stops) =>
+        (inputs ?? []).Select((input, index) => BuildCargoItem(orderId, input, index + 1, stops)).ToList();
+
+    private CargoItem BuildCargoItem(Guid orderId, CargoItemInput input, int sequence, IReadOnlyList<TransportOrderStop> stops)
     {
-        // Unambiguous orders (one loading + one unloading stop) auto-link omitted stop indexes.
+        var item = new CargoItem
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenantContext.TenantId,
+            TransportOrderId = orderId,
+        };
+        ApplyCargoInput(item, input, sequence, stops);
+        return item;
+    }
+
+    /// <summary>
+    /// Sets every mutable cargo field from an input, shared by create (via <see cref="BuildCargoItem"/>)
+    /// and the id-preserving update sync. Unambiguous orders (one loading + one unloading stop)
+    /// auto-link omitted stop indexes.
+    /// </summary>
+    private static void ApplyCargoInput(CargoItem target, CargoItemInput input, int sequence, IReadOnlyList<TransportOrderStop> stops)
+    {
         var loadingStops = stops.Where(s => s.StopType == StopType.Loading).ToList();
         var unloadingStops = stops.Where(s => s.StopType == StopType.Unloading).ToList();
         var defaultLoading = loadingStops.Count == 1 ? loadingStops[0].Id : (Guid?)null;
         var defaultUnloading = unloadingStops.Count == 1 ? unloadingStops[0].Id : (Guid?)null;
 
-        return (inputs ?? []).Select((input, index) =>
-        {
-            var (volume, volumeIsManual) = Modules.Fleet.Services.FleetFieldRules.ResolveVolume(
-                input.LengthMeters, input.WidthMeters, input.HeightMeters, input.VolumeM3, input.VolumeIsManual,
-                field: $"cargoItems[{index}].volumeM3");
+        var (volume, volumeIsManual) = Modules.Fleet.Services.FleetFieldRules.ResolveVolume(
+            input.LengthMeters, input.WidthMeters, input.HeightMeters, input.VolumeM3, input.VolumeIsManual,
+            field: $"cargoItems[{sequence - 1}].volumeM3");
 
-            return new CargoItem
-            {
-                Id = Guid.NewGuid(),
-                TenantId = _tenantContext.TenantId,
-                TransportOrderId = orderId,
-                Sequence = index + 1,
-                Description = input.Description.Trim(),
-                Barcode = Trim(input.Barcode),
-                ExpectedQuantity = input.ExpectedQuantity,
-                QuantityUnit = Trim(input.QuantityUnit),
-                QuantityUnitCode = NormalizeUnitCode(input.QuantityUnitCode),
-                Notes = Trim(input.Notes),
-                UnitType = input.UnitType,
-                UnitTypeLabel = Trim(input.UnitTypeLabel),
-                TotalWeightKg = NonNegative(input.TotalWeightKg),
-                WeightPerUnitKg = NonNegative(input.WeightPerUnitKg),
-                LengthMeters = NonNegative(input.LengthMeters),
-                WidthMeters = NonNegative(input.WidthMeters),
-                HeightMeters = NonNegative(input.HeightMeters),
-                VolumeM3 = volume,
-                VolumeIsManual = volumeIsManual,
-                AdrRequired = input.AdrRequired,
-                AdrDetails = Trim(input.AdrDetails),
-                Stackable = input.Stackable,
-                Reference = Trim(input.Reference),
-                LoadingStopId = input.LoadingStopIndex is { } load ? stops[load].Id : defaultLoading,
-                UnloadingStopId = input.UnloadingStopIndex is { } unload ? stops[unload].Id : defaultUnloading,
-            };
-        }).ToList();
+        target.Sequence = sequence;
+        target.Description = input.Description.Trim();
+        target.Barcode = Trim(input.Barcode);
+        target.ExpectedQuantity = input.ExpectedQuantity;
+        target.QuantityUnit = Trim(input.QuantityUnit);
+        target.QuantityUnitCode = NormalizeUnitCode(input.QuantityUnitCode);
+        target.Notes = Trim(input.Notes);
+        target.UnitType = input.UnitType;
+        target.UnitTypeLabel = Trim(input.UnitTypeLabel);
+        target.TotalWeightKg = NonNegative(input.TotalWeightKg);
+        target.WeightPerUnitKg = NonNegative(input.WeightPerUnitKg);
+        target.LengthMeters = NonNegative(input.LengthMeters);
+        target.WidthMeters = NonNegative(input.WidthMeters);
+        target.HeightMeters = NonNegative(input.HeightMeters);
+        target.VolumeM3 = volume;
+        target.VolumeIsManual = volumeIsManual;
+        target.AdrRequired = input.AdrRequired;
+        target.AdrDetails = Trim(input.AdrDetails);
+        target.Stackable = input.Stackable;
+        target.Reference = Trim(input.Reference);
+        target.LoadingStopId = input.LoadingStopIndex is { } load ? stops[load].Id : defaultLoading;
+        target.UnloadingStopId = input.UnloadingStopIndex is { } unload ? stops[unload].Id : defaultUnloading;
     }
 
     private static string? WindowError(DateTime? from, DateTime? to) =>
