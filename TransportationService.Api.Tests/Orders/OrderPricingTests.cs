@@ -467,6 +467,174 @@ public class OrderPricingTests
         Assert.Equal(2.5m, serviceLine.Amount); // 2 pallets × €1.25 — NOT €0/informational
     }
 
+    // --- Wave 2026-08-04 §6: recalculation always uses the CURRENT goods lines ------------------
+
+    private static async Task AddUnitTypeAsync(Harness h, string code, string name)
+    {
+        h.Db.Context.UnitTypes.Add(new UnitType { Id = Guid.NewGuid(), TenantId = h.TenantId, Code = code, Name = name, IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task CargoUnitChange_EuropalletToDoos_RemovesStaleAutoLine_AndReportsMissingTariff()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        await AddUnitTypeAsync(h, "DOOS", "Doos");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        Assert.Equal(85m, created.Order!.AgreedPrice); // bracket 2 pallets
+        var lineId = created.Order.CargoItems.Single().Id;
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order.Id, BuildUpdateFrom(created.Order) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "DOOS", Id: lineId)],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        // The stale "2 × Europallet = €85" automatic line is gone…
+        Assert.DoesNotContain(updated.Order!.PricingLines!, l => l.Source == "Pallets klant X");
+        // …and the engine reports the missing Doos tariff instead of pricing nothing silently.
+        Assert.Contains(updated.Order.PricingLines!, l => l.Label.Contains("Doos", StringComparison.OrdinalIgnoreCase)
+            && l.Source == "Ontbrekend");
+        Assert.Null(updated.Order.CalculatedPrice);
+    }
+
+    [Fact]
+    public async Task CargoQuantityChange_Reprices_FromCurrentLines()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput("Onderdelen", null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        Assert.Equal(85m, created.Order!.AgreedPrice);
+        var lineId = created.Order.CargoItems.Single().Id;
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order.Id, BuildUpdateFrom(created.Order) with
+        {
+            CargoItems = [new CargoItemInput("Onderdelen", null, 3, null, null, QuantityUnitCode: "EUROPALLET", Id: lineId)],
+        }, CancellationToken.None);
+
+        Assert.Equal(115m, updated.Order!.AgreedPrice); // bracket 3+ pallets
+    }
+
+    [Fact]
+    public async Task AddSecondGoodsLine_UnpricedUnit_KeepsBaseLine_AndAddsMissingTariffLine()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        await AddUnitTypeAsync(h, "COLLI", "Colli");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        var lineId = created.Order!.CargoItems.Single().Id;
+        h.Db.Context.ChangeTracker.Clear();
+
+        var updated = await h.Sut.UpdateAsync(created.Order.Id, BuildUpdateFrom(created.Order) with
+        {
+            CargoItems =
+            [
+                new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET", Id: lineId),
+                new CargoItemInput(null, null, 4, null, null, QuantityUnitCode: "COLLI"),
+            ],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        var pallets = Assert.Single(updated.Order!.PricingLines!, l => l.Source == "Pallets klant X");
+        Assert.Equal(85m, pallets.Amount);
+        Assert.Contains(updated.Order.PricingLines!, l => l.Source == "Ontbrekend"
+            && l.Label.Contains("Colli", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task ManualPriceLine_SurvivesGoodsChange()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        var orderId = created.Order!.Id;
+        var lineId = created.Order.CargoItems.Single().Id;
+        var manual = await h.Sut.SaveOrderPriceLinesAsync(orderId,
+            [new SaveOrderPriceLineRequest(null, "Extra handling", null, null, 10m, null)], CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, manual.Outcome);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var reloaded = await h.Sut.GetByIdAsync(orderId, CancellationToken.None);
+        var updated = await h.Sut.UpdateAsync(orderId, BuildUpdateFrom(reloaded!) with
+        {
+            CargoItems = [new CargoItemInput(null, null, 3, null, null, QuantityUnitCode: "EUROPALLET", Id: lineId)],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        var manualLine = Assert.Single(updated.Order!.PricingLines!, l => l.Kind == OrderPriceLineKind.Manual);
+        Assert.Equal(10m, manualLine.Amount);
+        Assert.Equal(125m, updated.Order.AgreedPrice); // 115 repriced + 10 manual
+    }
+
+    [Fact]
+    public async Task LockedPricing_RejectsCargoQuantityChange()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        h.Permissions.Codes.Add("orders.edit");
+        h.Permissions.Codes.Add("orders.lock_price");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        var orderId = created.Order!.Id;
+        var lineId = created.Order.CargoItems.Single().Id;
+        await h.Sut.SetOrderPricingStatusAsync(orderId, OrderPricingStatus.Locked, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var reloaded = await h.Sut.GetByIdAsync(orderId, CancellationToken.None);
+        await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(() =>
+            h.Sut.UpdateAsync(orderId, BuildUpdateFrom(reloaded!) with
+            {
+                CargoItems = [new CargoItemInput(null, null, 5, null, null, QuantityUnitCode: "EUROPALLET", Id: lineId)],
+            }, CancellationToken.None));
+
+        // The frozen price is untouched.
+        h.Db.Context.ChangeTracker.Clear();
+        var after = await h.Sut.GetByIdAsync(orderId, CancellationToken.None);
+        Assert.Equal(85m, after!.AgreedPrice);
+        Assert.Equal(2m, after.CargoItems.Single().ExpectedQuantity);
+    }
+
+    [Fact]
+    public async Task LockedPricing_AllowsUnrelatedNotesEdit_WithCargoLines()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        h.Permissions.Codes.Add("orders.edit");
+        h.Permissions.Codes.Add("orders.lock_price");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        var orderId = created.Order!.Id;
+        await h.Sut.SetOrderPricingStatusAsync(orderId, OrderPricingStatus.Locked, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var reloaded = await h.Sut.GetByIdAsync(orderId, CancellationToken.None);
+        var updated = await h.Sut.UpdateAsync(orderId,
+            BuildUpdateFrom(reloaded!) with { Notes = "Chauffeur eerst bellen" }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        Assert.Equal(85m, updated.Order!.AgreedPrice);
+        Assert.Equal("Chauffeur eerst bellen", updated.Order.Notes);
+    }
+
     private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d)
     {
         var stopIndexById = d.Stops

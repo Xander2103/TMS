@@ -1903,10 +1903,63 @@ public class TransportOrderService : ITransportOrderService
             return true;
         }
 
+        // Wave 2026-08-04 §6: goods ARE pricing inputs. A locked price must refuse (not silently
+        // ignore) quantity/unit/measure changes and any commercial-cargo-line change — otherwise
+        // the frozen price no longer describes the order's goods and nothing warns anyone.
+        if (OneOffChanged(nameof(TransportOrder.Quantity))
+            || OneOffChanged(nameof(TransportOrder.QuantityUnit))
+            || OneOffChanged(nameof(TransportOrder.QuantityUnitCode))
+            || OneOffChanged(nameof(TransportOrder.WeightKg))
+            || OneOffChanged(nameof(TransportOrder.VolumeM3))
+            || OneOffChanged(nameof(TransportOrder.PalletCount))
+            || OneOffChanged(nameof(TransportOrder.AdrRequired)))
+        {
+            return true;
+        }
+
+        if (CargoPricingInputsChanged(order.Id))
+        {
+            return true;
+        }
+
         var storedServices = await _dbContext.TransportOrderServiceLines
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .ToListAsync(cancellationToken);
         return await ServiceSelectionsChangedAsync(order.CustomerId, order.OrderDate, storedServices, serviceSelections, cancellationToken);
+    }
+
+    /// <summary>Cargo-line properties that feed the pricing engine (quantity/unit/measures/dims/ADR).</summary>
+    private static readonly string[] CargoPricingProperties =
+    [
+        nameof(CargoItem.ExpectedQuantity), nameof(CargoItem.QuantityUnitCode),
+        nameof(CargoItem.TotalWeightKg), nameof(CargoItem.VolumeM3), nameof(CargoItem.PalletCount),
+        nameof(CargoItem.LengthMeters), nameof(CargoItem.WidthMeters), nameof(CargoItem.AdrRequired),
+    ];
+
+    /// <summary>
+    /// Whether the update currently in the change tracker adds/removes a commercial cargo line of
+    /// this order or touches a pricing-relevant property of one. Stop relinking after the
+    /// wholesale stop replacement only moves Loading/UnloadingStopId, which is deliberately NOT
+    /// in the list — an unrelated edit must stay possible on a locked order.
+    /// </summary>
+    private bool CargoPricingInputsChanged(Guid orderId)
+    {
+        foreach (var cargoEntry in _dbContext.ChangeTracker.Entries<CargoItem>()
+                     .Where(e => e.Entity.TransportOrderId == orderId))
+        {
+            if (cargoEntry.State is EntityState.Added or EntityState.Deleted)
+            {
+                return true;
+            }
+
+            if (cargoEntry.State == EntityState.Modified
+                && CargoPricingProperties.Any(p => !Equals(cargoEntry.OriginalValues[p], cargoEntry.CurrentValues[p])))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
