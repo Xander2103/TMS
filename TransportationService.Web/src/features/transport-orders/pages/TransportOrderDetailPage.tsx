@@ -1283,6 +1283,22 @@ export function TransportOrderDetailPage() {
             {order.pricingSnapshot.zoneName ? ` · Zone: ${order.pricingSnapshot.zoneName} (${order.pricingSnapshot.zoneCode})` : ''}
             {order.pricingSnapshot.agreementNames ? ` · Tarief: ${order.pricingSnapshot.agreementNames}` : ''}
           </p>
+          {coverage.length > 0 && (
+            <div className="to-coverage">
+              <h3>Prijsdekking per goederenlijn</h3>
+              <ul>
+                {coverage.map((c, index) => (
+                  <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
+                    <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{PRICING_COVERAGE_LABELS[c.status]}</Badge>{' '}
+                    {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}
+                    {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: € ${c.baseAmount.toFixed(2)}`}
+                    {c.status !== 'Full' && c.reason ? ` — ${c.reason}` : ''}
+                    {c.servicesAmount > 0 && ` · diensten € ${c.servicesAmount.toFixed(2)}`}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <pre className="to-calc-explanation">{order.pricingSnapshot.explanation}</pre>
         </Modal>
       )}
