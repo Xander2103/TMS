@@ -312,11 +312,15 @@ public class TransportationDbContext : DbContext
                     currentTenant));
 
             var body = tenantBody;
-            var existing = entityType.GetQueryFilter();
-            if (existing is not null)
+            foreach (var existing in entityType.GetDeclaredQueryFilters())
             {
+                if (existing.Expression is not { } existingExpression)
+                {
+                    continue;
+                }
+
                 var rebased = Microsoft.EntityFrameworkCore.Query.ReplacingExpressionVisitor.Replace(
-                    existing.Parameters[0], parameter, existing.Body);
+                    existingExpression.Parameters[0], parameter, existingExpression.Body);
                 body = System.Linq.Expressions.Expression.AndAlso(rebased, body);
             }
 

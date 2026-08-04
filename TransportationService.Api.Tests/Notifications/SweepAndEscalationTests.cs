@@ -180,8 +180,8 @@ public class SweepAndEscalationTests
         Assert.Contains(overdue, n => n.UserId == h.ManagerUserId);
 
         // Default TaskOverdue-escalatie (48u) vuurt voor de 72u oude taak.
-        Assert.Single((await h.Notifications("escalation_raised"))
-            .Where(n => n.DedupeKey != null && n.DedupeKey.StartsWith("escalation:task_overdue")));
+        Assert.Single(await h.Notifications("escalation_raised"),
+            n => n.DedupeKey != null && n.DedupeKey.StartsWith("escalation:task_overdue"));
     }
 
     [Fact]
