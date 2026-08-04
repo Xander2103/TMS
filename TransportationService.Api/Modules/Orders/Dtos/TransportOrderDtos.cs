@@ -43,7 +43,11 @@ public record TransportOrderStopDto(
     string? AppointmentReference = null,
     string? AccessInstructions = null,
     string? LoadingInstructions = null,
-    string? UnloadingInstructions = null);
+    string? UnloadingInstructions = null,
+    /// <summary>Wave 2026-08-04 §15: simple time requirement ("Leveren vóór 10:00").</summary>
+    StopTimeRequirementKind TimeRequirement = StopTimeRequirementKind.None,
+    TimeOnly? TimeRequirementFrom = null,
+    TimeOnly? TimeRequirementTo = null);
 
 public record TransportOrderDetailDto(
     Guid Id,
@@ -286,7 +290,11 @@ public record TransportOrderStopInput(
     string? AppointmentReference = null,
     string? AccessInstructions = null,
     string? LoadingInstructions = null,
-    string? UnloadingInstructions = null);
+    string? UnloadingInstructions = null,
+    /// <summary>Wave 2026-08-04 §15: simple time requirement (Before → To, After → From, Window → both).</summary>
+    StopTimeRequirementKind TimeRequirement = StopTimeRequirementKind.None,
+    TimeOnly? TimeRequirementFrom = null,
+    TimeOnly? TimeRequirementTo = null);
 
 /// <summary>
 /// Dispatcher-side execution planning of one stop: the confirmed window, hard bounds,

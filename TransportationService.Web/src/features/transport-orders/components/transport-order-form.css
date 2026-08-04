@@ -104,6 +104,42 @@
   margin: 8px 0 0;
 }
 
+/* Wave 2026-08-04 §13: primary loading stop left, unloading right on desktop; extra stops
+   flow row by row in sequence order. Stacks to one column on tablet/mobile. */
+.tof-stops-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+  align-items: start;
+}
+
+.tof-stops-grid .tof-stop {
+  min-width: 0;
+}
+
+/* Half-width cards: two form columns fit, four don't. */
+.tof-stops-grid .tof-row,
+.tof-stops-grid .tof-row-4 {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 900px) {
+  .tof-stops-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tof-stops-grid .tof-row,
+  .tof-stops-grid .tof-row-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tof-stop-summary {
+  margin: 4px 0;
+  font-size: 14px;
+  color: var(--text-muted, #6b7280);
+}
+
 .tof-stop legend {
   font-size: 14px;
   font-weight: 600;

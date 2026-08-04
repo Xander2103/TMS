@@ -1158,6 +1158,70 @@ public class TransportOrderServiceTests
         Assert.Equal(20, created.Order!.PalletCount);
     }
 
+    // ---- Wave 2026-08-04 §15: simple stop time requirements ------------------------------------
+
+    [Fact]
+    public async Task Create_StopTimeRequirementBefore_RoundTrips_AndDropsIrrelevantTime()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId),
+            Stop(StopType.Unloading, city: "Gent") with
+            {
+                TimeRequirement = StopTimeRequirementKind.Before,
+                TimeRequirementTo = new TimeOnly(10, 0),
+                // A stale "from" of a previously chosen kind must not persist for Before.
+                TimeRequirementFrom = new TimeOnly(8, 0),
+            }), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var unloading = created.Order!.Stops.Single(s => s.StopType == StopType.Unloading);
+        Assert.Equal(StopTimeRequirementKind.Before, unloading.TimeRequirement);
+        Assert.Equal(new TimeOnly(10, 0), unloading.TimeRequirementTo);
+        Assert.Null(unloading.TimeRequirementFrom);
+
+        h.Db.Context.ChangeTracker.Clear();
+        var reloaded = await h.Sut.GetByIdAsync(created.Order.Id, CancellationToken.None);
+        Assert.Equal(new TimeOnly(10, 0), reloaded!.Stops.Single(s => s.StopType == StopType.Unloading).TimeRequirementTo);
+    }
+
+    [Fact]
+    public async Task Create_StopWindowRequirement_EndBeforeStart_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId),
+            Stop(StopType.Unloading, city: "Gent") with
+            {
+                TimeRequirement = StopTimeRequirementKind.Window,
+                TimeRequirementFrom = new TimeOnly(16, 0),
+                TimeRequirementTo = new TimeOnly(14, 0),
+            }), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+        Assert.Contains("tijdvenster", result.Error!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Create_StopTimeRequirementBefore_WithoutTime_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var result = await h.Sut.CreateAsync(Request(h.CustomerId,
+            Stop(StopType.Loading, h.LocationId),
+            Stop(StopType.Unloading, city: "Gent") with
+            {
+                TimeRequirement = StopTimeRequirementKind.Before,
+            }), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, result.Outcome);
+    }
+
     [Fact]
     public async Task StatusChanges_AreRecordedInImmutableHistory()
     {

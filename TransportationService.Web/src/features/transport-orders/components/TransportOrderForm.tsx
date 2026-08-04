@@ -94,8 +94,14 @@ interface StopFormRow {
   postalCode: string
   city: string
   countryCode: string
-  plannedFrom: string
-  plannedTo: string
+  /** §14: one date + optional from/to time replace the raw planned datetime pair. */
+  date: string
+  fromTime: string
+  toTime: string
+  /** §15: simple time requirement ('' = geen specifieke eis). */
+  timeRequirement: '' | 'Before' | 'After' | 'Window'
+  timeReqFrom: string
+  timeReqTo: string
   requestedFrom: string
   requestedTo: string
   confirmedFrom: string
@@ -109,6 +115,8 @@ interface StopFormRow {
   accessInstructions: string
   loadingInstructions: string
   unloadingInstructions: string
+  /** §13: compact card state for orders with many stops. */
+  collapsed: boolean
 }
 
 let stopKeyCounter = 0
@@ -127,8 +135,12 @@ function emptyStop(stopType: StopInput['stopType']): StopFormRow {
     postalCode: '',
     city: '',
     countryCode: 'BE',
-    plannedFrom: '',
-    plannedTo: '',
+    date: '',
+    fromTime: '',
+    toTime: '',
+    timeRequirement: '',
+    timeReqFrom: '',
+    timeReqTo: '',
     requestedFrom: '',
     requestedTo: '',
     confirmedFrom: '',
@@ -142,12 +154,32 @@ function emptyStop(stopType: StopInput['stopType']): StopFormRow {
     accessInstructions: '',
     loadingInstructions: '',
     unloadingInstructions: '',
+    collapsed: false,
   }
 }
 
 /** ISO datetime → value usable by <input type="datetime-local"> (minute precision). */
 function toLocalInput(value: string | null): string {
   return value ? value.slice(0, 16) : ''
+}
+
+/** "10:00:00" (TimeOnly wire format) → "10:00" for <input type="time">. */
+function toTimeInput(value: string | null | undefined): string {
+  return value ? value.slice(0, 5) : ''
+}
+
+/** §15 badge text ("Vóór 10:00") for a stop's time requirement, '' when none. */
+function timeRequirementBadge(stop: Pick<StopFormRow, 'timeRequirement' | 'timeReqFrom' | 'timeReqTo'>): string {
+  switch (stop.timeRequirement) {
+    case 'Before':
+      return stop.timeReqTo ? `Vóór ${stop.timeReqTo}` : ''
+    case 'After':
+      return stop.timeReqFrom ? `Na ${stop.timeReqFrom}` : ''
+    case 'Window':
+      return stop.timeReqFrom && stop.timeReqTo ? `${stop.timeReqFrom}–${stop.timeReqTo}` : ''
+    default:
+      return ''
+  }
 }
 
 interface TransportOrderFormProps {
@@ -214,7 +246,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
 
   const [stops, setStops] = useState<StopFormRow[]>(() =>
     order && order.stops.length > 0
-      ? order.stops.map((s) => ({
+      ? order.stops.map((s, index) => ({
           key: nextStopKey(),
           stopType: s.stopType,
           locationId: s.locationId ?? '',
@@ -223,8 +255,15 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           postalCode: s.postalCode ?? '',
           city: s.city ?? '',
           countryCode: s.countryCode ?? 'BE',
-          plannedFrom: toLocalInput(s.plannedFrom),
-          plannedTo: toLocalInput(s.plannedTo),
+          date: (s.plannedFrom ?? s.plannedTo)?.slice(0, 10) ?? '',
+          // A lone midnight "from" is the wire encoding of a date-only stop — show it as empty.
+          fromTime: s.plannedFrom
+            ? (s.plannedFrom.slice(11, 16) === '00:00' && !s.plannedTo ? '' : s.plannedFrom.slice(11, 16))
+            : '',
+          toTime: s.plannedTo ? s.plannedTo.slice(11, 16) : '',
+          timeRequirement: s.timeRequirement && s.timeRequirement !== 'None' ? s.timeRequirement : '',
+          timeReqFrom: toTimeInput(s.timeRequirementFrom),
+          timeReqTo: toTimeInput(s.timeRequirementTo),
           requestedFrom: toLocalInput(s.requestedFrom),
           requestedTo: toLocalInput(s.requestedTo),
           confirmedFrom: toLocalInput(s.confirmedFrom),
@@ -238,6 +277,8 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           accessInstructions: s.accessInstructions ?? '',
           loadingInstructions: s.loadingInstructions ?? '',
           unloadingInstructions: s.unloadingInstructions ?? '',
+          // Beyond the primary loading/unloading pair stops start compact (§13).
+          collapsed: index >= 2,
         }))
       : [emptyStop('Loading'), emptyStop('Unloading')],
   )
@@ -730,7 +771,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         return
       }
       const windowPairs: Array<[string, string]> = [
-        [stop.plannedFrom, stop.plannedTo],
+        [stop.fromTime, stop.toTime],
         [stop.requestedFrom, stop.requestedTo],
         [stop.confirmedFrom, stop.confirmedTo],
       ]
@@ -741,6 +782,25 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       if (stop.earliestAllowed && stop.latestAllowed && stop.latestAllowed < stop.earliestAllowed) {
         setFormError('Het uiterste tijdstip moet na het vroegst toegelaten tijdstip liggen.')
         return
+      }
+      // §15: the simple time requirement needs the time(s) its kind uses.
+      if (stop.timeRequirement === 'Before' && !stop.timeReqTo) {
+        setFormError('Geef het uur op waarvóór deze stop moet gebeuren.')
+        return
+      }
+      if (stop.timeRequirement === 'After' && !stop.timeReqFrom) {
+        setFormError('Geef het uur op waarvóór deze stop niet mag gebeuren.')
+        return
+      }
+      if (stop.timeRequirement === 'Window') {
+        if (!stop.timeReqFrom || !stop.timeReqTo) {
+          setFormError('Geef het volledige tijdvenster (van en tot) van deze stop op.')
+          return
+        }
+        if (stop.timeReqTo <= stop.timeReqFrom) {
+          setFormError('Het einde van het tijdvenster moet na het begin liggen.')
+          return
+        }
       }
     }
     for (const cargo of cargoItems) {
@@ -826,8 +886,18 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         postalCode: stop.postalCode.trim() || null,
         city: stop.city.trim() || null,
         countryCode: stop.countryCode.trim() || null,
-        plannedFrom: stop.plannedFrom ? `${stop.plannedFrom}:00Z` : null,
-        plannedTo: stop.plannedTo ? `${stop.plannedTo}:00Z` : null,
+        // §14: one date + optional from/to time; a date without times keeps the day itself.
+        plannedFrom: stop.date ? `${stop.date}T${stop.fromTime || '00:00'}:00Z` : null,
+        plannedTo: stop.date && stop.toTime ? `${stop.date}T${stop.toTime}:00Z` : null,
+        timeRequirement: stop.timeRequirement || 'None',
+        timeRequirementFrom:
+          (stop.timeRequirement === 'After' || stop.timeRequirement === 'Window') && stop.timeReqFrom
+            ? stop.timeReqFrom
+            : null,
+        timeRequirementTo:
+          (stop.timeRequirement === 'Before' || stop.timeRequirement === 'Window') && stop.timeReqTo
+            ? stop.timeReqTo
+            : null,
         requestedFrom: stop.requestedFrom ? `${stop.requestedFrom}:00Z` : null,
         requestedTo: stop.requestedTo ? `${stop.requestedTo}:00Z` : null,
         confirmedFrom: stop.confirmedFrom ? `${stop.confirmedFrom}:00Z` : null,
@@ -1006,10 +1076,26 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         </div>
       </div>
 
-      {stops.map((stop, index) => (
+      <div className="tof-stops-grid">
+      {stops.map((stop, index) => {
+        const isUnloading = stop.stopType === 'Unloading'
+        const requirementBadge = timeRequirementBadge(stop)
+        return (
         <fieldset key={stop.key} className="tof-stop">
           <legend>
             {index + 1}. {STOP_TYPE_LABELS[stop.stopType]}
+            {requirementBadge && (
+              <>
+                {' '}
+                <Badge tone="info">{requirementBadge}</Badge>
+              </>
+            )}
+            {stop.appointmentRequired && (
+              <>
+                {' '}
+                <Badge tone="warning">Afspraak</Badge>
+              </>
+            )}
           </legend>
           <div className="tof-stop-toolbar">
             <select
@@ -1029,6 +1115,14 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
             </button>
             <button
               type="button"
+              className="tof-link"
+              onClick={() => setStop(stop.key, { collapsed: !stop.collapsed })}
+              disabled={saving}
+            >
+              {stop.collapsed ? 'Uitklappen' : 'Inklappen'}
+            </button>
+            <button
+              type="button"
               className="tof-link tof-link-danger"
               onClick={() => setStops((rows) => rows.filter((row) => row.key !== stop.key))}
               disabled={saving}
@@ -1036,6 +1130,16 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               Verwijderen
             </button>
           </div>
+          {stop.collapsed ? (
+            <p className="tof-stop-summary">
+              {stop.locationId ? 'Locatie uit stamgegevens' : stop.city || stop.locationName || 'Nog geen adres'}
+              {stop.date ? ` · ${stop.date}` : ''}
+              {stop.fromTime || stop.toTime
+                ? ` ${stop.fromTime || '…'}${stop.toTime ? ` – ${stop.toTime}` : ''}`
+                : ''}
+            </p>
+          ) : (
+          <>
           <div className="tof-row">
             <FormField label="Locatie (stamgegevens)" htmlFor={`st-loc-${stop.key}`}>
               <LocationSelect
@@ -1084,15 +1188,55 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
             </div>
           )}
           <div className="tof-row tof-row-4">
-            <FormField label="Venster van" htmlFor={`st-from-${stop.key}`}>
-              <input id={`st-from-${stop.key}`} type="datetime-local" value={stop.plannedFrom} onChange={(e) => setStop(stop.key, { plannedFrom: e.target.value })} disabled={saving} />
+            <FormField label={stop.stopType === 'Loading' ? 'Laaddatum' : 'Losdatum'} htmlFor={`st-date-${stop.key}`}>
+              <input id={`st-date-${stop.key}`} type="date" value={stop.date} onChange={(e) => setStop(stop.key, { date: e.target.value })} disabled={saving} />
             </FormField>
-            <FormField label="Venster tot" htmlFor={`st-to-${stop.key}`}>
-              <input id={`st-to-${stop.key}`} type="datetime-local" value={stop.plannedTo} onChange={(e) => setStop(stop.key, { plannedTo: e.target.value })} disabled={saving} />
+            <FormField label="Van" htmlFor={`st-fromtime-${stop.key}`} hint="Optioneel.">
+              <input id={`st-fromtime-${stop.key}`} type="time" value={stop.fromTime} onChange={(e) => setStop(stop.key, { fromTime: e.target.value })} disabled={saving} />
+            </FormField>
+            <FormField label="Tot" htmlFor={`st-totime-${stop.key}`} hint="Optioneel.">
+              <input id={`st-totime-${stop.key}`} type="time" value={stop.toTime} onChange={(e) => setStop(stop.key, { toTime: e.target.value })} disabled={saving} />
             </FormField>
             <FormField label="Referentie" htmlFor={`st-ref-${stop.key}`}>
               <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
             </FormField>
+          </div>
+          <div className="tof-row tof-row-4">
+            <FormField label="Tijdseis" htmlFor={`st-timereq-${stop.key}`}>
+              <select
+                id={`st-timereq-${stop.key}`}
+                value={stop.timeRequirement}
+                onChange={(e) => setStop(stop.key, { timeRequirement: e.target.value as StopFormRow['timeRequirement'] })}
+                disabled={saving}
+              >
+                <option value="">Geen specifieke eis</option>
+                <option value="Before">{isUnloading ? 'Leveren vóór' : 'Laden vóór'}</option>
+                <option value="After">{isUnloading ? 'Niet leveren vóór' : 'Niet laden vóór'}</option>
+                <option value="Window">{isUnloading ? 'Exact levervenster' : 'Exact laadvenster'}</option>
+              </select>
+            </FormField>
+            {(stop.timeRequirement === 'After' || stop.timeRequirement === 'Window') && (
+              <FormField
+                label={stop.timeRequirement === 'Window' ? 'Venster van' : 'Niet vóór'}
+                htmlFor={`st-timereqfrom-${stop.key}`}
+              >
+                <input id={`st-timereqfrom-${stop.key}`} type="time" value={stop.timeReqFrom} onChange={(e) => setStop(stop.key, { timeReqFrom: e.target.value })} disabled={saving} />
+              </FormField>
+            )}
+            {(stop.timeRequirement === 'Before' || stop.timeRequirement === 'Window') && (
+              <FormField
+                label={stop.timeRequirement === 'Window' ? 'Venster tot' : 'Vóór'}
+                htmlFor={`st-timereqto-${stop.key}`}
+              >
+                <input id={`st-timereqto-${stop.key}`} type="time" value={stop.timeReqTo} onChange={(e) => setStop(stop.key, { timeReqTo: e.target.value })} disabled={saving} />
+              </FormField>
+            )}
+            <label className="tof-checkbox">
+              <input type="checkbox" checked={stop.appointmentRequired} onChange={(e) => setStop(stop.key, { appointmentRequired: e.target.checked })} disabled={saving} />
+              Afspraak verplicht
+            </label>
+          </div>
+          <div className="tof-row">
             <FormField label="Instructies" htmlFor={`st-instr-${stop.key}`}>
               <input id={`st-instr-${stop.key}`} value={stop.instructions} onChange={(e) => setStop(stop.key, { instructions: e.target.value })} disabled={saving} maxLength={2000} />
             </FormField>
@@ -1101,11 +1245,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
             className="tof-stop-extended"
             open={Boolean(
               stop.requestedFrom || stop.requestedTo || stop.confirmedFrom || stop.confirmedTo ||
-              stop.earliestAllowed || stop.latestAllowed || stop.appointmentRequired ||
+              stop.earliestAllowed || stop.latestAllowed ||
               stop.accessInstructions || stop.loadingInstructions || stop.unloadingInstructions,
             )}
           >
-            <summary>Tijdvensters, afspraak &amp; instructies</summary>
+            <summary>Geavanceerde tijdvensters</summary>
             <div className="tof-row tof-row-4">
               <FormField label="Gevraagd van" htmlFor={`st-reqfrom-${stop.key}`} hint="Venster gevraagd door de klant">
                 <input id={`st-reqfrom-${stop.key}`} type="datetime-local" value={stop.requestedFrom} onChange={(e) => setStop(stop.key, { requestedFrom: e.target.value })} disabled={saving} />
@@ -1127,10 +1271,6 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               <FormField label="Uiterste tijdstip" htmlFor={`st-latest-${stop.key}`} hint="Na dit tijdstip is een reden voor late aankomst verplicht">
                 <input id={`st-latest-${stop.key}`} type="datetime-local" value={stop.latestAllowed} onChange={(e) => setStop(stop.key, { latestAllowed: e.target.value })} disabled={saving} />
               </FormField>
-              <label className="tof-checkbox">
-                <input type="checkbox" checked={stop.appointmentRequired} onChange={(e) => setStop(stop.key, { appointmentRequired: e.target.checked })} disabled={saving} />
-                Afspraak verplicht
-              </label>
               <FormField label="Afspraakreferentie" htmlFor={`st-appref-${stop.key}`}>
                 <input id={`st-appref-${stop.key}`} value={stop.appointmentReference} onChange={(e) => setStop(stop.key, { appointmentReference: e.target.value })} disabled={saving} maxLength={100} placeholder="bv. slotnummer" />
               </FormField>
@@ -1150,8 +1290,12 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               )}
             </div>
           </details>
+          </>
+          )}
         </fieldset>
-      ))}
+        )
+      })}
+      </div>
     </>
   )
 

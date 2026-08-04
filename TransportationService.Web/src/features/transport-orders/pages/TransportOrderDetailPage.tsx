@@ -68,6 +68,22 @@ function money(amount: number): string {
   return amount.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
 }
 
+/** §15 badge ("Vóór 10:00") for a stop's simple time requirement; '' when none. */
+function stopTimeRequirementBadge(stop: TransportOrderStop): string {
+  const from = stop.timeRequirementFrom?.slice(0, 5)
+  const to = stop.timeRequirementTo?.slice(0, 5)
+  switch (stop.timeRequirement) {
+    case 'Before':
+      return to ? `Vóór ${to}` : ''
+    case 'After':
+      return from ? `Na ${from}` : ''
+    case 'Window':
+      return from && to ? `${from}–${to}` : ''
+    default:
+      return ''
+  }
+}
+
 /** "04/08/2026 om 20:59" — the confirmation stamp next to the prominent total (§9). */
 function formatConfirmedStamp(isoUtc: string): string {
   const date = new Date(isoUtc.endsWith('Z') ? isoUtc : `${isoUtc}Z`)
@@ -824,6 +840,7 @@ export function TransportOrderDetailPage() {
                   <th>Locatie</th>
                   <th>Adres</th>
                   <th>Gepland</th>
+                  <th>Tijdseis</th>
                   <th>Gevraagd</th>
                   <th>Bevestigd</th>
                   <th>Afspraak</th>
@@ -844,6 +861,13 @@ export function TransportOrderDetailPage() {
                     </td>
                     <td>{[stop.address, [stop.postalCode, stop.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '—'}</td>
                     <td>{formatWindow(stop.plannedFrom, stop.plannedTo)}</td>
+                    <td>
+                      {stopTimeRequirementBadge(stop) ? (
+                        <Badge tone="info">{stopTimeRequirementBadge(stop)}</Badge>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td>{formatWindow(stop.requestedFrom, stop.requestedTo)}</td>
                     <td>{formatWindow(stop.confirmedFrom, stop.confirmedTo)}</td>
                     <td>

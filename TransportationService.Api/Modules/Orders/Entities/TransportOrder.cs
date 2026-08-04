@@ -160,6 +160,22 @@ public class TransportOrder : AuditableTenantEntity
     public List<TransportOrderStop> Stops { get; set; } = [];
 }
 
+/// <summary>Wave 2026-08-04 §15: simple per-stop time requirement kinds.</summary>
+public enum StopTimeRequirementKind
+{
+    /// <summary>Geen specifieke eis.</summary>
+    None = 0,
+
+    /// <summary>Vóór een uur (leveren/laden vóór TimeRequirementTo).</summary>
+    Before = 1,
+
+    /// <summary>Na een uur (niet vóór TimeRequirementFrom).</summary>
+    After = 2,
+
+    /// <summary>Exact tijdvenster (TimeRequirementFrom – TimeRequirementTo).</summary>
+    Window = 3,
+}
+
 /// <summary>
 /// One loading or unloading stop of an order, ordered by <see cref="Sequence"/>. Either a master
 /// location is referenced or a free address is entered inline (ad-hoc addresses without master data).
@@ -194,6 +210,21 @@ public class TransportOrderStop : AuditableTenantEntity
 
     public bool AppointmentRequired { get; set; }
     public string? AppointmentReference { get; set; }
+
+    /// <summary>
+    /// Wave 2026-08-04 §15: the user-friendly time requirement of this stop ("Leveren vóór
+    /// 10:00"). Distinct from the four raw window pairs above: this is the COMMERCIAL promise
+    /// that also drives time-based surcharges (§16). Before uses <see cref="TimeRequirementTo"/>,
+    /// After uses <see cref="TimeRequirementFrom"/>, Window uses both. "Afspraak verplicht"
+    /// remains the existing <see cref="AppointmentRequired"/> flag.
+    /// </summary>
+    public StopTimeRequirementKind TimeRequirement { get; set; } = StopTimeRequirementKind.None;
+
+    /// <summary>Not before this time (After / start of Window).</summary>
+    public TimeOnly? TimeRequirementFrom { get; set; }
+
+    /// <summary>Before this time (Before / end of Window).</summary>
+    public TimeOnly? TimeRequirementTo { get; set; }
 
     /// <summary>Stop-level reference (dossier, container number, booking slot, ...).</summary>
     public string? Reference { get; set; }

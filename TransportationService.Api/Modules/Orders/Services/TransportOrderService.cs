@@ -371,6 +371,7 @@ public class TransportOrderService : ITransportOrderService
 
         var before = new {
             order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count, Cargo = cargoBefore,
+            StopRequirements = SummarizeStopRequirements(order.Stops),
             order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
             order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
         };
@@ -469,6 +470,7 @@ public class TransportOrderService : ITransportOrderService
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Updated", before,
             new {
                 order.CustomerId, order.GoodsDescription, StopCount = order.Stops.Count, Cargo = cargoAfter,
+                StopRequirements = SummarizeStopRequirements(order.Stops),
                 order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
                 order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
             }, cancellationToken);
@@ -1007,6 +1009,25 @@ public class TransportOrderService : ITransportOrderService
                 return TransportOrderOperationResult.Invalid(
                     "Het uiterste tijdstip moet na het vroegst toegelaten tijdstip liggen.");
             }
+
+            // §15: the simple time requirement needs the time(s) its kind uses.
+            switch (stop.TimeRequirement)
+            {
+                case StopTimeRequirementKind.Before when stop.TimeRequirementTo is null:
+                    return TransportOrderOperationResult.Invalid(
+                        "Geef het uur op waarvóór deze stop moet gebeuren.");
+                case StopTimeRequirementKind.After when stop.TimeRequirementFrom is null:
+                    return TransportOrderOperationResult.Invalid(
+                        "Geef het uur op waarvóór deze stop niet mag gebeuren.");
+                case StopTimeRequirementKind.Window
+                    when stop.TimeRequirementFrom is null || stop.TimeRequirementTo is null:
+                    return TransportOrderOperationResult.Invalid(
+                        "Geef het volledige tijdvenster (van en tot) van deze stop op.");
+                case StopTimeRequirementKind.Window
+                    when stop.TimeRequirementTo <= stop.TimeRequirementFrom:
+                    return TransportOrderOperationResult.Invalid(
+                        "Het einde van het tijdvenster moet na het begin liggen.");
+            }
         }
 
         var locationIds = stops.Where(s => s.LocationId is not null).Select(s => s.LocationId!.Value).Distinct().ToList();
@@ -1246,6 +1267,20 @@ public class TransportOrderService : ITransportOrderService
         return null;
     }
 
+    /// <summary>Readable per-stop time-requirement summary for the Updated audit trail (§19).</summary>
+    private static List<string> SummarizeStopRequirements(IEnumerable<TransportOrderStop> stops) =>
+        stops
+            .Where(s => !s.IsDeleted)
+            .OrderBy(s => s.Sequence)
+            .Select(s => s.TimeRequirement switch
+            {
+                StopTimeRequirementKind.Before => $"{s.StopType}: vóór {s.TimeRequirementTo:HH\\:mm}",
+                StopTimeRequirementKind.After => $"{s.StopType}: na {s.TimeRequirementFrom:HH\\:mm}",
+                StopTimeRequirementKind.Window => $"{s.StopType}: {s.TimeRequirementFrom:HH\\:mm}–{s.TimeRequirementTo:HH\\:mm}",
+                _ => $"{s.StopType}: geen tijdseis",
+            } + (s.AppointmentRequired ? " (afspraak verplicht)" : string.Empty))
+            .ToList();
+
     private List<TransportOrderStop> BuildStops(IReadOnlyList<TransportOrderStopInput> inputs) =>
         inputs.Select((input, index) => new TransportOrderStop
         {
@@ -1269,6 +1304,15 @@ public class TransportOrderService : ITransportOrderService
             LatestAllowed = input.LatestAllowed,
             AppointmentRequired = input.AppointmentRequired,
             AppointmentReference = Trim(input.AppointmentReference),
+            // §15: only the fields the chosen kind actually uses are stored — a leftover time
+            // from a previously chosen kind must never linger.
+            TimeRequirement = input.TimeRequirement,
+            TimeRequirementFrom = input.TimeRequirement is StopTimeRequirementKind.After or StopTimeRequirementKind.Window
+                ? input.TimeRequirementFrom
+                : null,
+            TimeRequirementTo = input.TimeRequirement is StopTimeRequirementKind.Before or StopTimeRequirementKind.Window
+                ? input.TimeRequirementTo
+                : null,
             Reference = Trim(input.Reference),
             Instructions = Trim(input.Instructions),
             AccessInstructions = Trim(input.AccessInstructions),
@@ -1312,7 +1356,8 @@ public class TransportOrderService : ITransportOrderService
                     s.RequestedFrom, s.RequestedTo, s.ConfirmedFrom, s.ConfirmedTo,
                     s.EarliestAllowed, s.LatestAllowed,
                     s.AppointmentRequired, s.AppointmentReference,
-                    s.AccessInstructions, s.LoadingInstructions, s.UnloadingInstructions);
+                    s.AccessInstructions, s.LoadingInstructions, s.UnloadingInstructions,
+                    s.TimeRequirement, s.TimeRequirementFrom, s.TimeRequirementTo);
             })
             .ToList();
 

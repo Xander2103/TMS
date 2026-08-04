@@ -63,6 +63,7 @@ public class TransportOrderStopConfiguration : IEntityTypeConfiguration<Transpor
         builder.HasKey(s => s.Id);
 
         builder.Property(s => s.StopType).HasConversion<string>().HasMaxLength(20);
+        builder.Property(s => s.TimeRequirement).HasConversion<string>().HasMaxLength(20);
         builder.Property(s => s.LocationName).HasMaxLength(200);
         builder.Property(s => s.Address).HasMaxLength(300);
         builder.Property(s => s.PostalCode).HasMaxLength(20);

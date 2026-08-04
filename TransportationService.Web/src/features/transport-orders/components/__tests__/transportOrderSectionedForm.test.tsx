@@ -378,7 +378,7 @@ describe('TransportOrderForm sections + pricing', () => {
       extraTimeRoundingStepMinutes: 15,
       extraTimeMinimumBillableMinutes: null,
     }))
-  })
+  }, 15000)
 
   it('lists an informational not-applied service line from the preview under "Niet toegepast"', async () => {
     previewSpy.mockResolvedValueOnce({
@@ -528,7 +528,7 @@ describe('TransportOrderForm sections + pricing', () => {
         expect.objectContaining({ serviceOptionId: 'opt-wacht', note: 'Afgesproken met klant' }),
       ]),
     }))
-  })
+  }, 15000)
 
   it('shows the customer label with a favourite star in the unit selector', async () => {
     renderForm()
@@ -875,5 +875,107 @@ describe('TransportOrderForm derived goods summary (wave 2026-08-04 §2)', () =>
     expect(screen.getByText(/Totaal gewicht: 120 kg/)).toBeInTheDocument()
     expect(screen.queryByLabelText('Aantal')).not.toBeInTheDocument()
     expect(screen.getByDisplayValue('120')).toBeInTheDocument()
+  })
+})
+
+describe('TransportOrderForm stops layout & simple time input (wave 2026-08-04 §13-15)', () => {
+  beforeEach(() => {
+    auth.permissions = new Set(['locations.create'])
+  })
+
+  it('renders the two default stops in a two-column grid with simple date/from/to fields', async () => {
+    renderForm()
+    await waitFor(() => expect(screen.getByLabelText('Klant *')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
+
+    expect(document.querySelector('.tof-stops-grid')).toBeTruthy()
+    expect(screen.getByLabelText('Laaddatum')).toBeInTheDocument()
+    expect(screen.getByLabelText('Losdatum')).toBeInTheDocument()
+    expect(screen.getAllByLabelText('Van')).toHaveLength(2)
+    expect(screen.getAllByLabelText('Tot')).toHaveLength(2)
+    // Advanced windows stay available but collapsed by default.
+    expect(screen.getAllByText('Geavanceerde tijdvensters')).toHaveLength(2)
+    const advanced = document.querySelectorAll('details.tof-stop-extended')
+    expect(advanced).toHaveLength(2)
+    for (const details of advanced) {
+      expect(details.hasAttribute('open')).toBe(false)
+    }
+  })
+
+  it('offers delivery-friendly time requirement labels and shows the badge', async () => {
+    renderForm()
+    await fillMinimalRouteAndCustomer()
+
+    const selects = screen.getAllByLabelText('Tijdseis')
+    // Loading stop labels.
+    expect(within(selects[0]).getByRole('option', { name: 'Laden vóór' })).toBeInTheDocument()
+    // Unloading stop labels.
+    expect(within(selects[1]).getByRole('option', { name: 'Leveren vóór' })).toBeInTheDocument()
+    expect(within(selects[1]).getByRole('option', { name: 'Niet leveren vóór' })).toBeInTheDocument()
+    expect(within(selects[1]).getByRole('option', { name: 'Exact levervenster' })).toBeInTheDocument()
+
+    await userEvent.selectOptions(selects[1], 'Before')
+    await userEvent.type(screen.getByLabelText('Vóór'), '10:00')
+
+    expect(screen.getByText('Vóór 10:00')).toBeInTheDocument()
+  })
+
+  it('submits the simple date/time fields and the time requirement in the payload', async () => {
+    const { onSubmit } = renderForm()
+    await fillMinimalRouteAndCustomer()
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Omschrijving goederen'), 'Goederen')
+    await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
+
+    await userEvent.type(screen.getByLabelText('Losdatum'), '2026-08-12')
+    const unloadingVan = screen.getAllByLabelText('Van')[1]
+    const unloadingTot = screen.getAllByLabelText('Tot')[1]
+    await userEvent.type(unloadingVan, '08:00')
+    await userEvent.type(unloadingTot, '10:00')
+    const selects = screen.getAllByLabelText('Tijdseis')
+    await userEvent.selectOptions(selects[1], 'Before')
+    await userEvent.type(screen.getByLabelText('Vóór'), '10:00')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+
+    const input = onSubmit.mock.calls[0][0]
+    const unloading = input.stops[1]
+    expect(unloading.plannedFrom).toBe('2026-08-12T08:00:00Z')
+    expect(unloading.plannedTo).toBe('2026-08-12T10:00:00Z')
+    expect(unloading.timeRequirement).toBe('Before')
+    expect(unloading.timeRequirementTo).toBe('10:00')
+    expect(unloading.timeRequirementFrom).toBeNull()
+    expect(input.stops[0].timeRequirement).toBe('None')
+  })
+
+  it('rejects a Before requirement without a time', async () => {
+    const { onSubmit } = renderForm()
+    await fillMinimalRouteAndCustomer()
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Omschrijving goederen'), 'Goederen')
+    await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
+
+    const selects = screen.getAllByLabelText('Tijdseis')
+    await userEvent.selectOptions(selects[1], 'Before')
+    await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
+
+    expect(await screen.findByText('Geef het uur op waarvóór deze stop moet gebeuren.')).toBeInTheDocument()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('collapses a stop to a compact summary card and expands it again', async () => {
+    renderForm()
+    await fillMinimalRouteAndCustomer()
+    await userEvent.type(screen.getByLabelText('Losdatum'), '2026-08-12')
+
+    const collapseButtons = screen.getAllByRole('button', { name: 'Inklappen' })
+    await userEvent.click(collapseButtons[1])
+
+    expect(screen.queryByLabelText('Losdatum')).not.toBeInTheDocument()
+    expect(screen.getByText(/Gent · 2026-08-12/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Uitklappen' }))
+    expect(screen.getByLabelText('Losdatum')).toBeInTheDocument()
   })
 })

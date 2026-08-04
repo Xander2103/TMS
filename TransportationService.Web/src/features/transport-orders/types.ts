@@ -105,7 +105,15 @@ export interface TransportOrderStop {
   accessInstructions: string | null
   loadingInstructions: string | null
   unloadingInstructions: string | null
+  /** Wave 2026-08-04 §15: simple time requirement ("Leveren vóór 10:00"). */
+  timeRequirement?: StopTimeRequirementKind
+  /** "HH:mm:ss" wire format (TimeOnly). */
+  timeRequirementFrom?: string | null
+  timeRequirementTo?: string | null
 }
+
+/** Wave 2026-08-04 §15. */
+export type StopTimeRequirementKind = 'None' | 'Before' | 'After' | 'Window'
 
 export interface CargoItem {
   id: string
@@ -398,6 +406,10 @@ export interface StopInput {
   accessInstructions: string | null
   loadingInstructions: string | null
   unloadingInstructions: string | null
+  /** Wave 2026-08-04 §15: simple time requirement; "HH:mm" times. */
+  timeRequirement?: StopTimeRequirementKind
+  timeRequirementFrom?: string | null
+  timeRequirementTo?: string | null
 }
 
 /** Dispatcher-side execution planning of one stop (separate endpoint, editable after planning). */
