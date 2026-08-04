@@ -41,6 +41,23 @@ public class PricingEngine : IPricingEngine
 
         var zone = await ResolveZoneAsync(request.DeliveryCountryCode, request.DeliveryPostalCode, cancellationToken);
 
+        var unitTypeIds = request.Lines.Select(l => l.UnitTypeId).Distinct().ToList();
+        var unitNames = await _dbContext.UnitTypes.AsNoTracking()
+            .Where(u => u.TenantId == tenantId && unitTypeIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
+
+        // Wave 2026-08-04 §7: one coverage entry per unit line the engine received; the status is
+        // finalized in FinalizeAsync once per-unit services are known.
+        var coverage = request.Lines
+            .Select(l => new CoverageWork
+            {
+                UnitTypeId = l.UnitTypeId,
+                UnitLabel = unitNames.GetValueOrDefault(l.UnitTypeId, "eenheid"),
+                Quantity = l.Quantity,
+                Reason = "Geen passend basistarief",
+            })
+            .ToList();
+
         // One-off order pricing (spec Phase 6): the order carries its own price agreement — no
         // contract is consulted at all (no candidate loading, no agreement post-processing, no
         // "missing tariff" diagnostics). Services + diesel still run as usual, below.
@@ -63,15 +80,18 @@ public class PricingEngine : IPricingEngine
                 oneOff.IncludedLoadingMinutes, oneOff.IncludedUnloadingMinutes, oneOff.IncludedCombinedMinutes,
                 oneOff.ExtraHourlyRate, request.ActualLoadingMinutes, request.ActualUnloadingMinutes));
 
+            // The one-off amount prices the whole order — every unit line is covered by it.
+            foreach (var item in coverage)
+            {
+                item.BasePriced = true;
+                item.BaseRuleName = "Eenmalige prijsafspraak";
+                item.Reason = null;
+            }
+
             return await FinalizeAsync(
                 request, lines, requiresManual: false, configurationError: null,
-                zone, unitNames: new Dictionary<Guid, string>(), cancellationToken);
+                zone, unitNames, cancellationToken, coverage: coverage);
         }
-
-        var unitTypeIds = request.Lines.Select(l => l.UnitTypeId).Distinct().ToList();
-        var unitNames = await _dbContext.UnitTypes.AsNoTracking()
-            .Where(u => u.TenantId == tenantId && unitTypeIds.Contains(u.Id))
-            .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
 
         // This customer's assignments to shared rate tables, active on the tariff date. A shared
         // agreement (IsShared) never applies on its own — only through a matching assignment here.
@@ -189,7 +209,7 @@ public class PricingEngine : IPricingEngine
         // degression): the eligible base for a discount is apportioned from these RAW base
         // amounts, never from a post-modifier/assignment subtotal.
         var unitLineByUnitTypeId = new Dictionary<Guid, PriceBreakdownLine>();
-        foreach (var line in request.Lines)
+        foreach (var (line, coverageItem) in request.Lines.Zip(coverage))
         {
             var unitName = unitNames.GetValueOrDefault(line.UnitTypeId, "eenheid");
             var forUnit = allCandidates
@@ -202,6 +222,7 @@ public class PricingEngine : IPricingEngine
                     + string.Join(" én ", conflicts.Select(c => $"'{c.Rule.Name}'"))
                     + ". Corrigeer de tarieven (geldigheid, zone of prioriteit).";
                 lines.Add(new PriceBreakdownLine(configurationError, 0m, "Configuratiefout"));
+                coverageItem.Reason = "Conflicterende tariefregels";
                 requiresManual = true;
                 continue;
             }
@@ -229,6 +250,7 @@ public class PricingEngine : IPricingEngine
             {
                 lines.Add(new PriceBreakdownLine($"Geen staffel voor {billable:0.##} × {unitName}", 0m, rule.Name,
                     RuleId: rule.Id, RuleName: rule.Name, LineKey: RuleLineKey(rule.Id)));
+                coverageItem.Reason = $"Geen staffel voor {billable:0.##} × {unitName}";
                 requiresManual = true;
                 continue;
             }
@@ -243,6 +265,10 @@ public class PricingEngine : IPricingEngine
                 ActualQuantity: line.Quantity, BillableQuantity: billable, LineKey: RuleLineKey(rule.Id));
             lines.Add(unitLine);
             unitLineByUnitTypeId[line.UnitTypeId] = unitLine;
+            coverageItem.BasePriced = true;
+            coverageItem.BaseAmount = unitLine.Amount;
+            coverageItem.BaseRuleName = rule.Name;
+            coverageItem.Reason = null;
         }
 
         // --- Order-level rules (no unit): forfaits, km/pallet/ton components ------------------
@@ -319,6 +345,13 @@ public class PricingEngine : IPricingEngine
                 lines.RemoveAll(l => l.Source == "Ontbrekend" && !l.Informational);
                 requiresManual = configurationError is not null;
                 anyRuleMatched = true;
+                // The order-level tariff covers every unit line that had no own rule.
+                foreach (var item in coverage.Where(c => !c.BasePriced))
+                {
+                    item.BasePriced = true;
+                    item.BaseRuleName = "Ordertarief";
+                    item.Reason = null;
+                }
             }
         }
 
@@ -604,7 +637,7 @@ public class PricingEngine : IPricingEngine
             ? BuildIncludedTimeInfo(null, null, null, null, request.IncludedTimeOverrides)
             : new IncludedTimeInfoDto(null, null, null, null, "Geen");
 
-        return await FinalizeAsync(request, lines, requiresManual, configurationError, zone, unitNames, cancellationToken, includedTimeInfo);
+        return await FinalizeAsync(request, lines, requiresManual, configurationError, zone, unitNames, cancellationToken, includedTimeInfo, coverage);
     }
 
     private static string RuleLineKey(Guid ruleId) => $"rule:{ruleId}";
@@ -616,10 +649,27 @@ public class PricingEngine : IPricingEngine
     /// diagnostics and the final totals. Used by both contract-mode pricing and one-off pricing
     /// (spec Phase 6), which skips straight here after producing its own header line(s).
     /// </summary>
+    /// <summary>
+    /// Working state for one unit line's pricing coverage (wave 2026-08-04 §7) — finalized into
+    /// <see cref="PricingCoverageLine"/> records in <see cref="FinalizeAsync"/> once the per-unit
+    /// service amounts are known.
+    /// </summary>
+    private sealed class CoverageWork
+    {
+        public Guid UnitTypeId { get; init; }
+        public string UnitLabel { get; init; } = "eenheid";
+        public decimal Quantity { get; init; }
+        public bool BasePriced { get; set; }
+        public decimal BaseAmount { get; set; }
+        public string? BaseRuleName { get; set; }
+        public string? Reason { get; set; }
+        public decimal ServicesAmount { get; set; }
+    }
+
     private async Task<PriceCalculationResult> FinalizeAsync(
         PriceCalculationRequest request, List<PriceBreakdownLine> lines, bool requiresManual, string? configurationError,
         PricingZone? zone, IReadOnlyDictionary<Guid, string> unitNames, CancellationToken cancellationToken,
-        IncludedTimeInfoDto? includedTimeInfo = null)
+        IncludedTimeInfoDto? includedTimeInfo = null, List<CoverageWork>? coverage = null)
     {
         var tenantId = _tenantContext.TenantId;
         var subtotalBeforeServices = lines.Where(l => !l.Informational && !l.Proposed).Sum(l => l.Amount);
@@ -862,6 +912,14 @@ public class PricingEngine : IPricingEngine
                 ActualQuantity: quantity, BillableQuantity: quantity, LineKey: $"service:{option.Id}", ServiceOptionId: option.Id));
             serviceLines.Add(new PriceServiceLine(
                 option.Id, option.Name, option.Kind, value, amount, quantity, invoiceLabel, source, isAutoApplied));
+
+            // Coverage (wave 2026-08-04 §7): a per-unit service bills a specific unit line —
+            // recorded so an otherwise unpriced unit shows "Gedeeltelijk geprijsd", never "Volledig".
+            if (option.Kind == SurchargeKind.PerUnit && option.UnitTypeId is { } coveredUnitId
+                && coverage?.FirstOrDefault(c => c.UnitTypeId == coveredUnitId) is { } coveredItem)
+            {
+                coveredItem.ServicesAmount += amount;
+            }
         }
 
         var total = lines.Where(l => !l.Informational && !l.Proposed).Sum(l => l.Amount);
@@ -902,7 +960,14 @@ public class PricingEngine : IPricingEngine
             lines, decimal.Round(total, 2), decimal.Round(totalWithInformational, 2), "EUR",
             zone?.Code, zone?.Name, requiresManual, serviceLines,
             TariffDate: request.Date, ConfigurationError: configurationError, Diagnostics: diagnostics,
-            TotalWithProposed: decimal.Round(totalWithProposed, 2), IncludedTimeInfo: includedTimeInfo);
+            TotalWithProposed: decimal.Round(totalWithProposed, 2), IncludedTimeInfo: includedTimeInfo,
+            Coverage: coverage?
+                .Select(c => new PricingCoverageLine(
+                    c.UnitTypeId, c.UnitLabel, c.Quantity,
+                    c.BasePriced ? "Full" : c.ServicesAmount > 0m ? "Partial" : "None",
+                    c.BaseAmount, c.BaseRuleName, c.ServicesAmount,
+                    c.BasePriced ? null : c.Reason))
+                .ToList());
     }
 
     /// <summary>

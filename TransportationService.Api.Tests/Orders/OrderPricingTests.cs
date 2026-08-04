@@ -635,6 +635,82 @@ public class OrderPricingTests
         Assert.Equal("Chauffeur eerst bellen", updated.Order.Notes);
     }
 
+    // --- Wave 2026-08-04 §7: pricing coverage per goods line ------------------------------------
+
+    [Fact]
+    public async Task Coverage_MixedUnits_ReportsFullAndNone_OnSnapshot()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        await AddUnitTypeAsync(h, "DOOS", "Doos");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+        [
+            new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET"),
+            new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "DOOS"),
+        ]), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var coverage = created.Order!.PricingSnapshot!.Coverage!;
+        var pallet = Assert.Single(coverage, c => c.UnitLabel == "Europallet");
+        Assert.Equal("Full", pallet.Status);
+        Assert.Equal(85m, pallet.BaseAmount);
+        Assert.Equal("Pallets klant X", pallet.BaseRuleName);
+        var doos = Assert.Single(coverage, c => c.UnitLabel == "Doos");
+        Assert.Equal("None", doos.Status);
+        Assert.Equal(2m, doos.Quantity);
+        Assert.Equal("Geen passend basistarief", doos.Reason);
+    }
+
+    [Fact]
+    public async Task Coverage_PerUnitServiceOnUnpricedUnit_IsPartial_NeverFull()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        var doosUnitId = Guid.NewGuid();
+        h.Db.Context.UnitTypes.Add(new UnitType { Id = doosUnitId, TenantId = h.TenantId, Code = "DOOS", Name = "Doos", IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+        await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "PICK", "Picking", SurchargeKind.PerUnit, 1.25m, true, 0,
+            UnitTypeId: doosUnitId, AutoApply: true), CancellationToken.None);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+        [
+            new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "DOOS"),
+        ]), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var doos = Assert.Single(created.Order!.PricingSnapshot!.Coverage!, c => c.UnitLabel == "Doos");
+        // Picking bills the Doos, but a service never counts as transport pricing.
+        Assert.Equal("Partial", doos.Status);
+        Assert.Equal(2.5m, doos.ServicesAmount);
+        Assert.Equal(0m, doos.BaseAmount);
+        Assert.Equal("Geen passend basistarief", doos.Reason);
+    }
+
+    [Fact]
+    public async Task Coverage_UncodedCargoLine_ReportsNone_WithMissingUnitReason()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+        [
+            new CargoItemInput("Losse goederen", null, 3, "zakken", null),
+            new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET"),
+        ]), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var coverage = created.Order!.PricingSnapshot!.Coverage!;
+        var uncoded = Assert.Single(coverage, c => c.UnitLabel == "zakken");
+        Assert.Equal("None", uncoded.Status);
+        Assert.Equal("Geen eenheid gekozen voor deze goederenlijn", uncoded.Reason);
+        Assert.Equal("Full", Assert.Single(coverage, c => c.UnitLabel == "Europallet").Status);
+    }
+
     private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d)
     {
         var stopIndexById = d.Stops

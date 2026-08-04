@@ -152,6 +152,25 @@ public class TransportOrderPricingSnapshot : AuditableTenantEntity
 
     /// <summary>Sum of Auto/AutoAdjusted/Manual non-informational line amounts (drives AgreedPrice).</summary>
     public decimal? LinesTotal { get; set; }
+
+    /// <summary>
+    /// Wave 2026-08-04 §7: serialized per-goods-line pricing coverage
+    /// (<c>OrderPricingCoverageDto[]</c>, camelCase JSON) frozen with the calculation.
+    /// </summary>
+    public string? CoverageJson { get; set; }
+
+    /// <summary>Wave 2026-08-04 §8: when/by whom the price was confirmed (visible workflow "Bevestigd").</summary>
+    public DateTime? ConfirmedAtUtc { get; set; }
+    public Guid? ConfirmedByUserId { get; set; }
+
+    /// <summary>Display-name snapshot of the confirmer ("Bevestigd op … door …").</summary>
+    public string? ConfirmedByName { get; set; }
+
+    /// <summary>
+    /// Wave 2026-08-04 §10: reason given when the price was confirmed DESPITE unpriced goods
+    /// (authorized override). Non-null keeps a visible warning attached to the confirmed price.
+    /// </summary>
+    public string? ConfirmedWithUnpricedGoodsReason { get; set; }
 }
 
 /// <summary>

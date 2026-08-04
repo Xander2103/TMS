@@ -376,7 +376,25 @@ public record PriceCalculationResult(
     /// form's "Laad- en lostijd" section. Null for a one-off order (see <see cref="OneOffPricingInput"/>,
     /// which has its own included-time fields).
     /// </summary>
-    IncludedTimeInfoDto? IncludedTimeInfo = null);
+    IncludedTimeInfoDto? IncludedTimeInfo = null,
+    /// <summary>
+    /// Wave 2026-08-04 §7: per-unit-line pricing coverage — whether each commercial unit the
+    /// engine received has a base transport tariff, which per-unit services bill it, and the
+    /// resulting status. The order side appends entries for cargo lines that never reached the
+    /// engine (missing/unknown unit code).
+    /// </summary>
+    IReadOnlyList<PricingCoverageLine>? Coverage = null);
+
+/// <summary>
+/// Pricing coverage of one commercial unit line (wave 2026-08-04 §7). Status codes: "Full" — a
+/// base transport tariff prices it; "Partial" — no base tariff, but at least one per-unit service
+/// bills it (a service never masquerades as transport pricing); "None" — nothing prices it.
+/// Reason is set whenever the status is not Full (e.g. "Geen passend basistarief").
+/// </summary>
+public record PricingCoverageLine(
+    Guid? UnitTypeId, string UnitLabel, decimal Quantity, string Status,
+    decimal BaseAmount = 0m, string? BaseRuleName = null,
+    decimal ServicesAmount = 0m, string? Reason = null);
 
 /// <summary>
 /// Task 11: effective included-time info for the order form (spec 2026-08-02 §11). Source is

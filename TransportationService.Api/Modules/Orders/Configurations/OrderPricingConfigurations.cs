@@ -49,6 +49,8 @@ public class TransportOrderPricingSnapshotConfiguration : IEntityTypeConfigurati
         builder.Property(s => s.Explanation).HasMaxLength(4000);
         builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(s => s.LinesTotal).HasPrecision(12, 2);
+        builder.Property(s => s.ConfirmedByName).HasMaxLength(200);
+        builder.Property(s => s.ConfirmedWithUnpricedGoodsReason).HasMaxLength(500);
         builder.HasIndex(s => new { s.TenantId, s.TransportOrderId }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasOne<TransportOrder>().WithMany().HasForeignKey(s => s.TransportOrderId).OnDelete(DeleteBehavior.Cascade);
         builder.HasQueryFilter(s => !s.IsDeleted);

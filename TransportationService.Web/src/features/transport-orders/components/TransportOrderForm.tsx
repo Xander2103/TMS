@@ -2169,6 +2169,22 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               )}
             </tfoot>
           </table>
+          {(preview.coverage ?? []).some((c) => c.status !== 'Full') && (
+            <div className="to-coverage-warning" role="alert">
+              <strong>Niet alle goederen zijn geprijsd.</strong>
+              <ul>
+                {(preview.coverage ?? [])
+                  .filter((c) => c.status !== 'Full')
+                  .map((c, index) => (
+                    <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
+                      {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}:{' '}
+                      {(c.reason ?? 'geen passend basistarief').toLowerCase()}
+                      {c.servicesAmount > 0 && ` — alleen diensten (€ ${c.servicesAmount.toFixed(2)}), geen transportprijs`}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
           {preview.requiresManualPrice && !preview.configurationError && (
             <div className="tof-customer-requirements" role="note">
               <p>Geen geldig tarief gevonden voor deze order — vul een handmatige prijs in of configureer tarieven.</p>

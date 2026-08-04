@@ -155,6 +155,23 @@
   }
 }
 
+/* Also defined in ../pages/transport-orders.css — duplicated so the create form shows the
+   warning even when the detail page chunk (and its CSS) was never loaded. */
+.to-coverage-warning {
+  border: 1px solid #dc2626;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.06);
+  padding: 10px 14px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.to-coverage-warning ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
 .tof-derived-summary {
   border: 1px solid var(--border);
   border-radius: 8px;

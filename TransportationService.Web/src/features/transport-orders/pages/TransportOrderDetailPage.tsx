@@ -45,6 +45,8 @@ import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
   ORDER_TRANSITION_LABELS,
+  PRICING_COVERAGE_LABELS,
+  PRICING_COVERAGE_TONE,
   STOP_TYPE_LABELS,
   lineBadge,
   type OrderPricingLine,
@@ -429,6 +431,9 @@ export function TransportOrderDetailPage() {
   // zero-amount informational lines (e.g. "no matching rule") are pure notices under "Niet toegepast".
   const invoiceLines = (order.pricingLines ?? []).filter((l) => !l.informational || l.amount !== 0)
   const notAppliedLines = (order.pricingLines ?? []).filter((l) => l.informational && l.amount === 0)
+  // Wave 2026-08-04 §7: per-goods-line pricing coverage frozen on the snapshot.
+  const coverage = order.pricingSnapshot?.coverage ?? []
+  const unpricedCoverage = coverage.filter((c) => c.status !== 'Full')
 
   const addQuantityNum = parseNum(addQuantity)
   const addUnitPriceNum = parseNum(addUnitPrice)
@@ -621,6 +626,36 @@ export function TransportOrderDetailPage() {
                   </Button>
                 )}
               </div>
+              {unpricedCoverage.length > 0 && (
+                <div className="to-coverage-warning" role="alert">
+                  <strong>Niet alle goederen zijn geprijsd.</strong>
+                  <ul>
+                    {unpricedCoverage.map((c, index) => (
+                      <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
+                        {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}:{' '}
+                        {(c.reason ?? 'geen passend basistarief').toLowerCase()}
+                        {c.servicesAmount > 0 && ` — alleen diensten (€ ${c.servicesAmount.toFixed(2)}), geen transportprijs`}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {coverage.length > 0 && (
+                <div className="to-coverage">
+                  <h3>Prijsdekking per goederenlijn</h3>
+                  <ul>
+                    {coverage.map((c, index) => (
+                      <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
+                        <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{PRICING_COVERAGE_LABELS[c.status]}</Badge>{' '}
+                        {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}
+                        {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: € ${c.baseAmount.toFixed(2)}`}
+                        {c.status !== 'Full' && c.reason ? ` — ${c.reason}` : ''}
+                        {c.servicesAmount > 0 && ` · diensten € ${c.servicesAmount.toFixed(2)}`}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <table className="to-stops-table">
                 <thead>
                   <tr>

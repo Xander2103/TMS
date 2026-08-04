@@ -679,6 +679,20 @@ export interface PriceCalculationResult {
   totalWithProposed: number
   /** Null for a one-off order (see OneOffPricingInput, which has its own included-time fields). */
   includedTimeInfo?: IncludedTimeInfo | null
+  /** Wave 2026-08-04 §7: per-unit-line pricing coverage of the previewed calculation. */
+  coverage?: PricePreviewCoverageLine[] | null
+}
+
+/** Pricing coverage of one commercial unit line (wave 2026-08-04 §7). */
+export interface PricePreviewCoverageLine {
+  unitTypeId: string | null
+  unitLabel: string
+  quantity: number
+  status: 'Full' | 'Partial' | 'None'
+  baseAmount: number
+  baseRuleName: string | null
+  servicesAmount: number
+  reason: string | null
 }
 
 export const previewPrice = (input: PricePreviewInput): Promise<PriceCalculationResult> =>

@@ -133,6 +133,40 @@
   white-space: nowrap;
 }
 
+.to-coverage-warning {
+  border: 1px solid #dc2626;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.06);
+  padding: 10px 14px;
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.to-coverage-warning ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.to-coverage {
+  margin: 8px 0;
+}
+
+.to-coverage h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.to-coverage ul {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
 .to-price-not-applied {
   margin-top: 12px;
   font-size: 13px;

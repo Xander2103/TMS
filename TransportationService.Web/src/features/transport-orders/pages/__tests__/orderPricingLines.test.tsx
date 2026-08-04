@@ -449,3 +449,42 @@ describe('TransportOrderDetailPage add price line modal — berekeningswijze', (
     ])
   })
 })
+
+describe('TransportOrderDetailPage pricing coverage (wave 2026-08-04 §7)', () => {
+  const coverage = [
+    { unitTypeId: 'u-pallet', unitLabel: 'Europallet', quantity: 2, status: 'Full' as const, baseAmount: 100, baseRuleName: 'Palletstaffel', servicesAmount: 0, reason: null },
+    { unitTypeId: 'u-doos', unitLabel: 'Doos', quantity: 2, status: 'Partial' as const, baseAmount: 0, baseRuleName: null, servicesAmount: 2.5, reason: 'Geen passend basistarief' },
+  ]
+
+  it('shows the order-level warning listing the unpriced goods lines', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, coverage } }),
+    )
+    renderPage()
+
+    await screen.findByText('Niet alle goederen zijn geprijsd.')
+    expect(screen.getByText(/2 Doos: geen passend basistarief/)).toBeInTheDocument()
+    // A billed service must never read as transport pricing.
+    expect(screen.getByText(/alleen diensten \(€ 2\.50\), geen transportprijs/)).toBeInTheDocument()
+  })
+
+  it('shows per-goods-line coverage with status badges and the base rule of a fully priced line', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, coverage } }),
+    )
+    renderPage()
+
+    await screen.findByText('Prijsdekking per goederenlijn')
+    expect(screen.getByText('Volledig geprijsd')).toBeInTheDocument()
+    expect(screen.getByText('Gedeeltelijk geprijsd')).toBeInTheDocument()
+    expect(screen.getByText(/Palletstaffel: € 100\.00/)).toBeInTheDocument()
+  })
+
+  it('renders no coverage blocks when the snapshot carries no coverage', async () => {
+    renderPage()
+
+    await screen.findByText('Basisregel')
+    expect(screen.queryByText('Prijsdekking per goederenlijn')).not.toBeInTheDocument()
+    expect(screen.queryByText('Niet alle goederen zijn geprijsd.')).not.toBeInTheDocument()
+  })
+})

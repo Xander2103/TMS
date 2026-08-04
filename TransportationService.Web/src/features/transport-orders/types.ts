@@ -290,6 +290,32 @@ export function lineBadge(line: Pick<OrderPricingLine, 'kind' | 'serviceOptionId
   return line.kind === 'Auto' && line.serviceOptionId ? 'DIENST' : ORDER_PRICE_LINE_KIND_LABELS[line.kind]
 }
 
+/** Pricing coverage of one commercial goods line/unit (wave 2026-08-04 §7). */
+export type PricingCoverageStatus = 'Full' | 'Partial' | 'None'
+
+export interface OrderPricingCoverage {
+  unitTypeId: string | null
+  unitLabel: string
+  quantity: number
+  status: PricingCoverageStatus
+  baseAmount: number
+  baseRuleName: string | null
+  servicesAmount: number
+  reason: string | null
+}
+
+export const PRICING_COVERAGE_LABELS: Record<PricingCoverageStatus, string> = {
+  Full: 'Volledig geprijsd',
+  Partial: 'Gedeeltelijk geprijsd',
+  None: 'Niet geprijsd',
+}
+
+export const PRICING_COVERAGE_TONE: Record<PricingCoverageStatus, 'success' | 'warning' | 'danger'> = {
+  Full: 'success',
+  Partial: 'warning',
+  None: 'danger',
+}
+
 /** Frozen header of the order's pricing snapshot (spec ch. 21, extended ch. 24-26). */
 export interface OrderPricingSnapshot {
   tariffDate: string
@@ -306,6 +332,14 @@ export interface OrderPricingSnapshot {
   explanation: string | null
   status: OrderPricingStatus
   linesTotal: number | null
+  /** Wave 2026-08-04 §7: per-goods-line pricing coverage frozen with the calculation. */
+  coverage?: OrderPricingCoverage[] | null
+  /** Wave 2026-08-04 §8: confirmation metadata ("Bevestigd op … door …"). */
+  confirmedAtUtc?: string | null
+  confirmedByUserId?: string | null
+  confirmedByName?: string | null
+  /** Non-null: confirmed despite unpriced goods — keep a visible warning attached. */
+  confirmedWithUnpricedGoodsReason?: string | null
 }
 
 export interface OrderServiceLine {

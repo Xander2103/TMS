@@ -132,7 +132,25 @@ public record OrderPricingSnapshotDto(
     /// <summary>Draft → Reviewed → Locked → Invoiced (spec ch. 24-26); preserved across recalculations.</summary>
     OrderPricingStatus Status = OrderPricingStatus.Draft,
     /// <summary>Sum of Auto/AutoAdjusted/Manual non-informational line amounts.</summary>
-    decimal? LinesTotal = null);
+    decimal? LinesTotal = null,
+    /// <summary>Wave 2026-08-04 §7: per-goods-line pricing coverage frozen with the calculation.</summary>
+    IReadOnlyList<OrderPricingCoverageDto>? Coverage = null,
+    /// <summary>Wave 2026-08-04 §8: confirmation metadata ("Bevestigd op … door …").</summary>
+    DateTime? ConfirmedAtUtc = null,
+    Guid? ConfirmedByUserId = null,
+    string? ConfirmedByName = null,
+    /// <summary>Non-null: the price was confirmed DESPITE unpriced goods, with this reason (visible warning).</summary>
+    string? ConfirmedWithUnpricedGoodsReason = null);
+
+/// <summary>
+/// Pricing coverage of one commercial goods line/unit (wave 2026-08-04 §7). Status: "Full"
+/// (base tariff prices it), "Partial" (services only — never counts as transport pricing),
+/// "None" (nothing prices it; see Reason).
+/// </summary>
+public record OrderPricingCoverageDto(
+    Guid? UnitTypeId, string UnitLabel, decimal Quantity, string Status,
+    decimal BaseAmount = 0m, string? BaseRuleName = null,
+    decimal ServicesAmount = 0m, string? Reason = null);
 
 /// <summary>
 /// One line-level manual correction/addition (spec ch. 24-26). LineKey null = free manual line;

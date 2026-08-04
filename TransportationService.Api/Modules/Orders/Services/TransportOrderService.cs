@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TransportationService.Api.Common.Models;
@@ -1340,14 +1341,21 @@ public class TransportOrderService : ITransportOrderService
         var totalWithProposed = order.CalculatedPrice is { } calculatedTotal
             ? calculatedTotal + pricingLines.Where(l => l.Proposed && !l.Informational).Sum(l => l.Amount)
             : (decimal?)null;
-        var pricingSnapshot = await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
+        var snapshotEntity = await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
             .Where(s => s.TenantId == _tenantContext.TenantId && s.TransportOrderId == order.Id)
-            .Select(s => new OrderPricingSnapshotDto(
-                s.TariffDate, s.Currency, s.ZoneCode, s.ZoneName,
-                s.AgreementNames, s.UnitSummary, s.CalculatedTotal,
-                s.OverrideAmount, s.OverrideReason, s.OverriddenByUserId, s.OverriddenAtUtc,
-                s.Explanation, s.Status, s.LinesTotal))
             .FirstOrDefaultAsync(cancellationToken);
+        var pricingSnapshot = snapshotEntity is null
+            ? null
+            : new OrderPricingSnapshotDto(
+                snapshotEntity.TariffDate, snapshotEntity.Currency, snapshotEntity.ZoneCode, snapshotEntity.ZoneName,
+                snapshotEntity.AgreementNames, snapshotEntity.UnitSummary, snapshotEntity.CalculatedTotal,
+                snapshotEntity.OverrideAmount, snapshotEntity.OverrideReason, snapshotEntity.OverriddenByUserId,
+                snapshotEntity.OverriddenAtUtc, snapshotEntity.Explanation, snapshotEntity.Status, snapshotEntity.LinesTotal,
+                Coverage: DeserializeCoverage(snapshotEntity.CoverageJson),
+                ConfirmedAtUtc: snapshotEntity.ConfirmedAtUtc,
+                ConfirmedByUserId: snapshotEntity.ConfirmedByUserId,
+                ConfirmedByName: snapshotEntity.ConfirmedByName,
+                ConfirmedWithUnpricedGoodsReason: snapshotEntity.ConfirmedWithUnpricedGoodsReason);
         var serviceLines = await _dbContext.TransportOrderServiceLines.AsNoTracking()
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .OrderBy(l => l.NameSnapshot)
@@ -1485,6 +1493,8 @@ public class TransportOrderService : ITransportOrderService
             .ToListAsync(cancellationToken);
 
         PriceCalculationResult? result = null;
+        // Coverage entries for cargo lines that never reach the engine (§7): missing/unknown unit.
+        var unpricedCargoCoverage = new List<OrderPricingCoverageDto>();
         if (_pricingEngine is not null)
         {
             // Commercial cargo lines are the pricing source of truth as soon as any carries a
@@ -1494,9 +1504,21 @@ public class TransportOrderService : ITransportOrderService
             // serves orders without coded lines (legacy fallback). Never both — that would
             // double-count.
             var lines = new List<PriceCalculationLineInput>();
-            var codedCargo = (cargoItems ?? [])
-                .Where(c => !c.IsDeleted && !string.IsNullOrWhiteSpace(c.QuantityUnitCode))
+            var allCargo = (cargoItems ?? []).Where(c => !c.IsDeleted).ToList();
+            var codedCargo = allCargo
+                .Where(c => !string.IsNullOrWhiteSpace(c.QuantityUnitCode))
                 .ToList();
+            // Cargo the engine can never price per unit (unknown/missing code) — reported as
+            // "Niet geprijsd" coverage entries next to the engine's own coverage (§7).
+            foreach (var uncoded in allCargo.Where(c => string.IsNullOrWhiteSpace(c.QuantityUnitCode)))
+            {
+                unpricedCargoCoverage.Add(new OrderPricingCoverageDto(
+                    null,
+                    uncoded.UnitTypeLabel ?? uncoded.QuantityUnit ?? "stuks",
+                    uncoded.ExpectedQuantity, "None",
+                    Reason: "Geen eenheid gekozen voor deze goederenlijn"));
+            }
+
             if (codedCargo.Count > 0)
             {
                 var codes = codedCargo
@@ -1511,6 +1533,9 @@ public class TransportOrderService : ITransportOrderService
                     if (!unitTypeIds.TryGetValue(group.Key, out var uid))
                     {
                         // Unknown code: cannot be priced per unit — pricing coverage reports it.
+                        unpricedCargoCoverage.Add(new OrderPricingCoverageDto(
+                            null, group.Key, group.Sum(c => c.ExpectedQuantity), "None",
+                            Reason: "Onbekende eenheid"));
                         continue;
                     }
 
@@ -1794,6 +1819,15 @@ public class TransportOrderService : ITransportOrderService
             snapshot.OverriddenAtUtc = order.PriceIsManual ? _timeProvider.GetUtcNow().UtcDateTime : null;
             snapshot.Explanation = explanation.Length > 4000 ? explanation[..4000] : explanation;
             snapshot.LinesTotal = linesTotal;
+            // Wave 2026-08-04 §7: freeze per-goods-line coverage with the calculation — engine
+            // coverage (per unit line it received) + cargo the engine never saw.
+            var coverage = (result.Coverage ?? [])
+                .Select(c => new OrderPricingCoverageDto(
+                    c.UnitTypeId, c.UnitLabel, c.Quantity, c.Status,
+                    c.BaseAmount, c.BaseRuleName, c.ServicesAmount, c.Reason))
+                .Concat(unpricedCargoCoverage)
+                .ToList();
+            snapshot.CoverageJson = coverage.Count > 0 ? JsonSerializer.Serialize(coverage, CoverageJsonOptions) : null;
             // Status is deliberately left untouched — a save never resets Draft/Reviewed.
         }
 
@@ -1855,6 +1889,27 @@ public class TransportOrderService : ITransportOrderService
         }
 
         return groups;
+    }
+
+    /// <summary>Camel-cased, matching the API's wire format so the frontend can share the shape.</summary>
+    private static readonly JsonSerializerOptions CoverageJsonOptions = new(JsonSerializerDefaults.Web);
+
+    private static IReadOnlyList<OrderPricingCoverageDto>? DeserializeCoverage(string? coverageJson)
+    {
+        if (string.IsNullOrWhiteSpace(coverageJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<OrderPricingCoverageDto>>(coverageJson, CoverageJsonOptions);
+        }
+        catch (JsonException)
+        {
+            // A malformed historical payload must never break the order detail.
+            return null;
+        }
     }
 
     /// <summary>Derives a display unit price (amount / quantity) only where that is a real per-unit rate — never invented for bracket/base-amount rule lines.</summary>
