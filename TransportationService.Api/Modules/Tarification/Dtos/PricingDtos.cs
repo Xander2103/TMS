@@ -132,14 +132,29 @@ public record ServiceOptionDto(
     bool OnlyForAdr = false,
     /// <summary>Warehouse condition: only charged/auto-applied when the order touches one of these warehouses. Empty = all orders.</summary>
     IReadOnlyList<Guid>? WarehouseIds = null,
-    IReadOnlyList<string>? WarehouseNames = null);
+    IReadOnlyList<string>? WarehouseNames = null,
+    /// <summary>Wave 2026-08-04 §16: time-based stop conditions (before/after/appointment/weekend).</summary>
+    IReadOnlyList<ServiceTimeConditionDto>? TimeConditions = null);
+
+/// <summary>One time-based condition row of a service option (wave 2026-08-04 §16/§17).</summary>
+public record ServiceTimeConditionDto(
+    ServiceConditionKind Kind,
+    ServiceConditionStopScope StopScope = ServiceConditionStopScope.Any,
+    /// <summary>StopTimeBefore/StopTimeAfter only: the configured threshold.</summary>
+    TimeOnly? TimeOfDay = null,
+    /// <summary>Competition priority among matched Before (resp. After) conditions; higher wins.</summary>
+    int Priority = 0,
+    /// <summary>Opt-in stacking: never competes, always applies when matched.</summary>
+    bool AllowStacking = false);
 
 public record SaveServiceOptionRequest(
     string Code, string Name, SurchargeKind Kind, decimal DefaultValue, bool IsActive, int SortOrder,
     string? Description = null, string? InvoiceDescription = null, bool SelectableInOrders = true,
     Guid? UnitTypeId = null, bool AutoApply = false, bool OnlyForAdr = false,
     /// <summary>Warehouse condition (OR within the list, AND with the ADR flag); null/empty = all orders.</summary>
-    IReadOnlyList<Guid>? WarehouseIds = null);
+    IReadOnlyList<Guid>? WarehouseIds = null,
+    /// <summary>Wave 2026-08-04 §16: time-based stop conditions; null = leave unchanged is NOT supported — the list replaces.</summary>
+    IReadOnlyList<ServiceTimeConditionDto>? TimeConditions = null);
 
 // --- Customer pricing configuration ---
 
@@ -312,7 +327,25 @@ public record PriceCalculationRequest(
     /// unloading time and extra-time rate/rounding/minimum. Contract mode only — never set for a
     /// one-off order (see <see cref="OneOff"/>, which carries its own included-time fields).
     /// </summary>
-    IncludedTimeOverrideInput? IncludedTimeOverrides = null);
+    IncludedTimeOverrideInput? IncludedTimeOverrides = null,
+    /// <summary>
+    /// Wave 2026-08-04 §16: per-stop time requirements + appointment flag + planned date,
+    /// feeding time-based service conditions. Null/empty = no time conditions can match.
+    /// </summary>
+    IReadOnlyList<StopTimeInput>? StopTimes = null);
+
+/// <summary>
+/// One stop's time facts for time-based service conditions (wave 2026-08-04 §16).
+/// RequirementKind mirrors the order-side StopTimeRequirementKind as a string
+/// ("None"/"Before"/"After"/"Window") to keep the modules decoupled.
+/// </summary>
+public record StopTimeInput(
+    bool IsUnloading,
+    string RequirementKind,
+    TimeOnly? RequirementFrom,
+    TimeOnly? RequirementTo,
+    bool AppointmentRequired,
+    DateOnly? PlannedDate);
 
 /// <summary>A one-off order's own price agreement: no contract is consulted (spec Phase 6).</summary>
 public record OneOffPricingInput(
@@ -327,7 +360,12 @@ public record OneOffPricingInput(
 /// </summary>
 public record IncludedTimeOverrideInput(
     int? IncludedLoadingMinutes, int? IncludedUnloadingMinutes, decimal? ExtraHourlyRate,
-    int? RoundingStepMinutes, int? MinimumBillableMinutes);
+    int? RoundingStepMinutes, int? MinimumBillableMinutes,
+    /// <summary>
+    /// Wave 2026-08-04 §18: true when a STOP-level override produced the minutes (resolution
+    /// stop → order → contract) — the included-time info then reports Source "Stop".
+    /// </summary>
+    bool FromStopOverride = false);
 
 public record PriceBreakdownLine(
     string Label, decimal Amount, string Source, bool Informational = false,

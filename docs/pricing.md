@@ -525,3 +525,67 @@ Eerlijk overgenomen uit de code (geen van deze is "verborgen" — elk is hierond
    klant A → eenheidlijn 3 × €22 = €66 + km-component 25 + 1,20×100 = €145 → totaal €211 (beide
    regels vuren, want de tabel is "engaged" via de gematchte eenheidregel). Klant B (geen koppeling)
    → geen enkele regel van deze tabel vuurt — geen km-lijn, `RequiresManualPrice`.
+
+## 13. Wave 2026-08-04: goederen als bron van waarheid, dekking, bevestiging, tijdstoeslagen
+
+### 13.1 Commerciële goederenlijnen zijn de prijsbron
+
+Zodra minstens één goederenlijn een beheerde eenheidcode draagt, bouwt `ApplyPricingAsync` de
+engine-invoer uit de LIJNEN: één `PriceCalculationLineInput` per onderscheiden eenheid met de
+som van de hoeveelheden (en per-lijn afmetingen voor oversize). De orderkop
+(`Quantity`/`QuantityUnitCode`/gewicht/volume/paletten) wordt bij het opslaan AFGELEID van de
+lijnen (`DeriveSummaryFromCargo`): één gedeelde eenheid → som + code; gemengde eenheden → kop
+leeg (de samenvatting leeft in de lijnen); maten worden gesommeerd zodra een lijn ze draagt.
+Orders zonder lijnen behouden het oude kopgedrag (legacy). Kop en lijnen kunnen dus nooit meer
+dubbel tellen of een verouderde eenheid aan de engine voeren.
+
+Minimale cargo-informatie (validatie): hoeveelheid+eenheid, óf een goederenlijn, óf een
+algemene omschrijving — beschrijvingen zijn nooit meer verplicht zolang er betekenisvolle
+hoeveelheden zijn.
+
+### 13.2 Prijsdekking per goederenlijn (Coverage)
+
+`PriceCalculationResult.Coverage` bevat per eenheidlijn: status `Full` (basistarief),
+`Partial` (alleen diensten — een dienst telt nooit als transportprijs) of `None`, met
+basisbedrag/regel, dienstenbedrag en reden ("Geen passend basistarief", "Geen staffel …",
+"Conflicterende tariefregels"). De orderzijde voegt `None`-regels toe voor cargo zonder
+(bekende) eenheidcode en bevriest de lijst als `CoverageJson` op de pricing-snapshot. UI:
+waarschuwing "Niet alle goederen zijn geprijsd." + dekkinglijst op de detailpagina en in de
+formulier-preview.
+
+### 13.3 Zichtbare prijsbevestiging
+
+Zichtbare statussen: Nog te bevestigen (Draft/Reviewed) → Bevestigd (Locked, groen) →
+Gefactureerd; Onvolledig (rood) wanneer onbevestigd met niet-gedekte goederen. Acties:
+`POST …/pricing/confirm` ("Prijs bevestigen": zet Locked + `ConfirmedAtUtc/ByUserId/ByName`)
+en `POST …/pricing/reopen` ("Prijs aanpassen": reden verplicht, terug naar Draft, oud totaal
+in audit). Bevestigen met niet-geprijsde goederen vereist `orders.confirm_incomplete_price`
+(rollen v24: management + boekhouding) én een reden die zichtbaar aan de prijs blijft hangen
+(`ConfirmedWithUnpricedGoodsReason`). Technische Draft/Reviewed/Locked-vocabulaire blijft
+API-compatibel bestaan maar is uit de UI verdwenen.
+
+Vergrendelde/bevestigde prijzen weigeren nu ook GOEDERENwijzigingen (kop-hoeveelheden, cargo
+add/verwijder/prijsrelevante props) en wijzigingen aan stop-tijdseisen/afspraakvlag/stop-
+inbegrepen-tijd; notities en planningsvensters blijven bewerkbaar.
+
+### 13.4 Stop-tijdseisen en tijdgebonden toeslagen
+
+`TransportOrderStop.TimeRequirement` (None/Before/After/Window + `TimeRequirementFrom/To`)
+is de commerciële belofte ("Leveren vóór 10:00") en voedt via `PriceCalculationRequest.StopTimes`
+de nieuwe `ServiceConditionKind`-leden: `StopTimeBefore`, `StopTimeAfter`,
+`AppointmentRequired`, `Weekend` (met `StopScope` Laden/Lossen/Elke stop, `TimeOfDay`,
+`Priority`, `AllowStacking`). Matching: een belofte "vóór 08:00" voldoet aan een voorwaarde
+"vóór 10:00" (08 ≤ 10); "na 19:00" voldoet aan "na 18:00". Concurrentie (§17): onder
+auto-toegepaste opties die op dezelfde soort (Before resp. After) matchen wint de hoogste
+`Priority`, daarna het meest specifieke uur; exact gelijk = blokkerende configuratiefout;
+verliezers verschijnen als informatieve regel "… niet toegepast — '<winnaar>' heeft voorrang".
+`AllowStacking` laat een voorwaarde expliciet naast de winnaar toe. Feestdagkalender bestaat
+niet in de codebase — Weekend is de enige kalendervoorwaarde (bekende beperking).
+
+### 13.5 Inbegrepen laad-/lostijd: stop → order → contract
+
+`TransportOrderStop.IncludedTimeMinutesOverride`: zodra een stop van een activiteit een
+afwijking draagt, is de effectieve inbegrepen tijd van die activiteit de SOM van de afwijkende
+stops (stops zonder afwijking tellen 0); anders geldt de orderafwijking, anders de
+contractwaarde. `IncludedTimeInfo.Source` meldt "Stop"/"Order"/"Contract"/"Geen". Een
+bedrijfsbrede standaardwaarde bestaat niet (bekende beperking).

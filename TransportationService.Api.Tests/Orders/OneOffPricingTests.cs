@@ -743,6 +743,39 @@ public class OneOffPricingTests
         Assert.Equal(30.00m, proposed.Amount); // 30 / 60 × 60
     }
 
+    /// <summary>
+    /// Wave 2026-08-04 §18: a stop-level included-minutes override wins over the order-level
+    /// override (resolution stop → order → contract); clearing it falls back to the order value.
+    /// </summary>
+    [Fact]
+    public async Task StopOverride_WinsOverOrderOverride_AndFallsBackWhenCleared()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await CreateEngagedAgreementAsync(h, "Contract Stopoverride", includedLoadingMinutes: 30, extraHourlyRate: 60m);
+
+        var created = await h.Sut.CreateAsync(ContractRequest(h.CustomerId, quantity: 3), CancellationToken.None);
+        await SeedStopExecutionsAsync(h, created.Order!.Id, loadingMinutes: 50, unloadingMinutes: null);
+        await SetIncludedTimeOverridesAsync(h, created.Order.Id, includedLoading: 40);
+
+        // Stop override 60 min beats the order's 40 min — actual 50 min no longer exceeds it.
+        var withStops = await h.Db.Context.TransportOrders.Include(o => o.Stops)
+            .SingleAsync(o => o.Id == created.Order.Id);
+        var loadingStop = withStops.Stops.Single(s => s.StopType == StopType.Loading);
+        loadingStop.IncludedTimeMinutesOverride = 60;
+        await h.Db.Context.SaveChangesAsync();
+        var overridden = await RepriceAsync(h, created.Order.Id);
+        Assert.DoesNotContain(overridden.PricingLines!, l => l.Proposed);
+        Assert.Equal(60, overridden.Stops.Single(s => s.StopType == StopType.Loading).IncludedTimeMinutesOverride);
+
+        // Clearing the stop override falls back to the order override: 50 − 40 = 10 min → €10.
+        loadingStop.IncludedTimeMinutesOverride = null;
+        await h.Db.Context.SaveChangesAsync();
+        var fallback = await RepriceAsync(h, created.Order.Id);
+        var proposed = Assert.Single(fallback.PricingLines!, l => l.Proposed);
+        Assert.Equal(10.00m, proposed.Amount); // (50 - 40) / 60 × 60
+    }
+
     /// <summary>Clearing the override (setting it back to null) restores the plain contract-based proposal.</summary>
     [Fact]
     public async Task OrderOverride_Reset_ReturnsToContractValues()

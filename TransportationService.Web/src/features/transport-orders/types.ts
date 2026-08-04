@@ -110,6 +110,8 @@ export interface TransportOrderStop {
   /** "HH:mm:ss" wire format (TimeOnly). */
   timeRequirementFrom?: string | null
   timeRequirementTo?: string | null
+  /** Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract). */
+  includedTimeMinutesOverride?: number | null
 }
 
 /** Wave 2026-08-04 §15. */
@@ -410,6 +412,8 @@ export interface StopInput {
   timeRequirement?: StopTimeRequirementKind
   timeRequirementFrom?: string | null
   timeRequirementTo?: string | null
+  /** Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract). */
+  includedTimeMinutesOverride?: number | null
 }
 
 /** Dispatcher-side execution planning of one stop (separate endpoint, editable after planning). */

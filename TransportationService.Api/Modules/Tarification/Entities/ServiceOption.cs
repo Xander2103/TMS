@@ -51,6 +51,29 @@ public enum ServiceConditionKind
 {
     /// <summary>The order touches the referenced warehouse (a stop at the warehouse's master location).</summary>
     Warehouse = 0,
+
+    /// <summary>
+    /// Wave 2026-08-04 §16: a stop's time requirement promises execution at or before
+    /// <see cref="ServiceOptionCondition.TimeOfDay"/> (e.g. "Levering vóór 10u").
+    /// </summary>
+    StopTimeBefore = 1,
+
+    /// <summary>Wave 2026-08-04 §16: a stop's time requirement starts at or after TimeOfDay (avondlevering).</summary>
+    StopTimeAfter = 2,
+
+    /// <summary>Wave 2026-08-04 §16: a matching stop has "Afspraak verplicht".</summary>
+    AppointmentRequired = 3,
+
+    /// <summary>Wave 2026-08-04 §16: a matching stop is planned on a Saturday or Sunday.</summary>
+    Weekend = 4,
+}
+
+/// <summary>Which stops a time-based condition looks at (wave 2026-08-04 §16).</summary>
+public enum ServiceConditionStopScope
+{
+    Any = 0,
+    Loading = 1,
+    Unloading = 2,
 }
 
 /// <summary>One condition row restricting when a service option is charged/auto-applied.</summary>
@@ -59,8 +82,24 @@ public class ServiceOptionCondition : AuditableTenantEntity
     public Guid ServiceOptionId { get; set; }
     public ServiceConditionKind Kind { get; set; }
 
-    /// <summary>The referenced master-data id (Kind == Warehouse: the Warehouse id).</summary>
+    /// <summary>The referenced master-data id (Kind == Warehouse: the Warehouse id). Unused (Guid.Empty) for time kinds.</summary>
     public Guid ReferenceId { get; set; }
+
+    /// <summary>Time kinds: which stops this condition looks at.</summary>
+    public ServiceConditionStopScope StopScope { get; set; } = ServiceConditionStopScope.Any;
+
+    /// <summary>StopTimeBefore/StopTimeAfter: the configured threshold (never hardcoded).</summary>
+    public TimeOnly? TimeOfDay { get; set; }
+
+    /// <summary>
+    /// Wave 2026-08-04 §17: among competing matched StopTimeBefore (or StopTimeAfter) options
+    /// the highest priority wins; on a tie the most specific time wins; an exact tie is a
+    /// blocking configuration error.
+    /// </summary>
+    public int Priority { get; set; }
+
+    /// <summary>§17: opt-in stacking — this condition never competes, it always applies when matched.</summary>
+    public bool AllowStacking { get; set; }
 }
 
 /// <summary>

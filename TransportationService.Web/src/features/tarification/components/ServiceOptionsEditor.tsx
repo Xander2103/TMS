@@ -16,10 +16,19 @@ import {
   listUnitTypeSettings,
   updateServiceOption,
   type ServiceOption,
+  type ServiceTimeCondition,
   type UnitTypeSettings,
 } from '../api/pricingApi'
 import { listWarehouses } from '../../warehousing/api/warehousingApi'
 import type { Warehouse } from '../../warehousing/types'
+
+interface TimeConditionDraft {
+  kind: ServiceTimeCondition['kind']
+  stopScope: ServiceTimeCondition['stopScope']
+  timeOfDay: string
+  priority: string
+  allowStacking: boolean
+}
 
 interface OptionDraft {
   option: ServiceOption | null
@@ -35,6 +44,39 @@ interface OptionDraft {
   autoApply: boolean
   onlyForAdr: boolean
   warehouseIds: string[]
+  timeConditions: TimeConditionDraft[]
+}
+
+const TIME_CONDITION_KIND_LABELS: Record<ServiceTimeCondition['kind'], string> = {
+  StopTimeBefore: 'Vóór een uur',
+  StopTimeAfter: 'Na een uur',
+  AppointmentRequired: 'Afspraak verplicht',
+  Weekend: 'Weekend',
+}
+
+const TIME_CONDITION_SCOPE_LABELS: Record<ServiceTimeCondition['stopScope'], string> = {
+  Any: 'Elke stop',
+  Loading: 'Laden',
+  Unloading: 'Lossen',
+}
+
+/** "Lossen vóór 10:00 (prioriteit 1)" — badge/summary text of a configured time condition. */
+function timeConditionSummary(condition: ServiceTimeCondition): string {
+  const scope = TIME_CONDITION_SCOPE_LABELS[condition.stopScope]
+  const time = condition.timeOfDay?.slice(0, 5)
+  const core =
+    condition.kind === 'StopTimeBefore'
+      ? `${scope} vóór ${time ?? '?'}`
+      : condition.kind === 'StopTimeAfter'
+        ? `${scope} na ${time ?? '?'}`
+        : condition.kind === 'AppointmentRequired'
+          ? `${scope}: afspraak verplicht`
+          : `${scope}: weekend`
+  const extras = [
+    condition.priority !== 0 ? `prioriteit ${condition.priority}` : null,
+    condition.allowStacking ? 'stapelt' : null,
+  ].filter(Boolean)
+  return extras.length > 0 ? `${core} (${extras.join(', ')})` : core
 }
 
 const VALUE_LABEL_BY_KIND: Partial<Record<SurchargeKind, string>> = {
@@ -113,6 +155,13 @@ export function ServiceOptionsEditor() {
             autoApply: option.autoApply,
             onlyForAdr: option.onlyForAdr,
             warehouseIds: option.warehouseIds ?? [],
+            timeConditions: (option.timeConditions ?? []).map((c) => ({
+              kind: c.kind,
+              stopScope: c.stopScope,
+              timeOfDay: c.timeOfDay?.slice(0, 5) ?? '',
+              priority: String(c.priority),
+              allowStacking: c.allowStacking,
+            })),
           }
         : {
             option: null,
@@ -128,6 +177,7 @@ export function ServiceOptionsEditor() {
             autoApply: false,
             onlyForAdr: false,
             warehouseIds: [],
+            timeConditions: [],
           },
     )
   }
@@ -151,6 +201,13 @@ export function ServiceOptionsEditor() {
         autoApply: draft.autoApply,
         onlyForAdr: draft.onlyForAdr,
         warehouseIds: draft.warehouseIds,
+        timeConditions: draft.timeConditions.map((c) => ({
+          kind: c.kind,
+          stopScope: c.stopScope,
+          timeOfDay: c.kind === 'StopTimeBefore' || c.kind === 'StopTimeAfter' ? c.timeOfDay || null : null,
+          priority: Number(c.priority) || 0,
+          allowStacking: c.allowStacking,
+        })),
       }
       if (draft.option) {
         await updateServiceOption(draft.option.id, input)
@@ -204,6 +261,11 @@ export function ServiceOptionsEditor() {
                 {(option.warehouseNames?.length ?? 0) > 0 && (
                   <Badge tone="warning">Magazijn: {option.warehouseNames!.join(', ')}</Badge>
                 )}
+                {(option.timeConditions ?? []).map((condition, index) => (
+                  <Badge key={index} tone="info">
+                    {timeConditionSummary(condition)}
+                  </Badge>
+                ))}
               </td>
               <td>{option.selectableInOrders ? 'Ja' : 'Nee'}</td>
               <td>
@@ -328,6 +390,126 @@ export function ServiceOptionsEditor() {
                 </div>
               </FormField>
             )}
+            <FormField
+              label="Tijdsvoorwaarden"
+              hint="Automatische toeslag op basis van de tijdseis van een stop (bv. Lossen vóór 10:00). Bij overlappende 'vóór'-voorwaarden geldt de hoogste prioriteit, dan het meest specifieke uur; 'stapelt' past de toeslag altijd toe naast de winnaar."
+            >
+              <div>
+                {draft.timeConditions.map((condition, index) => (
+                  <div key={index} className="issued-items-form-row" data-testid="time-condition-row">
+                    <select
+                      aria-label="Voorwaarde"
+                      value={condition.kind}
+                      onChange={(e) =>
+                        setDraft((d) => {
+                          if (!d) return d
+                          const next = [...d.timeConditions]
+                          next[index] = { ...next[index], kind: e.target.value as TimeConditionDraft['kind'] }
+                          return { ...d, timeConditions: next }
+                        })
+                      }
+                    >
+                      {Object.entries(TIME_CONDITION_KIND_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      aria-label="Stoptype"
+                      value={condition.stopScope}
+                      onChange={(e) =>
+                        setDraft((d) => {
+                          if (!d) return d
+                          const next = [...d.timeConditions]
+                          next[index] = { ...next[index], stopScope: e.target.value as TimeConditionDraft['stopScope'] }
+                          return { ...d, timeConditions: next }
+                        })
+                      }
+                    >
+                      {Object.entries(TIME_CONDITION_SCOPE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                    {(condition.kind === 'StopTimeBefore' || condition.kind === 'StopTimeAfter') && (
+                      <input
+                        aria-label="Uur"
+                        type="time"
+                        value={condition.timeOfDay}
+                        onChange={(e) =>
+                          setDraft((d) => {
+                            if (!d) return d
+                            const next = [...d.timeConditions]
+                            next[index] = { ...next[index], timeOfDay: e.target.value }
+                            return { ...d, timeConditions: next }
+                          })
+                        }
+                      />
+                    )}
+                    <input
+                      aria-label="Prioriteit"
+                      type="number"
+                      value={condition.priority}
+                      onChange={(e) =>
+                        setDraft((d) => {
+                          if (!d) return d
+                          const next = [...d.timeConditions]
+                          next[index] = { ...next[index], priority: e.target.value }
+                          return { ...d, timeConditions: next }
+                        })
+                      }
+                      style={{ width: 80 }}
+                    />
+                    <label className="tof-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={condition.allowStacking}
+                        onChange={(e) =>
+                          setDraft((d) => {
+                            if (!d) return d
+                            const next = [...d.timeConditions]
+                            next[index] = { ...next[index], allowStacking: e.target.checked }
+                            return { ...d, timeConditions: next }
+                          })
+                        }
+                      />
+                      Stapelt
+                    </label>
+                    <button
+                      type="button"
+                      className="issued-items-link issued-items-link-danger"
+                      onClick={() =>
+                        setDraft((d) =>
+                          d ? { ...d, timeConditions: d.timeConditions.filter((_, i) => i !== index) } : d,
+                        )
+                      }
+                    >
+                      Verwijderen
+                    </button>
+                  </div>
+                ))}
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    setDraft((d) =>
+                      d
+                        ? {
+                            ...d,
+                            timeConditions: [
+                              ...d.timeConditions,
+                              { kind: 'StopTimeBefore', stopScope: 'Unloading', timeOfDay: '', priority: '0', allowStacking: false },
+                            ],
+                          }
+                        : d,
+                    )
+                  }
+                >
+                  + Tijdsvoorwaarde
+                </Button>
+              </div>
+            </FormField>
             <label className="tof-checkbox">
               <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />
               Actief

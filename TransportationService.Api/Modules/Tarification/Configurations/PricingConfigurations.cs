@@ -192,6 +192,7 @@ public class ServiceOptionConditionConfiguration : IEntityTypeConfiguration<Serv
         builder.ToTable("service_option_conditions");
         builder.HasKey(c => c.Id);
         builder.Property(c => c.Kind).HasConversion<string>().HasMaxLength(30);
+        builder.Property(c => c.StopScope).HasConversion<string>().HasMaxLength(20);
         builder.HasOne<ServiceOption>().WithMany().HasForeignKey(c => c.ServiceOptionId).OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(c => new { c.TenantId, c.ServiceOptionId });
         builder.HasQueryFilter(c => !c.IsDeleted);

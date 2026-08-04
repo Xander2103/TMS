@@ -110,3 +110,53 @@ describe('ServiceOptionsEditor — warehouse calculation bases', () => {
     }))
   })
 })
+
+describe('ServiceOptionsEditor — time-based conditions (wave 2026-08-04 §16/§17)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['tariffs.view', 'tariffs.manage'])
+    state.options = [makeOption()]
+    state.units = []
+    state.create.mockResolvedValue(makeOption())
+  })
+
+  it('saves a configured "Lossen vóór 10:00" condition with priority', async () => {
+    const user = userEvent.setup()
+    render(<ServiceOptionsEditor />)
+
+    await user.click(await screen.findByRole('button', { name: '+ Dienst' }))
+    const dialog = await screen.findByRole('dialog')
+
+    await user.type(within(dialog).getByLabelText('Code *'), 'VOOR10')
+    await user.type(within(dialog).getByLabelText('Naam *'), 'Levering vóór 10u')
+    await user.click(within(dialog).getByRole('button', { name: '+ Tijdsvoorwaarde' }))
+
+    await user.selectOptions(within(dialog).getByLabelText('Voorwaarde'), 'StopTimeBefore')
+    await user.selectOptions(within(dialog).getByLabelText('Stoptype'), 'Unloading')
+    await user.type(within(dialog).getByLabelText('Uur'), '10:00')
+    const priorityInput = within(dialog).getByLabelText('Prioriteit')
+    await user.clear(priorityInput)
+    await user.type(priorityInput, '1')
+
+    await user.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+
+    await waitFor(() => expect(state.create).toHaveBeenCalled())
+    const payload = state.create.mock.calls[0][0]
+    expect(payload.timeConditions).toEqual([
+      { kind: 'StopTimeBefore', stopScope: 'Unloading', timeOfDay: '10:00', priority: 1, allowStacking: false },
+    ])
+  })
+
+  it('shows a summary badge for a stored time condition', async () => {
+    state.options = [
+      makeOption({
+        timeConditions: [
+          { kind: 'StopTimeBefore', stopScope: 'Unloading', timeOfDay: '10:00:00', priority: 1, allowStacking: false },
+        ],
+      }),
+    ]
+    render(<ServiceOptionsEditor />)
+
+    expect(await screen.findByText('Lossen vóór 10:00 (prioriteit 1)')).toBeInTheDocument()
+  })
+})

@@ -47,7 +47,9 @@ public record TransportOrderStopDto(
     /// <summary>Wave 2026-08-04 §15: simple time requirement ("Leveren vóór 10:00").</summary>
     StopTimeRequirementKind TimeRequirement = StopTimeRequirementKind.None,
     TimeOnly? TimeRequirementFrom = null,
-    TimeOnly? TimeRequirementTo = null);
+    TimeOnly? TimeRequirementTo = null,
+    /// <summary>Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract).</summary>
+    int? IncludedTimeMinutesOverride = null);
 
 public record TransportOrderDetailDto(
     Guid Id,
@@ -294,7 +296,9 @@ public record TransportOrderStopInput(
     /// <summary>Wave 2026-08-04 §15: simple time requirement (Before → To, After → From, Window → both).</summary>
     StopTimeRequirementKind TimeRequirement = StopTimeRequirementKind.None,
     TimeOnly? TimeRequirementFrom = null,
-    TimeOnly? TimeRequirementTo = null);
+    TimeOnly? TimeRequirementTo = null,
+    /// <summary>Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract).</summary>
+    int? IncludedTimeMinutesOverride = null);
 
 /// <summary>
 /// Dispatcher-side execution planning of one stop: the confirmed window, hard bounds,

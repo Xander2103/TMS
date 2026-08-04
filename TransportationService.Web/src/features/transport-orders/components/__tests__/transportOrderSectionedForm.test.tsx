@@ -964,6 +964,29 @@ describe('TransportOrderForm stops layout & simple time input (wave 2026-08-04 �
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('sends the stop time requirements to the price preview (§16 live surcharges)', async () => {
+    renderForm()
+    await fillMinimalRouteAndCustomer()
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '3')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+    await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
+
+    const selects = screen.getAllByLabelText('Tijdseis')
+    await userEvent.selectOptions(selects[1], 'Before')
+    await userEvent.type(screen.getByLabelText('Vóór'), '09:30')
+
+    await waitFor(() =>
+      expect(previewSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stopTimes: expect.arrayContaining([
+            expect.objectContaining({ isUnloading: true, requirementKind: 'Before', requirementTo: '09:30' }),
+          ]),
+        }),
+      ),
+    )
+  })
+
   it('collapses a stop to a compact summary card and expands it again', async () => {
     renderForm()
     await fillMinimalRouteAndCustomer()

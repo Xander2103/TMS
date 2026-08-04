@@ -860,6 +860,92 @@ public class OrderPricingTests
         Assert.Equal(TransportOrderOperationOutcome.Success, afterReopen.Outcome);
     }
 
+    // --- Wave 2026-08-04 §16: stop time requirements drive configured surcharges ---------------
+
+    [Fact]
+    public async Task StopTimeRequirement_TriggersConfiguredSurcharge_AndRemovalRemovesIt()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "VOOR10", "Levering vóór 10u", SurchargeKind.Fixed, 35m, true, 0,
+            AutoApply: true,
+            TimeConditions: [new ServiceTimeConditionDto(
+                ServiceConditionKind.StopTimeBefore,
+                ServiceConditionStopScope.Unloading,
+                new TimeOnly(10, 0))]), CancellationToken.None);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]) with
+        {
+            Stops =
+            [
+                Stop(StopType.Loading, "Antwerpen"),
+                Stop(StopType.Unloading, "Hasselt", "3500") with
+                {
+                    TimeRequirement = StopTimeRequirementKind.Before,
+                    TimeRequirementTo = new TimeOnly(9, 30),
+                },
+            ],
+        }, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Equal(120m, created.Order!.AgreedPrice); // 85 bracket + 35 surcharge
+        Assert.Contains(created.Order.ServiceLines!, l => l.Name == "Levering vóór 10u");
+        h.Db.Context.ChangeTracker.Clear();
+
+        // Dropping the requirement must also drop the surcharge (§6: no stale automatic lines).
+        var reloaded = await h.Sut.GetByIdAsync(created.Order.Id, CancellationToken.None);
+        var withoutRequirement = BuildUpdateFrom(reloaded!) with
+        {
+            Stops = reloaded!.Stops.Select(s => new TransportOrderStopInput(
+                s.StopType, s.LocationId, s.LocationName, s.Address, s.PostalCode, s.City, s.CountryCode,
+                s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions)).ToList(),
+        };
+        var updated = await h.Sut.UpdateAsync(created.Order.Id, withoutRequirement, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, updated.Outcome);
+        Assert.Equal(85m, updated.Order!.AgreedPrice);
+        Assert.DoesNotContain(updated.Order.ServiceLines ?? [], l => l.Name == "Levering vóór 10u");
+    }
+
+    [Fact]
+    public async Task LockedPricing_RejectsStopTimeRequirementChange_ButAllowsIdenticalStops()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        h.Permissions.Codes.Add("orders.edit");
+        h.Permissions.Codes.Add("orders.lock_price");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        var orderId = created.Order!.Id;
+        await h.Sut.ConfirmOrderPricingAsync(orderId, null, CancellationToken.None);
+        h.Db.Context.ChangeTracker.Clear();
+
+        var reloaded = await h.Sut.GetByIdAsync(orderId, CancellationToken.None);
+        // Identical stops (notes-only edit) stay possible on a confirmed price.
+        var notesOnly = await h.Sut.UpdateAsync(orderId,
+            BuildUpdateFrom(reloaded!) with { Notes = "OK" }, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, notesOnly.Outcome);
+        h.Db.Context.ChangeTracker.Clear();
+
+        // Changing a stop's time requirement is a pricing input → refused while confirmed.
+        var reloaded2 = await h.Sut.GetByIdAsync(orderId, CancellationToken.None);
+        var changed = BuildUpdateFrom(reloaded2!) with
+        {
+            Stops = reloaded2!.Stops.Select((s, i) => new TransportOrderStopInput(
+                s.StopType, s.LocationId, s.LocationName, s.Address, s.PostalCode, s.City, s.CountryCode,
+                s.PlannedFrom, s.PlannedTo, s.Reference, s.Instructions,
+                TimeRequirement: i == 1 ? StopTimeRequirementKind.Before : StopTimeRequirementKind.None,
+                TimeRequirementTo: i == 1 ? new TimeOnly(10, 0) : null)).ToList(),
+        };
+        await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(() =>
+            h.Sut.UpdateAsync(orderId, changed, CancellationToken.None));
+    }
+
     private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d)
     {
         var stopIndexById = d.Stops

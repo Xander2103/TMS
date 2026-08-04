@@ -712,6 +712,97 @@ public class PricingEngine : IPricingEngine
             .Where(c => allOptionIdSet.Contains(c.ServiceOptionId))
             .ToLookup(c => c.ServiceOptionId);
 
+        // --- Wave 2026-08-04 §16/§17: time-based stop conditions -------------------------------
+        var stopTimes = request.StopTimes ?? [];
+
+        bool ScopeMatches(ServiceConditionStopScope scope, StopTimeInput stop) =>
+            scope == ServiceConditionStopScope.Any
+            || (scope == ServiceConditionStopScope.Unloading) == stop.IsUnloading;
+
+        // A stop's PROMISE matches the condition: "vóór 08:00" satisfies a "vóór 10:00" surcharge
+        // (08 ≤ 10); "na 19:00" satisfies "na 18:00" (19 ≥ 18). Windows expose both bounds.
+        bool RowMatches(ServiceOptionCondition row) => row.Kind switch
+        {
+            ServiceConditionKind.StopTimeBefore => stopTimes.Any(s => ScopeMatches(row.StopScope, s)
+                && s.RequirementKind is "Before" or "Window"
+                && s.RequirementTo is { } to && row.TimeOfDay is { } before && to <= before),
+            ServiceConditionKind.StopTimeAfter => stopTimes.Any(s => ScopeMatches(row.StopScope, s)
+                && s.RequirementKind is "After" or "Window"
+                && s.RequirementFrom is { } from && row.TimeOfDay is { } after && from >= after),
+            ServiceConditionKind.AppointmentRequired => stopTimes.Any(s =>
+                ScopeMatches(row.StopScope, s) && s.AppointmentRequired),
+            ServiceConditionKind.Weekend => stopTimes.Any(s => ScopeMatches(row.StopScope, s)
+                && s.PlannedDate is { } day && day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday),
+            _ => true,
+        };
+
+        var timeConditionHoldsByOption = new Dictionary<Guid, bool>();
+        foreach (var option in allOptions)
+        {
+            var rows = conditionsByOption[option.Id].Where(c => c.Kind != ServiceConditionKind.Warehouse).ToList();
+            timeConditionHoldsByOption[option.Id] = rows
+                .GroupBy(c => c.Kind)
+                .All(kindGroup => kindGroup.Any(RowMatches));
+        }
+
+        bool WouldAutoApply(ServiceOption option)
+        {
+            var over = overrides.GetValueOrDefault(option.Id);
+            var warehouseRows = conditionsByOption[option.Id]
+                .Where(c => c.Kind == ServiceConditionKind.Warehouse).Select(c => c.ReferenceId).ToList();
+            var warehouseHolds = warehouseRows.Count == 0
+                || warehouseRows.Any(id => request.WarehouseIds?.Contains(id) == true);
+            return (over?.AutoApplyOverride ?? option.AutoApply) && over?.Disabled != true
+                   && (!option.OnlyForAdr || request.AdrRequired == true)
+                   && warehouseHolds && timeConditionHoldsByOption[option.Id];
+        }
+
+        // §17 competition: among auto-applied options matched via a non-stacking Before (resp.
+        // After) condition only ONE applies — highest priority wins, then the most specific time
+        // (Before: earliest, After: latest). An exact tie is a blocking configuration error.
+        var suppressedByCompetition = new Dictionary<Guid, string>();
+        foreach (var competitionKind in new[] { ServiceConditionKind.StopTimeBefore, ServiceConditionKind.StopTimeAfter })
+        {
+            var contenders = allOptions
+                .Where(o => !selectedIds.Contains(o.Id) && WouldAutoApply(o))
+                .Select(o => (Option: o, Row: conditionsByOption[o.Id]
+                    .Where(c => c.Kind == competitionKind && !c.AllowStacking && RowMatches(c))
+                    .OrderByDescending(c => c.Priority)
+                    .FirstOrDefault()))
+                .Where(x => x.Row is not null)
+                .ToList();
+            if (contenders.Count < 2)
+            {
+                continue;
+            }
+
+            var ordered = (competitionKind == ServiceConditionKind.StopTimeBefore
+                    ? contenders.OrderByDescending(x => x.Row!.Priority).ThenBy(x => x.Row!.TimeOfDay)
+                    : contenders.OrderByDescending(x => x.Row!.Priority).ThenByDescending(x => x.Row!.TimeOfDay))
+                .ToList();
+            var winner = ordered[0];
+            var runnerUp = ordered[1];
+            if (winner.Row!.Priority == runnerUp.Row!.Priority && winner.Row.TimeOfDay == runnerUp.Row.TimeOfDay)
+            {
+                configurationError ??= "Conflicterende tijdsvoorwaarden: "
+                    + $"'{winner.Option.Name}' én '{runnerUp.Option.Name}' matchen even specifiek. "
+                    + "Onderscheid ze met prioriteit of tijd.";
+                requiresManual = true;
+                foreach (var contender in ordered)
+                {
+                    suppressedByCompetition[contender.Option.Id] = "conflict";
+                }
+
+                lines.Add(new PriceBreakdownLine(configurationError, 0m, "Configuratiefout"));
+                continue;
+            }
+
+            foreach (var loser in ordered.Skip(1))
+            {
+                suppressedByCompetition[loser.Option.Id] = winner.Option.Name;
+            }
+        }
+
         foreach (var option in allOptions)
         {
             var over = overrides.GetValueOrDefault(option.Id);
@@ -723,6 +814,7 @@ public class PricingEngine : IPricingEngine
                 .ToList();
             var warehouseConditionHolds = warehouseConditionIds.Count == 0
                 || warehouseConditionIds.Any(id => request.WarehouseIds?.Contains(id) == true);
+            var timeConditionHolds = timeConditionHoldsByOption[option.Id];
 
             // Auto-apply: a contract service the engine adds without the user selecting it —
             // active, effectively auto (customer override wins), not disabled for this customer,
@@ -730,7 +822,8 @@ public class PricingEngine : IPricingEngine
             var effectiveAutoApply = over?.AutoApplyOverride ?? option.AutoApply;
             var autoEligible = effectiveAutoApply && over?.Disabled != true
                                 && (!option.OnlyForAdr || request.AdrRequired == true)
-                                && warehouseConditionHolds;
+                                && warehouseConditionHolds
+                                && timeConditionHolds;
             var isAutoApplied = !isSelected && autoEligible;
             if (!isSelected && !isAutoApplied)
             {
@@ -759,6 +852,26 @@ public class PricingEngine : IPricingEngine
                 // touches one of the configured warehouses — informational, never charged.
                 lines.Add(new PriceBreakdownLine(
                     $"{option.Name}: alleen van toepassing voor het gekoppelde magazijn", 0m, "Voorwaarde", Informational: true));
+                continue;
+            }
+
+            if (!timeConditionHolds)
+            {
+                // Explicit selection of a time-conditioned service whose stop-time requirement
+                // does not match — informational, never charged (§16).
+                lines.Add(new PriceBreakdownLine(
+                    $"{option.Name}: alleen van toepassing bij de ingestelde tijdseis", 0m, "Voorwaarde", Informational: true));
+                continue;
+            }
+
+            if (isAutoApplied && suppressedByCompetition.TryGetValue(option.Id, out var winnerName))
+            {
+                // §17: never a silent double charge — the loser explains why it did not apply.
+                lines.Add(new PriceBreakdownLine(
+                    winnerName == "conflict"
+                        ? $"{option.Name}: niet toegepast — conflicterende tijdsvoorwaarden"
+                        : $"{option.Name}: niet toegepast — '{winnerName}' heeft voorrang",
+                    0m, "Voorwaarde", Informational: true));
                 continue;
             }
 
@@ -1015,7 +1128,9 @@ public class PricingEngine : IPricingEngine
     {
         var (loading, unloading, combined, rate, anyOverrideSet) = ResolveIncludedTime(
             includedLoadingMinutes, includedUnloadingMinutes, includedCombinedMinutes, extraHourlyRate, overrides);
-        return new IncludedTimeInfoDto(loading, unloading, combined, rate, anyOverrideSet ? "Order" : "Contract");
+        // §18: stop-level overrides beat order-level ones — the source reflects the winner.
+        var source = !anyOverrideSet ? "Contract" : overrides?.FromStopOverride == true ? "Stop" : "Order";
+        return new IncludedTimeInfoDto(loading, unloading, combined, rate, source);
     }
 
     /// <summary>

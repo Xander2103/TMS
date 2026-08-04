@@ -1324,9 +1324,14 @@ public class PricingAdminService : IPricingAdminService
         ApplyOption(option, request);
         _dbContext.ServiceOptions.Add(option);
         await ApplyWarehouseConditionsAsync(option, request.WarehouseIds, cancellationToken);
+        await ApplyTimeConditionsAsync(option, request.TimeConditions, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Created", null,
-            new { option.Code, option.Name, option.Kind, WarehouseIds = request.WarehouseIds ?? [] }, cancellationToken);
+            new
+            {
+                option.Code, option.Name, option.Kind, WarehouseIds = request.WarehouseIds ?? [],
+                TimeConditions = request.TimeConditions ?? [],
+            }, cancellationToken);
         return await MapOptionAsync(option, cancellationToken);
     }
 
@@ -1341,9 +1346,14 @@ public class PricingAdminService : IPricingAdminService
         await ValidateOptionAsync(request, cancellationToken);
         ApplyOption(option, request);
         await ApplyWarehouseConditionsAsync(option, request.WarehouseIds, cancellationToken);
+        await ApplyTimeConditionsAsync(option, request.TimeConditions, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("ServiceOption", option.Id.ToString(), "Updated", null,
-            new { option.Code, option.Name, option.Kind, WarehouseIds = request.WarehouseIds ?? [] }, cancellationToken);
+            new
+            {
+                option.Code, option.Name, option.Kind, WarehouseIds = request.WarehouseIds ?? [],
+                TimeConditions = request.TimeConditions ?? [],
+            }, cancellationToken);
         return await MapOptionAsync(option, cancellationToken);
     }
 
@@ -2069,6 +2079,22 @@ public class PricingAdminService : IPricingAdminService
                 throw new InvalidTenantReferenceException("magazijn");
             }
         }
+
+        // Wave 2026-08-04 §16: time conditions need their threshold; nothing is ever hardcoded.
+        foreach (var condition in request.TimeConditions ?? [])
+        {
+            if (condition.Kind is ServiceConditionKind.StopTimeBefore or ServiceConditionKind.StopTimeAfter
+                && condition.TimeOfDay is null)
+            {
+                throw new DomainValidationException("timeConditions", "Geef het uur van de tijdsvoorwaarde op.");
+            }
+
+            if (condition.Kind is ServiceConditionKind.Warehouse)
+            {
+                throw new DomainValidationException("timeConditions",
+                    "Magazijnvoorwaarden worden via de magazijnselectie beheerd.");
+            }
+        }
     }
 
     /// <summary>
@@ -2089,6 +2115,35 @@ public class PricingAdminService : IPricingAdminService
             {
                 Id = Guid.NewGuid(), TenantId = TenantId, ServiceOptionId = option.Id,
                 Kind = ServiceConditionKind.Warehouse, ReferenceId = id,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Wave 2026-08-04 §16: replaces the option's time-based condition rows with the requested
+    /// list (value-matched add/remove — never delete-all-rewrite). Warehouse rows are untouched.
+    /// </summary>
+    private async Task ApplyTimeConditionsAsync(
+        ServiceOption option, IReadOnlyList<ServiceTimeConditionDto>? timeConditions, CancellationToken cancellationToken)
+    {
+        var wanted = (timeConditions ?? [])
+            .Select(c => (c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking))
+            .Distinct()
+            .ToHashSet();
+        var existing = await _dbContext.ServiceOptionConditions
+            .Where(c => c.TenantId == TenantId && c.ServiceOptionId == option.Id && c.Kind != ServiceConditionKind.Warehouse)
+            .ToListAsync(cancellationToken);
+        _dbContext.RemoveRange(existing.Where(c => !wanted.Contains((c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking))));
+        var kept = existing
+            .Select(c => (c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking))
+            .ToHashSet();
+        foreach (var row in wanted.Except(kept))
+        {
+            _dbContext.ServiceOptionConditions.Add(new ServiceOptionCondition
+            {
+                Id = Guid.NewGuid(), TenantId = TenantId, ServiceOptionId = option.Id,
+                Kind = row.Kind, StopScope = row.StopScope, TimeOfDay = row.TimeOfDay,
+                Priority = row.Priority, AllowStacking = row.AllowStacking,
             });
         }
     }
@@ -2120,11 +2175,16 @@ public class PricingAdminService : IPricingAdminService
             .Where(u => u.TenantId == TenantId && unitIds.Contains(u.Id))
             .ToDictionaryAsync(u => u.Id, u => u.Name, cancellationToken);
         var optionIds = options.Select(o => o.Id).ToList();
-        var conditions = (await _dbContext.ServiceOptionConditions.AsNoTracking()
-                .Where(c => c.TenantId == TenantId && optionIds.Contains(c.ServiceOptionId)
-                            && c.Kind == ServiceConditionKind.Warehouse)
-                .ToListAsync(cancellationToken))
+        var allConditions = await _dbContext.ServiceOptionConditions.AsNoTracking()
+            .Where(c => c.TenantId == TenantId && optionIds.Contains(c.ServiceOptionId))
+            .ToListAsync(cancellationToken);
+        var conditions = allConditions
+            .Where(c => c.Kind == ServiceConditionKind.Warehouse)
             .ToLookup(c => c.ServiceOptionId, c => c.ReferenceId);
+        var timeConditions = allConditions
+            .Where(c => c.Kind != ServiceConditionKind.Warehouse)
+            .ToLookup(c => c.ServiceOptionId,
+                c => new ServiceTimeConditionDto(c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking));
         var warehouseIds = conditions.SelectMany(g => g).Distinct().ToList();
         var warehouseNames = await _dbContext.Warehouses.AsNoTracking()
             .Where(w => w.TenantId == TenantId && warehouseIds.Contains(w.Id))
@@ -2135,7 +2195,8 @@ public class PricingAdminService : IPricingAdminService
             o.UnitTypeId, o.UnitTypeId is { } uid ? unitNames.GetValueOrDefault(uid) : null,
             o.AutoApply, o.OnlyForAdr,
             conditions[o.Id].ToList(),
-            conditions[o.Id].Select(id => warehouseNames.GetValueOrDefault(id, "?")).ToList())).ToList();
+            conditions[o.Id].Select(id => warehouseNames.GetValueOrDefault(id, "?")).ToList(),
+            timeConditions[o.Id].ToList())).ToList();
     }
 
     private async Task<IReadOnlyList<PriceRuleDto>> MapRulesAsync(IReadOnlyList<PriceRule> rules, CancellationToken cancellationToken)

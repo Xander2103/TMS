@@ -226,6 +226,14 @@ public class TransportOrderStop : AuditableTenantEntity
     /// <summary>Before this time (Before / end of Window).</summary>
     public TimeOnly? TimeRequirementTo { get; set; }
 
+    /// <summary>
+    /// Wave 2026-08-04 §18: stop-level override of the included loading/unloading minutes for
+    /// THIS stop's activity. Resolution: stop override → order override → contract value. When
+    /// any stop of an activity carries an override, the activity's effective included minutes
+    /// are the sum of the overriding stops' values (a stop without one contributes 0).
+    /// </summary>
+    public int? IncludedTimeMinutesOverride { get; set; }
+
     /// <summary>Stop-level reference (dossier, container number, booking slot, ...).</summary>
     public string? Reference { get; set; }
 

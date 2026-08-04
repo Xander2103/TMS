@@ -115,6 +115,8 @@ interface StopFormRow {
   accessInstructions: string
   loadingInstructions: string
   unloadingInstructions: string
+  /** §18: stop-level included-minutes override ('' = geen afwijking). */
+  includedTimeMinutesOverride: string
   /** §13: compact card state for orders with many stops. */
   collapsed: boolean
 }
@@ -154,6 +156,7 @@ function emptyStop(stopType: StopInput['stopType']): StopFormRow {
     accessInstructions: '',
     loadingInstructions: '',
     unloadingInstructions: '',
+    includedTimeMinutesOverride: '',
     collapsed: false,
   }
 }
@@ -277,6 +280,8 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           accessInstructions: s.accessInstructions ?? '',
           loadingInstructions: s.loadingInstructions ?? '',
           unloadingInstructions: s.unloadingInstructions ?? '',
+          includedTimeMinutesOverride:
+            s.includedTimeMinutesOverride != null ? String(s.includedTimeMinutesOverride) : '',
           // Beyond the primary loading/unloading pair stops start compact (§13).
           collapsed: index >= 2,
         }))
@@ -598,6 +603,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds, serviceQuantities,
     servicePallets, serviceDays, touchedWarehouseIds,
     adrRequired, cargoItems.map((c) => [c.quantityUnitCode, c.expectedQuantity, c.totalWeightKg, c.palletCount]),
+    stops.map((s) => [s.stopType, s.timeRequirement, s.timeReqFrom, s.timeReqTo, s.appointmentRequired, s.date]),
     pricingSource, oneOffFixedAmount, oneOffTimeMode, oneOffIncludedLoadingMinutes, oneOffIncludedUnloadingMinutes,
     oneOffIncludedCombinedMinutes, oneOffExtraHourlyRate, oneOffNotes,
   ])
@@ -646,6 +652,15 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         cargoLineCount: cargoItems.length > 0 ? cargoItems.length : null,
         oneOff,
         warehouseIds: touchedWarehouseIds.length > 0 ? touchedWarehouseIds : null,
+        // §16: stop time requirements drive time-based surcharges live in the preview.
+        stopTimes: stops.map((s) => ({
+          isUnloading: s.stopType === 'Unloading',
+          requirementKind: s.timeRequirement || 'None',
+          requirementFrom: s.timeReqFrom || null,
+          requirementTo: s.timeReqTo || null,
+          appointmentRequired: s.appointmentRequired,
+          plannedDate: s.date || null,
+        })),
       })
         .then(setPreview)
         .catch(() => setPreview(null))
@@ -898,6 +913,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           (stop.timeRequirement === 'Before' || stop.timeRequirement === 'Window') && stop.timeReqTo
             ? stop.timeReqTo
             : null,
+        includedTimeMinutesOverride: numberOrNullFrom(stop.includedTimeMinutesOverride),
         requestedFrom: stop.requestedFrom ? `${stop.requestedFrom}:00Z` : null,
         requestedTo: stop.requestedTo ? `${stop.requestedTo}:00Z` : null,
         confirmedFrom: stop.confirmedFrom ? `${stop.confirmedFrom}:00Z` : null,
@@ -1273,6 +1289,13 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               </FormField>
               <FormField label="Afspraakreferentie" htmlFor={`st-appref-${stop.key}`}>
                 <input id={`st-appref-${stop.key}`} value={stop.appointmentReference} onChange={(e) => setStop(stop.key, { appointmentReference: e.target.value })} disabled={saving} maxLength={100} placeholder="bv. slotnummer" />
+              </FormField>
+              <FormField
+                label="Inbegrepen tijd (minuten)"
+                htmlFor={`st-inclmin-${stop.key}`}
+                hint="Afwijking voor deze stop; gaat vóór de orderafwijking en de contractwaarde."
+              >
+                <input id={`st-inclmin-${stop.key}`} type="number" min={0} value={stop.includedTimeMinutesOverride} onChange={(e) => setStop(stop.key, { includedTimeMinutesOverride: e.target.value })} disabled={saving} />
               </FormField>
             </div>
             <div className="tof-row">
@@ -1805,11 +1828,13 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     includedLoadingMinutesOverride, includedUnloadingMinutesOverride, extraTimeHourlyRateOverride,
     extraTimeRoundingStepMinutes, extraTimeMinimumBillableMinutes,
   ].some((value) => value.trim() !== '')
-  const includedTimeSourceLabel = hasIncludedTimeOverride
-    ? 'Bron: Afwijking op order'
-    : includedTimeInfo?.source === 'Contract'
-      ? 'Bron: Klantcontract'
-      : 'Bron: Geen contractwaarde'
+  const includedTimeSourceLabel = stops.some((s) => s.includedTimeMinutesOverride.trim() !== '')
+    ? 'Bron: Afwijking op stop'
+    : hasIncludedTimeOverride
+      ? 'Bron: Afwijking op order'
+      : includedTimeInfo?.source === 'Contract'
+        ? 'Bron: Klantcontract'
+        : 'Bron: Geen contractwaarde'
   // Mirrors PricingEngine.ResolveIncludedTime: the combined allowance only survives while NEITHER
   // per-activity minutes override is set — an override to the rate/rounding/minimum alone does not
   // switch the agreement out of combined mode, so the combined row must still show.

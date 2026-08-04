@@ -1010,6 +1010,13 @@ public class TransportOrderService : ITransportOrderService
                     "Het uiterste tijdstip moet na het vroegst toegelaten tijdstip liggen.");
             }
 
+            // §18: a stop-level included-time override may not be negative.
+            if (stop.IncludedTimeMinutesOverride is < 0)
+            {
+                return TransportOrderOperationResult.Invalid(
+                    "De afwijkende inbegrepen tijd van een stop mag niet negatief zijn.");
+            }
+
             // §15: the simple time requirement needs the time(s) its kind uses.
             switch (stop.TimeRequirement)
             {
@@ -1313,6 +1320,7 @@ public class TransportOrderService : ITransportOrderService
             TimeRequirementTo = input.TimeRequirement is StopTimeRequirementKind.Before or StopTimeRequirementKind.Window
                 ? input.TimeRequirementTo
                 : null,
+            IncludedTimeMinutesOverride = input.IncludedTimeMinutesOverride,
             Reference = Trim(input.Reference),
             Instructions = Trim(input.Instructions),
             AccessInstructions = Trim(input.AccessInstructions),
@@ -1357,7 +1365,8 @@ public class TransportOrderService : ITransportOrderService
                     s.EarliestAllowed, s.LatestAllowed,
                     s.AppointmentRequired, s.AppointmentReference,
                     s.AccessInstructions, s.LoadingInstructions, s.UnloadingInstructions,
-                    s.TimeRequirement, s.TimeRequirementFrom, s.TimeRequirementTo);
+                    s.TimeRequirement, s.TimeRequirementFrom, s.TimeRequirementTo,
+                    s.IncludedTimeMinutesOverride);
             })
             .ToList();
 
@@ -1617,17 +1626,32 @@ public class TransportOrderService : ITransportOrderService
                     order.OneOffFixedAmount ?? 0m, order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes,
                     order.OneOffIncludedCombinedMinutes, order.OneOffExtraHourlyRate, order.OneOffNotes)
                 : null;
-            // Task 10: order-level included-time overrides, contract mode only (never built for a
-            // one-off order — ValidateAsync/IncludedTimeOverrideError already rejects that
-            // combination, but this stays a belt-and-braces guard against ever feeding them into
-            // the one-off branch of PricingEngine.CalculateAsync).
+            // Task 10 + wave 2026-08-04 §18: included-time resolution stop → order → contract.
+            // A stop-level override replaces the activity's included minutes (summed when several
+            // stops of the activity carry one). Contract mode only (never built for a one-off
+            // order — ValidateAsync/IncludedTimeOverrideError already rejects that combination,
+            // but this stays a belt-and-braces guard against ever feeding them into the one-off
+            // branch of PricingEngine.CalculateAsync).
+            var loadingStopOverrides = order.Stops
+                .Where(s => !s.IsDeleted && s.StopType == StopType.Loading && s.IncludedTimeMinutesOverride is not null)
+                .Select(s => s.IncludedTimeMinutesOverride!.Value)
+                .ToList();
+            var unloadingStopOverrides = order.Stops
+                .Where(s => !s.IsDeleted && s.StopType == StopType.Unloading && s.IncludedTimeMinutesOverride is not null)
+                .Select(s => s.IncludedTimeMinutesOverride!.Value)
+                .ToList();
+            int? stopLoadingOverride = loadingStopOverrides.Count > 0 ? loadingStopOverrides.Sum() : null;
+            int? stopUnloadingOverride = unloadingStopOverrides.Count > 0 ? unloadingStopOverrides.Sum() : null;
+            var effectiveLoadingOverride = stopLoadingOverride ?? order.IncludedLoadingMinutesOverride;
+            var effectiveUnloadingOverride = stopUnloadingOverride ?? order.IncludedUnloadingMinutesOverride;
             var includedTimeOverrides = order.PricingSource != OrderPricingSource.OneOff
-                && (order.IncludedLoadingMinutesOverride is not null || order.IncludedUnloadingMinutesOverride is not null
+                && (effectiveLoadingOverride is not null || effectiveUnloadingOverride is not null
                     || order.ExtraTimeHourlyRateOverride is not null || order.ExtraTimeRoundingStepMinutes is not null
                     || order.ExtraTimeMinimumBillableMinutes is not null)
                 ? new IncludedTimeOverrideInput(
-                    order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
-                    order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes)
+                    effectiveLoadingOverride, effectiveUnloadingOverride,
+                    order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
+                    FromStopOverride: stopLoadingOverride is not null || stopUnloadingOverride is not null)
                 : null;
             // Warehouses the order touches (stop at the warehouse's master location) — feeds
             // warehouse-conditioned service options (wave 2026-07-27 §2.4).
@@ -1642,6 +1666,19 @@ public class TransportOrderService : ITransportOrderService
                     .Where(w => w.TenantId == tenantId && w.IsActive && stopLocationIds.Contains(w.LocationId))
                     .Select(w => w.Id)
                     .ToListAsync(cancellationToken);
+
+            // §16: per-stop time facts feed time-based service conditions (never hardcoded times).
+            var stopTimeInputs = order.Stops
+                .Where(s => !s.IsDeleted)
+                .OrderBy(s => s.Sequence)
+                .Select(s => new StopTimeInput(
+                    s.StopType == StopType.Unloading,
+                    s.TimeRequirement.ToString(),
+                    s.TimeRequirementFrom,
+                    s.TimeRequirementTo,
+                    s.AppointmentRequired,
+                    (s.PlannedFrom ?? s.PlannedTo) is { } planned ? DateOnly.FromDateTime(planned) : null))
+                .ToList();
 
             var groups = await BuildPricingGroupsAsync(order, cargoItems, cancellationToken);
             if (groups.Count == 0 && lines.Count > 0)
@@ -1667,7 +1704,8 @@ public class TransportOrderService : ITransportOrderService
                 ActualUnloadingMinutes: actualUnloadingMinutes,
                 Groups: groups.Count > 0 ? groups : null,
                 WarehouseIds: warehouseIds,
-                IncludedTimeOverrides: includedTimeOverrides), cancellationToken);
+                IncludedTimeOverrides: includedTimeOverrides,
+                StopTimes: stopTimeInputs.Count > 0 ? stopTimeInputs : null), cancellationToken);
         }
 
         var calculated = result is { RequiresManualPrice: false } && result.Lines.Any(l => !l.Informational)
@@ -2022,6 +2060,11 @@ public class TransportOrderService : ITransportOrderService
             return true;
         }
 
+        if (StopTimeRequirementsChanged(order))
+        {
+            return true;
+        }
+
         var storedServices = await _dbContext.TransportOrderServiceLines
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .ToListAsync(cancellationToken);
@@ -2060,6 +2103,34 @@ public class TransportOrderService : ITransportOrderService
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Wave 2026-08-04 §16/§21: stop time requirements feed time-based surcharges and are
+    /// therefore pricing inputs. Stops are wholesale-replaced on update, so the old rows are the
+    /// change tracker's Deleted entries; compared as ordered multisets of the pricing-relevant
+    /// facts. Planned dates/windows are deliberately NOT compared — planning must stay possible
+    /// on a locked price.
+    /// </summary>
+    private bool StopTimeRequirementsChanged(TransportOrder order)
+    {
+        var oldStops = _dbContext.ChangeTracker.Entries<TransportOrderStop>()
+            .Where(e => e.State == EntityState.Deleted && e.Entity.TransportOrderId == order.Id)
+            .Select(e => e.Entity)
+            .ToList();
+        if (oldStops.Count == 0)
+        {
+            // Create path / recalculation: no replacement happened.
+            return false;
+        }
+
+        static (StopType, StopTimeRequirementKind, TimeOnly?, TimeOnly?, bool, int?) Key(TransportOrderStop s) =>
+            (s.StopType, s.TimeRequirement, s.TimeRequirementFrom, s.TimeRequirementTo, s.AppointmentRequired,
+             s.IncludedTimeMinutesOverride);
+
+        var before = oldStops.Select(Key).OrderBy(k => k).ToList();
+        var after = order.Stops.Where(s => !s.IsDeleted).Select(Key).OrderBy(k => k).ToList();
+        return !before.SequenceEqual(after);
     }
 
     /// <summary>

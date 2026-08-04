@@ -402,6 +402,20 @@ export interface ServiceOption {
   /** Warehouse condition: only applies when the order touches one of these warehouses. Empty = all orders. */
   warehouseIds?: string[] | null
   warehouseNames?: string[] | null
+  /** Wave 2026-08-04 §16: time-based stop conditions. */
+  timeConditions?: ServiceTimeCondition[] | null
+}
+
+/** One time-based condition row of a service option (wave 2026-08-04 §16/§17). */
+export interface ServiceTimeCondition {
+  kind: 'StopTimeBefore' | 'StopTimeAfter' | 'AppointmentRequired' | 'Weekend'
+  stopScope: 'Any' | 'Loading' | 'Unloading'
+  /** "HH:mm[:ss]" — StopTimeBefore/StopTimeAfter only. */
+  timeOfDay: string | null
+  /** Competition priority among matched Before (resp. After) conditions; higher wins. */
+  priority: number
+  /** Opt-in stacking: never competes, always applies when matched. */
+  allowStacking: boolean
 }
 
 export interface ServiceOptionInput {
@@ -419,6 +433,8 @@ export interface ServiceOptionInput {
   onlyForAdr?: boolean
   /** Warehouse condition (OR within the list, AND with the ADR flag); empty/omitted = all orders. */
   warehouseIds?: string[] | null
+  /** Wave 2026-08-04 §16: time-based stop conditions; the list replaces the stored rows. */
+  timeConditions?: ServiceTimeCondition[] | null
 }
 
 export const listServiceOptions = (includeInactive = false, forOrderEntry = false): Promise<ServiceOption[]> => {
@@ -613,6 +629,20 @@ export interface PricePreviewInput {
   actualUnloadingMinutes?: number | null
   /** Warehouses the order touches (stop at a warehouse's master location) — drives warehouse-conditioned services. */
   warehouseIds?: string[] | null
+  /** Wave 2026-08-04 §16: per-stop time facts driving time-based service conditions. */
+  stopTimes?: StopTimePreviewInput[] | null
+}
+
+/** One stop's time facts for time-based service conditions (wave 2026-08-04 §16). */
+export interface StopTimePreviewInput {
+  isUnloading: boolean
+  requirementKind: 'None' | 'Before' | 'After' | 'Window'
+  /** "HH:mm". */
+  requirementFrom: string | null
+  requirementTo: string | null
+  appointmentRequired: boolean
+  /** "YYYY-MM-DD" — drives weekend conditions. */
+  plannedDate: string | null
 }
 
 /** A one-off order's own price agreement: no contract is consulted (spec Phase 6). */
