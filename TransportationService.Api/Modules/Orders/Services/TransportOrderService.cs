@@ -196,7 +196,8 @@ public class TransportOrderService : ITransportOrderService
         CreateTransportOrderRequest request, CancellationToken cancellationToken)
     {
         var validation = await ValidateAsync(request.CustomerId, request.CustomerReference, request.GoodsDescription,
-            request.CargoItems?.Select(c => c.Description).ToList(),
+            request.Quantity, request.QuantityUnitCode ?? request.QuantityUnit,
+            hasCargoLines: request.CargoItems is { Count: > 0 },
             request.Stops, enforceCustomerIntake: true, cancellationToken);
         if (validation is not null)
         {
@@ -261,6 +262,7 @@ public class TransportOrderService : ITransportOrderService
         order.LegalEntityId = await ResolveOrderLegalEntityAsync(request.LegalEntityId, request.CustomerId, cancellationToken);
 
         var cargoItems = BuildCargoItems(order.Id, request.CargoItems, order.Stops);
+        DeriveSummaryFromCargo(order, cargoItems);
         if (await ApplyPricingAsync(order, request.AgreedPrice, ResolveServiceSelections(request.Services, request.ServiceOptionIds),
                 request.PriceIsManual, request.PriceOverrideReason, cargoItems, cancellationToken) is { } pricingError)
         {
@@ -316,16 +318,15 @@ public class TransportOrderService : ITransportOrderService
 
         // Switching an order TO a blocked customer is refused; editing an existing order whose
         // customer became blocked afterwards stays possible (dispatch still needs to manage it).
-        // Null CargoItems means "leave unchanged" (API contract), so the description rule falls
+        // Null CargoItems means "leave unchanged" (API contract), so the minimal-cargo rule falls
         // back to the currently persisted lines in that case.
-        var cargoDescriptions = request.CargoItems is not null
-            ? request.CargoItems.Select(c => c.Description).ToList()
+        var hasCargoLines = request.CargoItems is not null
+            ? request.CargoItems.Count > 0
             : await _dbContext.CargoItems.AsNoTracking()
-                .Where(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id)
-                .Select(c => c.Description)
-                .ToListAsync(cancellationToken);
+                .AnyAsync(c => c.TenantId == _tenantContext.TenantId && c.TransportOrderId == order.Id, cancellationToken);
         var validation = await ValidateAsync(request.CustomerId, request.CustomerReference, request.GoodsDescription,
-            cargoDescriptions, request.Stops, enforceCustomerIntake: request.CustomerId != order.CustomerId, cancellationToken);
+            request.Quantity, request.QuantityUnitCode ?? request.QuantityUnit, hasCargoLines,
+            request.Stops, enforceCustomerIntake: request.CustomerId != order.CustomerId, cancellationToken);
         if (validation is not null)
         {
             return validation;
@@ -453,6 +454,7 @@ public class TransportOrderService : ITransportOrderService
             replacementCargo = existingCargo;
         }
 
+        DeriveSummaryFromCargo(order, replacementCargo);
         if (await ApplyPricingAsync(order, request.AgreedPrice, ResolveServiceSelections(request.Services, request.ServiceOptionIds),
                 request.PriceIsManual, request.PriceOverrideReason, replacementCargo, cancellationToken) is { } pricingError)
         {
@@ -938,17 +940,20 @@ public class TransportOrderService : ITransportOrderService
     /// <summary>Shared shape validation for create/update. Returns null when valid.</summary>
     private async Task<TransportOrderOperationResult?> ValidateAsync(
         Guid customerId, string? customerReference, string? goodsDescription,
-        IReadOnlyList<string?>? cargoDescriptions,
+        decimal? quantity, string? quantityUnit, bool hasCargoLines,
         IReadOnlyList<TransportOrderStopInput> stops, bool enforceCustomerIntake,
         CancellationToken cancellationToken)
     {
-        // At least one description must exist somewhere: general, or on any cargo line.
-        var hasAnyDescription = !string.IsNullOrWhiteSpace(goodsDescription)
-            || cargoDescriptions?.Any(d => !string.IsNullOrWhiteSpace(d)) == true;
-        if (!hasAnyDescription)
+        // Minimal cargo information (wave 2026-08-04 §3): quantity + unit, a commercial goods
+        // line, or a general description — any one is enough. Descriptions are never required
+        // when a meaningful quantity exists.
+        var hasMeaningfulCargo = (quantity is > 0 && !string.IsNullOrWhiteSpace(quantityUnit))
+            || hasCargoLines
+            || !string.IsNullOrWhiteSpace(goodsDescription);
+        if (!hasMeaningfulCargo)
         {
             return TransportOrderOperationResult.Invalid(
-                "Geef minstens één omschrijving van de goederen op: algemeen of op een goederenlijn.");
+                "Vul minstens een hoeveelheid en eenheid in, voeg een goederenlijn toe of beschrijf de goederen.");
         }
 
         var customer = await _dbContext.Customers
@@ -1087,6 +1092,60 @@ public class TransportOrderService : ITransportOrderService
 
     private List<CargoItem> BuildCargoItems(Guid orderId, IReadOnlyList<CargoItemInput>? inputs, IReadOnlyList<TransportOrderStop> stops) =>
         (inputs ?? []).Select((input, index) => BuildCargoItem(orderId, input, index + 1, stops)).ToList();
+
+    /// <summary>
+    /// Commercial cargo lines are the source of truth when they exist (wave 2026-08-04 §2): the
+    /// order-level summary is derived from them, never independently edited, so summary and lines
+    /// can no longer contradict each other. Facet by facet: quantity+unit collapse to the single
+    /// shared managed unit (multi-unit orders keep a null header pair — the summary lives in the
+    /// lines); weight/volume/pallets replace the header value as soon as any line carries that
+    /// measure. Orders without lines keep the legacy hand-entered header fields.
+    /// </summary>
+    private static void DeriveSummaryFromCargo(TransportOrder order, IReadOnlyList<CargoItem> cargoItems)
+    {
+        var lines = cargoItems.Where(c => !c.IsDeleted).ToList();
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        if (lines.All(c => !string.IsNullOrWhiteSpace(c.QuantityUnitCode)))
+        {
+            var codes = lines
+                .Select(c => c.QuantityUnitCode!.Trim().ToUpperInvariant())
+                .Distinct()
+                .ToList();
+            if (codes.Count == 1)
+            {
+                order.Quantity = lines.Sum(c => c.ExpectedQuantity);
+                order.QuantityUnitCode = codes[0];
+                order.QuantityUnit = null;
+            }
+            else
+            {
+                order.Quantity = null;
+                order.QuantityUnitCode = null;
+                order.QuantityUnit = null;
+            }
+        }
+        // Lines without managed codes: the header pair stays as the legacy fallback.
+
+        if (lines.Any(c => c.TotalWeightKg is not null))
+        {
+            order.WeightKg = lines.Sum(c => c.TotalWeightKg ?? 0m);
+        }
+
+        if (lines.Any(c => c.VolumeM3 is not null))
+        {
+            order.VolumeM3 = lines.Sum(c => c.VolumeM3 ?? 0m);
+        }
+
+        if (lines.Any(c => c.PalletCount is not null))
+        {
+            // Ceiling: a started pallet place occupies a whole one commercially.
+            order.PalletCount = (int)Math.Ceiling(lines.Sum(c => c.PalletCount ?? 0m));
+        }
+    }
 
     private CargoItem BuildCargoItem(Guid orderId, CargoItemInput input, int sequence, IReadOnlyList<TransportOrderStop> stops)
     {
@@ -1428,8 +1487,44 @@ public class TransportOrderService : ITransportOrderService
         PriceCalculationResult? result = null;
         if (_pricingEngine is not null)
         {
+            // Commercial cargo lines are the pricing source of truth as soon as any carries a
+            // managed unit code (wave 2026-08-04 §2/§6): one engine line per distinct unit with
+            // summed quantities, so a unit change on a goods line immediately re-prices and the
+            // header pair can never feed a stale unit into the engine. The order-level pair only
+            // serves orders without coded lines (legacy fallback). Never both — that would
+            // double-count.
             var lines = new List<PriceCalculationLineInput>();
-            if (order.Quantity is { } quantity && quantity > 0 && order.QuantityUnitCode is { } code)
+            var codedCargo = (cargoItems ?? [])
+                .Where(c => !c.IsDeleted && !string.IsNullOrWhiteSpace(c.QuantityUnitCode))
+                .ToList();
+            if (codedCargo.Count > 0)
+            {
+                var codes = codedCargo
+                    .Select(c => c.QuantityUnitCode!.Trim().ToUpperInvariant())
+                    .Distinct()
+                    .ToList();
+                var unitTypeIds = await _dbContext.UnitTypes.AsNoTracking()
+                    .Where(u => u.TenantId == tenantId && codes.Contains(u.Code))
+                    .ToDictionaryAsync(u => u.Code, u => u.Id, cancellationToken);
+                foreach (var group in codedCargo.GroupBy(c => c.QuantityUnitCode!.Trim().ToUpperInvariant()))
+                {
+                    if (!unitTypeIds.TryGetValue(group.Key, out var uid))
+                    {
+                        // Unknown code: cannot be priced per unit — pricing coverage reports it.
+                        continue;
+                    }
+
+                    // Per-line dimensions feed billable-quantity contracts (oversize).
+                    var details = group
+                        .Select(c => new PriceCalculationLineDetail(
+                            c.ExpectedQuantity,
+                            c.LengthMeters is { } length ? length * 100m : null,
+                            c.WidthMeters is { } width ? width * 100m : null))
+                        .ToList();
+                    lines.Add(new PriceCalculationLineInput(uid, group.Sum(c => c.ExpectedQuantity), details));
+                }
+            }
+            else if (order.Quantity is { } quantity && quantity > 0 && order.QuantityUnitCode is { } code)
             {
                 var unitTypeId = await _dbContext.UnitTypes.AsNoTracking()
                     .Where(u => u.TenantId == tenantId && u.Code == code)
@@ -1437,16 +1532,7 @@ public class TransportOrderService : ITransportOrderService
                     .FirstOrDefaultAsync(cancellationToken);
                 if (unitTypeId is { } uid)
                 {
-                    // Cargo lines with the same managed unit describe the physical detail of
-                    // this quantity — dimensions feed billable-quantity contracts (oversize).
-                    var details = (cargoItems ?? [])
-                        .Where(c => !c.IsDeleted && string.Equals(c.QuantityUnitCode, code, StringComparison.OrdinalIgnoreCase))
-                        .Select(c => new PriceCalculationLineDetail(
-                            c.ExpectedQuantity,
-                            c.LengthMeters is { } length ? length * 100m : null,
-                            c.WidthMeters is { } width ? width * 100m : null))
-                        .ToList();
-                    lines.Add(new PriceCalculationLineInput(uid, quantity, details.Count > 0 ? details : null));
+                    lines.Add(new PriceCalculationLineInput(uid, quantity, null));
                 }
             }
 

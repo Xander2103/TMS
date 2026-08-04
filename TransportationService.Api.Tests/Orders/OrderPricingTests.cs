@@ -449,11 +449,14 @@ public class OrderPricingTests
             "PICK", "Picking", SurchargeKind.PerUnit, 1.25m, true, 0,
             UnitTypeId: h.PalletUnitId, AutoApply: true), CancellationToken.None);
 
-        // Cargo detail exists only for Colli — no cargo item shares "EUROPALLET", so it never
-        // reaches Groups. The order's own primary-unit quantity (2 pallets) must still come from
-        // Lines (order.Quantity), the authoritative source for the order's own unit.
+        // Wave 2026-08-04 §2: commercial cargo lines are the pricing source of truth as soon as
+        // any carries a managed unit code — the pallet quantity must therefore live on its own
+        // cargo line next to the Colli detail (a header-only pallet quantity would be the exact
+        // stale-summary ambiguity this wave removes). The engine receives one line per unit and
+        // the pallet-bound service bills from the Europallet line.
         var created = await h.Sut.CreateAsync(Request(h.CustomerId, quantity: 2, cargoItems:
         [
+            new CargoItemInput("Paletten", null, 2, null, null, QuantityUnitCode: "EUROPALLET"),
             new CargoItemInput("Kleine dozen", null, 5, null, null, QuantityUnitCode: "COLLI"),
         ]), CancellationToken.None);
 

@@ -549,9 +549,9 @@ describe('TransportOrderForm sections + pricing', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
 
     await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
-    const cargoUnitSelects = screen.getAllByLabelText('Eenheid')
-    // The cargo-line unit select is the second "Eenheid" field (after the order-level one).
-    await userEvent.selectOptions(cargoUnitSelects[1], 'EUROPALLET')
+    // Once a line exists the order-level "Eenheid" disappears (summary derives from the lines),
+    // so the cargo-line unit select is the only "Eenheid" field left.
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
 
     // 120 × 80 cm from master data arrives as 1.2 × 0.8 m; empty fields only (overridable).
     await waitFor(() => expect(screen.getByLabelText('Lengte (m)')).toHaveValue(1.2))
@@ -786,18 +786,17 @@ describe('TransportOrderForm sections + pricing', () => {
   })
 })
 
-describe('TransportOrderForm goods-description rule', () => {
+describe('TransportOrderForm minimal-cargo rule (wave 2026-08-04 §3)', () => {
   beforeEach(() => {
     auth.permissions = new Set(['locations.create'])
   })
 
-  it('submits with an empty general description when a cargo line has one', async () => {
+  it('submits with an empty general description when a cargo line exists (descriptions optional)', async () => {
     const { onSubmit } = renderForm()
     await fillMinimalRouteAndCustomer()
 
     await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
     await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
-    await userEvent.type(screen.getByLabelText('Omschrijving'), '2 europallets onderdelen')
 
     await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
 
@@ -805,15 +804,76 @@ describe('TransportOrderForm goods-description rule', () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ goodsDescription: null }))
   })
 
-  it('rejects submission when neither the general nor any line description is filled in', async () => {
+  it('submits with only a quantity and unit, no description anywhere', async () => {
+    const { onSubmit } = renderForm()
+    await fillMinimalRouteAndCustomer()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '2')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ quantity: 2, quantityUnitCode: 'EUROPALLET', goodsDescription: null }),
+    )
+  })
+
+  it('rejects submission when there is no quantity, no goods line and no description at all', async () => {
     const { onSubmit } = renderForm()
     await fillMinimalRouteAndCustomer()
 
     await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
 
     expect(await screen.findByText(
-      'Geef minstens één omschrijving van de goederen op: algemeen of per goederenlijn.',
+      'Vul minstens een hoeveelheid en eenheid in, voeg een goederenlijn toe of beschrijf de goederen.',
     )).toBeInTheDocument()
     expect(onSubmit).not.toHaveBeenCalled()
+  })
+})
+
+describe('TransportOrderForm derived goods summary (wave 2026-08-04 §2)', () => {
+  beforeEach(() => {
+    auth.permissions = new Set(['locations.create'])
+  })
+
+  it('replaces the header quantity inputs with a derived Lading summary once a line exists', async () => {
+    renderForm()
+    await fillMinimalRouteAndCustomer()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    expect(screen.getByLabelText('Aantal')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Goederenlijn' }))
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+    await userEvent.clear(screen.getByLabelText('Verwacht aantal *'))
+    await userEvent.type(screen.getByLabelText('Verwacht aantal *'), '2')
+
+    // Header inputs are gone; the derived summary shows the aggregated lading.
+    expect(screen.queryByLabelText('Aantal')).not.toBeInTheDocument()
+    expect(screen.getByText('Lading')).toBeInTheDocument()
+    expect(screen.getByText(/2 Europallet/)).toBeInTheDocument()
+    expect(
+      screen.getByText('De samenvatting wordt automatisch afgeleid van de goederenlijnen hieronder.'),
+    ).toBeInTheDocument()
+  })
+
+  it('offers a migration action that converts the header summary into the first goods line', async () => {
+    renderForm()
+    await fillMinimalRouteAndCustomer()
+
+    await userEvent.click(screen.getByRole('tab', { name: /Goederen/ }))
+    await userEvent.type(screen.getByLabelText('Aantal'), '5')
+    await userEvent.selectOptions(screen.getByLabelText('Eenheid'), 'EUROPALLET')
+    await userEvent.type(screen.getByLabelText('Gewicht (kg)'), '120')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Zet samenvatting om naar goederenlijn' }))
+
+    // A line seeded from the summary now exists and drives the derived summary.
+    expect(screen.getByText(/5 Europallet/)).toBeInTheDocument()
+    expect(screen.getByText(/Totaal gewicht: 120 kg/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Aantal')).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue('120')).toBeInTheDocument()
   })
 })

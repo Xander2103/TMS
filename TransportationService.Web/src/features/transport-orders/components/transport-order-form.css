@@ -155,6 +155,28 @@
   }
 }
 
+.tof-derived-summary {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 8px 0;
+  background: var(--surface-muted, rgba(0, 0, 0, 0.03));
+}
+
+.tof-derived-summary h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.tof-lading-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.tof-lading-list li {
+  font-size: 14px;
+}
+
 .tof-stop-extended {
   margin-top: 4px;
   border-top: 1px dashed var(--border);

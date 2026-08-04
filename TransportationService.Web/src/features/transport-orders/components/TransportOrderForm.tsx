@@ -496,6 +496,55 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           notes: oneOffNotes.trim() || null,
         }
 
+  // Wave 2026-08-04 §2: commercial goods lines are the source of truth as soon as any row
+  // exists — the order summary derives from them and the header inputs disappear.
+  const derivedFromCargo = cargoItems.length > 0
+  const cargoSummary = (() => {
+    if (!derivedFromCargo) return null
+    const units = new Map<string, number>()
+    let weight = 0
+    let hasWeight = false
+    let volume = 0
+    let hasVolume = false
+    let pallets = 0
+    let hasPallets = false
+    for (const c of cargoItems) {
+      const qty = c.expectedQuantity === '' ? 0 : Number(c.expectedQuantity)
+      const label =
+        unitOptions.find((u) => u.code === c.quantityUnitCode)?.name ??
+        c.quantityUnitCode ??
+        (c.quantityUnit.trim() || 'stuks')
+      units.set(label, (units.get(label) ?? 0) + qty)
+      if (c.totalWeightKg.trim()) {
+        weight += Number(c.totalWeightKg)
+        hasWeight = true
+      }
+      const lineVolume = c.volumeIsManual
+        ? numberOrNullFrom(c.volumeM3)
+        : computeVolumeM3(
+            numberOrNullFrom(c.lengthMeters),
+            numberOrNullFrom(c.widthMeters),
+            numberOrNullFrom(c.heightMeters),
+          )
+      if (lineVolume !== null) {
+        volume += lineVolume
+        hasVolume = true
+      }
+      if (c.palletCount.trim()) {
+        pallets += Number(c.palletCount)
+        hasPallets = true
+      }
+    }
+    return {
+      units: [...units.entries()],
+      weight: hasWeight ? weight : null,
+      volume: hasVolume ? volume : null,
+      pallets: hasPallets ? Math.ceil(pallets) : null,
+    }
+  })()
+  const effectiveWeightKg = cargoSummary?.weight ?? (weightKg === '' ? null : Number(weightKg))
+  const effectivePalletCount = cargoSummary?.pallets ?? (palletCount === '' ? null : Number(palletCount))
+
   // Live price preview, debounced on the pricing-relevant inputs.
   const lastUnloading = [...stops].reverse().find((s) => s.stopType === 'Unloading')
   // Warehouses the order touches (stop at a warehouse's master location) — mirrors the
@@ -507,15 +556,32 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount,
     lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds, serviceQuantities,
     servicePallets, serviceDays, touchedWarehouseIds,
-    adrRequired, cargoItems.length,
+    adrRequired, cargoItems.map((c) => [c.quantityUnitCode, c.expectedQuantity, c.totalWeightKg, c.palletCount]),
     pricingSource, oneOffFixedAmount, oneOffTimeMode, oneOffIncludedLoadingMinutes, oneOffIncludedUnloadingMinutes,
     oneOffIncludedCombinedMinutes, oneOffExtraHourlyRate, oneOffNotes,
   ])
   useEffect(() => {
-    const unitTypeId = unitOptions.find((u) => u.code === quantityUnitCode)?.id ?? null
-    const lines = unitTypeId && quantity !== '' && Number(quantity) > 0
-      ? [{ unitTypeId, quantity: Number(quantity) }]
-      : []
+    // Mirrors the backend: cargo lines with a managed unit drive the price (one line per unit,
+    // quantities summed); the header pair only serves orders without coded lines.
+    const codedCargo = cargoItems.filter(
+      (c) => c.quantityUnitCode && c.expectedQuantity !== '' && Number(c.expectedQuantity) > 0,
+    )
+    let lines: Array<{ unitTypeId: string; quantity: number }> = []
+    if (codedCargo.length > 0) {
+      const byCode = new Map<string, number>()
+      for (const c of codedCargo) {
+        byCode.set(c.quantityUnitCode!, (byCode.get(c.quantityUnitCode!) ?? 0) + Number(c.expectedQuantity))
+      }
+      lines = [...byCode.entries()].flatMap(([code, qty]) => {
+        const unitTypeId = unitOptions.find((u) => u.code === code)?.id
+        return unitTypeId ? [{ unitTypeId, quantity: qty }] : []
+      })
+    } else {
+      const unitTypeId = unitOptions.find((u) => u.code === quantityUnitCode)?.id ?? null
+      lines = unitTypeId && quantity !== '' && Number(quantity) > 0
+        ? [{ unitTypeId, quantity: Number(quantity) }]
+        : []
+    }
     const oneOff = oneOffPreviewInput()
     const shouldPreview = Boolean(customerId)
       && (lines.length > 0 || selectedServiceOptionIds.length > 0 || cargoItems.length > 0 || adrRequired || oneOff !== null)
@@ -530,9 +596,9 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         lines,
         deliveryCountryCode: lastUnloading?.countryCode || null,
         deliveryPostalCode: lastUnloading?.postalCode || null,
-        weightKg: weightKg === '' ? null : Number(weightKg),
+        weightKg: effectiveWeightKg,
         distanceKm: null,
-        palletCount: palletCount === '' ? null : Number(palletCount),
+        palletCount: effectivePalletCount,
         serviceOptionIds: selectedServiceOptionIds,
         services: serviceSelections(),
         adrRequired,
@@ -683,8 +749,12 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         return
       }
     }
-    if (!goodsDescription.trim() && !cargoItems.some((c) => c.description.trim())) {
-      setFormError('Geef minstens één omschrijving van de goederen op: algemeen of per goederenlijn.')
+    // Wave 2026-08-04 §3: quantity + unit, a goods line or a description — any one suffices.
+    const hasHeaderQuantity =
+      quantity !== '' && Number(quantity) > 0 && Boolean(quantityUnitCode || quantityUnit.trim())
+    if (!hasHeaderQuantity && cargoItems.length === 0 && !goodsDescription.trim()) {
+      setActive('goederen')
+      setFormError('Vul minstens een hoeveelheid en eenheid in, voeg een goederenlijn toe of beschrijf de goederen.')
       return
     }
     const barcodes = cargoItems.map((c) => c.barcode.trim().toLowerCase()).filter(Boolean)
@@ -1091,37 +1161,69 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         <textarea id="to-goods" rows={2} value={goodsDescription} onChange={(e) => setGoodsDescription(e.target.value)} disabled={saving} maxLength={1000} />
       </FormField>
 
-      <div className="tof-row tof-row-4">
-        <FormField label="Aantal" htmlFor="to-qty">
-          <input id="to-qty" type="number" min={0} step="0.01" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={saving} />
-        </FormField>
-        <FormField
-          label="Eenheid"
-          htmlFor="to-unit"
-          hint={!quantityUnitCode && quantityUnit ? `Bestaande waarde: ${quantityUnit}` : undefined}
-        >
-          {/* Customer units first (favourites ★, customer label); the full active list stays reachable. */}
-          <UnitSelect
-            id="to-unit"
-            value={quantityUnitCode}
-            onChange={setQuantityUnitCode}
-            units={unitOptions}
-            preferredUnits={preferredUnits}
-            disabled={saving}
-          />
-        </FormField>
-        <FormField label="Gewicht (kg)" htmlFor="to-weight">
-          <input id="to-weight" type="number" min={0} step="0.01" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} disabled={saving} />
-        </FormField>
-        <FormField label="Volume (m³)" htmlFor="to-volume">
-          <input id="to-volume" type="number" min={0} step="0.01" value={volumeM3} onChange={(e) => setVolumeM3(e.target.value)} disabled={saving} />
-        </FormField>
-      </div>
+      {!derivedFromCargo && (
+        <>
+          <div className="tof-row tof-row-4">
+            <FormField label="Aantal" htmlFor="to-qty">
+              <input id="to-qty" type="number" min={0} step="0.01" value={quantity} onChange={(e) => setQuantity(e.target.value)} disabled={saving} />
+            </FormField>
+            <FormField
+              label="Eenheid"
+              htmlFor="to-unit"
+              hint={!quantityUnitCode && quantityUnit ? `Bestaande waarde: ${quantityUnit}` : undefined}
+            >
+              {/* Customer units first (favourites ★, customer label); the full active list stays reachable. */}
+              <UnitSelect
+                id="to-unit"
+                value={quantityUnitCode}
+                onChange={setQuantityUnitCode}
+                units={unitOptions}
+                preferredUnits={preferredUnits}
+                disabled={saving}
+              />
+            </FormField>
+            <FormField label="Gewicht (kg)" htmlFor="to-weight">
+              <input id="to-weight" type="number" min={0} step="0.01" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} disabled={saving} />
+            </FormField>
+            <FormField label="Volume (m³)" htmlFor="to-volume">
+              <input id="to-volume" type="number" min={0} step="0.01" value={volumeM3} onChange={(e) => setVolumeM3(e.target.value)} disabled={saving} />
+            </FormField>
+          </div>
+
+          <div className="tof-row tof-row-4">
+            <FormField label="Paletten" htmlFor="to-pallets">
+              <input id="to-pallets" type="number" min={0} value={palletCount} onChange={(e) => setPalletCount(e.target.value)} disabled={saving} />
+            </FormField>
+          </div>
+        </>
+      )}
+
+      {derivedFromCargo && cargoSummary && (
+        <div className="tof-derived-summary">
+          <h4>Lading</h4>
+          <ul className="tof-lading-list">
+            {cargoSummary.units.map(([label, qty]) => (
+              <li key={label}>
+                {qty.toLocaleString('nl-BE')} {label}
+              </li>
+            ))}
+          </ul>
+          <p className="tof-cargo-hint">
+            {[
+              cargoSummary.weight !== null ? `Totaal gewicht: ${cargoSummary.weight.toLocaleString('nl-BE')} kg` : null,
+              cargoSummary.volume !== null ? `Volume: ${cargoSummary.volume.toLocaleString('nl-BE')} m³` : null,
+              cargoSummary.pallets !== null ? `Paletten: ${cargoSummary.pallets.toLocaleString('nl-BE')}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'Vul gewicht of volume per goederenlijn in voor de totalen.'}
+          </p>
+          <p className="tof-cargo-hint">
+            De samenvatting wordt automatisch afgeleid van de goederenlijnen hieronder.
+          </p>
+        </div>
+      )}
 
       <div className="tof-row tof-row-4">
-        <FormField label="Paletten" htmlFor="to-pallets">
-          <input id="to-pallets" type="number" min={0} value={palletCount} onChange={(e) => setPalletCount(e.target.value)} disabled={saving} />
-        </FormField>
         <label className="tof-checkbox">
           <input type="checkbox" checked={adrRequired} onChange={(e) => setAdrRequired(e.target.checked)} disabled={saving} />
           ADR-transport
@@ -1135,6 +1237,47 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       <div className="tof-stops-header">
         <h3>Goederenlijnen</h3>
         <div className="tof-stops-actions">
+          {!derivedFromCargo && (quantity !== '' || weightKg !== '' || volumeM3 !== '' || palletCount !== '') && (
+            <Button
+              variant="secondary"
+              onClick={() =>
+                // Migration action (wave 2026-08-04 §2): the legacy header summary becomes the
+                // first commercial line, so nothing is double-counted once lines take over.
+                setCargoItems((rows) => [
+                  ...rows,
+                  {
+                    key: nextStopKey(),
+                    id: null,
+                    description: '',
+                    barcode: '',
+                    expectedQuantity: quantity !== '' && Number(quantity) > 0 ? quantity : '1',
+                    quantityUnit: quantityUnit,
+                    quantityUnitCode: quantityUnitCode,
+                    notes: '',
+                    unitType: '',
+                    unitTypeLabel: '',
+                    totalWeightKg: weightKg,
+                    weightPerUnitKg: '',
+                    lengthMeters: '',
+                    widthMeters: '',
+                    heightMeters: '',
+                    volumeM3: volumeM3,
+                    volumeIsManual: volumeM3 !== '',
+                    adrRequired: false,
+                    adrDetails: '',
+                    stackable: true,
+                    reference: '',
+                    loadingStopIndex: '',
+                    unloadingStopIndex: '',
+                    palletCount: palletCount,
+                  },
+                ])
+              }
+              disabled={saving}
+            >
+              Zet samenvatting om naar goederenlijn
+            </Button>
+          )}
           <Button
             variant="secondary"
             onClick={() =>
