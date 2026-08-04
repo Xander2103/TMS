@@ -44,7 +44,8 @@ const api = vi.hoisted(() => ({
   getTransportOrder: vi.fn(),
   saveOrderPriceLines: vi.fn(),
   recalculateOrderPricing: vi.fn(),
-  setOrderPricingStatus: vi.fn(),
+  confirmOrderPricing: vi.fn(),
+  reopenOrderPricing: vi.fn(),
   confirmOrderPriceLine: vi.fn(),
 }))
 vi.mock('../../api/transportOrdersApi', async (orig) => ({
@@ -52,7 +53,8 @@ vi.mock('../../api/transportOrdersApi', async (orig) => ({
   getTransportOrder: api.getTransportOrder,
   saveOrderPriceLines: api.saveOrderPriceLines,
   recalculateOrderPricing: api.recalculateOrderPricing,
-  setOrderPricingStatus: api.setOrderPricingStatus,
+  confirmOrderPricing: api.confirmOrderPricing,
+  reopenOrderPricing: api.reopenOrderPricing,
   confirmOrderPriceLine: api.confirmOrderPriceLine,
 }))
 
@@ -145,8 +147,11 @@ beforeEach(() => {
   api.getTransportOrder.mockReset()
   api.saveOrderPriceLines.mockReset()
   api.recalculateOrderPricing.mockReset()
-  api.setOrderPricingStatus.mockReset()
+  api.confirmOrderPricing.mockReset()
+  api.reopenOrderPricing.mockReset()
   api.confirmOrderPriceLine.mockReset()
+  toast.success.mockReset()
+  toast.error.mockReset()
   api.getTransportOrder.mockResolvedValue(baseOrder())
 })
 
@@ -319,13 +324,16 @@ describe('TransportOrderDetailPage pricing lines', () => {
     await waitFor(() => expect(api.confirmOrderPriceLine).toHaveBeenCalledWith('order-1', 'line-proposed'))
   })
 
-  it('hides the lock action without orders.lock_price, shows it and calls the status endpoint when granted', async () => {
+  it('hides "Prijs bevestigen" without orders.lock_price; confirms directly with full coverage when granted', async () => {
     const { rerender } = renderPage()
     await screen.findByText('Basisregel')
-    expect(screen.queryByRole('button', { name: 'Vergrendel prijs' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Prijs bevestigen' })).not.toBeInTheDocument()
+    // Technical lock/unlock wording never appears for normal users.
+    expect(screen.queryByText('Vergrendel prijs')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ontgrendel')).not.toBeInTheDocument()
 
     auth.permissions = new Set(['orders.view', 'orders.override_price', 'orders.edit', 'orders.lock_price'])
-    api.setOrderPricingStatus.mockResolvedValue(baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, status: 'Locked' } }))
+    api.confirmOrderPricing.mockResolvedValue(baseOrder({ pricingSnapshot: { ...baseOrder().pricingSnapshot!, status: 'Locked' } }))
     rerender(
       <MemoryRouter initialEntries={['/transport-orders/order-1']}>
         <Routes>
@@ -333,10 +341,130 @@ describe('TransportOrderDetailPage pricing lines', () => {
         </Routes>
       </MemoryRouter>,
     )
-    await screen.findByRole('button', { name: 'Vergrendel prijs' })
-    await userEvent.click(screen.getByRole('button', { name: 'Vergrendel prijs' }))
+    await screen.findByRole('button', { name: 'Prijs bevestigen' })
+    await userEvent.click(screen.getByRole('button', { name: 'Prijs bevestigen' }))
 
-    await waitFor(() => expect(api.setOrderPricingStatus).toHaveBeenCalledWith('order-1', 'Locked'))
+    await waitFor(() => expect(api.confirmOrderPricing).toHaveBeenCalledWith('order-1', null))
+  })
+
+  it('confirmed price shows "Prijs aanpassen" which reopens with a mandatory reason', async () => {
+    auth.permissions = new Set(['orders.view', 'orders.override_price', 'orders.edit', 'orders.lock_price'])
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingSnapshot: {
+          ...baseOrder().pricingSnapshot!,
+          status: 'Locked',
+          confirmedAtUtc: '2026-08-04T18:59:00',
+          confirmedByName: 'Dev Admin',
+        },
+      }),
+    )
+    api.reopenOrderPricing.mockResolvedValue(baseOrder())
+    renderPage()
+
+    await screen.findByRole('button', { name: 'Prijs aanpassen' })
+    expect(screen.queryByRole('button', { name: 'Prijs bevestigen' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Prijs aanpassen' }))
+
+    // Empty reason blocks the reopen.
+    const dialog = screen.getByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Prijs aanpassen' }))
+    expect(api.reopenOrderPricing).not.toHaveBeenCalled()
+
+    await userEvent.type(screen.getByLabelText('Reden', { exact: false }), 'Extra kost vergeten')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Prijs aanpassen' }))
+    await waitFor(() => expect(api.reopenOrderPricing).toHaveBeenCalledWith('order-1', 'Extra kost vergeten'))
+  })
+
+  it('blocks confirmation with unpriced goods and no override permission', async () => {
+    auth.permissions = new Set(['orders.view', 'orders.lock_price'])
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingSnapshot: {
+          ...baseOrder().pricingSnapshot!,
+          coverage: [
+            { unitTypeId: 'u-doos', unitLabel: 'Doos', quantity: 2, status: 'None', baseAmount: 0, baseRuleName: null, servicesAmount: 0, reason: 'Geen passend basistarief' },
+          ],
+        },
+      }),
+    )
+    renderPage()
+
+    await screen.findByRole('button', { name: 'Prijs bevestigen' })
+    await userEvent.click(screen.getByRole('button', { name: 'Prijs bevestigen' }))
+
+    expect(await screen.findByText('De prijs kan niet worden bevestigd.')).toBeInTheDocument()
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText(/2 Doos: geen passend basistarief/)).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Toch bevestigen' })).not.toBeInTheDocument()
+    expect(api.confirmOrderPricing).not.toHaveBeenCalled()
+  })
+
+  it('allows an authorized override with a mandatory reason when goods are unpriced', async () => {
+    auth.permissions = new Set(['orders.view', 'orders.lock_price', 'orders.confirm_incomplete_price'])
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingSnapshot: {
+          ...baseOrder().pricingSnapshot!,
+          coverage: [
+            { unitTypeId: 'u-doos', unitLabel: 'Doos', quantity: 2, status: 'None', baseAmount: 0, baseRuleName: null, servicesAmount: 0, reason: 'Geen passend basistarief' },
+          ],
+        },
+      }),
+    )
+    api.confirmOrderPricing.mockResolvedValue(baseOrder())
+    renderPage()
+
+    await screen.findByRole('button', { name: 'Prijs bevestigen' })
+    await userEvent.click(screen.getByRole('button', { name: 'Prijs bevestigen' }))
+
+    const dialog = await screen.findByRole('dialog')
+    // Reason is mandatory for the override.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Toch bevestigen' }))
+    expect(api.confirmOrderPricing).not.toHaveBeenCalled()
+
+    await userEvent.type(within(dialog).getByLabelText('Reden', { exact: false }), 'Prijs volgt later')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Toch bevestigen' }))
+    await waitFor(() => expect(api.confirmOrderPricing).toHaveBeenCalledWith('order-1', 'Prijs volgt later'))
+  })
+
+  it('shows the prominent total with separate order and price status, and the confirmation stamp', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingSnapshot: {
+          ...baseOrder().pricingSnapshot!,
+          status: 'Locked',
+          confirmedAtUtc: '2026-08-04T18:59:00',
+          confirmedByName: 'Dev Admin',
+        },
+      }),
+    )
+    renderPage()
+
+    await screen.findByText('Totaalprijs')
+    expect(screen.getAllByText('€ 132.50').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(/Opdracht:/)).toBeInTheDocument()
+    expect(screen.getByText(/^Prijs:/)).toBeInTheDocument()
+    // Order status (Bevestigd) and price status (Bevestigd) are separate badges.
+    expect(screen.getAllByText('Bevestigd').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(/Bevestigd op .* door Dev Admin\./)).toBeInTheDocument()
+  })
+
+  it('shows the price status as Onvolledig when unconfirmed goods lack pricing', async () => {
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        pricingSnapshot: {
+          ...baseOrder().pricingSnapshot!,
+          coverage: [
+            { unitTypeId: 'u-doos', unitLabel: 'Doos', quantity: 2, status: 'None', baseAmount: 0, baseRuleName: null, servicesAmount: 0, reason: 'Geen passend basistarief' },
+          ],
+        },
+      }),
+    )
+    renderPage()
+
+    await screen.findByText('Totaalprijs')
+    expect(screen.getAllByText('Onvolledig').length).toBeGreaterThanOrEqual(1)
   })
 
   it('hides the recalculate action without orders.edit/orders.manage, shows it once granted', async () => {

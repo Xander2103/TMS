@@ -167,6 +167,15 @@ public record SaveOrderPriceLineRequest(
 /// <summary>Body for the pricing status transition endpoint (spec ch. 24-26).</summary>
 public record SetOrderPricingStatusRequest(OrderPricingStatus Status);
 
+/// <summary>
+/// Body for "Prijs bevestigen" (wave 2026-08-04 §8/§10). UnpricedGoodsReason is only consulted —
+/// and then mandatory — when the coverage shows unpriced goods and the caller may override.
+/// </summary>
+public record ConfirmOrderPricingRequest(string? UnpricedGoodsReason = null);
+
+/// <summary>Body for "Prijs aanpassen" (wave 2026-08-04 §8): mandatory reason to reopen a confirmed price.</summary>
+public record ReopenOrderPricingRequest(string Reason);
+
 /// <summary>Selected delivery service/supplement snapshotted on the order.</summary>
 public record OrderServiceLineDto(
     Guid? ServiceOptionId, string Name,

@@ -177,3 +177,18 @@ export function confirmOrderPriceLine(orderId: string, lineId: string): Promise<
   return apiClient.postJson<TransportOrderDetail, Record<string, never>>(
     `/api/transport-orders/${orderId}/pricing/lines/${lineId}/confirm`, {})
 }
+
+/**
+ * Wave 2026-08-04 §8/§10: "Prijs bevestigen". The reason is only consulted — and then required —
+ * when the coverage shows unpriced goods and the caller holds the override permission.
+ */
+export function confirmOrderPricing(orderId: string, unpricedGoodsReason?: string | null): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, { unpricedGoodsReason: string | null }>(
+    `/api/transport-orders/${orderId}/pricing/confirm`, { unpricedGoodsReason: unpricedGoodsReason ?? null })
+}
+
+/** Wave 2026-08-04 §8: "Prijs aanpassen" — reopens a confirmed price (reason required). */
+export function reopenOrderPricing(orderId: string, reason: string): Promise<TransportOrderDetail> {
+  return apiClient.postJson<TransportOrderDetail, { reason: string }>(
+    `/api/transport-orders/${orderId}/pricing/reopen`, { reason })
+}

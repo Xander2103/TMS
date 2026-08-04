@@ -243,18 +243,36 @@ export const ORDER_PRICE_LINE_KIND_TONE: Record<OrderPriceLineKind, 'neutral' | 
 /** Draft → Reviewed → Locked → Invoiced (spec ch. 24-26); Invoiced is set only by invoicing. */
 export type OrderPricingStatus = 'Draft' | 'Reviewed' | 'Locked' | 'Invoiced'
 
+/**
+ * Wave 2026-08-04 §8: the visible workflow speaks in confirmation terms — the technical
+ * Draft/Reviewed/Locked lifecycle stays underneath but is never shown to normal users.
+ */
 export const ORDER_PRICING_STATUS_LABELS: Record<OrderPricingStatus, string> = {
-  Draft: 'Concept',
-  Reviewed: 'Gecontroleerd',
-  Locked: 'Vergrendeld',
+  Draft: 'Nog te bevestigen',
+  Reviewed: 'Nog te bevestigen',
+  Locked: 'Bevestigd',
   Invoiced: 'Gefactureerd',
 }
 
 export const ORDER_PRICING_STATUS_TONE: Record<OrderPricingStatus, 'neutral' | 'info' | 'warning' | 'success'> = {
-  Draft: 'neutral',
-  Reviewed: 'info',
-  Locked: 'warning',
+  Draft: 'warning',
+  Reviewed: 'warning',
+  Locked: 'success',
   Invoiced: 'success',
+}
+
+/**
+ * Visible price status (wave 2026-08-04 §9): Bevestigd (green) / Gefactureerd / Onvolledig
+ * (red, unconfirmed with unpriced goods) / Nog te bevestigen (orange).
+ */
+export function priceStatusDisplay(
+  status: OrderPricingStatus | undefined,
+  hasUnpricedGoods: boolean,
+): { label: string; tone: 'neutral' | 'warning' | 'success' | 'danger' } {
+  if (status === 'Invoiced') return { label: 'Gefactureerd', tone: 'success' }
+  if (status === 'Locked') return { label: 'Bevestigd', tone: 'success' }
+  if (hasUnpricedGoods) return { label: 'Onvolledig', tone: 'danger' }
+  return { label: 'Nog te bevestigen', tone: 'warning' }
 }
 
 export interface OrderPricingLine {

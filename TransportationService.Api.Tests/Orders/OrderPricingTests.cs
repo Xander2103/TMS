@@ -29,7 +29,7 @@ public class OrderPricingTests
 
     private sealed record Harness(
         SqliteTestDbContext Db, TransportOrderService Sut, PricingAdminService Admin, PermissionSet Permissions,
-        Guid TenantId, Guid CustomerId, Guid PalletUnitId);
+        Guid TenantId, Guid CustomerId, Guid PalletUnitId, Guid UserId);
 
     private static async Task<Harness> SeedAsync()
     {
@@ -37,6 +37,7 @@ public class OrderPricingTests
         var tenantId = Guid.NewGuid();
         var customerId = Guid.NewGuid();
         var palletUnitId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
 
         db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = Now.UtcDateTime });
         db.Context.TenantSettings.Add(new TenantSettings
@@ -45,16 +46,20 @@ public class OrderPricingTests
         });
         db.Context.Customers.Add(new Customer { Id = customerId, TenantId = tenantId, CustomerNumber = "KL-1", Name = "Klant X", IsActive = true });
         db.Context.UnitTypes.Add(new UnitType { Id = palletUnitId, TenantId = tenantId, Code = "EUROPALLET", Name = "Europallet", IsActive = true });
+        db.Context.Users.Add(new TransportationService.Api.Modules.Identity.Entities.User
+        {
+            Id = userId, TenantId = tenantId, Email = "dev@acme.test", FirstName = "Dev", LastName = "Admin",
+        });
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);
-        var currentUser = new DevCurrentUserContext(Guid.NewGuid());
+        var currentUser = new DevCurrentUserContext(userId);
         var audit = new AuditService(db.Context, tenant, currentUser);
         var admin = new PricingAdminService(db.Context, tenant, audit);
         var engine = new PricingEngine(db.Context, tenant);
         var permissions = new PermissionSet();
         var sut = new TransportOrderService(db.Context, tenant, audit, new TestClock(Now), engine, currentUser, permissions);
-        return new Harness(db, sut, admin, permissions, tenantId, customerId, palletUnitId);
+        return new Harness(db, sut, admin, permissions, tenantId, customerId, palletUnitId, userId);
     }
 
     private static TransportOrderStopInput Stop(StopType type, string city, string? postalCode = null) =>
@@ -709,6 +714,150 @@ public class OrderPricingTests
         Assert.Equal("None", uncoded.Status);
         Assert.Equal("Geen eenheid gekozen voor deze goederenlijn", uncoded.Reason);
         Assert.Equal("Full", Assert.Single(coverage, c => c.UnitLabel == "Europallet").Status);
+    }
+
+    // --- Wave 2026-08-04 §8/§10: Prijs bevestigen / Prijs aanpassen -----------------------------
+
+    [Fact]
+    public async Task ConfirmPrice_FullCoverage_Locks_AndStampsConfirmer()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        h.Permissions.Codes.Add("orders.lock_price");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        var confirmed = await h.Sut.ConfirmOrderPricingAsync(created.Order!.Id, null, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, confirmed.Outcome);
+        var snapshot = confirmed.Order!.PricingSnapshot!;
+        Assert.Equal(OrderPricingStatus.Locked, snapshot.Status);
+        Assert.Equal(Now.UtcDateTime, snapshot.ConfirmedAtUtc);
+        Assert.Equal(h.UserId, snapshot.ConfirmedByUserId);
+        Assert.Equal("Dev Admin", snapshot.ConfirmedByName);
+        Assert.Null(snapshot.ConfirmedWithUnpricedGoodsReason);
+        // Order status stays a separate concept — confirming the price never confirms the order.
+        Assert.Equal(TransportOrderStatus.Draft, confirmed.Order.Status);
+    }
+
+    [Fact]
+    public async Task ConfirmPrice_UnpricedGoods_IsBlocked_WithoutOverridePermission()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        await AddUnitTypeAsync(h, "DOOS", "Doos");
+        h.Permissions.Codes.Add("orders.lock_price");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+        [
+            new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET"),
+            new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "DOOS"),
+        ]), CancellationToken.None);
+        var confirmed = await h.Sut.ConfirmOrderPricingAsync(created.Order!.Id, null, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, confirmed.Outcome);
+        Assert.Contains("kan niet worden bevestigd", confirmed.Error!);
+        Assert.Contains("2 Doos", confirmed.Error!);
+    }
+
+    [Fact]
+    public async Task ConfirmPrice_UnpricedGoods_WithPermission_RequiresReason_AndKeepsWarning()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        await AddUnitTypeAsync(h, "DOOS", "Doos");
+        h.Permissions.Codes.Add("orders.lock_price");
+        h.Permissions.Codes.Add("orders.confirm_incomplete_price");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+        [
+            new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "DOOS"),
+        ]), CancellationToken.None);
+
+        var withoutReason = await h.Sut.ConfirmOrderPricingAsync(created.Order!.Id, "  ", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, withoutReason.Outcome);
+        Assert.Contains("reden", withoutReason.Error!, StringComparison.OrdinalIgnoreCase);
+
+        var confirmed = await h.Sut.ConfirmOrderPricingAsync(created.Order!.Id, "Prijs volgt via creditnota", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, confirmed.Outcome);
+        Assert.Equal(OrderPricingStatus.Locked, confirmed.Order!.PricingSnapshot!.Status);
+        Assert.Equal("Prijs volgt via creditnota", confirmed.Order.PricingSnapshot.ConfirmedWithUnpricedGoodsReason);
+    }
+
+    [Fact]
+    public async Task ConfirmPrice_RequiresLockPermission()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        var confirmed = await h.Sut.ConfirmOrderPricingAsync(created.Order!.Id, null, CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, confirmed.Outcome);
+        Assert.Contains("geen rechten", confirmed.Error!);
+    }
+
+    [Fact]
+    public async Task ReopenPrice_RequiresReason_ReturnsToDraft_AndAuditsOldTotal()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        h.Permissions.Codes.Add("orders.lock_price");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        var orderId = created.Order!.Id;
+        await h.Sut.ConfirmOrderPricingAsync(orderId, null, CancellationToken.None);
+
+        var withoutReason = await h.Sut.ReopenOrderPricingAsync(orderId, " ", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, withoutReason.Outcome);
+
+        var reopened = await h.Sut.ReopenOrderPricingAsync(orderId, "Extra kost vergeten", CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, reopened.Outcome);
+        var snapshot = reopened.Order!.PricingSnapshot!;
+        Assert.Equal(OrderPricingStatus.Draft, snapshot.Status);
+        Assert.Null(snapshot.ConfirmedAtUtc);
+        Assert.Null(snapshot.ConfirmedByName);
+
+        var audit = await h.Db.Context.AuditLogs
+            .Where(a => a.EntityType == "OrderPricing" && a.Action == "price_reopened")
+            .OrderByDescending(a => a.Id)
+            .FirstAsync();
+        Assert.Contains("85", audit.OldValuesJson);          // old total stays in the trail
+        Assert.Contains("Extra kost vergeten", audit.NewValuesJson);
+
+        // Reconfirmation works after editing.
+        var reconfirmed = await h.Sut.ConfirmOrderPricingAsync(orderId, null, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, reconfirmed.Outcome);
+        Assert.Equal(OrderPricingStatus.Locked, reconfirmed.Order!.PricingSnapshot!.Status);
+    }
+
+    [Fact]
+    public async Task ConfirmedPrice_BlocksRecalculation_UntilReopened()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SeedPalletBracketsAsync(h);
+        h.Permissions.Codes.Add("orders.lock_price");
+        h.Permissions.Codes.Add("orders.edit");
+
+        var created = await h.Sut.CreateAsync(Request(h.CustomerId, cargoItems:
+            [new CargoItemInput(null, null, 2, null, null, QuantityUnitCode: "EUROPALLET")]), CancellationToken.None);
+        var orderId = created.Order!.Id;
+        await h.Sut.ConfirmOrderPricingAsync(orderId, null, CancellationToken.None);
+
+        var recalc = await h.Sut.RecalculateOrderPricingAsync(orderId, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.ValidationFailed, recalc.Outcome);
+
+        await h.Sut.ReopenOrderPricingAsync(orderId, "Aanpassing nodig", CancellationToken.None);
+        var afterReopen = await h.Sut.RecalculateOrderPricingAsync(orderId, CancellationToken.None);
+        Assert.Equal(TransportOrderOperationOutcome.Success, afterReopen.Outcome);
     }
 
     private static UpdateTransportOrderRequest BuildUpdateFrom(TransportOrderDetailDto d)

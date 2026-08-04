@@ -133,6 +133,66 @@
   white-space: nowrap;
 }
 
+/* Wave 2026-08-04 §9: prominent total + price status near the page header. */
+.to-price-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  border: 1px solid var(--border);
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin: 12px 0;
+  max-width: 1000px;
+}
+
+.to-price-summary-success {
+  border-left-color: #16a34a;
+}
+
+.to-price-summary-danger {
+  border-left-color: #dc2626;
+}
+
+.to-price-summary-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.to-price-summary-label {
+  font-size: 13px;
+  color: var(--text-muted, #6b7280);
+}
+
+.to-price-summary-amount {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.to-price-summary-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 14px;
+  align-items: center;
+}
+
+.to-price-summary-confirmed {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted, #6b7280);
+  flex-basis: 100%;
+}
+
+.to-price-summary-warning {
+  margin: 0;
+  font-size: 13px;
+  color: #b91c1c;
+  flex-basis: 100%;
+}
+
 .to-coverage-warning {
   border: 1px solid #dc2626;
   border-left-width: 4px;

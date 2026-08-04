@@ -18,12 +18,13 @@ import {
   cancelTransportOrder,
   changeTransportOrderStatus,
   confirmOrderPriceLine,
+  confirmOrderPricing,
   correctTransportOrderStatus,
   deleteTransportOrder,
   getTransportOrder,
   recalculateOrderPricing,
+  reopenOrderPricing,
   saveOrderPriceLines,
-  setOrderPricingStatus,
   updateTransportOrder,
   type SaveOrderPriceLineInput,
 } from '../api/transportOrdersApi'
@@ -40,8 +41,6 @@ import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CustomerPackagesSummary } from '../../packages/components/CustomerPackagesSummary'
 import {
   ORDER_PRICE_LINE_KIND_TONE,
-  ORDER_PRICING_STATUS_LABELS,
-  ORDER_PRICING_STATUS_TONE,
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
   ORDER_TRANSITION_LABELS,
@@ -49,8 +48,8 @@ import {
   PRICING_COVERAGE_TONE,
   STOP_TYPE_LABELS,
   lineBadge,
+  priceStatusDisplay,
   type OrderPricingLine,
-  type OrderPricingStatus,
   type TransportOrderDetail,
   type TransportOrderStatus,
   type TransportOrderStop,
@@ -67,6 +66,15 @@ function formatWindow(from: string | null, to: string | null): string {
 
 function money(amount: number): string {
   return amount.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
+}
+
+/** "04/08/2026 om 20:59" — the confirmation stamp next to the prominent total (§9). */
+function formatConfirmedStamp(isoUtc: string): string {
+  const date = new Date(isoUtc.endsWith('Z') ? isoUtc : `${isoUtc}Z`)
+  return `${date.toLocaleDateString('nl-BE')} om ${date.toLocaleTimeString('nl-BE', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`
 }
 
 /**
@@ -140,6 +148,11 @@ export function TransportOrderDetailPage() {
   const [calcDetailsOpen, setCalcDetailsOpen] = useState(false)
   const [recalcConfirmOpen, setRecalcConfirmOpen] = useState(false)
   const [pricingBusy, setPricingBusy] = useState(false)
+  // Wave 2026-08-04 §8: confirmation workflow dialogs.
+  const [confirmPriceOpen, setConfirmPriceOpen] = useState(false)
+  const [confirmPriceReason, setConfirmPriceReason] = useState('')
+  const [reopenPriceOpen, setReopenPriceOpen] = useState(false)
+  const [reopenPriceReason, setReopenPriceReason] = useState('')
 
   useEffect(() => {
     let mounted = true
@@ -397,15 +410,48 @@ export function TransportOrderDetailPage() {
     }
   }
 
-  async function handleSetPricingStatus(status: OrderPricingStatus) {
+  // --- Wave 2026-08-04 §8: Prijs bevestigen / Prijs aanpassen -----------------------------
+  async function handleConfirmPrice(unpricedGoodsReason: string | null) {
     if (!order) return
     setPricingBusy(true)
     try {
-      const updated = await setOrderPricingStatus(order.id, status)
+      const updated = await confirmOrderPricing(order.id, unpricedGoodsReason)
       setOrder(updated)
-      showSuccess(`Prijsstatus gewijzigd naar ${ORDER_PRICING_STATUS_LABELS[status]}.`)
+      showSuccess('Prijs bevestigd.')
+      setConfirmPriceOpen(false)
+      setConfirmPriceReason('')
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De prijsstatus kon niet worden gewijzigd.')
+      showError(err instanceof ApiError ? err.message : 'De prijs kon niet worden bevestigd.')
+    } finally {
+      setPricingBusy(false)
+    }
+  }
+
+  function handleConfirmPriceClick() {
+    if (unpricedCoverage.length > 0) {
+      // Blocked or override-with-reason — both explained in the dialog.
+      setConfirmPriceReason('')
+      setConfirmPriceOpen(true)
+    } else {
+      void handleConfirmPrice(null)
+    }
+  }
+
+  async function handleReopenPrice() {
+    if (!order) return
+    if (!reopenPriceReason.trim()) {
+      showError('Geef een reden op om de bevestigde prijs aan te passen.')
+      return
+    }
+    setPricingBusy(true)
+    try {
+      const updated = await reopenOrderPricing(order.id, reopenPriceReason.trim())
+      setOrder(updated)
+      showSuccess('De prijs staat terug op "Nog te bevestigen".')
+      setReopenPriceOpen(false)
+      setReopenPriceReason('')
+    } catch (err) {
+      showError(err instanceof ApiError ? err.message : 'De prijs kon niet worden aangepast.')
     } finally {
       setPricingBusy(false)
     }
@@ -424,6 +470,7 @@ export function TransportOrderDetailPage() {
   const canEditPricingLines = hasAnyPermission(['orders.override_price', 'orders.manage'])
   const canEditPricingStatus = hasAnyPermission(['orders.edit', 'orders.manage'])
   const canLockPrice = hasAnyPermission(['orders.lock_price', 'orders.manage'])
+  const canOverrideIncomplete = hasAnyPermission(['orders.confirm_incomplete_price', 'orders.manage'])
   const pricingStatus = order.pricingSnapshot?.status ?? 'Draft'
   const pricingLocked = pricingStatus === 'Locked' || pricingStatus === 'Invoiced'
   // Informational lines with a non-zero amount (e.g. the diesel surcharge) still carry a real
@@ -434,6 +481,9 @@ export function TransportOrderDetailPage() {
   // Wave 2026-08-04 §7: per-goods-line pricing coverage frozen on the snapshot.
   const coverage = order.pricingSnapshot?.coverage ?? []
   const unpricedCoverage = coverage.filter((c) => c.status !== 'Full')
+  // §9: one visible price status — Bevestigd / Onvolledig / Nog te bevestigen / Gefactureerd.
+  const priceDisplay = priceStatusDisplay(order.pricingSnapshot?.status, unpricedCoverage.length > 0)
+  const totalPrice = order.pricingSnapshot?.linesTotal ?? order.agreedPrice
 
   const addQuantityNum = parseNum(addQuantity)
   const addUnitPriceNum = parseNum(addUnitPrice)
@@ -505,6 +555,35 @@ export function TransportOrderDetailPage() {
         <p className="to-cancel-reason" role="note">
           Geannuleerd: {order.cancellationReason}
         </p>
+      )}
+
+      {/* Wave 2026-08-04 §9: prominent total + separate order/price status near the header. */}
+      {!editing && (order.pricingSnapshot || totalPrice !== null) && (
+        <section className={`to-price-summary to-price-summary-${priceDisplay.tone}`}>
+          <div className="to-price-summary-main">
+            <span className="to-price-summary-label">Totaalprijs</span>
+            <span className="to-price-summary-amount">€ {(totalPrice ?? 0).toFixed(2)}</span>
+          </div>
+          <div className="to-price-summary-status">
+            <span>
+              Opdracht: <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
+            </span>
+            <span>
+              Prijs: <Badge tone={priceDisplay.tone}>{priceDisplay.label}</Badge>
+            </span>
+          </div>
+          {order.pricingSnapshot?.confirmedAtUtc && (
+            <p className="to-price-summary-confirmed">
+              Bevestigd op {formatConfirmedStamp(order.pricingSnapshot.confirmedAtUtc)}
+              {order.pricingSnapshot.confirmedByName ? ` door ${order.pricingSnapshot.confirmedByName}` : ''}.
+            </p>
+          )}
+          {order.pricingSnapshot?.confirmedWithUnpricedGoodsReason && (
+            <p className="to-price-summary-warning" role="note">
+              Bevestigd terwijl niet alle goederen geprijsd zijn: {order.pricingSnapshot.confirmedWithUnpricedGoodsReason}
+            </p>
+          )}
+        </section>
       )}
 
       {!editing && hasAnyPermission(['orders.change_status', 'orders.manage']) && (
@@ -586,28 +665,24 @@ export function TransportOrderDetailPage() {
           {order.pricingLines && order.pricingLines.length > 0 && (
             <section className="to-section">
               <h2>
-                Prijs{' '}
-                <Badge tone={ORDER_PRICING_STATUS_TONE[pricingStatus]}>{ORDER_PRICING_STATUS_LABELS[pricingStatus]}</Badge>
+                Prijs <Badge tone={priceDisplay.tone}>{priceDisplay.label}</Badge>
               </h2>
               <div className="to-header-actions to-price-status-actions">
-                {canEditPricingStatus && pricingStatus === 'Draft' && (
-                  <Button variant="secondary" onClick={() => void handleSetPricingStatus('Reviewed')} disabled={pricingBusy}>
-                    Markeer gecontroleerd
-                  </Button>
-                )}
-                {canEditPricingStatus && pricingStatus === 'Reviewed' && (
-                  <Button variant="secondary" onClick={() => void handleSetPricingStatus('Draft')} disabled={pricingBusy}>
-                    Terug naar concept
-                  </Button>
-                )}
                 {canLockPrice && (pricingStatus === 'Draft' || pricingStatus === 'Reviewed') && (
-                  <Button variant="secondary" onClick={() => void handleSetPricingStatus('Locked')} disabled={pricingBusy}>
-                    Vergrendel prijs
+                  <Button onClick={handleConfirmPriceClick} disabled={pricingBusy}>
+                    Prijs bevestigen
                   </Button>
                 )}
                 {canLockPrice && pricingStatus === 'Locked' && (
-                  <Button variant="secondary" onClick={() => void handleSetPricingStatus('Reviewed')} disabled={pricingBusy}>
-                    Ontgrendel
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setReopenPriceReason('')
+                      setReopenPriceOpen(true)
+                    }}
+                    disabled={pricingBusy}
+                  >
+                    Prijs aanpassen
                   </Button>
                 )}
                 {canEditPricingStatus && !pricingLocked && (
@@ -1197,6 +1272,102 @@ export function TransportOrderDetailPage() {
           onConfirm={() => void handleRecalculate()}
           onCancel={() => setRecalcConfirmOpen(false)}
         />
+      )}
+
+      {confirmPriceOpen && (
+        <Modal
+          title="Prijs bevestigen"
+          onClose={() => setConfirmPriceOpen(false)}
+          busy={pricingBusy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmPriceOpen(false)} disabled={pricingBusy}>
+                {canOverrideIncomplete ? 'Annuleren' : 'Sluiten'}
+              </Button>
+              {canOverrideIncomplete && (
+                <Button
+                  onClick={() => {
+                    if (!confirmPriceReason.trim()) {
+                      showError('Geef een reden op om te bevestigen terwijl niet alle goederen geprijsd zijn.')
+                      return
+                    }
+                    void handleConfirmPrice(confirmPriceReason.trim())
+                  }}
+                  disabled={pricingBusy}
+                >
+                  Toch bevestigen
+                </Button>
+              )}
+            </>
+          }
+        >
+          <p>
+            <strong>De prijs kan niet worden bevestigd.</strong>
+          </p>
+          <ul>
+            {unpricedCoverage.map((c, index) => (
+              <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
+                {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}:{' '}
+                {(c.reason ?? 'geen passend basistarief').toLowerCase()}
+              </li>
+            ))}
+          </ul>
+          {canOverrideIncomplete ? (
+            <FormField
+              label="Reden"
+              htmlFor="confirm-price-reason"
+              hint="Verplicht — de waarschuwing blijft zichtbaar bij de bevestigde prijs."
+              required
+            >
+              <input
+                id="confirm-price-reason"
+                value={confirmPriceReason}
+                onChange={(e) => setConfirmPriceReason(e.target.value)}
+                disabled={pricingBusy}
+                maxLength={500}
+                autoFocus
+              />
+            </FormField>
+          ) : (
+            <p className="customer-form-muted">
+              Prijs de goederen (basistarief of goederenlijn corrigeren) of vraag iemand met de juiste rechten
+              om toch te bevestigen.
+            </p>
+          )}
+        </Modal>
+      )}
+
+      {reopenPriceOpen && (
+        <Modal
+          title="Prijs aanpassen"
+          onClose={() => setReopenPriceOpen(false)}
+          busy={pricingBusy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setReopenPriceOpen(false)} disabled={pricingBusy}>
+                Annuleren
+              </Button>
+              <Button onClick={() => void handleReopenPrice()} disabled={pricingBusy}>
+                Prijs aanpassen
+              </Button>
+            </>
+          }
+        >
+          <p>
+            De prijs gaat terug naar <strong>Nog te bevestigen</strong>; de huidige totaalprijs en bevestiging
+            blijven bewaard in de historiek. Bevestig de prijs opnieuw na het aanpassen.
+          </p>
+          <FormField label="Reden" htmlFor="reopen-price-reason" required>
+            <input
+              id="reopen-price-reason"
+              value={reopenPriceReason}
+              onChange={(e) => setReopenPriceReason(e.target.value)}
+              disabled={pricingBusy}
+              maxLength={500}
+              autoFocus
+            />
+          </FormField>
+        </Modal>
       )}
     </div>
   )

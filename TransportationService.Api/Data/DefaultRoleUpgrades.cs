@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 23;
+    public const int CurrentVersion = 24;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -477,6 +477,16 @@ public static class DefaultRoleUpgrades
                 ["dispatcher"] = [PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn],
                 ["boekhouding"] = [PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn],
                 ["chauffeur"] = [PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn],
+            }),
+
+        new(24,
+            "Order usability/pricing coverage wave 2026-08-04: confirming a price with unpriced "
+            + "goods lines is a separate, explicitly granted decision (reason required, warning "
+            + "stays attached) — management and boekhouding only.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["management"] = [PermissionCodes.OrdersConfirmIncompletePrice],
+                ["boekhouding"] = [PermissionCodes.OrdersConfirmIncompletePrice],
             }),
     ];
 }

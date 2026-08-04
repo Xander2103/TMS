@@ -228,6 +228,12 @@ public static class PermissionCodes
     /// <summary>Locks/unlocks the pricing status of an order (spec ch. 24-26), blocking further recalculation.</summary>
     public const string OrdersLockPrice = "orders.lock_price";
 
+    /// <summary>
+    /// Wave 2026-08-04 §10: confirm an order price even though one or more goods lines have no
+    /// base transport tariff (explicit reason required; the warning stays on the confirmed price).
+    /// </summary>
+    public const string OrdersConfirmIncompletePrice = "orders.confirm_incomplete_price";
+
     // --- Dashboard (company overview) ---
     public const string DashboardView = "dashboard.view";
 
@@ -549,6 +555,7 @@ public static class PermissionCodes
         (OrdersExport, "orders", "export", "Transportopdrachten exporteren"),
         (OrdersOverridePrice, "orders", "override_price", "Berekende orderprijs handmatig overschrijven"),
         (OrdersLockPrice, "orders", "lock_price", "Prijs van transportopdrachten vergrendelen en ontgrendelen"),
+        (OrdersConfirmIncompletePrice, "orders", "confirm_incomplete_price", "Prijs bevestigen ook wanneer goederen geen basistarief hebben"),
         (OrdersManage, "orders", "manage", "Volledig beheer van transportopdrachten"),
         (DashboardView, "dashboard", "view", "Bedrijfsdashboard bekijken"),
         (MessagesSend, "messages", "send", "Interne berichten versturen"),

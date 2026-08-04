@@ -278,6 +278,29 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>
+    /// Wave 2026-08-04 §8/§10: "Prijs bevestigen". Locks the snapshot and stamps who/when;
+    /// coverage gate + override permission are enforced service-side.
+    /// </summary>
+    [HttpPost("{id:guid}/pricing/confirm")]
+    [RequirePermission(PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ConfirmOrderPricing(
+        Guid id, ConfirmOrderPricingRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ConfirmOrderPricingAsync(id, request.UnpricedGoodsReason, cancellationToken);
+        return Handle(result, created: false);
+    }
+
+    /// <summary>Wave 2026-08-04 §8: "Prijs aanpassen" — reopen a confirmed price (reason required).</summary>
+    [HttpPost("{id:guid}/pricing/reopen")]
+    [RequirePermission(PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ReopenOrderPricing(
+        Guid id, ReopenOrderPricingRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ReopenOrderPricingAsync(id, request.Reason, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     /// <summary>Confirms an unconfirmed (VOORSTEL) extra-time line so it counts towards the price.</summary>
     [HttpPost("{id:guid}/pricing/lines/{lineId:guid}/confirm")]
     [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]

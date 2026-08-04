@@ -2395,6 +2395,171 @@ public class TransportOrderService : ITransportOrderService
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
 
+    /// <summary>Fail-closed permission check shared by the confirmation workflow.</summary>
+    private async Task<bool> CurrentUserHasAnyAsync(CancellationToken cancellationToken, params string[] codes)
+    {
+        if (_permissionService is null || _currentUser?.CurrentUserId is not { } userId)
+        {
+            return false;
+        }
+
+        foreach (var code in codes)
+        {
+            if (await _permissionService.UserHasPermissionAsync(userId, code, cancellationToken))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Wave 2026-08-04 §8/§10: the single visible "Prijs bevestigen" action. Technically locks
+    /// the snapshot (every existing locked-price protection applies) and stamps who/when.
+    /// Refused while any goods line lacks a base transport tariff, unless the caller holds the
+    /// dedicated override permission AND gives a reason — that reason stays visibly attached to
+    /// the confirmed price.
+    /// </summary>
+    public async Task<TransportOrderOperationResult> ConfirmOrderPricingAsync(
+        Guid orderId, string? unpricedGoodsReason, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await TenantScoped().Include(o => o.Stops).FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == orderId, cancellationToken);
+        if (snapshot is null)
+        {
+            return TransportOrderOperationResult.Invalid("Er is nog geen prijsberekening voor deze order.");
+        }
+
+        if (snapshot.Status == OrderPricingStatus.Invoiced)
+        {
+            return TransportOrderOperationResult.Invalid("De prijs van een gefactureerde order kan niet meer wijzigen.");
+        }
+
+        if (snapshot.Status == OrderPricingStatus.Locked)
+        {
+            return TransportOrderOperationResult.Invalid("De prijs is al bevestigd.");
+        }
+
+        if (!await CurrentUserHasAnyAsync(cancellationToken, PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage))
+        {
+            return TransportOrderOperationResult.Invalid("Je hebt geen rechten om de prijs te bevestigen.");
+        }
+
+        // §10: coverage gate — a price with unpriced goods needs the dedicated override + reason.
+        var coverage = DeserializeCoverage(snapshot.CoverageJson) ?? [];
+        var unpriced = coverage.Where(c => c.Status != "Full").ToList();
+        string? overrideReason = null;
+        if (unpriced.Count > 0)
+        {
+            var affected = string.Join(", ", unpriced.Select(c => $"{c.Quantity:0.##} {c.UnitLabel}"));
+            if (!await CurrentUserHasAnyAsync(cancellationToken, PermissionCodes.OrdersConfirmIncompletePrice, PermissionCodes.OrdersManage))
+            {
+                return TransportOrderOperationResult.Invalid(
+                    $"De prijs kan niet worden bevestigd. {affected} zonder passend basistarief.");
+            }
+
+            if (string.IsNullOrWhiteSpace(unpricedGoodsReason))
+            {
+                return TransportOrderOperationResult.Invalid(
+                    "Geef een reden op om te bevestigen terwijl niet alle goederen geprijsd zijn.");
+            }
+
+            overrideReason = unpricedGoodsReason.Trim();
+        }
+
+        var userId = _currentUser?.CurrentUserId;
+        var confirmerName = userId is { } confirmerId
+            ? await _dbContext.Users.AsNoTracking()
+                .Where(u => u.Id == confirmerId && u.TenantId == tenantId)
+                .Select(u => (u.FirstName + " " + u.LastName).Trim())
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
+        var before = new { snapshot.Status, snapshot.LinesTotal };
+        snapshot.Status = OrderPricingStatus.Locked;
+        snapshot.ConfirmedAtUtc = _timeProvider.GetUtcNow().UtcDateTime;
+        snapshot.ConfirmedByUserId = userId;
+        snapshot.ConfirmedByName = string.IsNullOrWhiteSpace(confirmerName) ? null : confirmerName;
+        snapshot.ConfirmedWithUnpricedGoodsReason = overrideReason;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "price_confirmed", before,
+            new
+            {
+                snapshot.Status, snapshot.LinesTotal, snapshot.ConfirmedAtUtc, snapshot.ConfirmedByName,
+                snapshot.ConfirmedWithUnpricedGoodsReason,
+                UnpricedGoods = unpriced.Select(c => $"{c.Quantity:0.##} {c.UnitLabel}: {c.Reason}").ToList(),
+            }, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    /// <summary>
+    /// Wave 2026-08-04 §8: "Prijs aanpassen" — reopens a confirmed price with a mandatory reason.
+    /// The old total and confirmation stamp stay in the audit trail; the price returns to
+    /// "Nog te bevestigen" (Draft) and must be confirmed again after editing.
+    /// </summary>
+    public async Task<TransportOrderOperationResult> ReopenOrderPricingAsync(
+        Guid orderId, string? reason, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var order = await TenantScoped().Include(o => o.Stops).FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.TransportOrderId == orderId, cancellationToken);
+        if (snapshot is null)
+        {
+            return TransportOrderOperationResult.Invalid("Er is nog geen prijsberekening voor deze order.");
+        }
+
+        if (snapshot.Status == OrderPricingStatus.Invoiced)
+        {
+            return TransportOrderOperationResult.Invalid("De prijs van een gefactureerde order kan niet meer wijzigen.");
+        }
+
+        if (snapshot.Status != OrderPricingStatus.Locked)
+        {
+            return TransportOrderOperationResult.Invalid("Alleen een bevestigde prijs kan worden aangepast.");
+        }
+
+        if (!await CurrentUserHasAnyAsync(cancellationToken, PermissionCodes.OrdersLockPrice, PermissionCodes.OrdersManage))
+        {
+            return TransportOrderOperationResult.Invalid("Je hebt geen rechten om de bevestigde prijs aan te passen.");
+        }
+
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return TransportOrderOperationResult.Invalid("Geef een reden op om de bevestigde prijs aan te passen.");
+        }
+
+        var before = new
+        {
+            snapshot.Status, snapshot.LinesTotal,
+            snapshot.ConfirmedAtUtc, snapshot.ConfirmedByName, snapshot.ConfirmedWithUnpricedGoodsReason,
+        };
+        snapshot.Status = OrderPricingStatus.Draft;
+        snapshot.ConfirmedAtUtc = null;
+        snapshot.ConfirmedByUserId = null;
+        snapshot.ConfirmedByName = null;
+        snapshot.ConfirmedWithUnpricedGoodsReason = null;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "price_reopened", before,
+            new { snapshot.Status, snapshot.LinesTotal, Reason = reason.Trim() }, cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
     /// <summary>Confirms an unconfirmed (Proposed) extra-time line so it counts in LinesTotal/AgreedPrice.</summary>
     public async Task<TransportOrderOperationResult> ConfirmOrderPriceLineAsync(
         Guid orderId, Guid lineId, CancellationToken cancellationToken)

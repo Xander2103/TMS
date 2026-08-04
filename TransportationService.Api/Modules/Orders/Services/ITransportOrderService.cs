@@ -63,4 +63,15 @@ public interface ITransportOrderService
     /// <summary>Confirms an unconfirmed (Proposed) extra-time line so it counts in LinesTotal/AgreedPrice.</summary>
     Task<TransportOrderOperationResult> ConfirmOrderPriceLineAsync(
         Guid orderId, Guid lineId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Wave 2026-08-04 §8/§10: "Prijs bevestigen" — locks the snapshot and stamps who/when.
+    /// Refused with unpriced goods unless the dedicated override permission + reason is given.
+    /// </summary>
+    Task<TransportOrderOperationResult> ConfirmOrderPricingAsync(
+        Guid orderId, string? unpricedGoodsReason, CancellationToken cancellationToken);
+
+    /// <summary>Wave 2026-08-04 §8: "Prijs aanpassen" — reopens a confirmed price with a mandatory reason.</summary>
+    Task<TransportOrderOperationResult> ReopenOrderPricingAsync(
+        Guid orderId, string? reason, CancellationToken cancellationToken);
 }

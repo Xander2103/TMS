@@ -26,6 +26,7 @@ public class Phase8SupplyChainTests
         [PermissionCodes.UsersResetPassword] = "UsersController password-reset gate (C2)",
         [PermissionCodes.OrdersOverridePrice] = "TransportOrderService manual-price override (L7)",
         [PermissionCodes.OrdersLockPrice] = "TransportOrderService pricing-status transitions (L7)",
+        [PermissionCodes.OrdersConfirmIncompletePrice] = "TransportOrderService.ConfirmOrderPricingAsync unpriced-goods override gate (wave 2026-08-04 §10)",
         [PermissionCodes.EmployeePlanningConflictOverride] = "planning conflict-override flow",
         [PermissionCodes.ScanningOverride] = "scan pipeline override gate",
         [PermissionCodes.PackagesRelabel] = "PackagesController.PrintLabels reprint gate",
