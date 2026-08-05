@@ -61,6 +61,8 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
 
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState<Partial<DriverDetail>>({})
+  /** Ordered selection: the first ticked category is the primary (mirrors create). */
+  const [formCategoryIds, setFormCategoryIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [trailerOptions, setTrailerOptions] = useState<TrailerOption[]>([])
 
@@ -89,6 +91,7 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
   function startEdit() {
     if (!driver) return
     setForm(driver)
+    setFormCategoryIds(driver.categoryIds ?? [])
     setEditing(true)
     if (trailerOptions.length === 0) {
       getTrailerOptions()
@@ -108,7 +111,9 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
     setSaving(true)
     try {
       const updated = await updateDriver(driverId, {
-        driverCategoryId: form.categoryId ?? null,
+        // The ordered multi-select is authoritative; the first entry is the primary.
+        driverCategoryId: formCategoryIds[0] ?? null,
+        driverCategoryIds: formCategoryIds,
         availabilityStatus: (form.availabilityStatus as DriverAvailabilityStatus) ?? driver.availabilityStatus,
         isActive: form.isActive ?? driver.isActive,
         fixedTrailerId: form.fixedTrailerId !== undefined ? form.fixedTrailerId : driver.fixedTrailerId,
@@ -220,18 +225,35 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
       )}
 
       <section className="driver-grid">
-        <FormField label="Categorie">
+        <FormField label="Categorieën" hint={editing ? 'De eerst aangevinkte categorie is de primaire.' : undefined}>
           {editing ? (
-            <select value={form.categoryId ?? ''} onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value || null }))}>
-              <option value="">— Geen —</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <div className="driver-category-options">
+              {categories.length === 0 && <span className="placeholder-text">Geen categorieën beschikbaar.</span>}
+              {categories.map((c) => {
+                const position = formCategoryIds.indexOf(c.id)
+                return (
+                  <label key={c.id} className="driver-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={position >= 0}
+                      onChange={(e) =>
+                        setFormCategoryIds((ids) =>
+                          e.target.checked ? [...ids, c.id] : ids.filter((id) => id !== c.id),
+                        )
+                      }
+                    />
+                    <span>
+                      {c.name}
+                      {position === 0 && ' (primair)'}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
           ) : (
-            <span>{driver.categoryName ?? '—'}</span>
+            <span>
+              {driver.categoryNames && driver.categoryNames.length > 0 ? driver.categoryNames.join(', ') : '—'}
+            </span>
           )}
         </FormField>
 

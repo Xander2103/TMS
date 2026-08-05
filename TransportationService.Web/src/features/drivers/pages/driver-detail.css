@@ -62,6 +62,13 @@
   width: auto;
 }
 
+/* Multi-category picker in the inline edit form: compact vertical checkbox list. */
+.driver-category-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .driver-form-actions {
   display: flex;
   gap: 8px;

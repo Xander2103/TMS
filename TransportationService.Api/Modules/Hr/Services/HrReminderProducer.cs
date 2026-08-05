@@ -73,7 +73,13 @@ public class HrReminderProducer
 
         foreach (var employee in employees)
         {
-            if (employee.DateOfBirth.Month != target.Month || target.Day != EffectiveBirthDay(employee.DateOfBirth, target))
+            // Date of birth is optional (minimal dossier): no birthday reminders without one.
+            if (employee.DateOfBirth is not { } birthDate)
+            {
+                continue;
+            }
+
+            if (birthDate.Month != target.Month || target.Day != EffectiveBirthDay(birthDate, target))
             {
                 continue;
             }
@@ -84,7 +90,7 @@ public class HrReminderProducer
                 continue;
             }
 
-            var turning = target.Year - employee.DateOfBirth.Year;
+            var turning = target.Year - birthDate.Year;
             foreach (var recipient in recipients)
             {
                 _dbContext.Add(BuildNotification(tenantId, recipient, "hr_birthday",
@@ -115,9 +121,15 @@ public class HrReminderProducer
 
         foreach (var employee in employees)
         {
+            // Start date is optional (minimal dossier): no seniority milestones without one.
+            if (employee.EmploymentStartDate is not { } startDate)
+            {
+                continue;
+            }
+
             foreach (var milestone in milestones)
             {
-                var milestoneDate = employee.EmploymentStartDate.AddYears(milestone);
+                var milestoneDate = startDate.AddYears(milestone);
 
                 // HR warning: SeniorityWarningDays before the milestone.
                 if (today == milestoneDate.AddDays(-settings.SeniorityWarningDays))
@@ -298,6 +310,6 @@ public class HrReminderProducer
         birthDate is { Month: 2, Day: 29 } && !DateTime.IsLeapYear(target.Year) ? 28 : birthDate.Day;
 
     private sealed record EmployeeRow(
-        Guid Id, string FirstName, string LastName, DateOnly DateOfBirth,
-        DateOnly EmploymentStartDate, DateOnly? EmploymentEndDate, string? Email);
+        Guid Id, string FirstName, string LastName, DateOnly? DateOfBirth,
+        DateOnly? EmploymentStartDate, DateOnly? EmploymentEndDate, string? Email);
 }

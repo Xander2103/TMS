@@ -19,14 +19,15 @@ public class EmployeeConfiguration : IEntityTypeConfiguration<Employee>
         // NRN is ~90 chars. Plaintext legacy rows still fit.
         builder.Property(e => e.NationalRegisterNumber).HasMaxLength(200);
         builder.Property(e => e.PreferredLanguageCode).HasMaxLength(10);
-        builder.Property(e => e.Street).IsRequired().HasMaxLength(150);
-        builder.Property(e => e.HouseNumber).IsRequired().HasMaxLength(20);
-        builder.Property(e => e.PostalCode).IsRequired().HasMaxLength(20);
-        builder.Property(e => e.City).IsRequired().HasMaxLength(100);
+        // Address/contact fields are optional (spec §13: only first/last name may block).
+        builder.Property(e => e.Street).HasMaxLength(150);
+        builder.Property(e => e.HouseNumber).HasMaxLength(20);
+        builder.Property(e => e.PostalCode).HasMaxLength(20);
+        builder.Property(e => e.City).HasMaxLength(100);
         builder.Property(e => e.CountryCode).HasMaxLength(2);
-        builder.Property(e => e.PhoneNumber).IsRequired().HasMaxLength(30);
+        builder.Property(e => e.PhoneNumber).HasMaxLength(30);
         builder.Property(e => e.MobilePhone).HasMaxLength(30);
-        builder.Property(e => e.Email).IsRequired().HasMaxLength(250);
+        builder.Property(e => e.Email).HasMaxLength(250);
         builder.Property(e => e.EmergencyContactName).HasMaxLength(150);
         builder.Property(e => e.EmergencyContactPhone).HasMaxLength(30);
         builder.Property(e => e.Iban).HasMaxLength(34);

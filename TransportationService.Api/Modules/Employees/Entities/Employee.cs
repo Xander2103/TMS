@@ -14,10 +14,11 @@ public class Employee : ITenantOwned, IHasId, IAuditableEntity
     public Guid TenantId { get; set; }
     public string EmployeeNumber { get; set; } = string.Empty;
 
-    // Person
+    // Person. Only the name is mandatory (spec §13): a dossier can start with nothing but
+    // first + last name and be completed later.
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
-    public DateOnly DateOfBirth { get; set; }
+    public DateOnly? DateOfBirth { get; set; }
     public string? PlaceOfBirth { get; set; }
     /// <summary>Code of the tenant Nationality lookup (e.g. "BE").</summary>
     public string? NationalityCode { get; set; }
@@ -27,15 +28,15 @@ public class Employee : ITenantOwned, IHasId, IAuditableEntity
     public string? PreferredLanguageCode { get; set; }
 
     // Contact
-    public string Email { get; set; } = string.Empty;
-    public string PhoneNumber { get; set; } = string.Empty;
+    public string? Email { get; set; }
+    public string? PhoneNumber { get; set; }
     public string? MobilePhone { get; set; }
 
     // Address
-    public string Street { get; set; } = string.Empty;
-    public string HouseNumber { get; set; } = string.Empty;
-    public string PostalCode { get; set; } = string.Empty;
-    public string City { get; set; } = string.Empty;
+    public string? Street { get; set; }
+    public string? HouseNumber { get; set; }
+    public string? PostalCode { get; set; }
+    public string? City { get; set; }
     /// <summary>ISO 3166-1 alpha-2 code validated against the global country reference.</summary>
     public string? CountryCode { get; set; }
 
@@ -59,7 +60,7 @@ public class Employee : ITenantOwned, IHasId, IAuditableEntity
     public string? Bic { get; set; }
 
     // Employment
-    public DateOnly EmploymentStartDate { get; set; }
+    public DateOnly? EmploymentStartDate { get; set; }
     public DateOnly? EmploymentEndDate { get; set; }
     public EmploymentStatus EmploymentStatus { get; set; }
     public Guid? DepartmentId { get; set; }
@@ -73,6 +74,12 @@ public class Employee : ITenantOwned, IHasId, IAuditableEntity
     public List<EmployeeJobFunction> JobFunctions { get; set; } = [];
 
     public bool IsActive { get; set; } = true;
+
+    /// <summary>
+    /// Legacy single-note column, read-only historical data. EmployeeNote records are the
+    /// source of truth for notes; create/update never write this field anymore (the stored
+    /// value is preserved and still returned for display of pre-migration content).
+    /// </summary>
     public string? Notes { get; set; }
 
     public DateTime CreatedAt { get; set; }

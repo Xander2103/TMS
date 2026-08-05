@@ -84,20 +84,22 @@ public class EmployeeHistoryTests
         status, CountryCode: "BE", Notes: notes, Iban: iban);
 
     [Fact]
-    public async Task CreateWithNote_ReturnsNoteInDetail_AndHistoryShowsIt()
+    public async Task CreateWithLegacyNotesInput_IgnoresIt_EmployeeNoteRecordsAreTheSourceOfTruth()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
         var created = await h.Employees.CreateAsync(CreateRequest("Belangrijke afspraak"), false, CancellationToken.None);
 
-        Assert.Equal("Belangrijke afspraak", created.Notes);
+        // The legacy Employee.Notes column is read-only historical data: the request value is
+        // accepted (older clients) but never written, and no EmployeeNote row appears silently.
+        Assert.Null(created.Notes);
         var detail = await h.Employees.GetByIdAsync(created.Id, false, CancellationToken.None);
-        Assert.Equal("Belangrijke afspraak", detail!.Notes);
+        Assert.Null(detail!.Notes);
 
         var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var entry = Assert.Single(history!.Items, e => e.Action == "Created");
         Assert.Equal("Profiel", entry.Category);
-        Assert.Contains(entry.Changes, c => c.Field == "Notities" && c.Before is null && c.After == "Belangrijke afspraak");
+        Assert.DoesNotContain(entry.Changes, c => c.Field == "Notities");
     }
 
     [Fact]
@@ -127,18 +129,18 @@ public class EmployeeHistoryTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var created = await h.Employees.CreateAsync(CreateRequest("Oude notitie"), false, CancellationToken.None);
+        var created = await h.Employees.CreateAsync(CreateRequest(), false, CancellationToken.None);
 
+        // request.Notes is accepted-but-ignored, so it must never show up as a change.
         await h.Employees.UpdateAsync(created.Id, UpdateRequest(
             street: "Nieuwe straat", status: EmploymentStatus.OnLeave, notes: "Nieuwe notitie"), false, CancellationToken.None);
 
         var history = await h.History.GetHistoryAsync(created.Id, 1, 25, null, EmployeeHistoryAccess.Full, CancellationToken.None);
         var entry = history!.Items.First();
-        Assert.Equal(3, entry.Changes.Count);
+        Assert.Equal(2, entry.Changes.Count);
         Assert.Contains(entry.Changes, c => c.Field == "Straat" && c.Before == "Oude straat" && c.After == "Nieuwe straat");
         Assert.Contains(entry.Changes, c => c.Field == "Status tewerkstelling" && c.Before == "Actief" && c.After == "Met verlof");
-        Assert.Contains(entry.Changes, c => c.Field == "Notities" && c.Before == "Oude notitie" && c.After == "Nieuwe notitie");
-        Assert.Equal("3 velden gewijzigd (Straat, Status tewerkstelling, Notities)", entry.Summary);
+        Assert.Equal("2 velden gewijzigd (Straat, Status tewerkstelling)", entry.Summary);
     }
 
     [Fact]

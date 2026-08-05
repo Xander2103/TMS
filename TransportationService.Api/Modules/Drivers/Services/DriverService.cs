@@ -168,7 +168,7 @@ public class DriverService : IDriverService
             Notes = Trim(request.Notes),
             IsActive = true,
         };
-        SyncCategories(driver, categoryIds);
+        await SyncCategoriesAsync(driver, categoryIds, cancellationToken);
 
         _dbContext.Add(driver);
         try
@@ -203,16 +203,30 @@ public class DriverService : IDriverService
             return DriverOperationResult.InvalidReference;
         }
 
-        var categoryIds = NormalizeCategoryIds(request.DriverCategoryIds, request.DriverCategoryId);
-        if (!await CategoriesInTenantAsync(categoryIds, cancellationToken))
+        // Category-edit semantics: an explicit DriverCategoryIds list is authoritative (its
+        // order counts, index 0 = primary; an empty list clears everything). A null list with
+        // the legacy single id set syncs to just that category; both null leaves the current
+        // categories completely untouched.
+        List<Guid>? categoryIds = request.DriverCategoryIds is { } multi
+            ? multi.Distinct().ToList()
+            : request.DriverCategoryId is { } single ? [single] : null;
+
+        if (categoryIds is not null && !await CategoriesInTenantAsync(categoryIds, cancellationToken))
         {
             return DriverOperationResult.InvalidReference;
         }
 
-        var oldValues = new { driver.DriverCategoryId, driver.AvailabilityStatus, driver.IsActive };
+        var oldPrimaryId = driver.DriverCategoryId;
+        var oldAvailability = driver.AvailabilityStatus;
+        var oldIsActive = driver.IsActive;
+        var oldCategoryIds = driver.Categories.OrderBy(c => c.SortOrder).Select(c => c.DriverCategoryId).ToList();
 
-        driver.DriverCategoryId = categoryIds.Count > 0 ? categoryIds[0] : null;
-        SyncCategories(driver, categoryIds);
+        if (categoryIds is not null)
+        {
+            driver.DriverCategoryId = categoryIds.Count > 0 ? categoryIds[0] : null;
+            await SyncCategoriesAsync(driver, categoryIds, cancellationToken);
+        }
+
         driver.AvailabilityStatus = request.AvailabilityStatus;
         driver.IsActive = request.IsActive;
         driver.FixedTrailerId = request.FixedTrailerId;
@@ -220,8 +234,17 @@ public class DriverService : IDriverService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync(EntityType, driver.Id.ToString(), "Updated", oldValues,
-            new { driver.DriverCategoryId, driver.AvailabilityStatus, driver.IsActive }, cancellationToken);
+        // Audit with resolved, readable category names so the history stays meaningful even
+        // when master data is renamed or removed later.
+        var newCategoryIds = categoryIds ?? oldCategoryIds;
+        var categoryNames = await CategoryNamesAsync([.. oldCategoryIds, .. newCategoryIds, oldPrimaryId ?? Guid.Empty, driver.DriverCategoryId ?? Guid.Empty], cancellationToken);
+        string? Names(IReadOnlyList<Guid> ids) =>
+            ids.Count == 0 ? null : string.Join(", ", ids.Select(id => categoryNames.GetValueOrDefault(id, id.ToString())));
+        string? PrimaryName(Guid? id) => id is { } value ? categoryNames.GetValueOrDefault(value, value.ToString()) : null;
+
+        await _auditService.RecordAsync(EntityType, driver.Id.ToString(), "Updated",
+            new { DriverCategoryId = oldPrimaryId, PrimaryCategory = PrimaryName(oldPrimaryId), Categories = Names(oldCategoryIds), AvailabilityStatus = oldAvailability, IsActive = oldIsActive },
+            new { driver.DriverCategoryId, PrimaryCategory = PrimaryName(driver.DriverCategoryId), Categories = Names(newCategoryIds), driver.AvailabilityStatus, driver.IsActive }, cancellationToken);
 
         return DriverOperationResult.Success(await MapToDetailAsync(driver, cancellationToken));
     }
@@ -300,8 +323,27 @@ public class DriverService : IDriverService
         return known == categoryIds.Count;
     }
 
-    /// <summary>Wholesale sync of the category join rows in the given order.</summary>
-    private void SyncCategories(Driver driver, IReadOnlyList<Guid> categoryIds)
+    /// <summary>Resolved names for the audit trail; unknown ids simply stay unresolved.</summary>
+    private async Task<Dictionary<Guid, string>> CategoryNamesAsync(
+        IReadOnlyCollection<Guid> categoryIds, CancellationToken cancellationToken)
+    {
+        var ids = categoryIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        return await _dbContext.Set<DriverCategory>().AsNoTracking()
+            .Where(c => c.TenantId == _tenantContext.TenantId && ids.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+    }
+
+    /// <summary>
+    /// Id-preserving sync of the category join rows in the given order (index = SortOrder).
+    /// The (TenantId, DriverId, DriverCategoryId) unique index is NOT filtered on IsDeleted,
+    /// so a category that was removed earlier (soft delete) is revived instead of re-inserted.
+    /// </summary>
+    private async Task SyncCategoriesAsync(Driver driver, IReadOnlyList<Guid> categoryIds, CancellationToken cancellationToken)
     {
         var wanted = categoryIds.ToList();
         foreach (var removed in driver.Categories.Where(c => !wanted.Contains(c.DriverCategoryId)).ToList())
@@ -311,11 +353,27 @@ public class DriverService : IDriverService
         }
 
         var existing = driver.Categories.ToDictionary(c => c.DriverCategoryId);
+        var missing = wanted.Where(id => !existing.ContainsKey(id)).ToList();
+        var softDeleted = missing.Count == 0
+            ? []
+            : await _dbContext.Set<DriverDriverCategory>().IgnoreQueryFilters()
+                .Where(c => c.TenantId == _tenantContext.TenantId && c.DriverId == driver.Id
+                            && c.IsDeleted && missing.Contains(c.DriverCategoryId))
+                .ToDictionaryAsync(c => c.DriverCategoryId, cancellationToken);
+
         for (var index = 0; index < wanted.Count; index += 1)
         {
             if (existing.TryGetValue(wanted[index], out var link))
             {
                 link.SortOrder = index;
+            }
+            else if (softDeleted.TryGetValue(wanted[index], out var revived))
+            {
+                revived.IsDeleted = false;
+                revived.DeletedAt = null;
+                revived.DeletedByUserId = null;
+                revived.SortOrder = index;
+                driver.Categories.Add(revived);
             }
             else
             {

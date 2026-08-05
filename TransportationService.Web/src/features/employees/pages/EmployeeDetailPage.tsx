@@ -403,7 +403,10 @@ export function EmployeeDetailPage() {
             try {
               const driver = await getDriver(employee.driverId!)
               await updateDriver(employee.driverId!, {
-                driverCategoryId: driver.categoryId,
+                // Both category fields null = leave the category set untouched; this action
+                // only deactivates the profile.
+                driverCategoryId: null,
+                driverCategoryIds: null,
                 availabilityStatus: driver.availabilityStatus,
                 isActive: false,
                 fixedTrailerId: driver.fixedTrailerId,

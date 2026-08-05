@@ -180,6 +180,115 @@ public class EmployeeHrAndDriverCategoryTests
         Assert.Equal(DriverOperationOutcome.InvalidReference, bad.Outcome);
     }
 
+    [Fact]
+    public async Task Driver_UpdateCategories_ReorderAndReAddAfterRemove_RoundTripsWithPrimaryMirror()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = await h.Drivers.CreateAsync(new CreateDriverRequest(
+            await NewEmployeeIdAsync(h), null, DriverAvailabilityStatus.Available,
+            DriverCategoryIds: [h.CategoryB, h.CategoryC]), CancellationToken.None);
+        var driverId = create.Driver!.Id;
+
+        // Remove B, keep C, add CE — order counts: C becomes primary.
+        var second = await h.Drivers.UpdateAsync(driverId, new UpdateDriverRequest(
+            null, DriverAvailabilityStatus.Available, true, DriverCategoryIds: [h.CategoryC, h.CategoryCe]), CancellationToken.None);
+        Assert.Equal([h.CategoryC, h.CategoryCe], second.Driver!.CategoryIds);
+        Assert.Equal(h.CategoryC, second.Driver.CategoryId);
+
+        // Re-add previously removed B (revives the soft-deleted join row — the unique index
+        // on (TenantId, DriverId, DriverCategoryId) is unfiltered) and reorder: B is primary.
+        var third = await h.Drivers.UpdateAsync(driverId, new UpdateDriverRequest(
+            null, DriverAvailabilityStatus.Available, true, DriverCategoryIds: [h.CategoryB, h.CategoryCe, h.CategoryC]), CancellationToken.None);
+        Assert.Equal([h.CategoryB, h.CategoryCe, h.CategoryC], third.Driver!.CategoryIds);
+        Assert.Equal(h.CategoryB, third.Driver.CategoryId);
+        Assert.Equal(["Categorie B", "Categorie CE", "Categorie C"], third.Driver.CategoryNames);
+
+        // No duplicate physical rows: one row per category, including soft-deleted history.
+        var rawRows = await h.Db.Context.Set<DriverDriverCategory>().IgnoreQueryFilters()
+            .Where(c => c.DriverId == driverId).ToListAsync();
+        Assert.Equal(3, rawRows.Count);
+        Assert.All(rawRows, r => Assert.False(r.IsDeleted));
+    }
+
+    [Fact]
+    public async Task Driver_UpdateCategories_NullList_LeavesCategoriesUnchanged()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = await h.Drivers.CreateAsync(new CreateDriverRequest(
+            await NewEmployeeIdAsync(h), null, DriverAvailabilityStatus.Available,
+            DriverCategoryIds: [h.CategoryB, h.CategoryC]), CancellationToken.None);
+
+        // Neither the multi-list nor the legacy single id is supplied: categories stay as-is.
+        var updated = await h.Drivers.UpdateAsync(create.Driver!.Id, new UpdateDriverRequest(
+            null, DriverAvailabilityStatus.Unavailable, true), CancellationToken.None);
+
+        Assert.Equal(DriverOperationOutcome.Success, updated.Outcome);
+        Assert.Equal([h.CategoryB, h.CategoryC], updated.Driver!.CategoryIds);
+        Assert.Equal(h.CategoryB, updated.Driver.CategoryId);
+        Assert.Equal(DriverAvailabilityStatus.Unavailable, updated.Driver.AvailabilityStatus);
+    }
+
+    [Fact]
+    public async Task Driver_UpdateCategories_EmptyList_ClearsAll_AndPrimaryBecomesNull()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = await h.Drivers.CreateAsync(new CreateDriverRequest(
+            await NewEmployeeIdAsync(h), null, DriverAvailabilityStatus.Available,
+            DriverCategoryIds: [h.CategoryB, h.CategoryC]), CancellationToken.None);
+
+        var updated = await h.Drivers.UpdateAsync(create.Driver!.Id, new UpdateDriverRequest(
+            null, DriverAvailabilityStatus.Available, true, DriverCategoryIds: []), CancellationToken.None);
+
+        Assert.Equal(DriverOperationOutcome.Success, updated.Outcome);
+        Assert.Empty(updated.Driver!.CategoryIds!);
+        Assert.Null(updated.Driver.CategoryId);
+    }
+
+    [Fact]
+    public async Task Driver_UpdateCategories_ForeignTenantCategory_IsRejected_AndNothingChanges()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var foreignCategory = new DriverCategory
+        {
+            Id = Guid.NewGuid(), TenantId = Guid.NewGuid(), Code = "VR", Name = "Vreemd", IsActive = true,
+        };
+        h.Db.Context.DriverCategories.Add(foreignCategory);
+        await h.Db.Context.SaveChangesAsync();
+        var create = await h.Drivers.CreateAsync(new CreateDriverRequest(
+            await NewEmployeeIdAsync(h), null, DriverAvailabilityStatus.Available,
+            DriverCategoryIds: [h.CategoryB]), CancellationToken.None);
+
+        var bad = await h.Drivers.UpdateAsync(create.Driver!.Id, new UpdateDriverRequest(
+            null, DriverAvailabilityStatus.Available, true, DriverCategoryIds: [foreignCategory.Id]), CancellationToken.None);
+
+        Assert.Equal(DriverOperationOutcome.InvalidReference, bad.Outcome);
+        var unchanged = await h.Drivers.GetByIdAsync(create.Driver.Id, CancellationToken.None);
+        Assert.Equal([h.CategoryB], unchanged!.CategoryIds);
+    }
+
+    [Fact]
+    public async Task Driver_UpdateCategories_AuditsResolvedReadableNames()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var create = await h.Drivers.CreateAsync(new CreateDriverRequest(
+            await NewEmployeeIdAsync(h), null, DriverAvailabilityStatus.Available,
+            DriverCategoryIds: [h.CategoryB]), CancellationToken.None);
+
+        await h.Drivers.UpdateAsync(create.Driver!.Id, new UpdateDriverRequest(
+            null, DriverAvailabilityStatus.Available, true, DriverCategoryIds: [h.CategoryC, h.CategoryB]), CancellationToken.None);
+
+        var entry = await h.Db.Context.AuditLogs.AsNoTracking()
+            .Where(l => l.EntityType == "Driver" && l.EntityId == create.Driver.Id.ToString() && l.Action == "Updated")
+            .OrderByDescending(l => l.Timestamp).FirstAsync();
+        Assert.Contains("Categorie B", entry.OldValuesJson!);
+        Assert.Contains("Categorie C, Categorie B", entry.NewValuesJson!);
+    }
+
     private async Task<Guid> NewEmployeeIdAsync(Harness h)
     {
         var created = await h.Employees.CreateAsync(Request() with { Email = $"{Guid.NewGuid():N}@acme.example" },

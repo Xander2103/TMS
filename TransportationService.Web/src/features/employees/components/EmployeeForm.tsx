@@ -647,9 +647,8 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
       nationalRegisterNumber: canSeeConfidential ? nullable(nationalRegisterNumber) : null,
       iban: canSeeConfidential ? nullable(iban) : null,
       bic: canSeeConfidential ? nullable(bic) : null,
-      // Legacy single-note field: no UI writes to it anymore (see EmployeeNotesPanel);
-      // pass the existing value through unchanged so it is never accidentally cleared.
-      notes: initial?.notes ?? null,
+      // Legacy Employee.Notes is deliberately absent: EmployeeNote records (EmployeeNotesPanel)
+      // are the source of truth and the backend preserves the stored legacy value itself.
       civilStatus: civilStatus || null,
       dependentChildren: dependentChildren.trim() ? Number(dependentChildren) : null,
       dimonaNumber: nullable(dimonaNumber),

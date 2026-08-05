@@ -3,23 +3,24 @@ using TransportationService.Api.Modules.Qualifications.Dtos;
 
 namespace TransportationService.Api.Modules.Portal.Dtos;
 
-/// <summary>Own, non-confidential profile: no national register number, no banking data.</summary>
+/// <summary>Own, non-confidential profile: no national register number, no banking data.
+/// Contact/address/start date are optional on the dossier and may be null.</summary>
 public record MyProfileDto(
     Guid EmployeeId,
     string EmployeeNumber,
     string FirstName,
     string LastName,
-    string Email,
-    string PhoneNumber,
+    string? Email,
+    string? PhoneNumber,
     string? MobilePhone,
-    string Street,
-    string HouseNumber,
-    string PostalCode,
-    string City,
+    string? Street,
+    string? HouseNumber,
+    string? PostalCode,
+    string? City,
     string? CountryCode,
     string? EmergencyContactName,
     string? EmergencyContactPhone,
-    DateOnly EmploymentStartDate,
+    DateOnly? EmploymentStartDate,
     string EmploymentStatus,
     string? DepartmentName,
     IReadOnlyList<string> JobFunctions,

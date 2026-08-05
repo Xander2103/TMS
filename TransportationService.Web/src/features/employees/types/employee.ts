@@ -84,21 +84,22 @@ export interface EmployeeDetail {
   employeeNumber: string
   firstName: string
   lastName: string
-  dateOfBirth: string
+  // Only the name is guaranteed: a minimal dossier (spec §13) leaves the rest null.
+  dateOfBirth: string | null
   placeOfBirth: string | null
   nationalityCode: string | null
   preferredLanguageCode: string | null
-  email: string
-  phoneNumber: string
+  email: string | null
+  phoneNumber: string | null
   mobilePhone: string | null
-  street: string
-  houseNumber: string
-  postalCode: string
-  city: string
+  street: string | null
+  houseNumber: string | null
+  postalCode: string | null
+  city: string | null
   countryCode: string | null
   emergencyContactName: string | null
   emergencyContactPhone: string | null
-  employmentStartDate: string
+  employmentStartDate: string | null
   employmentEndDate: string | null
   employmentStatus: EmploymentStatus
   departmentId: string | null
@@ -147,7 +148,8 @@ export interface EmployeeInput {
   nationalRegisterNumber: string | null
   iban: string | null
   bic: string | null
-  notes: string | null
+  // NB: no `notes` — the legacy Employee.Notes column is read-only historical data;
+  // notes are managed through the EmployeeNote endpoints (EmployeeNotesPanel).
   civilStatus: CivilStatus | null
   dependentChildren: number | null
   dimonaNumber: string | null

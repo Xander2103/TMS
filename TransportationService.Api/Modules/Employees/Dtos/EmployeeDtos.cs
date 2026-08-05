@@ -27,21 +27,21 @@ public record EmployeeDetailDto(
     string EmployeeNumber,
     string FirstName,
     string LastName,
-    DateOnly DateOfBirth,
+    DateOnly? DateOfBirth,
     string? PlaceOfBirth,
     string? NationalityCode,
     string? PreferredLanguageCode,
-    string Email,
-    string PhoneNumber,
+    string? Email,
+    string? PhoneNumber,
     string? MobilePhone,
-    string Street,
-    string HouseNumber,
-    string PostalCode,
-    string City,
+    string? Street,
+    string? HouseNumber,
+    string? PostalCode,
+    string? City,
     string? CountryCode,
     string? EmergencyContactName,
     string? EmergencyContactPhone,
-    DateOnly EmploymentStartDate,
+    DateOnly? EmploymentStartDate,
     DateOnly? EmploymentEndDate,
     EmploymentStatus EmploymentStatus,
     Guid? DepartmentId,
@@ -77,17 +77,21 @@ public record EmployeeEmergencyContactInput(
 /// </summary>
 public record CreateEmployeeDriverProfile(Guid? DriverCategoryId, string? Notes, IReadOnlyList<Guid>? DriverCategoryIds = null);
 
+/// <summary>
+/// Only FirstName and LastName are required (spec §13); everything else is optional and can
+/// be completed later. A supplied Email is format-checked; end date must not precede start.
+/// </summary>
 public record CreateEmployeeRequest(
     string FirstName,
     string LastName,
-    DateOnly DateOfBirth,
-    string Street,
-    string HouseNumber,
-    string PostalCode,
-    string City,
-    string PhoneNumber,
-    string Email,
-    DateOnly EmploymentStartDate,
+    DateOnly? DateOfBirth,
+    string? Street,
+    string? HouseNumber,
+    string? PostalCode,
+    string? City,
+    string? PhoneNumber,
+    string? Email,
+    DateOnly? EmploymentStartDate,
     EmploymentStatus EmploymentStatus,
     string? CountryCode = null,
     string? PlaceOfBirth = null,
@@ -102,6 +106,8 @@ public record CreateEmployeeRequest(
     string? NationalRegisterNumber = null,
     string? Iban = null,
     string? Bic = null,
+    /// <summary>Accepted but ignored: EmployeeNote records are the source of truth; the
+    /// legacy Employee.Notes column is read-only historical data and is never written.</summary>
     string? Notes = null,
     CreateEmployeeDriverProfile? DriverProfile = null,
     IReadOnlyList<CreateEmployeeQualificationRequest>? Qualifications = null,
@@ -112,17 +118,18 @@ public record CreateEmployeeRequest(
     DateOnly? EmploymentEndDate = null,
     IReadOnlyList<EmployeeEmergencyContactInput>? EmergencyContacts = null);
 
+/// <summary>Same contract as create: only FirstName and LastName are required.</summary>
 public record UpdateEmployeeRequest(
     string FirstName,
     string LastName,
-    DateOnly DateOfBirth,
-    string Street,
-    string HouseNumber,
-    string PostalCode,
-    string City,
-    string PhoneNumber,
-    string Email,
-    DateOnly EmploymentStartDate,
+    DateOnly? DateOfBirth,
+    string? Street,
+    string? HouseNumber,
+    string? PostalCode,
+    string? City,
+    string? PhoneNumber,
+    string? Email,
+    DateOnly? EmploymentStartDate,
     EmploymentStatus EmploymentStatus,
     DateOnly? EmploymentEndDate = null,
     string? CountryCode = null,
@@ -138,6 +145,8 @@ public record UpdateEmployeeRequest(
     string? NationalRegisterNumber = null,
     string? Iban = null,
     string? Bic = null,
+    /// <summary>Accepted but ignored: EmployeeNote records are the source of truth; the
+    /// stored legacy Employee.Notes value is preserved untouched.</summary>
     string? Notes = null,
     CivilStatus? CivilStatus = null,
     int? DependentChildren = null,

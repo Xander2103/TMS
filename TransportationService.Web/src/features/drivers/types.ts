@@ -35,8 +35,12 @@ export interface DriverDetail {
   employeeId: string
   fullName: string
   employeeNumber: string
+  /** Primary category — mirrors the first entry of categoryIds. */
   categoryId: string | null
   categoryName: string | null
+  /** All operational categories in order; index 0 is the primary. */
+  categoryIds: string[]
+  categoryNames: string[]
   availabilityStatus: DriverAvailabilityStatus
   isActive: boolean
   isBlocked: boolean
@@ -65,6 +69,11 @@ export interface UpdateDriverInput {
   isActive: boolean
   fixedTrailerId: string | null
   notes: string | null
+  /**
+   * Ordered multi-category selection; the first entry becomes the primary. An empty array
+   * clears every category; null (together with a null driverCategoryId) leaves them unchanged.
+   */
+  driverCategoryIds: string[] | null
 }
 
 export const AVAILABILITY_LABELS: Record<DriverAvailabilityStatus, string> = {

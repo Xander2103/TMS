@@ -65,6 +65,9 @@ public record UpdateDriverRequest(
     bool IsActive,
     Guid? FixedTrailerId = null,
     string? Notes = null,
+    /// <summary>Ordered multi-category selection; the first entry is the primary and mirrors
+    /// DriverCategoryId. Empty list clears all categories (primary becomes null); null leaves
+    /// the categories unchanged unless the legacy single DriverCategoryId is set.</summary>
     IReadOnlyList<Guid>? DriverCategoryIds = null);
 
 /// <summary>Body for the driver-side assignment endpoints; null VehicleId clears the slot.</summary>

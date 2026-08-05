@@ -88,8 +88,8 @@ public class EmployeeService : IEmployeeService
                 e.EmployeeNumber.ToLower().Contains(term) ||
                 e.FirstName.ToLower().Contains(term) ||
                 e.LastName.ToLower().Contains(term) ||
-                e.Email.ToLower().Contains(term) ||
-                e.City.ToLower().Contains(term));
+                (e.Email != null && e.Email.ToLower().Contains(term)) ||
+                (e.City != null && e.City.ToLower().Contains(term)));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -138,7 +138,8 @@ public class EmployeeService : IEmployeeService
 
     public async Task<EmployeeDetailDto> CreateAsync(CreateEmployeeRequest request, bool canEditConfidential, CancellationToken cancellationToken)
     {
-        ValidateRequired(request.FirstName, request.LastName, request.Email);
+        ValidateRequired(request.FirstName, request.LastName, request.Email,
+            request.EmploymentStartDate, request.EmploymentEndDate);
         await ValidateLookupCodesAsync(request.NationalityCode, request.PreferredLanguageCode, cancellationToken);
         await EnsureReferencesInTenantAsync(request.DepartmentId, request.ContractTypeId, request.JobFunctionIds, cancellationToken);
         await EnsureQualificationTypesExistAsync(request.Qualifications, cancellationToken);
@@ -156,13 +157,13 @@ public class EmployeeService : IEmployeeService
             PlaceOfBirth = Trim(request.PlaceOfBirth),
             NationalityCode = Trim(request.NationalityCode)?.ToUpperInvariant(),
             PreferredLanguageCode = Trim(request.PreferredLanguageCode)?.ToLowerInvariant(),
-            Email = request.Email.Trim(),
-            PhoneNumber = request.PhoneNumber.Trim(),
+            Email = Trim(request.Email),
+            PhoneNumber = Trim(request.PhoneNumber),
             MobilePhone = Trim(request.MobilePhone),
-            Street = request.Street.Trim(),
-            HouseNumber = request.HouseNumber.Trim(),
-            PostalCode = request.PostalCode.Trim(),
-            City = request.City.Trim(),
+            Street = Trim(request.Street),
+            HouseNumber = Trim(request.HouseNumber),
+            PostalCode = Trim(request.PostalCode),
+            City = Trim(request.City),
             CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken, "countryCode"),
             EmergencyContactName = Trim(request.EmergencyContactName),
             EmergencyContactPhone = Trim(request.EmergencyContactPhone),
@@ -175,7 +176,8 @@ public class EmployeeService : IEmployeeService
             DependentChildren = ValidateDependentChildren(request.DependentChildren),
             DimonaNumber = Trim(request.DimonaNumber),
             IsActive = true,
-            Notes = Trim(request.Notes),
+            // Legacy Employee.Notes stays null: EmployeeNote records are the source of truth
+            // (request.Notes is accepted for older clients but deliberately ignored).
         };
 
         if (canEditConfidential)
@@ -245,7 +247,8 @@ public class EmployeeService : IEmployeeService
             return null;
         }
 
-        ValidateRequired(request.FirstName, request.LastName, request.Email);
+        ValidateRequired(request.FirstName, request.LastName, request.Email,
+            request.EmploymentStartDate, request.EmploymentEndDate);
         await ValidateLookupCodesAsync(request.NationalityCode, request.PreferredLanguageCode, cancellationToken);
         await EnsureReferencesInTenantAsync(request.DepartmentId, request.ContractTypeId, request.JobFunctionIds, cancellationToken);
 
@@ -260,13 +263,13 @@ public class EmployeeService : IEmployeeService
         employee.PlaceOfBirth = Trim(request.PlaceOfBirth);
         employee.NationalityCode = Trim(request.NationalityCode)?.ToUpperInvariant();
         employee.PreferredLanguageCode = Trim(request.PreferredLanguageCode)?.ToLowerInvariant();
-        employee.Email = request.Email.Trim();
-        employee.PhoneNumber = request.PhoneNumber.Trim();
+        employee.Email = Trim(request.Email);
+        employee.PhoneNumber = Trim(request.PhoneNumber);
         employee.MobilePhone = Trim(request.MobilePhone);
-        employee.Street = request.Street.Trim();
-        employee.HouseNumber = request.HouseNumber.Trim();
-        employee.PostalCode = request.PostalCode.Trim();
-        employee.City = request.City.Trim();
+        employee.Street = Trim(request.Street);
+        employee.HouseNumber = Trim(request.HouseNumber);
+        employee.PostalCode = Trim(request.PostalCode);
+        employee.City = Trim(request.City);
         employee.CountryCode = await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "adresland", cancellationToken, "countryCode");
         employee.EmergencyContactName = Trim(request.EmergencyContactName);
         employee.EmergencyContactPhone = Trim(request.EmergencyContactPhone);
@@ -278,7 +281,8 @@ public class EmployeeService : IEmployeeService
         employee.CivilStatus = request.CivilStatus;
         employee.DependentChildren = ValidateDependentChildren(request.DependentChildren);
         employee.DimonaNumber = Trim(request.DimonaNumber);
-        employee.Notes = Trim(request.Notes);
+        // Legacy Employee.Notes is intentionally NOT written: EmployeeNote records are the
+        // source of truth and the stored legacy value stays preserved as historical data.
 
         // Confidential fields are only touched by callers holding employees.view_confidential;
         // for everyone else the stored values are preserved untouched.
@@ -400,7 +404,7 @@ public class EmployeeService : IEmployeeService
             ["EmployeeNumber"] = employee.EmployeeNumber,
             ["FirstName"] = employee.FirstName,
             ["LastName"] = employee.LastName,
-            ["DateOfBirth"] = employee.DateOfBirth.ToString("yyyy-MM-dd"),
+            ["DateOfBirth"] = employee.DateOfBirth?.ToString("yyyy-MM-dd"),
             ["PlaceOfBirth"] = employee.PlaceOfBirth,
             ["Nationality"] = employee.NationalityCode,
             ["Language"] = employee.PreferredLanguageCode,
@@ -414,7 +418,7 @@ public class EmployeeService : IEmployeeService
             ["Country"] = employee.CountryCode,
             ["CivilStatus"] = employee.CivilStatus?.ToString(),
             ["DependentChildren"] = employee.DependentChildren,
-            ["EmploymentStartDate"] = employee.EmploymentStartDate.ToString("yyyy-MM-dd"),
+            ["EmploymentStartDate"] = employee.EmploymentStartDate?.ToString("yyyy-MM-dd"),
             ["EmploymentEndDate"] = employee.EmploymentEndDate?.ToString("yyyy-MM-dd"),
             ["EmploymentStatus"] = employee.EmploymentStatus.ToString(),
             ["Department"] = departmentName,
@@ -437,16 +441,26 @@ public class EmployeeService : IEmployeeService
             ? null
             : value.Length <= visibleSuffix ? "•••" : $"•••{value[^visibleSuffix..]}";
 
-    private static void ValidateRequired(string firstName, string lastName, string email)
+    /// <summary>
+    /// Spec §13: only first and last name may block a save. Everything else is optional and
+    /// only format-checked when a value was actually supplied.
+    /// </summary>
+    private static void ValidateRequired(
+        string firstName, string lastName, string? email, DateOnly? startDate, DateOnly? endDate)
     {
         if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
         {
             throw new DomainValidationException("Voornaam en achternaam zijn verplicht.");
         }
 
-        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+        if (!string.IsNullOrWhiteSpace(email) && !email.Contains('@'))
         {
-            throw new DomainValidationException("Een geldig e-mailadres is verplicht.");
+            throw new DomainValidationException("email", "Geef een geldig e-mailadres op.");
+        }
+
+        if (startDate is { } start && endDate is { } end && end < start)
+        {
+            throw new DomainValidationException("employmentEndDate", "De einddatum moet na de startdatum liggen.");
         }
     }
 
