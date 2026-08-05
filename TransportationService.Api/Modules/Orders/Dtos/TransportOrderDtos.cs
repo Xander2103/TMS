@@ -49,7 +49,27 @@ public record TransportOrderStopDto(
     TimeOnly? TimeRequirementFrom = null,
     TimeOnly? TimeRequirementTo = null,
     /// <summary>Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract).</summary>
-    int? IncludedTimeMinutesOverride = null);
+    int? IncludedTimeMinutesOverride = null,
+    // --- Location snapshot (master-data wave 2026-08-05, Phase 7): frozen at order time ---
+    string? ContactName = null,
+    string? ContactPhone = null,
+    string? ContactMobile = null,
+    string? ContactEmail = null,
+    string? OpeningHoursSummary = null,
+    string? Gate = null,
+    /// <summary>Sensitive: null unless the caller holds locations.view_sensitive.</summary>
+    string? AccessCode = null,
+    string? Dock = null,
+    string? RouteDescription = null,
+    int? DefaultLoadingMinutes = null,
+    int? DefaultUnloadingMinutes = null,
+    DateTime? SnapshotAt = null,
+    /// <summary>
+    /// Computed (never persisted) advisory opening-hours warnings: planned times evaluated
+    /// against the LIVE location hours — the warning answers "will the site be open", the
+    /// snapshot answers "what did we agree". Dutch, non-blocking.
+    /// </summary>
+    IReadOnlyList<string>? Warnings = null);
 
 public record TransportOrderDetailDto(
     Guid Id,
@@ -298,7 +318,15 @@ public record TransportOrderStopInput(
     TimeOnly? TimeRequirementFrom = null,
     TimeOnly? TimeRequirementTo = null,
     /// <summary>Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract).</summary>
-    int? IncludedTimeMinutesOverride = null);
+    int? IncludedTimeMinutesOverride = null,
+    /// <summary>
+    /// Existing stop id echoed by the client (stops are still wholesale-rebuilt on update). A
+    /// matching id with an unchanged LocationId carries the previous location snapshot over
+    /// instead of re-copying live master data (master-data wave 2026-08-05, Phase 7).
+    /// </summary>
+    Guid? Id = null,
+    /// <summary>True = deliberately re-copy the CURRENT master-location data onto this stop (audited).</summary>
+    bool RefreshSnapshot = false);
 
 /// <summary>
 /// Dispatcher-side execution planning of one stop: the confirmed window, hard bounds,

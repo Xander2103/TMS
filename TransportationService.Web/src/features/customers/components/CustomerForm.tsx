@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { FormField } from '../../../components/ui/FormField'
 import { Button } from '../../../components/ui/Button'
 import { FormSection } from '../../../components/ui/FormSection'
@@ -20,11 +20,24 @@ import { validateVatNumber } from '../utils/vatNumber'
 import { resolveRateOptions } from '../utils/vatTreatment'
 import { PeppolFieldGroup } from './PeppolFieldGroup'
 import { combinePeppolValue, peppolFormatError } from '../utils/peppolValue'
-import { CUSTOMER_SECTION_FIELD_KEYS } from './customerSections'
+import { CUSTOMER_SECTION_FIELD_KEYS, isKlantgegevensFieldKey } from './customerSections'
 import {
+  addContactRow,
+  contactRowsToPayload,
+  createContactRow,
+  payloadIndexByKey,
+  removeContactRow,
+  updateContactRow,
+  validateContactRows,
+  type ContactRow,
+} from '../utils/contactRows'
+import {
+  CUSTOMER_CONTACT_TYPE_LABELS,
+  CUSTOMER_CONTACT_TYPES,
   PEPPOL_DELIVERY_PREFERENCE_LABELS,
   VAT_TREATMENT_LABELS,
   type CompanyRegistryResult,
+  type CustomerContactType,
   type CustomerDetail,
   type CustomerInput,
   type CustomerPeppolVerifyResult,
@@ -37,6 +50,12 @@ import {
 } from '../types'
 import './customers.css'
 
+/**
+ * Which save button triggered the submit: 'save' is the normal flow (navigate/reload by the
+ * parent), 'saveAndNew' (create mode only) asks the parent to reset for a fresh entry.
+ */
+export type CustomerSubmitIntent = 'save' | 'saveAndNew'
+
 interface CustomerFormProps {
   mode: 'create' | 'edit'
   initial?: CustomerDetail
@@ -44,10 +63,10 @@ interface CustomerFormProps {
   submitError: string | null
   /** Per-field backend validation messages, shown next to the fields + in the summary. */
   serverFieldErrors?: FieldErrors
-  onSubmit: (values: UpdateCustomerInput) => void
+  onSubmit: (values: UpdateCustomerInput, intent: CustomerSubmitIntent) => void
   onCancel: () => void
   /**
-   * Edit-only self-saving panels embedded as their sections. The detail page owns the
+   * Edit-only self-saving panels embedded in their (sub)sections. The detail page owns the
    * mutations + reload for these, so it passes the wired panel nodes; create mode shows
    * inline blocks / "available after creation" placeholders instead.
    */
@@ -56,7 +75,14 @@ interface CustomerFormProps {
     contactpersonen?: ReactNode
     communicatie?: ReactNode
     tarieven?: ReactNode
+    historiek?: ReactNode
   }
+  /**
+   * Create-only slot under "Locaties & adressen": the staged-locations editor. The page owns
+   * that state because the staged rows are created via POST /api/locations only after the
+   * customer create succeeds.
+   */
+  stagedLocationsSlot?: ReactNode
 }
 
 /** User-facing labels for backend field paths, for the validation summary. */
@@ -73,8 +99,7 @@ const FIELD_LABELS: Record<string, string> = {
   iban: 'IBAN',
   bic: 'BIC',
   bankAccountNumber: 'Rekeningnummer',
-  'initialContact.firstName': 'Contactpersoon — voornaam',
-  'initialContact.lastName': 'Contactpersoon — achternaam',
+  notes: 'Interne klantmemo',
   peppolId: 'Peppol-ID',
   peppolScheme: 'Peppol-schema',
   peppolEnabled: 'Facturen via Peppol versturen',
@@ -113,7 +138,7 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
 }
 
-export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, editPanels }: CustomerFormProps) {
+export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, editPanels, stagedLocationsSlot }: CustomerFormProps) {
   const languages = useLookupOptions('/api/languages')
   const { hasPermission } = useAuth()
   const canManageFiscal = hasPermission('customers.manage_fiscal')
@@ -159,6 +184,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   const [customerNumber, setCustomerNumber] = useState('')
   const [legalName, setLegalName] = useState(initial?.legalName ?? '')
   const [categoryId, setCategoryId] = useState<string | null>(initial?.categoryId ?? null)
+  const [isActive, setIsActive] = useState(initial?.isActive ?? true)
   const [email, setEmail] = useState(initial?.email ?? '')
   const [phoneNumber, setPhoneNumber] = useState(initial?.phoneNumber ?? '')
   const [website, setWebsite] = useState(initial?.website ?? '')
@@ -221,18 +247,13 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
 
   const [notes, setNotes] = useState(initial?.notes ?? '')
 
-  // Optional initial contact (create flow only) — same model as the contacts panel.
-  const [contactFirstName, setContactFirstName] = useState('')
-  const [contactLastName, setContactLastName] = useState('')
-  const [contactRole, setContactRole] = useState('')
-  const [contactEmail, setContactEmail] = useState('')
-  const [contactPhone, setContactPhone] = useState('')
-  const [contactIsPrimary, setContactIsPrimary] = useState(true)
+  // Contact-person repeater (create flow only) — posted via `contacts[]` on the create request.
+  const [contactRows, setContactRows] = useState<ContactRow[]>(() => [createContactRow()])
+  const [contactRowErrors, setContactRowErrors] = useState<Record<string, string>>({})
 
   const [nameError, setNameError] = useState<string | undefined>(undefined)
   const [vatError, setVatError] = useState<string | undefined>(undefined)
   const [vatRateError, setVatRateError] = useState<string | undefined>(undefined)
-  const [contactErrors, setContactErrors] = useState<{ firstName?: string; lastName?: string }>({})
   const [dirty, setDirty] = useState(false)
   const [lookup, setLookup] = useState<LookupState>({ kind: 'idle' })
 
@@ -249,6 +270,11 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
 
   function touch() {
     if (!dirty) setDirty(true)
+  }
+
+  function patchContactRow(key: string, patch: Partial<Omit<ContactRow, 'key'>>) {
+    setContactRows((rows) => updateContactRow(rows, key, patch))
+    touch()
   }
 
   function onPeppolChange(next: { scheme: string; participantId: string }) {
@@ -293,7 +319,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
    */
   function applyRegistryResult(result: CompanyRegistryResult) {
     const fields: { label: string; value: string | null; current: string; set: (v: string) => void; fiscal?: boolean }[] = [
-      { label: 'Juridische naam', value: result.legalName, current: legalName, set: setLegalName },
+      { label: 'Officiële naam', value: result.legalName, current: legalName, set: setLegalName },
       { label: 'Ondernemingsnummer', value: result.companyNumber, current: companyNumber, set: setCompanyNumber, fiscal: true },
       { label: 'BTW-nummer', value: result.vatNumber, current: vatNumber, set: setVatNumber, fiscal: true },
       { label: 'Straat', value: result.street, current: street, set: setStreet },
@@ -367,10 +393,6 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     }
   }
 
-  const contactHasInput =
-    mode === 'create' &&
-    [contactFirstName, contactLastName, contactRole, contactEmail, contactPhone].some((value) => value.trim() !== '')
-
   // Badge a section when one of its fields is failing (client or server error).
   const peppolProblem = peppolFormatError(combinePeppolValue(peppolScheme, peppolId))
   const combinedErrorKeys = new Set<string>()
@@ -378,99 +400,243 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   if (vatError) combinedErrorKeys.add('vatNumber')
   if (peppolProblem) combinedErrorKeys.add('peppolId')
   if (vatRateError) combinedErrorKeys.add('defaultVatRatePercent')
-  if (contactErrors.firstName) combinedErrorKeys.add('initialContact.firstName')
-  if (contactErrors.lastName) combinedErrorKeys.add('initialContact.lastName')
+  for (const key of Object.keys(contactRowErrors)) combinedErrorKeys.add(key)
   for (const key of Object.keys(serverFieldErrors ?? {})) combinedErrorKeys.add(key)
   const sectionHasError = (id: string) =>
-    (CUSTOMER_SECTION_FIELD_KEYS[id] ?? []).some((key) => combinedErrorKeys.has(key))
+    id === 'klantgegevens'
+      ? [...combinedErrorKeys].some(isKlantgegevensFieldKey)
+      : (CUSTOMER_SECTION_FIELD_KEYS[id] ?? []).some((key) => combinedErrorKeys.has(key))
 
   const isEdit = mode === 'edit'
 
-  const sections: SectionDef[] = [
-    {
-      id: 'algemeen',
-      label: 'Algemeen',
-      hasError: sectionHasError('algemeen'),
-      render: () => (
-        <FormSection title="Algemeen" columns={2}>
-          <FormField label="Naam" htmlFor="c-name" error={nameError ?? getFieldError(serverFieldErrors, 'name')} required>
-            <input id="c-name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={nameError ? 'true' : undefined} maxLength={200} />
-          </FormField>
-          <FormField label="Roepnaam" htmlFor="c-nickname" hint="Korte interne naam, bv. voor planning en zoeken." error={getFieldError(serverFieldErrors, 'nickname')}>
-            <input id="c-nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={100} />
-          </FormField>
-          {mode === 'create' && (
-            <FormField
-              label="Klantnummer"
-              htmlFor="c-number"
-              hint="Leeg laten voor automatische nummering."
-              error={getFieldError(serverFieldErrors, 'customerNumber')}
-            >
-              <input
-                id="c-number"
-                value={customerNumber}
-                onChange={(e) => setCustomerNumber(e.target.value)}
-                aria-invalid={getFieldError(serverFieldErrors, 'customerNumber') ? 'true' : undefined}
-                maxLength={30}
-              />
-            </FormField>
-          )}
-          <FormField label="Juridische naam" htmlFor="c-legal">
-            <input id="c-legal" value={legalName} onChange={(e) => setLegalName(e.target.value)} maxLength={200} />
-          </FormField>
-          <FormField label="Categorie" htmlFor="c-category" hint="Commerciële classificatie van deze klant.">
-            <LookupSelect
-              id="c-category"
-              basePath="/api/customer-categories"
-              managePermission="customer_categories.manage"
-              singular="klantcategorie"
-              value={categoryId}
-              onChange={(v) => {
-                setCategoryId(v)
-                touch()
-              }}
-              placeholder="— Geen categorie —"
+  // Backend error paths (`contacts[i].…`) index the non-empty rows; map them back per row.
+  const contactIndexByKey = payloadIndexByKey(contactRows)
+  function contactError(rowKey: string, field: string): string | undefined {
+    const index = contactIndexByKey.get(rowKey)
+    if (index === undefined) return undefined
+    const path = `contacts[${index}].${field}`
+    return contactRowErrors[path] ?? getFieldError(serverFieldErrors, path)
+  }
+
+  const contactRepeater = (
+    <>
+      {contactRows.map((row, rowIndex) => (
+        <div key={row.key} className="customer-contact-repeater-row">
+          <FormField
+            label="Voornaam"
+            htmlFor={`c-ct-first-${row.key}`}
+            required
+            error={contactError(row.key, 'firstName')}
+          >
+            <input
+              id={`c-ct-first-${row.key}`}
+              value={row.firstName}
+              onChange={(e) => patchContactRow(row.key, { firstName: e.target.value })}
+              aria-invalid={contactError(row.key, 'firstName') ? 'true' : undefined}
+              maxLength={100}
             />
           </FormField>
-        </FormSection>
-      ),
-    },
-    {
-      id: 'contact',
-      label: 'Contact',
-      optional: true,
-      hasError: sectionHasError('contact'),
-      render: () => (
-        <FormSection title="Contact" columns={3}>
-          <FormField label="E-mail" htmlFor="c-email">
-            <input id="c-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} />
+          <FormField
+            label="Achternaam"
+            htmlFor={`c-ct-last-${row.key}`}
+            required
+            error={contactError(row.key, 'lastName')}
+          >
+            <input
+              id={`c-ct-last-${row.key}`}
+              value={row.lastName}
+              onChange={(e) => patchContactRow(row.key, { lastName: e.target.value })}
+              aria-invalid={contactError(row.key, 'lastName') ? 'true' : undefined}
+              maxLength={100}
+            />
           </FormField>
-          <FormField label="Telefoon" htmlFor="c-phone">
-            <input id="c-phone" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} maxLength={30} />
+          <FormField label="Functie" htmlFor={`c-ct-role-${row.key}`}>
+            <input
+              id={`c-ct-role-${row.key}`}
+              value={row.role}
+              onChange={(e) => patchContactRow(row.key, { role: e.target.value })}
+              maxLength={100}
+            />
           </FormField>
-          <FormField label="Website" htmlFor="c-website">
-            <input id="c-website" value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={200} />
-          </FormField>
-          <FormField label="Voorkeurstaal" htmlFor="c-lang" hint="Taal voor algemene communicatie.">
-            <select id="c-lang" value={defaultLanguageCode} onChange={(e) => setDefaultLanguageCode(e.target.value)}>
-              <option value="">— Geen —</option>
-              {languages.options.map((option) => (
-                <option key={option.id} value={option.code}>
-                  {option.name}
+          <FormField label="Type" htmlFor={`c-ct-type-${row.key}`} error={contactError(row.key, 'contactType')}>
+            <select
+              id={`c-ct-type-${row.key}`}
+              value={row.contactType}
+              onChange={(e) => patchContactRow(row.key, { contactType: e.target.value as CustomerContactType })}
+            >
+              {CUSTOMER_CONTACT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {CUSTOMER_CONTACT_TYPE_LABELS[type]}
                 </option>
               ))}
             </select>
           </FormField>
-        </FormSection>
-      ),
-    },
+          <FormField label="E-mail" htmlFor={`c-ct-email-${row.key}`}>
+            <input
+              id={`c-ct-email-${row.key}`}
+              type="email"
+              value={row.email}
+              onChange={(e) => patchContactRow(row.key, { email: e.target.value })}
+              maxLength={250}
+            />
+          </FormField>
+          <FormField label="Telefoon" htmlFor={`c-ct-phone-${row.key}`}>
+            <input
+              id={`c-ct-phone-${row.key}`}
+              value={row.phoneNumber}
+              onChange={(e) => patchContactRow(row.key, { phoneNumber: e.target.value })}
+              maxLength={30}
+            />
+          </FormField>
+          <FormField label="GSM" htmlFor={`c-ct-mobile-${row.key}`}>
+            <input
+              id={`c-ct-mobile-${row.key}`}
+              value={row.mobilePhone}
+              onChange={(e) => patchContactRow(row.key, { mobilePhone: e.target.value })}
+              maxLength={30}
+            />
+          </FormField>
+          <div className="customer-contact-repeater-footer">
+            <label className="customer-form-checkbox">
+              <input
+                type="checkbox"
+                checked={row.isPrimary}
+                onChange={(e) => patchContactRow(row.key, { isPrimary: e.target.checked })}
+                aria-invalid={contactError(row.key, 'isPrimary') ? 'true' : undefined}
+              />
+              Primair voor dit type
+            </label>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setContactRows((rows) => removeContactRow(rows, row.key))
+                touch()
+              }}
+              aria-label={`Contactpersoon ${rowIndex + 1} verwijderen`}
+            >
+              Verwijderen
+            </Button>
+          </div>
+          {contactError(row.key, 'isPrimary') && (
+            <p className="ui-form-field-error form-span-all" role="alert">
+              {contactError(row.key, 'isPrimary')}
+            </p>
+          )}
+        </div>
+      ))}
+      <Button
+        variant="secondary"
+        onClick={() => {
+          setContactRows((rows) => addContactRow(rows))
+          touch()
+        }}
+      >
+        + Contactpersoon toevoegen
+      </Button>
+    </>
+  )
+
+  const sections: SectionDef[] = [
     {
-      id: 'adressen',
-      label: 'Adressen',
-      hasError: sectionHasError('adressen'),
+      id: 'klantgegevens',
+      label: 'Klantgegevens',
+      hasError: sectionHasError('klantgegevens'),
       render: () => (
         <>
-          <FormSection title="Adres" columns={3}>
+          <FormSection title="Bedrijfsgegevens" columns={2}>
+            <FormField label="Naam" htmlFor="c-name" error={nameError ?? getFieldError(serverFieldErrors, 'name')} required>
+              <input id="c-name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={nameError ? 'true' : undefined} maxLength={200} />
+            </FormField>
+            <FormField label="Roepnaam" htmlFor="c-nickname" hint="Korte interne naam, bv. voor planning en zoeken." error={getFieldError(serverFieldErrors, 'nickname')}>
+              <input id="c-nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={100} />
+            </FormField>
+            {mode === 'create' && (
+              <FormField
+                label="Klantnummer"
+                htmlFor="c-number"
+                hint="Leeg laten voor automatische nummering."
+                error={getFieldError(serverFieldErrors, 'customerNumber')}
+              >
+                <input
+                  id="c-number"
+                  value={customerNumber}
+                  onChange={(e) => setCustomerNumber(e.target.value)}
+                  aria-invalid={getFieldError(serverFieldErrors, 'customerNumber') ? 'true' : undefined}
+                  maxLength={30}
+                />
+              </FormField>
+            )}
+            <FormField label="Officiële naam" htmlFor="c-legal">
+              <input id="c-legal" value={legalName} onChange={(e) => setLegalName(e.target.value)} maxLength={200} />
+            </FormField>
+            <FormField label="Categorie" htmlFor="c-category" hint="Commerciële classificatie van deze klant.">
+              <LookupSelect
+                id="c-category"
+                basePath="/api/customer-categories"
+                managePermission="customer_categories.manage"
+                singular="klantcategorie"
+                value={categoryId}
+                onChange={(v) => {
+                  setCategoryId(v)
+                  touch()
+                }}
+                placeholder="— Geen categorie —"
+              />
+            </FormField>
+            {isEdit && (
+              <div className="customer-form-requirements">
+                <label className="customer-form-checkbox">
+                  <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+                  Actief
+                </label>
+              </div>
+            )}
+          </FormSection>
+
+          <FormSection title="Algemene contactgegevens" columns={2}>
+            <FormField label="Algemeen e-mailadres" htmlFor="c-email">
+              <input id="c-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} />
+            </FormField>
+            <FormField label="Algemeen telefoonnummer" htmlFor="c-phone">
+              <input id="c-phone" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} maxLength={30} />
+            </FormField>
+            <FormField label="Website" htmlFor="c-website">
+              <input id="c-website" value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={200} />
+            </FormField>
+            <FormField label="Voorkeurstaal" htmlFor="c-lang" hint="Taal voor algemene communicatie.">
+              <select id="c-lang" value={defaultLanguageCode} onChange={(e) => setDefaultLanguageCode(e.target.value)}>
+                <option value="">— Geen —</option>
+                {languages.options.map((option) => (
+                  <option key={option.id} value={option.code}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField
+              label="Interne klantmemo"
+              htmlFor="c-notes"
+              hint="Alleen zichtbaar voor interne gebruikers."
+              className="form-span-all"
+              error={getFieldError(serverFieldErrors, 'notes')}
+            >
+              <textarea id="c-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} />
+            </FormField>
+          </FormSection>
+
+          <FormSection
+            title="Contactpersonen"
+            columns={1}
+            description={
+              isEdit
+                ? undefined
+                : 'Voeg meteen één of meer contactpersonen toe; volledig lege rijen worden overgeslagen.'
+            }
+          >
+            <div className="form-span-all">{isEdit ? (editPanels?.contactpersonen ?? null) : contactRepeater}</div>
+          </FormSection>
+
+          <FormSection title="Locaties & adressen" columns={3} description="Hoofdzetel / algemeen adres">
             <FormField label="Straat" htmlFor="c-street">
               <input id="c-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} />
             </FormField>
@@ -480,7 +646,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
             <FormField label="Postcode" htmlFor="c-postal">
               <input id="c-postal" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} maxLength={20} />
             </FormField>
-            <FormField label="Plaats" htmlFor="c-city">
+            <FormField label="Gemeente" htmlFor="c-city">
               <input id="c-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} />
             </FormField>
             <FormField label="Land" htmlFor="c-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
@@ -493,73 +659,18 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 }}
               />
             </FormField>
-          </FormSection>
-          {isEdit ? (
-            editPanels?.adressen
-          ) : (
-            <p className="customer-form-muted">Bijkomende adressen (laden, leveren, facturatie) beheer je na het aanmaken.</p>
-          )}
-        </>
-      ),
-    },
-    {
-      id: 'contactpersonen',
-      label: 'Contactpersonen',
-      optional: true,
-      panel: isEdit,
-      hasError: sectionHasError('contactpersonen'),
-      render: () =>
-        isEdit ? (
-          editPanels?.contactpersonen ?? null
-        ) : (
-          <FormSection
-            title="Eerste contactpersoon (optioneel)"
-            columns={3}
-            description="Voeg meteen een contactpersoon toe; dit kan ook later op de klantpagina."
-          >
-            <FormField
-              label="Voornaam"
-              htmlFor="c-contact-first"
-              error={contactErrors.firstName ?? getFieldError(serverFieldErrors, 'initialContact.firstName')}
-            >
-              <input
-                id="c-contact-first"
-                value={contactFirstName}
-                onChange={(e) => setContactFirstName(e.target.value)}
-                aria-invalid={contactErrors.firstName ? 'true' : undefined}
-                maxLength={100}
-              />
-            </FormField>
-            <FormField
-              label="Achternaam"
-              htmlFor="c-contact-last"
-              error={contactErrors.lastName ?? getFieldError(serverFieldErrors, 'initialContact.lastName')}
-            >
-              <input
-                id="c-contact-last"
-                value={contactLastName}
-                onChange={(e) => setContactLastName(e.target.value)}
-                aria-invalid={contactErrors.lastName ? 'true' : undefined}
-                maxLength={100}
-              />
-            </FormField>
-            <FormField label="Functie" htmlFor="c-contact-role">
-              <input id="c-contact-role" value={contactRole} onChange={(e) => setContactRole(e.target.value)} maxLength={100} />
-            </FormField>
-            <FormField label="E-mail" htmlFor="c-contact-email">
-              <input id="c-contact-email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} maxLength={250} />
-            </FormField>
-            <FormField label="Telefoon" htmlFor="c-contact-phone">
-              <input id="c-contact-phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} maxLength={30} />
-            </FormField>
-            <div className="customer-form-requirements">
-              <label className="customer-form-checkbox">
-                <input type="checkbox" checked={contactIsPrimary} onChange={(e) => setContactIsPrimary(e.target.checked)} />
-                Primaire contactpersoon
-              </label>
+            <div className="form-span-all">
+              {isEdit
+                ? editPanels?.adressen
+                : (stagedLocationsSlot ?? (
+                    <p className="customer-form-muted">
+                      Bijkomende adressen (laden, leveren, facturatie) beheer je na het aanmaken.
+                    </p>
+                  ))}
             </div>
           </FormSection>
-        ),
+        </>
+      ),
     },
     {
       id: 'fiscaal',
@@ -634,7 +745,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 <dl>
                   {(
                     [
-                      ['Juridische naam', lookup.result.legalName],
+                      ['Officiële naam', lookup.result.legalName],
                       ['Ondernemingsnummer', lookup.result.companyNumber],
                       ['BTW-nummer', lookup.result.vatNumber],
                       ['Straat', lookup.result.street],
@@ -1006,23 +1117,29 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
         ),
     },
     {
-      id: 'notities',
-      label: 'Notities',
+      id: 'historiek',
+      label: 'Historiek',
       optional: true,
-      render: () => (
-        <FormSection title="Notities" columns={1}>
-          <FormField label="Interne notities" htmlFor="c-notes" className="form-span-all">
-            <textarea id="c-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} />
-          </FormField>
-        </FormSection>
-      ),
+      panel: true,
+      render: () =>
+        isEdit ? (
+          editPanels?.historiek ?? null
+        ) : (
+          <p className="placeholder-text">De historiek is beschikbaar na het aanmaken van de klant.</p>
+        ),
     },
   ]
 
   const { activeId, setActive } = useSectionNavigation(sections.map((s) => s.id), sections[0].id)
+  const activeSection = sections.find((s) => s.id === activeId) ?? sections[0]
+
+  // Which save button was clicked last; a plain Enter-submit counts as the normal save.
+  const submitIntentRef = useRef<CustomerSubmitIntent>('save')
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    const intent = submitIntentRef.current
+    submitIntentRef.current = 'save'
     let valid = true
     const errorKeys: Record<string, string> = {}
     if (!name.trim()) {
@@ -1054,25 +1171,26 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       setVatRateError(undefined)
     }
 
-    // The contact is optional, but once any contact field is filled the name is required.
-    const nextContactErrors: { firstName?: string; lastName?: string } = {}
-    if (contactHasInput) {
-      if (!contactFirstName.trim()) nextContactErrors.firstName = 'Voornaam van de contactpersoon is verplicht.'
-      if (!contactLastName.trim()) nextContactErrors.lastName = 'Achternaam van de contactpersoon is verplicht.'
-    }
-    setContactErrors(nextContactErrors)
-    if (nextContactErrors.firstName) {
-      errorKeys['initialContact.firstName'] = nextContactErrors.firstName
-      valid = false
-    }
-    if (nextContactErrors.lastName) {
-      errorKeys['initialContact.lastName'] = nextContactErrors.lastName
+    // Contact rows are optional; filled rows need names, and per type at most one primary.
+    const rowErrors = mode === 'create' ? validateContactRows(contactRows) : {}
+    setContactRowErrors(rowErrors)
+    for (const [key, message] of Object.entries(rowErrors)) {
+      errorKeys[key] = message
       valid = false
     }
 
     if (!valid) {
       const target = firstSectionWithError(
-        sections.map((s) => ({ id: s.id, fieldKeys: CUSTOMER_SECTION_FIELD_KEYS[s.id] })),
+        sections.map((s) => ({
+          id: s.id,
+          fieldKeys:
+            s.id === 'klantgegevens'
+              ? [
+                  ...CUSTOMER_SECTION_FIELD_KEYS.klantgegevens,
+                  ...Object.keys(errorKeys).filter(isKlantgegevensFieldKey),
+                ]
+              : CUSTOMER_SECTION_FIELD_KEYS[s.id],
+        })),
         errorKeys,
       )
       if (target) setActive(target)
@@ -1117,7 +1235,10 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
 
     const base: CustomerInput = {
       name: name.trim(),
-      ...(mode === 'create' ? { customerNumber: nullable(customerNumber) } : {}),
+      // Create-only: manual number + the multi-contact payload (initialContact is history).
+      ...(mode === 'create'
+        ? { customerNumber: nullable(customerNumber), contacts: contactRowsToPayload(contactRows) }
+        : {}),
       nickname: nullable(nickname),
       legalName: nullable(legalName),
       categoryId: categoryId || null,
@@ -1141,49 +1262,57 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       purchaseOrderRequired,
       signedDeliveryNoteRequired,
       customerReferenceRequired,
-      initialContact: contactHasInput
-        ? {
-            firstName: contactFirstName.trim(),
-            lastName: contactLastName.trim(),
-            role: nullable(contactRole),
-            email: nullable(contactEmail),
-            phoneNumber: nullable(contactPhone),
-            isPrimary: contactIsPrimary,
-            notes: null,
-            displayName: null,
-            nickname: null,
-            mobilePhone: null,
-            departmentId: null,
-            preferredLanguageCode: null,
-            isActive: true,
-          }
-        : null,
     }
-    // Clear the guard before the parent saves + navigates away. Activation is a dedicated
-    // detail-page action; the form only preserves the current state.
+    // Clear the guard before the parent saves + navigates away. In edit mode the Actief
+    // checkbox is authoritative; a create is always active.
     setDirty(false)
-    onSubmit({ ...base, isActive: initial?.isActive ?? true })
+    onSubmit({ ...base, isActive: isEdit ? isActive : true }, intent)
   }
+
+  // Same buttons at the top and (sticky) bottom of the form; both submit the one form.
+  const actionBar = (position: 'top' | 'bottom') => (
+    <FormActions dirty={dirty} position={position}>
+      <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+        Annuleren
+      </Button>
+      {mode === 'create' && (
+        <Button
+          type="submit"
+          variant="secondary"
+          disabled={isSubmitting}
+          onClick={() => {
+            submitIntentRef.current = 'saveAndNew'
+          }}
+        >
+          Opslaan en nieuwe klant
+        </Button>
+      )}
+      <Button
+        type="submit"
+        disabled={isSubmitting}
+        onClick={() => {
+          submitIntentRef.current = 'save'
+        }}
+      >
+        {isSubmitting ? 'Opslaan...' : 'Opslaan'}
+      </Button>
+    </FormActions>
+  )
 
   return (
     <form onSubmit={handleSubmit} className="customer-form" onChange={touch}>
       <UnsavedChangesGuard when={dirty && !isSubmitting} />
       <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={FIELD_LABELS} />
 
+      {/* SectionedForm renders `actions` only at the bottom; mirror its panel check here so the
+          top bar also disappears on self-saving panel sections. */}
+      {!activeSection.panel && actionBar('top')}
+
       <SectionedForm
         sections={sections}
         activeId={activeId}
         onActiveChange={setActive}
-        actions={
-          <FormActions dirty={dirty}>
-            <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
-              Annuleren
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Opslaan...' : 'Opslaan'}
-            </Button>
-          </FormActions>
-        }
+        actions={actionBar('bottom')}
       />
     </form>
   )

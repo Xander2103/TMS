@@ -9,6 +9,29 @@ export interface CustomerListItem {
   isBlocked: boolean
 }
 
+/** Contact-person type; `isPrimary` means "primary within this type" (one per type). */
+export type CustomerContactType =
+  | 'Algemeen'
+  | 'Planning'
+  | 'Facturatie'
+  | 'Magazijn'
+  | 'Directie'
+  | 'Operationeel'
+  | 'Overig'
+
+/** Dutch labels equal the enum names — the backend stores the enum as string. */
+export const CUSTOMER_CONTACT_TYPE_LABELS: Record<CustomerContactType, string> = {
+  Algemeen: 'Algemeen',
+  Planning: 'Planning',
+  Facturatie: 'Facturatie',
+  Magazijn: 'Magazijn',
+  Directie: 'Directie',
+  Operationeel: 'Operationeel',
+  Overig: 'Overig',
+}
+
+export const CUSTOMER_CONTACT_TYPES = Object.keys(CUSTOMER_CONTACT_TYPE_LABELS) as CustomerContactType[]
+
 export interface CustomerContact {
   id: string
   firstName: string
@@ -24,6 +47,7 @@ export interface CustomerContact {
   departmentId: string | null
   preferredLanguageCode: string | null
   isActive: boolean
+  contactType: CustomerContactType
 }
 
 export type VatTreatment =
@@ -280,8 +304,11 @@ export interface CustomerDetail extends CustomerVatProfile {
 }
 
 export interface CustomerInput extends CustomerVatProfile {
-  /** Optional first contact created together with the customer (create flow only). */
-  initialContact?: CustomerContactInput | null
+  /**
+   * Contact persons created together with the customer (create flow only). Supersedes the
+   * legacy single `initialContact`, which the form no longer sends.
+   */
+  contacts?: CustomerContactInput[] | null
   /** Optional manual customer number (create flow only); empty = automatic numbering. */
   customerNumber?: string | null
   name: string
@@ -361,4 +388,5 @@ export interface CustomerContactInput {
   departmentId: string | null
   preferredLanguageCode: string | null
   isActive: boolean
+  contactType: CustomerContactType
 }

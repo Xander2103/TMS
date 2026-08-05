@@ -8,7 +8,8 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { searchLocations, setLocationActive, setLocationDefaults } from '../../locations/api/locationsApi'
-import { LOCATION_TYPE_LABELS, type LocationListItem } from '../../locations/types'
+import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
+import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationListItem, type LocationType } from '../../locations/types'
 
 interface CustomerLocationsPanelProps {
   customerId: string
@@ -26,6 +27,7 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
   const canCreate = hasPermission('locations.create')
 
   const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState<LocationType | ''>('')
   const [showInactive, setShowInactive] = useState(false)
   const [rows, setRows] = useState<LocationListItem[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -33,8 +35,9 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
   const [reloadToken, setReloadToken] = useState(0)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [confirmDeactivate, setConfirmDeactivate] = useState<LocationListItem | null>(null)
+  const [showQuickCreate, setShowQuickCreate] = useState(false)
 
-  const requestKey = `${customerId}|${search}|${showInactive}|${reloadToken}`
+  const requestKey = `${customerId}|${search}|${typeFilter}|${showInactive}|${reloadToken}`
   const isLoading = loadedKey !== requestKey
 
   useEffect(() => {
@@ -42,6 +45,7 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
     searchLocations({
       customerId,
       search: search || undefined,
+      type: typeFilter || undefined,
       isActive: showInactive ? undefined : true,
       page: 1,
       pageSize: 100,
@@ -60,7 +64,7 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
     return () => {
       mounted = false
     }
-  }, [customerId, search, showInactive, reloadToken, requestKey])
+  }, [customerId, search, typeFilter, showInactive, reloadToken, requestKey])
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), [])
 
@@ -102,14 +106,15 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
         </span>
       ),
     },
-    ...(canEdit
-      ? [
-          {
-            key: 'actions',
-            header: 'Acties',
-            render: (row: LocationListItem) => (
-              <span className="customer-locations-actions">
-                {!row.isDefaultLoadingLocation && row.isActive && (
+    {
+      key: 'actions',
+      header: 'Acties',
+      render: (row: LocationListItem) => (
+        <span className="customer-locations-actions">
+          <Link to={`/locations/${row.id}`}>Volledig bewerken</Link>
+          {canEdit && (
+            <>
+              {!row.isDefaultLoadingLocation && row.isActive && (
                   <Button
                     variant="ghost"
                     disabled={busyId === row.id}
@@ -182,11 +187,11 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
                     Heractiveren
                   </Button>
                 )}
-              </span>
-            ),
-          },
-        ]
-      : []),
+            </>
+          )}
+        </span>
+      ),
+    },
   ]
 
   return (
@@ -199,14 +204,26 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
           placeholder="Zoeken op naam, code of plaats…"
           aria-label="Locaties zoeken"
         />
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as LocationType | '')}
+          aria-label="Filter op type"
+        >
+          <option value="">Alle types</option>
+          {LOCATION_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {LOCATION_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </select>
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
           Toon inactieve
         </label>
         {canCreate && (
-          <Link to={`/locations/new?customerId=${customerId}`} className="customer-locations-new">
-            <Button>+ Adres toevoegen</Button>
-          </Link>
+          <span className="customer-locations-new">
+            <Button onClick={() => setShowQuickCreate(true)}>+ Adres toevoegen</Button>
+          </span>
         )}
       </div>
 
@@ -219,6 +236,19 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
         emptyMessage="Deze klant heeft nog geen locaties."
         loadingMessage="Locaties laden..."
       />
+
+      {showQuickCreate && (
+        <LocationQuickCreateDialog
+          customerId={customerId}
+          onClose={(created) => {
+            setShowQuickCreate(false)
+            if (created) {
+              toast.showSuccess(`Locatie '${created.name}' aangemaakt.`)
+              reload()
+            }
+          }}
+        />
+      )}
 
       {confirmDeactivate && (
         <ConfirmDialog

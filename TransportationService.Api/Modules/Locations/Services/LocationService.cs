@@ -105,7 +105,12 @@ public class LocationService : ILocationService
             .ThenBy(l => l.Name)
             .Select(l => new LocationOptionDto(
                 l.Id, l.Code, l.Name, l.Type, l.City,
-                l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation, l.IsDefaultBillingLocation))
+                l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation, l.IsDefaultBillingLocation,
+                // Street + house number as one display line ("Noorderlaan 10"); null when both empty.
+                (l.Street ?? "") == "" && (l.HouseNumber ?? "") == ""
+                    ? null
+                    : ((l.Street ?? "") + " " + (l.HouseNumber ?? "")).Trim(),
+                l.PostalCode))
             .ToListAsync(cancellationToken);
     }
 
@@ -670,23 +675,10 @@ public class LocationService : ILocationService
         }
     }
 
-    private static readonly string[] DutchDayAbbreviations = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
-
-    /// <summary>Compact audit-friendly summary, e.g. "Ma 07:00–12:00, 13:00–17:00; Di 07:00–17:00".</summary>
-    private static string? OpeningHoursSummary(IReadOnlyCollection<LocationOpeningInterval> intervals)
-    {
-        if (intervals.Count == 0)
-        {
-            return null;
-        }
-
-        return string.Join("; ", intervals
-            .GroupBy(i => i.DayOfWeek)
-            .OrderBy(g => g.Key)
-            .Select(g => DutchDayAbbreviations[g.Key - 1] + " " + string.Join(", ", g
-                .OrderBy(i => i.FromTime)
-                .Select(i => $"{FormatTime(i.FromTime)}–{FormatTime(i.ToTime)}"))));
-    }
+    /// <summary>Compact audit-friendly summary, e.g. "Ma 07:00–12:00, 13:00–17:00; Di 07:00–17:00".
+    /// Extracted to <see cref="OpeningHoursFormatter"/> so the order-stop snapshot shares it.</summary>
+    private static string? OpeningHoursSummary(IReadOnlyCollection<LocationOpeningInterval> intervals) =>
+        OpeningHoursFormatter.Summarize(intervals);
 
     private static string? FormatTime(TimeOnly? time) =>
         time?.ToString("HH:mm", CultureInfo.InvariantCulture);

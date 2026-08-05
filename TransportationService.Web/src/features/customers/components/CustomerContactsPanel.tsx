@@ -8,7 +8,13 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useAuth } from '../../auth/authContextValue'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
-import type { CustomerContact, CustomerContactInput } from '../types'
+import {
+  CUSTOMER_CONTACT_TYPE_LABELS,
+  CUSTOMER_CONTACT_TYPES,
+  type CustomerContact,
+  type CustomerContactInput,
+  type CustomerContactType,
+} from '../types'
 
 interface CustomerContactsPanelProps {
   contacts: CustomerContact[]
@@ -27,10 +33,13 @@ function contactDisplayName(contact: CustomerContact): string {
 export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate, onRemove }: CustomerContactsPanelProps) {
   const [dialog, setDialog] = useState<DialogState>(null)
   const [removeTarget, setRemoveTarget] = useState<CustomerContact | null>(null)
+  const [typeFilter, setTypeFilter] = useState<CustomerContactType | ''>('')
   const { hasPermission } = useAuth()
   const canViewDepartments = hasPermission('contact_departments.view')
   const departments = useLookupOptions('/api/contact-departments', { enabled: canViewDepartments })
   const departmentNames = useMemo(() => new Map(departments.options.map((d) => [d.id, d.name])), [departments.options])
+
+  const visibleContacts = typeFilter ? contacts.filter((contact) => contact.contactType === typeFilter) : contacts
 
   const columns: Column<CustomerContact>[] = [
     {
@@ -39,8 +48,18 @@ export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate,
       render: (contact) => (
         <span className="customer-contact-name">
           {contactDisplayName(contact)}{' '}
-          {contact.isPrimary && <Badge tone="info">Primair</Badge>}
           {!contact.isActive && <Badge tone="neutral">Inactief</Badge>}
+        </span>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      render: (contact) => (
+        <span className="customer-contact-name">
+          {CUSTOMER_CONTACT_TYPE_LABELS[contact.contactType] ?? contact.contactType}
+          {/* Primair geldt binnen het type: hoogstens één primaire contactpersoon per type. */}
+          {contact.isPrimary && <Badge tone="info">Primair</Badge>}
         </span>
       ),
     },
@@ -78,9 +97,27 @@ export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate,
         </Button>
       </div>
 
+      <div className="customer-locations-toolbar">
+        <label className="customer-form-muted" htmlFor="ct-type-filter">
+          Type
+        </label>
+        <select
+          id="ct-type-filter"
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as CustomerContactType | '')}
+        >
+          <option value="">Alle types</option>
+          {CUSTOMER_CONTACT_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {CUSTOMER_CONTACT_TYPE_LABELS[type]}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <DataTable
         columns={columns}
-        rows={contacts}
+        rows={visibleContacts}
         rowKey={(contact) => contact.id}
         isLoading={false}
         error={null}
@@ -133,6 +170,7 @@ function ContactDialog({
   const [displayName, setDisplayName] = useState(contact?.displayName ?? '')
   const [nickname, setNickname] = useState(contact?.nickname ?? '')
   const [role, setRole] = useState(contact?.role ?? '')
+  const [contactType, setContactType] = useState<CustomerContactType>(contact?.contactType ?? 'Algemeen')
   const [departmentId, setDepartmentId] = useState<string | null>(contact?.departmentId ?? null)
   const [email, setEmail] = useState(contact?.email ?? '')
   const [phoneNumber, setPhoneNumber] = useState(contact?.phoneNumber ?? '')
@@ -155,6 +193,7 @@ function ContactDialog({
     onSubmit({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
+      contactType,
       role: role.trim() || null,
       email: email.trim() || null,
       phoneNumber: phoneNumber.trim() || null,
@@ -201,6 +240,15 @@ function ContactDialog({
         <FormField label="Functie" htmlFor="ct-role">
           <input id="ct-role" value={role} onChange={(e) => setRole(e.target.value)} maxLength={100} />
         </FormField>
+        <FormField label="Type" htmlFor="ct-type" hint="Primair geldt binnen dit type.">
+          <select id="ct-type" value={contactType} onChange={(e) => setContactType(e.target.value as CustomerContactType)}>
+            {CUSTOMER_CONTACT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {CUSTOMER_CONTACT_TYPE_LABELS[type]}
+              </option>
+            ))}
+          </select>
+        </FormField>
         <FormField label="Afdeling" htmlFor="ct-department">
           <LookupSelect
             id="ct-department"
@@ -230,7 +278,7 @@ function ContactDialog({
         </FormField>
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={isPrimary} onChange={(e) => setIsPrimary(e.target.checked)} />
-          Primaire contactpersoon
+          Primair voor dit type
         </label>
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />

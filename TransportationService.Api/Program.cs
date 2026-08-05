@@ -10,6 +10,8 @@ using TransportationService.Api.Modules.Employees.Services;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Qualifications.Services;
 using TransportationService.Api.Modules.Tenancy;
+using TransportationService.Api.Modules.Messaging.Configurations;
+using TransportationService.Api.Modules.Messaging.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -485,24 +487,45 @@ builder.Services.AddHostedService<TransportationService.Api.Modules.Notification
 // The DevelopmentSinkProvider writes rendered messages (including invite/activation links with
 // raw tokens) to App_Data/message-sink, so it is registered ONLY in Development. Outside
 // Development a fail-closed placeholder is registered and StartupSecurityValidator refuses to
-// boot until a real provider exists �?" raw tokens can never leak via a production sink.
+// boot until a real provider exists — raw tokens can never leak via a production sink.
 if (builder.Environment.IsDevelopment())
 {
-    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>(_ =>
-        new TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider(
+    builder.Services.AddSingleton<DevelopmentSinkProvider>(_ =>
+        new DevelopmentSinkProvider(
             Path.Combine(builder.Environment.ContentRootPath, "App_Data", "message-sink")));
-    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.IEmailProvider>(sp =>
-        sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>());
-    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.ISmsProvider>(sp =>
-        sp.GetRequiredService<TransportationService.Api.Modules.Messaging.Services.DevelopmentSinkProvider>());
+
+    builder.Services.AddSingleton<IEmailProvider>(sp =>
+        sp.GetRequiredService<DevelopmentSinkProvider>());
+
+    builder.Services.AddSingleton<ISmsProvider>(sp =>
+        sp.GetRequiredService<DevelopmentSinkProvider>());
 }
 else
 {
-    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.IEmailProvider,
-        TransportationService.Api.Modules.Messaging.Services.UnconfiguredEmailProvider>();
-    builder.Services.AddSingleton<TransportationService.Api.Modules.Messaging.Services.ISmsProvider,
-        TransportationService.Api.Modules.Messaging.Services.UnconfiguredSmsProvider>();
+    var smtpSection = builder.Configuration.GetSection(SmtpOptions.SectionName);
+    var smtpConfigured = !string.IsNullOrWhiteSpace(smtpSection["Host"]);
+
+    if (smtpConfigured)
+    {
+        builder.Services
+            .AddOptions<SmtpOptions>()
+            .Bind(smtpSection)
+            .ValidateDataAnnotations()
+            .Validate(
+                options => options.UseTls,
+                "Email:Smtp:UseTls moet true zijn voor deze productieconfiguratie.")
+            .ValidateOnStart();
+
+        builder.Services.AddSingleton<IEmailProvider, SmtpEmailProvider>();
+    }
+    else
+    {
+        builder.Services.AddSingleton<IEmailProvider, UnconfiguredEmailProvider>();
+    }
+
+    builder.Services.AddSingleton<ISmsProvider, UnconfiguredSmsProvider>();
 }
+
 builder.Services.AddScoped<TransportationService.Api.Modules.Messaging.Services.IMessageOutboxService,
     TransportationService.Api.Modules.Messaging.Services.MessageOutboxService>();
 builder.Services.AddScoped(sp => new TransportationService.Api.Modules.Messaging.Services.MessageDispatcher(

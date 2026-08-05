@@ -190,12 +190,38 @@ public class TransportOrderStop : AuditableTenantEntity
 
     public Guid? LocationId { get; set; }
 
-    // Inline fallback when no master location is linked.
+    // Address as agreed at order time. Free-address stops enter these inline; master-location
+    // stops get them COPIED from the location at snapshot time (master-data wave 2026-08-05),
+    // so editing a location never rewrites historical orders.
     public string? LocationName { get; set; }
     public string? Address { get; set; }
     public string? PostalCode { get; set; }
     public string? City { get; set; }
     public string? CountryCode { get; set; }
+
+    // --- Location snapshot (master-data wave 2026-08-05, Phase 7) ---
+    // Frozen copy of the master location's operational data, taken when the stop is created
+    // with (or switched to) a master location, or explicitly refreshed (RefreshSnapshot).
+    public string? ContactName { get; set; }
+    public string? ContactPhone { get; set; }
+    public string? ContactMobile { get; set; }
+    public string? ContactEmail { get; set; }
+
+    /// <summary>Compact weekly summary, e.g. "Ma 07:00–12:00, 13:00–17:00; Di 07:00–17:00".</summary>
+    public string? OpeningHoursSummary { get; set; }
+
+    public string? Gate { get; set; }
+
+    /// <summary>SENSITIVE: exposed in order DTOs only to locations.view_sensitive holders; drivers on the trip see it by design.</summary>
+    public string? AccessCode { get; set; }
+
+    public string? Dock { get; set; }
+    public string? RouteDescription { get; set; }
+    public int? DefaultLoadingMinutes { get; set; }
+    public int? DefaultUnloadingMinutes { get; set; }
+
+    /// <summary>UTC moment the location snapshot was (last) taken; null for free-address stops.</summary>
+    public DateTime? SnapshotAt { get; set; }
 
     // Four distinct time concepts (Wave "stop execution"): what planning scheduled, what the
     // customer asked for, what was confirmed back to the customer, and the hard outer bounds.
@@ -239,7 +265,8 @@ public class TransportOrderStop : AuditableTenantEntity
 
     public string? Instructions { get; set; }
 
-    // Stop-level overrides; when empty the master location's instructions apply.
+    // Instructions as agreed at order time. Empty fields are filled from the master location at
+    // snapshot time (never live-joined anymore); user-entered values always win.
     public string? AccessInstructions { get; set; }
     public string? LoadingInstructions { get; set; }
     public string? UnloadingInstructions { get; set; }

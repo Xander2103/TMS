@@ -222,6 +222,62 @@
   flex-wrap: wrap;
 }
 
+/* Contact-person repeater (create flow): fixed-column grid, wraps instead of scrolling. */
+.customer-contact-repeater-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 16px;
+  align-items: end;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 1100px) {
+  .customer-contact-repeater-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .customer-contact-repeater-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.customer-contact-repeater-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+/* Staged locations (create flow): compact cards, created after the customer is saved. */
+.customer-staged-locations {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.customer-staged-location-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 16px;
+}
+
+.customer-staged-location-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .customer-detail-toolbar {
   display: flex;
   gap: 8px;

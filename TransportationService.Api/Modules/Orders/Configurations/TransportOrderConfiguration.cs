@@ -76,6 +76,17 @@ public class TransportOrderStopConfiguration : IEntityTypeConfiguration<Transpor
         builder.Property(s => s.LoadingInstructions).HasMaxLength(2000);
         builder.Property(s => s.UnloadingInstructions).HasMaxLength(2000);
 
+        // Location snapshot (master-data wave 2026-08-05, Phase 7).
+        builder.Property(s => s.ContactName).HasMaxLength(150);
+        builder.Property(s => s.ContactPhone).HasMaxLength(30);
+        builder.Property(s => s.ContactMobile).HasMaxLength(30);
+        builder.Property(s => s.ContactEmail).HasMaxLength(250);
+        builder.Property(s => s.OpeningHoursSummary).HasMaxLength(500);
+        builder.Property(s => s.Gate).HasMaxLength(100);
+        builder.Property(s => s.AccessCode).HasMaxLength(200);
+        builder.Property(s => s.Dock).HasMaxLength(100);
+        builder.Property(s => s.RouteDescription).HasMaxLength(2000);
+
         builder.HasIndex(s => new { s.TransportOrderId, s.Sequence });
 
         builder.HasOne<Location>().WithMany().HasForeignKey(s => s.LocationId).OnDelete(DeleteBehavior.SetNull);

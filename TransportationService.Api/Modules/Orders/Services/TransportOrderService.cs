@@ -7,6 +7,8 @@ using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Services;
+using TransportationService.Api.Modules.Locations.Entities;
+using TransportationService.Api.Modules.Locations.Services;
 using TransportationService.Api.Modules.Messaging.Entities;
 using TransportationService.Api.Modules.Messaging.Services;
 using TransportationService.Api.Modules.Orders.Dtos;
@@ -69,6 +71,7 @@ public class TransportOrderService : ITransportOrderService
     private readonly IPermissionAuthorizationService? _permissionService;
     private readonly INotificationEventService? _notificationEvents;
     private readonly ILogger<TransportOrderService>? _logger;
+    private readonly IOpeningHoursEvaluator _openingHoursEvaluator;
 
     public TransportOrderService(
         TransportationDbContext dbContext,
@@ -79,7 +82,8 @@ public class TransportOrderService : ITransportOrderService
         ICurrentUserContext? currentUser = null,
         IPermissionAuthorizationService? permissionService = null,
         INotificationEventService? notificationEvents = null,
-        ILogger<TransportOrderService>? logger = null)
+        ILogger<TransportOrderService>? logger = null,
+        IOpeningHoursEvaluator? openingHoursEvaluator = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -90,6 +94,8 @@ public class TransportOrderService : ITransportOrderService
         _permissionService = permissionService;
         _notificationEvents = notificationEvents;
         _logger = logger;
+        // The evaluator is a stateless pure function; defaulting keeps existing call sites/tests working.
+        _openingHoursEvaluator = openingHoursEvaluator ?? new OpeningHoursEvaluator();
     }
 
     /// <summary>Fire-and-forget event publication: never lets a notification failure break the
@@ -229,6 +235,9 @@ public class TransportOrderService : ITransportOrderService
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
+        // Master-location stops get their location data snapshotted at creation (Phase 7).
+        var stops = await BuildStopsAsync(request.Stops, previousStops: null, cancellationToken);
+
         var order = new TransportOrder
         {
             Id = Guid.NewGuid(),
@@ -249,7 +258,7 @@ public class TransportOrderService : ITransportOrderService
             Priority = request.Priority ?? OrderPriority.Normal,
             AgreedPrice = NonNegative(request.AgreedPrice),
             Notes = Trim(request.Notes),
-            Stops = BuildStops(request.Stops),
+            Stops = stops,
         };
         ApplyOneOffPricing(order, request.PricingSource, request.OneOffFixedAmount,
             request.OneOffIncludedLoadingMinutes, request.OneOffIncludedUnloadingMinutes, request.OneOffIncludedCombinedMinutes,
@@ -410,9 +419,13 @@ public class TransportOrderService : ITransportOrderService
             order.LegalEntityId = await ResolveOrderLegalEntityAsync(requestedEntity, order.CustomerId, cancellationToken);
         }
 
-        // Wholesale stop replacement; removal is soft, so the trail stays auditable.
+        // Wholesale stop replacement; removal is soft, so the trail stays auditable. The
+        // previous rows are captured first so an unchanged stop (client echoes its id, same
+        // LocationId, no RefreshSnapshot) carries its location snapshot over into the rebuilt
+        // row instead of silently re-copying live master data (Phase 7).
+        var previousStops = order.Stops.Where(s => !s.IsDeleted).ToDictionary(s => s.Id);
         _dbContext.RemoveRange(order.Stops);
-        order.Stops = BuildStops(request.Stops);
+        order.Stops = await BuildStopsAsync(request.Stops, previousStops, cancellationToken);
         foreach (var stop in order.Stops)
         {
             stop.TransportOrderId = order.Id;
@@ -474,6 +487,18 @@ public class TransportOrderService : ITransportOrderService
                 order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
                 order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
             }, cancellationToken);
+
+        // Deliberate "Opnieuw overnemen van locatie": one order-level audit entry per refreshed
+        // stop (inputs and rebuilt stops align by index).
+        for (var i = 0; i < request.Stops.Count; i++)
+        {
+            if (request.Stops[i] is { RefreshSnapshot: true, LocationId: not null })
+            {
+                var stop = order.Stops[i];
+                await _auditService.RecordAsync(EntityType, order.Id.ToString(), "StopSnapshotRefreshed", null,
+                    new { stop.Sequence, stop.LocationName, stop.SnapshotAt }, cancellationToken);
+            }
+        }
 
         if (surchargeChanged)
         {
@@ -1328,6 +1353,200 @@ public class TransportOrderService : ITransportOrderService
             UnloadingInstructions = Trim(input.UnloadingInstructions),
         }).ToList();
 
+    /// <summary>
+    /// Builds the replacement stop rows AND resolves each stop's location snapshot (Phase 7):
+    /// an unchanged master-location stop (echoed id, same LocationId, no RefreshSnapshot)
+    /// carries the previous snapshot over; a new/changed/refreshed one takes a fresh copy from
+    /// the tenant's location (single batched query). Free-address stops are untouched.
+    /// </summary>
+    private async Task<List<TransportOrderStop>> BuildStopsAsync(
+        IReadOnlyList<TransportOrderStopInput> inputs,
+        IReadOnlyDictionary<Guid, TransportOrderStop>? previousStops,
+        CancellationToken cancellationToken)
+    {
+        var stops = BuildStops(inputs);
+
+        var freshLocationIds = inputs
+            .Where(input => NeedsFreshSnapshot(input, previousStops))
+            .Select(input => input.LocationId!.Value)
+            .Distinct()
+            .ToList();
+        var locations = freshLocationIds.Count == 0
+            ? new Dictionary<Guid, Location>()
+            : await _dbContext.Locations.AsNoTracking()
+                .Include(l => l.OpeningIntervals)
+                .Where(l => l.TenantId == _tenantContext.TenantId && freshLocationIds.Contains(l.Id))
+                .ToDictionaryAsync(l => l.Id, cancellationToken);
+
+        for (var i = 0; i < inputs.Count; i++)
+        {
+            var input = inputs[i];
+            if (input.LocationId is not { } locationId)
+            {
+                continue; // free-address stop: inline fields only, no snapshot.
+            }
+
+            if (NeedsFreshSnapshot(input, previousStops))
+            {
+                if (locations.TryGetValue(locationId, out var location))
+                {
+                    ApplyLocationSnapshot(stops[i], location);
+                }
+            }
+            else if (previousStops!.TryGetValue(input.Id!.Value, out var previous))
+            {
+                CarryOverSnapshot(stops[i], previous);
+            }
+        }
+
+        return stops;
+    }
+
+    /// <summary>Fresh copy needed for: new stop, changed LocationId, or an explicit refresh.</summary>
+    private static bool NeedsFreshSnapshot(
+        TransportOrderStopInput input, IReadOnlyDictionary<Guid, TransportOrderStop>? previousStops)
+    {
+        if (input.LocationId is null)
+        {
+            return false;
+        }
+
+        if (input.RefreshSnapshot)
+        {
+            return true;
+        }
+
+        return previousStops is null
+            || input.Id is not { } id
+            || !previousStops.TryGetValue(id, out var previous)
+            || previous.LocationId != input.LocationId;
+    }
+
+    /// <summary>
+    /// Copies the master location onto the stop: the address quintet and operational snapshot
+    /// fields are REPLACED (the snapshot is the agreed address); instruction fields are only
+    /// filled where the input left them empty — user-entered instructions always win.
+    /// </summary>
+    private void ApplyLocationSnapshot(TransportOrderStop stop, Location location)
+    {
+        stop.LocationName = location.Name;
+        var addressLine = string.Join(" ",
+            new[] { location.Street, location.HouseNumber }.Where(p => !string.IsNullOrWhiteSpace(p)));
+        stop.Address = string.IsNullOrWhiteSpace(addressLine) ? null : addressLine;
+        stop.PostalCode = Trim(location.PostalCode);
+        stop.City = Trim(location.City);
+        stop.CountryCode = Trim(location.CountryCode)?.ToUpperInvariant();
+
+        stop.ContactName = Trim(location.ContactName);
+        stop.ContactPhone = Trim(location.ContactPhone);
+        stop.ContactMobile = Trim(location.ContactMobile);
+        stop.ContactEmail = Trim(location.ContactEmail);
+        // Structured hours first; the legacy free-text field is the display fallback.
+        var hoursSummary = OpeningHoursFormatter.Summarize(location.OpeningIntervals) ?? Trim(location.OpeningHours);
+        stop.OpeningHoursSummary = hoursSummary is { Length: > 500 } ? hoursSummary[..500] : hoursSummary;
+        stop.Gate = Trim(location.Gate);
+        stop.AccessCode = Trim(location.AccessCode);
+        stop.Dock = Trim(location.Dock);
+        stop.RouteDescription = Trim(location.RouteDescription);
+        stop.DefaultLoadingMinutes = location.DefaultLoadingMinutes;
+        stop.DefaultUnloadingMinutes = location.DefaultUnloadingMinutes;
+        // OR-ed in once at snapshot time; afterwards the stop keeps the user's own override.
+        stop.AppointmentRequired |= location.AppointmentRequired;
+        stop.SnapshotAt = _timeProvider.GetUtcNow().UtcDateTime;
+
+        stop.Instructions ??= Trim(location.DriverInstructions);
+        stop.AccessInstructions ??= Trim(location.AccessInstructions);
+        stop.LoadingInstructions ??= Trim(location.LoadingInstructions);
+        stop.UnloadingInstructions ??= Trim(location.UnloadingInstructions);
+    }
+
+    /// <summary>
+    /// Rebuilt-but-unchanged stop: the previous snapshot rides along. Fields the input CAN
+    /// express (address quintet, instructions) keep input-wins semantics; snapshot-only fields
+    /// are copied verbatim.
+    /// </summary>
+    private static void CarryOverSnapshot(TransportOrderStop stop, TransportOrderStop previous)
+    {
+        stop.ContactName = previous.ContactName;
+        stop.ContactPhone = previous.ContactPhone;
+        stop.ContactMobile = previous.ContactMobile;
+        stop.ContactEmail = previous.ContactEmail;
+        stop.OpeningHoursSummary = previous.OpeningHoursSummary;
+        stop.Gate = previous.Gate;
+        stop.AccessCode = previous.AccessCode;
+        stop.Dock = previous.Dock;
+        stop.RouteDescription = previous.RouteDescription;
+        stop.DefaultLoadingMinutes = previous.DefaultLoadingMinutes;
+        stop.DefaultUnloadingMinutes = previous.DefaultUnloadingMinutes;
+        stop.SnapshotAt = previous.SnapshotAt;
+
+        stop.LocationName ??= previous.LocationName;
+        stop.Address ??= previous.Address;
+        stop.PostalCode ??= previous.PostalCode;
+        stop.City ??= previous.City;
+        stop.CountryCode ??= previous.CountryCode;
+        stop.Instructions ??= previous.Instructions;
+        stop.AccessInstructions ??= previous.AccessInstructions;
+        stop.LoadingInstructions ??= previous.LoadingInstructions;
+        stop.UnloadingInstructions ??= previous.UnloadingInstructions;
+    }
+
+    private static readonly string[] DutchDayNames =
+        ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"];
+
+    /// <summary>
+    /// Advisory (never blocking) opening-hours warnings for one stop. Evaluated against the
+    /// LIVE location intervals on purpose: the warning answers "will the site be open at the
+    /// planned time", while the snapshot answers "what did we agree back then".
+    /// </summary>
+    private IReadOnlyList<string>? BuildOpeningHoursWarnings(TransportOrderStop stop, Location? location)
+    {
+        if (location is null || location.OpeningIntervals.Count == 0)
+        {
+            return null; // Free-address stop or no structured hours (NoData) → no warning.
+        }
+
+        var activity = stop.StopType == StopType.Loading ? "laadtijd" : "lostijd";
+        var name = stop.LocationName ?? location.Name;
+        List<string>? warnings = null;
+        foreach (var moment in new[] { stop.PlannedFrom, stop.PlannedTo })
+        {
+            if (moment is not { } planned)
+            {
+                continue;
+            }
+
+            // A lone midnight "from" is the wire encoding of a date-only stop (no time chosen);
+            // warning about 00:00 would be noise.
+            if (planned.TimeOfDay == TimeSpan.Zero && stop.PlannedTo is null)
+            {
+                continue;
+            }
+
+            var time = TimeOnly.FromDateTime(planned);
+            var check = _openingHoursEvaluator.Check(location.OpeningIntervals, planned.DayOfWeek, time);
+            var message = check.Status switch
+            {
+                OpeningHoursStatus.BeforeOpening or OpeningHoursStatus.AfterClosing =>
+                    $"De geplande {activity} van {time:HH\\:mm} valt buiten de openingsuren " +
+                    $"({OpeningHoursFormatter.FormatDayIntervals(check.DayIntervals)}) van {name}.",
+                OpeningHoursStatus.ClosedDay =>
+                    $"De geplande {activity} op {DutchDayNames[planned.DayOfWeek == DayOfWeek.Sunday ? 6 : (int)planned.DayOfWeek - 1]} valt op een sluitingsdag van {name}.",
+                _ => null,
+            };
+            if (message is not null)
+            {
+                warnings ??= [];
+                if (!warnings.Contains(message))
+                {
+                    warnings.Add(message);
+                }
+            }
+        }
+
+        return warnings;
+    }
+
     private async Task<TransportOrderDetailDto> MapDetailAsync(TransportOrder order, CancellationToken cancellationToken)
     {
         var customerName = await _dbContext.Customers.AsNoTracking()
@@ -1335,12 +1554,19 @@ public class TransportOrderService : ITransportOrderService
             .Select(c => c.Name)
             .FirstOrDefaultAsync(cancellationToken) ?? string.Empty;
 
+        // Live locations serve two remaining purposes: the code (identifier, not snapshot data)
+        // + opening-hours warnings, and a LEGACY fallback for stop rows created before the
+        // snapshot backfill whose inline fields are still null. Snapshot fields always win.
         var locationIds = order.Stops.Where(s => s.LocationId is not null).Select(s => s.LocationId!.Value).Distinct().ToList();
         var locations = locationIds.Count == 0
             ? []
             : await _dbContext.Locations.AsNoTracking()
+                .Include(l => l.OpeningIntervals)
                 .Where(l => l.TenantId == _tenantContext.TenantId && locationIds.Contains(l.Id))
                 .ToDictionaryAsync(l => l.Id, cancellationToken);
+
+        // Sensitive access codes only surface for locations.view_sensitive holders (fail-closed).
+        var canViewSensitiveAccess = await CurrentUserHasAnyAsync(cancellationToken, PermissionCodes.LocationsViewSensitive);
 
         var stops = order.Stops
             .Where(s => !s.IsDeleted)
@@ -1355,7 +1581,7 @@ public class TransportOrderService : ITransportOrderService
                     s.Id, s.Sequence, s.StopType,
                     s.LocationId,
                     location?.Code,
-                    location?.Name ?? s.LocationName ?? s.City ?? string.Empty,
+                    s.LocationName ?? location?.Name ?? s.City ?? string.Empty,
                     s.Address ?? (string.IsNullOrWhiteSpace(locationAddress) ? null : locationAddress),
                     s.PostalCode ?? location?.PostalCode,
                     s.City ?? location?.City,
@@ -1366,7 +1592,20 @@ public class TransportOrderService : ITransportOrderService
                     s.AppointmentRequired, s.AppointmentReference,
                     s.AccessInstructions, s.LoadingInstructions, s.UnloadingInstructions,
                     s.TimeRequirement, s.TimeRequirementFrom, s.TimeRequirementTo,
-                    s.IncludedTimeMinutesOverride);
+                    s.IncludedTimeMinutesOverride,
+                    ContactName: s.ContactName,
+                    ContactPhone: s.ContactPhone,
+                    ContactMobile: s.ContactMobile,
+                    ContactEmail: s.ContactEmail,
+                    OpeningHoursSummary: s.OpeningHoursSummary,
+                    Gate: s.Gate,
+                    AccessCode: canViewSensitiveAccess ? s.AccessCode : null,
+                    Dock: s.Dock,
+                    RouteDescription: s.RouteDescription,
+                    DefaultLoadingMinutes: s.DefaultLoadingMinutes,
+                    DefaultUnloadingMinutes: s.DefaultUnloadingMinutes,
+                    SnapshotAt: s.SnapshotAt,
+                    Warnings: BuildOpeningHoursWarnings(s, location));
             })
             .ToList();
 

@@ -23,7 +23,10 @@ public record LocationOptionDto(
     string? City = null,
     bool IsDefaultLoadingLocation = false,
     bool IsDefaultUnloadingLocation = false,
-    bool IsDefaultBillingLocation = false);
+    bool IsDefaultBillingLocation = false,
+    /// <summary>Street + house number ("Noorderlaan 10") so pickers can render a full address line.</summary>
+    string? Address = null,
+    string? PostalCode = null);
 
 /// <summary>
 /// One structured opening window. Times travel as "HH:mm" strings (JSON friendly, exactly what
