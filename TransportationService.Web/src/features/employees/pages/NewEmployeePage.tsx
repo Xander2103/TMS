@@ -36,6 +36,13 @@ interface QualificationRow {
 }
 
 export function NewEmployeePage() {
+  // "Opslaan en nieuwe werknemer" resets the entire create flow (form fields, driver profile,
+  // prepared documents/items) by remounting the inner page with a fresh key.
+  const [formInstance, setFormInstance] = useState(0)
+  return <NewEmployeePageContent key={formInstance} onSavedAndNew={() => setFormInstance((k) => k + 1)} />
+}
+
+function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }) {
   const navigate = useNavigate()
   const toast = useToast()
   const { hasPermission } = useAuth()
@@ -124,13 +131,14 @@ export function NewEmployeePage() {
 
   const extraSections: SectionDef[] = [
     {
-      id: 'chauffeursprofiel',
-      label: 'Chauffeursprofiel',
+      // Same id/label as the edit page so deep links and muscle memory carry over.
+      id: 'chauffeursgegevens',
+      label: 'Chauffeursgegevens',
       optional: true,
       render: () =>
         canCreateDriver ? (
           <FormSection
-            title="Chauffeursprofiel"
+            title="Chauffeursgegevens"
             columns={2}
             description="Een chauffeursprofiel wordt in dezelfde stap aangemaakt — persoonsgegevens worden nooit dubbel ingevoerd."
           >
@@ -287,22 +295,24 @@ export function NewEmployeePage() {
     navigate(emp.driverId ? `/employees/${emp.id}?tab=kwalificaties` : `/employees/${emp.id}`)
   }
 
-  // Runs after employee creation succeeds. On full success it navigates; on partial failure
-  // it keeps the employee + prepared files and surfaces the retry dialog.
-  async function processFollowUps(emp: EmployeeDetail) {
+  // Runs after employee creation succeeds. On full success it navigates to the detail page —
+  // or, for "Opslaan en nieuwe werknemer", resets the create page for the next entry. On
+  // partial failure it keeps the employee + prepared files and surfaces the retry dialog.
+  async function processFollowUps(emp: EmployeeDetail, startNextEntry: boolean) {
+    const finish = startNextEntry ? onSavedAndNew : () => goToEmployee(emp)
     if (preparedDocs.length === 0 && preparedItems.length === 0) {
       toast.showSuccess(
         emp.driverId
           ? `Medewerker ${emp.employeeNumber} en chauffeursprofiel aangemaakt.`
           : `Medewerker ${emp.employeeNumber} aangemaakt.`,
       )
-      goToEmployee(emp)
+      finish()
       return
     }
     const results = await runEmployeeCreateFollowUps(emp.id, preparedDocs, preparedItems)
     if (results.every((r) => r.ok)) {
       toast.showSuccess(`Medewerker ${emp.employeeNumber} aangemaakt; ${results.length} bijlage(n) verwerkt.`)
-      goToEmployee(emp)
+      finish()
     } else {
       toast.showError(`Medewerker aangemaakt, maar enkele bijlagen zijn mislukt.`)
       setCreatedEmployee(emp)
@@ -355,14 +365,14 @@ export function NewEmployeePage() {
         onCancel={() => navigate('/employees')}
         onFunctionsChanged={handleFunctionsChanged}
         extraSections={extraSections}
-        onSubmit={async (values) => {
+        onSubmit={async (values, intent) => {
           const created = await mutations.create({
             ...values,
             driverProfile: isDriver ? { driverCategoryIds, notes: driverNotes.trim() || null } : null,
             qualifications: buildQualifications(),
           })
           // Creation failed → nothing uploaded, no issuance/stock changes, no orphans.
-          if (created) await processFollowUps(created)
+          if (created) await processFollowUps(created, intent === 'saveAndNew')
         }}
       />
       {createdEmployee && followUpResults && (

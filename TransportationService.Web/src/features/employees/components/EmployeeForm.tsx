@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormActions } from '../../../components/ui/FormActions'
@@ -38,6 +38,12 @@ import {
 } from './employeeSections'
 import './EmployeeForm.css'
 
+/**
+ * Which save button triggered the submit: 'save' is the normal flow (navigate/reload by the
+ * parent), 'saveAndNew' (create mode only) asks the parent to reset for a fresh entry.
+ */
+export type EmployeeSubmitIntent = 'save' | 'saveAndNew'
+
 interface EmployeeFormProps {
   mode: 'create' | 'edit'
   initial?: EmployeeDetail
@@ -45,12 +51,12 @@ interface EmployeeFormProps {
   submitError: string | null
   /** Per-field backend validation messages, shown next to the fields + in the summary. */
   serverFieldErrors?: FieldErrors
-  onSubmit: (values: EmployeeInput) => void
+  onSubmit: (values: EmployeeInput, intent: EmployeeSubmitIntent) => void
   onCancel: () => void
   /**
    * Extra sections injected between the core sections and Notities. Create passes the
    * inline driver-profile + qualifications + "available after creation" placeholders; edit
-   * passes the self-saving panel sections (Chauffeursprofiel, Kwalificaties, Documenten,
+   * passes the self-saving panel sections (Chauffeursgegevens, Kwalificaties, Documenten,
    * Bedrijfsmiddelen). Both modes therefore present the same section configuration.
    */
   extraSections?: SectionDef[]
@@ -62,10 +68,32 @@ interface EmployeeFormProps {
 
 /** User-facing labels for backend field paths, for the validation summary. */
 const FIELD_LABELS: Record<string, string> = {
+  firstName: 'Voornaam',
+  lastName: 'Achternaam',
+  email: 'E-mailadres',
+  phoneNumber: 'Telefoon',
+  mobilePhone: 'GSM',
+  dateOfBirth: 'Geboortedatum',
+  placeOfBirth: 'Geboorteplaats',
+  street: 'Straat',
+  houseNumber: 'Huisnummer',
+  postalCode: 'Postcode',
+  city: 'Gemeente',
+  countryCode: 'Land',
+  employmentStartDate: 'Startdatum',
+  employmentEndDate: 'Einddatum',
+  employmentStatus: 'Status dienstverband',
+  departmentId: 'Afdeling',
+  contractTypeId: 'Contracttype',
+  jobFunctionIds: 'Functies',
+  civilStatus: 'Burgerlijke staat',
+  dimonaNumber: 'Dimonanummer',
+  dependentChildren: 'Kinderen ten laste',
+  identityCardNumber: 'Identiteitskaartnummer',
+  emergencyContacts: 'Noodcontacten',
   nationalRegisterNumber: 'Rijksregisternummer',
   iban: 'IBAN',
   bic: 'BIC',
-  countryCode: 'Land',
   qualifications: 'Kwalificaties',
 }
 
@@ -154,17 +182,15 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
     .filter((o): o is NonNullable<typeof o> => Boolean(o))
 
   function validate(): Record<string, string> {
+    // Alleen voor- en achternaam blokkeren (spec §13); al de rest wordt enkel op formaat
+    // gecontroleerd wanneer er effectief een waarde is ingevuld.
     const errors: Record<string, string> = {}
     if (!firstName.trim()) errors.firstName = 'Voornaam is verplicht.'
     if (!lastName.trim()) errors.lastName = 'Achternaam is verplicht.'
-    if (!email.trim() || !email.includes('@')) errors.email = 'Een geldig e-mailadres is verplicht.'
-    if (!phoneNumber.trim()) errors.phoneNumber = 'Telefoonnummer is verplicht.'
-    if (!dateOfBirth) errors.dateOfBirth = 'Geboortedatum is verplicht.'
-    if (!employmentStartDate) errors.employmentStartDate = 'Startdatum is verplicht.'
-    if (!street.trim()) errors.street = 'Straat is verplicht.'
-    if (!houseNumber.trim()) errors.houseNumber = 'Nummer is verplicht.'
-    if (!postalCode.trim()) errors.postalCode = 'Postcode is verplicht.'
-    if (!city.trim()) errors.city = 'Plaats is verplicht.'
+    if (email.trim() && !email.includes('@')) errors.email = 'Geef een geldig e-mailadres op.'
+    if (employmentStartDate && employmentEndDate && employmentEndDate < employmentStartDate) {
+      errors.employmentEndDate = 'De einddatum moet na de startdatum liggen.'
+    }
     if (canSeeConfidential) {
       const nrnError = validateNrn(nationalRegisterNumber)
       if (nrnError) errors.nationalRegisterNumber = nrnError
@@ -196,7 +222,7 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
           <FormField label="Achternaam" htmlFor="e-lastname" error={fieldErrors.lastName} required>
             <input id="e-lastname" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.lastName ? 'true' : undefined} />
           </FormField>
-          <FormField label="Geboortedatum" htmlFor="e-dob" error={fieldErrors.dateOfBirth} required>
+          <FormField label="Geboortedatum" htmlFor="e-dob" error={fieldErrors.dateOfBirth}>
             <input id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} aria-invalid={fieldErrors.dateOfBirth ? 'true' : undefined} />
           </FormField>
           <FormField label="Geboorteplaats" htmlFor="e-pob">
@@ -228,25 +254,25 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
         </FormSection>
 
         <FormSection title="Contact & adres" columns={3}>
-          <FormField label="E-mail" htmlFor="e-email" error={fieldErrors.email} required>
+          <FormField label="E-mail" htmlFor="e-email" error={fieldErrors.email}>
             <input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} aria-invalid={fieldErrors.email ? 'true' : undefined} />
           </FormField>
-          <FormField label="Telefoon" htmlFor="e-phone" error={fieldErrors.phoneNumber} required>
+          <FormField label="Telefoon" htmlFor="e-phone" error={fieldErrors.phoneNumber}>
             <input id="e-phone" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} maxLength={30} aria-invalid={fieldErrors.phoneNumber ? 'true' : undefined} />
           </FormField>
           <FormField label="GSM" htmlFor="e-mobile">
             <input id="e-mobile" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} maxLength={30} />
           </FormField>
-          <FormField label="Straat" htmlFor="e-street" error={fieldErrors.street} required>
+          <FormField label="Straat" htmlFor="e-street" error={fieldErrors.street}>
             <input id="e-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} aria-invalid={fieldErrors.street ? 'true' : undefined} />
           </FormField>
-          <FormField label="Nummer" htmlFor="e-houseno" error={fieldErrors.houseNumber} required>
+          <FormField label="Nummer" htmlFor="e-houseno" error={fieldErrors.houseNumber}>
             <input id="e-houseno" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} maxLength={20} aria-invalid={fieldErrors.houseNumber ? 'true' : undefined} />
           </FormField>
-          <FormField label="Postcode" htmlFor="e-postal" error={fieldErrors.postalCode} required>
+          <FormField label="Postcode" htmlFor="e-postal" error={fieldErrors.postalCode}>
             <input id="e-postal" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} maxLength={20} aria-invalid={fieldErrors.postalCode ? 'true' : undefined} />
           </FormField>
-          <FormField label="Plaats" htmlFor="e-city" error={fieldErrors.city} required>
+          <FormField label="Plaats" htmlFor="e-city" error={fieldErrors.city}>
             <input id="e-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} aria-invalid={fieldErrors.city ? 'true' : undefined} />
           </FormField>
           <FormField label="Land" htmlFor="e-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
@@ -273,8 +299,22 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
         columns={3}
         description="Functies zijn HR-informatie en geven géén toegangsrechten in de applicatie; rechten beheer je via Gebruikers en Rollen."
       >
-        <FormField label="Startdatum" htmlFor="e-start" error={fieldErrors.employmentStartDate} required>
+        <FormField label="Startdatum" htmlFor="e-start" error={fieldErrors.employmentStartDate}>
           <input id="e-start" type="date" value={employmentStartDate} onChange={(e) => setEmploymentStartDate(e.target.value)} aria-invalid={fieldErrors.employmentStartDate ? 'true' : undefined} />
+        </FormField>
+        <FormField
+          label="Einddatum tewerkstelling"
+          htmlFor="e-end"
+          hint="Leeg = onbepaalde duur."
+          error={fieldErrors.employmentEndDate ?? getFieldError(serverFieldErrors, 'employmentEndDate')}
+        >
+          <input
+            id="e-end"
+            type="date"
+            value={employmentEndDate}
+            onChange={(e) => setEmploymentEndDate(e.target.value)}
+            aria-invalid={fieldErrors.employmentEndDate ? 'true' : undefined}
+          />
         </FormField>
         <FormField label="Dienstverbandstatus" htmlFor="e-status">
           <select id="e-status" value={employmentStatus} onChange={(e) => setEmploymentStatus(e.target.value as EmploymentStatus)}>
@@ -381,9 +421,6 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
               onChange={(e) => setDependentChildren(e.target.value)}
             />
           </FormField>
-          <FormField label="Einddatum tewerkstelling" htmlFor="e-end" hint="Leeg = onbepaalde duur.">
-            <input id="e-end" type="date" value={employmentEndDate} onChange={(e) => setEmploymentEndDate(e.target.value)} />
-          </FormField>
           <FormField label="DIMONA-nummer" htmlFor="e-dimona">
             <input id="e-dimona" value={dimonaNumber} onChange={(e) => setDimonaNumber(e.target.value)} maxLength={50} />
           </FormField>
@@ -464,7 +501,7 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
         <div className="form-span-all">
           {emergencyRows.map((row, index) => (
             <div key={row.key} className="employee-emergency-row">
-              <FormField label={`Naam ${index + 1}`} htmlFor={`e-ec-name-${row.key}`} required={index === 0}>
+              <FormField label={`Naam ${index + 1}`} htmlFor={`e-ec-name-${row.key}`}>
                 <input
                   id={`e-ec-name-${row.key}`}
                   value={row.name}
@@ -566,9 +603,15 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
   const defaultSectionId =
     initialSectionId && sections.some((s) => s.id === initialSectionId) ? initialSectionId : sections[0].id
   const { activeId, setActive } = useSectionNavigation(sections.map((s) => s.id), defaultSectionId)
+  const activeSection = sections.find((s) => s.id === activeId) ?? sections[0]
+
+  // Which save button was clicked last; a plain Enter-submit counts as the normal save.
+  const submitIntentRef = useRef<EmployeeSubmitIntent>('save')
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    const intent = submitIntentRef.current
+    submitIntentRef.current = 'save'
     const errors = validate()
     if (Object.keys(errors).length > 0) {
       // Route to the first section that owns a failing field so the error is visible.
@@ -583,19 +626,19 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
     const values: EmployeeInput = {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      dateOfBirth,
+      dateOfBirth: dateOfBirth || null,
       placeOfBirth: nullable(placeOfBirth),
       nationalityCode: nationalityCode || null,
       preferredLanguageCode: preferredLanguageCode || null,
-      email: email.trim(),
-      phoneNumber: phoneNumber.trim(),
+      email: nullable(email),
+      phoneNumber: nullable(phoneNumber),
       mobilePhone: nullable(mobilePhone),
-      street: street.trim(),
-      houseNumber: houseNumber.trim(),
-      postalCode: postalCode.trim(),
-      city: city.trim(),
+      street: nullable(street),
+      houseNumber: nullable(houseNumber),
+      postalCode: nullable(postalCode),
+      city: nullable(city),
       countryCode: countryCode || null,
-      employmentStartDate,
+      employmentStartDate: employmentStartDate || null,
       employmentEndDate: employmentEndDate || null,
       employmentStatus,
       departmentId: departmentId || null,
@@ -614,29 +657,54 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
       emergencyContacts: emergencyContactRowsToPayload(emergencyRows),
     }
     setDirty(false)
-    onSubmit(values)
+    onSubmit(values, intent)
   }
 
+  // Same buttons at the top and (sticky) bottom of the form; both submit the one form.
+  const actionBar = (position: 'top' | 'bottom') => (
+    <FormActions dirty={dirty} position={position}>
+      <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+        Annuleren
+      </Button>
+      {mode === 'create' && (
+        <Button
+          type="submit"
+          variant="secondary"
+          disabled={isSubmitting}
+          onClick={() => {
+            submitIntentRef.current = 'saveAndNew'
+          }}
+        >
+          Opslaan en nieuwe werknemer
+        </Button>
+      )}
+      <Button
+        type="submit"
+        disabled={isSubmitting}
+        onClick={() => {
+          submitIntentRef.current = 'save'
+        }}
+      >
+        {isSubmitting ? 'Opslaan…' : 'Opslaan'}
+      </Button>
+    </FormActions>
+  )
+
   return (
-    <form onSubmit={handleSubmit} className="employee-form" onChange={touch}>
+    <form onSubmit={handleSubmit} className="employee-form" onChange={touch} noValidate>
       <UnsavedChangesGuard when={dirty && !isSubmitting} />
       <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={FIELD_LABELS} />
+
+      {/* SectionedForm renders `actions` only at the bottom; mirror its panel check here so the
+          top bar also disappears on self-saving panel sections. */}
+      {!activeSection.panel && actionBar('top')}
 
       <SectionedForm
         sections={sections}
         activeId={activeId}
         onActiveChange={setActive}
         orientation="left"
-        actions={
-          <FormActions dirty={dirty}>
-            <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
-              Annuleren
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Opslaan…' : 'Opslaan'}
-            </Button>
-          </FormActions>
-        }
+        actions={actionBar('bottom')}
       />
     </form>
   )

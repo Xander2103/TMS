@@ -64,7 +64,8 @@ describe('EmployeeForm section navigation', () => {
     auth.permissions = ['employees.view_confidential']
     renderForm()
     await userEvent.click(screen.getByRole('tab', { name: /Noodcontacten/i }))
-    await userEvent.click(screen.getByRole('button', { name: /Opslaan/i }))
+    // The save bar renders at both the top and the bottom of the form; any submit will do.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Opslaan' })[0])
     // required Voornaam is empty -> routes back to Algemeen
     const algemeen = screen.getByRole('tab', { name: /Algemeen/i })
     expect(algemeen).toHaveAttribute('aria-selected', 'true')

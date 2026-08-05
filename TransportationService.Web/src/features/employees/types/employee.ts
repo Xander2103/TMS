@@ -125,14 +125,15 @@ export interface EmployeeDetail {
 export interface EmployeeInput {
   firstName: string
   lastName: string
-  dateOfBirth: string
-  street: string
-  houseNumber: string
-  postalCode: string
-  city: string
-  phoneNumber: string
-  email: string
-  employmentStartDate: string
+  // Alleen voor- en achternaam blokkeren; alle andere velden zijn optioneel (spec §13).
+  dateOfBirth: string | null
+  street: string | null
+  houseNumber: string | null
+  postalCode: string | null
+  city: string | null
+  phoneNumber: string | null
+  email: string | null
+  employmentStartDate: string | null
   employmentStatus: EmploymentStatus
   employmentEndDate?: string | null
   countryCode: string | null
