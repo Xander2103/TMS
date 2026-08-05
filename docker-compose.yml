@@ -6,7 +6,8 @@ services:
     environment:
       POSTGRES_DB: transportation_service
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      # Local dev default; override with an environment variable for anything non-local.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "5432:5432"
     volumes:
