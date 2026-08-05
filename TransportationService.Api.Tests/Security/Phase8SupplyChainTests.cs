@@ -59,6 +59,7 @@ public class Phase8SupplyChainTests
 
         // Runtime-checked gates outside attributes.
         [PermissionCodes.CustomersManageFiscal] = "CustomersController fiscal-section gate (UserHasPermissionAsync)",
+        [PermissionCodes.LocationsViewSensitive] = "LocationsController.HasSensitiveAccessAsync / LocationService access-code gating",
         [PermissionCodes.WarehouseReleaseTrip] = "TripsController release gate (UserHasPermissionAsync)",
         [PermissionCodes.WarehouseConflictOverride] = "DockPlanningController conflict-override gate (UserHasPermissionAsync)",
     };

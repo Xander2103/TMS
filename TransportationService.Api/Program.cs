@@ -278,6 +278,9 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Organization.Servic
 // Locations
 builder.Services.AddScoped<TransportationService.Api.Modules.Locations.Services.ILocationService,
     TransportationService.Api.Modules.Locations.Services.LocationService>();
+// Pure, stateless opening-hours check — singleton by design.
+builder.Services.AddSingleton<TransportationService.Api.Modules.Locations.Services.IOpeningHoursEvaluator,
+    TransportationService.Api.Modules.Locations.Services.OpeningHoursEvaluator>();
 
 // Fleet
 builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IVehicleService,

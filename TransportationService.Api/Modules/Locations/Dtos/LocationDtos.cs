@@ -25,6 +25,12 @@ public record LocationOptionDto(
     bool IsDefaultUnloadingLocation = false,
     bool IsDefaultBillingLocation = false);
 
+/// <summary>
+/// One structured opening window. Times travel as "HH:mm" strings (JSON friendly, exactly what
+/// the weekly editor shows); DayOfWeek is ISO (1 = maandag .. 7 = zondag).
+/// </summary>
+public record LocationOpeningIntervalDto(int DayOfWeek, string FromTime, string ToTime, string? Note = null);
+
 public record LocationDetailDto(
     Guid Id,
     string Code,
@@ -55,10 +61,36 @@ public record LocationDetailDto(
     string? Notes,
     bool IsDefaultLoadingLocation,
     bool IsDefaultUnloadingLocation,
-    bool IsDefaultBillingLocation = false);
+    bool IsDefaultBillingLocation = false,
+    // Master-data wave 2026-08-05 (appended optional params only — positional callers exist).
+    string? ExternalReference = null,
+    string? ContactMobile = null,
+    Guid? CustomerContactId = null,
+    string? Gate = null,
+    // Null when the caller lacks locations.view_sensitive (never exposed unmasked without it).
+    string? AccessCode = null,
+    string? ReceptionPoint = null,
+    string? Dock = null,
+    string? RouteDescription = null,
+    bool DeliveryByAppointmentOnly = false,
+    decimal? HeightRestrictionMeters = null,
+    decimal? WeightRestrictionTons = null,
+    bool? AdrAllowed = null,
+    bool CraneRequired = false,
+    bool ForkliftAvailable = false,
+    string? DriverInstructions = null,
+    string? InternalMemo = null,
+    int? DefaultLoadingMinutes = null,
+    int? DefaultUnloadingMinutes = null,
+    string? PreferredArrivalFrom = null,
+    string? PreferredArrivalTo = null,
+    string? EarliestArrival = null,
+    string? LatestArrival = null,
+    IReadOnlyList<LocationOpeningIntervalDto>? OpeningIntervals = null);
 
 public record CreateLocationRequest(
-    string Code,
+    // Optional since the master-data wave: when blank the service generates "LOC-xxxxxxxx".
+    string? Code,
     string Name,
     LocationType Type,
     string? Street,
@@ -84,7 +116,30 @@ public record CreateLocationRequest(
     string? Notes,
     bool IsDefaultLoadingLocation = false,
     bool IsDefaultUnloadingLocation = false,
-    bool IsDefaultBillingLocation = false);
+    bool IsDefaultBillingLocation = false,
+    string? ExternalReference = null,
+    string? ContactMobile = null,
+    Guid? CustomerContactId = null,
+    string? Gate = null,
+    string? AccessCode = null,
+    string? ReceptionPoint = null,
+    string? Dock = null,
+    string? RouteDescription = null,
+    bool DeliveryByAppointmentOnly = false,
+    decimal? HeightRestrictionMeters = null,
+    decimal? WeightRestrictionTons = null,
+    bool? AdrAllowed = null,
+    bool CraneRequired = false,
+    bool ForkliftAvailable = false,
+    string? DriverInstructions = null,
+    string? InternalMemo = null,
+    int? DefaultLoadingMinutes = null,
+    int? DefaultUnloadingMinutes = null,
+    string? PreferredArrivalFrom = null,
+    string? PreferredArrivalTo = null,
+    string? EarliestArrival = null,
+    string? LatestArrival = null,
+    IReadOnlyList<LocationOpeningIntervalDto>? OpeningIntervals = null);
 
 public record UpdateLocationRequest(
     string Code,
@@ -114,7 +169,31 @@ public record UpdateLocationRequest(
     string? Notes,
     bool IsDefaultLoadingLocation = false,
     bool IsDefaultUnloadingLocation = false,
-    bool IsDefaultBillingLocation = false);
+    bool IsDefaultBillingLocation = false,
+    string? ExternalReference = null,
+    string? ContactMobile = null,
+    Guid? CustomerContactId = null,
+    string? Gate = null,
+    // Ignored (existing value preserved) when the caller lacks locations.view_sensitive.
+    string? AccessCode = null,
+    string? ReceptionPoint = null,
+    string? Dock = null,
+    string? RouteDescription = null,
+    bool DeliveryByAppointmentOnly = false,
+    decimal? HeightRestrictionMeters = null,
+    decimal? WeightRestrictionTons = null,
+    bool? AdrAllowed = null,
+    bool CraneRequired = false,
+    bool ForkliftAvailable = false,
+    string? DriverInstructions = null,
+    string? InternalMemo = null,
+    int? DefaultLoadingMinutes = null,
+    int? DefaultUnloadingMinutes = null,
+    string? PreferredArrivalFrom = null,
+    string? PreferredArrivalTo = null,
+    string? EarliestArrival = null,
+    string? LatestArrival = null,
+    IReadOnlyList<LocationOpeningIntervalDto>? OpeningIntervals = null);
 
 public record SetLocationActiveRequest(bool IsActive);
 

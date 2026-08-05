@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
@@ -5,10 +6,13 @@ using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Common.Reference;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Edi.Entities;
 using TransportationService.Api.Modules.Locations.Dtos;
 using TransportationService.Api.Modules.Locations.Entities;
+using TransportationService.Api.Modules.Orders.Entities;
 using TransportationService.Api.Modules.Partners.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
+using TransportationService.Api.Modules.Warehousing.Entities;
 
 namespace TransportationService.Api.Modules.Locations.Services;
 
@@ -35,6 +39,7 @@ public class LocationService : ILocationService
 
     public async Task<PagedResult<LocationListItemDto>> SearchAsync(
         string? search, LocationType? type, bool? isActive, Guid? customerId,
+        string? country, string? postalCode,
         string? sort, string? dir, PageRequest page, CancellationToken cancellationToken)
     {
         var query = TenantScoped().AsNoTracking();
@@ -42,6 +47,17 @@ public class LocationService : ILocationService
         if (type is { } t) query = query.Where(l => l.Type == t);
         if (isActive is { } active) query = query.Where(l => l.IsActive == active);
         if (customerId is { } cust) query = query.Where(l => l.CustomerId == cust);
+        if (!string.IsNullOrWhiteSpace(country))
+        {
+            var cc = country.Trim().ToUpperInvariant();
+            query = query.Where(l => l.CountryCode == cc);
+        }
+
+        if (!string.IsNullOrWhiteSpace(postalCode))
+        {
+            var pc = postalCode.Trim().ToLowerInvariant();
+            query = query.Where(l => l.PostalCode != null && l.PostalCode.ToLower().StartsWith(pc));
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -50,7 +66,8 @@ public class LocationService : ILocationService
             query = query.Where(l =>
                 l.Code.ToLower().Contains(term) ||
                 l.Name.ToLower().Contains(term) ||
-                (l.City != null && l.City.ToLower().Contains(term)));
+                (l.City != null && l.City.ToLower().Contains(term)) ||
+                (l.PostalCode != null && l.PostalCode.ToLower().Contains(term)));
         }
 
         var descending = string.Equals(dir, "desc", StringComparison.OrdinalIgnoreCase);
@@ -92,15 +109,21 @@ public class LocationService : ILocationService
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<LocationDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<LocationDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken, bool canViewSensitive = false)
     {
         var location = await TenantScoped().AsNoTracking().FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
-        return location is null ? null : await MapToDetailAsync(location, cancellationToken);
+        return location is null ? null : await MapToDetailAsync(location, cancellationToken, canViewSensitive);
     }
 
-    public async Task<LocationOperationResult> CreateAsync(CreateLocationRequest request, CancellationToken cancellationToken)
+    public async Task<LocationOperationResult> CreateAsync(
+        CreateLocationRequest request, CancellationToken cancellationToken, bool canViewSensitive = false)
     {
-        var code = request.Code.Trim();
+        // Code is optional since the master-data wave: blank → generated "LOC-xxxxxxxx"
+        // (the DB column stays required; a generated-code race is retried once below).
+        var explicitCode = Trim(request.Code);
+        var codeGenerated = explicitCode is null;
+        var code = explicitCode ?? GenerateCode();
+
         if (!CoordinatesValid(request.Latitude, request.Longitude))
         {
             return LocationOperationResult.InvalidCoordinates;
@@ -111,7 +134,9 @@ public class LocationService : ILocationService
             return LocationOperationResult.InvalidReference;
         }
 
-        if (await TenantScoped().AnyAsync(l => l.Code == code, cancellationToken))
+        await EnsureCustomerContactValidAsync(request.CustomerContactId, request.CustomerId, cancellationToken);
+
+        if (!codeGenerated && await TenantScoped().AnyAsync(l => l.Code == code, cancellationToken))
         {
             return LocationOperationResult.DuplicateCode;
         }
@@ -127,11 +152,8 @@ public class LocationService : ILocationService
             Type = request.Type,
             IsActive = true,
         };
-        ApplyEditableFields(location, request.Street, request.HouseNumber, request.PostalCode, request.City, request.CountryCode,
-            request.Latitude, request.Longitude, request.ContactName, request.ContactPhone, request.ContactEmail,
-            request.OpeningHours, request.LoadingInstructions, request.UnloadingInstructions, request.AccessInstructions,
-            request.AccessRestrictions, request.VehicleRestrictions, request.TrailerRestrictions,
-            request.AlfapassRequired, request.AppointmentRequired, request.CustomerId, request.Notes);
+        ApplyEditableFields(location, ToEditableShape(request), canViewSensitive);
+        location.OpeningIntervals = BuildIntervals(request.OpeningIntervals, location);
 
         // Transaction: default-demotion runs as an immediate UPDATE and must roll back when the
         // insert itself fails.
@@ -145,19 +167,36 @@ public class LocationService : ILocationService
         }
         catch (DbUpdateException)
         {
-            return LocationOperationResult.DuplicateCode;
+            if (!codeGenerated)
+            {
+                return LocationOperationResult.DuplicateCode;
+            }
+
+            // Generated-code collision on the unique index: retry exactly once with a new code.
+            location.Code = GenerateCode();
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                return LocationOperationResult.DuplicateCode;
+            }
         }
 
         await _auditService.RecordAsync(EntityType, location.Id.ToString(), "Created", null,
-            new { location.Code, location.Name, location.Type }, cancellationToken);
+            await BuildAuditPayloadAsync(location, cancellationToken), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return LocationOperationResult.Success(await MapToDetailAsync(location, cancellationToken));
+        return LocationOperationResult.Success(await MapToDetailAsync(location, cancellationToken, canViewSensitive));
     }
 
-    public async Task<LocationOperationResult> UpdateAsync(Guid id, UpdateLocationRequest request, CancellationToken cancellationToken)
+    public async Task<LocationOperationResult> UpdateAsync(
+        Guid id, UpdateLocationRequest request, CancellationToken cancellationToken, bool canViewSensitive = false)
     {
-        var location = await TenantScoped().FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
+        var location = await TenantScoped()
+            .Include(l => l.OpeningIntervals)
+            .FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
         if (location is null)
         {
             return LocationOperationResult.NotFound;
@@ -174,6 +213,8 @@ public class LocationService : ILocationService
             return LocationOperationResult.InvalidReference;
         }
 
+        await EnsureCustomerContactValidAsync(request.CustomerContactId, request.CustomerId, cancellationToken);
+
         if (await TenantScoped().AnyAsync(l => l.Code == code && l.Id != id, cancellationToken))
         {
             return LocationOperationResult.DuplicateCode;
@@ -181,17 +222,20 @@ public class LocationService : ILocationService
 
         await _countryValidator.NormalizeAndValidateAsync(request.CountryCode, "land", cancellationToken, "countryCode");
 
-        var before = new { location.Code, location.Name, location.Type, location.IsActive };
+        var before = await BuildAuditPayloadAsync(location, cancellationToken);
 
         location.Code = code;
         location.Name = request.Name.Trim();
         location.Type = request.Type;
         location.IsActive = request.IsActive;
-        ApplyEditableFields(location, request.Street, request.HouseNumber, request.PostalCode, request.City, request.CountryCode,
-            request.Latitude, request.Longitude, request.ContactName, request.ContactPhone, request.ContactEmail,
-            request.OpeningHours, request.LoadingInstructions, request.UnloadingInstructions, request.AccessInstructions,
-            request.AccessRestrictions, request.VehicleRestrictions, request.TrailerRestrictions,
-            request.AlfapassRequired, request.AppointmentRequired, request.CustomerId, request.Notes);
+        ApplyEditableFields(location, request, canViewSensitive);
+
+        // Opening intervals are replaced wholesale: nothing outside the location references an
+        // individual interval row, so id preservation buys nothing (documented on the entity).
+        var newIntervals = BuildIntervals(request.OpeningIntervals, location);
+        _dbContext.RemoveRange(location.OpeningIntervals);
+        _dbContext.AddRange(newIntervals);
+        location.OpeningIntervals = newIntervals;
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
         await ApplyDefaultFlagsAsync(location, request.IsDefaultLoadingLocation, request.IsDefaultUnloadingLocation, request.IsDefaultBillingLocation, cancellationToken);
@@ -206,10 +250,10 @@ public class LocationService : ILocationService
         }
 
         await _auditService.RecordAsync(EntityType, location.Id.ToString(), "Updated", before,
-            new { location.Code, location.Name, location.Type, location.IsActive }, cancellationToken);
+            await BuildAuditPayloadAsync(location, cancellationToken), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return LocationOperationResult.Success(await MapToDetailAsync(location, cancellationToken));
+        return LocationOperationResult.Success(await MapToDetailAsync(location, cancellationToken, canViewSensitive));
     }
 
     public async Task<bool> SetActiveAsync(Guid id, SetLocationActiveRequest request, CancellationToken cancellationToken)
@@ -297,6 +341,24 @@ public class LocationService : ILocationService
             return false;
         }
 
+        // A location that has ever been used must be deactivated, never deleted. The checks use
+        // IgnoreQueryFilters + an explicit TenantId predicate: IgnoreQueryFilters bypasses the
+        // tenant AND soft-delete filters, and soft-deleted stops still belong to a live order
+        // (stops are rebuilt wholesale on every order save).
+        var tenantId = _tenantContext.TenantId;
+        var referenced =
+            await _dbContext.Set<TransportOrderStop>().IgnoreQueryFilters()
+                .AnyAsync(s => s.TenantId == tenantId && s.LocationId == id, cancellationToken)
+            || await _dbContext.Set<Warehouse>().IgnoreQueryFilters()
+                .AnyAsync(w => w.TenantId == tenantId && w.LocationId == id, cancellationToken)
+            || await _dbContext.Set<EdiPartnerLocation>().IgnoreQueryFilters()
+                .AnyAsync(m => m.TenantId == tenantId && m.LocationId == id, cancellationToken);
+        if (referenced)
+        {
+            throw new DomainValidationException(
+                "Deze locatie is al gebruikt en kan niet worden verwijderd. Je kunt de locatie wel deactiveren.");
+        }
+
         _dbContext.Remove(location); // soft delete via interceptor
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -306,6 +368,121 @@ public class LocationService : ILocationService
         return true;
     }
 
+    public async Task<LocationOperationResult> DuplicateAsync(
+        Guid id, CancellationToken cancellationToken, bool canViewSensitive = false)
+    {
+        var source = await TenantScoped().AsNoTracking()
+            .Include(l => l.OpeningIntervals)
+            .FirstOrDefaultAsync(l => l.Id == id, cancellationToken);
+        if (source is null)
+        {
+            return LocationOperationResult.NotFound;
+        }
+
+        var copy = new Location
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenantContext.TenantId,
+            Code = GenerateCode(),
+            Name = CopyName(source.Name),
+            Type = source.Type,
+            Street = source.Street,
+            HouseNumber = source.HouseNumber,
+            PostalCode = source.PostalCode,
+            City = source.City,
+            CountryCode = source.CountryCode,
+            Latitude = source.Latitude,
+            Longitude = source.Longitude,
+            ContactName = source.ContactName,
+            ContactPhone = source.ContactPhone,
+            ContactEmail = source.ContactEmail,
+            ContactMobile = source.ContactMobile,
+            CustomerContactId = source.CustomerContactId,
+            ExternalReference = source.ExternalReference,
+            OpeningHours = source.OpeningHours,
+            LoadingInstructions = source.LoadingInstructions,
+            UnloadingInstructions = source.UnloadingInstructions,
+            AccessInstructions = source.AccessInstructions,
+            AccessRestrictions = source.AccessRestrictions,
+            VehicleRestrictions = source.VehicleRestrictions,
+            TrailerRestrictions = source.TrailerRestrictions,
+            AlfapassRequired = source.AlfapassRequired,
+            AppointmentRequired = source.AppointmentRequired,
+            Gate = source.Gate,
+            AccessCode = source.AccessCode,
+            ReceptionPoint = source.ReceptionPoint,
+            Dock = source.Dock,
+            RouteDescription = source.RouteDescription,
+            DeliveryByAppointmentOnly = source.DeliveryByAppointmentOnly,
+            HeightRestrictionMeters = source.HeightRestrictionMeters,
+            WeightRestrictionTons = source.WeightRestrictionTons,
+            AdrAllowed = source.AdrAllowed,
+            CraneRequired = source.CraneRequired,
+            ForkliftAvailable = source.ForkliftAvailable,
+            DriverInstructions = source.DriverInstructions,
+            InternalMemo = source.InternalMemo,
+            DefaultLoadingMinutes = source.DefaultLoadingMinutes,
+            DefaultUnloadingMinutes = source.DefaultUnloadingMinutes,
+            PreferredArrivalFrom = source.PreferredArrivalFrom,
+            PreferredArrivalTo = source.PreferredArrivalTo,
+            EarliestArrival = source.EarliestArrival,
+            LatestArrival = source.LatestArrival,
+            CustomerId = source.CustomerId,
+            Notes = source.Notes,
+            IsActive = true,
+            IsDefaultLoadingLocation = false,
+            IsDefaultUnloadingLocation = false,
+            IsDefaultBillingLocation = false,
+        };
+        copy.OpeningIntervals = source.OpeningIntervals
+            .Select(i => new LocationOpeningInterval
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                LocationId = copy.Id,
+                DayOfWeek = i.DayOfWeek,
+                FromTime = i.FromTime,
+                ToTime = i.ToTime,
+                Note = i.Note,
+            })
+            .ToList();
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        _dbContext.Add(copy);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // Generated-code collision: retry exactly once with a new code.
+            copy.Code = GenerateCode();
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                return LocationOperationResult.DuplicateCode;
+            }
+        }
+
+        await _auditService.RecordAsync(EntityType, copy.Id.ToString(), "Duplicated", null,
+            new { SourceLocationId = id, copy.Code, copy.Name }, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return LocationOperationResult.Success(await MapToDetailAsync(copy, cancellationToken, canViewSensitive));
+    }
+
+    private static string CopyName(string sourceName)
+    {
+        const string suffix = " (kopie)";
+        var name = sourceName + suffix;
+        return name.Length <= 200 ? name : sourceName[..(200 - suffix.Length)] + suffix;
+    }
+
+    private static string GenerateCode() => "LOC-" + Guid.NewGuid().ToString("N")[..8].ToUpperInvariant();
+
     private static bool CoordinatesValid(decimal? lat, decimal? lng)
     {
         if (lat is { } la && (la < -90m || la > 90m)) return false;
@@ -313,34 +490,154 @@ public class LocationService : ILocationService
         return true;
     }
 
-    private static void ApplyEditableFields(
-        Location l, string? street, string? houseNumber, string? postalCode, string? city, string? countryCode,
-        decimal? lat, decimal? lng, string? contactName, string? contactPhone, string? contactEmail,
-        string? openingHours, string? loading, string? unloading, string? access,
-        string? accessRestrictions, string? vehicleRestrictions, string? trailerRestrictions,
-        bool alfapass, bool appointment, Guid? customerId, string? notes)
+    /// <summary>Create and update requests share the editable-field shape; the update record is that shape.</summary>
+    private static UpdateLocationRequest ToEditableShape(CreateLocationRequest r) => new(
+        r.Code ?? string.Empty, r.Name, r.Type, r.Street, r.HouseNumber, r.PostalCode, r.City, r.CountryCode,
+        r.Latitude, r.Longitude, r.ContactName, r.ContactPhone, r.ContactEmail,
+        r.OpeningHours, r.LoadingInstructions, r.UnloadingInstructions, r.AccessInstructions,
+        r.AccessRestrictions, r.VehicleRestrictions, r.TrailerRestrictions,
+        r.AlfapassRequired, r.AppointmentRequired, IsActive: true, r.CustomerId, r.Notes,
+        r.IsDefaultLoadingLocation, r.IsDefaultUnloadingLocation, r.IsDefaultBillingLocation,
+        r.ExternalReference, r.ContactMobile, r.CustomerContactId, r.Gate, r.AccessCode,
+        r.ReceptionPoint, r.Dock, r.RouteDescription, r.DeliveryByAppointmentOnly,
+        r.HeightRestrictionMeters, r.WeightRestrictionTons, r.AdrAllowed, r.CraneRequired,
+        r.ForkliftAvailable, r.DriverInstructions, r.InternalMemo,
+        r.DefaultLoadingMinutes, r.DefaultUnloadingMinutes,
+        r.PreferredArrivalFrom, r.PreferredArrivalTo, r.EarliestArrival, r.LatestArrival,
+        r.OpeningIntervals);
+
+    private static void ApplyEditableFields(Location l, UpdateLocationRequest r, bool canEditSensitive)
     {
-        l.Street = Trim(street);
-        l.HouseNumber = Trim(houseNumber);
-        l.PostalCode = Trim(postalCode);
-        l.City = Trim(city);
-        l.CountryCode = countryCode is null ? null : Trim(countryCode)?.ToUpperInvariant();
-        l.Latitude = lat;
-        l.Longitude = lng;
-        l.ContactName = Trim(contactName);
-        l.ContactPhone = Trim(contactPhone);
-        l.ContactEmail = Trim(contactEmail);
-        l.OpeningHours = Trim(openingHours);
-        l.LoadingInstructions = Trim(loading);
-        l.UnloadingInstructions = Trim(unloading);
-        l.AccessInstructions = Trim(access);
-        l.AccessRestrictions = Trim(accessRestrictions);
-        l.VehicleRestrictions = Trim(vehicleRestrictions);
-        l.TrailerRestrictions = Trim(trailerRestrictions);
-        l.AlfapassRequired = alfapass;
-        l.AppointmentRequired = appointment;
-        l.CustomerId = customerId;
-        l.Notes = Trim(notes);
+        l.Street = Trim(r.Street);
+        l.HouseNumber = Trim(r.HouseNumber);
+        l.PostalCode = Trim(r.PostalCode);
+        l.City = Trim(r.City);
+        l.CountryCode = r.CountryCode is null ? null : Trim(r.CountryCode)?.ToUpperInvariant();
+        l.Latitude = r.Latitude;
+        l.Longitude = r.Longitude;
+        l.ContactName = Trim(r.ContactName);
+        l.ContactPhone = Trim(r.ContactPhone);
+        l.ContactEmail = Trim(r.ContactEmail);
+        l.ContactMobile = Trim(r.ContactMobile);
+        l.CustomerContactId = r.CustomerContactId;
+        l.ExternalReference = Trim(r.ExternalReference);
+        l.OpeningHours = Trim(r.OpeningHours);
+        l.LoadingInstructions = Trim(r.LoadingInstructions);
+        l.UnloadingInstructions = Trim(r.UnloadingInstructions);
+        l.AccessInstructions = Trim(r.AccessInstructions);
+        l.AccessRestrictions = Trim(r.AccessRestrictions);
+        l.VehicleRestrictions = Trim(r.VehicleRestrictions);
+        l.TrailerRestrictions = Trim(r.TrailerRestrictions);
+        l.AlfapassRequired = r.AlfapassRequired;
+        l.AppointmentRequired = r.AppointmentRequired;
+        l.CustomerId = r.CustomerId;
+        l.Notes = Trim(r.Notes);
+
+        l.Gate = Trim(r.Gate);
+        if (canEditSensitive)
+        {
+            // Without locations.view_sensitive the stored code is preserved untouched (mirrors
+            // the employees confidential-field pattern); on create the field simply stays null.
+            l.AccessCode = Trim(r.AccessCode);
+        }
+
+        l.ReceptionPoint = Trim(r.ReceptionPoint);
+        l.Dock = Trim(r.Dock);
+        l.RouteDescription = Trim(r.RouteDescription);
+        l.DeliveryByAppointmentOnly = r.DeliveryByAppointmentOnly;
+        l.HeightRestrictionMeters = r.HeightRestrictionMeters;
+        l.WeightRestrictionTons = r.WeightRestrictionTons;
+        l.AdrAllowed = r.AdrAllowed;
+        l.CraneRequired = r.CraneRequired;
+        l.ForkliftAvailable = r.ForkliftAvailable;
+        l.DriverInstructions = Trim(r.DriverInstructions);
+        l.InternalMemo = Trim(r.InternalMemo);
+
+        ValidateMinutes(r.DefaultLoadingMinutes, "defaultLoadingMinutes");
+        ValidateMinutes(r.DefaultUnloadingMinutes, "defaultUnloadingMinutes");
+        l.DefaultLoadingMinutes = r.DefaultLoadingMinutes;
+        l.DefaultUnloadingMinutes = r.DefaultUnloadingMinutes;
+
+        l.PreferredArrivalFrom = ParseOptionalTime(r.PreferredArrivalFrom, "preferredArrivalFrom");
+        l.PreferredArrivalTo = ParseOptionalTime(r.PreferredArrivalTo, "preferredArrivalTo");
+        l.EarliestArrival = ParseOptionalTime(r.EarliestArrival, "earliestArrival");
+        l.LatestArrival = ParseOptionalTime(r.LatestArrival, "latestArrival");
+    }
+
+    private static void ValidateMinutes(int? value, string field)
+    {
+        if (value is < 0 or > 1440)
+        {
+            throw new DomainValidationException(field, "De waarde moet tussen 0 en 1440 minuten liggen.");
+        }
+    }
+
+    private static TimeOnly? ParseOptionalTime(string? value, string field) =>
+        string.IsNullOrWhiteSpace(value) ? null : ParseTime(value, field);
+
+    private static TimeOnly ParseTime(string value, string field)
+    {
+        if (!TimeOnly.TryParseExact(value.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
+        {
+            throw new DomainValidationException(field, "Ongeldige tijd (gebruik uu:mm, bv. 07:30).");
+        }
+
+        return time;
+    }
+
+    private List<LocationOpeningInterval> BuildIntervals(
+        IReadOnlyList<LocationOpeningIntervalDto>? dtos, Location location)
+    {
+        var result = new List<LocationOpeningInterval>();
+        if (dtos is null || dtos.Count == 0)
+        {
+            return result;
+        }
+
+        for (var i = 0; i < dtos.Count; i++)
+        {
+            var dto = dtos[i];
+            if (dto.DayOfWeek is < 1 or > 7)
+            {
+                throw new DomainValidationException($"openingIntervals[{i}].dayOfWeek",
+                    "De dag moet tussen 1 (maandag) en 7 (zondag) liggen.");
+            }
+
+            var from = ParseTime(dto.FromTime, $"openingIntervals[{i}].fromTime");
+            var to = ParseTime(dto.ToTime, $"openingIntervals[{i}].toTime");
+            if (from >= to)
+            {
+                throw new DomainValidationException($"openingIntervals[{i}].toTime",
+                    "De eindtijd moet na de starttijd liggen.");
+            }
+
+            result.Add(new LocationOpeningInterval
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                LocationId = location.Id,
+                DayOfWeek = dto.DayOfWeek,
+                FromTime = from,
+                ToTime = to,
+                Note = Trim(dto.Note),
+            });
+        }
+
+        for (var i = 0; i < result.Count; i++)
+        {
+            for (var j = 0; j < i; j++)
+            {
+                if (result[i].DayOfWeek == result[j].DayOfWeek
+                    && result[i].FromTime < result[j].ToTime
+                    && result[j].FromTime < result[i].ToTime)
+                {
+                    throw new DomainValidationException($"openingIntervals[{i}].fromTime",
+                        "De tijdvakken van eenzelfde dag mogen niet overlappen.");
+                }
+            }
+        }
+
+        return result;
     }
 
     private async Task<bool> CustomerInTenantAsync(Guid? customerId, CancellationToken cancellationToken) =>
@@ -348,13 +645,110 @@ public class LocationService : ILocationService
         || await _dbContext.Customers.AnyAsync(
             c => c.Id == id && c.TenantId == _tenantContext.TenantId, cancellationToken);
 
-    private async Task<LocationDetailDto> MapToDetailAsync(Location l, CancellationToken cancellationToken)
+    /// <summary>
+    /// The linked contact person must exist in this tenant AND belong to the same customer the
+    /// location is linked to; anything else (foreign tenant, other customer, no customer link)
+    /// is one and the same Dutch validation error — existence is never leaked.
+    /// </summary>
+    private async Task EnsureCustomerContactValidAsync(
+        Guid? customerContactId, Guid? customerId, CancellationToken cancellationToken)
+    {
+        if (customerContactId is not { } contactId)
+        {
+            return;
+        }
+
+        var contactCustomerId = await _dbContext.Set<CustomerContact>()
+            .Where(c => c.Id == contactId && c.TenantId == _tenantContext.TenantId)
+            .Select(c => (Guid?)c.CustomerId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (contactCustomerId is null || customerId is null || contactCustomerId != customerId)
+        {
+            throw new DomainValidationException("customerContactId",
+                "De gekozen contactpersoon hoort niet bij de gekoppelde klant.");
+        }
+    }
+
+    private static readonly string[] DutchDayAbbreviations = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
+
+    /// <summary>Compact audit-friendly summary, e.g. "Ma 07:00–12:00, 13:00–17:00; Di 07:00–17:00".</summary>
+    private static string? OpeningHoursSummary(IReadOnlyCollection<LocationOpeningInterval> intervals)
+    {
+        if (intervals.Count == 0)
+        {
+            return null;
+        }
+
+        return string.Join("; ", intervals
+            .GroupBy(i => i.DayOfWeek)
+            .OrderBy(g => g.Key)
+            .Select(g => DutchDayAbbreviations[g.Key - 1] + " " + string.Join(", ", g
+                .OrderBy(i => i.FromTime)
+                .Select(i => $"{FormatTime(i.FromTime)}–{FormatTime(i.ToTime)}"))));
+    }
+
+    private static string? FormatTime(TimeOnly? time) =>
+        time?.ToString("HH:mm", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Purpose-built readable audit payload (never a raw entity). The sensitive access code is
+    /// masked: "•••" when set, null when empty — the raw value never reaches the audit log. The
+    /// linked contact person is resolved to a name at write time (house history pattern).
+    /// </summary>
+    private async Task<object> BuildAuditPayloadAsync(Location l, CancellationToken cancellationToken)
+    {
+        string? contactPersonName = l.CustomerContactId is { } contactId
+            ? await _dbContext.Set<CustomerContact>().AsNoTracking()
+                .Where(c => c.Id == contactId && c.TenantId == _tenantContext.TenantId)
+                .Select(c => c.DisplayName ?? c.FirstName + " " + c.LastName)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+
+        return new
+        {
+            l.Code,
+            l.Name,
+            l.Type,
+            l.IsActive,
+            l.ExternalReference,
+            l.ContactMobile,
+            CustomerContact = contactPersonName,
+            l.Gate,
+            AccessCode = string.IsNullOrEmpty(l.AccessCode) ? null : "•••",
+            l.ReceptionPoint,
+            l.Dock,
+            l.RouteDescription,
+            l.DeliveryByAppointmentOnly,
+            l.HeightRestrictionMeters,
+            l.WeightRestrictionTons,
+            l.AdrAllowed,
+            l.CraneRequired,
+            l.ForkliftAvailable,
+            l.DriverInstructions,
+            l.InternalMemo,
+            l.DefaultLoadingMinutes,
+            l.DefaultUnloadingMinutes,
+            PreferredArrivalFrom = FormatTime(l.PreferredArrivalFrom),
+            PreferredArrivalTo = FormatTime(l.PreferredArrivalTo),
+            EarliestArrival = FormatTime(l.EarliestArrival),
+            LatestArrival = FormatTime(l.LatestArrival),
+            OpeningIntervals = OpeningHoursSummary(l.OpeningIntervals),
+        };
+    }
+
+    private async Task<LocationDetailDto> MapToDetailAsync(Location l, CancellationToken cancellationToken, bool canViewSensitive = false)
     {
         string? customerName = l.CustomerId is { } cid
             ? await _dbContext.Customers.AsNoTracking()
                 .Where(c => c.Id == cid && c.TenantId == _tenantContext.TenantId)
                 .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken)
             : null;
+
+        var intervals = await _dbContext.Set<LocationOpeningInterval>().AsNoTracking()
+            .Where(i => i.TenantId == _tenantContext.TenantId && i.LocationId == l.Id)
+            .OrderBy(i => i.DayOfWeek).ThenBy(i => i.FromTime)
+            .ToListAsync(cancellationToken);
 
         return new LocationDetailDto(
             l.Id, l.Code, l.Name, l.Type,
@@ -364,7 +758,32 @@ public class LocationService : ILocationService
             l.OpeningHours, l.LoadingInstructions, l.UnloadingInstructions, l.AccessInstructions,
             l.AccessRestrictions, l.VehicleRestrictions, l.TrailerRestrictions,
             l.AlfapassRequired, l.AppointmentRequired, l.IsActive, l.CustomerId, customerName, l.Notes,
-            l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation, l.IsDefaultBillingLocation);
+            l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation, l.IsDefaultBillingLocation,
+            ExternalReference: l.ExternalReference,
+            ContactMobile: l.ContactMobile,
+            CustomerContactId: l.CustomerContactId,
+            Gate: l.Gate,
+            AccessCode: canViewSensitive ? l.AccessCode : null,
+            ReceptionPoint: l.ReceptionPoint,
+            Dock: l.Dock,
+            RouteDescription: l.RouteDescription,
+            DeliveryByAppointmentOnly: l.DeliveryByAppointmentOnly,
+            HeightRestrictionMeters: l.HeightRestrictionMeters,
+            WeightRestrictionTons: l.WeightRestrictionTons,
+            AdrAllowed: l.AdrAllowed,
+            CraneRequired: l.CraneRequired,
+            ForkliftAvailable: l.ForkliftAvailable,
+            DriverInstructions: l.DriverInstructions,
+            InternalMemo: l.InternalMemo,
+            DefaultLoadingMinutes: l.DefaultLoadingMinutes,
+            DefaultUnloadingMinutes: l.DefaultUnloadingMinutes,
+            PreferredArrivalFrom: FormatTime(l.PreferredArrivalFrom),
+            PreferredArrivalTo: FormatTime(l.PreferredArrivalTo),
+            EarliestArrival: FormatTime(l.EarliestArrival),
+            LatestArrival: FormatTime(l.LatestArrival),
+            OpeningIntervals: intervals
+                .Select(i => new LocationOpeningIntervalDto(i.DayOfWeek, FormatTime(i.FromTime)!, FormatTime(i.ToTime)!, i.Note))
+                .ToList());
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

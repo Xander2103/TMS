@@ -214,6 +214,8 @@ public class DefaultRoleSeederTests
                 PermissionCodes.OrdersOverridePrice, PermissionCodes.OrdersLockPrice,
                 // v23 (sprint): personal tasks for every employee-facing template.
                 PermissionCodes.TasksViewOwn, PermissionCodes.TasksManageOwn,
+                // v25 (master-data wave): sensitive location data for the planning side.
+                PermissionCodes.LocationsViewSensitive,
             }
                 .Concat(Version3Codes).OrderBy(c => c),
             plannerAfter.Except(plannerBefore).OrderBy(c => c));
@@ -655,6 +657,62 @@ public class DefaultRoleSeederTests
             var codes = await CodesOfAsync(db, portal.Id);
             Assert.DoesNotContain(PermissionCodes.TasksViewOwn, codes);
             Assert.DoesNotContain(PermissionCodes.PortalMessagesSend, codes);
+        }
+    }
+
+    [Fact]
+    public async Task Version24_GrantsIncompletePriceConfirmation_ToManagementAndBoekhoudingOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+
+        // Confirming a price while goods lines are unpriced is an explicitly granted decision:
+        // management and boekhouding only.
+        foreach (var template in new[] { "management", "boekhouding" })
+        {
+            var codes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == template).Id);
+            Assert.Contains(PermissionCodes.OrdersConfirmIncompletePrice, codes);
+        }
+
+        // Planning-side templates confirm complete prices at most; the incomplete-price override
+        // stays away from them (administrator holds the full catalog by design).
+        var others = roles.Where(r =>
+            r.TemplateCode is not null and not "management" and not "boekhouding" and not "administrator");
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.OrdersConfirmIncompletePrice, await CodesOfAsync(db, other.Id));
+        }
+    }
+
+    [Fact]
+    public async Task Version25_GrantsSensitiveLocationData_ToOperationalTemplatesOnly()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+
+        // Access codes brief drivers and plan site visits: planner, dispatcher and management.
+        foreach (var template in new[] { "planner", "dispatcher", "management" })
+        {
+            var codes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == template).Id);
+            Assert.Contains(PermissionCodes.LocationsViewSensitive, codes);
+        }
+
+        // Everyone else — including the klantportaal templates — keeps locations.view at most,
+        // never the sensitive site data (administrator holds the full catalog by design).
+        var others = roles.Where(r =>
+            r.TemplateCode is not null and not "planner" and not "dispatcher" and not "management"
+            and not "administrator");
+        foreach (var other in others)
+        {
+            Assert.DoesNotContain(PermissionCodes.LocationsViewSensitive, await CodesOfAsync(db, other.Id));
         }
     }
 

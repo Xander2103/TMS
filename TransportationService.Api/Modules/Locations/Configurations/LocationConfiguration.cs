@@ -27,6 +27,8 @@ public class LocationConfiguration : IEntityTypeConfiguration<Location>
         builder.Property(l => l.ContactName).HasMaxLength(150);
         builder.Property(l => l.ContactPhone).HasMaxLength(30);
         builder.Property(l => l.ContactEmail).HasMaxLength(250);
+        builder.Property(l => l.ContactMobile).HasMaxLength(30);
+        builder.Property(l => l.ExternalReference).HasMaxLength(100);
 
         builder.Property(l => l.OpeningHours).HasMaxLength(500);
         builder.Property(l => l.LoadingInstructions).HasMaxLength(2000);
@@ -36,6 +38,28 @@ public class LocationConfiguration : IEntityTypeConfiguration<Location>
         builder.Property(l => l.VehicleRestrictions).HasMaxLength(1000);
         builder.Property(l => l.TrailerRestrictions).HasMaxLength(1000);
         builder.Property(l => l.Notes).HasMaxLength(2000);
+
+        builder.Property(l => l.Gate).HasMaxLength(100);
+        builder.Property(l => l.AccessCode).HasMaxLength(200);
+        builder.Property(l => l.ReceptionPoint).HasMaxLength(200);
+        builder.Property(l => l.Dock).HasMaxLength(100);
+        builder.Property(l => l.RouteDescription).HasMaxLength(2000);
+        builder.Property(l => l.DriverInstructions).HasMaxLength(2000);
+        builder.Property(l => l.InternalMemo).HasMaxLength(2000);
+        builder.Property(l => l.HeightRestrictionMeters).HasPrecision(5, 2);
+        builder.Property(l => l.WeightRestrictionTons).HasPrecision(7, 2);
+
+        // Optional link to a contact person of the same customer; removing the contact must
+        // never break the location, hence SetNull.
+        builder.HasOne<TransportationService.Api.Modules.Partners.Entities.CustomerContact>()
+            .WithMany()
+            .HasForeignKey(l => l.CustomerContactId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasMany(l => l.OpeningIntervals)
+            .WithOne()
+            .HasForeignKey(i => i.LocationId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(l => new { l.TenantId, l.Code }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(l => l.TenantId);

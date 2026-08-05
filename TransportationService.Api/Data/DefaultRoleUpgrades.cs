@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 24;
+    public const int CurrentVersion = 25;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -487,6 +487,17 @@ public static class DefaultRoleUpgrades
             {
                 ["management"] = [PermissionCodes.OrdersConfirmIncompletePrice],
                 ["boekhouding"] = [PermissionCodes.OrdersConfirmIncompletePrice],
+            }),
+
+        new(25,
+            "Master-data wave 2026-08-05: location access codes are sensitive site data "
+            + "(locations.view_sensitive). Granted to the operational templates that brief "
+            + "drivers and plan site visits — planner, dispatcher and management.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.LocationsViewSensitive],
+                ["dispatcher"] = [PermissionCodes.LocationsViewSensitive],
+                ["management"] = [PermissionCodes.LocationsViewSensitive],
             }),
     ];
 }

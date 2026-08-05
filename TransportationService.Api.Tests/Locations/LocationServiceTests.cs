@@ -92,7 +92,7 @@ public class LocationServiceTests
         h.Db.Context.Set<Location>().Add(new Location { Id = Guid.NewGuid(), TenantId = otherTenant, Code = "X", Name = "Other depot", Type = LocationType.Depot, IsActive = true });
         await h.Db.Context.SaveChangesAsync();
 
-        var depots = await h.Sut.SearchAsync(null, LocationType.Depot, null, null, null, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var depots = await h.Sut.SearchAsync(null, LocationType.Depot, null, null, null, null, null, null, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Equal(1, depots.TotalCount);
         Assert.Equal("Depot A", depots.Items[0].Name);

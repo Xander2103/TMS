@@ -136,6 +136,7 @@ public static class PermissionCodes
     public const string LocationsCreate = "locations.create";
     public const string LocationsEdit = "locations.edit";
     public const string LocationsDelete = "locations.delete";
+    public const string LocationsViewSensitive = "locations.view_sensitive";
 
     // --- Drivers ---
     public const string DriversView = "drivers.view";
@@ -498,6 +499,7 @@ public static class PermissionCodes
         (LocationsCreate, "locations", "create", "Locaties aanmaken"),
         (LocationsEdit, "locations", "edit", "Locaties bewerken"),
         (LocationsDelete, "locations", "delete", "Locaties verwijderen"),
+        (LocationsViewSensitive, "locations", "view_sensitive", "Toegangscodes en gevoelige locatiegegevens bekijken"),
         (DriversView, "drivers", "view", "Chauffeurs bekijken"),
         (DriversCreate, "drivers", "create", "Chauffeurs aanmaken"),
         (DriversEdit, "drivers", "edit", "Chauffeurs bewerken"),
