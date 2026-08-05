@@ -291,6 +291,31 @@ export function TripExecutionPage() {
                 <div className="mt-stop-address">{[stop.address, [stop.postalCode, stop.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</div>
               )}
 
+              {/* Phase 7 location snapshot: contact, gate/dock, access code and route info for on site. */}
+              {(stop.contactName || stop.contactPhone || stop.contactMobile) && (
+                <div className="mt-stop-site">
+                  👤 {stop.contactName ?? 'Contact'}
+                  {(stop.contactPhone || stop.contactMobile) && (
+                    <>
+                      {' · '}
+                      <a href={`tel:${(stop.contactPhone ?? stop.contactMobile ?? '').replace(/\s+/g, '')}`}>
+                        {stop.contactPhone ?? stop.contactMobile}
+                      </a>
+                    </>
+                  )}
+                </div>
+              )}
+              {(stop.gate || stop.dock) && (
+                <div className="mt-stop-site">
+                  🚪 {[stop.gate ? `Poort: ${stop.gate}` : null, stop.dock ? `Kade/dok: ${stop.dock}` : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </div>
+              )}
+              {stop.accessCode && <div className="mt-stop-site">🔐 Toegangscode: {stop.accessCode}</div>}
+              {stop.routeDescription && <div className="mt-stop-site">🧭 {stop.routeDescription}</div>}
+              {stop.openingHoursSummary && <div className="mt-stop-site">🕒 {stop.openingHoursSummary}</div>}
+
               {(stop.plannedFrom || stop.plannedTo || stop.requestedFrom || stop.requestedTo ||
                 stop.confirmedFrom || stop.confirmedTo || stop.latestAllowed || stop.appointmentRequired) && (
                 <dl className="mt-stop-windows">

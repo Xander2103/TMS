@@ -102,6 +102,12 @@
   color: var(--text);
 }
 
+/* Phase 7 location snapshot: contact / gate / access code / route lines in the stop block. */
+.mt-stop-site {
+  font-size: 14px;
+  color: var(--text);
+}
+
 .mt-stop-instructions {
   font-size: 14px;
   color: var(--text-h);

@@ -117,13 +117,14 @@ describe('Customer Peppol configuration (fiscaal section)', () => {
     await userEvent.selectOptions(screen.getByLabelText(/Bezorgvoorkeur/i), 'EmailFallback')
     await userEvent.type(screen.getByLabelText(/Kopersreferentie/i), 'Kostenplaats 42')
 
-    await userEvent.click(screen.getByRole('button', { name: /Opslaan/i }))
+    await userEvent.click(screen.getAllByRole('button', { name: 'Opslaan' })[0])
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
         peppolEnabled: true,
         peppolDeliveryPreference: 'EmailFallback',
         buyerReference: 'Kostenplaats 42',
       }),
+      'save',
     )
   })
 

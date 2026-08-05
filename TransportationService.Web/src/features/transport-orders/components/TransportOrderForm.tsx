@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
 import { useSectionNavigation } from '../../../components/ui/useSectionNavigation'
@@ -14,7 +15,9 @@ import type { LegalEntityOption } from '../../legal-entities/types'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LocationSelect } from '../../locations/components/LocationSelect'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
-import type { LocationOption } from '../../locations/types'
+import { getLocation } from '../../locations/api/locationsApi'
+import type { LocationOpeningInterval, LocationOption } from '../../locations/types'
+import { openingHoursWarning } from '../utils/openingHours'
 import { useAuth } from '../../auth/authContextValue'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { UNIT_TYPE_LABELS, type PackageUnitType } from '../../packages/types'
@@ -87,6 +90,14 @@ function numberOrNullFrom(value: string): number | null {
 
 interface StopFormRow {
   key: string
+  /** Existing stop id (Phase 7): echoed on submit so the backend can carry the location snapshot over. */
+  id: string | null
+  /** Phase 7: pending "Opnieuw overnemen van locatie" — applied by the backend on save. */
+  refreshSnapshot: boolean
+  /** Snapshot display line for a master-location stop ("Magazijn Antwerpen"). */
+  snapshotName: string
+  /** Snapshot address line ("Noorderlaan 10, 2030 Antwerpen"). */
+  snapshotAddress: string
   stopType: StopInput['stopType']
   locationId: string
   locationName: string
@@ -130,6 +141,10 @@ function nextStopKey(): string {
 function emptyStop(stopType: StopInput['stopType']): StopFormRow {
   return {
     key: nextStopKey(),
+    id: null,
+    refreshSnapshot: false,
+    snapshotName: '',
+    snapshotAddress: '',
     stopType,
     locationId: '',
     locationName: '',
@@ -216,6 +231,14 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     resolve: (created: LocationOption | null) => void
   } | null>(null)
 
+  // Phase 7: structured opening hours per selected location (fetched lazily whenever a stop
+  // references one) for the immediate, non-blocking client-side hint; the backend detail's
+  // warnings stay authoritative after save.
+  const [locationHours, setLocationHours] = useState<Record<string, LocationOpeningInterval[]>>({})
+  const requestedHoursRef = useRef<Set<string>>(new Set())
+  // Pending "Opnieuw overnemen van locatie" confirmation for one stop row (keyed by row key).
+  const [refreshTarget, setRefreshTarget] = useState<string | null>(null)
+
   const [customerId, setCustomerId] = useState(order?.customerId ?? '')
   const [customerReference, setCustomerReference] = useState(order?.customerReference ?? '')
   const [orderDate, setOrderDate] = useState(order?.orderDate ?? new Date().toISOString().slice(0, 10))
@@ -251,6 +274,12 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     order && order.stops.length > 0
       ? order.stops.map((s, index) => ({
           key: nextStopKey(),
+          id: s.id,
+          refreshSnapshot: false,
+          snapshotName: s.locationId ? s.locationName : '',
+          snapshotAddress: s.locationId
+            ? [s.address, [s.postalCode, s.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+            : '',
           stopType: s.stopType,
           locationId: s.locationId ?? '',
           locationName: s.locationId ? '' : s.locationName,
@@ -287,6 +316,22 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         }))
       : [emptyStop('Loading'), emptyStop('Unloading')],
   )
+
+  // Fetch each referenced location's structured hours once (initial load + on selection).
+  useEffect(() => {
+    for (const stop of stops) {
+      const locationId = stop.locationId
+      if (!locationId || requestedHoursRef.current.has(locationId)) continue
+      requestedHoursRef.current.add(locationId)
+      getLocation(locationId)
+        .then((detail) => {
+          setLocationHours((current) => ({ ...current, [locationId]: detail.openingIntervals ?? [] }))
+        })
+        .catch(() => {
+          // Hint only — without hours there is simply no client-side warning.
+        })
+    }
+  }, [stops])
 
   const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() =>
     (order?.cargoItems ?? []).map((c) => {
@@ -894,6 +939,9 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       extraTimeRoundingStepMinutes: pricingSource === 'OneOff' ? null : numberOrNullFrom(extraTimeRoundingStepMinutes),
       extraTimeMinimumBillableMinutes: pricingSource === 'OneOff' ? null : numberOrNullFrom(extraTimeMinimumBillableMinutes),
       stops: stops.map((stop) => ({
+        // Phase 7: echo the existing stop id (snapshot carry-over) + the pending re-copy flag.
+        id: stop.id,
+        refreshSnapshot: stop.refreshSnapshot,
         stopType: stop.stopType,
         locationId: stop.locationId || null,
         locationName: stop.locationId ? null : stop.locationName.trim() || null,
@@ -1096,6 +1144,23 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
       {stops.map((stop, index) => {
         const isUnloading = stop.stopType === 'Unloading'
         const requirementBadge = timeRequirementBadge(stop)
+        // Phase 7: immediate advisory hint when a planned time falls outside the selected
+        // location's structured hours (client mirror; backend warnings are authoritative).
+        const hoursHint =
+          stop.locationId && stop.date
+            ? ([stop.fromTime, stop.toTime]
+                .filter(Boolean)
+                .map((time) =>
+                  openingHoursWarning(
+                    locationHours[stop.locationId],
+                    stop.date,
+                    time,
+                    isUnloading ? 'lostijd' : 'laadtijd',
+                    stop.snapshotName || 'deze locatie',
+                  ),
+                )
+                .find((warning) => warning !== null) ?? null)
+            : null
         return (
         <fieldset key={stop.key} className="tof-stop">
           <legend>
@@ -1148,7 +1213,9 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           </div>
           {stop.collapsed ? (
             <p className="tof-stop-summary">
-              {stop.locationId ? 'Locatie uit stamgegevens' : stop.city || stop.locationName || 'Nog geen adres'}
+              {stop.locationId
+                ? `${stop.snapshotName || 'Locatie uit stamgegevens'}${stop.snapshotAddress ? ` — ${stop.snapshotAddress}` : ''}`
+                : stop.city || stop.locationName || 'Nog geen adres'}
               {stop.date ? ` · ${stop.date}` : ''}
               {stop.fromTime || stop.toTime
                 ? ` ${stop.fromTime || '…'}${stop.toTime ? ` – ${stop.toTime}` : ''}`
@@ -1161,7 +1228,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               <LocationSelect
                 id={`st-loc-${stop.key}`}
                 value={stop.locationId}
-                onChange={(locationId) => setStop(stop.key, { locationId })}
+                onChange={(locationId) =>
+                  // A different location invalidates the shown snapshot; the backend takes a
+                  // fresh copy on save, so the pending refresh flag is also reset.
+                  setStop(stop.key, { locationId, refreshSnapshot: false, snapshotName: '', snapshotAddress: '' })
+                }
                 customerId={customerId || undefined}
                 disabled={saving}
                 placeholder="Geen — adres hieronder"
@@ -1182,6 +1253,28 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               />
             </FormField>
           </div>
+          {stop.locationId !== '' && (
+            <div className="tof-snapshot-row">
+              <Badge tone="info">Overgenomen van klantlocatie</Badge>
+              {stop.snapshotName && (
+                <span className="tof-snapshot-line">
+                  {stop.snapshotName}
+                  {stop.snapshotAddress ? ` — ${stop.snapshotAddress}` : ''}
+                </span>
+              )}
+              {stop.id && !stop.refreshSnapshot && (
+                <button
+                  type="button"
+                  className="tof-link"
+                  onClick={() => setRefreshTarget(stop.key)}
+                  disabled={saving}
+                >
+                  Opnieuw overnemen van locatie
+                </button>
+              )}
+              {stop.refreshSnapshot && <Badge tone="warning">Wordt opnieuw overgenomen bij opslaan</Badge>}
+            </div>
+          )}
           {stop.locationId === '' && (
             <div className="tof-row tof-row-4">
               <FormField label="Adres" htmlFor={`st-addr-${stop.key}`}>
@@ -1217,6 +1310,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
               <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
             </FormField>
           </div>
+          {hoursHint && (
+            <p className="tof-hours-warning" role="note">
+              ⚠ {hoursHint}
+            </p>
+          )}
           <div className="tof-row tof-row-4">
             <FormField label="Tijdseis" htmlFor={`st-timereq-${stop.key}`}>
               <select
@@ -2498,6 +2596,19 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
             quickCreate.resolve(created)
             setQuickCreate(null)
           }}
+        />
+      )}
+
+      {refreshTarget && (
+        <ConfirmDialog
+          title="Opnieuw overnemen van locatie"
+          message="Lokale aanpassingen op deze stop worden vervangen door de actuele locatiegegevens."
+          confirmLabel="Opnieuw overnemen"
+          onConfirm={() => {
+            setStop(refreshTarget, { refreshSnapshot: true })
+            setRefreshTarget(null)
+          }}
+          onCancel={() => setRefreshTarget(null)}
         />
       )}
     </form>

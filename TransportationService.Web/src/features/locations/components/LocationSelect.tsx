@@ -20,17 +20,35 @@ interface LocationSelectProps {
   onCreateNew?: (name: string) => Promise<LocationOption | null>
 }
 
-function optionLabel(option: LocationOption): string {
+/**
+ * The options endpoint also returns an address line + postal code (Phase 7) so the picker can
+ * render "Magazijn Antwerpen — Noorderlaan 10, 2030 Antwerpen". Typed locally: the shared
+ * LocationOption type is owned by another change set; the extra fields are additive on the wire.
+ */
+type LocationOptionWithAddress = LocationOption & {
+  address?: string | null
+  postalCode?: string | null
+}
+
+function optionLabel(option: LocationOptionWithAddress): string {
   const base = `${option.name} (${option.code})`
+  const addressLine = [option.address, [option.postalCode, option.city].filter(Boolean).join(' ')]
+    .filter(Boolean)
+    .join(', ')
+  const withAddress = addressLine ? `${base} — ${addressLine}` : base
   const markers = [
     option.isDefaultLoadingLocation ? 'standaard laden' : null,
     option.isDefaultUnloadingLocation ? 'standaard lossen' : null,
   ].filter(Boolean)
-  return markers.length > 0 ? `${base} — ${markers.join(' + ')}` : base
+  return markers.length > 0 ? `${withAddress} — ${markers.join(' + ')}` : withAddress
 }
 
-function toSelectOption(option: LocationOption): SearchableSelectOption {
-  return { value: option.id, label: optionLabel(option), keywords: [option.code, option.city ?? ''].join(' ') }
+function toSelectOption(option: LocationOptionWithAddress): SearchableSelectOption {
+  return {
+    value: option.id,
+    label: optionLabel(option),
+    keywords: [option.code, option.city ?? '', option.postalCode ?? '', option.address ?? ''].join(' '),
+  }
 }
 
 /**

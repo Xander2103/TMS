@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { addRecentItem } from '../../../hooks/recentItems'
 import { PageHeader } from '../../../components/layout/PageHeader'
@@ -850,14 +850,27 @@ export function TransportOrderDetailPage() {
               </thead>
               <tbody>
                 {order.stops.map((stop) => (
-                  <tr key={stop.id}>
+                  <Fragment key={stop.id}>
+                  <tr>
                     <td>{stop.sequence}</td>
                     <td>
                       <Badge tone={stop.stopType === 'Loading' ? 'info' : 'success'}>{STOP_TYPE_LABELS[stop.stopType]}</Badge>
                     </td>
                     <td title={stop.instructions ?? undefined}>
+                      {(stop.warnings?.length ?? 0) > 0 && (
+                        <span className="to-stop-warning-marker" title="Waarschuwing openingsuren" aria-label="Waarschuwing">
+                          ⚠{' '}
+                        </span>
+                      )}
                       {stop.locationName}
                       {stop.locationCode && <span className="to-loc-code"> ({stop.locationCode})</span>}
+                      {(stop.gate || stop.dock) && (
+                        <div className="to-stop-site">
+                          {[stop.gate ? `Poort: ${stop.gate}` : null, stop.dock ? `Kade/dok: ${stop.dock}` : null]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </div>
+                      )}
                     </td>
                     <td>{[stop.address, [stop.postalCode, stop.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') || '—'}</td>
                     <td>{formatWindow(stop.plannedFrom, stop.plannedTo)}</td>
@@ -886,6 +899,18 @@ export function TransportOrderDetailPage() {
                       </td>
                     )}
                   </tr>
+                  {(stop.warnings?.length ?? 0) > 0 && (
+                    <tr className="to-stop-warning-row">
+                      <td colSpan={planEditable ? 11 : 10}>
+                        {stop.warnings!.map((warning, index) => (
+                          <p key={index} className="to-stop-warning" role="note">
+                            ⚠ {warning}
+                          </p>
+                        ))}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

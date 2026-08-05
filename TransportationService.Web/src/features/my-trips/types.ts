@@ -130,6 +130,16 @@ export interface ExecutionStop {
   hasPod: boolean
   podSignedBy: string | null
   remarks: string | null
+  // --- Location snapshot on the stop (Phase 7): what the driver needs on site ---
+  contactName?: string | null
+  contactPhone?: string | null
+  contactMobile?: string | null
+  gate?: string | null
+  /** Driver-facing by design: the assigned driver needs the code at the gate. */
+  accessCode?: string | null
+  dock?: string | null
+  routeDescription?: string | null
+  openingHoursSummary?: string | null
 }
 
 export interface TripExecution {

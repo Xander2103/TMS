@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
-import type { CustomerContact } from '../types'
+import type { CustomerContact, CustomerContactInput } from '../types'
 
 // Mutable permission set so each test controls what useAuth() reports.
 const auth = vi.hoisted(() => ({ permissions: ['contact_departments.view', 'contact_departments.manage'] }))
@@ -49,7 +49,7 @@ function makeContact(overrides: Partial<CustomerContact>): CustomerContact {
 
 function renderPanel(
   contacts: CustomerContact[],
-  handlers: { onUpdate?: ReturnType<typeof vi.fn> } = {},
+  handlers: { onUpdate?: (contactId: string, input: CustomerContactInput) => Promise<boolean> } = {},
 ) {
   return render(
     <CustomerContactsPanel
@@ -96,7 +96,7 @@ describe('CustomerContactsPanel', () => {
     expect(screen.getByText('Afdeling')).toBeInTheDocument()
     expect(screen.getByLabelText('Voorkeurstaal')).toBeInTheDocument()
     expect(screen.getByLabelText('Actief')).toBeInTheDocument()
-    expect(screen.getByLabelText('Type')).toBeInTheDocument()
+    expect(screen.getByLabelText('Type', { selector: 'select#ct-type' })).toBeInTheDocument()
   })
 
   it('shows the type column with a per-type Primair badge', () => {

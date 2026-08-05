@@ -80,6 +80,31 @@
   margin-bottom: 8px;
 }
 
+/* Phase 7: "Overgenomen van klantlocatie" chip row + pending-refresh badge on a stop. */
+.tof-snapshot-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  margin: -4px 0 8px;
+}
+
+.tof-snapshot-line {
+  color: var(--muted, #64748b);
+}
+
+/* Phase 7: advisory opening-hours hint (never blocking). */
+.tof-hours-warning {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
 .tof-stops-header {
   display: flex;
   align-items: center;
