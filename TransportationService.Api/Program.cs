@@ -638,6 +638,13 @@ if (app.Environment.IsDevelopment())
     var passwordHasher = scope.ServiceProvider
         .GetRequiredService<TransportationService.Api.Modules.Authentication.Services.IPasswordHasher>();
     await DevAdminSeeder.EnsurePasswordAsync(dbContext, passwordHasher, app.Logger);
+
+    // Fictional demo master data, only on explicit request:
+    //   dotnet run --project TransportationService.Api -- --seed-demo
+    if (args.Contains(DevDemoDataSeeder.CommandLineFlag))
+    {
+        await DevDemoDataSeeder.SeedAsync(dbContext, app.Logger);
+    }
 }
 
 // Security pipeline order (documented deliberately):

@@ -113,7 +113,8 @@ public class CustomersController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
-            return BadRequest(new { message = "Naam is verplicht." });
+            // Field-scoped ProblemDetails via the shared filter, so the form marks the exact field.
+            throw new Common.DomainValidationException("name", "Naam is verplicht.");
         }
 
         var created = await _customerService.CreateAsync(request, cancellationToken, await HasFiscalAccessAsync(cancellationToken));
@@ -126,7 +127,8 @@ public class CustomersController : ControllerBase
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
-            return BadRequest(new { message = "Naam is verplicht." });
+            // Field-scoped ProblemDetails via the shared filter, so the form marks the exact field.
+            throw new Common.DomainValidationException("name", "Naam is verplicht.");
         }
 
         var updated = await _customerService.UpdateAsync(id, request, cancellationToken, await HasFiscalAccessAsync(cancellationToken));
