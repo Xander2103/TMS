@@ -7,31 +7,71 @@ import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { useToast } from '../../../components/ui/toastContext'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useAuth } from '../../auth/authContextValue'
-import { searchLocations } from '../api/locationsApi'
+import { CountryCombobox } from '../../reference/components/CountryCombobox'
+import { duplicateLocation, searchLocations, setLocationActive } from '../api/locationsApi'
 import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationListItem, type LocationType } from '../types'
 import './locations.css'
 
 export function LocationsPage() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
+  const { showSuccess, showError } = useToast()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [typeFilter, setTypeFilter] = useState<LocationType | ''>('')
+  const [countryFilter, setCountryFilter] = useState<string | null>(null)
+  const [postalCodeFilter, setPostalCodeFilter] = useState('')
   const [page, setPage] = useState(1)
+  const [busyRowId, setBusyRowId] = useState<string | null>(null)
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<LocationListItem>(
-    (args) => searchLocations({ ...args, type: typeFilter || undefined }),
+    (args) =>
+      searchLocations({
+        ...args,
+        type: typeFilter || undefined,
+        country: countryFilter ?? undefined,
+        postalCode: postalCodeFilter || undefined,
+      }),
     { search, isActive: activeFilter, page, errorMessage: 'Locaties konden niet worden geladen.' },
   )
 
-  // The type filter isn't part of usePagedQuery's own dependency key, so trigger a reload
-  // explicitly whenever it changes.
+  // Type/country/postcode aren't part of usePagedQuery's own dependency key, so trigger a
+  // reload explicitly whenever one of them changes.
   useEffect(() => {
     reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeFilter])
+  }, [typeFilter, countryFilter, postalCodeFilter])
+
+  const canCreate = hasPermission('locations.create')
+  const canEdit = hasPermission('locations.edit')
+
+  async function handleDuplicate(row: LocationListItem) {
+    setBusyRowId(row.id)
+    try {
+      const copy = await duplicateLocation(row.id)
+      showSuccess('Locatie gedupliceerd.')
+      navigate(`/locations/${copy.id}`)
+    } catch {
+      showError('Locatie kon niet worden gedupliceerd.')
+      setBusyRowId(null)
+    }
+  }
+
+  async function handleToggleActive(row: LocationListItem) {
+    setBusyRowId(row.id)
+    try {
+      await setLocationActive(row.id, !row.isActive)
+      showSuccess(row.isActive ? 'Locatie gedeactiveerd.' : 'Locatie geactiveerd.')
+      reload()
+    } catch {
+      showError('Status kon niet worden gewijzigd.')
+    } finally {
+      setBusyRowId(null)
+    }
+  }
 
   const columns: Column<LocationListItem>[] = [
     { key: 'code', header: 'Code', width: '120px', render: (row) => <code>{row.code}</code> },
@@ -47,12 +87,34 @@ export function LocationsPage() {
     },
   ]
 
+  if (canCreate || canEdit) {
+    columns.push({
+      key: 'actions',
+      header: 'Acties',
+      align: 'right',
+      render: (row) => (
+        <div className="locations-row-actions" onClick={(event) => event.stopPropagation()}>
+          {canCreate && (
+            <Button variant="secondary" onClick={() => void handleDuplicate(row)} disabled={busyRowId === row.id}>
+              Dupliceren
+            </Button>
+          )}
+          {canEdit && (
+            <Button variant="secondary" onClick={() => void handleToggleActive(row)} disabled={busyRowId === row.id}>
+              {row.isActive ? 'Deactiveren' : 'Activeren'}
+            </Button>
+          )}
+        </div>
+      ),
+    })
+  }
+
   return (
     <div>
       <Breadcrumbs items={[{ label: 'Locaties' }]} />
       <PageHeader
         title="Locaties"
-        action={hasPermission('locations.create') ? <Button onClick={() => navigate('/locations/new')}>Nieuwe locatie</Button> : undefined}
+        action={canCreate ? <Button onClick={() => navigate('/locations/new')}>Nieuwe locatie</Button> : undefined}
       />
       <div className="locations-filters">
         <FilterBar
@@ -75,6 +137,7 @@ export function LocationsPage() {
             setPage(1)
           }}
           className="locations-type-filter"
+          aria-label="Type"
         >
           <option value="">Alle types</option>
           {LOCATION_TYPES.map((t) => (
@@ -83,6 +146,27 @@ export function LocationsPage() {
             </option>
           ))}
         </select>
+        <div className="locations-country-filter">
+          <CountryCombobox
+            id="locations-country-filter"
+            value={countryFilter}
+            onChange={(code) => {
+              setCountryFilter(code)
+              setPage(1)
+            }}
+            placeholder="Land"
+          />
+        </div>
+        <input
+          className="locations-postal-filter"
+          value={postalCodeFilter}
+          onChange={(e) => {
+            setPostalCodeFilter(e.target.value)
+            setPage(1)
+          }}
+          placeholder="Postcode"
+          aria-label="Postcode"
+        />
       </div>
       <DataTable
         columns={columns}

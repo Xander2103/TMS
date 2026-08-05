@@ -6,7 +6,7 @@ import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { createLocation } from '../api/locationsApi'
-import type { LocationOption } from '../types'
+import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationOption, type LocationType } from '../types'
 
 interface LocationQuickCreateDialogProps {
   customerId: string
@@ -22,6 +22,7 @@ interface LocationQuickCreateDialogProps {
 export function LocationQuickCreateDialog({ customerId, initialName, onClose }: LocationQuickCreateDialogProps) {
   const [code, setCode] = useState('')
   const [name, setName] = useState(initialName ?? '')
+  const [type, setType] = useState<LocationType>('CustomerLocation')
   const [street, setStreet] = useState('')
   const [houseNumber, setHouseNumber] = useState('')
   const [postalCode, setPostalCode] = useState('')
@@ -34,11 +35,11 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    // Code is optional since the master-data wave: blank codes are generated server-side.
     const nextClientErrors: { code?: string; name?: string } = {}
-    if (!code.trim()) nextClientErrors.code = 'Code is verplicht.'
     if (!name.trim()) nextClientErrors.name = 'Naam is verplicht.'
     setClientErrors(nextClientErrors)
-    if (nextClientErrors.code || nextClientErrors.name) return
+    if (nextClientErrors.name) return
 
     setSaving(true)
     setError(null)
@@ -47,7 +48,7 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
       const created = await createLocation({
         code: code.trim(),
         name: name.trim(),
-        type: 'CustomerLocation',
+        type,
         street: street.trim() || null,
         houseNumber: houseNumber.trim() || null,
         postalCode: postalCode.trim() || null,
@@ -57,8 +58,12 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
         longitude: null,
         contactName: null,
         contactPhone: null,
+        contactMobile: null,
         contactEmail: null,
+        customerContactId: null,
+        externalReference: null,
         openingHours: null,
+        openingIntervals: [],
         loadingInstructions: null,
         unloadingInstructions: null,
         accessInstructions: null,
@@ -67,6 +72,24 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
         trailerRestrictions: null,
         alfapassRequired: false,
         appointmentRequired: false,
+        gate: null,
+        receptionPoint: null,
+        dock: null,
+        routeDescription: null,
+        deliveryByAppointmentOnly: false,
+        heightRestrictionMeters: null,
+        weightRestrictionTons: null,
+        adrAllowed: null,
+        craneRequired: false,
+        forkliftAvailable: false,
+        driverInstructions: null,
+        internalMemo: null,
+        defaultLoadingMinutes: null,
+        defaultUnloadingMinutes: null,
+        preferredArrivalFrom: null,
+        preferredArrivalTo: null,
+        earliestArrival: null,
+        latestArrival: null,
         isActive: true,
         customerId,
         notes: null,
@@ -110,11 +133,25 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
     >
       <form id="location-quick-create" onSubmit={handleSubmit} noValidate>
         <ValidationSummary message={error} fieldErrors={fieldErrors} fieldLabels={{ countryCode: 'Land', code: 'Code' }} />
-        <FormField label="Code" htmlFor="qc-code" required error={clientErrors.code ?? getFieldError(fieldErrors, 'code')}>
+        <FormField
+          label="Code"
+          htmlFor="qc-code"
+          hint="Leeg laten voor automatische code."
+          error={clientErrors.code ?? getFieldError(fieldErrors, 'code')}
+        >
           <input id="qc-code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={40} disabled={saving} />
         </FormField>
         <FormField label="Naam" htmlFor="qc-name" required error={clientErrors.name}>
           <input id="qc-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} disabled={saving} />
+        </FormField>
+        <FormField label="Type" htmlFor="qc-type">
+          <select id="qc-type" value={type} onChange={(e) => setType(e.target.value as LocationType)} disabled={saving}>
+            {LOCATION_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {LOCATION_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
         </FormField>
         <FormField label="Straat" htmlFor="qc-street">
           <input id="qc-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} disabled={saving} />

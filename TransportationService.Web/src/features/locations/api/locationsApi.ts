@@ -7,6 +7,8 @@ export interface SearchLocationsParams {
   type?: LocationType
   isActive?: boolean
   customerId?: string
+  country?: string
+  postalCode?: string
   sort?: string
   dir?: 'asc' | 'desc'
   page: number
@@ -19,6 +21,8 @@ export function searchLocations(params: SearchLocationsParams): Promise<PagedRes
   if (params.type) query.set('type', params.type)
   if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
   if (params.customerId) query.set('customerId', params.customerId)
+  if (params.country) query.set('country', params.country)
+  if (params.postalCode) query.set('postalCode', params.postalCode)
   if (params.sort) query.set('sort', params.sort)
   if (params.dir) query.set('dir', params.dir)
   query.set('page', String(params.page))
@@ -44,6 +48,11 @@ export function createLocation(input: LocationInput): Promise<LocationDetail> {
 
 export function updateLocation(id: string, input: LocationInput): Promise<LocationDetail> {
   return apiClient.putJson<LocationDetail, LocationInput>(`/api/locations/${id}`, input)
+}
+
+/** Server-side copy of all master data + opening intervals: new code, "(kopie)" name, cleared defaults. */
+export function duplicateLocation(id: string): Promise<LocationDetail> {
+  return apiClient.postJson<LocationDetail, Record<string, never>>(`/api/locations/${id}/duplicate`, {})
 }
 
 export function setLocationActive(id: string, isActive: boolean): Promise<void> {

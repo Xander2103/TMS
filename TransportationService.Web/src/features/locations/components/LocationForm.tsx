@@ -1,0 +1,433 @@
+import { useEffect, useState, type FormEvent } from 'react'
+import { FormField } from '../../../components/ui/FormField'
+import { FormSection } from '../../../components/ui/FormSection'
+import { Button } from '../../../components/ui/Button'
+import { useAuth } from '../../auth/authContextValue'
+import { searchCustomers, getCustomer } from '../../customers/api/customersApi'
+import type { CustomerContact, CustomerListItem } from '../../customers/types'
+import { CountryCombobox } from '../../reference/components/CountryCombobox'
+import { OpeningHoursEditor } from './OpeningHoursEditor'
+import { openingIntervalsValid } from '../openingHours'
+import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationInput, type LocationType } from '../types'
+import '../pages/location-form.css'
+
+interface LocationFormProps {
+  mode: 'create' | 'edit'
+  /** Read once at mount (pages early-return while loading, so this is stable). */
+  initial: LocationInput
+  submitting: boolean
+  error?: string | null
+  onSubmit: (value: LocationInput) => void
+  onCancel: () => void
+  submitLabel?: string
+}
+
+function contactDisplayName(contact: CustomerContact): string {
+  return contact.displayName || [contact.firstName, contact.lastName].filter(Boolean).join(' ')
+}
+
+/**
+ * Shared create/edit location form (full create/edit parity). Only "Naam" blocks submit;
+ * everything else is optional. The access code section is rendered — and included in the
+ * payload — only for users holding locations.view_sensitive: the backend preserves the
+ * stored code when the field is omitted.
+ */
+export function LocationForm({ mode, initial, submitting, error, onSubmit, onCancel, submitLabel }: LocationFormProps) {
+  const { hasPermission } = useAuth()
+  const canViewSensitive = hasPermission('locations.view_sensitive')
+
+  const [form, setForm] = useState<LocationInput>(initial)
+  const [openingValid, setOpeningValid] = useState(() => openingIntervalsValid(initial.openingIntervals))
+  const [localError, setLocalError] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
+
+  const [customers, setCustomers] = useState<CustomerListItem[]>([])
+  // Contacts are kept together with the customer they were fetched for, so switching
+  // customers "clears" the list by derivation instead of a synchronous setState in an effect.
+  const [contactsFor, setContactsFor] = useState<{ customerId: string; contacts: CustomerContact[] } | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
+      .then((result) => {
+        if (mounted) setCustomers(result.items)
+      })
+      .catch(() => {
+        /* customer link stays usable via the already-selected value */
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  // The on-site contact can be linked to one of the customer's contact persons; the list
+  // follows the selected customer.
+  const customerId = form.customerId
+  useEffect(() => {
+    if (!customerId) return
+    let mounted = true
+    getCustomer(customerId)
+      .then((customer) => {
+        if (mounted) setContactsFor({ customerId, contacts: customer.contacts.filter((c) => c.isActive) })
+      })
+      .catch(() => {
+        if (mounted) setContactsFor({ customerId, contacts: [] })
+      })
+    return () => {
+      mounted = false
+    }
+  }, [customerId])
+
+  const contacts = customerId && contactsFor?.customerId === customerId ? contactsFor.contacts : []
+
+  function set<K extends keyof LocationInput>(key: K, value: LocationInput[K]) {
+    setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  function selectCustomer(id: string | null) {
+    // Switching customers invalidates a linked contact of the previous customer.
+    setForm((f) => ({ ...f, customerId: id, customerContactId: id === f.customerId ? f.customerContactId : null }))
+  }
+
+  function selectCustomerContact(contactId: string) {
+    if (!contactId) {
+      set('customerContactId', null)
+      return
+    }
+    const contact = contacts.find((c) => c.id === contactId)
+    if (!contact) return
+    // Prefill the on-site snapshot fields from the linked contact; they stay editable.
+    setForm((f) => ({
+      ...f,
+      customerContactId: contact.id,
+      contactName: contactDisplayName(contact) || f.contactName,
+      contactPhone: contact.phoneNumber,
+      contactMobile: contact.mobilePhone,
+      contactEmail: contact.email,
+    }))
+  }
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault()
+    setLocalError(null)
+    if (!form.name.trim()) {
+      setNameError('Naam is verplicht.')
+      setLocalError('Naam is verplicht.')
+      return
+    }
+    setNameError(null)
+    if (mode === 'edit' && !form.code.trim()) {
+      // On update the backend requires the (already assigned) code; only create may leave it blank.
+      setLocalError('Code is verplicht.')
+      return
+    }
+    if (!openingValid) {
+      setLocalError('Corrigeer eerst de openingsuren.')
+      return
+    }
+    const payload: LocationInput = { ...form }
+    if (!canViewSensitive) {
+      // Never echo a value the user could not see: the backend keeps the stored access code.
+      delete payload.accessCode
+    }
+    onSubmit(payload)
+  }
+
+  const shownError = error ?? localError
+
+  return (
+    <form className="location-form" onSubmit={handleSubmit} noValidate>
+      {shownError && (
+        <div className="location-form-error" role="alert">
+          {shownError}
+        </div>
+      )}
+
+      <FormSection title="Identificatie">
+        <FormField label="Naam" htmlFor="loc-name" required error={nameError ?? undefined}>
+          <input id="loc-name" value={form.name} onChange={(e) => set('name', e.target.value)} disabled={submitting} maxLength={200} />
+        </FormField>
+        <FormField
+          label="Code"
+          htmlFor="loc-code"
+          hint={mode === 'create' ? 'Leeg laten voor automatische code.' : undefined}
+          required={mode === 'edit'}
+        >
+          <input id="loc-code" value={form.code} onChange={(e) => set('code', e.target.value)} disabled={submitting} maxLength={40} />
+        </FormField>
+        <FormField label="Type" htmlFor="loc-type">
+          <select id="loc-type" value={form.type} onChange={(e) => set('type', e.target.value as LocationType)} disabled={submitting}>
+            {LOCATION_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {LOCATION_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Externe referentie" htmlFor="loc-ext-ref" hint="Referentie van de klant of partner voor deze locatie.">
+          <input id="loc-ext-ref" value={form.externalReference ?? ''} onChange={(e) => set('externalReference', e.target.value || null)} disabled={submitting} maxLength={100} />
+        </FormField>
+        <FormField label="Klant" htmlFor="loc-customer">
+          <select id="loc-customer" value={form.customerId ?? ''} onChange={(e) => selectCustomer(e.target.value || null)} disabled={submitting}>
+            <option value="">— Geen —</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        {mode === 'edit' && (
+          <div className="location-form-checkboxes">
+            <label className="location-checkbox">
+              <input type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} disabled={submitting} />
+              <span>Actief</span>
+            </label>
+          </div>
+        )}
+      </FormSection>
+
+      <FormSection title="Adres">
+        <FormField label="Straat" htmlFor="loc-street">
+          <input id="loc-street" value={form.street ?? ''} onChange={(e) => set('street', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Nummer" htmlFor="loc-house">
+          <input id="loc-house" value={form.houseNumber ?? ''} onChange={(e) => set('houseNumber', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Postcode" htmlFor="loc-postal">
+          <input id="loc-postal" value={form.postalCode ?? ''} onChange={(e) => set('postalCode', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Gemeente" htmlFor="loc-city">
+          <input id="loc-city" value={form.city ?? ''} onChange={(e) => set('city', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Land" htmlFor="loc-country">
+          <CountryCombobox id="loc-country" value={form.countryCode} onChange={(code) => set('countryCode', code)} disabled={submitting} />
+        </FormField>
+        <FormField label="Breedtegraad" htmlFor="loc-lat">
+          <input
+            id="loc-lat"
+            type="number"
+            step="0.000001"
+            value={form.latitude ?? ''}
+            onChange={(e) => set('latitude', e.target.value === '' ? null : Number(e.target.value))}
+            disabled={submitting}
+          />
+        </FormField>
+        <FormField label="Lengtegraad" htmlFor="loc-lng">
+          <input
+            id="loc-lng"
+            type="number"
+            step="0.000001"
+            value={form.longitude ?? ''}
+            onChange={(e) => set('longitude', e.target.value === '' ? null : Number(e.target.value))}
+            disabled={submitting}
+          />
+        </FormField>
+      </FormSection>
+
+      <FormSection title="Contactpersoon ter plaatse">
+        {form.customerId && (
+          <FormField
+            label="Contactpersoon van klant"
+            htmlFor="loc-customer-contact"
+            hint="Kies om onderstaande velden in te vullen; ze blijven aanpasbaar."
+            className="form-span-all"
+          >
+            <select id="loc-customer-contact" value={form.customerContactId ?? ''} onChange={(e) => selectCustomerContact(e.target.value)} disabled={submitting}>
+              <option value="">— Geen koppeling —</option>
+              {contacts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {contactDisplayName(c)}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        )}
+        <FormField label="Naam contactpersoon" htmlFor="loc-contact-name">
+          <input id="loc-contact-name" value={form.contactName ?? ''} onChange={(e) => set('contactName', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Telefoon" htmlFor="loc-contact-phone">
+          <input id="loc-contact-phone" value={form.contactPhone ?? ''} onChange={(e) => set('contactPhone', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Gsm" htmlFor="loc-contact-mobile">
+          <input id="loc-contact-mobile" value={form.contactMobile ?? ''} onChange={(e) => set('contactMobile', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="E-mail" htmlFor="loc-contact-email">
+          <input id="loc-contact-email" value={form.contactEmail ?? ''} onChange={(e) => set('contactEmail', e.target.value || null)} disabled={submitting} />
+        </FormField>
+      </FormSection>
+
+      <FormSection title="Openingsuren" columns={1}>
+        <div className="form-span-all">
+          <OpeningHoursEditor
+            value={form.openingIntervals}
+            onChange={(intervals, isValid) => {
+              set('openingIntervals', intervals)
+              setOpeningValid(isValid)
+            }}
+            disabled={submitting}
+          />
+        </div>
+        <FormField label="Openingsuren (vrije tekst, fallback)" htmlFor="loc-hours" hint="Wordt getoond wanneer er geen tijdvakken zijn ingesteld.">
+          <input id="loc-hours" value={form.openingHours ?? ''} onChange={(e) => set('openingHours', e.target.value || null)} disabled={submitting} placeholder="Bv. ma-vr 08:00-18:00" maxLength={500} />
+        </FormField>
+      </FormSection>
+
+      <FormSection title="Toegang & operationele informatie">
+        <FormField label="Poort" htmlFor="loc-gate">
+          <input id="loc-gate" value={form.gate ?? ''} onChange={(e) => set('gate', e.target.value || null)} disabled={submitting} maxLength={50} />
+        </FormField>
+        {canViewSensitive && (
+          <FormField label="Toegangscode" htmlFor="loc-access-code" hint="Vertrouwelijk — alleen zichtbaar met de juiste rechten.">
+            <input id="loc-access-code" value={form.accessCode ?? ''} onChange={(e) => set('accessCode', e.target.value || null)} disabled={submitting} maxLength={100} />
+          </FormField>
+        )}
+        <FormField label="Aanmeldpunt" htmlFor="loc-reception">
+          <input id="loc-reception" value={form.receptionPoint ?? ''} onChange={(e) => set('receptionPoint', e.target.value || null)} disabled={submitting} maxLength={200} />
+        </FormField>
+        <FormField label="Kade/dok" htmlFor="loc-dock">
+          <input id="loc-dock" value={form.dock ?? ''} onChange={(e) => set('dock', e.target.value || null)} disabled={submitting} maxLength={50} />
+        </FormField>
+        <FormField label="Routebeschrijving" htmlFor="loc-route" className="form-span-all">
+          <textarea id="loc-route" rows={2} value={form.routeDescription ?? ''} onChange={(e) => set('routeDescription', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <div className="location-form-checkboxes form-span-all">
+          <label className="location-checkbox">
+            <input type="checkbox" checked={form.appointmentRequired} onChange={(e) => set('appointmentRequired', e.target.checked)} disabled={submitting} />
+            <span>Afspraak verplicht</span>
+          </label>
+          <label className="location-checkbox">
+            <input type="checkbox" checked={form.deliveryByAppointmentOnly} onChange={(e) => set('deliveryByAppointmentOnly', e.target.checked)} disabled={submitting} />
+            <span>Leveren enkel op afspraak</span>
+          </label>
+          <label className="location-checkbox">
+            <input type="checkbox" checked={form.alfapassRequired} onChange={(e) => set('alfapassRequired', e.target.checked)} disabled={submitting} />
+            <span>Alfapass vereist</span>
+          </label>
+        </div>
+        <FormField label="Hoogtebeperking (m)" htmlFor="loc-height">
+          <input
+            id="loc-height"
+            type="number"
+            step="0.1"
+            min="0"
+            value={form.heightRestrictionMeters ?? ''}
+            onChange={(e) => set('heightRestrictionMeters', e.target.value === '' ? null : Number(e.target.value))}
+            disabled={submitting}
+          />
+        </FormField>
+        <FormField label="Gewichtsbeperking (t)" htmlFor="loc-weight">
+          <input
+            id="loc-weight"
+            type="number"
+            step="0.1"
+            min="0"
+            value={form.weightRestrictionTons ?? ''}
+            onChange={(e) => set('weightRestrictionTons', e.target.value === '' ? null : Number(e.target.value))}
+            disabled={submitting}
+          />
+        </FormField>
+        <FormField label="ADR toegelaten" htmlFor="loc-adr" hint="Onbekend = niet ingevuld.">
+          <select
+            id="loc-adr"
+            value={form.adrAllowed === null ? '' : String(form.adrAllowed)}
+            onChange={(e) => set('adrAllowed', e.target.value === '' ? null : e.target.value === 'true')}
+            disabled={submitting}
+          >
+            <option value="">Onbekend</option>
+            <option value="true">Ja</option>
+            <option value="false">Nee</option>
+          </select>
+        </FormField>
+        <FormField label="Voertuigbeperkingen" htmlFor="loc-vehicle-restr">
+          <input id="loc-vehicle-restr" value={form.vehicleRestrictions ?? ''} onChange={(e) => set('vehicleRestrictions', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Opleggerrestricties" htmlFor="loc-trailer-restr">
+          <input id="loc-trailer-restr" value={form.trailerRestrictions ?? ''} onChange={(e) => set('trailerRestrictions', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Toegangsrestricties" htmlFor="loc-access-restr">
+          <input id="loc-access-restr" value={form.accessRestrictions ?? ''} onChange={(e) => set('accessRestrictions', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <div className="location-form-checkboxes form-span-all">
+          <label className="location-checkbox">
+            <input type="checkbox" checked={form.craneRequired} onChange={(e) => set('craneRequired', e.target.checked)} disabled={submitting} />
+            <span>Kraan vereist</span>
+          </label>
+          <label className="location-checkbox">
+            <input type="checkbox" checked={form.forkliftAvailable} onChange={(e) => set('forkliftAvailable', e.target.checked)} disabled={submitting} />
+            <span>Heftruck beschikbaar</span>
+          </label>
+        </div>
+      </FormSection>
+
+      <FormSection title="Instructies">
+        <FormField label="Laadinstructies" htmlFor="loc-loading" className="form-span-all">
+          <textarea id="loc-loading" rows={2} value={form.loadingInstructions ?? ''} onChange={(e) => set('loadingInstructions', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Losinstructies" htmlFor="loc-unloading" className="form-span-all">
+          <textarea id="loc-unloading" rows={2} value={form.unloadingInstructions ?? ''} onChange={(e) => set('unloadingInstructions', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Toegangsinstructies" htmlFor="loc-access" className="form-span-all">
+          <textarea id="loc-access" rows={2} value={form.accessInstructions ?? ''} onChange={(e) => set('accessInstructions', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Chauffeursinstructies" htmlFor="loc-driver" className="form-span-all">
+          <textarea id="loc-driver" rows={2} value={form.driverInstructions ?? ''} onChange={(e) => set('driverInstructions', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Interne memo" htmlFor="loc-memo" hint="Alleen zichtbaar voor interne gebruikers." className="form-span-all">
+          <textarea id="loc-memo" rows={2} value={form.internalMemo ?? ''} onChange={(e) => set('internalMemo', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Notities" htmlFor="loc-notes" className="form-span-all">
+          <textarea id="loc-notes" rows={3} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={submitting} />
+        </FormField>
+      </FormSection>
+
+      <FormSection title="Planningsstandaarden">
+        <FormField label="Standaard laadtijd (min)" htmlFor="loc-load-min">
+          <input
+            id="loc-load-min"
+            type="number"
+            min="0"
+            max="1440"
+            step="1"
+            value={form.defaultLoadingMinutes ?? ''}
+            onChange={(e) => set('defaultLoadingMinutes', e.target.value === '' ? null : Number(e.target.value))}
+            disabled={submitting}
+          />
+        </FormField>
+        <FormField label="Standaard lostijd (min)" htmlFor="loc-unload-min">
+          <input
+            id="loc-unload-min"
+            type="number"
+            min="0"
+            max="1440"
+            step="1"
+            value={form.defaultUnloadingMinutes ?? ''}
+            onChange={(e) => set('defaultUnloadingMinutes', e.target.value === '' ? null : Number(e.target.value))}
+            disabled={submitting}
+          />
+        </FormField>
+        <FormField label="Voorkeursvenster van" htmlFor="loc-pref-from">
+          <input id="loc-pref-from" type="time" value={form.preferredArrivalFrom ?? ''} onChange={(e) => set('preferredArrivalFrom', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Voorkeursvenster tot" htmlFor="loc-pref-to">
+          <input id="loc-pref-to" type="time" value={form.preferredArrivalTo ?? ''} onChange={(e) => set('preferredArrivalTo', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Vroegste aankomst" htmlFor="loc-earliest">
+          <input id="loc-earliest" type="time" value={form.earliestArrival ?? ''} onChange={(e) => set('earliestArrival', e.target.value || null)} disabled={submitting} />
+        </FormField>
+        <FormField label="Laatste aankomst" htmlFor="loc-latest">
+          <input id="loc-latest" type="time" value={form.latestArrival ?? ''} onChange={(e) => set('latestArrival', e.target.value || null)} disabled={submitting} />
+        </FormField>
+      </FormSection>
+
+      <div className="location-form-actions">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
+          Annuleren
+        </Button>
+        <Button type="submit" disabled={submitting}>
+          {submitting ? 'Bezig…' : submitLabel ?? (mode === 'create' ? 'Locatie aanmaken' : 'Opslaan')}
+        </Button>
+      </div>
+    </form>
+  )
+}

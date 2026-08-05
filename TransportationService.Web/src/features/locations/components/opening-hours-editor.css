@@ -1,0 +1,120 @@
+.ohe {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ohe-toolbar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ohe-grid {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ohe-day-row {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  align-items: flex-start;
+}
+
+.ohe-day-row + .ohe-day-row {
+  border-top: 1px solid var(--border);
+}
+
+.ohe-day-label {
+  width: 32px;
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 14px;
+  padding-top: 6px;
+}
+
+.ohe-day-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ohe-closed {
+  font-size: 14px;
+  color: var(--text-muted, #6b7280);
+  padding-top: 6px;
+}
+
+.ohe-interval-fields {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ohe-interval-fields input[type='time'] {
+  width: auto;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.ohe-note {
+  flex: 1;
+  min-width: 140px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.ohe-remove {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted, #6b7280);
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.ohe-remove:hover:not(:disabled) {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.ohe-add {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--accent, #2563eb);
+  font: inherit;
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+.ohe-add:disabled,
+.ohe-remove:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ohe-error {
+  margin: 0;
+  font-size: 13px;
+  color: #dc2626;
+}

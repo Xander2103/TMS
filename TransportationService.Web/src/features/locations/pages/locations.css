@@ -14,3 +14,23 @@
   border: 1px solid var(--border);
   border-radius: 6px;
 }
+
+.locations-country-filter {
+  min-width: 180px;
+}
+
+.locations-postal-filter {
+  width: 110px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.locations-row-actions {
+  display: inline-flex;
+  gap: 6px;
+}
