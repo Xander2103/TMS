@@ -19,16 +19,18 @@ public class CustomersController : ControllerBase
     private readonly IPermissionAuthorizationService _authorization;
     private readonly ICompanyRegistryProvider _registryProvider;
     private readonly IPeppolCustomerVerificationService _peppolVerification;
+    private readonly ICustomerHistoryService _historyService;
 
     public CustomersController(ICustomerService customerService, ICurrentUserContext currentUser,
         IPermissionAuthorizationService authorization, ICompanyRegistryProvider registryProvider,
-        IPeppolCustomerVerificationService peppolVerification)
+        IPeppolCustomerVerificationService peppolVerification, ICustomerHistoryService historyService)
     {
         _customerService = customerService;
         _currentUser = currentUser;
         _authorization = authorization;
         _registryProvider = registryProvider;
         _peppolVerification = peppolVerification;
+        _historyService = historyService;
     }
 
     /// <summary>Fiscal/Peppol/bank mutations are gated on customers.manage_fiscal.</summary>
@@ -89,6 +91,20 @@ public class CustomersController : ControllerBase
     {
         var customer = await _customerService.GetByIdAsync(id, cancellationToken);
         return customer is null ? NotFound() : Ok(customer);
+    }
+
+    /// <summary>Readable change history (old/new values, actor, Dutch labels) for the Historiek tab.</summary>
+    [HttpGet("{id:guid}/history")]
+    [RequirePermission(PermissionCodes.CustomersView)]
+    public async Task<ActionResult<CustomerHistoryPageDto>> GetHistory(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 25,
+        [FromQuery] string? category = null,
+        CancellationToken cancellationToken = default)
+    {
+        var history = await _historyService.GetHistoryAsync(id, page, pageSize, category, cancellationToken);
+        return history is null ? NotFound() : Ok(history);
     }
 
     [HttpPost]

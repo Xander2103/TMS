@@ -132,44 +132,39 @@ public class CustomerService : ICustomerService
             request.PeppolEnabled, request.PeppolDeliveryPreference, request.BuyerReference,
             cancellationToken);
 
-        // Optional initial contact: same entity + rules as the detail-page contacts, created
-        // in the same SaveChanges so customer + contact commit (or fail) together.
-        CustomerContact? initialContact = null;
-        if (request.InitialContact is { } contactRequest)
+        // Contact persons: either the multi-contact list or (legacy) the single InitialContact.
+        // Field paths keep the shape the caller used so inline error mapping keeps working.
+        var contactInputs = new List<(CreateCustomerContactRequest Request, string FieldPrefix)>();
+        if (request.Contacts is { Count: > 0 } contactList)
         {
-            if (string.IsNullOrWhiteSpace(contactRequest.FirstName))
+            for (var i = 0; i < contactList.Count; i++)
             {
-                throw new DomainValidationException("initialContact.firstName", "Voornaam van de contactpersoon is verplicht.");
+                contactInputs.Add((contactList[i], $"contacts[{i}]"));
             }
-
-            if (string.IsNullOrWhiteSpace(contactRequest.LastName))
-            {
-                throw new DomainValidationException("initialContact.lastName", "Achternaam van de contactpersoon is verplicht.");
-            }
-
-            await EnsureContactDepartmentInTenantAsync(contactRequest.DepartmentId, cancellationToken);
-            initialContact = new CustomerContact
-            {
-                Id = Guid.NewGuid(),
-                TenantId = _tenantContext.TenantId,
-                CustomerId = customer.Id,
-                FirstName = contactRequest.FirstName.Trim(),
-                LastName = contactRequest.LastName.Trim(),
-                DisplayName = Trim(contactRequest.DisplayName),
-                Nickname = Trim(contactRequest.Nickname),
-                Role = Trim(contactRequest.Role),
-                DepartmentId = contactRequest.DepartmentId,
-                Email = Trim(contactRequest.Email),
-                PhoneNumber = Trim(contactRequest.PhoneNumber),
-                MobilePhone = Trim(contactRequest.MobilePhone),
-                PreferredLanguageCode = Trim(contactRequest.PreferredLanguageCode)?.ToLowerInvariant(),
-                IsPrimary = contactRequest.IsPrimary,
-                IsActive = contactRequest.IsActive,
-                Notes = Trim(contactRequest.Notes),
-            };
-            _dbContext.CustomerContacts.Add(initialContact);
-            customer.Contacts.Add(initialContact);
         }
+        else if (request.InitialContact is { } single)
+        {
+            contactInputs.Add((single, "initialContact"));
+        }
+
+        var contacts = new List<CustomerContact>();
+        var primaryTypes = new HashSet<CustomerContactType>();
+        foreach (var (contactRequest, fieldPrefix) in contactInputs)
+        {
+            var contact = await BuildContactAsync(customer.Id, contactRequest, fieldPrefix, cancellationToken);
+            if (contact.IsPrimary && !primaryTypes.Add(contact.ContactType))
+            {
+                throw new DomainValidationException($"{fieldPrefix}.isPrimary",
+                    $"Er is al een primaire contactpersoon van het type '{contact.ContactType}'.");
+            }
+
+            _dbContext.CustomerContacts.Add(contact);
+            customer.Contacts.Add(contact);
+            contacts.Add(contact);
+        }
+
+        // Customer + contacts + claimed number + audit trail commit (or roll back) as one unit.
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         _dbContext.Customers.Add(customer);
         if (Trim(request.CustomerNumber) is { } explicitNumber)
@@ -199,14 +194,71 @@ public class CustomerService : ICustomerService
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "Created", null,
             new { customer.CustomerNumber, customer.Name }, cancellationToken);
-        if (initialContact is not null)
+        foreach (var contact in contacts)
         {
             await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "ContactAdded", null,
-                new { initialContact.Id, initialContact.FirstName, initialContact.LastName }, cancellationToken);
+                ContactAuditSnapshot(contact), cancellationToken);
         }
+
+        await transaction.CommitAsync(cancellationToken);
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
         return MapToDetail(customer, categoryName);
+    }
+
+    /// <summary>Validates and materializes one contact input; <paramref name="fieldPrefix"/> shapes error paths.</summary>
+    private async Task<CustomerContact> BuildContactAsync(
+        Guid customerId, CreateCustomerContactRequest request, string fieldPrefix, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.FirstName))
+        {
+            throw new DomainValidationException($"{fieldPrefix}.firstName", "Voornaam van de contactpersoon is verplicht.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.LastName))
+        {
+            throw new DomainValidationException($"{fieldPrefix}.lastName", "Achternaam van de contactpersoon is verplicht.");
+        }
+
+        await EnsureContactDepartmentInTenantAsync(request.DepartmentId, cancellationToken);
+
+        return new CustomerContact
+        {
+            Id = Guid.NewGuid(),
+            TenantId = _tenantContext.TenantId,
+            CustomerId = customerId,
+            FirstName = request.FirstName.Trim(),
+            LastName = request.LastName.Trim(),
+            DisplayName = Trim(request.DisplayName),
+            Nickname = Trim(request.Nickname),
+            Role = Trim(request.Role),
+            DepartmentId = request.DepartmentId,
+            Email = Trim(request.Email),
+            PhoneNumber = Trim(request.PhoneNumber),
+            MobilePhone = Trim(request.MobilePhone),
+            PreferredLanguageCode = Trim(request.PreferredLanguageCode)?.ToLowerInvariant(),
+            ContactType = ParseContactType(request.ContactType, $"{fieldPrefix}.contactType"),
+            IsPrimary = request.IsPrimary,
+            IsActive = request.IsActive,
+            Notes = Trim(request.Notes),
+        };
+    }
+
+    /// <summary>IsDefined guards the string-stored column against numeric strings ("7").</summary>
+    private static CustomerContactType ParseContactType(string? value, string fieldPath)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return CustomerContactType.Algemeen;
+        }
+
+        if (!Enum.TryParse<CustomerContactType>(value.Trim(), ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+        {
+            throw new DomainValidationException(fieldPath,
+                "Kies een geldig type contactpersoon (Algemeen, Planning, Facturatie, Magazijn, Directie, Operationeel of Overig).");
+        }
+
+        return parsed;
     }
 
     public async Task<CustomerDetailDto?> UpdateAsync(Guid id, UpdateCustomerRequest request, CancellationToken cancellationToken, bool canManageFiscal = true)
@@ -219,11 +271,7 @@ public class CustomerService : ICustomerService
 
         await EnsureCategoryInTenantAsync(request.CategoryId, cancellationToken);
 
-        var oldValues = new
-        {
-            customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber,
-            customer.PeppolEnabled, PeppolDeliveryPreference = customer.PeppolDeliveryPreference.ToString(), customer.BuyerReference,
-        };
+        var oldValues = await BuildCustomerSnapshotAsync(customer, cancellationToken);
 
         if (!canManageFiscal && FiscalValuesChanged(customer, request))
         {
@@ -261,15 +309,85 @@ public class CustomerService : ICustomerService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "Updated", oldValues,
-            new
-            {
-                customer.Name, customer.IsActive, customer.CategoryId, customer.VatTreatment, customer.VatNumber,
-                customer.PeppolEnabled, PeppolDeliveryPreference = customer.PeppolDeliveryPreference.ToString(), customer.BuyerReference,
-            }, cancellationToken);
+            await BuildCustomerSnapshotAsync(customer, cancellationToken), cancellationToken);
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
         return MapToDetail(customer, categoryName);
     }
+
+    /// <summary>
+    /// Full readable field snapshot for the audit trail (history projection diffs old vs new).
+    /// Lookup ids are resolved to names at write time so history survives renames; the IBAN is
+    /// masked so history shows THAT it changed, never the full number.
+    /// </summary>
+    private async Task<Dictionary<string, object?>> BuildCustomerSnapshotAsync(Customer c, CancellationToken cancellationToken)
+    {
+        var categoryName = await ResolveCategoryNameAsync(c.CategoryId, cancellationToken);
+        string? legalEntityName = null;
+        if (c.DefaultLegalEntityId is { } legalEntityId)
+        {
+            legalEntityName = await _dbContext.LegalEntities
+                .Where(e => e.TenantId == _tenantContext.TenantId && e.Id == legalEntityId)
+                .Select(e => e.LegalName)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["Name"] = c.Name,
+            ["LegalName"] = c.LegalName,
+            ["Nickname"] = c.Nickname,
+            ["Category"] = categoryName,
+            ["Email"] = c.Email,
+            ["PhoneNumber"] = c.PhoneNumber,
+            ["Website"] = c.Website,
+            ["Street"] = c.Street,
+            ["HouseNumber"] = c.HouseNumber,
+            ["PostalCode"] = c.PostalCode,
+            ["City"] = c.City,
+            ["CountryCode"] = c.CountryCode,
+            ["InvoiceEmail"] = c.InvoiceEmail,
+            ["PaymentTermDays"] = c.PaymentTermDays,
+            ["DefaultLanguageCode"] = c.DefaultLanguageCode,
+            ["InvoiceLanguageCode"] = c.InvoiceLanguageCode,
+            ["Notes"] = c.Notes,
+            ["IsActive"] = c.IsActive,
+            ["VatTreatment"] = c.VatTreatment.ToString(),
+            ["VatNumber"] = c.VatNumber,
+            ["CompanyNumber"] = c.CompanyNumber,
+            ["CurrencyCode"] = c.CurrencyCode,
+            ["Iban"] = MaskIban(c.Iban),
+            ["Bic"] = c.Bic,
+            ["BankName"] = c.BankName,
+            ["DefaultLegalEntity"] = legalEntityName,
+            ["PeppolEnabled"] = c.PeppolEnabled,
+            ["PeppolId"] = c.PeppolId,
+            ["PeppolScheme"] = c.PeppolScheme,
+            ["PeppolDeliveryPreference"] = c.PeppolDeliveryPreference.ToString(),
+            ["BuyerReference"] = c.BuyerReference,
+            ["PurchaseOrderRequired"] = c.PurchaseOrderRequired,
+            ["SignedDeliveryNoteRequired"] = c.SignedDeliveryNoteRequired,
+            ["CustomerReferenceRequired"] = c.CustomerReferenceRequired,
+        };
+    }
+
+    private static string? MaskIban(string? iban) =>
+        string.IsNullOrWhiteSpace(iban) ? null : iban.Length <= 4 ? "•••" : $"•••{iban[^4..]}";
+
+    /// <summary>Readable contact payload for the audit trail.</summary>
+    private static Dictionary<string, object?> ContactAuditSnapshot(CustomerContact c) => new()
+    {
+        ["FirstName"] = c.FirstName,
+        ["LastName"] = c.LastName,
+        ["DisplayName"] = c.DisplayName,
+        ["Role"] = c.Role,
+        ["Email"] = c.Email,
+        ["PhoneNumber"] = c.PhoneNumber,
+        ["MobilePhone"] = c.MobilePhone,
+        ["ContactType"] = c.ContactType.ToString(),
+        ["IsPrimary"] = c.IsPrimary,
+        ["IsActive"] = c.IsActive,
+    };
 
     public async Task<CustomerDetailDto?> ChangeNumberAsync(
         Guid id, ChangeCustomerNumberRequest request, CancellationToken cancellationToken)
@@ -406,31 +524,11 @@ public class CustomerService : ICustomerService
             return null;
         }
 
-        await EnsureContactDepartmentInTenantAsync(request.DepartmentId, cancellationToken);
-
-        var contact = new CustomerContact
-        {
-            Id = Guid.NewGuid(),
-            TenantId = _tenantContext.TenantId,
-            CustomerId = customerId,
-            FirstName = request.FirstName.Trim(),
-            LastName = request.LastName.Trim(),
-            DisplayName = Trim(request.DisplayName),
-            Nickname = Trim(request.Nickname),
-            Role = Trim(request.Role),
-            DepartmentId = request.DepartmentId,
-            Email = Trim(request.Email),
-            PhoneNumber = Trim(request.PhoneNumber),
-            MobilePhone = Trim(request.MobilePhone),
-            PreferredLanguageCode = Trim(request.PreferredLanguageCode)?.ToLowerInvariant(),
-            IsPrimary = request.IsPrimary,
-            IsActive = request.IsActive,
-            Notes = Trim(request.Notes),
-        };
+        var contact = await BuildContactAsync(customerId, request, "contact", cancellationToken);
 
         if (contact.IsPrimary)
         {
-            DemoteOtherPrimaries(customer, exceptContactId: contact.Id);
+            DemoteOtherPrimaries(customer, contact.ContactType, exceptContactId: contact.Id);
         }
 
         // Add through the DbSet (not the tracked parent's navigation): a new child with a
@@ -440,7 +538,7 @@ public class CustomerService : ICustomerService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "ContactAdded", null,
-            new { contact.Id, contact.FirstName, contact.LastName }, cancellationToken);
+            ContactAuditSnapshot(contact), cancellationToken);
 
         return MapContact(contact);
     }
@@ -454,7 +552,19 @@ public class CustomerService : ICustomerService
             return null;
         }
 
+        if (string.IsNullOrWhiteSpace(request.FirstName))
+        {
+            throw new DomainValidationException("firstName", "Voornaam van de contactpersoon is verplicht.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.LastName))
+        {
+            throw new DomainValidationException("lastName", "Achternaam van de contactpersoon is verplicht.");
+        }
+
         await EnsureContactDepartmentInTenantAsync(request.DepartmentId, cancellationToken);
+
+        var oldSnapshot = ContactAuditSnapshot(contact);
 
         contact.FirstName = request.FirstName.Trim();
         contact.LastName = request.LastName.Trim();
@@ -466,19 +576,20 @@ public class CustomerService : ICustomerService
         contact.PhoneNumber = Trim(request.PhoneNumber);
         contact.MobilePhone = Trim(request.MobilePhone);
         contact.PreferredLanguageCode = Trim(request.PreferredLanguageCode)?.ToLowerInvariant();
+        contact.ContactType = request.ContactType is null ? contact.ContactType : ParseContactType(request.ContactType, "contactType");
         contact.IsPrimary = request.IsPrimary;
         contact.IsActive = request.IsActive;
         contact.Notes = Trim(request.Notes);
 
         if (contact.IsPrimary)
         {
-            DemoteOtherPrimaries(customer, exceptContactId: contact.Id);
+            DemoteOtherPrimaries(customer, contact.ContactType, exceptContactId: contact.Id);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "ContactUpdated", null,
-            new { contact.Id, contact.FirstName, contact.LastName }, cancellationToken);
+        await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "ContactUpdated", oldSnapshot,
+            ContactAuditSnapshot(contact), cancellationToken);
 
         return MapContact(contact);
     }
@@ -492,18 +603,32 @@ public class CustomerService : ICustomerService
             return false;
         }
 
+        // A contact that other records refer to must be deactivated, not deleted, so the
+        // historical references keep resolving (soft delete still leaves dangling FK rows
+        // pointing at an invisible contact — the communication module joins them live).
+        var referenced = await _dbContext.CustomerCommunicationRuleContacts
+            .AnyAsync(r => r.TenantId == _tenantContext.TenantId && r.ContactId == contactId, cancellationToken);
+        if (referenced)
+        {
+            throw new DomainValidationException(
+                "Deze contactpersoon is al in gebruik (bv. bij communicatievoorkeuren) en kan niet worden verwijderd. " +
+                "Je kunt de contactpersoon wel deactiveren.");
+        }
+
         _dbContext.Set<CustomerContact>().Remove(contact);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, customer.Id.ToString(), "ContactRemoved",
-            new { contact.Id, contact.FirstName, contact.LastName }, null, cancellationToken);
+            ContactAuditSnapshot(contact), null, cancellationToken);
 
         return true;
     }
 
-    private static void DemoteOtherPrimaries(Customer customer, Guid exceptContactId)
+    /// <summary>Primary is scoped per contact type: promoting a planning contact leaves the invoicing primary alone.</summary>
+    private static void DemoteOtherPrimaries(Customer customer, CustomerContactType contactType, Guid exceptContactId)
     {
-        foreach (var other in customer.Contacts.Where(c => c.Id != exceptContactId && c.IsPrimary))
+        foreach (var other in customer.Contacts.Where(c =>
+                     c.Id != exceptContactId && c.IsPrimary && c.ContactType == contactType))
         {
             other.IsPrimary = false;
         }
@@ -581,6 +706,18 @@ public class CustomerService : ICustomerService
         customer.PeppolScheme = trimmedPeppolScheme;
         customer.InvoiceLanguageCode = Trim(invoiceLanguageCode);
         customer.PurchaseOrderRequired = purchaseOrderRequired;
+        // Keep the authoritative PurchaseOrderPolicy enum in sync with the legacy bool the
+        // customer form edits (SetPoPolicyAsync does the inverse). "Optional" survives an
+        // unchanged bool=false so the billing panel's nuance isn't clobbered by a form save.
+        if (purchaseOrderRequired)
+        {
+            customer.PurchaseOrderPolicy = PurchaseOrderPolicy.Required;
+        }
+        else if (customer.PurchaseOrderPolicy == PurchaseOrderPolicy.Required)
+        {
+            customer.PurchaseOrderPolicy = PurchaseOrderPolicy.None;
+        }
+
         customer.SignedDeliveryNoteRequired = signedDeliveryNoteRequired;
         customer.CustomerReferenceRequired = customerReferenceRequired;
         customer.PeppolEnabled = peppolEnabled;
@@ -702,7 +839,8 @@ public class CustomerService : ICustomerService
 
     private static CustomerContactDto MapContact(CustomerContact c) =>
         new(c.Id, c.FirstName, c.LastName, c.Role, c.Email, c.PhoneNumber, c.IsPrimary, c.Notes,
-            c.DisplayName, c.Nickname, c.MobilePhone, c.DepartmentId, c.PreferredLanguageCode, c.IsActive);
+            c.DisplayName, c.Nickname, c.MobilePhone, c.DepartmentId, c.PreferredLanguageCode, c.IsActive,
+            c.ContactType.ToString());
 
     private static CustomerDetailDto MapToDetail(Customer c, string? categoryName) => new(
         c.Id, c.CustomerNumber, c.Name, c.LegalName, c.VatNumber, c.CategoryId, categoryName,

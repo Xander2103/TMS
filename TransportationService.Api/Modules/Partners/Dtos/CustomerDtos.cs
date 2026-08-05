@@ -29,7 +29,8 @@ public record CustomerContactDto(
     string? MobilePhone = null,
     Guid? DepartmentId = null,
     string? PreferredLanguageCode = null,
-    bool IsActive = true);
+    bool IsActive = true,
+    string ContactType = "Algemeen");
 
 public record CustomerDetailDto(
     Guid Id,
@@ -119,7 +120,8 @@ public record CreateCustomerRequest(
     Guid? DefaultLegalEntityId = null,
     bool PeppolEnabled = false,
     string? PeppolDeliveryPreference = null,
-    string? BuyerReference = null);
+    string? BuyerReference = null,
+    IReadOnlyList<CreateCustomerContactRequest>? Contacts = null);
 
 public record UpdateCustomerRequest(
     string Name,
@@ -163,6 +165,25 @@ public record UpdateCustomerRequest(
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
 
+/// <summary>One readable field change (labels and values resolved server-side, Dutch).</summary>
+public record CustomerHistoryChangeDto(string Field, string? Before, string? After);
+
+public record CustomerHistoryEntryDto(
+    Guid Id,
+    DateTime Timestamp,
+    string? UserName,
+    string Action,
+    string ActionLabel,
+    string Category,
+    IReadOnlyList<CustomerHistoryChangeDto> Changes,
+    string Summary);
+
+public record CustomerHistoryPageDto(
+    IReadOnlyList<CustomerHistoryEntryDto> Items,
+    int TotalCount,
+    int Page,
+    int PageSize);
+
 /// <summary>Company-registry lookup request (VAT or enterprise number).</summary>
 public record CompanyRegistryLookupRequest(string Number);
 
@@ -184,7 +205,8 @@ public record CreateCustomerContactRequest(
     string? MobilePhone = null,
     Guid? DepartmentId = null,
     string? PreferredLanguageCode = null,
-    bool IsActive = true);
+    bool IsActive = true,
+    string? ContactType = null);
 
 public record UpdateCustomerContactRequest(
     string FirstName,
@@ -199,4 +221,5 @@ public record UpdateCustomerContactRequest(
     string? MobilePhone = null,
     Guid? DepartmentId = null,
     string? PreferredLanguageCode = null,
-    bool IsActive = true);
+    bool IsActive = true,
+    string? ContactType = null);

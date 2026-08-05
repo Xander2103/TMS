@@ -256,6 +256,8 @@ builder.Services.AddSingleton<TransportationService.Api.Modules.Partners.Service
     TransportationService.Api.Modules.Partners.Services.NullCompanyRegistryProvider>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerService,
     TransportationService.Api.Modules.Partners.Services.CustomerService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerHistoryService,
+    TransportationService.Api.Modules.Partners.Services.CustomerHistoryService>();
 
 // Drivers
 builder.Services.AddScoped<TransportationService.Api.Modules.Drivers.Services.IDriverService,
