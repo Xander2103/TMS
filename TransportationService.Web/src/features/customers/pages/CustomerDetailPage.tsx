@@ -123,6 +123,46 @@ export function CustomerDetailPage() {
     }
   }
 
+  // One wiring for the contacts panel, shared by the edit form and the read-only tab.
+  // Delete goes straight to the API so a backend refusal (e.g. contact still referenced by a
+  // communication rule) surfaces its Dutch message via the error toast.
+  const contactsPanel = (
+    <CustomerContactsPanel
+      contacts={customer.contacts}
+      isSubmitting={mutations.isSubmitting}
+      onAdd={async (input) => {
+        if (!id) return false
+        const ok = await mutations.addContact(id, input)
+        if (ok) {
+          toast.showSuccess('Contactpersoon toegevoegd.')
+          reload()
+        }
+        return ok
+      }}
+      onUpdate={async (contactId, input) => {
+        if (!id) return false
+        const ok = await mutations.updateContact(id, contactId, input)
+        if (ok) {
+          toast.showSuccess('Contactpersoon bijgewerkt.')
+          reload()
+        }
+        return ok
+      }}
+      onRemove={async (contactId) => {
+        if (!id) return false
+        try {
+          await removeCustomerContact(id, contactId)
+          toast.showSuccess('Contactpersoon verwijderd.')
+          reload()
+          return true
+        } catch (err) {
+          toast.showError(describeApiError(err, 'De contactpersoon kon niet worden verwijderd.').message)
+          return false
+        }
+      }}
+    />
+  )
+
   async function handleBlock(event: FormEvent) {
     event.preventDefault()
     if (!id) return
@@ -194,40 +234,9 @@ export function CustomerDetailPage() {
               ) : (
                 <p className="customer-form-muted">Je hebt geen rechten om bijkomende adressen te beheren.</p>
               ),
-            contactpersonen: (
-              <CustomerContactsPanel
-                contacts={customer.contacts}
-                isSubmitting={mutations.isSubmitting}
-                onAdd={async (input) => {
-                  if (!id) return false
-                  const ok = await mutations.addContact(id, input)
-                  if (ok) {
-                    toast.showSuccess('Contactpersoon toegevoegd.')
-                    reload()
-                  }
-                  return ok
-                }}
-                onUpdate={async (contactId, input) => {
-                  if (!id) return false
-                  const ok = await mutations.updateContact(id, contactId, input)
-                  if (ok) {
-                    toast.showSuccess('Contactpersoon bijgewerkt.')
-                    reload()
-                  }
-                  return ok
-                }}
-                onRemove={async (contactId) => {
-                  if (!id) return false
-                  const ok = await mutations.removeContact(id, contactId)
-                  if (ok) {
-                    toast.showSuccess('Contactpersoon verwijderd.')
-                    reload()
-                  }
-                  return ok
-                }}
-              />
-            ),
+            contactpersonen: contactsPanel,
             communicatie: id ? <CustomerCommunicationPanel customerId={id} contacts={customer.contacts} /> : null,
+            historiek: id ? <CustomerHistoryPanel customerId={id} /> : null,
             tarieven:
               canViewBilling && id ? (
                 <>
@@ -261,6 +270,7 @@ export function CustomerDetailPage() {
                 ...(canViewLocations ? [{ id: 'locations', label: 'Locaties' }] : []),
                 { id: 'communication', label: 'Communicatie' },
                 ...(canViewBilling ? [{ id: 'billing', label: 'Tarieven & toeslagen' }] : []),
+                { id: 'history', label: 'Historiek' },
                 ...(canViewMessages ? [{ id: 'messages', label: 'Berichten', badge: unreadMessages || undefined }] : []),
               ]}
               activeId={activeTab}
@@ -399,41 +409,7 @@ export function CustomerDetailPage() {
             </TabPanel>
           )}
 
-          {activeTab === 'contacts' && (
-            <TabPanel tabId="contacts">
-              <CustomerContactsPanel
-                contacts={customer.contacts}
-            isSubmitting={mutations.isSubmitting}
-            onAdd={async (input) => {
-              if (!id) return false
-              const ok = await mutations.addContact(id, input)
-              if (ok) {
-                toast.showSuccess('Contactpersoon toegevoegd.')
-                reload()
-              }
-              return ok
-            }}
-            onUpdate={async (contactId, input) => {
-              if (!id) return false
-              const ok = await mutations.updateContact(id, contactId, input)
-              if (ok) {
-                toast.showSuccess('Contactpersoon bijgewerkt.')
-                reload()
-              }
-              return ok
-            }}
-            onRemove={async (contactId) => {
-              if (!id) return false
-              const ok = await mutations.removeContact(id, contactId)
-              if (ok) {
-                toast.showSuccess('Contactpersoon verwijderd.')
-                reload()
-              }
-              return ok
-            }}
-              />
-            </TabPanel>
-          )}
+          {activeTab === 'contacts' && <TabPanel tabId="contacts">{contactsPanel}</TabPanel>}
 
           {activeTab === 'locations' && canViewLocations && id && (
             <TabPanel tabId="locations">
@@ -454,6 +430,12 @@ export function CustomerDetailPage() {
               <CustomerPriceAdjustmentsPanel customerId={id} />
               <CombinedDiscountsPanel customerId={id} />
               <CustomerBillingPanel customerId={id} />
+            </TabPanel>
+          )}
+
+          {activeTab === 'history' && id && (
+            <TabPanel tabId="history">
+              <CustomerHistoryPanel customerId={id} />
             </TabPanel>
           )}
 

@@ -432,7 +432,9 @@ public class TripExecutionService : ITripExecutionService
         string? Instructions, string? AccessInstructions, string? LoadingInstructions, string? UnloadingInstructions,
         StopExecutionStatus Status, DateTime? ArrivedAt, DateTime? DepartedAt, DateTime? CompletedAt,
         int? WaitingMinutes, string? LateArrivalReason, string? StatusReason,
-        bool HasPod, string? PodSignedBy, string? Remarks);
+        bool HasPod, string? PodSignedBy, string? Remarks,
+        string? ContactName, string? ContactPhone, string? ContactMobile,
+        string? Gate, string? AccessCode, string? Dock, string? RouteDescription, string? OpeningHoursSummary);
 
     private async Task<List<ExecutionStopRow>> LoadExecutionStopsAsync(Trip trip, CancellationToken cancellationToken)
     {
@@ -508,26 +510,32 @@ public class TripExecutionService : ITripExecutionService
 
                 var status = execution?.Status ?? StopExecutionStatus.Planned;
 
+                // Phase 7 (master-data wave 2026-08-05): the stop's location snapshot is
+                // authoritative — instructions and AppointmentRequired are no longer live-joined
+                // from the master location. The name/address coalesce below is only a LEGACY
+                // fallback for rows created before the snapshot backfill.
                 return new ExecutionStopRow(
                     x.Stop.Id, x.Stop.TransportOrderId, order.OrderNumber, order.CustomerName,
                     orderSequence[x.Stop.TransportOrderId], x.Stop.Sequence, x.Stop.StopType,
-                    x.Location?.Name ?? x.Stop.LocationName ?? x.Stop.City ?? string.Empty,
+                    x.Stop.LocationName ?? x.Location?.Name ?? x.Stop.City ?? string.Empty,
                     x.Stop.Address ?? (string.IsNullOrWhiteSpace(locationAddress) ? null : locationAddress),
                     x.Stop.PostalCode ?? x.Location?.PostalCode,
                     x.Stop.City ?? x.Location?.City,
                     x.Stop.PlannedFrom, x.Stop.PlannedTo, x.Stop.RequestedFrom, x.Stop.RequestedTo,
                     x.Stop.ConfirmedFrom, x.Stop.ConfirmedTo, x.Stop.EarliestAllowed, x.Stop.LatestAllowed,
-                    x.Stop.AppointmentRequired || (x.Location?.AppointmentRequired ?? false),
+                    x.Stop.AppointmentRequired,
                     x.Stop.AppointmentReference,
                     x.Stop.Instructions,
-                    x.Stop.AccessInstructions ?? x.Location?.AccessInstructions,
-                    x.Stop.LoadingInstructions ?? x.Location?.LoadingInstructions,
-                    x.Stop.UnloadingInstructions ?? x.Location?.UnloadingInstructions,
+                    x.Stop.AccessInstructions,
+                    x.Stop.LoadingInstructions,
+                    x.Stop.UnloadingInstructions,
                     status,
                     execution?.ArrivedAt, execution?.DepartedAt, execution?.CompletedAt,
                     waitingMinutes, execution?.LateArrivalReason, execution?.StatusReason,
                     execution?.PodPath is not null || podStopIds.Contains(x.Stop.Id),
-                    execution?.PodSignedBy, execution?.Remarks);
+                    execution?.PodSignedBy, execution?.Remarks,
+                    x.Stop.ContactName, x.Stop.ContactPhone, x.Stop.ContactMobile,
+                    x.Stop.Gate, x.Stop.AccessCode, x.Stop.Dock, x.Stop.RouteDescription, x.Stop.OpeningHoursSummary);
             })
             .OrderBy(r => r.OrderSequence).ThenBy(r => r.StopSequence)
             .ToList();
@@ -573,7 +581,9 @@ public class TripExecutionService : ITripExecutionService
                 r.Status, r.ArrivedAt, r.DepartedAt, r.CompletedAt,
                 r.WaitingMinutes, r.LateArrivalReason, r.StatusReason,
                 StopStatusMachine.AllowedTargets(r.Status, r.StopType),
-                r.HasPod, r.PodSignedBy, r.Remarks)).ToList(),
+                r.HasPod, r.PodSignedBy, r.Remarks,
+                r.ContactName, r.ContactPhone, r.ContactMobile,
+                r.Gate, r.AccessCode, r.Dock, r.RouteDescription, r.OpeningHoursSummary)).ToList(),
             stops.Count(s => StopStatusMachine.IsTerminal(s.Status)),
             stops.Count);
     }

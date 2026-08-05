@@ -75,6 +75,14 @@ public class StopExecutionTransitionTests
                 StopType = StopType.Loading, LocationId = locationId,
                 RequestedFrom = Now.UtcDateTime.AddHours(-2), RequestedTo = Now.UtcDateTime.AddHours(4),
                 AppointmentRequired = true, AppointmentReference = "SLOT-77",
+                // Phase 7 location snapshot: the stop carries its own frozen copy; note the
+                // loading instructions deliberately DIFFER from the live location above and the
+                // access instructions are left empty to prove no live fallback happens.
+                LoadingInstructions = "Stop-instructie: dok 7",
+                ContactName = "Magazijnier Piet", ContactPhone = "+32 3 123 45 67",
+                Gate = "Poort B", AccessCode = "1234#", Dock = "Kade 7",
+                RouteDescription = "Via de Noorderlaan", OpeningHoursSummary = "Ma 07:00–17:00",
+                SnapshotAt = Now.UtcDateTime,
             },
             new TransportOrderStop
             {
@@ -305,7 +313,7 @@ public class StopExecutionTransitionTests
     }
 
     [Fact]
-    public async Task ExecutionDto_ExposesWindowsAppointmentAndLocationInstructionFallback()
+    public async Task ExecutionDto_ExposesWindowsAppointmentAndStopSnapshot()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
@@ -317,9 +325,18 @@ public class StopExecutionTransitionTests
         Assert.Equal(Now.UtcDateTime.AddHours(4), load.RequestedTo);
         Assert.True(load.AppointmentRequired);
         Assert.Equal("SLOT-77", load.AppointmentReference);
-        // Stop-level instructions win; otherwise the master location's instructions apply.
-        Assert.Equal("Aanmelden aan dok 5", load.LoadingInstructions);
-        Assert.Equal("Alfapass verplicht", load.AccessInstructions);
+        // Phase 7: the stop's snapshot is authoritative — the live location's instructions
+        // ("Aanmelden aan dok 5" / "Alfapass verplicht") must NOT leak in anymore.
+        Assert.Equal("Stop-instructie: dok 7", load.LoadingInstructions);
+        Assert.Null(load.AccessInstructions);
+        // Snapshot fields the driver needs on site (access code is driver-facing by design).
+        Assert.Equal("Magazijnier Piet", load.ContactName);
+        Assert.Equal("+32 3 123 45 67", load.ContactPhone);
+        Assert.Equal("Poort B", load.Gate);
+        Assert.Equal("1234#", load.AccessCode);
+        Assert.Equal("Kade 7", load.Dock);
+        Assert.Equal("Via de Noorderlaan", load.RouteDescription);
+        Assert.Equal("Ma 07:00–17:00", load.OpeningHoursSummary);
 
         Assert.Equal(
             new[]

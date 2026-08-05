@@ -112,6 +112,22 @@ export interface TransportOrderStop {
   timeRequirementTo?: string | null
   /** Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract). */
   includedTimeMinutesOverride?: number | null
+  // --- Location snapshot (master-data wave 2026-08-05, Phase 7): frozen at order time ---
+  contactName?: string | null
+  contactPhone?: string | null
+  contactMobile?: string | null
+  contactEmail?: string | null
+  openingHoursSummary?: string | null
+  gate?: string | null
+  /** Sensitive: null unless the caller holds locations.view_sensitive. */
+  accessCode?: string | null
+  dock?: string | null
+  routeDescription?: string | null
+  defaultLoadingMinutes?: number | null
+  defaultUnloadingMinutes?: number | null
+  snapshotAt?: string | null
+  /** Advisory opening-hours warnings (live location hours vs planned times); never blocking. */
+  warnings?: string[] | null
 }
 
 /** Wave 2026-08-04 §15. */
@@ -414,6 +430,13 @@ export interface StopInput {
   timeRequirementTo?: string | null
   /** Wave 2026-08-04 §18: stop-level included-minutes override (stop → order → contract). */
   includedTimeMinutesOverride?: number | null
+  /**
+   * Existing stop id echoed on update (Phase 7): a matching id with an unchanged locationId
+   * carries the location snapshot over instead of re-copying live master data.
+   */
+  id?: string | null
+  /** True = deliberately re-copy the CURRENT master-location data onto this stop (audited). */
+  refreshSnapshot?: boolean
 }
 
 /** Dispatcher-side execution planning of one stop (separate endpoint, editable after planning). */

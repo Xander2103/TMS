@@ -45,6 +45,7 @@ function makeContact(overrides: Partial<CustomerContact>): CustomerContact {
     departmentId: null,
     preferredLanguageCode: null,
     isActive: true,
+    contactType: 'Algemeen',
     ...overrides,
   }
 }

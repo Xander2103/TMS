@@ -41,7 +41,18 @@ public record ExecutionStopDto(
     IReadOnlyList<StopExecutionStatus> AllowedTransitions,
     bool HasPod,
     string? PodSignedBy,
-    string? Remarks);
+    string? Remarks,
+    // --- Location snapshot on the stop (master-data wave 2026-08-05, Phase 7). Drivers on the
+    // trip legitimately need gate/access data; the customer portal must NEVER receive these. ---
+    string? ContactName = null,
+    string? ContactPhone = null,
+    string? ContactMobile = null,
+    string? Gate = null,
+    /// <summary>Driver-facing by design: the assigned driver needs the code at the gate.</summary>
+    string? AccessCode = null,
+    string? Dock = null,
+    string? RouteDescription = null,
+    string? OpeningHoursSummary = null);
 
 public record TripExecutionDto(
     Guid TripId,

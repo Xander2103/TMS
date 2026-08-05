@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
 import type { CustomerContact } from '../types'
@@ -42,17 +42,21 @@ function makeContact(overrides: Partial<CustomerContact>): CustomerContact {
     departmentId: null,
     preferredLanguageCode: null,
     isActive: true,
+    contactType: 'Algemeen',
     ...overrides,
   }
 }
 
-function renderPanel(contacts: CustomerContact[]) {
+function renderPanel(
+  contacts: CustomerContact[],
+  handlers: { onUpdate?: ReturnType<typeof vi.fn> } = {},
+) {
   return render(
     <CustomerContactsPanel
       contacts={contacts}
       isSubmitting={false}
       onAdd={vi.fn().mockResolvedValue(true)}
-      onUpdate={vi.fn().mockResolvedValue(true)}
+      onUpdate={handlers.onUpdate ?? vi.fn().mockResolvedValue(true)}
       onRemove={vi.fn().mockResolvedValue(true)}
     />,
   )
@@ -92,5 +96,51 @@ describe('CustomerContactsPanel', () => {
     expect(screen.getByText('Afdeling')).toBeInTheDocument()
     expect(screen.getByLabelText('Voorkeurstaal')).toBeInTheDocument()
     expect(screen.getByLabelText('Actief')).toBeInTheDocument()
+    expect(screen.getByLabelText('Type')).toBeInTheDocument()
+  })
+
+  it('shows the type column with a per-type Primair badge', () => {
+    renderPanel([
+      makeContact({ contactType: 'Planning', isPrimary: true }),
+      makeContact({ id: 'contact-2', firstName: 'Jan', lastName: 'Claes', contactType: 'Facturatie' }),
+    ])
+
+    const table = within(screen.getByRole('table'))
+    expect(table.getByText('Planning')).toBeInTheDocument()
+    expect(table.getByText('Facturatie')).toBeInTheDocument()
+    // Only the primary-within-its-type contact carries the badge.
+    expect(table.getAllByText('Primair')).toHaveLength(1)
+  })
+
+  it('filters the table on contact type', async () => {
+    renderPanel([
+      makeContact({ contactType: 'Planning' }),
+      makeContact({ id: 'contact-2', firstName: 'Jan', lastName: 'Claes', contactType: 'Facturatie' }),
+    ])
+
+    expect(screen.getByText('An Peeters')).toBeInTheDocument()
+    expect(screen.getByText('Jan Claes')).toBeInTheDocument()
+
+    await userEvent.selectOptions(screen.getByLabelText('Type'), 'Planning')
+
+    expect(screen.getByText('An Peeters')).toBeInTheDocument()
+    expect(screen.queryByText('Jan Claes')).not.toBeInTheDocument()
+  })
+
+  it('round-trips the contact type through the edit dialog', async () => {
+    const onUpdate = vi.fn().mockResolvedValue(true)
+    renderPanel([makeContact({ contactType: 'Planning' })], { onUpdate })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bewerken' }))
+    const typeSelect = screen.getByLabelText('Type', { selector: 'select#ct-type' })
+    expect(typeSelect).toHaveValue('Planning')
+
+    await userEvent.selectOptions(typeSelect, 'Facturatie')
+    await userEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
+
+    expect(onUpdate).toHaveBeenCalledWith(
+      'contact-1',
+      expect.objectContaining({ contactType: 'Facturatie', firstName: 'An', lastName: 'Peeters' }),
+    )
   })
 })
