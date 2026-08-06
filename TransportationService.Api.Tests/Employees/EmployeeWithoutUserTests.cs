@@ -74,7 +74,7 @@ public class EmployeeWithoutUserTests
 
         await sutA.CreateAsync(NewEmployee("Jan", "Janssen", "jan@a.com"), canEditConfidential: true, CancellationToken.None);
 
-        var resultForTenantB = await sutB.SearchAsync(null, null, null, null, null, false, null, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var resultForTenantB = await sutB.SearchAsync(null, null, null, null, null, false, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Empty(resultForTenantB.Items);
     }

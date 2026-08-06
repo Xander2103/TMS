@@ -26,6 +26,8 @@ interface DataTableProps<TRow> {
   loadingMessage?: string
   /** Invoked when a row is clicked; makes rows keyboard-focusable. */
   onRowClick?: (row: TRow) => void
+  /** Optional extra class name per row, e.g. greying out inactive records. */
+  rowClassName?: (row: TRow) => string | undefined
 }
 
 /**
@@ -41,6 +43,7 @@ export function DataTable<TRow>({
   emptyMessage = 'Geen gegevens gevonden.',
   loadingMessage = 'Laden...',
   onRowClick,
+  rowClassName,
 }: DataTableProps<TRow>) {
   if (isLoading) return <LoadingState message={loadingMessage} />
   if (error) return <ErrorState message={error} />
@@ -61,10 +64,13 @@ export function DataTable<TRow>({
         <tbody>
           {rows.map((row) => {
             const clickable = Boolean(onRowClick)
+            const className = [clickable ? 'data-table-row-clickable' : undefined, rowClassName?.(row)]
+              .filter(Boolean)
+              .join(' ')
             return (
               <tr
                 key={rowKey(row)}
-                className={clickable ? 'data-table-row-clickable' : undefined}
+                className={className || undefined}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 tabIndex={clickable ? 0 : undefined}
                 onKeyDown={

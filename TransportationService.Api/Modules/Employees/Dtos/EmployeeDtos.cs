@@ -28,7 +28,9 @@ public record EmployeeListItemDto(
     DriverAvailabilityStatus? DriverAvailability = null,
     /// <summary>Dossier-completeness percentage (HR maturity wave §2.1), filled via one batched
     /// query in <c>SearchAsync</c>.</summary>
-    int CompletenessPercentage = 0);
+    int CompletenessPercentage = 0,
+    /// <summary>Drives the personnel list's contract-end badge (HR maturity wave §9).</summary>
+    DateOnly? EmploymentEndDate = null);
 
 /// <summary>
 /// Full employee profile. NationalRegisterNumber, Iban and Bic are null when the caller

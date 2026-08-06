@@ -62,13 +62,14 @@ public class EmployeesController : ControllerBase
         [FromQuery] bool excludeDrivers = false,
         [FromQuery] bool? hasDriverProfile = null,
         [FromQuery] string? sort = null,
+        [FromQuery] bool incompleteOnly = false,
         [FromQuery] int? page = null,
         [FromQuery] int? pageSize = null,
         CancellationToken cancellationToken = default)
     {
         var result = await _employeeService.SearchAsync(
             search, isActive, jobFunctionId, departmentId, employmentStatus, excludeDrivers, hasDriverProfile, sort,
-            PageRequest.Of(page, pageSize), cancellationToken);
+            incompleteOnly, PageRequest.Of(page, pageSize), cancellationToken);
         return Ok(result);
     }
 

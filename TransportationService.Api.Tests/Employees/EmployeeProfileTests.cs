@@ -205,8 +205,8 @@ public class EmployeeProfileTests
             canEditConfidential: true, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
 
-        var chauffeurs = await h.Sut.SearchAsync(null, null, h.FunctionChauffeur, null, null, false, null, null, PageRequest.Of(1, 25), CancellationToken.None);
-        var planningDept = await h.Sut.SearchAsync(null, null, null, h.DepartmentId, null, false, null, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var chauffeurs = await h.Sut.SearchAsync(null, null, h.FunctionChauffeur, null, null, false, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
+        var planningDept = await h.Sut.SearchAsync(null, null, null, h.DepartmentId, null, false, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Single(chauffeurs.Items);
         Assert.Equal("Janssen", chauffeurs.Items[0].LastName);
@@ -292,7 +292,7 @@ public class EmployeeProfileTests
             EmploymentStatus.Active), canEditConfidential: true, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
 
-        var withoutDrivers = await h.Sut.SearchAsync(null, null, null, null, null, true, null, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var withoutDrivers = await h.Sut.SearchAsync(null, null, null, null, null, true, null, null, false, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Single(withoutDrivers.Items);
         Assert.DoesNotContain(withoutDrivers.Items, e => e.Id == withDriver.Id);
@@ -315,7 +315,7 @@ public class EmployeeProfileTests
             EmploymentStatus.Active), canEditConfidential: true, CancellationToken.None);
         h.Db.Context.ChangeTracker.Clear();
 
-        var onlyDrivers = await h.Sut.SearchAsync(null, null, null, null, null, false, true, null, PageRequest.Of(1, 25), CancellationToken.None);
+        var onlyDrivers = await h.Sut.SearchAsync(null, null, null, null, null, false, true, null, false, PageRequest.Of(1, 25), CancellationToken.None);
 
         var row = Assert.Single(onlyDrivers.Items);
         Assert.Equal(withDriver.Id, row.Id);

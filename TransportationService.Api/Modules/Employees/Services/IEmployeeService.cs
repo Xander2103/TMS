@@ -11,10 +11,12 @@ public interface IEmployeeService
     /// <param name="sort">One of name_asc|name_desc|number|recent|department|function|status; an
     /// unrecognised or missing value falls back to name_asc. Secondary order is always
     /// LastName, FirstName for stable paging.</param>
+    /// <param name="incompleteOnly">HR maturity wave, task 9: restrict to employees whose dossier
+    /// is not (yet) complete.</param>
     Task<PagedResult<EmployeeListItemDto>> SearchAsync(
         string? searchText, bool? isActive, Guid? jobFunctionId, Guid? departmentId,
         EmploymentStatus? employmentStatus, bool excludeDrivers, bool? hasDriverProfile, string? sort,
-        PageRequest page, CancellationToken cancellationToken);
+        bool incompleteOnly, PageRequest page, CancellationToken cancellationToken);
 
     /// <param name="includeConfidential">When false, confidential fields (NRN/IBAN/BIC) are nulled.</param>
     Task<EmployeeDetailDto?> GetByIdAsync(Guid id, bool includeConfidential, CancellationToken cancellationToken);

@@ -1,5 +1,7 @@
 import { apiClient } from '../../../api/apiClient'
-import type { CreateEmployeeInput, EmployeeDetail, EmployeePagedResult, EmploymentStatus, UpdateEmployeeInput } from '../types/employee'
+import type {
+  CreateEmployeeInput, EmployeeDetail, EmployeePagedResult, EmploymentStatus, EmployeeSortOption, UpdateEmployeeInput,
+} from '../types/employee'
 
 export interface SearchEmployeesParams {
   search?: string
@@ -9,6 +11,9 @@ export interface SearchEmployeesParams {
   employmentStatus?: EmploymentStatus
   excludeDrivers?: boolean
   hasDriverProfile?: boolean
+  sort?: EmployeeSortOption
+  /** Restricts to employees with an incomplete dossier (HR maturity wave, task 9). */
+  incompleteOnly?: boolean
   page: number
   pageSize: number
 }
@@ -22,6 +27,8 @@ export function searchEmployees(params: SearchEmployeesParams): Promise<Employee
   if (params.employmentStatus) query.set('employmentStatus', params.employmentStatus)
   if (params.excludeDrivers) query.set('excludeDrivers', 'true')
   if (params.hasDriverProfile !== undefined) query.set('hasDriverProfile', String(params.hasDriverProfile))
+  if (params.sort) query.set('sort', params.sort)
+  if (params.incompleteOnly) query.set('incompleteOnly', 'true')
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
 

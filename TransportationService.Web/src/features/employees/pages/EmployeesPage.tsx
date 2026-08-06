@@ -17,9 +17,50 @@ import {
   EMPLOYMENT_STATUS_LABELS,
   EMPLOYMENT_STATUS_TONES,
   type EmployeeListItem,
+  type EmployeeSortOption,
   type EmploymentStatus,
 } from '../types/employee'
+import { completenessTone, contractEndBadge } from '../utils/employeeListBadges'
 import './employees-page.css'
+
+const FILTER_STORAGE_KEY = 'ts.employees.filters'
+
+interface EmployeesFilters {
+  activeFilter: boolean | undefined
+  jobFunctionId: string
+  departmentId: string
+  employmentStatus: EmploymentStatus | ''
+  sort: EmployeeSortOption
+  incompleteOnly: boolean
+}
+
+const EMPTY_FILTERS: EmployeesFilters = {
+  activeFilter: undefined,
+  jobFunctionId: '',
+  departmentId: '',
+  employmentStatus: '',
+  sort: 'name_asc',
+  incompleteOnly: false,
+}
+
+function loadStoredFilters(): EmployeesFilters {
+  try {
+    const raw = localStorage.getItem(FILTER_STORAGE_KEY)
+    return raw ? { ...EMPTY_FILTERS, ...(JSON.parse(raw) as Partial<EmployeesFilters>) } : EMPTY_FILTERS
+  } catch {
+    return EMPTY_FILTERS
+  }
+}
+
+const SORT_OPTIONS: { value: EmployeeSortOption; label: string }[] = [
+  { value: 'name_asc', label: 'Naam A–Z' },
+  { value: 'name_desc', label: 'Naam Z–A' },
+  { value: 'number', label: 'Personeelsnummer' },
+  { value: 'recent', label: 'Recent toegevoegd' },
+  { value: 'department', label: 'Afdeling' },
+  { value: 'function', label: 'Functie' },
+  { value: 'status', label: 'Actief/Inactief' },
+]
 
 export function EmployeesPage() {
   const navigate = useNavigate()
@@ -27,32 +68,42 @@ export function EmployeesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const isDriversView = searchParams.get('view') === 'chauffeurs'
   const [search, setSearch] = useState('')
-  const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
-  const [jobFunctionId, setJobFunctionId] = useState('')
-  const [departmentId, setDepartmentId] = useState('')
-  const [employmentStatus, setEmploymentStatus] = useState<EmploymentStatus | ''>('')
   const [page, setPage] = useState(1)
+  const [filters, setFilters] = useState<EmployeesFilters>(loadStoredFilters)
 
   const jobFunctions = useLookupOptions('/api/job-functions')
   const departments = useLookupOptions('/api/departments')
 
-  const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<EmployeeListItem>(
+  useEffect(() => {
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters))
+  }, [filters])
+
+  function updateFilters(patch: Partial<EmployeesFilters>) {
+    setFilters((current) => ({ ...current, ...patch }))
+    setPage(1)
+  }
+
+  const { items, totalCount, pageSize, isLoading, error } = usePagedQuery<EmployeeListItem>(
     (args) =>
       searchEmployees({
         ...args,
-        jobFunctionId: jobFunctionId || undefined,
-        departmentId: departmentId || undefined,
-        employmentStatus: employmentStatus || undefined,
+        jobFunctionId: filters.jobFunctionId || undefined,
+        departmentId: filters.departmentId || undefined,
+        employmentStatus: filters.employmentStatus || undefined,
         hasDriverProfile: isDriversView || undefined,
+        sort: filters.sort,
+        incompleteOnly: filters.incompleteOnly || undefined,
       }),
-    { search, isActive: activeFilter, page, errorMessage: 'Medewerkers konden niet worden geladen.' },
+    {
+      search,
+      isActive: filters.activeFilter,
+      page,
+      // Every filter value that the fetcher closure reads must be folded in here — otherwise
+      // usePagedQuery's request key doesn't change and a filter edit silently reuses stale data.
+      extra: { ...filters, isDriversView },
+      errorMessage: 'Medewerkers konden niet worden geladen.',
+    },
   )
-
-  // Extra filters are not part of the paged-query key: trigger an explicit reload.
-  useEffect(() => {
-    reload()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobFunctionId, departmentId, employmentStatus, isDriversView])
 
   const columns: Column<EmployeeListItem>[] = [
     { key: 'number', header: 'Nummer', width: '120px', render: (row) => <code>{row.employeeNumber}</code> },
@@ -75,6 +126,16 @@ export function EmployeesPage() {
         ),
     },
     { key: 'department', header: 'Afdeling', width: '150px', render: (row) => row.departmentName ?? '—' },
+    {
+      key: 'completeness',
+      header: 'Dossier',
+      width: '90px',
+      render: (row) => (
+        <Badge tone={completenessTone(row.completenessPercentage)} title={`Dossier ${row.completenessPercentage}% compleet`}>
+          {row.completenessPercentage}%
+        </Badge>
+      ),
+    },
     ...(isDriversView
       ? [
           {
@@ -96,16 +157,22 @@ export function EmployeesPage() {
       key: 'status',
       header: 'Status',
       width: '220px',
-      render: (row) => (
-        <StatusBadges
-          active={row.isActive}
-          operational={{
-            label: EMPLOYMENT_STATUS_LABELS[row.employmentStatus],
-            tone: EMPLOYMENT_STATUS_TONES[row.employmentStatus],
-          }}
-          blocked={isDriversView ? { isBlocked: row.driverIsBlocked ?? false } : undefined}
-        />
-      ),
+      render: (row) => {
+        const endBadge = contractEndBadge(row)
+        return (
+          <>
+            <StatusBadges
+              active={row.isActive}
+              operational={{
+                label: EMPLOYMENT_STATUS_LABELS[row.employmentStatus],
+                tone: EMPLOYMENT_STATUS_TONES[row.employmentStatus],
+              }}
+              blocked={isDriversView ? { isBlocked: row.driverIsBlocked ?? false } : undefined}
+            />
+            {endBadge && <Badge tone={endBadge.tone}>{endBadge.label}</Badge>}
+          </>
+        )
+      },
     },
   ]
 
@@ -160,19 +227,13 @@ export function EmployeesPage() {
           setPage(1)
         }}
         searchPlaceholder="Zoeken op nummer, naam, e-mail of plaats…"
-        activeFilter={activeFilter}
-        onActiveFilterChange={(value) => {
-          setActiveFilter(value)
-          setPage(1)
-        }}
+        activeFilter={filters.activeFilter}
+        onActiveFilterChange={(value) => updateFilters({ activeFilter: value })}
       >
         <select
           aria-label="Filter op functie"
-          value={jobFunctionId}
-          onChange={(e) => {
-            setJobFunctionId(e.target.value)
-            setPage(1)
-          }}
+          value={filters.jobFunctionId}
+          onChange={(e) => updateFilters({ jobFunctionId: e.target.value })}
         >
           <option value="">Alle functies</option>
           {jobFunctions.options.map((o) => (
@@ -183,11 +244,8 @@ export function EmployeesPage() {
         </select>
         <select
           aria-label="Filter op afdeling"
-          value={departmentId}
-          onChange={(e) => {
-            setDepartmentId(e.target.value)
-            setPage(1)
-          }}
+          value={filters.departmentId}
+          onChange={(e) => updateFilters({ departmentId: e.target.value })}
         >
           <option value="">Alle afdelingen</option>
           {departments.options.map((o) => (
@@ -198,11 +256,8 @@ export function EmployeesPage() {
         </select>
         <select
           aria-label="Filter op dienstverband"
-          value={employmentStatus}
-          onChange={(e) => {
-            setEmploymentStatus(e.target.value as EmploymentStatus | '')
-            setPage(1)
-          }}
+          value={filters.employmentStatus}
+          onChange={(e) => updateFilters({ employmentStatus: e.target.value as EmploymentStatus | '' })}
         >
           <option value="">Alle statussen</option>
           {Object.entries(EMPLOYMENT_STATUS_LABELS).map(([value, label]) => (
@@ -211,6 +266,25 @@ export function EmployeesPage() {
             </option>
           ))}
         </select>
+        <select
+          aria-label="Sorteren"
+          value={filters.sort}
+          onChange={(e) => updateFilters({ sort: e.target.value as EmployeeSortOption })}
+        >
+          {SORT_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <label className="employees-incomplete-filter">
+          <input
+            type="checkbox"
+            checked={filters.incompleteOnly}
+            onChange={(e) => updateFilters({ incompleteOnly: e.target.checked })}
+          />
+          Enkel onvolledige dossiers
+        </label>
       </FilterBar>
       <DataTable
         columns={columns}
@@ -221,6 +295,7 @@ export function EmployeesPage() {
         emptyMessage="Geen medewerkers gevonden."
         loadingMessage="Medewerkers laden…"
         onRowClick={(row) => navigate(`/employees/${row.id}`)}
+        rowClassName={(row) => (row.isActive ? undefined : 'employees-row-inactive')}
       />
       <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />
     </div>

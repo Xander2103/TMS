@@ -68,7 +68,19 @@ export interface EmployeeListItem {
   /** Populated only in the "Chauffeurs" view (rows with a driver profile). */
   driverIsBlocked?: boolean | null
   driverAvailability?: DriverAvailabilityStatus | null
+  /** Dossier-completeness percentage (HR maturity wave §2.1). */
+  completenessPercentage: number
+  employmentEndDate: string | null
 }
+
+export type EmployeeSortOption =
+  | 'name_asc'
+  | 'name_desc'
+  | 'number'
+  | 'recent'
+  | 'department'
+  | 'function'
+  | 'status'
 
 export type DriverAvailabilityStatus = 'Available' | 'Unavailable' | 'OnLeave' | 'OnTrip'
 

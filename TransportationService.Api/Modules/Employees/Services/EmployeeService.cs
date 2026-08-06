@@ -108,7 +108,7 @@ public class EmployeeService : IEmployeeService
     public async Task<PagedResult<EmployeeListItemDto>> SearchAsync(
         string? searchText, bool? isActive, Guid? jobFunctionId, Guid? departmentId,
         EmploymentStatus? employmentStatus, bool excludeDrivers, bool? hasDriverProfile, string? sort,
-        PageRequest page, CancellationToken cancellationToken)
+        bool incompleteOnly, PageRequest page, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
         var query = TenantScoped().AsNoTracking();
@@ -143,6 +143,20 @@ public class EmployeeService : IEmployeeService
         if (employmentStatus is { } statusFilter)
         {
             query = query.Where(e => e.EmploymentStatus == statusFilter);
+        }
+
+        if (incompleteOnly)
+        {
+            // HR maturity wave, task 9: the completeness engine has no SQL-level "is complete"
+            // predicate (it's evaluated in memory, per employee, from several batched sources —
+            // see IEmployeeCompletenessService), so filtering "onvolledige dossiers" means
+            // materialising the tenant-wide incomplete-id set first and then applying a plain
+            // WHERE Id IN (...) before paging. That's one extra round-trip per request and an
+            // in-memory id list sized to the tenant's ACTIVE headcount — fine up to a few
+            // thousand employees; a tenant far beyond that would need the engine itself to push
+            // its checks into SQL instead of returning ids to filter by.
+            var incompleteIds = await _completenessService.FindIncompleteEmployeeIdsAsync(cancellationToken);
+            query = query.Where(e => incompleteIds.Contains(e.Id));
         }
 
         if (!string.IsNullOrWhiteSpace(searchText))
@@ -182,7 +196,12 @@ public class EmployeeService : IEmployeeService
                 _dbContext.Drivers
                     .Where(d => d.EmployeeId == e.Id && d.TenantId == tenantId)
                     .Select(d => (DriverAvailabilityStatus?)d.AvailabilityStatus)
-                    .FirstOrDefault()))
+                    .FirstOrDefault(),
+                // CompletenessPercentage is filled below via `with` (one batched query for the
+                // whole page); passed positionally here because expression trees (this Select
+                // runs through EF's LINQ provider) don't allow out-of-position named arguments.
+                0,
+                e.EmploymentEndDate))
             .ToListAsync(cancellationToken);
 
         // One batched query for the whole page instead of one per row (HR maturity wave §2.1).

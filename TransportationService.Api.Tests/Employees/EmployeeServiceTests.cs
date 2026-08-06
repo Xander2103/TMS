@@ -65,7 +65,7 @@ public class EmployeeServiceTests
     private static async Task<List<string>> LastNamesAsync(Harness h, string? sort)
     {
         var result = await h.Employees.SearchAsync(
-            null, null, null, null, null, false, null, sort, PageRequest.Of(1, 25), CancellationToken.None);
+            null, null, null, null, null, false, null, sort, false, PageRequest.Of(1, 25), CancellationToken.None);
         return result.Items.Select(i => $"{i.LastName} {i.FirstName}").ToList();
     }
 
@@ -97,7 +97,7 @@ public class EmployeeServiceTests
         await h.Db.Context.SaveChangesAsync();
 
         var result = await h.Employees.SearchAsync(
-            null, null, null, null, null, false, null, "number", PageRequest.Of(1, 25), CancellationToken.None);
+            null, null, null, null, null, false, null, "number", false, PageRequest.Of(1, 25), CancellationToken.None);
 
         Assert.Equal(["MED-0001", "MED-0002", "MED-0003"], result.Items.Select(i => i.EmployeeNumber).ToList());
     }
@@ -210,5 +210,57 @@ public class EmployeeServiceTests
         Assert.Equal(expected, await LastNamesAsync(h, null));
         Assert.Equal(expected, await LastNamesAsync(h, "not-a-real-sort-value"));
         Assert.Equal(expected, await LastNamesAsync(h, "name_asc"));
+    }
+
+    /// <summary>
+    /// HR maturity wave, task 9: <c>incompleteOnly=true</c> restricts the list to employees whose
+    /// dossier is not (yet) complete. Fills the same scalar/document/contact set the completeness
+    /// engine's own test suite (<c>EmployeeCompletenessTests</c>) uses for a "full dossier".
+    /// </summary>
+    [Fact]
+    public async Task IncompleteOnly_ExcludesCompleteDossier_IncludesIncompleteDossier()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var jobFunction = new JobFunction { Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "ADM", Name = "Administratie", IsActive = true };
+        h.Db.Context.Add(jobFunction);
+
+        var complete = NewEmployee(h.TenantId, "Ann", "Compleet", "MED-0001");
+        complete.DateOfBirth = new DateOnly(1990, 1, 1);
+        complete.NationalRegisterNumber = "90010112345";
+        complete.Street = "Kerkstraat";
+        complete.PostalCode = "2000";
+        complete.City = "Antwerpen";
+        complete.Email = "ann@acme.example";
+        complete.Iban = "BE68539007547034";
+        complete.EmploymentStartDate = new DateOnly(2020, 1, 1);
+        complete.ContractTypeId = Guid.NewGuid();
+        complete.DepartmentId = Guid.NewGuid();
+
+        var incomplete = NewEmployee(h.TenantId, "Piet", "Onvolledig", "MED-0002");
+
+        h.Db.Context.Employees.AddRange(complete, incomplete);
+        h.Db.Context.Add(new EmployeeJobFunction { EmployeeId = complete.Id, JobFunctionId = jobFunction.Id });
+        h.Db.Context.Add(new EmployeeEmergencyContact
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, EmployeeId = complete.Id, Name = "Noodcontact", Priority = 1,
+        });
+        h.Db.Context.Add(new EmployeeDocument
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, EmployeeId = complete.Id,
+            Category = EmployeeDocumentCategory.IdentityCardFront, FileName = "id.pdf", StorageKey = "k1",
+        });
+        h.Db.Context.Add(new EmployeeDocument
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, EmployeeId = complete.Id,
+            Category = EmployeeDocumentCategory.Contract, FileName = "contract.pdf", StorageKey = "k2",
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var result = await h.Employees.SearchAsync(
+            null, null, null, null, null, false, null, null, true, PageRequest.Of(1, 25), CancellationToken.None);
+
+        Assert.DoesNotContain(result.Items, i => i.Id == complete.Id);
+        Assert.Contains(result.Items, i => i.Id == incomplete.Id);
     }
 }
