@@ -10,7 +10,8 @@ namespace TransportationService.Api.Modules.Hr.Services;
 public record HrReminderSettingsDto(
     bool BirthdayEnabled, int BirthdayDaysBefore, bool BirthdayEmailEnabled, string BirthdayRecipientRoleCodes,
     bool SeniorityEnabled, string SeniorityMilestoneYears, int SeniorityWarningDays, bool SeniorityEmployeeEmailEnabled,
-    bool EmploymentEndEnabled, int EmploymentEndDaysBefore);
+    bool EmploymentEndEnabled, int EmploymentEndDaysBefore,
+    bool DossierRemindersEnabled, int DossierReminderDays, int DossierEscalationDays);
 
 public record ExpiryReminderPolicyDto(
     Guid Id, ExpiryReminderTargetKind TargetKind, string TargetCode, int LeadTimeDays, int? RepeatIntervalDays,
@@ -49,6 +50,19 @@ public class HrReminderConfigService : IHrReminderConfigService
 
     public async Task<HrReminderSettingsDto> UpdateSettingsAsync(HrReminderSettingsDto request, CancellationToken cancellationToken)
     {
+        if (request.DossierReminderDays < 1 || request.DossierReminderDays > 365)
+        {
+            throw new DomainValidationException("dossierReminderDays", "Kies een aantal dagen tussen 1 en 365.");
+        }
+        if (request.DossierEscalationDays < 1 || request.DossierEscalationDays > 365)
+        {
+            throw new DomainValidationException("dossierEscalationDays", "Kies een aantal dagen tussen 1 en 365.");
+        }
+        if (request.DossierEscalationDays <= request.DossierReminderDays)
+        {
+            throw new DomainValidationException("dossierEscalationDays", "Escalatie moet later vallen dan de eerste melding.");
+        }
+
         var settings = await GetOrCreateAsync(cancellationToken);
 
         settings.BirthdayEnabled = request.BirthdayEnabled;
@@ -61,6 +75,9 @@ public class HrReminderConfigService : IHrReminderConfigService
         settings.SeniorityEmployeeEmailEnabled = request.SeniorityEmployeeEmailEnabled;
         settings.EmploymentEndEnabled = request.EmploymentEndEnabled;
         settings.EmploymentEndDaysBefore = Math.Clamp(request.EmploymentEndDaysBefore, 0, 365);
+        settings.DossierRemindersEnabled = request.DossierRemindersEnabled;
+        settings.DossierReminderDays = request.DossierReminderDays;
+        settings.DossierEscalationDays = request.DossierEscalationDays;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("HrReminderSettings", settings.TenantId.ToString(), "Updated", null,
@@ -186,7 +203,8 @@ public class HrReminderConfigService : IHrReminderConfigService
     private static HrReminderSettingsDto Map(HrReminderSettings s) => new(
         s.BirthdayEnabled, s.BirthdayDaysBefore, s.BirthdayEmailEnabled, s.BirthdayRecipientRoleCodes,
         s.SeniorityEnabled, s.SeniorityMilestoneYears, s.SeniorityWarningDays, s.SeniorityEmployeeEmailEnabled,
-        s.EmploymentEndEnabled, s.EmploymentEndDaysBefore);
+        s.EmploymentEndEnabled, s.EmploymentEndDaysBefore,
+        s.DossierRemindersEnabled, s.DossierReminderDays, s.DossierEscalationDays);
 
     private static ExpiryReminderPolicyDto Map(ExpiryReminderPolicy p) => new(
         p.Id, p.TargetKind, p.TargetCode, p.LeadTimeDays, p.RepeatIntervalDays,

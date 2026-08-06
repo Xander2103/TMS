@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Hr.Entities;
@@ -169,5 +170,105 @@ public class HrReminderTests
         Assert.Single(list);
         Assert.True(await sut.DeletePolicyAsync(policy.Id, CancellationToken.None));
         Assert.Empty(await sut.ListPoliciesAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ConfigService_DossierReminderDefaults_AreSevenAndThirtyEnabled()
+    {
+        var clock = new TestClock(new DateTimeOffset(2026, 7, 21, 6, 0, 0, TimeSpan.Zero));
+        var h = await SeedAsync(clock);
+        using var _ = h.Db;
+        var tenant = new DevTenantContext(h.TenantId);
+        var sut = new HrReminderConfigService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+
+        var settings = await sut.GetSettingsAsync(CancellationToken.None);
+
+        Assert.True(settings.DossierRemindersEnabled);
+        Assert.Equal(7, settings.DossierReminderDays);
+        Assert.Equal(30, settings.DossierEscalationDays);
+    }
+
+    [Fact]
+    public async Task ConfigService_UpdatesDossierReminderSettings_WhenValid()
+    {
+        var clock = new TestClock(new DateTimeOffset(2026, 7, 21, 6, 0, 0, TimeSpan.Zero));
+        var h = await SeedAsync(clock);
+        using var _ = h.Db;
+        var tenant = new DevTenantContext(h.TenantId);
+        var sut = new HrReminderConfigService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+
+        var settings = await sut.GetSettingsAsync(CancellationToken.None);
+        var updated = await sut.UpdateSettingsAsync(settings with
+        {
+            DossierRemindersEnabled = false,
+            DossierReminderDays = 14,
+            DossierEscalationDays = 45,
+        }, CancellationToken.None);
+
+        Assert.False(updated.DossierRemindersEnabled);
+        Assert.Equal(14, updated.DossierReminderDays);
+        Assert.Equal(45, updated.DossierEscalationDays);
+    }
+
+    [Fact]
+    public async Task ConfigService_RejectsDossierEscalation_WhenNotLaterThanReminder()
+    {
+        var clock = new TestClock(new DateTimeOffset(2026, 7, 21, 6, 0, 0, TimeSpan.Zero));
+        var h = await SeedAsync(clock);
+        using var _ = h.Db;
+        var tenant = new DevTenantContext(h.TenantId);
+        var sut = new HrReminderConfigService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+
+        var settings = await sut.GetSettingsAsync(CancellationToken.None);
+
+        var ex = await Assert.ThrowsAsync<DomainValidationException>(() => sut.UpdateSettingsAsync(settings with
+        {
+            DossierReminderDays = 30,
+            DossierEscalationDays = 30,
+        }, CancellationToken.None));
+
+        Assert.NotNull(ex.FieldErrors);
+        Assert.True(ex.FieldErrors!.ContainsKey("dossierEscalationDays"));
+        Assert.Equal("Escalatie moet later vallen dan de eerste melding.", ex.FieldErrors["dossierEscalationDays"][0]);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(366)]
+    public async Task ConfigService_RejectsDossierReminderDays_OutsideOneToThreeSixtyFive(int invalidDays)
+    {
+        var clock = new TestClock(new DateTimeOffset(2026, 7, 21, 6, 0, 0, TimeSpan.Zero));
+        var h = await SeedAsync(clock);
+        using var _ = h.Db;
+        var tenant = new DevTenantContext(h.TenantId);
+        var sut = new HrReminderConfigService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+
+        var settings = await sut.GetSettingsAsync(CancellationToken.None);
+
+        await Assert.ThrowsAsync<DomainValidationException>(() => sut.UpdateSettingsAsync(settings with
+        {
+            DossierReminderDays = invalidDays,
+            DossierEscalationDays = 200,
+        }, CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(366)]
+    public async Task ConfigService_RejectsDossierEscalationDays_OutsideOneToThreeSixtyFive(int invalidDays)
+    {
+        var clock = new TestClock(new DateTimeOffset(2026, 7, 21, 6, 0, 0, TimeSpan.Zero));
+        var h = await SeedAsync(clock);
+        using var _ = h.Db;
+        var tenant = new DevTenantContext(h.TenantId);
+        var sut = new HrReminderConfigService(h.Db.Context, tenant, new AuditService(h.Db.Context, tenant, new DevCurrentUserContext(null)));
+
+        var settings = await sut.GetSettingsAsync(CancellationToken.None);
+
+        await Assert.ThrowsAsync<DomainValidationException>(() => sut.UpdateSettingsAsync(settings with
+        {
+            DossierReminderDays = 5,
+            DossierEscalationDays = invalidDays,
+        }, CancellationToken.None));
     }
 }

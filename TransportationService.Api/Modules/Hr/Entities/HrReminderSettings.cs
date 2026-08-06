@@ -29,4 +29,11 @@ public class HrReminderSettings : AuditableTenantEntity
     // Employment end
     public bool EmploymentEndEnabled { get; set; } = true;
     public int EmploymentEndDaysBefore { get; set; } = 7;
+
+    // Dossier follow-up (document/file completeness reminders)
+    public bool DossierRemindersEnabled { get; set; } = true;
+    /// <summary>Days after a dossier item becomes due before HR is reminded.</summary>
+    public int DossierReminderDays { get; set; } = 7;
+    /// <summary>Days after a dossier item becomes due before it is escalated. Must exceed <see cref="DossierReminderDays"/>.</summary>
+    public int DossierEscalationDays { get; set; } = 30;
 }

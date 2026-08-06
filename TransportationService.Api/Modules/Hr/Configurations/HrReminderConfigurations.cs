@@ -14,6 +14,10 @@ public class HrReminderSettingsConfiguration : IEntityTypeConfiguration<HrRemind
         builder.Property(s => s.BirthdayRecipientRoleCodes).IsRequired().HasMaxLength(200);
         builder.Property(s => s.SeniorityMilestoneYears).IsRequired().HasMaxLength(200);
 
+        builder.Property(s => s.DossierRemindersEnabled).HasDefaultValue(true);
+        builder.Property(s => s.DossierReminderDays).HasDefaultValue(7);
+        builder.Property(s => s.DossierEscalationDays).HasDefaultValue(30);
+
         builder.HasIndex(s => s.TenantId).IsUnique();
         builder.HasQueryFilter(s => !s.IsDeleted);
     }
