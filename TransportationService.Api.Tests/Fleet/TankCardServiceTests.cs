@@ -52,6 +52,12 @@ public class TankCardServiceTests
         new(cardNumber, "DKV", vehicleId, driverId, employeeId, new DateOnly(2026, 1, 1), new DateOnly(2028, 1, 1),
             internalName, null, dailyLimit, weeklyLimit, monthlyLimit, null, null);
 
+    private static UpdateTankCardRequest UpdateRequest(
+        string cardNumber = "7002-1111-2222-0001", Guid? vehicleId = null, Guid? driverId = null, Guid? employeeId = null,
+        decimal? dailyLimit = null, decimal? weeklyLimit = null, decimal? monthlyLimit = null, string? internalName = null) =>
+        new(cardNumber, "DKV", vehicleId, driverId, employeeId, new DateOnly(2026, 1, 1), new DateOnly(2028, 1, 1),
+            internalName, null, dailyLimit, weeklyLimit, monthlyLimit, null, null);
+
     [Fact]
     public void ComputeStatus_CoversLifecycle()
     {
@@ -335,5 +341,89 @@ public class TankCardServiceTests
 
         Assert.Equal(1, available.TotalCount);
         Assert.Equal("FREE-1", available.Items[0].CardNumber);
+    }
+
+    [Fact]
+    public async Task Update_ReassignEmployee_ResyncsDriverId()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var employeeA = NewEmployee(h.TenantId, "P-A", "Jan", "Peeters");
+        var driverA = NewDriver(h.TenantId, employeeA.Id, "CH-A");
+        var employeeB = NewEmployee(h.TenantId, "P-B", "An", "Vermeulen");
+        var driverB = NewDriver(h.TenantId, employeeB.Id, "CH-B");
+        h.Db.Context.Employees.Add(employeeA);
+        h.Db.Context.Employees.Add(employeeB);
+        h.Db.Context.Set<Driver>().Add(driverA);
+        h.Db.Context.Set<Driver>().Add(driverB);
+        await h.Db.Context.SaveChangesAsync();
+
+        var created = await h.Sut.CreateAsync(Request("CARD-A", employeeId: employeeA.Id), CancellationToken.None);
+        Assert.Equal(employeeA.Id, created.Card!.EmployeeId);
+        Assert.Equal(driverA.Id, created.Card.DriverId);
+
+        var updated = await h.Sut.UpdateAsync(
+            created.Card.Id, UpdateRequest("CARD-A", employeeId: employeeB.Id), CancellationToken.None);
+
+        Assert.Equal(TankCardOperationOutcome.Success, updated.Outcome);
+        Assert.Equal(employeeB.Id, updated.Card!.EmployeeId);
+        Assert.Equal(driverB.Id, updated.Card.DriverId);
+        Assert.Equal("An Vermeulen", updated.Card.EmployeeName);
+        Assert.Equal("An Vermeulen", updated.Card.DriverName);
+    }
+
+    [Fact]
+    public async Task Update_ClearingEmployeeAndDriver_ClearsBothLinks()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var employee = NewEmployee(h.TenantId);
+        var driver = NewDriver(h.TenantId, employee.Id);
+        h.Db.Context.Employees.Add(employee);
+        h.Db.Context.Set<Driver>().Add(driver);
+        await h.Db.Context.SaveChangesAsync();
+
+        var created = await h.Sut.CreateAsync(Request("CARD-A", employeeId: employee.Id), CancellationToken.None);
+        Assert.Equal(driver.Id, created.Card!.DriverId);
+
+        var updated = await h.Sut.UpdateAsync(
+            created.Card.Id, UpdateRequest("CARD-A", employeeId: null, driverId: null), CancellationToken.None);
+
+        Assert.Equal(TankCardOperationOutcome.Success, updated.Outcome);
+        Assert.Null(updated.Card!.EmployeeId);
+        Assert.Null(updated.Card.DriverId);
+        Assert.Null(updated.Card.EmployeeName);
+        Assert.Null(updated.Card.DriverName);
+    }
+
+    [Fact]
+    public async Task Update_NegativeWeeklyLimit_ThrowsDomainValidationException()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request("CARD-A"), CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<DomainValidationException>(
+            () => h.Sut.UpdateAsync(created.Card!.Id, UpdateRequest("CARD-A", weeklyLimit: -5m), CancellationToken.None));
+
+        Assert.NotNull(exception.FieldErrors);
+        Assert.True(exception.FieldErrors!.ContainsKey("weeklyLimit"));
+    }
+
+    [Fact]
+    public async Task Update_CrossTenantEmployee_ThrowsInvalidTenantReferenceException()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.CreateAsync(Request("CARD-A"), CancellationToken.None);
+
+        var otherTenantId = Guid.NewGuid();
+        h.Db.Context.Tenants.Add(new Tenant { Id = otherTenantId, Name = "Other", Slug = "other", IsActive = true, CreatedAt = Now.UtcDateTime });
+        var foreignEmployee = NewEmployee(otherTenantId);
+        h.Db.Context.Employees.Add(foreignEmployee);
+        await h.Db.Context.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<InvalidTenantReferenceException>(
+            () => h.Sut.UpdateAsync(created.Card!.Id, UpdateRequest("CARD-A", employeeId: foreignEmployee.Id), CancellationToken.None));
     }
 }
