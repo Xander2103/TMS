@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using TransportationService.Api.Data;
+using TransportationService.Api.Modules.Employees.Services;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Messaging.Entities;
 using TransportationService.Api.Modules.Notifications.Entities;
 using TransportationService.Api.Modules.Notifications.Services;
+using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Modules.Hr.Services;
 
@@ -39,7 +41,7 @@ public class HrReminderProducer
 
         var employees = await _dbContext.Employees.AsNoTracking()
             .Where(e => e.TenantId == tenantId && e.IsActive)
-            .Select(e => new EmployeeRow(e.Id, e.FirstName, e.LastName, e.DateOfBirth, e.EmploymentStartDate, e.EmploymentEndDate, e.Email))
+            .Select(e => new EmployeeRow(e.Id, e.FirstName, e.LastName, e.DateOfBirth, e.EmploymentStartDate, e.EmploymentEndDate, e.Email, e.CreatedAt))
             .ToListAsync(cancellationToken);
 
         if (settings.BirthdayEnabled)
@@ -55,6 +57,11 @@ public class HrReminderProducer
         if (settings.EmploymentEndEnabled)
         {
             added |= await ProduceEmploymentEndAsync(tenantId, settings, today, employees, sentKeys, cancellationToken);
+        }
+
+        if (settings.DossierRemindersEnabled)
+        {
+            added |= await ProduceDossierRemindersAsync(tenantId, settings, today, employees, sentKeys, cancellationToken);
         }
 
         if (added)
@@ -206,6 +213,84 @@ public class HrReminderProducer
         return added;
     }
 
+    /// <summary>
+    /// Dossier-completeness follow-up (HR maturity wave, task 4). Delegates the "what's missing"
+    /// question entirely to <see cref="EmployeeCompletenessService"/> (task 2) — this method only
+    /// applies the age gate (<see cref="HrReminderSettings.DossierReminderDays"/> /
+    /// <see cref="HrReminderSettings.DossierEscalationDays"/>) and the dedupe/recipient plumbing
+    /// shared with the other reminder kinds. A throwaway per-tenant <see cref="DevTenantContext"/>
+    /// composes the completeness service, same pattern as every other per-tenant dependency in
+    /// this sweep.
+    /// </summary>
+    private async Task<bool> ProduceDossierRemindersAsync(
+        Guid tenantId, HrReminderSettings settings, DateOnly today, IReadOnlyList<EmployeeRow> employees,
+        HashSet<string> sentKeys, CancellationToken cancellationToken)
+    {
+        var completeness = new EmployeeCompletenessService(_dbContext, new DevTenantContext(tenantId));
+        var incompleteIds = (await completeness.FindIncompleteEmployeeIdsAsync(cancellationToken)).ToHashSet();
+        if (incompleteIds.Count == 0)
+        {
+            return false;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var bucket = today.DayNumber / 7;
+        var reminderCutoff = now.AddDays(-settings.DossierReminderDays);
+        var escalationCutoff = now.AddDays(-settings.DossierEscalationDays);
+
+        var hrRecipients = await ResolveRoleRecipientsAsync(tenantId, ["hr"], cancellationToken);
+        var escalationRecipients = await ResolveRoleRecipientsAsync(tenantId, ["hr", "management"], cancellationToken);
+        var added = false;
+
+        foreach (var employee in employees)
+        {
+            if (!incompleteIds.Contains(employee.Id) || employee.CreatedAt > reminderCutoff)
+            {
+                continue;
+            }
+
+            var completenessResult = await completeness.GetForEmployeeAsync(employee.Id, cancellationToken);
+            if (completenessResult.IsComplete)
+            {
+                continue;
+            }
+
+            var missingLabels = completenessResult.MissingItems.Take(3).Select(i => i.Label).ToList();
+            var missingText = string.Join(", ", missingLabels) + (completenessResult.MissingItems.Count > 3 ? "…" : "");
+            var message = $"Personeelsdossier {employee.FirstName} {employee.LastName} is {completenessResult.Percentage}% compleet. Nog ontbrekend: {missingText}.";
+            var linkPath = $"/employees/{employee.Id}";
+
+            var baseKey = $"dossier_incomplete:{employee.Id}:{bucket}";
+            if (Claim(tenantId, sentKeys, baseKey, "dossier_incomplete"))
+            {
+                foreach (var recipient in hrRecipients)
+                {
+                    _dbContext.Add(BuildNotification(tenantId, recipient, "employee_dossier_incomplete",
+                        "Personeelsdossier onvolledig", message, linkPath));
+                }
+
+                added = true;
+            }
+
+            if (employee.CreatedAt <= escalationCutoff)
+            {
+                var escalationKey = $"dossier_escalated:{employee.Id}:{bucket}";
+                if (Claim(tenantId, sentKeys, escalationKey, "dossier_escalated"))
+                {
+                    foreach (var recipient in escalationRecipients)
+                    {
+                        _dbContext.Add(BuildNotification(tenantId, recipient, "employee_dossier_incomplete_escalated",
+                            "Personeelsdossier onvolledig — escalatie", message, linkPath));
+                    }
+
+                    added = true;
+                }
+            }
+        }
+
+        return added;
+    }
+
     // --- helpers ---
 
     private async Task<HashSet<string>> LoadSentKeysAsync(Guid tenantId, CancellationToken cancellationToken)
@@ -311,5 +396,5 @@ public class HrReminderProducer
 
     private sealed record EmployeeRow(
         Guid Id, string FirstName, string LastName, DateOnly? DateOfBirth,
-        DateOnly? EmploymentStartDate, DateOnly? EmploymentEndDate, string? Email);
+        DateOnly? EmploymentStartDate, DateOnly? EmploymentEndDate, string? Email, DateTime CreatedAt);
 }

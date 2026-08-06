@@ -93,6 +93,11 @@ public static class MessageKinds
     /// <summary>E-mail copy of a published customer-portal message, in the recipient's language.</summary>
     public const string PortalMessagePublished = "portal_message_published";
 
+    // HR maturity wave, task 4: automatic dossier-completeness follow-up (in-app only, like
+    // HrEmploymentEnd — no outbox e-mail is queued for these, cataloged so admins see them).
+    public const string EmployeeDossierIncomplete = "employee_dossier_incomplete";
+    public const string EmployeeDossierIncompleteEscalated = "employee_dossier_incomplete_escalated";
+
     public static readonly IReadOnlyList<string> All =
     [
         OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate, Delay, DeliveryCompleted,
@@ -107,6 +112,7 @@ public static class MessageKinds
         FleetMaintenanceDue, FleetInspectionDue, FleetDocumentExpiry, FleetDamageCreated,
         PortalUserInvited, CustomerMessageReceived, CustomerMessageReply,
         EmployeeMessageReceived, PortalMessagePublished,
+        EmployeeDossierIncomplete, EmployeeDossierIncompleteEscalated,
     ];
 
     /// <summary>

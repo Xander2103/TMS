@@ -42,6 +42,9 @@ public static class NotificationTypeCatalog
             ["hr_birthday"] = (NotificationCategory.Hr, NotificationSeverity.Info),
             ["hr_seniority"] = (NotificationCategory.Hr, NotificationSeverity.Info),
             ["hr_employment_end"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            // HR maturity wave, task 4: dossier-completeness follow-up.
+            ["employee_dossier_incomplete"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["employee_dossier_incomplete_escalated"] = (NotificationCategory.Hr, NotificationSeverity.Critical),
             ["trip_assigned"] = (NotificationCategory.Planning, NotificationSeverity.Info),
             ["trip_changed"] = (NotificationCategory.Planning, NotificationSeverity.Warning),
             ["shift_assigned"] = (NotificationCategory.Planning, NotificationSeverity.Info),
