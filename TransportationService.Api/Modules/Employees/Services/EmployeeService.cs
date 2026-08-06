@@ -44,9 +44,67 @@ public class EmployeeService : IEmployeeService
     private IQueryable<Employee> TenantScoped() =>
         _dbContext.Employees.Where(e => e.TenantId == _tenantContext.TenantId);
 
+    /// <summary>
+    /// Server-side sort for the personnel list (HR maturity wave, task 6). Unknown/missing
+    /// values fall back to name_asc — never an error. Every branch ends with LastName, FirstName
+    /// as a stable tie-breaker so paging never reshuffles rows with equal primary keys.
+    /// Department/function keys use correlated subqueries (no navigation property exists for
+    /// Department, and job functions are a many-to-many) with an explicit "is null" flag ordered
+    /// first, because SQLite and PostgreSQL disagree on default NULL ordering for ASC.
+    /// </summary>
+    private IOrderedQueryable<Employee> ApplySort(IQueryable<Employee> query, string? sort, Guid tenantId)
+    {
+        switch (sort?.Trim().ToLowerInvariant())
+        {
+            case "name_desc":
+                return query.OrderByDescending(e => e.LastName).ThenByDescending(e => e.FirstName);
+
+            case "number":
+                return query.OrderBy(e => e.EmployeeNumber)
+                    .ThenBy(e => e.LastName).ThenBy(e => e.FirstName);
+
+            case "recent":
+                return query.OrderByDescending(e => e.CreatedAt)
+                    .ThenBy(e => e.LastName).ThenBy(e => e.FirstName);
+
+            case "department":
+                return query
+                    .OrderBy(e => _dbContext.Departments
+                        .Where(d => d.Id == e.DepartmentId && d.TenantId == tenantId)
+                        .Select(d => d.Name)
+                        .FirstOrDefault() == null ? 1 : 0)
+                    .ThenBy(e => _dbContext.Departments
+                        .Where(d => d.Id == e.DepartmentId && d.TenantId == tenantId)
+                        .Select(d => d.Name)
+                        .FirstOrDefault())
+                    .ThenBy(e => e.LastName).ThenBy(e => e.FirstName);
+
+            case "function":
+                return query
+                    .OrderBy(e => e.JobFunctions
+                        .Where(j => j.JobFunction != null)
+                        .Select(j => j.JobFunction!.Name)
+                        .Min() == null ? 1 : 0)
+                    .ThenBy(e => e.JobFunctions
+                        .Where(j => j.JobFunction != null)
+                        .Select(j => j.JobFunction!.Name)
+                        .Min())
+                    .ThenBy(e => e.LastName).ThenBy(e => e.FirstName);
+
+            case "status":
+                return query.OrderByDescending(e => e.IsActive)
+                    .ThenBy(e => e.EmploymentStatus)
+                    .ThenBy(e => e.LastName).ThenBy(e => e.FirstName);
+
+            default: // name_asc, null, or anything unrecognised
+                return query.OrderBy(e => e.LastName).ThenBy(e => e.FirstName);
+        }
+    }
+
     public async Task<PagedResult<EmployeeListItemDto>> SearchAsync(
         string? searchText, bool? isActive, Guid? jobFunctionId, Guid? departmentId,
-        EmploymentStatus? employmentStatus, bool excludeDrivers, bool? hasDriverProfile, PageRequest page, CancellationToken cancellationToken)
+        EmploymentStatus? employmentStatus, bool excludeDrivers, bool? hasDriverProfile, string? sort,
+        PageRequest page, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
         var query = TenantScoped().AsNoTracking();
@@ -97,8 +155,7 @@ public class EmployeeService : IEmployeeService
 
         var totalCount = await query.CountAsync(cancellationToken);
 
-        var items = await query
-            .OrderBy(e => e.LastName).ThenBy(e => e.FirstName)
+        var items = await ApplySort(query, sort, tenantId)
             .Skip(page.Skip)
             .Take(page.PageSize)
             .Select(e => new EmployeeListItemDto(
