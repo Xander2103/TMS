@@ -74,6 +74,9 @@ public static class MessageKinds
     public const string FleetDocumentExpiry = "fleet_document_expiry";
     public const string FleetDamageCreated = "fleet_damage_created";
 
+    /// <summary>HR maturity wave, task 8: staged tank-card expiry reminders (90/30/7 days).</summary>
+    public const string TankCardExpiry = "tank_card_expiry";
+
     /// <summary>Cataloged so admins see/disable it, but delivered by a direct
     /// <see cref="Services.IMessageOutboxService"/> queue call (see CustomerPortalUserService) —
     /// the recipient (the invited address) is intrinsic to the invite, not resolved via a
@@ -109,7 +112,7 @@ public static class MessageKinds
         InvoiceDraftReady, InvoiceSent, InvoicePeppolQueued, InvoicePeppolDelivered, InvoicePeppolFailed,
         InvoiceCreditNote, PersonnelQualificationExpiry, PersonnelMedicalExpiry, PersonnelDocumentExpiry,
         LeaveRequested, LeaveDecided, EmployeeNotePinned,
-        FleetMaintenanceDue, FleetInspectionDue, FleetDocumentExpiry, FleetDamageCreated,
+        FleetMaintenanceDue, FleetInspectionDue, FleetDocumentExpiry, FleetDamageCreated, TankCardExpiry,
         PortalUserInvited, CustomerMessageReceived, CustomerMessageReply,
         EmployeeMessageReceived, PortalMessagePublished,
         EmployeeDossierIncomplete, EmployeeDossierIncompleteEscalated,

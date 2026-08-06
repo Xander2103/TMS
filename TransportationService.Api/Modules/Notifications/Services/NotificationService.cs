@@ -115,6 +115,7 @@ public static class NotificationTypeCatalog
             ["fleet_inspection_due"] = (NotificationCategory.General, NotificationSeverity.Warning),
             ["fleet_document_expiry"] = (NotificationCategory.General, NotificationSeverity.Warning),
             ["fleet_damage_created"] = (NotificationCategory.General, NotificationSeverity.Warning),
+            ["tank_card_expiry"] = (NotificationCategory.Fleet, NotificationSeverity.Warning),
             ["customer_message_received"] = (NotificationCategory.General, NotificationSeverity.Info),
         };
 

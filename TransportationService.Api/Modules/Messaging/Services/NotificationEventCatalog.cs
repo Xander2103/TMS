@@ -175,6 +175,10 @@ public static class NotificationEventCatalog
                 ["vehicle", "description"], DefaultInApp: true, DefaultEmail: false,
                 [new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.MaintenancePoliciesView)],
                 MessageKinds.FleetDamageCreated, NotificationSeverity.Warning),
+            new(MessageKinds.TankCardExpiry, "Tankkaart vervalt binnenkort", NotificationEventGroups.Vloot,
+                ["cardLabel", "expiryDate", "stage"], DefaultInApp: true, DefaultEmail: false,
+                [new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.TankCardsView)],
+                MessageKinds.TankCardExpiry, NotificationSeverity.Warning),
 
             // --- Portaal ---
             // Delivered by a DIRECT IMessageOutboxService.QueueAsync call in

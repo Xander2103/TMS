@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Fleet.Entities;
 using TransportationService.Api.Modules.Hr.Entities;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Messaging.Entities;
@@ -193,6 +194,84 @@ public class ExpiryNotificationProducer
 
             await LogDispatchAsync(tenantId, dedupeKey, "document_expiring", cancellationToken);
         }
+
+        // Tank cards: staged 90/30/7-day reminders (HR maturity wave, task 8). Each stage has its
+        // own dedupe key (no rolling bucket — a stage fires exactly once, ever, per card). When a
+        // card is first observed already inside multiple stages at once (e.g. seeded 6 days before
+        // expiry: 90/30/7 all due simultaneously) we still claim every due stage's key so none of
+        // them fire later, but only actually publish the single most urgent (tightest) one —
+        // quieter than bursting three notifications for the same card in one sweep.
+        var expiringCards = await _dbContext.TankCards.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && !c.IsBlocked && c.ValidUntil != null
+                        && c.ValidUntil <= today.AddDays(TankCardExpiryStages[0]) && c.ValidUntil >= today.AddDays(-7))
+            .Select(c => new { c.Id, c.ValidUntil, c.InternalName, c.CardNumber })
+            .ToListAsync(cancellationToken);
+
+        foreach (var card in expiringCards)
+        {
+            var daysRemaining = card.ValidUntil!.Value.DayNumber - today.DayNumber;
+            var dueStages = TankCardExpiryStages.Where(stage => daysRemaining <= stage).ToList();
+            if (dueStages.Count == 0)
+            {
+                continue;
+            }
+
+            var newlyClaimedStages = new List<int>();
+            foreach (var stage in dueStages)
+            {
+                if (Claim(sentKeys, $"tankcard_expiry:{card.Id}:{stage}"))
+                {
+                    newlyClaimedStages.Add(stage);
+                }
+            }
+
+            if (newlyClaimedStages.Count == 0)
+            {
+                continue;
+            }
+
+            foreach (var stage in newlyClaimedStages)
+            {
+                await LogDispatchAsync(tenantId, $"tankcard_expiry:{card.Id}:{stage}", "tankcard_expiring", cancellationToken);
+            }
+
+            var tightestStage = newlyClaimedStages.Min();
+            var cardLabel = !string.IsNullOrWhiteSpace(card.InternalName) ? card.InternalName! : MaskCardNumber(card.CardNumber);
+            var expiryDate = card.ValidUntil!.Value.ToString("dd-MM-yyyy");
+            await PublishSafeAsync(events, MessageKinds.TankCardExpiry, new NotificationEventContext(
+                "TankCard", card.Id.ToString(),
+                new Dictionary<string, string>
+                {
+                    ["cardLabel"] = cardLabel,
+                    ["expiryDate"] = expiryDate,
+                    ["stage"] = TankCardStageLabel(tightestStage),
+                })
+            {
+                LinkPath = "/tank-cards",
+                InAppTitle = "Tankkaart vervalt binnenkort",
+                InAppMessage = $"Tankkaart {cardLabel} vervalt op {expiryDate}.",
+            }, cancellationToken);
+        }
+    }
+
+    /// <summary>Lead times (days before <c>ValidUntil</c>) at which a tank card's staged expiry
+    /// reminder fires; ordered widest-first so the horizon prefilter can use the max.</summary>
+    private static readonly int[] TankCardExpiryStages = [90, 30, 7];
+
+    private static string TankCardStageLabel(int stageDays) => stageDays switch
+    {
+        90 => "3 maanden",
+        30 => "1 maand",
+        7 => "1 week",
+        _ => $"{stageDays} dagen",
+    };
+
+    /// <summary>Mirrors the frontend's maskCardNumber (features/tank-cards/types.ts): only the
+    /// last 4 characters survive, prefixed with a bullet mask.</summary>
+    private static string MaskCardNumber(string cardNumber)
+    {
+        var digits = cardNumber.Replace(" ", string.Empty);
+        return digits.Length <= 4 ? cardNumber : $"•••• {digits[^4..]}";
     }
 
     /// <summary>Reserves a dedupe key in-memory (mirrors HrReminderProducer.Claim); the caller
