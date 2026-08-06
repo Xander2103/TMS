@@ -104,7 +104,7 @@ export function EmployeeHistoryPanel({ employeeId }: { employeeId: string }) {
             return (
               <article key={entry.id} className="employee-history-entry">
                 <header className="employee-history-header">
-                  <span className="employee-history-when">{formatTimestamp(entry.timestamp)}</span>
+                  <span className="employee-history-when">{formatDateTime(entry.timestamp)}</span>
                   <span className="employee-history-actor">
                     {entry.actionLabel} door {entry.userName ?? 'Systeem'}
                   </span>
