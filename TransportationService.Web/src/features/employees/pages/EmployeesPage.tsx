@@ -283,9 +283,14 @@ export function EmployeesPage() {
             checked={filters.incompleteOnly}
             onChange={(e) => updateFilters({ incompleteOnly: e.target.checked })}
           />
-          Enkel onvolledige dossiers
+          Enkel onvolledige dossiers (actief personeel)
         </label>
       </FilterBar>
+      {filters.incompleteOnly && filters.activeFilter === false && (
+        <p className="ui-form-field-hint">
+          Onvolledige-dossierfilter geldt enkel voor actieve medewerkers.
+        </p>
+      )}
       <DataTable
         columns={columns}
         rows={items}

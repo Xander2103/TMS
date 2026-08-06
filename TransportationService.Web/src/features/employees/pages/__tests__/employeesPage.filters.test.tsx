@@ -63,7 +63,7 @@ describe('EmployeesPage — persisted filters', () => {
     renderPage()
 
     expect(screen.getByLabelText('Sorteren')).toHaveValue('recent')
-    expect(screen.getByLabelText('Enkel onvolledige dossiers')).toBeChecked()
+    expect(screen.getByLabelText('Enkel onvolledige dossiers (actief personeel)')).toBeChecked()
     await waitFor(() =>
       expect(api.searchEmployees).toHaveBeenCalledWith(
         expect.objectContaining({ sort: 'recent', incompleteOnly: true }),
@@ -75,7 +75,7 @@ describe('EmployeesPage — persisted filters', () => {
     renderPage()
 
     expect(screen.getByLabelText('Sorteren')).toHaveValue('name_asc')
-    expect(screen.getByLabelText('Enkel onvolledige dossiers')).not.toBeChecked()
+    expect(screen.getByLabelText('Enkel onvolledige dossiers (actief personeel)')).not.toBeChecked()
     await waitFor(() =>
       expect(api.searchEmployees).toHaveBeenCalledWith(
         expect.objectContaining({ sort: 'name_asc', incompleteOnly: undefined }),
@@ -102,7 +102,7 @@ describe('EmployeesPage — persisted filters', () => {
     renderPage()
     await waitFor(() => expect(api.searchEmployees).toHaveBeenCalled())
 
-    fireEvent.click(screen.getByLabelText('Enkel onvolledige dossiers'))
+    fireEvent.click(screen.getByLabelText('Enkel onvolledige dossiers (actief personeel)'))
 
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) ?? '{}')
@@ -111,6 +111,38 @@ describe('EmployeesPage — persisted filters', () => {
     await waitFor(() =>
       expect(api.searchEmployees).toHaveBeenCalledWith(expect.objectContaining({ incompleteOnly: true })),
     )
+  })
+})
+
+describe('EmployeesPage — incompleteOnly + Inactief limitation hint', () => {
+  const hintText = 'Onvolledige-dossierfilter geldt enkel voor actieve medewerkers.'
+
+  it('shows the hint when "Enkel onvolledige dossiers" is checked and the status filter is Inactief', async () => {
+    renderPage()
+    await waitFor(() => expect(api.searchEmployees).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByLabelText('Enkel onvolledige dossiers (actief personeel)'))
+    fireEvent.change(screen.getByLabelText('Statusfilter'), { target: { value: 'false' } })
+
+    expect(await screen.findByText(hintText)).toBeInTheDocument()
+  })
+
+  it('does not show the hint when incompleteOnly is off, even with Inactief selected', async () => {
+    renderPage()
+    await waitFor(() => expect(api.searchEmployees).toHaveBeenCalled())
+
+    fireEvent.change(screen.getByLabelText('Statusfilter'), { target: { value: 'false' } })
+
+    expect(screen.queryByText(hintText)).not.toBeInTheDocument()
+  })
+
+  it('does not show the hint when incompleteOnly is on but the status filter is not Inactief', async () => {
+    renderPage()
+    await waitFor(() => expect(api.searchEmployees).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByLabelText('Enkel onvolledige dossiers (actief personeel)'))
+
+    expect(screen.queryByText(hintText)).not.toBeInTheDocument()
   })
 })
 
