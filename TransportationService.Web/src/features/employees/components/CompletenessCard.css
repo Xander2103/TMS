@@ -1,0 +1,64 @@
+.completeness-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--card-bg, transparent);
+}
+
+.completeness-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.completeness-card-title {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+
+.completeness-card-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--code-bg);
+  overflow: hidden;
+}
+
+.completeness-card-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.completeness-card-bar-fill-complete {
+  background: var(--success);
+}
+
+.completeness-card-missing {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.completeness-card-chip {
+  font-size: 12.5px;
+  border-radius: 999px;
+  padding: 3px 10px;
+  border: 1px solid var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+  cursor: pointer;
+}
+
+.completeness-card-chip:hover {
+  filter: brightness(0.97);
+}
+
+.completeness-card-chip-static {
+  cursor: default;
+}

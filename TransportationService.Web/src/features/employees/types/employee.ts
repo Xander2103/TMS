@@ -55,6 +55,22 @@ export interface EmployeeEmergencyContactInput {
   priority: number
 }
 
+/** One missing dossier-completeness requirement (HR maturity wave §2.1). `section` maps to an
+ * `employeeSections` id (algemeen/dienstverband/hr/noodcontacten/documenten). */
+export interface EmployeeCompletenessItem {
+  code: string
+  label: string
+  section: string
+}
+
+/** Dossier-completeness snapshot (`EmployeeCompletenessDto`). `isComplete` is equivalent to
+ * `missingItems.length === 0`. */
+export interface EmployeeCompleteness {
+  percentage: number
+  isComplete: boolean
+  missingItems: EmployeeCompletenessItem[]
+}
+
 export interface EmployeeListItem {
   id: string
   employeeNumber: string
@@ -133,6 +149,8 @@ export interface EmployeeDetail {
   // Confidential — null when the user lacks employees.view_confidential.
   identityCardNumber: string | null
   emergencyContacts: EmployeeEmergencyContact[]
+  /** Null only if the backend didn't compute it (should not happen); absent-safe in the UI. */
+  completeness: EmployeeCompleteness | null
 }
 
 export interface EmployeeInput {

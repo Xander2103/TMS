@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -10,6 +10,9 @@ import type { EmployeeDetail } from '../../types/employee'
 // einddatum hoort bij Dienstverband en de bewaarbalk staat boven én onder het formulier.
 
 const auth = vi.hoisted(() => ({ permissions: [] as string[] }))
+// Per-basePath lookup options so contract-type tests can inject a `requiresEndDate` option
+// without disturbing every other lookup (which stays empty, as before).
+const lookups = vi.hoisted(() => ({ byPath: {} as Record<string, { id: string; code: string; name: string; requiresEndDate?: boolean }[]> }))
 
 vi.mock('../../../auth/authContextValue', () => ({
   useAuth: () => ({
@@ -22,7 +25,7 @@ vi.mock('../../../auth/authContextValue', () => ({
   }),
 }))
 vi.mock('../../../master-data/hooks/useLookupOptions', () => ({
-  useLookupOptions: () => ({ options: [], isLoading: false, error: null }),
+  useLookupOptions: (basePath: string) => ({ options: lookups.byPath[basePath] ?? [], isLoading: false, error: null }),
 }))
 vi.mock('../../../master-data/components/LookupSelect', () => ({
   LookupSelect: ({ id }: { id?: string }) => <input id={id} aria-label="lookup" />,
@@ -48,6 +51,10 @@ function renderForm(props: Partial<Parameters<typeof EmployeeForm>[0]> = {}) {
     </MemoryRouter>,
   )
 }
+
+beforeEach(() => {
+  lookups.byPath = {}
+})
 
 function clickSave() {
   // De bewaarbalk staat boven én onder het formulier; beide knoppen posten hetzelfde formulier.
@@ -93,6 +100,7 @@ const EDIT_INITIAL: EmployeeDetail = {
   dimonaNumber: null,
   identityCardNumber: null,
   emergencyContacts: [],
+  completeness: null,
 }
 
 describe('EmployeeForm — minimale aanmaak', () => {
@@ -158,12 +166,12 @@ describe('EmployeeForm — e-mailformaat', () => {
 })
 
 describe('EmployeeForm — dienstverbanddatums', () => {
-  it('toont de einddatum in de sectie Dienstverband en niet meer in HR', async () => {
+  it('toont de einddatum in de sectie Dienstverband en niet meer in Identiteit & bank', async () => {
     auth.permissions = []
     renderForm()
     await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
     expect(screen.getByLabelText(/Einddatum tewerkstelling/i)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('tab', { name: /^HR/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /Identiteit/i }))
     expect(screen.queryByLabelText(/Einddatum tewerkstelling/i)).not.toBeInTheDocument()
   })
 
@@ -218,5 +226,117 @@ describe('EmployeeForm — bewaarbalk boven en onder', () => {
     auth.permissions = []
     renderForm()
     expect(screen.getAllByRole('button', { name: 'Opslaan en nieuwe werknemer' })).toHaveLength(2)
+  })
+})
+
+// Task 10 (dossier-UX): burgerlijke staat / kinderen ten laste → Algemeen, DIMONA → Dienstverband,
+// "Identiteit & bank" keeps only identity + bank fields.
+describe('EmployeeForm — herziene secties', () => {
+  it('toont Burgerlijke staat en kinderen ten laste in Algemeen', async () => {
+    auth.permissions = []
+    renderForm()
+    await userEvent.click(screen.getByRole('tab', { name: /Algemeen/i }))
+    expect(screen.getByLabelText(/Burgerlijke staat/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Aantal kinderen ten laste/i)).toBeInTheDocument()
+  })
+
+  it('toont DIMONA-nummer in Dienstverband, niet meer in Algemeen', async () => {
+    auth.permissions = []
+    renderForm()
+    await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
+    expect(screen.getByLabelText(/DIMONA-nummer/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: /Algemeen/i }))
+    expect(screen.queryByLabelText(/DIMONA-nummer/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Burgerlijke staat/i)).toBeInTheDocument()
+  })
+
+  it('toont in Identiteit & bank enkel de vertrouwelijke velden, met permissie', async () => {
+    auth.permissions = ['employees.view_confidential']
+    renderForm()
+    await userEvent.click(screen.getByRole('tab', { name: /Identiteit/i }))
+    expect(screen.getByLabelText(/Rijksregisternummer/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/IBAN/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Burgerlijke staat/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/DIMONA-nummer/i)).not.toBeInTheDocument()
+  })
+
+  it('toont een placeholder in Identiteit & bank zonder de vertrouwelijke permissie', async () => {
+    auth.permissions = []
+    renderForm()
+    await userEvent.click(screen.getByRole('tab', { name: /Identiteit/i }))
+    expect(screen.getByText('Je hebt geen rechten om deze gegevens te bekijken.')).toBeInTheDocument()
+  })
+})
+
+describe('EmployeeForm — contracttype-gedreven einddatum', () => {
+  it('markeert de einddatum niet als verplicht zonder contracttype', async () => {
+    auth.permissions = []
+    const { container } = renderForm()
+    await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
+    const label = container.querySelector('label[for="e-end"]')
+    expect(label?.querySelector('.ui-form-field-required')).not.toBeInTheDocument()
+    expect(screen.getByText('Leeg = onbepaalde duur.')).toBeInTheDocument()
+  })
+
+  it('markeert de einddatum als verplicht en blokkeert opslaan zonder waarde bij een requiresEndDate-contracttype', async () => {
+    auth.permissions = []
+    lookups.byPath['/api/contract-types'] = [{ id: 'ct-1', code: 'TIJDELIJK', name: 'Tijdelijk contract', requiresEndDate: true }]
+    const onSubmit = vi.fn()
+    const { container } = renderForm({
+      mode: 'edit',
+      initial: { ...EDIT_INITIAL, contractTypeId: 'ct-1' },
+      onSubmit,
+    })
+    await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
+
+    const label = container.querySelector('label[for="e-end"]')
+    expect(label?.querySelector('.ui-form-field-required')).toBeInTheDocument()
+    expect(screen.queryByText('Leeg = onbepaalde duur.')).not.toBeInTheDocument()
+
+    await clickSave()
+    expect(screen.getByText('Einddatum is verplicht voor dit contracttype.')).toBeInTheDocument()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('laat opslaan toe zodra de verplichte einddatum is ingevuld', async () => {
+    auth.permissions = []
+    lookups.byPath['/api/contract-types'] = [{ id: 'ct-1', code: 'TIJDELIJK', name: 'Tijdelijk contract', requiresEndDate: true }]
+    const onSubmit = vi.fn()
+    renderForm({
+      mode: 'edit',
+      initial: { ...EDIT_INITIAL, contractTypeId: 'ct-1' },
+      onSubmit,
+    })
+    await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
+    fireEvent.change(screen.getByLabelText(/Einddatum tewerkstelling/i), { target: { value: '2026-12-31' } })
+    await clickSave()
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ employmentEndDate: '2026-12-31' })
+  })
+})
+
+describe('EmployeeForm — presetknoppen einddatum', () => {
+  it('zet de einddatum op 1 maand na de startdatum minus 1 dag', async () => {
+    auth.permissions = []
+    renderForm({ mode: 'edit', initial: { ...EDIT_INITIAL, employmentStartDate: '2026-01-01' } })
+    await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
+    await userEvent.click(screen.getByRole('button', { name: '1 m' }))
+    expect(screen.getByLabelText(/Einddatum tewerkstelling/i)).toHaveValue('2026-01-31')
+  })
+
+  it('klemt 31 januari + 1 maand op het einde van februari (schrikkeljaar)', async () => {
+    auth.permissions = []
+    renderForm({ mode: 'edit', initial: { ...EDIT_INITIAL, employmentStartDate: '2028-01-31' } })
+    await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
+    await userEvent.click(screen.getByRole('button', { name: '1 m' }))
+    expect(screen.getByLabelText(/Einddatum tewerkstelling/i)).toHaveValue('2028-02-29')
+  })
+
+  it('12 m-preset zet de einddatum op het einde van het jaar bij een startdatum op 1 januari', async () => {
+    auth.permissions = []
+    renderForm({ mode: 'edit', initial: { ...EDIT_INITIAL, employmentStartDate: '2026-01-01' } })
+    await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
+    await userEvent.click(screen.getByRole('button', { name: '12 m' }))
+    expect(screen.getByLabelText(/Einddatum tewerkstelling/i)).toHaveValue('2026-12-31')
   })
 })

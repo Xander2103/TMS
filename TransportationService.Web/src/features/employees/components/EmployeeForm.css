@@ -28,6 +28,35 @@
   font-style: italic;
 }
 
+/* Non-blocking duplicate-name warning (task 10), rendered under the name fields. */
+.employee-form-duplicate-hint {
+  margin-top: -8px;
+  font-size: 13px;
+  color: var(--warning);
+}
+
+/* End-date input + quick-duration preset buttons (task 10: contracttype-gedreven einddatum). */
+.employee-form-enddate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.employee-form-enddate-row input[type='date'] {
+  flex: 1 1 160px;
+}
+
+.employee-form-enddate-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.employee-form-enddate-presets .ui-button {
+  padding: 4px 8px;
+  font-size: 12.5px;
+}
+
 .ne-qualification-row {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr auto;

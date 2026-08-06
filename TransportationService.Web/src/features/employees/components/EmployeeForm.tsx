@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormActions } from '../../../components/ui/FormActions'
@@ -16,6 +16,7 @@ import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { EmployeeNotesPanel } from './EmployeeNotesPanel'
 import { formatIban, formatNrn, validateIban, validateNrn } from '../utils/personFormats'
+import { addContractEndDate, todayIsoDate, CONTRACT_END_DATE_PRESETS } from '../utils/contractPresets'
 import {
   addEmergencyContactRow,
   emergencyContactRowsFromDetail,
@@ -64,6 +65,10 @@ interface EmployeeFormProps {
   onFunctionsChanged?: (functionCodes: string[]) => void
   /** Section to activate on mount (e.g. a deep link to "chauffeursgegevens"); falls back to the first section when absent or unknown. */
   initialSectionId?: string
+  /** Notifies the parent when the first/last name changes (create page's duplicate-name check). */
+  onNameChanged?: (firstName: string, lastName: string) => void
+  /** Non-blocking hint rendered right under the name fields (create page's duplicate-name warning). */
+  duplicateNameHint?: ReactNode
 }
 
 /** User-facing labels for backend field paths, for the validation summary. */
@@ -102,13 +107,27 @@ function nullable(value: string): string | null {
   return trimmed ? trimmed : null
 }
 
-export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, extraSections, onFunctionsChanged, initialSectionId }: EmployeeFormProps) {
+export function EmployeeForm({
+  mode,
+  initial,
+  isSubmitting,
+  submitError,
+  serverFieldErrors,
+  onSubmit,
+  onCancel,
+  extraSections,
+  onFunctionsChanged,
+  initialSectionId,
+  onNameChanged,
+  duplicateNameHint,
+}: EmployeeFormProps) {
   const { hasPermission } = useAuth()
   const canSeeConfidential = hasPermission('employees.view_confidential')
 
   const jobFunctions = useLookupOptions('/api/job-functions')
   const nationalities = useLookupOptions('/api/nationalities')
   const languages = useLookupOptions('/api/languages')
+  const contractTypes = useLookupOptions('/api/contract-types')
 
   const [firstName, setFirstName] = useState(initial?.firstName ?? '')
   const [lastName, setLastName] = useState(initial?.lastName ?? '')
@@ -150,6 +169,13 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [dirty, setDirty] = useState(false)
 
+  // Create page's duplicate-name check lives outside this component (it's create-only and
+  // needs its own debounce/API state); this just relays every name change up to it.
+  useEffect(() => {
+    onNameChanged?.(firstName, lastName)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstName, lastName])
+
   function touch() {
     if (!dirty) setDirty(true)
   }
@@ -181,6 +207,16 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
     .map((id) => jobFunctions.options.find((o) => o.id === id))
     .filter((o): o is NonNullable<typeof o> => Boolean(o))
 
+  // Task 5: contract types can mandate an end date; the backend enforces the same rule and
+  // returns the identical message on employmentEndDate, so client + server never disagree.
+  const selectedContractType = contractTypes.options.find((o) => o.id === contractTypeId)
+  const contractTypeRequiresEndDate = Boolean(selectedContractType?.requiresEndDate)
+
+  function applyEndDatePreset(months: number) {
+    setEmploymentEndDate(addContractEndDate(employmentStartDate || todayIsoDate(), months))
+    touch()
+  }
+
   function validate(): Record<string, string> {
     // Alleen voor- en achternaam blokkeren (spec §13); al de rest wordt enkel op formaat
     // gecontroleerd wanneer er effectief een waarde is ingevuld.
@@ -188,7 +224,9 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
     if (!firstName.trim()) errors.firstName = 'Voornaam is verplicht.'
     if (!lastName.trim()) errors.lastName = 'Achternaam is verplicht.'
     if (email.trim() && !email.includes('@')) errors.email = 'Geef een geldig e-mailadres op.'
-    if (employmentStartDate && employmentEndDate && employmentEndDate < employmentStartDate) {
+    if (contractTypeRequiresEndDate && !employmentEndDate) {
+      errors.employmentEndDate = 'Einddatum is verplicht voor dit contracttype.'
+    } else if (employmentStartDate && employmentEndDate && employmentEndDate < employmentStartDate) {
       errors.employmentEndDate = 'De einddatum moet na de startdatum liggen.'
     }
     if (canSeeConfidential) {
@@ -222,6 +260,9 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
           <FormField label="Achternaam" htmlFor="e-lastname" error={fieldErrors.lastName} required>
             <input id="e-lastname" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.lastName ? 'true' : undefined} />
           </FormField>
+          {duplicateNameHint && (
+            <div className="form-span-all employee-form-duplicate-hint">{duplicateNameHint}</div>
+          )}
           <FormField label="Geboortedatum" htmlFor="e-dob" error={fieldErrors.dateOfBirth}>
             <input id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} aria-invalid={fieldErrors.dateOfBirth ? 'true' : undefined} />
           </FormField>
@@ -250,6 +291,33 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
                 </option>
               ))}
             </select>
+          </FormField>
+          <FormField label="Burgerlijke staat" htmlFor="e-civil-status">
+            <select
+              id="e-civil-status"
+              value={civilStatus}
+              onChange={(e) => {
+                setCivilStatus(e.target.value as CivilStatus | '')
+                touch()
+              }}
+            >
+              <option value="">— Onbekend —</option>
+              {Object.entries(CIVIL_STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Aantal kinderen ten laste" htmlFor="e-dependent-children">
+            <input
+              id="e-dependent-children"
+              type="number"
+              min={0}
+              max={30}
+              value={dependentChildren}
+              onChange={(e) => setDependentChildren(e.target.value)}
+            />
           </FormField>
         </FormSection>
 
@@ -305,16 +373,26 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
         <FormField
           label="Einddatum tewerkstelling"
           htmlFor="e-end"
-          hint="Leeg = onbepaalde duur."
+          hint={contractTypeRequiresEndDate ? undefined : 'Leeg = onbepaalde duur.'}
+          required={contractTypeRequiresEndDate}
           error={fieldErrors.employmentEndDate ?? getFieldError(serverFieldErrors, 'employmentEndDate')}
         >
-          <input
-            id="e-end"
-            type="date"
-            value={employmentEndDate}
-            onChange={(e) => setEmploymentEndDate(e.target.value)}
-            aria-invalid={fieldErrors.employmentEndDate ? 'true' : undefined}
-          />
+          <div className="employee-form-enddate-row">
+            <input
+              id="e-end"
+              type="date"
+              value={employmentEndDate}
+              onChange={(e) => setEmploymentEndDate(e.target.value)}
+              aria-invalid={fieldErrors.employmentEndDate ? 'true' : undefined}
+            />
+            <div className="employee-form-enddate-presets">
+              {CONTRACT_END_DATE_PRESETS.map((preset) => (
+                <Button key={preset.months} type="button" variant="ghost" onClick={() => applyEndDatePreset(preset.months)}>
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          </div>
         </FormField>
         <FormField label="Dienstverbandstatus" htmlFor="e-status">
           <select id="e-status" value={employmentStatus} onChange={(e) => setEmploymentStatus(e.target.value as EmploymentStatus)}>
@@ -353,6 +431,9 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
             placeholder="— Geen —"
           />
         </FormField>
+        <FormField label="DIMONA-nummer" htmlFor="e-dimona">
+          <input id="e-dimona" value={dimonaNumber} onChange={(e) => setDimonaNumber(e.target.value)} maxLength={50} />
+        </FormField>
         <div className="employee-form-functions form-span-all">
           <FormField label="Functies" htmlFor="e-function-add" hint="Meerdere functies mogelijk; typ om te zoeken.">
             <div className="employee-form-function-chips">
@@ -388,105 +469,71 @@ export function EmployeeForm({ mode, initial, isSubmitting, submitError, serverF
     ),
   }
 
+  // Task 10 (dossier-UX restructure): "hr" now holds only identity & bank fields — burgerlijke
+  // staat / kinderen ten laste moved to Algemeen, DIMONA to Dienstverband. Every remaining field
+  // is confidential, so the section is entirely permission-gated with a friendly placeholder.
   const hrSection: SectionDef = {
     ...EMPLOYEE_CORE_SECTIONS[2],
     hasError: sectionHasError('hr'),
-    render: () => (
-      <>
-        <FormSection title="Persoonlijk / HR" columns={3}>
-          <FormField label="Burgerlijke staat" htmlFor="e-civil-status">
-            <select
-              id="e-civil-status"
-              value={civilStatus}
-              onChange={(e) => {
-                setCivilStatus(e.target.value as CivilStatus | '')
-                touch()
-              }}
-            >
-              <option value="">— Onbekend —</option>
-              {Object.entries(CIVIL_STATUS_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Aantal kinderen ten laste" htmlFor="e-dependent-children">
+    render: () =>
+      canSeeConfidential ? (
+        <FormSection
+          title="Identiteit & bank"
+          columns={3}
+          description="Vertrouwelijke gegevens — alleen zichtbaar voor gebruikers met de juiste rechten."
+        >
+          <FormField
+            label="Identiteitskaartnummer"
+            htmlFor="e-identity-card"
+          >
             <input
-              id="e-dependent-children"
-              type="number"
-              min={0}
-              max={30}
-              value={dependentChildren}
-              onChange={(e) => setDependentChildren(e.target.value)}
+              id="e-identity-card"
+              value={identityCardNumber}
+              onChange={(e) => setIdentityCardNumber(e.target.value)}
+              maxLength={50}
             />
           </FormField>
-          <FormField label="DIMONA-nummer" htmlFor="e-dimona">
-            <input id="e-dimona" value={dimonaNumber} onChange={(e) => setDimonaNumber(e.target.value)} maxLength={50} />
-          </FormField>
-          {canSeeConfidential && (
-            <FormField
-              label="Identiteitskaartnummer"
-              htmlFor="e-identity-card"
-              hint="Vertrouwelijk — alleen zichtbaar met de juiste rechten."
-            >
-              <input
-                id="e-identity-card"
-                value={identityCardNumber}
-                onChange={(e) => setIdentityCardNumber(e.target.value)}
-                maxLength={50}
-              />
-            </FormField>
-          )}
-        </FormSection>
-
-        {canSeeConfidential && (
-          <FormSection
-            title="Identiteit & bank"
-            columns={3}
-            description="Vertrouwelijke gegevens — alleen zichtbaar voor gebruikers met de juiste rechten."
+          <FormField
+            label="Rijksregisternummer"
+            htmlFor="e-nrn"
+            hint="Met of zonder leestekens, bv. 90.05.01-123.26."
+            error={fieldErrors.nationalRegisterNumber ?? getFieldError(serverFieldErrors, 'nationalRegisterNumber')}
           >
-            <FormField
-              label="Rijksregisternummer"
-              htmlFor="e-nrn"
-              hint="Met of zonder leestekens, bv. 90.05.01-123.26."
-              error={fieldErrors.nationalRegisterNumber ?? getFieldError(serverFieldErrors, 'nationalRegisterNumber')}
-            >
-              <input
-                id="e-nrn"
-                value={nationalRegisterNumber}
-                onChange={(e) => setNationalRegisterNumber(e.target.value)}
-                onBlur={() => {
-                  const message = validateNrn(nationalRegisterNumber)
-                  setFieldErrors((current) => ({ ...current, nationalRegisterNumber: message ?? undefined }) as Record<string, string>)
-                  if (!message) setNationalRegisterNumber((value) => formatNrn(value))
-                }}
-                aria-invalid={fieldErrors.nationalRegisterNumber ? 'true' : undefined}
-                maxLength={15}
-              />
-            </FormField>
-            <FormField label="IBAN" htmlFor="e-iban" error={fieldErrors.iban ?? getFieldError(serverFieldErrors, 'iban')}>
-              <input
-                id="e-iban"
-                value={iban}
-                onChange={(e) => setIban(e.target.value)}
-                onBlur={() => {
-                  const message = validateIban(iban)
-                  setFieldErrors((current) => ({ ...current, iban: message ?? undefined }) as Record<string, string>)
-                  if (!message) setIban((value) => formatIban(value))
-                }}
-                aria-invalid={fieldErrors.iban ? 'true' : undefined}
-                maxLength={42}
-                placeholder="BE68 5390 0754 7034"
-              />
-            </FormField>
-            <FormField label="BIC" htmlFor="e-bic" error={getFieldError(serverFieldErrors, 'bic')}>
-              <input id="e-bic" value={bic} onChange={(e) => setBic(e.target.value)} maxLength={11} placeholder="KREDBEBB" />
-            </FormField>
-          </FormSection>
-        )}
-      </>
-    ),
+            <input
+              id="e-nrn"
+              value={nationalRegisterNumber}
+              onChange={(e) => setNationalRegisterNumber(e.target.value)}
+              onBlur={() => {
+                const message = validateNrn(nationalRegisterNumber)
+                setFieldErrors((current) => ({ ...current, nationalRegisterNumber: message ?? undefined }) as Record<string, string>)
+                if (!message) setNationalRegisterNumber((value) => formatNrn(value))
+              }}
+              aria-invalid={fieldErrors.nationalRegisterNumber ? 'true' : undefined}
+              maxLength={15}
+            />
+          </FormField>
+          <FormField label="IBAN" htmlFor="e-iban" error={fieldErrors.iban ?? getFieldError(serverFieldErrors, 'iban')}>
+            <input
+              id="e-iban"
+              value={iban}
+              onChange={(e) => setIban(e.target.value)}
+              onBlur={() => {
+                const message = validateIban(iban)
+                setFieldErrors((current) => ({ ...current, iban: message ?? undefined }) as Record<string, string>)
+                if (!message) setIban((value) => formatIban(value))
+              }}
+              aria-invalid={fieldErrors.iban ? 'true' : undefined}
+              maxLength={42}
+              placeholder="BE68 5390 0754 7034"
+            />
+          </FormField>
+          <FormField label="BIC" htmlFor="e-bic" error={getFieldError(serverFieldErrors, 'bic')}>
+            <input id="e-bic" value={bic} onChange={(e) => setBic(e.target.value)} maxLength={11} placeholder="KREDBEBB" />
+          </FormField>
+        </FormSection>
+      ) : (
+        <p className="placeholder-text">Je hebt geen rechten om deze gegevens te bekijken.</p>
+      ),
   }
 
   const noodcontactenSection: SectionDef = {

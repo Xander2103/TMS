@@ -15,7 +15,7 @@ export interface EmployeeSectionMeta {
 export const EMPLOYEE_CORE_SECTIONS: EmployeeSectionMeta[] = [
   { id: 'algemeen', label: 'Algemeen' },
   { id: 'dienstverband', label: 'Dienstverband' },
-  { id: 'hr', label: 'HR', optional: true },
+  { id: 'hr', label: 'Identiteit & bank', optional: true },
   { id: 'noodcontacten', label: 'Noodcontacten', optional: true },
 ]
 
@@ -43,6 +43,8 @@ export const EMPLOYEE_SECTION_FIELD_KEYS: Record<string, string[]> = {
     'postalCode',
     'city',
     'countryCode',
+    'civilStatus',
+    'dependentChildren',
   ],
   dienstverband: [
     'employmentStartDate',
@@ -51,11 +53,9 @@ export const EMPLOYEE_SECTION_FIELD_KEYS: Record<string, string[]> = {
     'departmentId',
     'contractTypeId',
     'jobFunctionIds',
+    'dimonaNumber',
   ],
   hr: [
-    'civilStatus',
-    'dependentChildren',
-    'dimonaNumber',
     'identityCardNumber',
     'nationalRegisterNumber',
     'iban',

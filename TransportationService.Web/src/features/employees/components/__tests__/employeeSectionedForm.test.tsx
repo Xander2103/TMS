@@ -81,15 +81,15 @@ describe('EmployeeForm section navigation', () => {
   it('hides confidential fields without the permission', async () => {
     auth.permissions = []
     renderForm()
-    await userEvent.click(screen.getByRole('tab', { name: /^HR/i }))
-    // HR section is active but the confidential NRN field is gated away.
+    await userEvent.click(screen.getByRole('tab', { name: /Identiteit/i }))
+    // Section is active but the confidential fields are gated away (placeholder shown instead).
     expect(screen.queryByLabelText(/Rijksregisternummer/i)).not.toBeInTheDocument()
   })
 
-  it('shows confidential fields in the HR section with the permission', async () => {
+  it('shows confidential fields in the Identiteit & bank section with the permission', async () => {
     auth.permissions = ['employees.view_confidential']
     renderForm()
-    await userEvent.click(screen.getByRole('tab', { name: /^HR/i }))
+    await userEvent.click(screen.getByRole('tab', { name: /Identiteit/i }))
     expect(screen.getByLabelText(/Rijksregisternummer/i)).toBeInTheDocument()
   })
 })

@@ -14,6 +14,7 @@ import { EmployeeForm } from '../components/EmployeeForm'
 import { PreparedDocumentsEditor } from '../components/PreparedDocumentsEditor'
 import { PreparedIssuedItemsEditor } from '../components/PreparedIssuedItemsEditor'
 import { CreateFollowUpDialog } from '../components/CreateFollowUpDialog'
+import { searchEmployees } from '../api/employeesApi'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { useQualificationTypes } from '../hooks/useQualificationTypes'
 import { listIssuedItemTemplates, type IssuedItemTemplate } from '../../issued-items/issuedItemsApi'
@@ -53,6 +54,40 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
   const canCreateDocuments = hasPermission('employee_documents.create')
   const canManageIssuedItems = hasPermission('issued_items.manage')
   const { qualificationTypes } = useQualificationTypes()
+
+  // Non-blocking duplicate-name hint (task 10): debounced check against the existing employees
+  // search API for an exact (trimmed, case-insensitive) first+last name match.
+  const [nameCandidate, setNameCandidate] = useState({ firstName: '', lastName: '' })
+  const [duplicateNameFound, setDuplicateNameFound] = useState(false)
+
+  useEffect(() => {
+    const firstName = nameCandidate.firstName.trim()
+    const lastName = nameCandidate.lastName.trim()
+    if (!firstName || !lastName) {
+      setDuplicateNameFound(false)
+      return
+    }
+    let isMounted = true
+    const timeoutId = window.setTimeout(() => {
+      searchEmployees({ search: lastName, page: 1, pageSize: 25 })
+        .then((result) => {
+          if (!isMounted) return
+          const match = result.items.some(
+            (item) =>
+              item.firstName.trim().toLowerCase() === firstName.toLowerCase() &&
+              item.lastName.trim().toLowerCase() === lastName.toLowerCase(),
+          )
+          setDuplicateNameFound(match)
+        })
+        .catch(() => {
+          // Non-blocking hint — a failed lookup simply shows no warning.
+        })
+    }, 400)
+    return () => {
+      isMounted = false
+      window.clearTimeout(timeoutId)
+    }
+  }, [nameCandidate])
 
   const [isDriver, setIsDriver] = useState(false)
   const [driverSuggested, setDriverSuggested] = useState(false)
@@ -364,6 +399,10 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
         serverFieldErrors={mutations.fieldErrors}
         onCancel={() => navigate('/employees')}
         onFunctionsChanged={handleFunctionsChanged}
+        onNameChanged={(firstName, lastName) => setNameCandidate({ firstName, lastName })}
+        duplicateNameHint={
+          duplicateNameFound ? <span role="status">Er bestaat al een medewerker met deze naam.</span> : undefined
+        }
         extraSections={extraSections}
         onSubmit={async (values, intent) => {
           const created = await mutations.create({

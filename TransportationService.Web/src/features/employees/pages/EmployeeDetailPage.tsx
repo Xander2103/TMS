@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { formatDate } from '../../../utils/dates'
+import { formatDate, parseIsoDate } from '../../../utils/dates'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
@@ -13,6 +13,7 @@ import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { AbsencesTab } from '../../absences/components/AbsencesTab'
+import { CompletenessCard } from '../components/CompletenessCard'
 import { EmployeeHistoryPanel } from '../components/EmployeeHistoryPanel'
 import { EmployeeNotesPanel } from '../components/EmployeeNotesPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
@@ -32,6 +33,18 @@ import { useEmployee } from '../hooks/useEmployee'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
+
+/** Full elapsed years between an ISO date and today; null when the date is absent/invalid. */
+function fullYearsSince(iso: string | null | undefined): number | null {
+  const start = parseIsoDate(iso)
+  if (!start) return null
+  const now = new Date()
+  let years = now.getFullYear() - start.getFullYear()
+  const anniversaryPassed =
+    now.getMonth() > start.getMonth() || (now.getMonth() === start.getMonth() && now.getDate() >= start.getDate())
+  if (!anniversaryPassed) years -= 1
+  return years
+}
 
 const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlof', 'taken', 'ritten', 'bedrijfsmiddelen', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
@@ -117,6 +130,28 @@ export function EmployeeDetailPage() {
     setSearchParams(next, { replace: true })
   }
 
+  /** Missing-item chip → its dossier home: "documenten" is a page-level tab, the rest are
+   * profile-form sections reached via `?section=` (same mechanism as `goToDriverSection`). */
+  function goToCompletenessSection(section: string) {
+    if (section === 'documenten') {
+      setTab('documenten')
+      return
+    }
+    const next = new URLSearchParams(searchParams)
+    next.delete('tab')
+    next.set('section', section)
+    setSearchParams(next, { replace: true })
+  }
+
+  async function copyEmployeeNumber() {
+    try {
+      await navigator.clipboard.writeText(employee!.employeeNumber)
+      toast.showSuccess('Personeelsnummer gekopieerd')
+    } catch {
+      toast.showError('Kopiëren is mislukt.')
+    }
+  }
+
   // Edit-only self-saving panels, embedded as sections of the profile form (they remain
   // reachable as page tabs too). `panel: true` hides the form's shared Save — each panel
   // saves through its own existing API.
@@ -187,7 +222,29 @@ export function EmployeeDetailPage() {
       <Breadcrumbs items={[{ label: 'Personeel', to: '/employees' }, { label: `${employee.firstName} ${employee.lastName}` }]} />
       <PageHeader
         title={`${employee.firstName} ${employee.lastName}`}
-        subtitle={`${employee.employeeNumber}${employee.functionNames.length > 0 ? ` · ${employee.functionNames.join(', ')}` : ''}`}
+        subtitle={
+          <span className="employee-header-subtitle">
+            <button
+              type="button"
+              className="employee-number-copy"
+              onClick={copyEmployeeNumber}
+              title="Klik om personeelsnummer te kopiëren"
+            >
+              {employee.employeeNumber}
+            </button>
+            {employee.functionNames.length > 0 && <> · {employee.functionNames.join(', ')}</>}
+            {employee.employmentStartDate && (
+              <>
+                {' '}
+                · In dienst sinds {formatDate(employee.employmentStartDate)}
+                {(() => {
+                  const years = fullYearsSince(employee.employmentStartDate)
+                  return years !== null && years >= 1 ? ` · ${years} jaar` : ''
+                })()}
+              </>
+            )}
+          </span>
+        }
         action={
           <>
             {hasPermission('users.create') && (
@@ -201,12 +258,19 @@ export function EmployeeDetailPage() {
                 onClick={() => setConfirmLifecycle(employee.isActive ? 'deactivate' : 'reactivate')}
                 disabled={mutations.isSubmitting}
               >
-                {employee.isActive ? 'Deactiveren' : 'Heractiveren'}
+                {employee.isActive ? 'Medewerker inactief zetten' : 'Heractiveren'}
               </Button>
             )}
           </>
         }
       />
+
+      {employee.completeness && (
+        <CompletenessCard
+          completeness={employee.completeness}
+          onNavigate={canEdit ? goToCompletenessSection : undefined}
+        />
+      )}
 
       <div className="employee-detail-status">
         <StatusBadges
@@ -287,6 +351,29 @@ export function EmployeeDetailPage() {
             <div className="employee-readonly-profile">
               <p className="placeholder-text">Je hebt alleen leesrechten voor dit profiel.</p>
               <dl className="employee-readonly-grid">
+                <div>
+                  <dt>Geboortedatum</dt>
+                  <dd>
+                    {employee.dateOfBirth
+                      ? `${formatDate(employee.dateOfBirth)}${(() => {
+                          const age = fullYearsSince(employee.dateOfBirth)
+                          return age !== null ? ` (${age} j.)` : ''
+                        })()}`
+                      : '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt>E-mail</dt>
+                  <dd>{employee.email ? <a href={`mailto:${employee.email}`}>{employee.email}</a> : '—'}</dd>
+                </div>
+                <div>
+                  <dt>Telefoon</dt>
+                  <dd>{employee.phoneNumber ? <a href={`tel:${employee.phoneNumber}`}>{employee.phoneNumber}</a> : '—'}</dd>
+                </div>
+                <div>
+                  <dt>GSM</dt>
+                  <dd>{employee.mobilePhone ? <a href={`tel:${employee.mobilePhone}`}>{employee.mobilePhone}</a> : '—'}</dd>
+                </div>
                 <div>
                   <dt>Burgerlijke staat</dt>
                   <dd>{employee.civilStatus ? CIVIL_STATUS_LABELS[employee.civilStatus] : '—'}</dd>
@@ -427,15 +514,15 @@ export function EmployeeDetailPage() {
 
       {confirmLifecycle === 'deactivate' && (
         <ConfirmDialog
-          title="Medewerker deactiveren"
-          message={`${employee.firstName} ${employee.lastName} deactiveren? Het dienstverband wordt op beëindigd gezet; historiek blijft bewaard.`}
-          confirmLabel="Deactiveren"
+          title="Medewerker inactief zetten"
+          message={`Weet je zeker dat je ${employee.firstName} ${employee.lastName} inactief wilt zetten? De medewerker blijft zichtbaar in het archief en kan later geheractiveerd worden.`}
+          confirmLabel="Inactief zetten"
           destructive
           busy={mutations.isSubmitting}
           onConfirm={async () => {
             const ok = await mutations.deactivate(employee.id)
             if (ok) {
-              toast.showSuccess('Medewerker gedeactiveerd.')
+              toast.showSuccess('Medewerker inactief gezet')
               setConfirmLifecycle(null)
               reload()
               // Offer (never force) redistributing any open tasks left behind — only meaningful
@@ -473,7 +560,7 @@ export function EmployeeDetailPage() {
           onConfirm={async () => {
             const ok = await mutations.reactivate(employee.id)
             if (ok) {
-              toast.showSuccess('Medewerker geheractiveerd.')
+              toast.showSuccess('Medewerker geheractiveerd')
               setConfirmLifecycle(null)
               reload()
             }
