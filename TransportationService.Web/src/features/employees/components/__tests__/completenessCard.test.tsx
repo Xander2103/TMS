@@ -50,4 +50,22 @@ describe('CompletenessCard', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.getByText('Rijksregisternummer')).toBeInTheDocument()
   })
+
+  it('renders a section gated by canNavigate as a plain chip even though onNavigate is set', async () => {
+    const onNavigate = vi.fn()
+    render(
+      <CompletenessCard
+        completeness={INCOMPLETE}
+        onNavigate={onNavigate}
+        canNavigate={(section) => section !== 'documenten'}
+      />,
+    )
+    // "documenten" (Contractdocument) is gated: plain chip, not a button.
+    expect(screen.queryByRole('button', { name: 'Contractdocument' })).not.toBeInTheDocument()
+    expect(screen.getByText('Contractdocument')).toBeInTheDocument()
+    // Every other section stays a clickable button.
+    expect(screen.getByRole('button', { name: 'Rijksregisternummer' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Noodcontact' }))
+    expect(onNavigate).toHaveBeenCalledWith('noodcontacten')
+  })
 })

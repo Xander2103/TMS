@@ -8,6 +8,13 @@ interface CompletenessCardProps {
    * missing items then render as plain (non-interactive) chips instead of buttons.
    */
   onNavigate?: (section: string) => void
+  /**
+   * Per-section gate: when it returns false for a missing item's section, that item renders as
+   * a plain chip even though `onNavigate` is set — e.g. a "documenten" item when the viewer
+   * lacks `employee_documents.view` (that tab wouldn't exist for them to land on). Defaults to
+   * always-navigable.
+   */
+  canNavigate?: (section: string) => boolean
 }
 
 /**
@@ -15,7 +22,7 @@ interface CompletenessCardProps {
  * incomplete, one clickable chip per missing requirement that jumps straight to the section
  * that owns it. Rendered above the detail-page tabs.
  */
-export function CompletenessCard({ completeness, onNavigate }: CompletenessCardProps) {
+export function CompletenessCard({ completeness, onNavigate, canNavigate }: CompletenessCardProps) {
   const { percentage, isComplete, missingItems } = completeness
 
   return (
@@ -39,17 +46,20 @@ export function CompletenessCard({ completeness, onNavigate }: CompletenessCardP
       </div>
       {!isComplete && missingItems.length > 0 && (
         <ul className="completeness-card-missing">
-          {missingItems.map((item) => (
-            <li key={item.code}>
-              {onNavigate ? (
-                <button type="button" className="completeness-card-chip" onClick={() => onNavigate(item.section)}>
-                  {item.label}
-                </button>
-              ) : (
-                <span className="completeness-card-chip completeness-card-chip-static">{item.label}</span>
-              )}
-            </li>
-          ))}
+          {missingItems.map((item) => {
+            const navigable = Boolean(onNavigate) && (canNavigate ? canNavigate(item.section) : true)
+            return (
+              <li key={item.code}>
+                {navigable ? (
+                  <button type="button" className="completeness-card-chip" onClick={() => onNavigate!(item.section)}>
+                    {item.label}
+                  </button>
+                ) : (
+                  <span className="completeness-card-chip completeness-card-chip-static">{item.label}</span>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>

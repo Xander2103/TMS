@@ -34,10 +34,11 @@ import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
 
-/** Full elapsed years between an ISO date and today; null when the date is absent/invalid. */
-function fullYearsSince(iso: string | null | undefined): number | null {
+/** Full elapsed years between an ISO date and today; null when the date is absent/invalid.
+ * Exported for direct unit testing (header seniority text + read-only age display). */
+export function fullYearsSince(iso: string | null | undefined): number | null {
   const start = parseIsoDate(iso)
-  if (!start) return null
+  if (!start || Number.isNaN(start.getTime())) return null
   const now = new Date()
   let years = now.getFullYear() - start.getFullYear()
   const anniversaryPassed =
@@ -134,6 +135,9 @@ export function EmployeeDetailPage() {
    * profile-form sections reached via `?section=` (same mechanism as `goToDriverSection`). */
   function goToCompletenessSection(section: string) {
     if (section === 'documenten') {
+      // Guards against a stray call; the chip itself is already non-clickable for this case
+      // (see `canNavigateCompleteness` passed to CompletenessCard below).
+      if (!canViewDocuments) return
       setTab('documenten')
       return
     }
@@ -141,6 +145,12 @@ export function EmployeeDetailPage() {
     next.delete('tab')
     next.set('section', section)
     setSearchParams(next, { replace: true })
+  }
+
+  /** A "documenten" missing item can only be a real link when the viewer can actually open that
+   * tab; every other section only needs `employees.edit` (already gated by the caller). */
+  function canNavigateCompleteness(section: string) {
+    return section !== 'documenten' || canViewDocuments
   }
 
   async function copyEmployeeNumber() {
@@ -269,6 +279,7 @@ export function EmployeeDetailPage() {
         <CompletenessCard
           completeness={employee.completeness}
           onNavigate={canEdit ? goToCompletenessSection : undefined}
+          canNavigate={canNavigateCompleteness}
         />
       )}
 
