@@ -143,25 +143,39 @@ public class EmployeeServiceTests
     }
 
     [Fact]
-    public async Task Sort_Function_OrdersByFirstFunctionName_NullLast()
+    public async Task Sort_Function_OrdersBySortOrderFirstFunctionName_NotAlphabeticalMinimum_NullLast()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var administratie = new JobFunction { Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "ADM", Name = "Administratie", IsActive = true };
-        var chauffeur = new JobFunction { Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "DRV", Name = "Chauffeur", IsActive = true };
-        h.Db.Context.Add(administratie);
+        // SortOrder deliberately disagrees with alphabetical order: "Administratie" sorts first
+        // alphabetically but has the HIGHER SortOrder, so the SortOrder-first function for the
+        // multi-function employee below is "Chauffeur" — the same definition the list projection
+        // (OrderBy SortOrder, ThenBy Name) uses for its FunctionNames column. A key built from
+        // Min(Name) would (wrongly) pick "Administratie" instead and reverse the expected order.
+        var chauffeur = new JobFunction { Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "DRV", Name = "Chauffeur", IsActive = true, SortOrder = 2 };
+        var administratie = new JobFunction { Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "ADM", Name = "Administratie", IsActive = true, SortOrder = 5 };
+        var baliemedewerker = new JobFunction { Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "BAL", Name = "Baliemedewerker", IsActive = true, SortOrder = 1 };
         h.Db.Context.Add(chauffeur);
-        var withChauffeur = NewEmployee(h.TenantId, "Bert", "Aerts", "MED-0001");
-        var withAdministratie = NewEmployee(h.TenantId, "Ann", "Mertens", "MED-0002");
-        var withoutFunction = NewEmployee(h.TenantId, "Piet", "Zeeman", "MED-0003");
-        h.Db.Context.Employees.AddRange(withChauffeur, withAdministratie, withoutFunction);
-        h.Db.Context.Add(new EmployeeJobFunction { EmployeeId = withChauffeur.Id, JobFunctionId = chauffeur.Id });
-        h.Db.Context.Add(new EmployeeJobFunction { EmployeeId = withAdministratie.Id, JobFunctionId = administratie.Id });
+        h.Db.Context.Add(administratie);
+        h.Db.Context.Add(baliemedewerker);
+        // Multi-function employee: SortOrder-first is Chauffeur (2 < 5); alphabetical-min would
+        // wrongly be Administratie (A < C).
+        var multi = NewEmployee(h.TenantId, "Werknemer", "Multi", "MED-0001");
+        // Single-function employee whose key ("Baliemedewerker") falls alphabetically BETWEEN
+        // "Administratie" and "Chauffeur" — this is what flips the expected order depending on
+        // which definition of "first function" is used.
+        var solo = NewEmployee(h.TenantId, "Werknemer", "Solo", "MED-0002");
+        var withoutFunction = NewEmployee(h.TenantId, "Functie", "Geen", "MED-0003");
+        h.Db.Context.Employees.AddRange(multi, solo, withoutFunction);
+        h.Db.Context.Add(new EmployeeJobFunction { EmployeeId = multi.Id, JobFunctionId = chauffeur.Id });
+        h.Db.Context.Add(new EmployeeJobFunction { EmployeeId = multi.Id, JobFunctionId = administratie.Id });
+        h.Db.Context.Add(new EmployeeJobFunction { EmployeeId = solo.Id, JobFunctionId = baliemedewerker.Id });
         await h.Db.Context.SaveChangesAsync();
 
         var names = await LastNamesAsync(h, "function");
 
-        Assert.Equal(["Mertens Ann", "Aerts Bert", "Zeeman Piet"], names);
+        // "Baliemedewerker" (Solo) < "Chauffeur" (Multi, SortOrder-first) < null (Geen, last).
+        Assert.Equal(["Solo Werknemer", "Multi Werknemer", "Geen Functie"], names);
     }
 
     [Fact]

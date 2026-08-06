@@ -80,15 +80,19 @@ public class EmployeeService : IEmployeeService
                     .ThenBy(e => e.LastName).ThenBy(e => e.FirstName);
 
             case "function":
+                // "First function" must match the same definition the list projection uses
+                // below (OrderBy SortOrder, ThenBy Name) — not the alphabetically smallest name.
                 return query
                     .OrderBy(e => e.JobFunctions
                         .Where(j => j.JobFunction != null)
+                        .OrderBy(j => j.JobFunction!.SortOrder).ThenBy(j => j.JobFunction!.Name)
                         .Select(j => j.JobFunction!.Name)
-                        .Min() == null ? 1 : 0)
+                        .FirstOrDefault() == null ? 1 : 0)
                     .ThenBy(e => e.JobFunctions
                         .Where(j => j.JobFunction != null)
+                        .OrderBy(j => j.JobFunction!.SortOrder).ThenBy(j => j.JobFunction!.Name)
                         .Select(j => j.JobFunction!.Name)
-                        .Min())
+                        .FirstOrDefault())
                     .ThenBy(e => e.LastName).ThenBy(e => e.FirstName);
 
             case "status":
