@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Common;
 using TransportationService.Api.Common.Models;
+using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Fleet.Dtos;
@@ -59,7 +61,7 @@ public class TankCardService : ITankCardService
         _dbContext.TankCards.Where(c => c.TenantId == _tenantContext.TenantId);
 
     public async Task<PagedResult<TankCardDto>> SearchAsync(
-        string? search, TankCardStatus? status, PageRequest page, CancellationToken cancellationToken)
+        string? search, TankCardStatus? status, bool available, PageRequest page, CancellationToken cancellationToken)
     {
         var today = Today;
         var query = TenantScoped().AsNoTracking();
@@ -71,10 +73,23 @@ public class TankCardService : ITankCardService
                 .Where(v => v.TenantId == _tenantContext.TenantId &&
                             (v.InternalNumber.ToLower().Contains(term) || v.LicensePlate.ToLower().Contains(term)))
                 .Select(v => (Guid?)v.Id);
+            var employeeMatches = _dbContext.Employees
+                .Where(e => e.TenantId == _tenantContext.TenantId &&
+                            (e.FirstName.ToLower().Contains(term) || e.LastName.ToLower().Contains(term)))
+                .Select(e => (Guid?)e.Id);
             query = query.Where(c =>
                 c.CardNumber.ToLower().Contains(term) ||
                 c.Provider.ToLower().Contains(term) ||
-                vehicleMatches.Contains(c.VehicleId));
+                (c.InternalName != null && c.InternalName.ToLower().Contains(term)) ||
+                vehicleMatches.Contains(c.VehicleId) ||
+                employeeMatches.Contains(c.EmployeeId));
+        }
+
+        // "Available" = free for linking to an employee: unassigned, unblocked, not expired.
+        if (available)
+        {
+            query = query.Where(c =>
+                c.EmployeeId == null && !c.IsBlocked && (c.ValidUntil == null || c.ValidUntil >= today));
         }
 
         // Status is derived, but each branch is expressible as a SQL predicate so paging stays correct.
@@ -103,7 +118,7 @@ public class TankCardService : ITankCardService
 
         var items = rows
             .OrderBy(r => r.Card.Provider).ThenBy(r => r.Card.CardNumber)
-            .Select(r => Map(r.Card, r.VehicleInternalNumber, r.VehicleLicensePlate, r.DriverName, today))
+            .Select(r => Map(r.Card, r.VehicleInternalNumber, r.VehicleLicensePlate, r.EmployeeName, today))
             .ToList();
 
         return new PagedResult<TankCardDto>(items, totalCount, page.Page, page.PageSize);
@@ -113,7 +128,19 @@ public class TankCardService : ITankCardService
     {
         var row = await Joined(TenantScoped().AsNoTracking().Where(c => c.Id == id))
             .FirstOrDefaultAsync(cancellationToken);
-        return row is null ? null : Map(row.Card, row.VehicleInternalNumber, row.VehicleLicensePlate, row.DriverName, Today);
+        return row is null ? null : Map(row.Card, row.VehicleInternalNumber, row.VehicleLicensePlate, row.EmployeeName, Today);
+    }
+
+    public async Task<IReadOnlyList<TankCardDto>> ListForEmployeeAsync(Guid employeeId, CancellationToken cancellationToken)
+    {
+        var today = Today;
+        var rows = await Joined(TenantScoped().AsNoTracking().Where(c => c.EmployeeId == employeeId))
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .OrderBy(r => r.Card.Provider).ThenBy(r => r.Card.CardNumber)
+            .Select(r => Map(r.Card, r.VehicleInternalNumber, r.VehicleLicensePlate, r.EmployeeName, today))
+            .ToList();
     }
 
     public async Task<TankCardOperationResult> CreateAsync(CreateTankCardRequest request, CancellationToken cancellationToken)
@@ -135,7 +162,15 @@ public class TankCardService : ITankCardService
             return TankCardOperationResult.Invalid("De einddatum moet na de begindatum liggen.");
         }
 
-        if (!await ReferencesInTenantAsync(request.VehicleId, request.DriverId, cancellationToken))
+        ValidateLimits(request.DailyLimit, request.WeeklyLimit, request.MonthlyLimit);
+
+        if (!await VehicleInTenantAsync(request.VehicleId, cancellationToken))
+        {
+            return TankCardOperationResult.InvalidReference;
+        }
+
+        var link = await ResolveEmployeeAndDriverAsync(request.EmployeeId, request.DriverId, cancellationToken);
+        if (link.DriverReferenceInvalid)
         {
             return TankCardOperationResult.InvalidReference;
         }
@@ -152,7 +187,14 @@ public class TankCardService : ITankCardService
             CardNumber = cardNumber,
             Provider = provider,
             VehicleId = request.VehicleId,
-            DriverId = request.DriverId,
+            DriverId = link.DriverId,
+            EmployeeId = link.EmployeeId,
+            InternalName = Trim(request.InternalName),
+            FuelType = Trim(request.FuelType),
+            DailyLimit = request.DailyLimit,
+            WeeklyLimit = request.WeeklyLimit,
+            MonthlyLimit = request.MonthlyLimit,
+            CostCenter = Trim(request.CostCenter),
             ValidFrom = request.ValidFrom,
             ValidUntil = request.ValidUntil,
             Notes = Trim(request.Notes),
@@ -170,7 +212,12 @@ public class TankCardService : ITankCardService
         }
 
         await _auditService.RecordAsync(EntityType, card.Id.ToString(), "Created", null,
-            new { card.CardNumber, card.Provider, card.VehicleId, card.DriverId }, cancellationToken);
+            new
+            {
+                card.CardNumber, card.Provider, card.VehicleId, card.DriverId, card.EmployeeId,
+                card.InternalName, card.FuelType, card.DailyLimit, card.WeeklyLimit, card.MonthlyLimit, card.CostCenter,
+            },
+            cancellationToken);
 
         return TankCardOperationResult.Success(await RequireDtoAsync(card.Id, cancellationToken));
     }
@@ -194,13 +241,21 @@ public class TankCardService : ITankCardService
             return TankCardOperationResult.Invalid("De einddatum moet na de begindatum liggen.");
         }
 
+        ValidateLimits(request.DailyLimit, request.WeeklyLimit, request.MonthlyLimit);
+
         var card = await TenantScoped().FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
         if (card is null)
         {
             return TankCardOperationResult.NotFound;
         }
 
-        if (!await ReferencesInTenantAsync(request.VehicleId, request.DriverId, cancellationToken))
+        if (!await VehicleInTenantAsync(request.VehicleId, cancellationToken))
+        {
+            return TankCardOperationResult.InvalidReference;
+        }
+
+        var link = await ResolveEmployeeAndDriverAsync(request.EmployeeId, request.DriverId, cancellationToken);
+        if (link.DriverReferenceInvalid)
         {
             return TankCardOperationResult.InvalidReference;
         }
@@ -210,12 +265,23 @@ public class TankCardService : ITankCardService
             return TankCardOperationResult.DuplicateCardNumber;
         }
 
-        var before = new { card.CardNumber, card.Provider, card.VehicleId, card.DriverId, card.ValidUntil };
+        var before = new
+        {
+            card.CardNumber, card.Provider, card.VehicleId, card.DriverId, card.EmployeeId, card.ValidUntil,
+            card.InternalName, card.FuelType, card.DailyLimit, card.WeeklyLimit, card.MonthlyLimit, card.CostCenter,
+        };
 
         card.CardNumber = cardNumber;
         card.Provider = provider;
         card.VehicleId = request.VehicleId;
-        card.DriverId = request.DriverId;
+        card.DriverId = link.DriverId;
+        card.EmployeeId = link.EmployeeId;
+        card.InternalName = Trim(request.InternalName);
+        card.FuelType = Trim(request.FuelType);
+        card.DailyLimit = request.DailyLimit;
+        card.WeeklyLimit = request.WeeklyLimit;
+        card.MonthlyLimit = request.MonthlyLimit;
+        card.CostCenter = Trim(request.CostCenter);
         card.ValidFrom = request.ValidFrom;
         card.ValidUntil = request.ValidUntil;
         card.Notes = Trim(request.Notes);
@@ -230,7 +296,12 @@ public class TankCardService : ITankCardService
         }
 
         await _auditService.RecordAsync(EntityType, card.Id.ToString(), "Updated", before,
-            new { card.CardNumber, card.Provider, card.VehicleId, card.DriverId, card.ValidUntil }, cancellationToken);
+            new
+            {
+                card.CardNumber, card.Provider, card.VehicleId, card.DriverId, card.EmployeeId, card.ValidUntil,
+                card.InternalName, card.FuelType, card.DailyLimit, card.WeeklyLimit, card.MonthlyLimit, card.CostCenter,
+            },
+            cancellationToken);
 
         return TankCardOperationResult.Success(await RequireDtoAsync(card.Id, cancellationToken));
     }
@@ -278,21 +349,71 @@ public class TankCardService : ITankCardService
     private static bool ValidityWindowValid(DateOnly? from, DateOnly? until) =>
         from is not { } f || until is not { } u || u >= f;
 
-    private async Task<bool> ReferencesInTenantAsync(Guid? vehicleId, Guid? driverId, CancellationToken cancellationToken)
+    private static void ValidateLimits(decimal? dailyLimit, decimal? weeklyLimit, decimal? monthlyLimit)
     {
-        if (vehicleId is { } v && !await _dbContext.Vehicles.AnyAsync(
-                x => x.Id == v && x.TenantId == _tenantContext.TenantId, cancellationToken))
+        ValidateLimit(dailyLimit, "dailyLimit");
+        ValidateLimit(weeklyLimit, "weeklyLimit");
+        ValidateLimit(monthlyLimit, "monthlyLimit");
+    }
+
+    private static void ValidateLimit(decimal? value, string field)
+    {
+        if (value is { } v && v < 0)
         {
-            return false;
+            throw new DomainValidationException(field, "Limiet moet positief zijn.");
+        }
+    }
+
+    private async Task<bool> VehicleInTenantAsync(Guid? vehicleId, CancellationToken cancellationToken)
+    {
+        if (vehicleId is not { } v)
+        {
+            return true;
         }
 
-        if (driverId is { } d && !await _dbContext.Drivers.AnyAsync(
-                x => x.Id == d && x.TenantId == _tenantContext.TenantId, cancellationToken))
+        return await _dbContext.Vehicles.AnyAsync(
+            x => x.Id == v && x.TenantId == _tenantContext.TenantId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resolves the canonical employee/driver link for a create or update:
+    /// - EmployeeId supplied: validated against the tenant (throws <see cref="InvalidTenantReferenceException"/>
+    ///   when it does not belong here), then DriverId is derived from that employee's driver profile
+    ///   (null when the employee has none).
+    /// - Only a legacy DriverId supplied: the employee is derived from that driver row. An unknown/foreign
+    ///   driver id is reported via <see cref="ResolvedLink.DriverReferenceInvalid"/> (not an exception) to
+    ///   preserve the existing InvalidReference result contract for that field.
+    /// - Neither supplied: both stay null.
+    /// </summary>
+    private async Task<ResolvedLink> ResolveEmployeeAndDriverAsync(
+        Guid? employeeId, Guid? driverId, CancellationToken cancellationToken)
+    {
+        if (employeeId is { } e)
         {
-            return false;
+            await _dbContext.Employees.EnsureBelongsToTenantAsync(
+                e, _tenantContext.TenantId, "medewerker", cancellationToken);
+
+            var driverProfileId = await _dbContext.Drivers.AsNoTracking()
+                .Where(d => d.TenantId == _tenantContext.TenantId && d.EmployeeId == e)
+                .Select(d => (Guid?)d.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return new ResolvedLink(e, driverProfileId, false);
         }
 
-        return true;
+        if (driverId is { } d)
+        {
+            var driver = await _dbContext.Drivers.AsNoTracking()
+                .Where(x => x.TenantId == _tenantContext.TenantId && x.Id == d)
+                .Select(x => new { x.Id, x.EmployeeId })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return driver is null
+                ? new ResolvedLink(null, null, true)
+                : new ResolvedLink(driver.EmployeeId, driver.Id, false);
+        }
+
+        return new ResolvedLink(null, null, false);
     }
 
     private IQueryable<JoinedCard> Joined(IQueryable<TankCard> cards) =>
@@ -300,11 +421,8 @@ public class TankCardService : ITankCardService
         join v in _dbContext.Vehicles.AsNoTracking().Where(v => v.TenantId == _tenantContext.TenantId)
             on c.VehicleId equals v.Id into vehicles
         from v in vehicles.DefaultIfEmpty()
-        join d in _dbContext.Drivers.AsNoTracking().Where(d => d.TenantId == _tenantContext.TenantId)
-            on c.DriverId equals d.Id into drivers
-        from d in drivers.DefaultIfEmpty()
         join e in _dbContext.Employees.AsNoTracking().Where(e => e.TenantId == _tenantContext.TenantId)
-            on d.EmployeeId equals e.Id into employees
+            on c.EmployeeId equals e.Id into employees
         from e in employees.DefaultIfEmpty()
         select new JoinedCard(
             c,
@@ -317,15 +435,22 @@ public class TankCardService : ITankCardService
         ?? throw new InvalidOperationException($"Tank card {id} disappeared after save.");
 
     private static TankCardDto Map(
-        TankCard c, string? vehicleInternalNumber, string? vehicleLicensePlate, string? driverName, DateOnly today) => new(
+        TankCard c, string? vehicleInternalNumber, string? vehicleLicensePlate, string? employeeName, DateOnly today) => new(
         c.Id, c.CardNumber, c.Provider,
         c.VehicleId, vehicleInternalNumber, vehicleLicensePlate,
-        c.DriverId, driverName,
+        // DriverId is kept in sync with EmployeeId, so the driver's display name is the employee's name.
+        c.DriverId, c.DriverId is not null ? employeeName : null,
+        c.EmployeeId, employeeName,
         c.ValidFrom, c.ValidUntil,
         ComputeStatus(c.IsBlocked, c.ValidUntil, today),
-        c.IsBlocked, c.BlockedReason, c.Notes);
+        c.IsBlocked, c.BlockedReason,
+        c.InternalName, c.FuelType, c.DailyLimit, c.WeeklyLimit, c.MonthlyLimit, c.CostCenter,
+        c.Notes);
 
-    private sealed record JoinedCard(TankCard Card, string? VehicleInternalNumber, string? VehicleLicensePlate, string? DriverName);
+    private sealed record JoinedCard(TankCard Card, string? VehicleInternalNumber, string? VehicleLicensePlate, string? EmployeeName);
+
+    /// <summary>DriverReferenceInvalid is true only for a legacy DriverId that does not resolve in the tenant.</summary>
+    private sealed record ResolvedLink(Guid? EmployeeId, Guid? DriverId, bool DriverReferenceInvalid);
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

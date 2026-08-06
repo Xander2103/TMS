@@ -11,11 +11,19 @@ public record TankCardDto(
     string? VehicleLicensePlate,
     Guid? DriverId,
     string? DriverName,
+    Guid? EmployeeId,
+    string? EmployeeName,
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
     TankCardStatus Status,
     bool IsBlocked,
     string? BlockedReason,
+    string? InternalName,
+    string? FuelType,
+    decimal? DailyLimit,
+    decimal? WeeklyLimit,
+    decimal? MonthlyLimit,
+    string? CostCenter,
     string? Notes);
 
 public record CreateTankCardRequest(
@@ -23,8 +31,15 @@ public record CreateTankCardRequest(
     string Provider,
     Guid? VehicleId,
     Guid? DriverId,
+    Guid? EmployeeId,
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
+    string? InternalName,
+    string? FuelType,
+    decimal? DailyLimit,
+    decimal? WeeklyLimit,
+    decimal? MonthlyLimit,
+    string? CostCenter,
     string? Notes);
 
 public record UpdateTankCardRequest(
@@ -32,8 +47,15 @@ public record UpdateTankCardRequest(
     string Provider,
     Guid? VehicleId,
     Guid? DriverId,
+    Guid? EmployeeId,
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
+    string? InternalName,
+    string? FuelType,
+    decimal? DailyLimit,
+    decimal? WeeklyLimit,
+    decimal? MonthlyLimit,
+    string? CostCenter,
     string? Notes);
 
 public record SetTankCardBlockedRequest(bool IsBlocked, string? Reason);
