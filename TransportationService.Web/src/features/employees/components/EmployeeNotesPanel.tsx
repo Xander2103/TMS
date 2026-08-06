@@ -8,14 +8,10 @@ import { useAuth } from '../../auth/authContextValue'
 import { useEmployeeNotes } from '../hooks/useEmployeeNotes'
 import { useEmployeeNoteMutations } from '../hooks/useEmployeeNoteMutations'
 import type { EmployeeNote } from '../api/employeeNotesApi'
+import { formatDateTime } from '../../../utils/dates'
 import './EmployeeNotesPanel.css'
 
 const MAX_NOTE_LENGTH = 4000
-
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`)
-  return date.toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
-}
 
 interface EmployeeNotesPanelProps {
   employeeId: string
@@ -116,7 +112,7 @@ export function EmployeeNotesPanel({ employeeId }: EmployeeNotesPanelProps) {
                   <p className="employee-note-text">{note.text}</p>
                   <div className="employee-note-meta">
                     <span className="employee-note-when">
-                      {formatTimestamp(note.createdAt)}
+                      {formatDateTime(note.createdAt)}
                     </span>
                     {note.isPinnedToDashboard && <Badge tone="warning">Op startscherm</Badge>}
                   </div>

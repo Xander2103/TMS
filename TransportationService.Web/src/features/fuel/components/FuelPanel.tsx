@@ -10,6 +10,7 @@ import { searchDrivers } from '../../drivers/api/driversApi'
 import type { DriverListItem } from '../../drivers/types'
 import { searchTankCards } from '../../tank-cards/api/tankCardsApi'
 import { maskCardNumber, type TankCard } from '../../tank-cards/types'
+import { formatDate } from '../../../utils/dates'
 import {
   createFuelTransaction,
   deleteFuelTransaction,
@@ -401,7 +402,7 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
       {deleteTarget && (
         <ConfirmDialog
           title="Tankbeurt verwijderen"
-          message={`Weet je zeker dat je de tankbeurt van ${deleteTarget.transactionDate} (${deleteTarget.litres.toLocaleString('nl-BE')} l) wilt verwijderen?`}
+          message={`Weet je zeker dat je de tankbeurt van ${formatDate(deleteTarget.transactionDate)} (${deleteTarget.litres.toLocaleString('nl-BE')} l) wilt verwijderen?`}
           confirmLabel="Verwijderen"
           destructive
           onConfirm={handleDelete}

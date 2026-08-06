@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { Pagination } from '../../../components/ui/Pagination'
 import { getEmployeeHistory, type EmployeeHistoryPage } from '../api/employeeHistoryApi'
+import { formatDateTime } from '../../../utils/dates'
 import './EmployeeHistoryPanel.css'
 
 const PAGE_SIZE = 25
@@ -29,11 +30,6 @@ const CATEGORY_TONES: Record<string, 'info' | 'neutral' | 'success' | 'warning'>
   Verlofsaldo: 'warning',
   Bedrijfsmiddelen: 'neutral',
   Chauffeursprofiel: 'info',
-}
-
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`)
-  return date.toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 /**

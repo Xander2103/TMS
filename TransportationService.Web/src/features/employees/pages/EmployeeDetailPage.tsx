@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { formatDate } from '../../../utils/dates'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
@@ -300,7 +301,7 @@ export function EmployeeDetailPage() {
                 </div>
                 <div>
                   <dt>Einddatum tewerkstelling</dt>
-                  <dd>{employee.employmentEndDate ?? '—'}</dd>
+                  <dd>{formatDate(employee.employmentEndDate) || '—'}</dd>
                 </div>
               </dl>
               <h3 className="employee-readonly-subtitle">Noodcontacten</h3>

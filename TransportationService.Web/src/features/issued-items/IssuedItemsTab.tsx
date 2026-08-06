@@ -7,6 +7,7 @@ import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../components/ui/toastContext'
 import { useAuth } from '../auth/authContextValue'
 import { describeApiError } from '../../api/problemDetails'
+import { formatDate } from '../../utils/dates'
 import {
   deleteEmployeeIssuedItem,
   downloadIssuedItemsAcknowledgement,
@@ -323,7 +324,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                 <td>{item.category}</td>
                 <td>{item.quantity}</td>
                 <td>{item.serialNumber ?? '—'}</td>
-                <td>{item.issuedDate ?? '—'}</td>
+                <td>{formatDate(item.issuedDate) || '—'}</td>
                 <td>
                   <Badge tone={STATUS_TONE[item.status]}>{ISSUED_ITEM_STATUS_LABELS[item.status]}</Badge>
                 </td>

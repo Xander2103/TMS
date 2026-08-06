@@ -6,6 +6,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { formatDate } from '../../../utils/dates'
 import {
   completeMaintenance,
   createMaintenance,
@@ -226,7 +227,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 <td>{maintenanceDisplayName(record)}</td>
                 <td className="maint-description">{record.description}</td>
                 <td>
-                  {record.scheduledDate ?? (record.odometerTriggerKm != null ? `${record.odometerTriggerKm.toLocaleString('nl-BE')} km` : '—')}
+                  {formatDate(record.scheduledDate) || (record.odometerTriggerKm != null ? `${record.odometerTriggerKm.toLocaleString('nl-BE')} km` : '—')}
                 </td>
                 <td>
                   <span className="maint-badges">
