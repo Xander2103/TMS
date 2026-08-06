@@ -19,6 +19,7 @@ import { EmployeeNotesPanel } from '../components/EmployeeNotesPanel'
 import { getDriver, updateDriver } from '../../drivers/api/driversApi'
 import { DriverProfilePanel } from '../../drivers/components/DriverProfilePanel'
 import { IssuedItemsTab } from '../../issued-items/IssuedItemsTab'
+import { EmployeeTankCardsSection } from '../components/EmployeeTankCardsSection'
 import { LeaveBalanceTab } from '../../leave-balance/components/LeaveBalanceTab'
 import { EmployeeTasksTab } from '../../tasks/components/EmployeeTasksTab'
 import { RedistributeTasksDialog } from '../../tasks/components/RedistributeTasksDialog'
@@ -220,7 +221,10 @@ export function EmployeeDetailPage() {
       panel: true,
       render: () =>
         canViewIssuedItems ? (
-          <IssuedItemsTab employeeId={employee.id} employeeName={`${employee.firstName} ${employee.lastName}`} />
+          <>
+            <IssuedItemsTab employeeId={employee.id} employeeName={`${employee.firstName} ${employee.lastName}`} />
+            <EmployeeTankCardsSection employeeId={employee.id} />
+          </>
         ) : (
           <p className="placeholder-text">Je hebt geen rechten om bedrijfsmiddelen te bekijken.</p>
         ),
@@ -481,6 +485,7 @@ export function EmployeeDetailPage() {
       {tab === 'bedrijfsmiddelen' && canViewIssuedItems && (
         <TabPanel tabId="bedrijfsmiddelen">
           <IssuedItemsTab employeeId={employee.id} employeeName={`${employee.firstName} ${employee.lastName}`} />
+          <EmployeeTankCardsSection employeeId={employee.id} />
         </TabPanel>
       )}
 

@@ -13,8 +13,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useAuth } from '../../auth/authContextValue'
-import { searchDrivers } from '../../drivers/api/driversApi'
-import type { DriverListItem } from '../../drivers/types'
+import { EmployeeSelect } from '../../tasks/components/EmployeePicker'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 import type { VehicleOption } from '../../vehicles/types'
 import {
@@ -32,6 +31,7 @@ import {
   type TankCardInput,
   type TankCardStatus,
 } from '../types'
+import { formatDate } from '../../../utils/dates'
 import './tank-cards.css'
 
 const STATUS_TONE: Record<TankCardStatus, BadgeTone> = {
@@ -45,9 +45,15 @@ interface CardForm {
   cardNumber: string
   provider: string
   vehicleId: string
-  driverId: string
+  employeeId: string
   validFrom: string
   validUntil: string
+  internalName: string
+  fuelType: string
+  dailyLimit: string
+  weeklyLimit: string
+  monthlyLimit: string
+  costCenter: string
   notes: string
 }
 
@@ -55,10 +61,24 @@ const EMPTY_FORM: CardForm = {
   cardNumber: '',
   provider: '',
   vehicleId: '',
-  driverId: '',
+  employeeId: '',
   validFrom: '',
   validUntil: '',
+  internalName: '',
+  fuelType: '',
+  dailyLimit: '',
+  weeklyLimit: '',
+  monthlyLimit: '',
+  costCenter: '',
   notes: '',
+}
+
+/** Empty-string form field -> null; otherwise the parsed number. Used for the optional limits. */
+function parseOptionalNumber(value: string): number | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  const n = Number(trimmed)
+  return Number.isFinite(n) ? n : null
 }
 
 export function TankCardsPage() {
@@ -82,18 +102,12 @@ export function TankCardsPage() {
   }, [statusFilter])
 
   const [vehicles, setVehicles] = useState<VehicleOption[]>([])
-  const [drivers, setDrivers] = useState<DriverListItem[]>([])
 
   useEffect(() => {
     let mounted = true
     getVehicleOptions()
       .then((data) => {
         if (mounted) setVehicles(data)
-      })
-      .catch(() => {})
-    searchDrivers({ isActive: true, page: 1, pageSize: 200 })
-      .then((data) => {
-        if (mounted) setDrivers(data.items)
       })
       .catch(() => {})
     return () => {
@@ -128,9 +142,15 @@ export function TankCardsPage() {
       cardNumber: card.cardNumber,
       provider: card.provider,
       vehicleId: card.vehicleId ?? '',
-      driverId: card.driverId ?? '',
+      employeeId: card.employeeId ?? '',
       validFrom: card.validFrom ?? '',
       validUntil: card.validUntil ?? '',
+      internalName: card.internalName ?? '',
+      fuelType: card.fuelType ?? '',
+      dailyLimit: card.dailyLimit != null ? String(card.dailyLimit) : '',
+      weeklyLimit: card.weeklyLimit != null ? String(card.weeklyLimit) : '',
+      monthlyLimit: card.monthlyLimit != null ? String(card.monthlyLimit) : '',
+      costCenter: card.costCenter ?? '',
       notes: card.notes ?? '',
     })
     setFormError(null)
@@ -145,16 +165,22 @@ export function TankCardsPage() {
       return
     }
     if (!form.provider.trim()) {
-      setFormError('Provider is verplicht.')
+      setFormError('Leverancier is verplicht.')
       return
     }
     const input: TankCardInput = {
       cardNumber: form.cardNumber.trim(),
       provider: form.provider.trim(),
       vehicleId: form.vehicleId || null,
-      driverId: form.driverId || null,
+      employeeId: form.employeeId || null,
       validFrom: form.validFrom || null,
       validUntil: form.validUntil || null,
+      internalName: form.internalName.trim() || null,
+      fuelType: form.fuelType.trim() || null,
+      dailyLimit: parseOptionalNumber(form.dailyLimit),
+      weeklyLimit: parseOptionalNumber(form.weeklyLimit),
+      monthlyLimit: parseOptionalNumber(form.monthlyLimit),
+      costCenter: form.costCenter.trim() || null,
       notes: form.notes.trim() || null,
     }
     setSaving(true)
@@ -216,15 +242,16 @@ export function TankCardsPage() {
 
   const columns: Column<TankCard>[] = [
     { key: 'number', header: 'Kaartnummer', width: '150px', render: (row) => <code>{maskCardNumber(row.cardNumber)}</code> },
-    { key: 'provider', header: 'Provider', width: '130px', render: (row) => row.provider },
+    { key: 'internalName', header: 'Interne naam', width: '140px', render: (row) => row.internalName ?? '—' },
+    { key: 'provider', header: 'Leverancier', width: '130px', render: (row) => row.provider },
     {
       key: 'vehicle',
       header: 'Voertuig',
       render: (row) =>
         row.vehicleInternalNumber ? `${row.vehicleInternalNumber} (${row.vehicleLicensePlate})` : '—',
     },
-    { key: 'driver', header: 'Chauffeur', render: (row) => row.driverName ?? '—' },
-    { key: 'validUntil', header: 'Geldig tot', width: '120px', render: (row) => row.validUntil ?? '—' },
+    { key: 'employee', header: 'Medewerker', render: (row) => row.employeeName ?? row.driverName ?? '—' },
+    { key: 'validUntil', header: 'Geldig tot', width: '120px', render: (row) => formatDate(row.validUntil) || '—' },
     {
       key: 'status',
       header: 'Status',
@@ -280,7 +307,7 @@ export function TankCardsPage() {
             setSearch(value)
             setPage(1)
           }}
-          searchPlaceholder="Zoeken op kaartnummer, provider of voertuig..."
+          searchPlaceholder="Zoeken op kaartnummer, leverancier, voertuig of medewerker..."
         />
         <select
           value={statusFilter}
@@ -342,7 +369,7 @@ export function TankCardsPage() {
                   maxLength={50}
                 />
               </FormField>
-              <FormField label="Provider" htmlFor="tc-provider" required>
+              <FormField label="Leverancier" htmlFor="tc-provider" required>
                 <input
                   id="tc-provider"
                   value={form.provider}
@@ -350,6 +377,26 @@ export function TankCardsPage() {
                   disabled={saving}
                   maxLength={100}
                   placeholder="bv. DKV, Shell, Total"
+                />
+              </FormField>
+            </div>
+            <div className="tc-form-row">
+              <FormField label="Interne naam" htmlFor="tc-internal-name">
+                <input
+                  id="tc-internal-name"
+                  value={form.internalName}
+                  onChange={(e) => set('internalName', e.target.value)}
+                  disabled={saving}
+                  maxLength={100}
+                />
+              </FormField>
+              <FormField label="Medewerker" htmlFor="tc-employee">
+                <EmployeeSelect
+                  id="tc-employee"
+                  value={form.employeeId || null}
+                  onChange={(value) => set('employeeId', value ?? '')}
+                  disabled={saving}
+                  ariaLabel="Medewerker"
                 />
               </FormField>
             </div>
@@ -369,20 +416,61 @@ export function TankCardsPage() {
                   ))}
                 </select>
               </FormField>
-              <FormField label="Chauffeur" htmlFor="tc-driver">
-                <select
-                  id="tc-driver"
-                  value={form.driverId}
-                  onChange={(e) => set('driverId', e.target.value)}
+              <FormField label="Brandstoftype" htmlFor="tc-fuel-type">
+                <input
+                  id="tc-fuel-type"
+                  value={form.fuelType}
+                  onChange={(e) => set('fuelType', e.target.value)}
                   disabled={saving}
-                >
-                  <option value="">Geen</option>
-                  {drivers.map((driver) => (
-                    <option key={driver.id} value={driver.id}>
-                      {driver.fullName} ({driver.driverNumber})
-                    </option>
-                  ))}
-                </select>
+                  maxLength={50}
+                  placeholder="bv. Diesel, AdBlue"
+                />
+              </FormField>
+            </div>
+            <div className="tc-form-row">
+              <FormField label="Limiet per dag (€)" htmlFor="tc-daily-limit">
+                <input
+                  id="tc-daily-limit"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={form.dailyLimit}
+                  onChange={(e) => set('dailyLimit', e.target.value)}
+                  disabled={saving}
+                />
+              </FormField>
+              <FormField label="Limiet per week (€)" htmlFor="tc-weekly-limit">
+                <input
+                  id="tc-weekly-limit"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={form.weeklyLimit}
+                  onChange={(e) => set('weeklyLimit', e.target.value)}
+                  disabled={saving}
+                />
+              </FormField>
+            </div>
+            <div className="tc-form-row">
+              <FormField label="Limiet per maand (€)" htmlFor="tc-monthly-limit">
+                <input
+                  id="tc-monthly-limit"
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={form.monthlyLimit}
+                  onChange={(e) => set('monthlyLimit', e.target.value)}
+                  disabled={saving}
+                />
+              </FormField>
+              <FormField label="Kostenplaats" htmlFor="tc-cost-center">
+                <input
+                  id="tc-cost-center"
+                  value={form.costCenter}
+                  onChange={(e) => set('costCenter', e.target.value)}
+                  disabled={saving}
+                  maxLength={100}
+                />
               </FormField>
             </div>
             <div className="tc-form-row">
