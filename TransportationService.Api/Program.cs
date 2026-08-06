@@ -151,6 +151,8 @@ builder.Services.AddScoped<IJobFunctionRoleMappingService, JobFunctionRoleMappin
 builder.Services.AddScoped<IRoleService, RoleService>();
 
 // Employees
+builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IEmployeeCompletenessService,
+    TransportationService.Api.Modules.Employees.Services.EmployeeCompletenessService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IEmployeeHistoryService, EmployeeHistoryService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Employees.Services.IEmployeeNoteService,

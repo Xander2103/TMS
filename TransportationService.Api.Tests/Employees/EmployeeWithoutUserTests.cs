@@ -26,7 +26,8 @@ public class EmployeeWithoutUserTests
             TimeProvider.System, audit, new CountryCodeValidator(db.Context),
             new TransportationService.Api.Modules.Qualifications.Services.LocalFileStorageService(
                 Path.Combine(Path.GetTempPath(), "ts-tests", Guid.NewGuid().ToString("N"))));
-        return new EmployeeService(db.Context, tenant, audit, new CountryCodeValidator(db.Context), driverService, qualificationService);
+        return new EmployeeService(db.Context, tenant, audit, new CountryCodeValidator(db.Context), driverService, qualificationService,
+            new EmployeeCompletenessService(db.Context, tenant));
     }
 
     internal static CreateEmployeeRequest NewEmployee(string firstName, string lastName, string email) => new(

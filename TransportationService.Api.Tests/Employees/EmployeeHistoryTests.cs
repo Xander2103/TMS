@@ -61,7 +61,8 @@ public class EmployeeHistoryTests
             new CountryCodeValidator(db.Context),
             new LocalFileStorageService(Path.Combine(Path.GetTempPath(), "ts-tests", Guid.NewGuid().ToString("N"))));
         var employees = new EmployeeService(db.Context, tenant, audit,
-            new CountryCodeValidator(db.Context), driverService, qualifications);
+            new CountryCodeValidator(db.Context), driverService, qualifications,
+            new EmployeeCompletenessService(db.Context, tenant));
         var history = new EmployeeHistoryService(db.Context, tenant);
         var leaveBalances = new LeaveBalanceService(db.Context, tenant, audit);
         var notes = new EmployeeNoteService(db.Context, tenant, audit, new DevCurrentUserContext(userId), TimeProvider.System);

@@ -26,9 +26,11 @@ public class EmployeeService : IEmployeeService
     private readonly ICountryCodeValidator _countryValidator;
     private readonly IDriverService _driverService;
     private readonly IQualificationService _qualificationService;
+    private readonly IEmployeeCompletenessService _completenessService;
 
     public EmployeeService(TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
-        ICountryCodeValidator countryValidator, IDriverService driverService, IQualificationService qualificationService)
+        ICountryCodeValidator countryValidator, IDriverService driverService, IQualificationService qualificationService,
+        IEmployeeCompletenessService completenessService)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -36,6 +38,7 @@ public class EmployeeService : IEmployeeService
         _countryValidator = countryValidator;
         _driverService = driverService;
         _qualificationService = qualificationService;
+        _completenessService = completenessService;
     }
 
     private IQueryable<Employee> TenantScoped() =>
@@ -120,6 +123,13 @@ public class EmployeeService : IEmployeeService
                     .Select(d => (DriverAvailabilityStatus?)d.AvailabilityStatus)
                     .FirstOrDefault()))
             .ToListAsync(cancellationToken);
+
+        // One batched query for the whole page instead of one per row (HR maturity wave §2.1).
+        var percentages = await _completenessService.GetPercentagesAsync(
+            items.Select(i => i.Id).ToList(), cancellationToken);
+        items = items
+            .Select(i => i with { CompletenessPercentage = percentages.GetValueOrDefault(i.Id) })
+            .ToList();
 
         return new PagedResult<EmployeeListItemDto>(items, totalCount, page.Page, page.PageSize);
     }
@@ -562,6 +572,8 @@ public class EmployeeService : IEmployeeService
             .OrderBy(j => j.JobFunction!.SortOrder).ThenBy(j => j.JobFunction!.Name)
             .ToList();
 
+        var completeness = await _completenessService.GetForEmployeeAsync(e.Id, cancellationToken);
+
         return new EmployeeDetailDto(
             e.Id, e.EmployeeNumber, e.FirstName, e.LastName,
             e.DateOfBirth, e.PlaceOfBirth, e.NationalityCode, e.PreferredLanguageCode,
@@ -583,7 +595,8 @@ public class EmployeeService : IEmployeeService
                 .Where(c => !c.IsDeleted)
                 .OrderBy(c => c.Priority).ThenBy(c => c.Name)
                 .Select(c => new EmployeeEmergencyContactDto(c.Id, c.Name, c.Relationship, c.Phone, c.MobilePhone, c.Notes, c.Priority))
-                .ToList());
+                .ToList(),
+            completeness);
     }
 
     private static int? ValidateDependentChildren(int? value)

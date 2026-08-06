@@ -4,6 +4,15 @@ using TransportationService.Api.Modules.Qualifications.Dtos;
 
 namespace TransportationService.Api.Modules.Employees.Dtos;
 
+/// <summary>One missing dossier-completeness requirement (HR maturity wave §2.1): a stable code,
+/// a Dutch label for display, and the dossier section it deep-links to.</summary>
+public record CompletenessItemDto(string Code, string Label, string Section);
+
+/// <summary>Dossier-completeness snapshot for one employee. <c>Percentage</c> is
+/// <c>100 * satisfied / totalApplicable</c>, rounded away from zero; <c>IsComplete</c> is
+/// equivalent to <c>MissingItems.Count == 0</c>.</summary>
+public record EmployeeCompletenessDto(int Percentage, bool IsComplete, IReadOnlyList<CompletenessItemDto> MissingItems);
+
 public record EmployeeListItemDto(
     Guid Id,
     string EmployeeNumber,
@@ -16,7 +25,10 @@ public record EmployeeListItemDto(
     bool IsDriver,
     /// <summary>Populated only for the personnel "Chauffeurs" view (rows with a driver profile).</summary>
     bool? DriverIsBlocked = null,
-    DriverAvailabilityStatus? DriverAvailability = null);
+    DriverAvailabilityStatus? DriverAvailability = null,
+    /// <summary>Dossier-completeness percentage (HR maturity wave §2.1), filled via one batched
+    /// query in <c>SearchAsync</c>.</summary>
+    int CompletenessPercentage = 0);
 
 /// <summary>
 /// Full employee profile. NationalRegisterNumber, Iban and Bic are null when the caller
@@ -62,7 +74,9 @@ public record EmployeeDetailDto(
     string? DimonaNumber = null,
     /// <summary>Confidential: null without employees.view_confidential.</summary>
     string? IdentityCardNumber = null,
-    IReadOnlyList<EmployeeEmergencyContactDto>? EmergencyContacts = null);
+    IReadOnlyList<EmployeeEmergencyContactDto>? EmergencyContacts = null,
+    /// <summary>Dossier-completeness snapshot (HR maturity wave §2.1).</summary>
+    EmployeeCompletenessDto? Completeness = null);
 
 public record EmployeeEmergencyContactDto(
     Guid Id, string Name, string? Relationship, string? Phone, string? MobilePhone, string? Notes, int Priority);

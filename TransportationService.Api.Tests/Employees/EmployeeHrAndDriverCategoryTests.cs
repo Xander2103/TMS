@@ -42,7 +42,8 @@ public class EmployeeHrAndDriverCategoryTests
         var qualifications = new QualificationService(db.Context, tenant, new QualificationStatusCalculator(),
             TimeProvider.System, audit, new CountryCodeValidator(db.Context),
             new LocalFileStorageService(Path.Combine(Path.GetTempPath(), "ts-tests", Guid.NewGuid().ToString("N"))));
-        var employees = new EmployeeService(db.Context, tenant, audit, new CountryCodeValidator(db.Context), drivers, qualifications);
+        var employees = new EmployeeService(db.Context, tenant, audit, new CountryCodeValidator(db.Context), drivers, qualifications,
+            new EmployeeCompletenessService(db.Context, tenant));
         return new Harness(db, employees, drivers, tenantId, catB.Id, catC.Id, catCe.Id);
     }
 

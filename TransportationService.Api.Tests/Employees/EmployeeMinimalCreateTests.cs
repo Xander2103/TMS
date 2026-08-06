@@ -43,7 +43,8 @@ public class EmployeeMinimalCreateTests
             new Modules.Qualifications.Services.LocalFileStorageService(
                 Path.Combine(Path.GetTempPath(), "ts-tests", Guid.NewGuid().ToString("N"))));
         var sut = new EmployeeService(db.Context, tenant, audit,
-            new CountryCodeValidator(db.Context), driverService, qualificationService);
+            new CountryCodeValidator(db.Context), driverService, qualificationService,
+            new EmployeeCompletenessService(db.Context, tenant));
         return new Harness(db, sut, tenantId);
     }
 
