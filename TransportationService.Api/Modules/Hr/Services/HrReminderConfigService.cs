@@ -65,6 +65,12 @@ public class HrReminderConfigService : IHrReminderConfigService
 
         var settings = await GetOrCreateAsync(cancellationToken);
 
+        var before = new
+        {
+            settings.BirthdayEnabled, settings.SeniorityEnabled, settings.EmploymentEndEnabled,
+            settings.DossierRemindersEnabled, settings.DossierReminderDays, settings.DossierEscalationDays,
+        };
+
         settings.BirthdayEnabled = request.BirthdayEnabled;
         settings.BirthdayDaysBefore = Math.Clamp(request.BirthdayDaysBefore, 0, 60);
         settings.BirthdayEmailEnabled = request.BirthdayEmailEnabled;
@@ -80,8 +86,12 @@ public class HrReminderConfigService : IHrReminderConfigService
         settings.DossierEscalationDays = request.DossierEscalationDays;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        await _auditService.RecordAsync("HrReminderSettings", settings.TenantId.ToString(), "Updated", null,
-            new { settings.BirthdayEnabled, settings.SeniorityEnabled, settings.EmploymentEndEnabled }, cancellationToken);
+        await _auditService.RecordAsync("HrReminderSettings", settings.TenantId.ToString(), "Updated", before,
+            new
+            {
+                settings.BirthdayEnabled, settings.SeniorityEnabled, settings.EmploymentEndEnabled,
+                settings.DossierRemindersEnabled, settings.DossierReminderDays, settings.DossierEscalationDays,
+            }, cancellationToken);
 
         return Map(settings);
     }

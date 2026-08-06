@@ -245,11 +245,14 @@ public class HrReminderTests
 
         var settings = await sut.GetSettingsAsync(CancellationToken.None);
 
-        await Assert.ThrowsAsync<DomainValidationException>(() => sut.UpdateSettingsAsync(settings with
+        var ex = await Assert.ThrowsAsync<DomainValidationException>(() => sut.UpdateSettingsAsync(settings with
         {
             DossierReminderDays = invalidDays,
             DossierEscalationDays = 200,
         }, CancellationToken.None));
+
+        Assert.NotNull(ex.FieldErrors);
+        Assert.True(ex.FieldErrors!.ContainsKey("dossierReminderDays"));
     }
 
     [Theory]
@@ -265,10 +268,13 @@ public class HrReminderTests
 
         var settings = await sut.GetSettingsAsync(CancellationToken.None);
 
-        await Assert.ThrowsAsync<DomainValidationException>(() => sut.UpdateSettingsAsync(settings with
+        var ex = await Assert.ThrowsAsync<DomainValidationException>(() => sut.UpdateSettingsAsync(settings with
         {
             DossierReminderDays = 5,
             DossierEscalationDays = invalidDays,
         }, CancellationToken.None));
+
+        Assert.NotNull(ex.FieldErrors);
+        Assert.True(ex.FieldErrors!.ContainsKey("dossierEscalationDays"));
     }
 }
