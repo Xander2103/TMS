@@ -161,4 +161,44 @@ public class EmployeeContractTypeTests
         Assert.Equal(uitzId, updated!.ContractTypeId);
         Assert.Equal(new DateOnly(2027, 1, 1), updated.EmploymentEndDate);
     }
+
+    /// <summary>
+    /// Zachte regel (spec §2.4): a legacy dossier whose contract type now requires an end date
+    /// (post-migration backfill of BEP/UITZ) but which predates that requirement must stay
+    /// editable — the missing-end-date gate only fires when the SAVE ITSELF changes the
+    /// contract type, not on every unrelated field edit.
+    /// </summary>
+    [Fact]
+    public async Task Update_WithoutContractTypeChange_LegacyEmployeeMissingEndDate_CanUpdateUnrelatedField()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var bepId = await AddContractTypeAsync(h.Db, h.TenantId, "BEP", requiresEndDate: true);
+
+        // Simulate a dossier from before the RequiresEndDate backfill: written directly so the
+        // create-time gate (which always enforces the rule) is never exercised.
+        var employee = new Employee
+        {
+            Id = Guid.NewGuid(),
+            TenantId = h.TenantId,
+            EmployeeNumber = "MED-LEGACY",
+            FirstName = "Ann",
+            LastName = "Peeters",
+            EmploymentStatus = EmploymentStatus.Active,
+            ContractTypeId = bepId,
+            EmploymentEndDate = null,
+            IsActive = true,
+        };
+        h.Db.Context.Employees.Add(employee);
+        await h.Db.Context.SaveChangesAsync();
+        h.Db.Context.ChangeTracker.Clear();
+
+        var update = MinimalUpdate(bepId, null) with { PhoneNumber = "+32 499 00 00 00" };
+        var updated = await h.Sut.UpdateAsync(employee.Id, update, canEditConfidential: false, CancellationToken.None);
+
+        Assert.NotNull(updated);
+        Assert.Equal("+32 499 00 00 00", updated!.PhoneNumber);
+        Assert.Equal(bepId, updated.ContractTypeId);
+        Assert.Null(updated.EmploymentEndDate);
+    }
 }

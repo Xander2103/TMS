@@ -27,8 +27,29 @@ vi.mock('../../../auth/authContextValue', () => ({
 vi.mock('../../../master-data/hooks/useLookupOptions', () => ({
   useLookupOptions: (basePath: string) => ({ options: lookups.byPath[basePath] ?? [], isLoading: false, error: null }),
 }))
+// A functional stand-in (real select, wired to value/onChange) so the contract-type-change
+// tests below can actually drive a selection instead of only seeding it via `initial`.
 vi.mock('../../../master-data/components/LookupSelect', () => ({
-  LookupSelect: ({ id }: { id?: string }) => <input id={id} aria-label="lookup" />,
+  LookupSelect: ({
+    id,
+    value,
+    onChange,
+    basePath,
+  }: {
+    id?: string
+    value?: string | null
+    onChange?: (value: string | null) => void
+    basePath?: string
+  }) => (
+    <select id={id} aria-label="lookup" value={value ?? ''} onChange={(e) => onChange?.(e.target.value || null)}>
+      <option value="">—</option>
+      {(lookups.byPath[basePath ?? ''] ?? []).map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.name}
+        </option>
+      ))}
+    </select>
+  ),
 }))
 vi.mock('../../../reference/components/CountryCombobox', () => ({
   CountryCombobox: ({ id }: { id?: string }) => <input id={id} aria-label="Land" />,
@@ -278,7 +299,33 @@ describe('EmployeeForm — contracttype-gedreven einddatum', () => {
     expect(screen.getByText('Leeg = onbepaalde duur.')).toBeInTheDocument()
   })
 
-  it('markeert de einddatum als verplicht en blokkeert opslaan zonder waarde bij een requiresEndDate-contracttype', async () => {
+  it('markeert de einddatum als verplicht en blokkeert opslaan zonder waarde wanneer het contracttype in deze bewerking wijzigt naar requiresEndDate', async () => {
+    // Zachte regel (spec §2.4): een bewerking die het contracttype ZELF wijzigt naar een
+    // requiresEndDate-type blijft blokkeren zonder einddatum, ook in edit-modus.
+    auth.permissions = []
+    lookups.byPath['/api/contract-types'] = [{ id: 'ct-1', code: 'TIJDELIJK', name: 'Tijdelijk contract', requiresEndDate: true }]
+    const onSubmit = vi.fn()
+    const { container } = renderForm({
+      mode: 'edit',
+      initial: EDIT_INITIAL, // contractTypeId: null
+      onSubmit,
+    })
+    await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
+    fireEvent.change(container.querySelector('#e-contract')!, { target: { value: 'ct-1' } })
+
+    const label = container.querySelector('label[for="e-end"]')
+    expect(label?.querySelector('.ui-form-field-required')).toBeInTheDocument()
+    expect(screen.queryByText('Leeg = onbepaalde duur.')).not.toBeInTheDocument()
+
+    await clickSave()
+    expect(screen.getByText('Einddatum is verplicht voor dit contracttype.')).toBeInTheDocument()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('toont een niet-blokkerende hint (geen required-markering) wanneer een bestaand contracttype ongewijzigd blijft zonder einddatum', async () => {
+    // Zachte regel: een dossier dat al bestaat zonder einddatum (bv. na backfill van
+    // RequiresEndDate op BEP/UITZ) mag verder bewerkt worden zolang het contracttype zelf
+    // niet wijzigt — de completeness-kaart signaleert de ontbrekende einddatum, niet dit veld.
     auth.permissions = []
     lookups.byPath['/api/contract-types'] = [{ id: 'ct-1', code: 'TIJDELIJK', name: 'Tijdelijk contract', requiresEndDate: true }]
     const onSubmit = vi.fn()
@@ -290,12 +337,14 @@ describe('EmployeeForm — contracttype-gedreven einddatum', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Dienstverband/i }))
 
     const label = container.querySelector('label[for="e-end"]')
-    expect(label?.querySelector('.ui-form-field-required')).toBeInTheDocument()
-    expect(screen.queryByText('Leeg = onbepaalde duur.')).not.toBeInTheDocument()
+    expect(label?.querySelector('.ui-form-field-required')).not.toBeInTheDocument()
+    expect(screen.getByText('Einddatum ontbreekt voor dit contracttype.')).toBeInTheDocument()
 
+    await userEvent.click(screen.getByRole('tab', { name: /Algemeen/i }))
+    await userEvent.type(screen.getByLabelText(/^Telefoon$/i), '011 22 33 44')
     await clickSave()
-    expect(screen.getByText('Einddatum is verplicht voor dit contracttype.')).toBeInTheDocument()
-    expect(onSubmit).not.toHaveBeenCalled()
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ employmentEndDate: null })
   })
 
   it('laat opslaan toe zodra de verplichte einddatum is ingevuld', async () => {

@@ -235,7 +235,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                     {record.isOverdue && <Badge tone="danger">Te laat</Badge>}
                   </span>
                 </td>
-                <td>{record.completedDate ?? '—'}</td>
+                <td>{formatDate(record.completedDate) || '—'}</td>
                 <td>{record.cost != null ? `€ ${record.cost.toLocaleString('nl-BE')}` : '—'}</td>
                 <td className="maint-actions">
                   {canEdit && (record.status === 'Planned' || record.status === 'InProgress') && (

@@ -5,6 +5,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { StatusBadges } from '../../../components/ui/StatusBadges'
@@ -32,6 +33,7 @@ import { EmployeeTripsTab } from '../components/EmployeeTripsTab'
 import { QualificationsTab } from '../components/QualificationsTab'
 import { useEmployee } from '../hooks/useEmployee'
 import { useEmployeeMutations } from '../hooks/useEmployeeMutations'
+import { contractEndBadge } from '../utils/employeeListBadges'
 import { CIVIL_STATUS_LABELS, EMPLOYMENT_STATUS_LABELS, EMPLOYMENT_STATUS_TONES } from '../types/employee'
 import './EmployeeDetailPage.css'
 
@@ -257,6 +259,15 @@ export function EmployeeDetailPage() {
                 })()}
               </>
             )}
+            {(employee.email || employee.phoneNumber) && (
+              <>
+                {' '}
+                ·{' '}
+                {employee.email && <a href={`mailto:${employee.email}`}>{employee.email}</a>}
+                {employee.email && employee.phoneNumber && ' · '}
+                {employee.phoneNumber && <a href={`tel:${employee.phoneNumber}`}>{employee.phoneNumber}</a>}
+              </>
+            )}
           </span>
         }
         action={
@@ -295,6 +306,10 @@ export function EmployeeDetailPage() {
             tone: EMPLOYMENT_STATUS_TONES[employee.employmentStatus],
           }}
         />
+        {(() => {
+          const endBadge = contractEndBadge(employee)
+          return endBadge && <Badge tone={endBadge.tone}>{endBadge.label}</Badge>
+        })()}
         {employee.driverId ? (
           <button type="button" className="employee-driver-link employee-driver-link-button" onClick={goToDriverSection}>
             Chauffeursgegevens bekijken →
@@ -538,7 +553,7 @@ export function EmployeeDetailPage() {
           onConfirm={async () => {
             const ok = await mutations.deactivate(employee.id)
             if (ok) {
-              toast.showSuccess('Medewerker inactief gezet')
+              toast.showSuccess('Medewerker inactief gezet.')
               setConfirmLifecycle(null)
               reload()
               // Offer (never force) redistributing any open tasks left behind — only meaningful
@@ -576,7 +591,7 @@ export function EmployeeDetailPage() {
           onConfirm={async () => {
             const ok = await mutations.reactivate(employee.id)
             if (ok) {
-              toast.showSuccess('Medewerker geheractiveerd')
+              toast.showSuccess('Medewerker geheractiveerd.')
               setConfirmLifecycle(null)
               reload()
             }

@@ -346,7 +346,7 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
                 value={newCard.internalName}
                 onChange={(e) => setNewCard((f) => ({ ...f, internalName: e.target.value }))}
                 disabled={saving}
-                maxLength={100}
+                maxLength={200}
               />
             </FormField>
             <div className="employee-tank-cards-form-row">

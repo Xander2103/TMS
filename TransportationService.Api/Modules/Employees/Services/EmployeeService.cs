@@ -341,8 +341,12 @@ public class EmployeeService : IEmployeeService
         ValidateRequired(request.FirstName, request.LastName, request.Email,
             request.EmploymentStartDate, request.EmploymentEndDate);
         await ValidateLookupCodesAsync(request.NationalityCode, request.PreferredLanguageCode, cancellationToken);
+        // Zachte regel (spec §2.4): the missing-end-date gate only blocks an update that itself
+        // changes the contract type, not every unrelated edit to a legacy dossier.
+        var contractTypeChanged = request.ContractTypeId != employee.ContractTypeId;
         await EnsureReferencesInTenantAsync(
-            request.DepartmentId, request.ContractTypeId, request.EmploymentEndDate, request.JobFunctionIds, cancellationToken);
+            request.DepartmentId, request.ContractTypeId, request.EmploymentEndDate, request.JobFunctionIds, cancellationToken,
+            enforceEndDateRule: contractTypeChanged);
 
         // Full before-image for the personnel history (corrections wave §4): every meaningful
         // field with resolved names, confidential values masked. Captured BEFORE any mutation.
@@ -605,7 +609,7 @@ public class EmployeeService : IEmployeeService
 
     private async Task EnsureReferencesInTenantAsync(
         Guid? departmentId, Guid? contractTypeId, DateOnly? employmentEndDate,
-        IReadOnlyList<Guid>? jobFunctionIds, CancellationToken cancellationToken)
+        IReadOnlyList<Guid>? jobFunctionIds, CancellationToken cancellationToken, bool enforceEndDateRule = true)
     {
         var tenantId = _tenantContext.TenantId;
 
@@ -629,7 +633,11 @@ public class EmployeeService : IEmployeeService
                 throw new InvalidTenantReferenceException("contracttype");
             }
 
-            if (contractType.RequiresEndDate && employmentEndDate is null)
+            // Zachte regel (spec §2.4): on create the rule always applies; on update it only
+            // blocks a save that itself changes the contract type — a legacy dossier that
+            // already lacks an end date can still have unrelated fields edited. The
+            // completeness engine (not this gate) surfaces the missing end date afterwards.
+            if (contractType.RequiresEndDate && employmentEndDate is null && enforceEndDateRule)
             {
                 throw new DomainValidationException("employmentEndDate", "Einddatum is verplicht voor dit contracttype.");
             }

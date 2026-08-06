@@ -217,7 +217,7 @@ export function HrReminderSettingsPage() {
             <FormField
               label="Eerste melding na (dagen)"
               htmlFor="hr-dossier-reminder-days"
-              hint="Hr-rol wordt verwittigd zodra een dossier dit aantal dagen onvolledig is."
+              hint="HR-rol wordt verwittigd zodra een dossier dit aantal dagen onvolledig is."
               error={getFieldError(fieldErrors, 'dossierReminderDays')}
             >
               <input
@@ -233,7 +233,7 @@ export function HrReminderSettingsPage() {
             <FormField
               label="Escalatie na (dagen)"
               htmlFor="hr-dossier-escalation-days"
-              hint="Hr + management worden verwittigd (kritiek) na dit aantal dagen."
+              hint="HR + management worden verwittigd (kritiek) na dit aantal dagen."
               error={getFieldError(fieldErrors, 'dossierEscalationDays')}
             >
               <input

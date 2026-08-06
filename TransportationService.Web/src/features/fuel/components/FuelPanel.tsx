@@ -245,7 +245,7 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
             <tbody>
               {overview.items.map((transaction) => (
                 <tr key={transaction.id}>
-                  <td>{transaction.transactionDate}</td>
+                  <td>{formatDate(transaction.transactionDate)}</td>
                   <td>
                     {transaction.litres.toLocaleString('nl-BE')} l{!transaction.fullTank && <span className="fuel-partial"> (deels)</span>}
                   </td>

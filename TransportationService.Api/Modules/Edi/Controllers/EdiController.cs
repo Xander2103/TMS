@@ -33,14 +33,17 @@ public class EdiController : ControllerBase
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
+    private readonly TimeProvider _timeProvider;
 
     public EdiController(
-        IEdiService service, TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService)
+        IEdiService service, TransportationDbContext dbContext, ITenantContext tenantContext, IAuditService auditService,
+        TimeProvider timeProvider)
     {
         _service = service;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
+        _timeProvider = timeProvider;
     }
 
     public record IngestRequest(string Payload);
@@ -402,7 +405,7 @@ public class EdiController : ControllerBase
             .Select(g => new { Status = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.Status.ToString(), x => x.Count, cancellationToken);
 
-        var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+        var sevenDaysAgo = _timeProvider.GetUtcNow().UtcDateTime.AddDays(-7);
         var processedLast7Days = await messages
             .CountAsync(m => m.Status == EdiProcessingStatus.Processed && m.ProcessedAt >= sevenDaysAgo, cancellationToken);
         var mappingIssues = await messages.CountAsync(MappingIssueExpression, cancellationToken);

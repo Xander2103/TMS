@@ -387,7 +387,7 @@ export function TankCardsPage() {
                   value={form.internalName}
                   onChange={(e) => set('internalName', e.target.value)}
                   disabled={saving}
-                  maxLength={100}
+                  maxLength={200}
                 />
               </FormField>
               <FormField label="Medewerker" htmlFor="tc-employee">

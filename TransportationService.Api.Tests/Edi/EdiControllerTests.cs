@@ -68,9 +68,10 @@ public class EdiControllerTests
         var tenant = new DevTenantContext(tenantId);
         var user = new DevCurrentUserContext(null);
         var audit = new AuditService(db.Context, tenant, user);
-        var orders = new TransportOrderService(db.Context, tenant, audit, new TestClock(Now));
-        var service = new EdiService(db.Context, tenant, audit, orders, new TestClock(Now));
-        var sut = new EdiController(service, db.Context, tenant, audit);
+        var clock = new TestClock(Now);
+        var orders = new TransportOrderService(db.Context, tenant, audit, clock);
+        var service = new EdiService(db.Context, tenant, audit, orders, clock);
+        var sut = new EdiController(service, db.Context, tenant, audit, clock);
         return new Harness(db, sut, tenantId, partnerId, customerId, locationId, mappingId);
     }
 
@@ -194,9 +195,10 @@ public class EdiControllerTests
         using var _ = h.Db;
         var foreignTenant = new DevTenantContext(Guid.NewGuid());
         var foreignAudit = new AuditService(h.Db.Context, foreignTenant, new DevCurrentUserContext(null));
-        var foreignOrders = new TransportOrderService(h.Db.Context, foreignTenant, foreignAudit, new TestClock(Now));
-        var foreignService = new EdiService(h.Db.Context, foreignTenant, foreignAudit, foreignOrders, new TestClock(Now));
-        var foreignSut = new EdiController(foreignService, h.Db.Context, foreignTenant, foreignAudit);
+        var foreignClock = new TestClock(Now);
+        var foreignOrders = new TransportOrderService(h.Db.Context, foreignTenant, foreignAudit, foreignClock);
+        var foreignService = new EdiService(h.Db.Context, foreignTenant, foreignAudit, foreignOrders, foreignClock);
+        var foreignSut = new EdiController(foreignService, h.Db.Context, foreignTenant, foreignAudit, foreignClock);
 
         var updateResult = await foreignSut.UpdatePartner(h.PartnerId,
             new EdiController.UpdatePartnerRequest("Gekaapt", null, null, "generic-json-v1", true, null),

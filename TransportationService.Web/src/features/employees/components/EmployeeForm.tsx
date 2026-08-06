@@ -212,6 +212,18 @@ export function EmployeeForm({
   const selectedContractType = contractTypes.options.find((o) => o.id === contractTypeId)
   const contractTypeRequiresEndDate = Boolean(selectedContractType?.requiresEndDate)
 
+  // Zachte regel (spec §2.4): on create the rule always applies; on edit it only blocks the
+  // save when THIS submit changes the contract type. A legacy dossier whose contract type
+  // was backfilled to requiresEndDate=true, but which predates that end date, stays editable
+  // for unrelated fields — the completeness card surfaces the gap instead of a hard block.
+  const initialContractTypeIdRef = useRef(initial?.contractTypeId ?? null)
+  const contractTypeChanged = mode === 'create' || contractTypeId !== initialContractTypeIdRef.current
+  const missingEndDateBlocking = contractTypeRequiresEndDate && contractTypeChanged
+  const missingEndDateHint =
+    contractTypeRequiresEndDate && !contractTypeChanged && !employmentEndDate
+      ? 'Einddatum ontbreekt voor dit contracttype.'
+      : undefined
+
   function applyEndDatePreset(months: number) {
     setEmploymentEndDate(addContractEndDate(employmentStartDate || todayIsoDate(), months))
     touch()
@@ -224,7 +236,7 @@ export function EmployeeForm({
     if (!firstName.trim()) errors.firstName = 'Voornaam is verplicht.'
     if (!lastName.trim()) errors.lastName = 'Achternaam is verplicht.'
     if (email.trim() && !email.includes('@')) errors.email = 'Geef een geldig e-mailadres op.'
-    if (contractTypeRequiresEndDate && !employmentEndDate) {
+    if (missingEndDateBlocking && !employmentEndDate) {
       errors.employmentEndDate = 'Einddatum is verplicht voor dit contracttype.'
     } else if (employmentStartDate && employmentEndDate && employmentEndDate < employmentStartDate) {
       errors.employmentEndDate = 'De einddatum moet na de startdatum liggen.'
@@ -373,8 +385,8 @@ export function EmployeeForm({
         <FormField
           label="Einddatum tewerkstelling"
           htmlFor="e-end"
-          hint={contractTypeRequiresEndDate ? undefined : 'Leeg = onbepaalde duur.'}
-          required={contractTypeRequiresEndDate}
+          hint={missingEndDateHint ?? (contractTypeRequiresEndDate ? undefined : 'Leeg = onbepaalde duur.')}
+          required={missingEndDateBlocking}
           error={fieldErrors.employmentEndDate ?? getFieldError(serverFieldErrors, 'employmentEndDate')}
         >
           <div className="employee-form-enddate-row">

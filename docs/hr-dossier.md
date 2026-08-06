@@ -108,4 +108,4 @@ voor bepaalde-duur/uitzendtypes, `false` voor onbepaalde duur — zie seeds in
   (`required={contractTypeRequiresEndDate}`) zodra het geselecteerde contracttype dit vereist, met
   vier snelkeuzeknoppen (`CONTRACT_END_DATE_PRESETS` in
   `TransportationService.Web/src/features/employees/utils/contractPresets.ts`: 1, 3, 6, 12
-  maanden vanaf vandaag) die de einddatum in één klik invullen.
+  maanden vanaf startdatum (fallback: vandaag) die de einddatum in één klik invullen.
