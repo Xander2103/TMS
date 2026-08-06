@@ -90,13 +90,65 @@ public static class ReferenceDataSeeder
         await SeedMissingAsync<Language>(dbContext, tenantId, NationalityLanguageSeedData.Languages, cancellationToken);
         await SeedMissingAsync<Nationality>(dbContext, tenantId, NationalityLanguageSeedData.Nationalities, cancellationToken);
 
-        await SeedIfEmptyAsync<ContractType>(dbContext, tenantId,
-            [("VAST", "Vast contract"), ("BEP", "Bepaalde duur"), ("UITZ", "Uitzendkracht"), ("ZELF", "Zelfstandig")],
-            cancellationToken);
+        await SeedContractTypesAsync(dbContext, tenantId, cancellationToken);
 
         await SeedServiceOptionsAsync(dbContext, tenantId, cancellationToken);
         await SeedUnitTypePhysicalDefaultsAsync(dbContext, tenantId, cancellationToken);
         await SeedInventoryUnitsAsync(dbContext, tenantId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Contract types, incl. whether the type requires an EmploymentEndDate (HR maturity wave
+    /// §5: fixed-term/temp/student contracts must have one, open-ended ones don't). Add-if-
+    /// missing by code — mirrors <see cref="SeedInventoryUnitsAsync"/> — so existing tenants
+    /// pick up newly introduced codes (STUD, FLEXI) without touching rows they may already
+    /// have renamed, deactivated or reordered. RequiresEndDate for pre-existing BEP/UITZ rows
+    /// is backfilled by the ContractTypeRequiresEndDate migration's data update, not here.
+    /// </summary>
+    private static async Task SeedContractTypesAsync(
+        TransportationDbContext dbContext, Guid tenantId, CancellationToken cancellationToken)
+    {
+        (string Code, string Name, bool RequiresEndDate)[] contractTypes =
+        [
+            ("VAST", "Vast contract", false),
+            ("BEP", "Bepaalde duur", true),
+            ("UITZ", "Uitzendkracht", true),
+            ("ZELF", "Zelfstandig", false),
+            ("STUD", "Studentenovereenkomst", true),
+            ("FLEXI", "Flexi-job", false),
+        ];
+        var existing = (await dbContext.Set<ContractType>()
+                .Where(c => c.TenantId == tenantId)
+                .Select(c => c.Code)
+                .ToListAsync(cancellationToken))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var added = false;
+        var sortOrder = existing.Count;
+        foreach (var (code, name, requiresEndDate) in contractTypes)
+        {
+            if (existing.Contains(code))
+            {
+                continue;
+            }
+
+            dbContext.Set<ContractType>().Add(new ContractType
+            {
+                Id = Guid.NewGuid(),
+                TenantId = tenantId,
+                Code = code,
+                Name = name,
+                IsActive = true,
+                SortOrder = sortOrder++,
+                RequiresEndDate = requiresEndDate,
+            });
+            added = true;
+        }
+
+        if (added)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 
     /// <summary>

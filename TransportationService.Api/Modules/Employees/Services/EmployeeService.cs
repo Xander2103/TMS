@@ -151,7 +151,8 @@ public class EmployeeService : IEmployeeService
         ValidateRequired(request.FirstName, request.LastName, request.Email,
             request.EmploymentStartDate, request.EmploymentEndDate);
         await ValidateLookupCodesAsync(request.NationalityCode, request.PreferredLanguageCode, cancellationToken);
-        await EnsureReferencesInTenantAsync(request.DepartmentId, request.ContractTypeId, request.JobFunctionIds, cancellationToken);
+        await EnsureReferencesInTenantAsync(
+            request.DepartmentId, request.ContractTypeId, request.EmploymentEndDate, request.JobFunctionIds, cancellationToken);
         await EnsureQualificationTypesExistAsync(request.Qualifications, cancellationToken);
 
         var settings = await _dbContext.TenantSettings
@@ -260,7 +261,8 @@ public class EmployeeService : IEmployeeService
         ValidateRequired(request.FirstName, request.LastName, request.Email,
             request.EmploymentStartDate, request.EmploymentEndDate);
         await ValidateLookupCodesAsync(request.NationalityCode, request.PreferredLanguageCode, cancellationToken);
-        await EnsureReferencesInTenantAsync(request.DepartmentId, request.ContractTypeId, request.JobFunctionIds, cancellationToken);
+        await EnsureReferencesInTenantAsync(
+            request.DepartmentId, request.ContractTypeId, request.EmploymentEndDate, request.JobFunctionIds, cancellationToken);
 
         // Full before-image for the personnel history (corrections wave §4): every meaningful
         // field with resolved names, confidential values masked. Captured BEFORE any mutation.
@@ -522,7 +524,8 @@ public class EmployeeService : IEmployeeService
     }
 
     private async Task EnsureReferencesInTenantAsync(
-        Guid? departmentId, Guid? contractTypeId, IReadOnlyList<Guid>? jobFunctionIds, CancellationToken cancellationToken)
+        Guid? departmentId, Guid? contractTypeId, DateOnly? employmentEndDate,
+        IReadOnlyList<Guid>? jobFunctionIds, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
 
@@ -532,10 +535,24 @@ public class EmployeeService : IEmployeeService
             throw new InvalidTenantReferenceException("afdeling");
         }
 
-        if (contractTypeId is { } contract
-            && !await _dbContext.ContractTypes.AnyAsync(c => c.Id == contract && c.TenantId == tenantId, cancellationToken))
+        if (contractTypeId is { } contract)
         {
-            throw new InvalidTenantReferenceException("contracttype");
+            // Single fetch doubles as both the tenant-reference check and the source for the
+            // end-date requirement (HR maturity wave §5): fixed-term/temp/student contract
+            // types demand an EmploymentEndDate, open-ended ones don't.
+            var contractType = await _dbContext.ContractTypes
+                .Where(c => c.Id == contract && c.TenantId == tenantId)
+                .Select(c => new { c.RequiresEndDate })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (contractType is null)
+            {
+                throw new InvalidTenantReferenceException("contracttype");
+            }
+
+            if (contractType.RequiresEndDate && employmentEndDate is null)
+            {
+                throw new DomainValidationException("employmentEndDate", "Einddatum is verplicht voor dit contracttype.");
+            }
         }
 
         var functionIds = (jobFunctionIds ?? []).Distinct().ToList();

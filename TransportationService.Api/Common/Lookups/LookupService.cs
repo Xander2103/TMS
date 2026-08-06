@@ -3,6 +3,7 @@ using TransportationService.Api.Common.Models;
 using TransportationService.Api.Common.Persistence;
 using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Auditing.Services;
+using TransportationService.Api.Modules.Reference.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
 
 namespace TransportationService.Api.Common.Lookups;
@@ -50,18 +51,32 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
                 e.Name.ToLower().Contains(term));
         }
 
-        return await query
+        // Mapped in memory (not via a Select(projection) expression tree): MapToDto's
+        // RequiresEndDate branch pattern-matches on ContractType, and only closed generic
+        // instantiations of this class where TEntity is ContractType can ever satisfy it — for
+        // every other lookup type the SQL translator would otherwise have to make sense of a
+        // TypeBinaryExpression against an unrelated entity, which it can't. Lookup tables are
+        // tiny, so paging in full rows instead of a narrow SELECT is not a real cost here.
+        var paged = await query
             .OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
-            .ToPagedResultAsync(page, e => MapToDto(e), cancellationToken);
+            .ToPagedResultAsync(page, e => e, cancellationToken);
+
+        return new PagedResult<LookupItemDto>(
+            paged.Items.Select(MapToDto).ToList(), paged.TotalCount, paged.Page, paged.PageSize);
     }
 
-    public async Task<IReadOnlyList<LookupOptionDto>> ListOptionsAsync(CancellationToken cancellationToken) =>
-        await TenantScoped()
+    public async Task<IReadOnlyList<LookupOptionDto>> ListOptionsAsync(CancellationToken cancellationToken)
+    {
+        var entities = await TenantScoped()
             .AsNoTracking()
             .Where(e => e.IsActive)
             .OrderBy(e => e.SortOrder).ThenBy(e => e.Name)
-            .Select(e => new LookupOptionDto(e.Id, e.Code, e.Name))
             .ToListAsync(cancellationToken);
+
+        return entities
+            .Select(e => new LookupOptionDto(e.Id, e.Code, e.Name, RequiresEndDateOf(e)))
+            .ToList();
+    }
 
     public async Task<LookupItemDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -92,6 +107,7 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
             IsActive = request.IsActive,
             SortOrder = request.SortOrder,
         };
+        ApplyRequiresEndDate(entity, request.RequiresEndDate);
 
         _dbContext.Set<TEntity>().Add(entity);
 
@@ -136,6 +152,7 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
         entity.Description = Normalize(request.Description);
         entity.IsActive = request.IsActive;
         entity.SortOrder = request.SortOrder;
+        ApplyRequiresEndDate(entity, request.RequiresEndDate);
 
         try
         {
@@ -185,6 +202,19 @@ public class LookupService<TEntity> : ILookupService<TEntity> where TEntity : Lo
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>No-op for every lookup type except <see cref="ContractType"/>; a request value
+    /// of null (field not supplied) leaves an existing row's flag untouched, but still defaults
+    /// to false on create.</summary>
+    private static void ApplyRequiresEndDate(TEntity entity, bool? requiresEndDate)
+    {
+        if (entity is ContractType contractType && requiresEndDate is { } value)
+        {
+            contractType.RequiresEndDate = value;
+        }
+    }
+
+    private static bool? RequiresEndDateOf(TEntity e) => e is ContractType ct ? ct.RequiresEndDate : null;
+
     private static LookupItemDto MapToDto(TEntity e) =>
-        new(e.Id, e.Code, e.Name, e.Description, e.IsActive, e.SortOrder, e.CreatedAt, e.UpdatedAt);
+        new(e.Id, e.Code, e.Name, e.Description, e.IsActive, e.SortOrder, e.CreatedAt, e.UpdatedAt, RequiresEndDateOf(e));
 }
