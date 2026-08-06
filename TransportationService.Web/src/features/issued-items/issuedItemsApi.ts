@@ -93,6 +93,7 @@ export interface EmployeeIssuedItem {
   serialNumber: string | null
   notes: string | null
   issuedByUserId: string | null
+  issuedByName: string | null
   returnedDate: string | null
   returnCondition: string | null
   receivedBackByUserId: string | null

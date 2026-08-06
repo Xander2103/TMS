@@ -68,6 +68,7 @@ function makeItem(overrides: Partial<EmployeeIssuedItem>): EmployeeIssuedItem {
     serialNumber: 'SN-9',
     notes: null,
     issuedByUserId: null,
+    issuedByName: null,
     returnedDate: null,
     returnCondition: null,
     receivedBackByUserId: null,

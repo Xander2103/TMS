@@ -39,7 +39,8 @@ public record EmployeeIssuedItemDto(
     DateOnly? ReturnedDate, string? ReturnCondition, Guid? ReceivedBackByUserId,
     Guid? VariantId = null, string? VariantLabel = null,
     DateOnly? ExpectedReturnDate = null, string? ConditionAtIssue = null,
-    string? ReturnDisposition = null, bool IsReturnOverdue = false);
+    string? ReturnDisposition = null, bool IsReturnOverdue = false,
+    string? IssuedByName = null);
 
 public record SaveEmployeeIssuedItemRequest(
     Guid? TemplateId, string? Name, string? Category, IssuedItemStatus Status,
@@ -208,11 +209,16 @@ public class IssuedItemService : IIssuedItemService
             return null;
         }
 
-        return await _dbContext.EmployeeIssuedItems
+        var items = await _dbContext.EmployeeIssuedItems
             .Where(i => i.TenantId == _tenantContext.TenantId && i.EmployeeId == employeeId)
             .OrderBy(i => i.CategorySnapshot).ThenBy(i => i.NameSnapshot)
-            .Select(i => Map(i))
             .ToListAsync(cancellationToken);
+
+        var issuerNames = await UserNamesAsync(
+            items.Where(i => i.IssuedByUserId.HasValue).Select(i => i.IssuedByUserId!.Value), cancellationToken);
+        return items
+            .Select(i => Map(i, i.IssuedByUserId is { } issuerId ? issuerNames.GetValueOrDefault(issuerId) : null))
+            .ToList();
     }
 
     public async Task<EmployeeIssuedItemDto?> UpsertAsync(
@@ -301,7 +307,10 @@ public class IssuedItemService : IIssuedItemService
                 cancellationToken);
         }
 
-        return Map(item);
+        var issuedByName = item.IssuedByUserId is { } issuedByUserId
+            ? (await UserNamesAsync([issuedByUserId], cancellationToken)).GetValueOrDefault(issuedByUserId)
+            : null;
+        return Map(item, issuedByName);
     }
 
     public async Task<bool> DeleteItemAsync(Guid employeeId, Guid itemId, CancellationToken cancellationToken)
@@ -654,6 +663,28 @@ public class IssuedItemService : IIssuedItemService
     private Task<bool> EmployeeExistsAsync(Guid employeeId, CancellationToken cancellationToken) =>
         _dbContext.Employees.AnyAsync(e => e.TenantId == _tenantContext.TenantId && e.Id == employeeId, cancellationToken);
 
+    /// <summary>Batch-resolves display names ("First Last", falling back to the e-mail) for the "Uitgegeven door" column.</summary>
+    private async Task<Dictionary<Guid, string>> UserNamesAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var users = await _dbContext.Users.AsNoTracking()
+            .Where(u => u.TenantId == _tenantContext.TenantId && ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.FirstName, u.LastName, u.Email })
+            .ToListAsync(cancellationToken);
+        return users.ToDictionary(u => u.Id, u => DisplayName(u.FirstName, u.LastName, u.Email));
+    }
+
+    private static string DisplayName(string firstName, string lastName, string email)
+    {
+        var name = $"{firstName} {lastName}".Trim();
+        return name.Length > 0 ? name : email;
+    }
+
     /// <summary>Shared template mapping; variantStockSum/variantCount come from the variant aggregates.</summary>
     public static IssuedItemTemplateDto MapTemplate(IssuedItemTemplate t, int variantStockSum, int variantCount = 0)
     {
@@ -673,14 +704,15 @@ public class IssuedItemService : IIssuedItemService
             t.TargetStockLevel, t.ReorderQuantity, t.NegativeStockRequiresReason, status);
     }
 
-    private static EmployeeIssuedItemDto Map(EmployeeIssuedItem i) => new(
+    private static EmployeeIssuedItemDto Map(EmployeeIssuedItem i, string? issuedByName = null) => new(
         i.Id, i.TemplateId, i.NameSnapshot, i.CategorySnapshot, i.Status,
         i.IssuedDate, i.Quantity, i.SerialNumber, i.Notes, i.IssuedByUserId,
         i.ReturnedDate, i.ReturnCondition, i.ReceivedBackByUserId,
         i.VariantId, i.VariantSnapshot,
         i.ExpectedReturnDate, i.ConditionAtIssue, i.ReturnDisposition,
         IsReturnOverdue: i.Status == IssuedItemStatus.Issued
-            && i.ExpectedReturnDate is { } due && due < DateOnly.FromDateTime(DateTime.UtcNow));
+            && i.ExpectedReturnDate is { } due && due < DateOnly.FromDateTime(DateTime.UtcNow),
+        IssuedByName: issuedByName);
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

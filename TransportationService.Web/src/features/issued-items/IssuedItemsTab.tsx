@@ -30,6 +30,7 @@ import {
   type NegativeStockPayload,
 } from './inventoryApi'
 import { NegativeStockConfirmModal } from './components/NegativeStockConfirmModal'
+import { BulkIssueModal } from './components/BulkIssueModal'
 import './issued-items.css'
 
 const STATUS_TONE: Record<IssuedItemStatus, BadgeTone> = {
@@ -71,6 +72,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
+  const [bulkIssueOpen, setBulkIssueOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EmployeeIssuedItemInput>(emptyForm())
@@ -292,6 +294,11 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
               Ontvangstbewijs (PDF)
             </Button>
           )}
+          {canManage && (
+            <Button variant="secondary" onClick={() => setBulkIssueOpen(true)}>
+              Meerdere middelen uitgeven
+            </Button>
+          )}
           {canManage && <Button onClick={openCreate}>Bedrijfsmiddel toevoegen</Button>}
         </div>
       </div>
@@ -312,6 +319,8 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
               <th>Aantal</th>
               <th>Serienr.</th>
               <th>Uitgereikt</th>
+              <th>Teruggebracht</th>
+              <th>Uitgegeven door</th>
               <th>Status</th>
               <th aria-label="Acties" />
             </tr>
@@ -325,6 +334,8 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                 <td>{item.quantity}</td>
                 <td>{item.serialNumber ?? '—'}</td>
                 <td>{formatDate(item.issuedDate) || '—'}</td>
+                <td>{formatDate(item.returnedDate) || '—'}</td>
+                <td>{item.issuedByName ?? '—'}</td>
                 <td>
                   <Badge tone={STATUS_TONE[item.status]}>{ISSUED_ITEM_STATUS_LABELS[item.status]}</Badge>
                 </td>
@@ -501,6 +512,22 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
           busy={saving}
           onConfirm={(reason) => void handleNegativeStockConfirm(reason)}
           onCancel={() => setNegativeStock(null)}
+        />
+      )}
+
+      {bulkIssueOpen && (
+        <BulkIssueModal
+          employeeId={employeeId}
+          employeeName={employeeName}
+          templates={templates}
+          canOverrideStock={canOverrideStock}
+          onClose={() => setBulkIssueOpen(false)}
+          onItemIssued={() => setReloadToken((t) => t + 1)}
+          onCompleted={(message) => {
+            showSuccess(message)
+            setBulkIssueOpen(false)
+            setReloadToken((t) => t + 1)
+          }}
         />
       )}
     </section>

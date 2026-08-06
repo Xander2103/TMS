@@ -3,6 +3,7 @@ using TransportationService.Api.Common;
 using TransportationService.Api.Modules.Auditing.Services;
 using TransportationService.Api.Modules.Employees.Entities;
 using TransportationService.Api.Modules.Employees.Services;
+using TransportationService.Api.Modules.Identity.Entities;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tenancy.Entities;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -19,13 +20,14 @@ public class IssuedItemTests
             Task.FromResult(true);
     }
 
-    private sealed record Harness(SqliteTestDbContext Db, IssuedItemService Sut, Guid TenantId, Guid EmployeeId);
+    private sealed record Harness(SqliteTestDbContext Db, IssuedItemService Sut, Guid TenantId, Guid EmployeeId, Guid IssuerUserId);
 
     private static async Task<Harness> SeedAsync()
     {
         var db = new SqliteTestDbContext();
         var tenantId = Guid.NewGuid();
         var employeeId = Guid.NewGuid();
+        var issuerUserId = Guid.NewGuid();
         db.Context.Tenants.Add(new Tenant { Id = tenantId, Name = "Acme", Slug = "acme", IsActive = true, CreatedAt = DateTime.UtcNow });
         db.Context.TenantSettings.Add(new TenantSettings { Id = Guid.NewGuid(), TenantId = tenantId, TradingName = "Acme" });
         db.Context.Employees.Add(new Employee
@@ -34,14 +36,18 @@ public class IssuedItemTests
             DateOfBirth = new(1990, 1, 1), Email = "jan@acme.example", PhoneNumber = "+321", Street = "S", HouseNumber = "1",
             PostalCode = "2000", City = "Antwerpen", EmploymentStartDate = new(2020, 1, 1), EmploymentStatus = EmploymentStatus.Active, IsActive = true,
         });
+        db.Context.Users.Add(new User
+        {
+            Id = issuerUserId, TenantId = tenantId, Email = "beheer@acme.example", FirstName = "Bea", LastName = "Heerder", IsActive = true,
+        });
         await db.Context.SaveChangesAsync();
 
         var tenant = new DevTenantContext(tenantId);
-        var currentUser = new DevCurrentUserContext(null);
+        var currentUser = new DevCurrentUserContext(issuerUserId);
         var audit = new AuditService(db.Context, tenant, currentUser);
         var inventory = new InventoryService(db.Context, tenant, currentUser, audit, InventoryTestFactory.Guard(currentUser));
         var sut = new IssuedItemService(db.Context, tenant, currentUser, audit, inventory, new AllowAllPermissions(), InventoryTestFactory.Guard(currentUser));
-        return new Harness(db, sut, tenantId, employeeId);
+        return new Harness(db, sut, tenantId, employeeId, issuerUserId);
     }
 
     private static SaveIssuedItemTemplateRequest Template(string name = "Toegangsbadge") =>
@@ -96,6 +102,21 @@ public class IssuedItemTests
         Assert.Equal(IssuedItemStatus.Returned, returned!.Status);
         Assert.Equal(new DateOnly(2026, 8, 1), returned.ReturnedDate);
         Assert.True(await h.Db.Context.AuditLogs.AnyAsync(a => a.EntityType == "EmployeeIssuedItem" && a.Action == "Returned"));
+    }
+
+    [Fact]
+    public async Task Issue_ResolvesIssuedByName_OnUpsertAndList()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var created = await h.Sut.UpsertAsync(h.EmployeeId, null, new SaveEmployeeIssuedItemRequest(
+            null, "Werkschoenen", "Chauffeur", IssuedItemStatus.Issued, new DateOnly(2026, 7, 1), 1, null, null, null, null),
+            CancellationToken.None);
+        Assert.Equal("Bea Heerder", created!.IssuedByName);
+
+        var listed = (await h.Sut.ListForEmployeeAsync(h.EmployeeId, CancellationToken.None))!.Single();
+        Assert.Equal("Bea Heerder", listed.IssuedByName);
+        Assert.Equal(h.IssuerUserId, listed.IssuedByUserId);
     }
 
     [Fact]

@@ -246,3 +246,54 @@
 .issued-items-stock-preview-warning {
   color: #b45309;
 }
+
+.bulk-issue-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.bulk-issue-shared-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.bulk-issue-category {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bulk-issue-category legend {
+  font-weight: 600;
+  font-size: 13px;
+  padding: 0 4px;
+}
+
+.bulk-issue-row {
+  border-top: 1px solid var(--border, #e5e7eb);
+  padding-top: 8px;
+}
+
+.bulk-issue-row:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.bulk-issue-row-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.bulk-issue-row-fields {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 8px 0 4px 24px;
+}
