@@ -230,11 +230,6 @@ public class ExpiryNotificationProducer
                 continue;
             }
 
-            foreach (var stage in newlyClaimedStages)
-            {
-                await LogDispatchAsync(tenantId, $"tankcard_expiry:{card.Id}:{stage}", "tankcard_expiring", cancellationToken);
-            }
-
             var tightestStage = newlyClaimedStages.Min();
             var cardLabel = !string.IsNullOrWhiteSpace(card.InternalName) ? card.InternalName! : MaskCardNumber(card.CardNumber);
             var expiryDate = card.ValidUntil!.Value.ToString("dd-MM-yyyy");
@@ -249,8 +244,16 @@ public class ExpiryNotificationProducer
             {
                 LinkPath = "/tank-cards",
                 InAppTitle = "Tankkaart vervalt binnenkort",
-                InAppMessage = $"Tankkaart {cardLabel} vervalt op {expiryDate}.",
+                InAppMessage = $"Tankkaart {cardLabel} vervalt op {expiryDate} (nog {TankCardStageLabel(tightestStage)}).",
             }, cancellationToken);
+
+            // Log only after the publish attempt returns (same Claim -> Publish -> Log order as
+            // the qualification/fleet-document branches above) — a cancellation mid-publish must
+            // not leave dedupe keys persisted while the notification itself never went out.
+            foreach (var stage in newlyClaimedStages)
+            {
+                await LogDispatchAsync(tenantId, $"tankcard_expiry:{card.Id}:{stage}", "tankcard_expiring", cancellationToken);
+            }
         }
     }
 

@@ -119,6 +119,47 @@ public class TankCardExpiryNotificationTests
     }
 
     [Fact]
+    public async Task StagePromotion_NarrowerStageFiresLater_WithoutReclaimingTheWiderOne()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var card = MakeCard(h.TenantId, daysUntilExpiry: 89);
+        h.Db.Context.TankCards.Add(card);
+        await h.Db.Context.SaveChangesAsync();
+
+        var clock = new TestClock(Now);
+        var producer = new ExpiryNotificationProducer(h.Db.Context, clock);
+        await producer.ProduceForTenantAsync(h.TenantId, CancellationToken.None);
+
+        var afterFirstRun = h.Db.Context.Notifications.Where(n => n.Type == MessageKinds.TankCardExpiry).ToList();
+        Assert.Single(afterFirstRun);
+        Assert.Contains("3 maanden", afterFirstRun[0].Message);
+        var logsAfterFirstRun = h.Db.Context.ReminderDispatchLogs
+            .Where(l => l.DedupeKey.StartsWith($"tankcard_expiry:{card.Id}:")).ToList();
+        Assert.Single(logsAfterFirstRun);
+        Assert.Equal($"tankcard_expiry:{card.Id}:90", logsAfterFirstRun[0].DedupeKey);
+
+        // Advance 60 days: the card is now 29 days from expiry, so stage 30 newly applies. Stage
+        // 90 must NOT be pre-claimed while only stage 90 was due — this proves the "quieter"
+        // multi-stage collapse only auto-claims stages that are ALREADY due at claim time, never
+        // stages that become due only later.
+        clock.Advance(TimeSpan.FromDays(60));
+        await producer.ProduceForTenantAsync(h.TenantId, CancellationToken.None);
+
+        var afterSecondRun = h.Db.Context.Notifications.Where(n => n.Type == MessageKinds.TankCardExpiry).ToList();
+        Assert.Equal(2, afterSecondRun.Count);
+        var newNotification = afterSecondRun.Except(afterFirstRun).Single();
+        Assert.Contains("1 maand", newNotification.Message);
+        Assert.DoesNotContain("1 maand", afterFirstRun[0].Message);
+
+        var logsAfterSecondRun = h.Db.Context.ReminderDispatchLogs
+            .Where(l => l.DedupeKey.StartsWith($"tankcard_expiry:{card.Id}:")).ToList();
+        Assert.Equal(2, logsAfterSecondRun.Count);
+        Assert.Contains($"tankcard_expiry:{card.Id}:90", logsAfterSecondRun.Select(l => l.DedupeKey));
+        Assert.Contains($"tankcard_expiry:{card.Id}:30", logsAfterSecondRun.Select(l => l.DedupeKey));
+    }
+
+    [Fact]
     public async Task BlockedCard_NeverFires()
     {
         var h = await SeedAsync();
