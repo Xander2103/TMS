@@ -156,6 +156,7 @@ export function getNavModules(): NavModule[] {
         { label: 'Personeelsplanning', to: '/employee-planning', permissions: ['employee_planning.view', 'employee_planning.manage'] },
         { label: 'Afwezigheden', to: '/absences', permissions: ['absences.view'] },
         { label: 'Kwalificaties', to: '/qualifications', permissions: ['employee_documents.view'] },
+        { label: 'HR-herinneringen', to: '/settings/hr-reminders', permissions: ['hr_settings.manage'] },
         // Voorraad van bedrijfsmiddelen hoort bij het personeelsdomein (uitgifte aan medewerkers);
         // de Stamgegevens-subgroep "Templates" blijft bewust template-only.
         { label: 'Voorraad', to: '/inventory', permissions: ['inventory.view', 'inventory.manage'] },

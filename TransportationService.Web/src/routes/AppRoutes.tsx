@@ -125,6 +125,7 @@ const EmployeesPage = lazyPage(() => import('../features/employees/pages/Employe
 const QualificationsOverviewPage = lazyPage(() => import('../features/qualifications/pages/QualificationsOverviewPage'), 'QualificationsOverviewPage')
 const NewEmployeePage = lazyPage(() => import('../features/employees/pages/NewEmployeePage'), 'NewEmployeePage')
 const EmployeeDetailPage = lazyPage(() => import('../features/employees/pages/EmployeeDetailPage'), 'EmployeeDetailPage')
+const HrReminderSettingsPage = lazyPage(() => import('../features/employees/pages/HrReminderSettingsPage'), 'HrReminderSettingsPage')
 const LookupPage = lazyPage(() => import('../features/master-data/pages/LookupPage'), 'LookupPage')
 const UnitTypesPage = lazyPage(() => import('../features/master-data/pages/UnitTypesPage'), 'UnitTypesPage')
 const ServiceOptionsPage = lazyPage(() => import('../features/master-data/pages/ServiceOptionsPage'), 'ServiceOptionsPage')
@@ -256,6 +257,7 @@ const router = createBrowserRouter(
           <Route path="/employees" element={<EmployeesPage />} />
           <Route path="/employees/new" element={<NewEmployeePage />} />
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+          <Route path="/settings/hr-reminders" element={<HrReminderSettingsPage />} />
           <Route path="/absences" element={<AbsencesPage />} />
           <Route path="/qualifications" element={<QualificationsOverviewPage />} />
           <Route path="/tasks" element={<TasksPage />} />
