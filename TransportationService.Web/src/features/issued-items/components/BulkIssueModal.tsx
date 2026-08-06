@@ -66,7 +66,12 @@ export function BulkIssueModal({
   const [issuedDate, setIssuedDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // busy spans the whole batch (from the first save to the last) so the submit button and
+  // inputs stay disabled across an in-flight negative-stock confirmation, not just around it.
   const [busy, setBusy] = useState(false)
+  // Tracks only the retry request inside the negative-stock modal; kept separate from `busy` so
+  // its own confirm/cancel buttons stay usable while the batch otherwise waits on the user.
+  const [confirmSaving, setConfirmSaving] = useState(false)
   const [negativeStock, setNegativeStock] = useState<PendingNegativeStock | null>(null)
   // Resolves the in-flight submit loop once the user confirms or cancels the negative-stock prompt.
   const negativeStockResolverRef = useRef<((outcome: ItemOutcome) => void) | null>(null)
@@ -153,7 +158,7 @@ export function BulkIssueModal({
       expectedVersion: negativeStock.payload.version,
       overrideReason: reason.trim() === '' ? null : reason.trim(),
     }
-    setBusy(true)
+    setConfirmSaving(true)
     try {
       await saveEmployeeIssuedItem(employeeId, null, retry)
       onItemIssued()
@@ -170,7 +175,7 @@ export function BulkIssueModal({
       setError(`${negativeStock.templateName}: ${describeApiError(err, 'Het bedrijfsmiddel kon niet worden uitgegeven.').message}`)
       negativeStockResolverRef.current?.('stopped')
     } finally {
-      setBusy(false)
+      setConfirmSaving(false)
     }
   }
 
@@ -180,12 +185,17 @@ export function BulkIssueModal({
   }
 
   async function handleSubmit() {
+    if (busy) return // a batch is already in flight; ignore a second click/invocation
     setError(null)
     if (selectedRows.length === 0) return
 
     for (const { template, row } of selectedRows) {
       if (template.variantsEnabled && !row.variantId) {
         setError('Kies een variant.')
+        return
+      }
+      if (template.requiresSerialNumber && !row.serialNumber.trim()) {
+        setError('Een serienummer is verplicht voor dit middel.')
         return
       }
     }
@@ -341,7 +351,7 @@ export function BulkIssueModal({
           employeeName={employeeName}
           storageLocation={negativeStock.storageLocation}
           canConfirm={canOverrideStock}
-          busy={busy}
+          busy={confirmSaving}
           onConfirm={(reason) => void handleNegativeStockConfirm(reason)}
           onCancel={handleNegativeStockCancel}
         />
