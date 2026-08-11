@@ -161,6 +161,7 @@ function makeOrder(overrides: Partial<TransportOrderDetail> = {}): TransportOrde
     extraTimeHourlyRateOverride: null,
     extraTimeRoundingStepMinutes: null,
     extraTimeMinimumBillableMinutes: null,
+    version: 'v1',
     ...overrides,
   }
 }

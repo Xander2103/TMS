@@ -13,6 +13,11 @@ interface ValidationSummaryProps {
    */
   fieldLabels?: Record<string, string>
   title?: string
+  /**
+   * When provided, entries render as links; clicking one calls back with the field path so
+   * the form can navigate to the owning section (Wave 1 §12 targeted validation).
+   */
+  onSelect?: (path: string) => void
 }
 
 /**
@@ -24,6 +29,7 @@ export function ValidationSummary({
   fieldErrors,
   fieldLabels,
   title = 'Opslaan is niet gelukt',
+  onSelect,
 }: ValidationSummaryProps) {
   const entries = Object.entries(fieldErrors ?? {}).flatMap(([path, messages]) =>
     messages.map((text) => ({ path, label: fieldLabels?.[path], text })),
@@ -33,7 +39,8 @@ export function ValidationSummary({
 
   useEffect(() => {
     if (hasContent) {
-      ref.current?.scrollIntoView({ block: 'nearest' })
+      // Optional call: jsdom has no scrollIntoView implementation.
+      ref.current?.scrollIntoView?.({ block: 'nearest' })
     }
   }, [hasContent, message, entries.length])
 
@@ -48,17 +55,26 @@ export function ValidationSummary({
       {showMessage && <p className="ui-validation-summary-message">{message}</p>}
       {entries.length > 0 && (
         <ul className="ui-validation-summary-list">
-          {entries.map(({ path, label, text }, index) => (
-            <li key={`${path}-${index}`}>
-              {label ? (
-                <>
-                  <span className="ui-validation-summary-field">{label}:</span> {text}
-                </>
-              ) : (
-                text
-              )}
-            </li>
-          ))}
+          {entries.map(({ path, label, text }, index) => {
+            const content = label ? (
+              <>
+                <span className="ui-validation-summary-field">{label}:</span> <span>{text}</span>
+              </>
+            ) : (
+              <span>{text}</span>
+            )
+            return (
+              <li key={`${path}-${index}`}>
+                {onSelect ? (
+                  <button type="button" className="ui-validation-summary-link" onClick={() => onSelect(path)}>
+                    {content}
+                  </button>
+                ) : (
+                  content
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

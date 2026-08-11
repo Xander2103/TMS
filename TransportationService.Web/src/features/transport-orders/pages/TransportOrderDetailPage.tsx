@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { addRecentItem } from '../../../hooks/recentItems'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -527,6 +527,12 @@ export function TransportOrderDetailPage() {
         subtitle={`Opdracht van ${order.orderDate}${order.customerReference ? ` · ref. ${order.customerReference}` : ''}`}
         action={
           <span className="to-header-actions">
+            {/* Wave 1: the containing dossier (wrapper or user-created) is one click away. */}
+            {order.dossierId && order.dossierNumber && (
+              <Link to={`/dossiers/${order.dossierId}`} className="ui-badge ui-badge-info" title="Open het dossier">
+                {order.dossierNumber}
+              </Link>
+            )}
             <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
             {editable && !editing && (
               <Button variant="secondary" onClick={() => setEditing(true)} disabled={busy}>

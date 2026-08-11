@@ -826,9 +826,10 @@ describe('TransportOrderForm minimal-cargo rule (wave 2026-08-04 §3)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
 
-    expect(await screen.findByText(
+    // Wave 1 §12: the message shows in the validation summary AND inline at the field.
+    expect((await screen.findAllByText(
       'Vul minstens een hoeveelheid en eenheid in, voeg een goederenlijn toe of beschrijf de goederen.',
-    )).toBeInTheDocument()
+    )).length).toBeGreaterThan(0)
     expect(onSubmit).not.toHaveBeenCalled()
   })
 })
@@ -893,8 +894,8 @@ describe('TransportOrderForm stops layout & simple time input (wave 2026-08-04 �
     expect(screen.getByLabelText('Losdatum')).toBeInTheDocument()
     expect(screen.getAllByLabelText('Van')).toHaveLength(2)
     expect(screen.getAllByLabelText('Tot')).toHaveLength(2)
-    // Advanced windows stay available but collapsed by default.
-    expect(screen.getAllByText('Geavanceerde tijdvensters')).toHaveLength(2)
+    // Advanced fields stay available but collapsed by default (Wave 1 §12: "Geavanceerd").
+    expect(screen.getAllByText('Geavanceerd')).toHaveLength(2)
     const advanced = document.querySelectorAll('details.tof-stop-extended')
     expect(advanced).toHaveLength(2)
     for (const details of advanced) {
@@ -960,7 +961,8 @@ describe('TransportOrderForm stops layout & simple time input (wave 2026-08-04 �
     await userEvent.selectOptions(selects[1], 'Before')
     await userEvent.click(screen.getByRole('button', { name: 'Opdracht aanmaken' }))
 
-    expect(await screen.findByText('Geef het uur op waarvóór deze stop moet gebeuren.')).toBeInTheDocument()
+    // Wave 1 §12: the message shows in the validation summary AND inline at the field.
+    expect((await screen.findAllByText('Geef het uur op waarvóór deze stop moet gebeuren.')).length).toBeGreaterThan(0)
     expect(onSubmit).not.toHaveBeenCalled()
   })
 

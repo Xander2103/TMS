@@ -247,6 +247,11 @@ export interface TransportOrderDetail {
   extraTimeHourlyRateOverride: number | null
   extraTimeRoundingStepMinutes: number | null
   extraTimeMinimumBillableMinutes: number | null
+  /** Wave 1 §10: concurrency token; echoed on update — a mismatch yields 409 with the current state. */
+  version: string
+  /** Containing dossier (wrapper or user-created); the detail header links to it. */
+  dossierId?: string | null
+  dossierNumber?: string | null
 }
 
 /** Manual-editing lifecycle of a pricing line (spec ch. 24-26). */
@@ -504,4 +509,6 @@ export interface TransportOrderInput {
   extraTimeHourlyRateOverride?: number | null
   extraTimeRoundingStepMinutes?: number | null
   extraTimeMinimumBillableMinutes?: number | null
+  /** Wave 1 §10: expected concurrency token on update; omitted on create (server skips the check). */
+  version?: string
 }

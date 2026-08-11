@@ -1283,7 +1283,12 @@ public class TransportOrderService : ITransportOrderService
 
         if (lines.Any(c => c.VolumeM3 is not null))
         {
-            order.VolumeM3 = lines.Sum(c => c.VolumeM3 ?? 0m);
+            // Audit fix (Wave 1 §12): line VolumeM3 is per stuk, so the header total multiplies by
+            // the expected quantity (lines without a volume are skipped). Weight needs no factor —
+            // TotalWeightKg is already a line total.
+            order.VolumeM3 = lines
+                .Where(c => c.VolumeM3 is not null)
+                .Sum(c => c.VolumeM3!.Value * c.ExpectedQuantity);
         }
 
         if (lines.Any(c => c.PalletCount is not null))
