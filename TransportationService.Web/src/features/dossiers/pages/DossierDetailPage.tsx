@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { PageHeader } from '../../../components/layout/PageHeader'
+import { ApiError } from '../../../api/apiClient'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { BackButton } from '../../../components/ui/BackButton'
-import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
-import { FormSection } from '../../../components/ui/FormSection'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
@@ -18,40 +16,43 @@ import { addRecentItem } from '../../../hooks/recentItems'
 import { useAuth } from '../../auth/authContextValue'
 import { euro } from '../../invoices/types'
 import { searchCustomers } from '../../customers/api/customersApi'
-import { searchTransportOrders } from '../../transport-orders/api/transportOrdersApi'
+import { getTransportOrder } from '../../transport-orders/api/transportOrdersApi'
+import type { TransportOrderDetail } from '../../transport-orders/types'
 import { getUsers } from '../../users/api/usersApi'
 import {
-  INCIDENT_SEVERITY_LABELS,
-  INCIDENT_SEVERITY_TONE,
-  INCIDENT_STATUS_LABELS,
-  INCIDENT_STATUS_TONE,
-  INCIDENT_TYPE_LABELS,
-  type IncidentSeverity,
-  type IncidentStatus,
-  type IncidentType,
-} from '../../incidents/types'
-import {
-  addDossierRelation,
   closeDossier,
   getDossier,
-  linkDossierOrder,
-  listDossiers,
   removeDossierRelation,
   reopenDossier,
   unlinkDossierOrder,
   updateDossier,
 } from '../api/dossiersApi'
-import {
-  DOSSIER_RELATION_LABELS,
-  DOSSIER_STATUS_LABELS,
-  DOSSIER_STATUS_TONE,
-  type DossierDetail,
-  type DossierRelationType,
-} from '../types'
+import { type DossierActivity, type DossierDetail, type ReadinessSection } from '../types'
+import { ActivityDrawer } from '../components/ActivityDrawer'
+import { ActivityList } from '../components/ActivityList'
+import { AddActivityDialog } from '../components/AddActivityDialog'
+import { AttentionPanel } from '../components/AttentionPanel'
+import { DossierHeader, type DossierMenuAction } from '../components/DossierHeader'
+import { DossierGoodsSummary } from '../components/DossierGoodsSummary'
+import { AddRelationDialog, LinkOrderDialog } from '../components/DossierLinkDialogs'
+import { DossierMoreSection } from '../components/DossierMoreSection'
+import { DossierPriceSummary } from '../components/DossierPriceSummary'
+import { DossierRouteSummary } from '../components/DossierRouteSummary'
+import { GoodsDrawer } from '../components/GoodsDrawer'
+import { RouteDrawer } from '../components/RouteDrawer'
 import '../../dashboard/pages/dashboard.css'
 import './dossiers.css'
+import './dossier-detail.css'
 
-/** Detail van één transportdossier: gegevens, opdrachten, relaties, incidenten en financieel. */
+/** True when a thrown error is a dossier 409 whose body carries the current state. */
+function conflictBody(err: unknown): DossierDetail | null {
+  if (err instanceof ApiError && err.status === 409 && err.body && typeof err.body === 'object' && 'dossierNumber' in err.body) {
+    return err.body as DossierDetail
+  }
+  return null
+}
+
+/** §11 dossierpagina: kop, aandacht, activiteiten, contextuele secties en drawers. */
 export function DossierDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -61,12 +62,29 @@ export function DossierDetailPage() {
 
   const [dossier, setDossier] = useState<DossierDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  /** 409-payload van een collega-wijziging; [Herladen] neemt deze staat over. */
+  const [conflict, setConflict] = useState<DossierDetail | null>(null)
 
-  // Edit form
+  // First linked order (drives Route/Goederen/Prijs summaries + drawers), keyed by order id
+  // so switching orders never shows stale data and the effect stays callback-only.
+  const [loadedOrder, setLoadedOrder] = useState<{ id: string; order: TransportOrderDetail | null } | null>(null)
+
+  // Dialogs & drawers
+  const [showAddActivity, setShowAddActivity] = useState(false)
+  const [drawerActivity, setDrawerActivity] = useState<DossierActivity | null>(null)
+  const [routeDrawerOpen, setRouteDrawerOpen] = useState(false)
+  const [goodsDrawerOpen, setGoodsDrawerOpen] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  const [showLinkOrder, setShowLinkOrder] = useState(false)
+  const [showAddRelation, setShowAddRelation] = useState(false)
+
+  // Kop bewerken
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [notes, setNotes] = useState('')
+  const [customerReference, setCustomerReference] = useState('')
+  const [dossierDate, setDossierDate] = useState('')
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [responsibleUserId, setResponsibleUserId] = useState<string | null>(null)
   const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
@@ -75,23 +93,26 @@ export function DossierDetailPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Link dialogs
-  const [showLinkOrder, setShowLinkOrder] = useState(false)
-  const [orderOptions, setOrderOptions] = useState<SearchableSelectOption[]>([])
-  const [orderToLink, setOrderToLink] = useState<string | null>(null)
-  const [showAddRelation, setShowAddRelation] = useState(false)
-  const [relationTarget, setRelationTarget] = useState<string | null>(null)
-  const [relationType, setRelationType] = useState<DossierRelationType>('FollowUp')
-  const [relationNotes, setRelationNotes] = useState('')
-  const [dossierOptions, setDossierOptions] = useState<SearchableSelectOption[]>([])
-  const [dialogError, setDialogError] = useState<string | null>(null)
-  const [confirmClose, setConfirmClose] = useState(false)
+  const applyDossier = useCallback((updated: DossierDetail) => {
+    setDossier(updated)
+    setConflict(null)
+  }, [])
+
+  /** Centrale 409-afhandeling: toont de banner en meldt de aanroeper dat het afgehandeld is. */
+  const handleConflict = useCallback((err: unknown): boolean => {
+    const current = conflictBody(err)
+    if (current) {
+      setConflict(current)
+      return true
+    }
+    return false
+  }, [])
 
   const load = useCallback(() => {
     if (!id) return
     getDossier(id)
       .then((data) => {
-        setDossier(data)
+        applyDossier(data)
         setLoadError(null)
         addRecentItem({
           category: 'Dossiers',
@@ -100,11 +121,34 @@ export function DossierDetailPage() {
         })
       })
       .catch(() => setLoadError('Het dossier kon niet worden geladen.'))
-  }, [id])
+  }, [id, applyDossier])
 
   useEffect(() => {
     load()
   }, [load])
+
+  const activities = dossier?.activities ?? []
+  const firstLinkedOrderId =
+    [...activities].sort((a, b) => a.sequence - b.sequence).find((a) => a.hasStops && a.linkedTransportOrderId)
+      ?.linkedTransportOrderId ?? null
+
+  useEffect(() => {
+    if (!firstLinkedOrderId) return
+    let mounted = true
+    getTransportOrder(firstLinkedOrderId)
+      .then((order) => {
+        if (mounted) setLoadedOrder({ id: firstLinkedOrderId, order })
+      })
+      .catch(() => {
+        if (mounted) setLoadedOrder({ id: firstLinkedOrderId, order: null })
+      })
+    return () => {
+      mounted = false
+    }
+  }, [firstLinkedOrderId, dossier?.version])
+
+  const firstOrder = firstLinkedOrderId && loadedOrder?.id === firstLinkedOrderId ? loadedOrder.order : null
+  const firstOrderLoading = Boolean(firstLinkedOrderId) && loadedOrder?.id !== firstLinkedOrderId
 
   useEffect(() => {
     if (!editing) return
@@ -114,51 +158,41 @@ export function DossierDetailPage() {
     getUsers()
       .then((users) =>
         setUserOptions(
-          users
-            .filter((u) => u.isActive)
-            .map((u) => ({ value: u.id, label: `${u.firstName} ${u.lastName}` })),
+          users.filter((u) => u.isActive).map((u) => ({ value: u.id, label: `${u.firstName} ${u.lastName}` })),
         ),
       )
       .catch(() => setUserOptions([]))
   }, [editing])
 
-  useEffect(() => {
-    if (!showLinkOrder || !dossier) return
-    searchTransportOrders({ page: 1, pageSize: 100, customerId: dossier.customerId ?? undefined })
-      .then((result) => {
-        const linked = new Set(dossier.orders.map((o) => o.orderId))
-        setOrderOptions(
-          result.items
-            .filter((o) => !linked.has(o.id))
-            .map((o) => ({ value: o.id, label: o.orderNumber, description: o.customerName })),
-        )
-      })
-      .catch(() => setOrderOptions([]))
-  }, [showLinkOrder, dossier])
-
-  useEffect(() => {
-    if (!showAddRelation || !dossier) return
-    listDossiers()
-      .then((all) =>
-        setDossierOptions(
-          all
-            .filter((d) => d.id !== dossier.id)
-            .map((d) => ({ value: d.id, label: d.dossierNumber, description: d.title })),
-        ),
-      )
-      .catch(() => setDossierOptions([]))
-  }, [showAddRelation, dossier])
-
   if (loadError) return <ErrorState message={loadError} />
   if (!dossier || !id) return <LoadingState message="Dossier laden..." />
 
   const isOpen = dossier.status === 'Open'
+  const hasRoute = activities.some((a) => a.hasStops)
+  const hasGoods = activities.some((a) => a.supportsGoods)
+  // Compat: opdrachten die (nog) niet door een activiteit vertegenwoordigd worden.
+  const activityOrderIds = new Set(activities.map((a) => a.linkedTransportOrderId).filter(Boolean))
+  const legacyOrders = dossier.orders.filter((o) => !activityOrderIds.has(o.orderId))
+
+  function goToSection(section: ReadinessSection) {
+    document.getElementById(`sectie-${section}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function openActivity(activity: DossierActivity) {
+    if (activity.hasStops && activity.linkedTransportOrderId) {
+      navigate(`/transport-orders/${activity.linkedTransportOrderId}`)
+      return
+    }
+    setDrawerActivity(activity)
+  }
 
   function startEdit() {
     if (!dossier) return
     setTitle(dossier.title)
     setDescription(dossier.description ?? '')
     setNotes(dossier.notes ?? '')
+    setCustomerReference(dossier.customerReference ?? '')
+    setDossierDate(dossier.dossierDate ?? '')
     setCustomerId(dossier.customerId)
     setResponsibleUserId(dossier.responsibleUserId)
     setFieldErrors({})
@@ -168,16 +202,14 @@ export function DossierDetailPage() {
 
   async function run(action: () => Promise<DossierDetail>, successMessage: string) {
     setBusy(true)
-    setDialogError(null)
     try {
       const updated = await action()
-      setDossier(updated)
+      applyDossier(updated)
       toast.showSuccess(successMessage)
       return true
     } catch (err) {
-      const described = describeApiError(err, 'De actie is niet gelukt.')
-      setDialogError(described.message)
-      toast.showError(described.message)
+      if (handleConflict(err)) return false
+      toast.showError(describeApiError(err, 'De actie is niet gelukt.').message)
       return false
     } finally {
       setBusy(false)
@@ -196,11 +228,18 @@ export function DossierDetailPage() {
         customerId,
         responsibleUserId,
         notes: notes || null,
+        customerReference: customerReference.trim() || null,
+        dossierDate: dossierDate || null,
+        version: dossier!.version,
       })
-      setDossier(updated)
+      applyDossier(updated)
       setEditing(false)
       toast.showSuccess('Dossier bijgewerkt.')
     } catch (err) {
+      if (handleConflict(err)) {
+        setEditing(false)
+        return
+      }
       const described = describeApiError(err, 'Het dossier kon niet worden bijgewerkt.')
       setFormError(described.message)
       setFieldErrors(described.fieldErrors)
@@ -209,176 +248,213 @@ export function DossierDetailPage() {
     }
   }
 
+  const menuActions: DossierMenuAction[] = []
+  if (canManage && isOpen) menuActions.push({ key: 'edit', label: 'Bewerken', onSelect: startEdit })
+  if (canManage) {
+    menuActions.push(
+      isOpen
+        ? { key: 'close', label: 'Dossier sluiten', onSelect: () => setConfirmClose(true) }
+        : { key: 'reopen', label: 'Heropenen', onSelect: () => void run(() => reopenDossier(id), 'Dossier heropend.') },
+    )
+    menuActions.push({ key: 'relation', label: 'Relatie toevoegen', onSelect: () => setShowAddRelation(true) })
+    if (isOpen) {
+      menuActions.push({ key: 'link-order', label: 'Opdracht koppelen', onSelect: () => setShowLinkOrder(true) })
+    }
+  }
+  if (hasPermission('incidents.manage')) {
+    menuActions.push({
+      key: 'incident',
+      label: 'Incident registreren',
+      onSelect: () => navigate(`/incidents/new?dossierId=${dossier.id}`),
+    })
+  }
+  menuActions.push({
+    key: 'history',
+    label: 'Notities & historiek',
+    onSelect: () => document.getElementById('sectie-notities')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+  })
+
   return (
-    <div>
+    <div className="dossier-detail">
       <BackButton to="/dossiers" label="Terug naar dossiers" />
-      <PageHeader
-        title={`${dossier.dossierNumber} · ${dossier.title}`}
-        subtitle={dossier.customerName ?? 'Geen klant gekoppeld'}
-        action={
-          canManage ? (
-            <span style={{ display: 'inline-flex', gap: '0.5rem' }}>
-              {isOpen && (
-                <Button variant="secondary" onClick={startEdit}>
-                  Bewerken
-                </Button>
-              )}
-              {isOpen ? (
-                <Button variant="secondary" onClick={() => setConfirmClose(true)}>
-                  Dossier sluiten
-                </Button>
-              ) : (
-                <Button variant="secondary" onClick={() => void run(() => reopenDossier(id), 'Dossier heropend.')}>
-                  Heropenen
-                </Button>
-              )}
-            </span>
-          ) : undefined
-        }
+
+      <DossierHeader
+        dossier={dossier}
+        canManage={canManage}
+        onAddActivity={() => setShowAddActivity(true)}
+        menuActions={menuActions}
+        onUpdated={applyDossier}
+        onConflict={handleConflict}
       />
 
-      <p>
-        <Badge tone={DOSSIER_STATUS_TONE[dossier.status]}>{DOSSIER_STATUS_LABELS[dossier.status]}</Badge>{' '}
-        {dossier.responsibleName && <>Verantwoordelijke: {dossier.responsibleName} · </>}
-        Aangemaakt op {dossier.createdAt.slice(0, 10)}
-        {dossier.closedAt && <> · Gesloten op {dossier.closedAt.slice(0, 10)}</>}
-      </p>
-      {dossier.description && <p>{dossier.description}</p>}
-      {dossier.notes && <p className="placeholder-text">Notities: {dossier.notes}</p>}
-
-      <FormSection title="Financieel overzicht">
-        <div className="db-kpis">
-          <div className="db-kpi">
-            <span className="db-kpi-label">Afgesproken omzet</span>
-            <span className="db-kpi-value">{euro(dossier.financials.agreedOrderTotal)}</span>
-          </div>
-          <div className="db-kpi">
-            <span className="db-kpi-label">Gefactureerd</span>
-            <span className="db-kpi-value">{euro(dossier.financials.invoicedTotal)}</span>
-          </div>
-          <div className="db-kpi">
-            <span className="db-kpi-label">Geschatte incidentkost</span>
-            <span className="db-kpi-value">{euro(dossier.financials.estimatedIncidentCost)}</span>
-          </div>
-          <div className="db-kpi">
-            <span className="db-kpi-label">Werkelijke incidentkost</span>
-            <span className="db-kpi-value">{euro(dossier.financials.actualIncidentCost)}</span>
-          </div>
+      {conflict && (
+        <div className="dossier-conflict-banner" role="alert">
+          <span>⚠ Dit dossier is intussen gewijzigd door een collega. Uw wijzigingen zijn niet opgeslagen.</span>
+          <Button variant="secondary" onClick={() => applyDossier(conflict)}>
+            Herladen
+          </Button>
         </div>
-      </FormSection>
+      )}
 
-      <FormSection title={`Gekoppelde opdrachten (${dossier.orders.length})`}>
-        {canManage && isOpen && (
-          <p>
-            <Button variant="secondary" onClick={() => { setOrderToLink(null); setDialogError(null); setShowLinkOrder(true) }}>
-              Opdracht koppelen
-            </Button>
-          </p>
-        )}
-        {dossier.orders.length === 0 && <p className="placeholder-text">Nog geen opdrachten gekoppeld.</p>}
-        {dossier.orders.length > 0 && (
-          <ul className="db-list">
-            {dossier.orders.map((order) => (
-              <li key={order.linkId}>
-                <span className="db-row">
-                  <button type="button" className="link-button" onClick={() => navigate(`/transport-orders/${order.orderId}`)}>
-                    <code>{order.orderNumber}</code>
-                  </button>
-                  <span className="db-row-main" title={order.goodsDescription ?? undefined}>
-                    {order.orderDate} · {order.status}
-                    {order.agreedPrice !== null && <> · {euro(order.agreedPrice)}</>}
+      <AttentionPanel issues={dossier.readiness} onNavigate={goToSection} />
+
+      <section id="sectie-activiteiten" className="dossier-section" aria-label="Activiteiten">
+        <h2>Activiteiten</h2>
+        <ActivityList
+          activities={activities}
+          canManage={canManage && isOpen}
+          onOpen={openActivity}
+          onAdd={() => setShowAddActivity(true)}
+        />
+        {legacyOrders.length > 0 && (
+          <div className="dossier-legacy-orders">
+            <h3>Gekoppelde opdrachten</h3>
+            <ul className="db-list">
+              {legacyOrders.map((order) => (
+                <li key={order.linkId}>
+                  <span className="db-row">
+                    <button type="button" className="link-button" onClick={() => navigate(`/transport-orders/${order.orderId}`)}>
+                      <code>{order.orderNumber}</code>
+                    </button>
+                    <span className="db-row-main" title={order.goodsDescription ?? undefined}>
+                      {order.orderDate} · {order.status}
+                      {order.agreedPrice !== null && <> · {euro(order.agreedPrice)}</>}
+                    </span>
+                    {canManage && isOpen && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => void run(() => unlinkDossierOrder(id, order.orderId), 'Opdracht ontkoppeld.')}
+                        disabled={busy}
+                      >
+                        Ontkoppelen
+                      </Button>
+                    )}
                   </span>
-                  {canManage && isOpen && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => void run(() => unlinkDossierOrder(id, order.orderId), 'Opdracht ontkoppeld.')}
-                      disabled={busy}
-                    >
-                      Ontkoppelen
-                    </Button>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
-      </FormSection>
+      </section>
 
-      <FormSection title={`Gerelateerde dossiers (${dossier.relations.length})`}>
-        {canManage && (
-          <p>
-            <Button
-              variant="secondary"
-              onClick={() => { setRelationTarget(null); setRelationNotes(''); setDialogError(null); setShowAddRelation(true) }}
-            >
-              Relatie toevoegen
-            </Button>
-          </p>
-        )}
-        {dossier.relations.length === 0 && <p className="placeholder-text">Geen gerelateerde dossiers.</p>}
-        {dossier.relations.length > 0 && (
-          <ul className="db-list">
-            {dossier.relations.map((relation) => (
-              <li key={relation.id}>
-                <span className="db-row">
-                  <Badge tone="info">
-                    {DOSSIER_RELATION_LABELS[relation.relationType]}
-                    {relation.isOutgoing ? ' →' : ' ←'}
-                  </Badge>
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => navigate(`/dossiers/${relation.otherDossierId}`)}
-                  >
-                    <code>{relation.otherDossierNumber}</code> {relation.otherDossierTitle}
-                  </button>
-                  <span className="db-row-main">{relation.notes ?? ''}</span>
-                  {canManage && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => void run(() => removeDossierRelation(id, relation.id), 'Relatie verwijderd.')}
-                      disabled={busy}
-                    >
-                      Verwijderen
-                    </Button>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </FormSection>
+      {hasRoute && (
+        <section id="sectie-route" className="dossier-section" aria-label="Route">
+          <h2>Route</h2>
+          {firstLinkedOrderId ? (
+            <DossierRouteSummary
+              order={firstOrder}
+              loading={firstOrderLoading}
+              canEdit={canManage && isOpen}
+              onEdit={() => setRouteDrawerOpen(true)}
+            />
+          ) : (
+            <p className="placeholder-text">Nog geen transportopdracht — open de transportactiviteit om er één aan te maken.</p>
+          )}
+        </section>
+      )}
 
-      <FormSection title={`Incidenten (${dossier.incidents.length})`}>
-        {hasPermission('incidents.manage') && (
+      {hasGoods && (
+        <section id="sectie-goederen" className="dossier-section" aria-label="Goederen">
+          <h2>Goederen</h2>
+          {firstLinkedOrderId ? (
+            <DossierGoodsSummary
+              order={firstOrder}
+              loading={firstOrderLoading}
+              canEdit={canManage && isOpen}
+              onEdit={() => setGoodsDrawerOpen(true)}
+            />
+          ) : (
+            <p className="placeholder-text">Goederen worden bijgehouden op de transportopdracht.</p>
+          )}
+        </section>
+      )}
+
+      <section id="sectie-prijs" className="dossier-section" aria-label="Verkoop en prijs">
+        <h2>Verkoop &amp; prijs</h2>
+        <DossierPriceSummary dossier={dossier} />
+      </section>
+
+      <details className="dossier-collapsed" id="sectie-documenten">
+        <summary>Documenten</summary>
+        {firstLinkedOrderId ? (
           <p>
-            <Button variant="secondary" onClick={() => navigate(`/incidents/new?dossierId=${dossier.id}`)}>
-              Incident registreren
-            </Button>
+            Documenten beheer je op de opdracht.{' '}
+            <button type="button" className="link-button" onClick={() => navigate(`/transport-orders/${firstLinkedOrderId}`)}>
+              Naar de opdracht
+            </button>
           </p>
+        ) : (
+          <p className="placeholder-text">Nog geen opdracht met documenten.</p>
         )}
-        {dossier.incidents.length === 0 && <p className="placeholder-text">Geen incidenten in dit dossier.</p>}
-        {dossier.incidents.length > 0 && (
-          <ul className="db-list">
-            {dossier.incidents.map((incident) => (
-              <li key={incident.id}>
-                <button type="button" className="db-row" onClick={() => navigate(`/incidents/${incident.id}`)}>
-                  <span className="db-row-main">{incident.title}</span>
-                  <span className="db-row-meta">
-                    {INCIDENT_TYPE_LABELS[incident.incidentType as IncidentType] ?? incident.incidentType}
-                    <Badge tone={INCIDENT_SEVERITY_TONE[incident.severity as IncidentSeverity] ?? 'neutral'}>
-                      {INCIDENT_SEVERITY_LABELS[incident.severity as IncidentSeverity] ?? incident.severity}
-                    </Badge>
-                    <Badge tone={INCIDENT_STATUS_TONE[incident.status as IncidentStatus] ?? 'neutral'}>
-                      {INCIDENT_STATUS_LABELS[incident.status as IncidentStatus] ?? incident.status}
-                    </Badge>
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </FormSection>
+      </details>
+
+      <details className="dossier-collapsed" id="sectie-notities">
+        <summary>Notities &amp; historiek</summary>
+        {dossier.description && <p>{dossier.description}</p>}
+        {dossier.notes ? <p>{dossier.notes}</p> : <p className="placeholder-text">Geen notities.</p>}
+        <p className="placeholder-text">
+          Aangemaakt op {dossier.createdAt.slice(0, 10)}
+          {dossier.responsibleName && <> · Verantwoordelijke: {dossier.responsibleName}</>}
+          {dossier.closedAt && <> · Gesloten op {dossier.closedAt.slice(0, 10)}</>}
+        </p>
+      </details>
+
+      <DossierMoreSection
+        dossier={dossier}
+        canManage={canManage}
+        busy={busy}
+        onRemoveRelation={(relationId) => void run(() => removeDossierRelation(id, relationId), 'Relatie verwijderd.')}
+      />
+
+      {showAddActivity && (
+        <AddActivityDialog
+          dossier={dossier}
+          onClose={() => setShowAddActivity(false)}
+          onAdded={(updated) => {
+            applyDossier(updated)
+            toast.showSuccess('Activiteit toegevoegd.')
+          }}
+          onConflict={handleConflict}
+        />
+      )}
+
+      {drawerActivity && (
+        <ActivityDrawer
+          dossier={dossier}
+          activity={drawerActivity}
+          canManage={canManage && isOpen}
+          onClose={() => setDrawerActivity(null)}
+          onUpdated={(updated) => {
+            applyDossier(updated)
+            toast.showSuccess('Activiteit bijgewerkt.')
+          }}
+          onConflict={handleConflict}
+        />
+      )}
+
+      {routeDrawerOpen && firstOrder && (
+        <RouteDrawer
+          order={firstOrder}
+          onClose={() => setRouteDrawerOpen(false)}
+          onSaved={(updated) => {
+            setLoadedOrder({ id: updated.id, order: updated })
+            toast.showSuccess('Route opgeslagen.')
+            load()
+          }}
+        />
+      )}
+
+      {goodsDrawerOpen && firstOrder && (
+        <GoodsDrawer
+          order={firstOrder}
+          onClose={() => setGoodsDrawerOpen(false)}
+          onSaved={(updated) => {
+            setLoadedOrder({ id: updated.id, order: updated })
+            toast.showSuccess('Goederen opgeslagen.')
+            load()
+          }}
+        />
+      )}
 
       {editing && (
         <Modal
@@ -401,6 +477,17 @@ export function DossierDetailPage() {
             <FormField label="Titel" htmlFor="edit-title" required error={getFieldError(fieldErrors, 'title')}>
               <input id="edit-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} />
             </FormField>
+            <FormField label="Klantreferentie" htmlFor="edit-ref" error={getFieldError(fieldErrors, 'customerReference')}>
+              <input
+                id="edit-ref"
+                value={customerReference}
+                onChange={(event) => setCustomerReference(event.target.value)}
+                maxLength={100}
+              />
+            </FormField>
+            <FormField label="Datum" htmlFor="edit-date" error={getFieldError(fieldErrors, 'dossierDate')}>
+              <input id="edit-date" type="date" value={dossierDate} onChange={(event) => setDossierDate(event.target.value)} />
+            </FormField>
             <FormField label="Omschrijving" htmlFor="edit-description" error={getFieldError(fieldErrors, 'description')}>
               <textarea
                 id="edit-description"
@@ -413,11 +500,7 @@ export function DossierDetailPage() {
             <FormField label="Klant" htmlFor="edit-customer" error={getFieldError(fieldErrors, 'customerId')}>
               <SearchableSelect id="edit-customer" value={customerId} onChange={setCustomerId} options={customerOptions} />
             </FormField>
-            <FormField
-              label="Verantwoordelijke"
-              htmlFor="edit-responsible"
-              error={getFieldError(fieldErrors, 'responsibleUserId')}
-            >
+            <FormField label="Verantwoordelijke" htmlFor="edit-responsible" error={getFieldError(fieldErrors, 'responsibleUserId')}>
               <SearchableSelect
                 id="edit-responsible"
                 value={responsibleUserId}
@@ -433,101 +516,25 @@ export function DossierDetailPage() {
       )}
 
       {showLinkOrder && (
-        <Modal
-          title="Opdracht koppelen"
+        <LinkOrderDialog
+          dossier={dossier}
           onClose={() => setShowLinkOrder(false)}
-          busy={busy}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setShowLinkOrder(false)} disabled={busy}>
-                Annuleren
-              </Button>
-              <Button
-                disabled={busy || !orderToLink}
-                onClick={() =>
-                  void run(() => linkDossierOrder(id, orderToLink!), 'Opdracht gekoppeld.').then((ok) => {
-                    if (ok) setShowLinkOrder(false)
-                  })
-                }
-              >
-                Koppelen
-              </Button>
-            </>
-          }
-        >
-          <ValidationSummary message={dialogError} />
-          <FormField label="Transportopdracht" htmlFor="link-order" required>
-            <SearchableSelect
-              id="link-order"
-              value={orderToLink}
-              onChange={setOrderToLink}
-              options={orderOptions}
-              emptyMessage="Geen (verdere) opdrachten gevonden"
-            />
-          </FormField>
-          {dossier.customerId && (
-            <p className="placeholder-text">Gefilterd op de klant van dit dossier.</p>
-          )}
-        </Modal>
+          onUpdated={(updated) => {
+            applyDossier(updated)
+            toast.showSuccess('Opdracht gekoppeld.')
+          }}
+        />
       )}
 
       {showAddRelation && (
-        <Modal
-          title="Dossierrelatie toevoegen"
+        <AddRelationDialog
+          dossier={dossier}
           onClose={() => setShowAddRelation(false)}
-          busy={busy}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setShowAddRelation(false)} disabled={busy}>
-                Annuleren
-              </Button>
-              <Button
-                disabled={busy || !relationTarget}
-                onClick={() =>
-                  void run(
-                    () => addDossierRelation(id, { targetDossierId: relationTarget!, relationType, notes: relationNotes || null }),
-                    'Relatie toegevoegd.',
-                  ).then((ok) => {
-                    if (ok) setShowAddRelation(false)
-                  })
-                }
-              >
-                Toevoegen
-              </Button>
-            </>
-          }
-        >
-          <ValidationSummary message={dialogError} />
-          <FormField label="Dossier" htmlFor="relation-target" required>
-            <SearchableSelect
-              id="relation-target"
-              value={relationTarget}
-              onChange={setRelationTarget}
-              options={dossierOptions}
-            />
-          </FormField>
-          <FormField label="Relatietype" htmlFor="relation-type" required>
-            <select
-              id="relation-type"
-              value={relationType}
-              onChange={(event) => setRelationType(event.target.value as DossierRelationType)}
-            >
-              {Object.entries(DOSSIER_RELATION_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Notitie" htmlFor="relation-notes">
-            <input
-              id="relation-notes"
-              value={relationNotes}
-              onChange={(event) => setRelationNotes(event.target.value)}
-              maxLength={1000}
-            />
-          </FormField>
-        </Modal>
+          onUpdated={(updated) => {
+            applyDossier(updated)
+            toast.showSuccess('Relatie toegevoegd.')
+          }}
+        />
       )}
 
       {confirmClose && (

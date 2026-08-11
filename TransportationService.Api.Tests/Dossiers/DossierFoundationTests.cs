@@ -222,6 +222,42 @@ public class DossierFoundationTests
         Assert.Contains(updated.Readiness!, i => i.Code == "route.date_missing");
     }
 
+    // Existing order-less transport activity → explicit "Transportopdracht aanmaken" links a
+    // draft order into THIS dossier (no wrapper); a second attempt and standalone types refuse.
+    [Fact]
+    public async Task CreateOrderForActivity_LinksDraftOrder_IntoOwnDossier()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var dossier = await h.Dossiers().CreateAsync(new SaveDossierRequest(
+            CustomerId: h.CustomerId, ActivityTypeId: await TypeIdAsync(h, "DIRECT_TRANSPORT")), CancellationToken.None);
+        var activity = Assert.Single(dossier.Activities!);
+        Assert.Null(activity.LinkedTransportOrderId); // fast create never fabricates orders
+
+        var updated = await h.Activities().CreateOrderForActivityAsync(
+            dossier.Id, activity.Id, dossier.Version, CancellationToken.None);
+
+        var linked = Assert.Single(updated!.Activities!);
+        Assert.NotNull(linked.LinkedTransportOrderId);
+        Assert.Equal("ORD-0001", linked.LinkedOrderNumber);
+        Assert.Equal("Draft", linked.LinkedOrderStatus);
+        Assert.Single(updated.Orders); // linked into THIS dossier…
+        Assert.Single(await h.Db.Context.TransportDossiers.Where(d => d.TenantId == h.TenantId).ToListAsync()); // …no wrapper
+
+        // Already linked → refused.
+        var again = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Activities().CreateOrderForActivityAsync(dossier.Id, linked.Id, updated.Version, CancellationToken.None));
+        Assert.Contains("al een opdracht", again.Message);
+
+        // Standalone (no-stops) activity → refused.
+        var withCrane = await h.Activities().AddAsync(dossier.Id, new SaveDossierActivityRequest(
+            await TypeIdAsync(h, "KRAANWERK"), Version: updated.Version), CancellationToken.None);
+        var crane = withCrane!.Activities!.Single(a => a.ActivityTypeCode == "KRAANWERK");
+        var standalone = await Assert.ThrowsAsync<DomainValidationException>(() =>
+            h.Activities().CreateOrderForActivityAsync(dossier.Id, crane.Id, withCrane.Version, CancellationToken.None));
+        Assert.Contains("transportactiviteiten", standalone.Message);
+    }
+
     // Auto-wrap: an order created WITHOUT a dossier (EDI/portal/legacy path) gets its own wrapper.
     [Fact]
     public async Task OrderCreate_WithoutDossier_AutoWrapsIntoOwnDossier()

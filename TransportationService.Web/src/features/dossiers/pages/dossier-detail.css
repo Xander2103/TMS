@@ -1,0 +1,344 @@
+/* §11 dossierpagina — één kolom, secties in vaste volgorde, UX-baseline §18. */
+
+.dossier-detail {
+  max-width: 960px;
+}
+
+/* --- Kop --- */
+
+.dossier-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.dossier-header-title h1 {
+  font-size: 2rem; /* §18: 32px pagina-kop */
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dossier-header-meta {
+  margin: 0 0 8px;
+  color: var(--text);
+  opacity: 0.85;
+}
+
+.dossier-header-entity .link-button {
+  margin-left: 6px;
+  font-size: 0.875rem;
+}
+
+.dossier-header-chips {
+  margin: 0;
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dossier-header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/* Meer ▾ menu */
+
+.dossier-more {
+  position: relative;
+}
+
+.dossier-more summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  user-select: none;
+}
+
+.dossier-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.dossier-more-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 220px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  z-index: 40;
+}
+
+.dossier-more-menu button {
+  border: none;
+  background: none;
+  text-align: left;
+  padding: 10px 12px;
+  min-height: 44px;
+  font-size: 1rem;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.dossier-more-menu button:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.dossier-more-menu .dossier-more-danger {
+  color: var(--color-danger, #dc2626);
+}
+
+/* --- Conflict (409) banner --- */
+
+.dossier-conflict-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid var(--color-warning, #d97706);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+}
+
+/* --- Aandacht --- */
+
+.dossier-attention {
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--color-warning, #d97706);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 24px;
+}
+
+.dossier-attention h2 {
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+}
+
+.dossier-attention ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dossier-attention li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dossier-attention-message {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* --- Secties --- */
+
+.dossier-section {
+  margin-bottom: 32px; /* §18 sectie-afstand */
+}
+
+.dossier-section h2 {
+  font-size: 1.25rem; /* §18: 20px sectiekop */
+  margin: 0 0 12px;
+}
+
+.dossier-section h3,
+.dossier-collapsed h3 {
+  font-size: 1rem;
+  margin: 16px 0 8px;
+}
+
+/* Activiteitenkaarten */
+
+.dossier-activity-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dossier-activity-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  flex-wrap: wrap;
+}
+
+.dossier-activity-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dossier-activity-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dossier-activity-title svg {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.dossier-activity-label {
+  opacity: 0.85;
+}
+
+.dossier-activity-context {
+  font-size: 0.875rem;
+  opacity: 0.75;
+}
+
+.dossier-legacy-orders {
+  margin-top: 16px;
+}
+
+/* Route-samenvatting */
+
+.dossier-route-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.dossier-route-columns h3 {
+  margin: 0 0 6px;
+}
+
+.dossier-route-stop {
+  margin: 0 0 4px;
+}
+
+.dossier-route-timing {
+  display: block;
+  font-size: 0.875rem;
+  opacity: 0.75;
+}
+
+/* Goederen & prijs */
+
+.dossier-goods-lines,
+.dossier-price-lines {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dossier-price-lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dossier-price-total {
+  font-size: 1.25rem;
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dossier-price-warning {
+  font-size: 0.875rem;
+  color: var(--color-warning, #d97706);
+}
+
+.dossier-price-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Ingeklapte secties */
+
+.dossier-collapsed {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+}
+
+.dossier-collapsed summary {
+  cursor: pointer;
+  font-weight: 600;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+/* Activiteitstype-picker (AddActivityDialog) */
+
+.dossier-type-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.dossier-type-hint {
+  display: block;
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.dossier-activity-order-cta {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+/* --- Responsief: één kolom onder 900px, gestapelde route-kolommen onder 640px --- */
+
+@media (max-width: 899px) {
+  .dossier-header {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .dossier-route-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .dossier-activity-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

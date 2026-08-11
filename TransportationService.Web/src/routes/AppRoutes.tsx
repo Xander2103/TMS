@@ -132,6 +132,7 @@ const ServiceOptionsPage = lazyPage(() => import('../features/master-data/pages/
 const ReportsPage = lazyPage(() => import('../features/reports/pages/ReportsPage'), 'ReportsPage')
 const ReportViewerPage = lazyPage(() => import('../features/reports/pages/ReportViewerPage'), 'ReportViewerPage')
 const DossiersPage = lazyPage(() => import('../features/dossiers/pages/DossiersPage'), 'DossiersPage')
+const NewDossierPage = lazyPage(() => import('../features/dossiers/pages/NewDossierPage'), 'NewDossierPage')
 const DossierDetailPage = lazyPage(() => import('../features/dossiers/pages/DossierDetailPage'), 'DossierDetailPage')
 const ActivityTypesPage = lazyPage(() => import('../features/dossiers/pages/ActivityTypesPage'), 'ActivityTypesPage')
 const IncidentsPage = lazyPage(() => import('../features/incidents/pages/IncidentsPage'), 'IncidentsPage')
@@ -233,6 +234,7 @@ const router = createBrowserRouter(
           <Route path="/tank-cards" element={<TankCardsPage />} />
           <Route path="/maintenance-policies" element={<MaintenancePoliciesPage />} />
           <Route path="/dossiers" element={<DossiersPage />} />
+          <Route path="/dossiers/new" element={<NewDossierPage />} />
           <Route path="/dossiers/:id" element={<DossierDetailPage />} />
           <Route path="/incidents" element={<IncidentsPage />} />
           <Route path="/incidents/new" element={<IncidentDetailPage />} />

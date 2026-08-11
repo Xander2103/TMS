@@ -1,0 +1,74 @@
+/* §8 fast create: minimal, instant. Controls follow the Wave 0 baseline (≥44px). */
+
+.new-dossier form {
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.new-dossier-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 640px) {
+  .new-dossier-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.new-dossier-templates {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.new-dossier-templates legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding: 0;
+}
+
+.new-dossier-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.new-dossier-tile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.new-dossier-tile svg {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.new-dossier-tile:hover {
+  border-color: var(--color-primary, #2563eb);
+}
+
+.new-dossier-tile-selected {
+  border-color: var(--color-primary, #2563eb);
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: -1px;
+}
+
+.new-dossier-actions {
+  display: flex;
+  justify-content: flex-start;
+}

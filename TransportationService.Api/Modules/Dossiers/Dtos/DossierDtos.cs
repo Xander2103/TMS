@@ -136,6 +136,9 @@ public record SaveDossierActivityRequest(
 
 public record ReorderDossierActivitiesRequest(IReadOnlyList<Guid> ActivityIds, Guid? Version = null);
 
+/// <summary>Explicit "Transportopdracht aanmaken" on an existing order-less transport activity.</summary>
+public record CreateActivityOrderRequest(Guid? Version = null);
+
 public record LinkDossierOrderRequest(Guid TransportOrderId);
 
 public record AddDossierRelationRequest(

@@ -20,6 +20,9 @@ public interface IDossierActivityService
     Task<DossierDetailDto?> DeleteAsync(Guid dossierId, Guid activityId, Guid? version, CancellationToken cancellationToken);
 
     Task<DossierDetailDto?> ReorderAsync(Guid dossierId, ReorderDossierActivitiesRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Creates the linked draft order for an existing order-less transport activity.</summary>
+    Task<DossierDetailDto?> CreateOrderForActivityAsync(Guid dossierId, Guid activityId, Guid? version, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -103,31 +106,7 @@ public class DossierActivityService : IDossierActivityService
                     "createLinkedOrder", "Alleen transportactiviteiten krijgen een transportopdracht.");
             }
 
-            if (dossier.CustomerId is not { } customerId)
-            {
-                throw new DomainValidationException(
-                    "createLinkedOrder", "Koppel eerst een klant aan het dossier voor je een opdracht aanmaakt.");
-            }
-
-            // Minimal draft order inside THIS dossier (so no wrapper is auto-created). The
-            // activity label / type name doubles as the goods description, which satisfies
-            // the order's minimal-cargo rule until real goods are entered.
-            var orderResult = await _orderService.CreateAsync(new CreateTransportOrderRequest(
-                CustomerId: customerId,
-                CustomerReference: dossier.CustomerReference,
-                OrderDate: dossier.DossierDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime),
-                GoodsDescription: Trim(request.Label) ?? type.Name,
-                Quantity: null, QuantityUnit: null, WeightKg: null, VolumeM3: null, PalletCount: null,
-                AdrRequired: false, CraneRequired: false, AgreedPrice: null, Notes: null,
-                Stops: [],
-                LegalEntityId: dossier.LegalEntityId,
-                DossierId: dossierId), cancellationToken);
-            if (orderResult.Outcome != TransportOrderOperationOutcome.Success)
-            {
-                throw new DomainValidationException(orderResult.Error ?? "De transportopdracht kon niet aangemaakt worden.");
-            }
-
-            activity.LinkedTransportOrderId = orderResult.Order!.Id;
+            activity.LinkedTransportOrderId = await CreateDraftOrderAsync(dossier, Trim(request.Label), type.Name, cancellationToken);
         }
 
         _dbContext.Add(activity);
@@ -267,6 +246,79 @@ public class DossierActivityService : IDossierActivityService
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return await _dossierService.GetAsync(dossierId, cancellationToken);
+    }
+
+    public async Task<DossierDetailDto?> CreateOrderForActivityAsync(
+        Guid dossierId, Guid activityId, Guid? version, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var dossier = await FindOpenDossierAsync(dossierId, cancellationToken);
+        if (dossier is null)
+        {
+            return null;
+        }
+
+        await RequireVersionAsync(dossier, version, cancellationToken);
+
+        var activity = await _dbContext.DossierActivities
+            .Include(a => a.ActivityType)
+            .FirstOrDefaultAsync(a => a.TenantId == tenantId && a.DossierId == dossierId && a.Id == activityId, cancellationToken);
+        if (activity is null)
+        {
+            throw new DomainValidationException("Deze activiteit bestaat niet.");
+        }
+
+        if (activity.ActivityType?.HasStops != true)
+        {
+            throw new DomainValidationException("Alleen transportactiviteiten krijgen een transportopdracht.");
+        }
+
+        if (activity.LinkedTransportOrderId is not null)
+        {
+            throw new DomainValidationException("Deze activiteit heeft al een opdracht.");
+        }
+
+        activity.LinkedTransportOrderId = await CreateDraftOrderAsync(
+            dossier, activity.Label, activity.ActivityType.Name, cancellationToken);
+        dossier.Version = Guid.NewGuid();
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, dossierId.ToString(), "ActivityOrderCreated", null,
+            new { activity.Id, activity.Label, activity.LinkedTransportOrderId }, cancellationToken);
+
+        return await _dossierService.GetAsync(dossierId, cancellationToken);
+    }
+
+    /// <summary>
+    /// Minimal draft order inside THIS dossier (so no wrapper is auto-created). The activity
+    /// label / type name doubles as the goods description, which satisfies the order's
+    /// minimal-cargo rule until real goods are entered.
+    /// </summary>
+    private async Task<Guid> CreateDraftOrderAsync(
+        TransportDossier dossier, string? label, string typeName, CancellationToken cancellationToken)
+    {
+        if (dossier.CustomerId is not { } customerId)
+        {
+            throw new DomainValidationException(
+                "createLinkedOrder", "Koppel eerst een klant aan het dossier voor je een opdracht aanmaakt.");
+        }
+
+        var orderResult = await _orderService.CreateAsync(new CreateTransportOrderRequest(
+            CustomerId: customerId,
+            CustomerReference: dossier.CustomerReference,
+            OrderDate: dossier.DossierDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime),
+            GoodsDescription: label ?? typeName,
+            Quantity: null, QuantityUnit: null, WeightKg: null, VolumeM3: null, PalletCount: null,
+            AdrRequired: false, CraneRequired: false, AgreedPrice: null, Notes: null,
+            Stops: [],
+            LegalEntityId: dossier.LegalEntityId,
+            DossierId: dossier.Id), cancellationToken);
+        if (orderResult.Outcome != TransportOrderOperationOutcome.Success)
+        {
+            throw new DomainValidationException(orderResult.Error ?? "De transportopdracht kon niet aangemaakt worden.");
+        }
+
+        return orderResult.Order!.Id;
     }
 
     private static void ValidateScalars(SaveDossierActivityRequest request, ActivityType type)

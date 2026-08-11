@@ -108,6 +108,16 @@ public class DossiersController : ControllerBase
         return dossier is null ? NotFound() : Ok(dossier);
     }
 
+    /// <summary>Creates the linked draft order for an existing order-less transport activity.</summary>
+    [HttpPost("{id:guid}/activities/{activityId:guid}/create-order")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> CreateActivityOrder(
+        Guid id, Guid activityId, CreateActivityOrderRequest request, CancellationToken cancellationToken)
+    {
+        var dossier = await _activityService.CreateOrderForActivityAsync(id, activityId, request.Version, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
     [HttpPost("{id:guid}/activities/reorder")]
     [RequirePermission(PermissionCodes.DossiersManage)]
     public async Task<ActionResult<DossierDetailDto>> ReorderActivities(

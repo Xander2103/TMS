@@ -1,5 +1,5 @@
 import { apiClient } from '../../../api/apiClient'
-import type { DossierDetail, DossierInput, DossierListItem } from '../types'
+import type { DossierActivityInput, DossierDetail, DossierInput, DossierListItem, NewDossierInput } from '../types'
 
 export function listDossiers(params: { search?: string; status?: string; customerId?: string } = {}): Promise<DossierListItem[]> {
   const query = new URLSearchParams()
@@ -16,6 +16,39 @@ export function getDossier(id: string): Promise<DossierDetail> {
 
 export function createDossier(input: DossierInput): Promise<DossierDetail> {
   return apiClient.postJson<DossierDetail, DossierInput>('/api/dossiers', input)
+}
+
+/** Fast create (§8): customer only; optional date/reference/template tile. */
+export function createDossierFast(input: NewDossierInput): Promise<DossierDetail> {
+  return apiClient.postJson<DossierDetail, NewDossierInput>('/api/dossiers', input)
+}
+
+export function changeDossierLegalEntity(id: string, legalEntityId: string, version?: string): Promise<DossierDetail> {
+  return apiClient.putJson<DossierDetail, { legalEntityId: string; version?: string }>(
+    `/api/dossiers/${id}/legal-entity`,
+    { legalEntityId, version },
+  )
+}
+
+export function addDossierActivity(id: string, input: DossierActivityInput): Promise<DossierDetail> {
+  return apiClient.postJson<DossierDetail, DossierActivityInput>(`/api/dossiers/${id}/activities`, input)
+}
+
+export function updateDossierActivity(id: string, activityId: string, input: DossierActivityInput): Promise<DossierDetail> {
+  return apiClient.putJson<DossierDetail, DossierActivityInput>(`/api/dossiers/${id}/activities/${activityId}`, input)
+}
+
+export function deleteDossierActivity(id: string, activityId: string, version?: string): Promise<DossierDetail> {
+  const suffix = version ? `?version=${encodeURIComponent(version)}` : ''
+  return apiClient.deleteJson<DossierDetail>(`/api/dossiers/${id}/activities/${activityId}${suffix}`)
+}
+
+/** "Transportopdracht aanmaken" on an existing order-less transport activity. */
+export function createOrderForActivity(id: string, activityId: string, version?: string): Promise<DossierDetail> {
+  return apiClient.postJson<DossierDetail, { version?: string }>(
+    `/api/dossiers/${id}/activities/${activityId}/create-order`,
+    { version },
+  )
 }
 
 export function updateDossier(id: string, input: DossierInput): Promise<DossierDetail> {
