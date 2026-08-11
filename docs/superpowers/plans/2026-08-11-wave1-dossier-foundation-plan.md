@@ -288,7 +288,7 @@ NOTITIES & HISTORIEK     (last note visible · [ + Notitie ] [ Historiek ])
 
 ## 12. Field-reduction execution (from the completed 89-field audit)
 
-Full audit table lives in the gap analysis addendum (89 internal fields vs 22 portal fields, classes A×12 / B×24 / C×10 / D×11 / E×13 / F×15). Wave 1 applies it as follows — **fields leaving the default workflow:**
+Full audit table: `docs/proposals/2026-08-11-order-form-field-audit.md` (≈89 internal fields vs 18 portal fields, classes A×12 / B×24 / C×10 / D×11 / E×13 / F×15). Wave 1 applies it as follows — **fields leaving the default workflow:**
 
 - **Removed from default UI (derived/E):** header `quantity`, `quantityUnitCode`, `weightKg`, `volumeM3`, `palletCount` (already derived via `DeriveSummaryFromCargo`; shown read-only in the Goederen summary), stop-row `stopType` select (set by the add button), `earliestAllowed`/`latestAllowed` (expressed via Tijdseis; kept under Geavanceerd for round-trip), `requestedFrom/To` (read-only "Gevraagd door klant" display on portal orders; hidden otherwise), cargo `volumeM3` (computed), `weightPerUnitKg` (prefilled from unit master).
 - **Moved behind Geavanceerd (C):** barcode, per-line pallets/reference/notes/stackable/manual-volume, appointment reference, per-line stop pinning (auto-shown only with >1 stop of that side — B), document sub-fields.
