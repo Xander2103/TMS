@@ -319,6 +319,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.I
     TransportationService.Api.Modules.Dossiers.Services.DossierService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IActivityTypeSeeder,
     TransportationService.Api.Modules.Dossiers.Services.ActivityTypeSeeder>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IActivityTypeService,
+    TransportationService.Api.Modules.Dossiers.Services.ActivityTypeService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IIncidentService,
     TransportationService.Api.Modules.Incidents.Services.IncidentService>();
 
@@ -608,6 +610,12 @@ using (var referenceScope = app.Services.CreateScope())
 {
     var referenceDbContext = referenceScope.ServiceProvider.GetRequiredService<TransportationDbContext>();
     await CountrySeeder.SyncAsync(referenceDbContext);
+
+    // Dossier foundation: idempotently wrap pre-wave orders in their own dossier so the
+    // dossier list covers ALL historical work. Cheap after the first run (one indexed
+    // query per tenant returning nothing).
+    await TransportationService.Api.Modules.Dossiers.Services.DossierBackfillSeeder.SyncAsync(
+        referenceDbContext, app.Logger);
 }
 
 // Development-only setup

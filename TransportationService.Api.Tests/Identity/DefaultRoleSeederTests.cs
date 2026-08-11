@@ -717,6 +717,45 @@ public class DefaultRoleSeederTests
     }
 
     [Fact]
+    public async Task Version26_GrantsActivityTypeCatalogue_ViewToOperationalTemplates_ManageToManagement()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+
+        // The operational templates read the tenant activity catalogue; only management
+        // maintains it (administrator holds the full catalog by design).
+        foreach (var template in new[] { "planner", "dispatcher", "management" })
+        {
+            var codes = await CodesOfAsync(db, roles.Single(r => r.TemplateCode == template).Id);
+            Assert.Contains(PermissionCodes.ActivityTypesView, codes);
+            if (template == "management")
+            {
+                Assert.Contains(PermissionCodes.ActivityTypesManage, codes);
+            }
+            else
+            {
+                Assert.DoesNotContain(PermissionCodes.ActivityTypesManage, codes);
+            }
+        }
+
+        // Everyone else — including the klantportaal templates — stays away from the
+        // activity-type catalogue entirely.
+        var others = roles.Where(r =>
+            r.TemplateCode is not null and not "planner" and not "dispatcher" and not "management"
+            and not "administrator");
+        foreach (var other in others)
+        {
+            var codes = await CodesOfAsync(db, other.Id);
+            Assert.DoesNotContain(PermissionCodes.ActivityTypesView, codes);
+            Assert.DoesNotContain(PermissionCodes.ActivityTypesManage, codes);
+        }
+    }
+
+    [Fact]
     public async Task Upgrades_AreTenantIsolated()
     {
         var (db, tenantA) = await SeedTenantWithCatalogAsync();

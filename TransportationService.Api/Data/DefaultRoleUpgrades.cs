@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 25;
+    public const int CurrentVersion = 26;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -498,6 +498,17 @@ public static class DefaultRoleUpgrades
                 ["planner"] = [PermissionCodes.LocationsViewSensitive],
                 ["dispatcher"] = [PermissionCodes.LocationsViewSensitive],
                 ["management"] = [PermissionCodes.LocationsViewSensitive],
+            }),
+
+        new(26,
+            "Dossier foundation wave 2026-08-11: tenant-configurable activity types. The "
+            + "operational templates read the catalogue (activity_types.view); management "
+            + "also maintains it (activity_types.manage).",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.ActivityTypesView],
+                ["dispatcher"] = [PermissionCodes.ActivityTypesView],
+                ["management"] = [PermissionCodes.ActivityTypesView, PermissionCodes.ActivityTypesManage],
             }),
     ];
 }

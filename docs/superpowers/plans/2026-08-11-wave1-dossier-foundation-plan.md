@@ -74,6 +74,14 @@ Concrete answers (grounded in the verified model):
    - Rollback: `Down` deletes `dossier_activities`, wrapper `transport_dossiers` (`OriginTransportOrderId IS NOT NULL`) and their `dossier_orders` rows, restores nothing else — safe because nothing existing was modified.
    - Retry safety: the filtered-unique `OriginTransportOrderId` index makes double-insert impossible even under a partially-applied crash.
 - **Nothing rewritten:** orders, stops, snapshots, invoices, documents, PODs, audit rows are not touched by any statement.
+- **Executed deviations (phase 3):** (a) the backfill ships as an idempotent startup seeder
+  (`DossierBackfillSeeder.SyncAsync`, CountrySeeder pattern, all environments) instead of a
+  raw-SQL data migration — the SQLite test harness uses EnsureCreated, so a SQL migration
+  would be untestable, and the seeder is provider-neutral and retry-safe by construction;
+  the `OriginTransportOrderId` filtered unique index still guarantees idempotency. (b)
+  Wrapper `CreatedAt` is the backfill moment (the auditing interceptor stamps inserts
+  unconditionally, and the wrapper genuinely is created then); the historical business date
+  is preserved on `DossierDate` (= order date), which is what the dossier list sorts on.
 - **Pre-flight (blocker check):** memory records earlier waves with never-applied migrations. Before writing migration 1, run `dotnet ef migrations list` against the target DB and reconcile; if drift exists that cannot be reconciled additively, STOP and report (genuine blocker per instructions).
 
 ## 4. DossierActivity domain model

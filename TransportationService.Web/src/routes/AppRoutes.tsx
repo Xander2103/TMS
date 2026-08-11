@@ -133,6 +133,7 @@ const ReportsPage = lazyPage(() => import('../features/reports/pages/ReportsPage
 const ReportViewerPage = lazyPage(() => import('../features/reports/pages/ReportViewerPage'), 'ReportViewerPage')
 const DossiersPage = lazyPage(() => import('../features/dossiers/pages/DossiersPage'), 'DossiersPage')
 const DossierDetailPage = lazyPage(() => import('../features/dossiers/pages/DossierDetailPage'), 'DossierDetailPage')
+const ActivityTypesPage = lazyPage(() => import('../features/dossiers/pages/ActivityTypesPage'), 'ActivityTypesPage')
 const IncidentsPage = lazyPage(() => import('../features/incidents/pages/IncidentsPage'), 'IncidentsPage')
 const IncidentDetailPage = lazyPage(() => import('../features/incidents/pages/IncidentDetailPage'), 'IncidentDetailPage')
 const TasksPage = lazyPage(() => import('../features/tasks/pages/TasksPage'), 'TasksPage')
@@ -275,6 +276,7 @@ const router = createBrowserRouter(
           <Route path="/settings/issued-item-templates/:id" element={<IssuedItemTemplateDetailPage />} />
           <Route path="/inventory" element={<InventoryOverviewPage />} />
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
+          <Route path="/settings/activity-types" element={<ActivityTypesPage />} />
           <Route path="/settings/accounting" element={<AccountingSettingsPage />} />
           <Route path="/settings/notifications" element={<NotificationAdminPage />} />
           <Route path="/settings/escalations" element={<EscalationSettingsPage />} />

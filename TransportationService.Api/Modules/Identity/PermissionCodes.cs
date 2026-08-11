@@ -250,6 +250,10 @@ public static class PermissionCodes
     public const string DossiersView = "dossiers.view";
     public const string DossiersManage = "dossiers.manage";
 
+    // --- Activity types (tenant-configurable dossier activity catalogue) ---
+    public const string ActivityTypesView = "activity_types.view";
+    public const string ActivityTypesManage = "activity_types.manage";
+
     // --- Incidents ---
     public const string IncidentsView = "incidents.view";
     public const string IncidentsManage = "incidents.manage";
@@ -566,6 +570,8 @@ public static class PermissionCodes
         (MessagesCancel, "messages", "cancel", "Interne berichten van anderen intrekken"),
         (DossiersView, "dossiers", "view", "Transportdossiers bekijken"),
         (DossiersManage, "dossiers", "manage", "Transportdossiers beheren (aanmaken, koppelen, sluiten)"),
+        (ActivityTypesView, "activity_types", "view", "Activiteitstypes bekijken"),
+        (ActivityTypesManage, "activity_types", "manage", "Activiteitstypes beheren"),
         (IncidentsView, "incidents", "view", "Incidenten bekijken"),
         (IncidentsManage, "incidents", "manage", "Incidenten registreren en afhandelen"),
         (TariffsView, "tariffs", "view", "Tarievenkaarten bekijken en prijzen berekenen"),
