@@ -27,6 +27,8 @@ builder.Services
         options.Filters.Add<TransportationService.Api.Common.InvalidTenantReferenceExceptionFilter>();
         options.Filters.Add<TransportationService.Api.Common.DomainValidationExceptionFilter>();
         options.Filters.Add<TransportationService.Api.Common.NegativeStockConfirmationFilter>();
+        // Stale dossier-version mutations → 409 with the current state (rebase contract).
+        options.Filters.Add<TransportationService.Api.Modules.Dossiers.DossierVersionConflictExceptionFilter>();
         // Per-request session-revocation (security stamp) + mandatory-password-change enforcement,
         // applied centrally to every authenticated request.
         options.Filters.Add<TransportationService.Api.Modules.Identity.Authorization.AccountStateAuthorizationFilter>();
@@ -319,6 +321,10 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.I
     TransportationService.Api.Modules.Dossiers.Services.DossierService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IActivityTypeSeeder,
     TransportationService.Api.Modules.Dossiers.Services.ActivityTypeSeeder>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierActivityService,
+    TransportationService.Api.Modules.Dossiers.Services.DossierActivityService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierReadinessService,
+    TransportationService.Api.Modules.Dossiers.Services.DossierReadinessService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IActivityTypeService,
     TransportationService.Api.Modules.Dossiers.Services.ActivityTypeService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IIncidentService,

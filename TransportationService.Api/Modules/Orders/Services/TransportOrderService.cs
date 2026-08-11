@@ -232,6 +232,30 @@ public class TransportOrderService : ITransportOrderService
             return TransportOrderOperationResult.Invalid(includedTimeOverrideError);
         }
 
+        // Dossier containment is prepared BEFORE anything is staged on the context: the lazy
+        // activity-type seed runs its own SaveChanges, which must never flush half an order.
+        Modules.Dossiers.Entities.TransportDossier? targetDossier = null;
+        Modules.Dossiers.Entities.ActivityType? wrapperTransportType = null;
+        if (request.DossierId is { } requestedDossierId)
+        {
+            targetDossier = await _dbContext.TransportDossiers
+                .FirstOrDefaultAsync(d => d.TenantId == _tenantContext.TenantId && d.Id == requestedDossierId, cancellationToken);
+            if (targetDossier is null)
+            {
+                return TransportOrderOperationResult.InvalidReference("Het opgegeven dossier bestaat niet.");
+            }
+
+            if (targetDossier.Status == Modules.Dossiers.Entities.DossierStatus.Closed)
+            {
+                return TransportOrderOperationResult.InvalidState(
+                    "Dit dossier is gesloten; heropen het dossier voor je een opdracht toevoegt.");
+            }
+        }
+        else
+        {
+            wrapperTransportType = await ResolveDefaultTransportActivityTypeAsync(cancellationToken);
+        }
+
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == _tenantContext.TenantId, cancellationToken);
 
@@ -279,11 +303,71 @@ public class TransportOrderService : ITransportOrderService
             return pricingError;
         }
 
+        // Dossier containment: an order created inside a dossier is linked to it; every other
+        // create (EDI, portal, legacy API) gets its own wrapper dossier in the SAME save, so
+        // no order exists outside a dossier and no caller has to change.
+        Modules.Dossiers.Entities.TransportDossier? wrapperDossier = null;
+        if (targetDossier is not null)
+        {
+            _dbContext.Add(new Modules.Dossiers.Entities.DossierOrder
+            {
+                Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId,
+                DossierId = targetDossier.Id, TransportOrderId = order.Id,
+            });
+            targetDossier.Version = Guid.NewGuid();
+        }
+        else
+        {
+            wrapperDossier = new Modules.Dossiers.Entities.TransportDossier
+            {
+                Id = Guid.NewGuid(),
+                TenantId = _tenantContext.TenantId,
+                Title = "wordt hieronder gezet", // assigned with the claimed numbers below
+                CustomerId = order.CustomerId,
+                CustomerReference = order.CustomerReference,
+                LegalEntityId = order.LegalEntityId,
+                DossierDate = order.OrderDate,
+                OriginTransportOrderId = order.Id,
+            };
+            _dbContext.Add(wrapperDossier);
+            if (wrapperTransportType is not null)
+            {
+                _dbContext.Add(new Modules.Dossiers.Entities.DossierActivity
+                {
+                    Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId, DossierId = wrapperDossier.Id,
+                    ActivityTypeId = wrapperTransportType.Id, Sequence = 1, LinkedTransportOrderId = order.Id,
+                });
+            }
+
+            _dbContext.Add(new Modules.Dossiers.Entities.DossierOrder
+            {
+                Id = Guid.NewGuid(), TenantId = _tenantContext.TenantId,
+                DossierId = wrapperDossier.Id, TransportOrderId = order.Id,
+            });
+        }
+
+        var customerNameForTitle = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.Id == order.CustomerId && c.TenantId == _tenantContext.TenantId)
+            .Select(c => c.Name).FirstOrDefaultAsync(cancellationToken);
+
         _dbContext.Add(order);
         _dbContext.AddRange(cargoItems);
         await TenantNumbering.SaveWithClaimedNumberAsync(
             _dbContext, settings,
-            () => order.OrderNumber = GenerateOrderNumber(settings),
+            () =>
+            {
+                order.OrderNumber = GenerateOrderNumber(settings);
+                if (wrapperDossier is not null)
+                {
+                    wrapperDossier.DossierNumber = settings is null
+                        ? $"DOS-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}"
+                        : $"{settings.DossierNumberPrefix}{settings.DossierNumberNextValue++:0000}";
+                    var title = customerNameForTitle is null
+                        ? order.OrderNumber
+                        : $"{order.OrderNumber} — {customerNameForTitle}";
+                    wrapperDossier.Title = title.Length > 200 ? title[..200] : title;
+                }
+            },
             cancellationToken);
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "Created", null,
@@ -324,6 +408,14 @@ public class TransportOrderService : ITransportOrderService
         {
             return TransportOrderOperationResult.InvalidState(
                 "Alleen concept-, ingediende en bevestigde opdrachten kunnen worden bewerkt.");
+        }
+
+        // Optimistic concurrency (Trip pattern): a stale token yields 409 with the CURRENT
+        // state so the client rebases instead of silently overwriting a colleague's changes.
+        // Null (legacy/EDI/portal callers) skips the check.
+        if (request.Version is { } expectedVersion && expectedVersion != order.Version)
+        {
+            return TransportOrderOperationResult.Conflict(await MapDetailAsync(order, cancellationToken));
         }
 
         // Switching an order TO a blocked customer is refused; editing an existing order whose
@@ -1655,6 +1747,19 @@ public class TransportOrderService : ITransportOrderService
             .Select(l => new OrderServiceLineDto(l.ServiceOptionId, l.NameSnapshot, l.Kind, l.Value, l.Amount, l.Quantity, l.PalletCount, l.DayCount, l.Note))
             .ToListAsync(cancellationToken);
 
+        // Containing dossier for the header chip: the order's own wrapper wins, else the
+        // first (oldest) user-created link.
+        var dossierRef = await _dbContext.TransportDossiers.AsNoTracking()
+                .Where(d => d.TenantId == _tenantContext.TenantId && d.OriginTransportOrderId == order.Id)
+                .Select(d => new { d.Id, d.DossierNumber })
+                .FirstOrDefaultAsync(cancellationToken)
+            ?? await _dbContext.DossierOrders.AsNoTracking()
+                .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
+                .OrderBy(l => l.CreatedAt)
+                .Join(_dbContext.TransportDossiers.AsNoTracking(), l => l.DossierId, d => d.Id,
+                    (l, d) => new { d.Id, d.DossierNumber })
+                .FirstOrDefaultAsync(cancellationToken);
+
         return new TransportOrderDetailDto(
             order.Id, order.OrderNumber, order.OrderDate, order.CustomerId, customerName,
             order.CustomerReference, order.Status, order.GoodsDescription,
@@ -1673,7 +1778,37 @@ public class TransportOrderService : ITransportOrderService
             order.OneOffIncludedLoadingMinutes, order.OneOffIncludedUnloadingMinutes, order.OneOffIncludedCombinedMinutes,
             order.OneOffExtraHourlyRate, order.OneOffNotes, totalWithProposed,
             order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
-            order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes);
+            order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
+            order.Version, dossierRef?.Id, dossierRef?.DossierNumber);
+    }
+
+    /// <summary>
+    /// The tenant's default transport activity type for auto-wrapped orders; seeds the
+    /// catalogue lazily and falls back to any active HasStops type for reshaped tenants.
+    /// Null only when the tenant has no transport-capable type at all (wrapper then carries
+    /// no activity; the dossier page renders the linked order directly).
+    /// </summary>
+    private async Task<Modules.Dossiers.Entities.ActivityType?> ResolveDefaultTransportActivityTypeAsync(
+        CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var type = await _dbContext.ActivityTypes
+            .Where(t => t.TenantId == tenantId && t.IsActive && t.IsSystemDefaultTransport)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (type is not null)
+        {
+            return type;
+        }
+
+        await new Modules.Dossiers.Services.ActivityTypeSeeder(_dbContext, _tenantContext)
+            .EnsureSeededAsync(cancellationToken);
+        return await _dbContext.ActivityTypes
+                .Where(t => t.TenantId == tenantId && t.IsActive && t.IsSystemDefaultTransport)
+                .FirstOrDefaultAsync(cancellationToken)
+            ?? await _dbContext.ActivityTypes
+                .Where(t => t.TenantId == tenantId && t.IsActive && t.HasStops)
+                .OrderBy(t => t.SortOrder)
+                .FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <summary>

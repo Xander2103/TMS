@@ -47,7 +47,7 @@ public enum OrderPricingSource
 /// (trip assignment, Phase 6) and pricing/invoicing (Phase 8) build on top of this entity.
 /// The order number is claimed from TenantSettings via the retry-safe numbering helper.
 /// </summary>
-public class TransportOrder : AuditableTenantEntity
+public class TransportOrder : AuditableTenantEntity, IVersionedEntity
 {
     public string OrderNumber { get; set; } = string.Empty;
 
@@ -65,9 +65,10 @@ public class TransportOrder : AuditableTenantEntity
     public DateOnly OrderDate { get; set; }
 
     /// <summary>
-    /// Optimistic-concurrency token (Trip pattern): bumped by the service on every mutation.
-    /// Clients echo it; a mismatch yields HTTP 409 carrying the current state. Null from a
-    /// client skips the check so legacy/EDI/portal callers keep working.
+    /// Optimistic-concurrency token, bumped centrally by the auditing interceptor on every
+    /// modification (see IVersionedEntity). Clients echo it; a mismatch yields HTTP 409
+    /// carrying the current state. Null from a client skips the check so legacy/EDI/portal
+    /// callers keep working.
     /// </summary>
     public Guid Version { get; set; } = Guid.NewGuid();
 

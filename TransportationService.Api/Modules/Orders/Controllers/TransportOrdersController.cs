@@ -335,6 +335,8 @@ public class TransportOrdersController : ControllerBase
             TransportOrderOperationOutcome.InvalidReference => BadRequest(new { message = result.Error }),
             TransportOrderOperationOutcome.InvalidState => BadRequest(new { message = result.Error }),
             TransportOrderOperationOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
+            // Stale concurrency token: 409 carries the CURRENT state so the client can rebase.
+            TransportOrderOperationOutcome.VersionConflict => Conflict(result.Order),
             _ => Conflict(),
         };
 }

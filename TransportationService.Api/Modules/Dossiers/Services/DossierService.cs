@@ -21,6 +21,9 @@ public interface IDossierService
 
     Task<DossierDetailDto?> UpdateAsync(Guid id, SaveDossierRequest request, CancellationToken cancellationToken);
 
+    /// <summary>Audited change of the issuing entity (old→new); inherited silently at create.</summary>
+    Task<DossierDetailDto?> ChangeLegalEntityAsync(Guid id, ChangeDossierEntityRequest request, CancellationToken cancellationToken);
+
     Task<DossierDetailDto?> CloseAsync(Guid id, CancellationToken cancellationToken);
 
     Task<DossierDetailDto?> ReopenAsync(Guid id, CancellationToken cancellationToken);
@@ -42,17 +45,20 @@ public class DossierService : IDossierService
     private readonly ITenantContext _tenantContext;
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
+    private readonly IDossierReadinessService _readinessService;
 
     public DossierService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDossierReadinessService? readinessService = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _timeProvider = timeProvider;
+        _readinessService = readinessService ?? new DossierReadinessService(dbContext, tenantContext);
     }
 
     public async Task<IReadOnlyList<DossierListItemDto>> ListAsync(
@@ -106,25 +112,88 @@ public class DossierService : IDossierService
             .ToList();
     }
 
+    /// <summary>
+    /// Fast create (spec Part I): the ONLY required input is the customer. Date defaults to
+    /// today, the title to "klant — datum", the issuing entity is inherited silently
+    /// (customer default → tenant default → none), and a quick-start activity type becomes
+    /// the first activity. Goods, route, price, contacts, times: all deliberately absent —
+    /// completion happens on the dossier page, guided by readiness.
+    /// </summary>
     public async Task<DossierDetailDto> CreateAsync(SaveDossierRequest request, CancellationToken cancellationToken)
     {
         var tenantId = _tenantContext.TenantId;
-        await ValidateAsync(request, tenantId, cancellationToken);
+
+        if (request.CustomerId is not { } customerId)
+        {
+            throw new DomainValidationException("customerId", "Kies een klant.");
+        }
+
+        var customer = await _dbContext.Customers.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.Id == customerId, cancellationToken);
+        if (customer is null)
+        {
+            throw new DomainValidationException("customerId", "De gekozen klant bestaat niet.");
+        }
+
+        // Same intake rule as orders: blocked/inactive customers get no NEW work.
+        if (customer.IsBlocked)
+        {
+            throw new DomainValidationException(
+                "customerId", "Deze klant is geblokkeerd; er kunnen geen nieuwe dossiers aangemaakt worden.");
+        }
+
+        if (!customer.IsActive)
+        {
+            throw new DomainValidationException(
+                "customerId", "Deze klant is inactief; er kunnen geen nieuwe dossiers aangemaakt worden.");
+        }
+
+        if (request.ResponsibleUserId is { } userId
+            && !await _dbContext.Users.AnyAsync(u => u.TenantId == tenantId && u.Id == userId && u.IsActive, cancellationToken))
+        {
+            throw new DomainValidationException("responsibleUserId", "De gekozen verantwoordelijke bestaat niet of is inactief.");
+        }
+
+        ActivityType? templateType = null;
+        if (request.ActivityTypeId is { } typeId)
+        {
+            templateType = await _dbContext.ActivityTypes
+                .FirstOrDefaultAsync(t => t.TenantId == tenantId && t.Id == typeId && t.IsActive, cancellationToken);
+            if (templateType is null)
+            {
+                throw new DomainValidationException("activityTypeId", "Het gekozen activiteitstype bestaat niet of is inactief.");
+            }
+        }
+
+        var dossierDate = request.DossierDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        var legalEntityId = await ResolveInheritedLegalEntityAsync(customer.DefaultLegalEntityId, cancellationToken);
 
         var settings = await _dbContext.TenantSettings
             .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
 
+        var title = Trim(request.Title) ?? $"{customer.Name} — {dossierDate:dd-MM-yyyy}";
         var dossier = new TransportDossier
         {
             Id = Guid.NewGuid(),
             TenantId = tenantId,
-            Title = request.Title.Trim(),
+            Title = title.Length > 200 ? title[..200] : title,
             Description = Trim(request.Description),
-            CustomerId = request.CustomerId,
+            CustomerId = customerId,
+            CustomerReference = Trim(request.CustomerReference),
+            DossierDate = dossierDate,
+            LegalEntityId = legalEntityId,
             ResponsibleUserId = request.ResponsibleUserId,
             Notes = Trim(request.Notes),
         };
         _dbContext.Add(dossier);
+        if (templateType is not null)
+        {
+            _dbContext.Add(new DossierActivity
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId, DossierId = dossier.Id,
+                ActivityTypeId = templateType.Id, Sequence = 1,
+            });
+        }
 
         await TenantNumbering.SaveWithClaimedNumberAsync(
             _dbContext, settings,
@@ -132,9 +201,31 @@ public class DossierService : IDossierService
             cancellationToken);
 
         await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "Created", null,
-            new { dossier.DossierNumber, dossier.Title, dossier.CustomerId }, cancellationToken);
+            new
+            {
+                dossier.DossierNumber, dossier.Title, dossier.CustomerId, dossier.DossierDate,
+                dossier.LegalEntityId, Template = templateType?.Code,
+            }, cancellationToken);
 
         return (await GetAsync(dossier.Id, cancellationToken))!;
+    }
+
+    /// <summary>Customer default when still valid/active, else the tenant default entity, else none.</summary>
+    private async Task<Guid?> ResolveInheritedLegalEntityAsync(Guid? customerDefault, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        if (customerDefault is { } candidate
+            && await _dbContext.LegalEntities.AnyAsync(
+                e => e.TenantId == tenantId && e.Id == candidate && e.IsActive, cancellationToken))
+        {
+            return candidate;
+        }
+
+        var tenantDefault = await _dbContext.LegalEntities.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && e.IsActive && e.IsDefault)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+        return tenantDefault;
     }
 
     public async Task<DossierDetailDto?> GetAsync(Guid id, CancellationToken cancellationToken)
@@ -202,11 +293,44 @@ public class DossierService : IDossierService
 
         var financials = await BuildFinancialsAsync(id, orderRows.Select(o => o.Id).ToList(), cancellationToken);
 
+        var legalEntityName = dossier.LegalEntityId is { } entityId
+            ? await _dbContext.LegalEntities.AsNoTracking()
+                .Where(e => e.Id == entityId && e.TenantId == tenantId)
+                .Select(e => (string?)e.LegalName).FirstOrDefaultAsync(cancellationToken)
+            : null;
+
+        var activityRows = await _dbContext.DossierActivities.AsNoTracking()
+            .Where(a => a.TenantId == tenantId && a.DossierId == id)
+            .OrderBy(a => a.Sequence)
+            .Join(_dbContext.ActivityTypes.AsNoTracking(), a => a.ActivityTypeId, t => t.Id,
+                (a, t) => new
+                {
+                    a.Id, a.ActivityTypeId, t.Code, t.Name, t.Icon, t.HasStops, t.SupportsGoods, t.AllowsDuration,
+                    a.Sequence, a.Label, a.LinkedTransportOrderId, a.LinkedActivityId,
+                    a.PlannedDate, a.DurationHours, a.Notes,
+                })
+            .ToListAsync(cancellationToken);
+        var linkedOrders = orderRows.ToDictionary(o => o.Id, o => new { o.OrderNumber, o.Status });
+        var activities = activityRows
+            .Select(a =>
+            {
+                var linked = a.LinkedTransportOrderId is { } oid ? linkedOrders.GetValueOrDefault(oid) : null;
+                return new DossierActivityDto(
+                    a.Id, a.ActivityTypeId, a.Code, a.Name, a.Icon, a.HasStops, a.SupportsGoods, a.AllowsDuration,
+                    a.Sequence, a.Label, a.LinkedTransportOrderId, linked?.OrderNumber, linked?.Status.ToString(),
+                    a.LinkedActivityId, a.PlannedDate, a.DurationHours, a.Notes);
+            })
+            .ToList();
+
+        var readiness = await _readinessService.EvaluateAsync(id, cancellationToken);
+
         return new DossierDetailDto(
             dossier.Id, dossier.DossierNumber, dossier.Title, dossier.Description, dossier.Status.ToString(),
             dossier.CustomerId, customerName, dossier.ResponsibleUserId, responsibleName,
             dossier.ClosedAt, dossier.Notes, dossier.CreatedAt,
-            orders, relations, incidents, financials);
+            orders, relations, incidents, financials,
+            dossier.CustomerReference, dossier.DossierDate, dossier.LegalEntityId, legalEntityName,
+            dossier.Version, activities, readiness);
     }
 
     public async Task<DossierDetailDto?> UpdateAsync(Guid id, SaveDossierRequest request, CancellationToken cancellationToken)
@@ -219,19 +343,78 @@ public class DossierService : IDossierService
         }
 
         RequireOpen(dossier);
+        await RequireVersionAsync(dossier, request.Version, cancellationToken);
         await ValidateAsync(request, tenantId, cancellationToken);
 
-        dossier.Title = request.Title.Trim();
+        // Null title keeps the current one (header edits are partial by design).
+        if (Trim(request.Title) is { } newTitle)
+        {
+            dossier.Title = newTitle.Length > 200 ? newTitle[..200] : newTitle;
+        }
+
         dossier.Description = Trim(request.Description);
-        dossier.CustomerId = request.CustomerId;
+        if (request.CustomerId is { } newCustomerId)
+        {
+            dossier.CustomerId = newCustomerId;
+        }
+
+        dossier.CustomerReference = Trim(request.CustomerReference);
+        if (request.DossierDate is { } newDate)
+        {
+            dossier.DossierDate = newDate;
+        }
+
         dossier.ResponsibleUserId = request.ResponsibleUserId;
         dossier.Notes = Trim(request.Notes);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "Updated", null,
-            new { dossier.Title, dossier.CustomerId, dossier.ResponsibleUserId }, cancellationToken);
+            new { dossier.Title, dossier.CustomerId, dossier.CustomerReference, dossier.DossierDate, dossier.ResponsibleUserId }, cancellationToken);
 
         return await GetAsync(id, cancellationToken);
+    }
+
+    public async Task<DossierDetailDto?> ChangeLegalEntityAsync(
+        Guid id, ChangeDossierEntityRequest request, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var dossier = await FindAsync(id, cancellationToken);
+        if (dossier is null)
+        {
+            return null;
+        }
+
+        RequireOpen(dossier);
+        await RequireVersionAsync(dossier, request.Version, cancellationToken);
+
+        var entityValid = await _dbContext.LegalEntities.AnyAsync(
+            e => e.TenantId == tenantId && e.Id == request.LegalEntityId && e.IsActive, cancellationToken);
+        if (!entityValid)
+        {
+            throw new DomainValidationException("legalEntityId", "De gekozen facturerende entiteit bestaat niet of is niet actief.");
+        }
+
+        var previous = dossier.LegalEntityId;
+        if (previous == request.LegalEntityId)
+        {
+            return await GetAsync(id, cancellationToken);
+        }
+
+        dossier.LegalEntityId = request.LegalEntityId;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "LegalEntityChanged",
+            new { LegalEntityId = previous }, new { dossier.LegalEntityId }, cancellationToken);
+
+        return await GetAsync(id, cancellationToken);
+    }
+
+    private async Task RequireVersionAsync(TransportDossier dossier, Guid? version, CancellationToken cancellationToken)
+    {
+        if (version is { } expected && expected != dossier.Version)
+        {
+            throw new DossierVersionConflictException((await GetAsync(dossier.Id, cancellationToken))!);
+        }
     }
 
     public async Task<DossierDetailDto?> CloseAsync(Guid id, CancellationToken cancellationToken)
@@ -469,11 +652,6 @@ public class DossierService : IDossierService
 
     private async Task ValidateAsync(SaveDossierRequest request, Guid tenantId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.Title))
-        {
-            throw new DomainValidationException("title", "Een titel is verplicht.");
-        }
-
         if (request.CustomerId is { } customerId
             && !await _dbContext.Customers.AnyAsync(c => c.TenantId == tenantId && c.Id == customerId, cancellationToken))
         {

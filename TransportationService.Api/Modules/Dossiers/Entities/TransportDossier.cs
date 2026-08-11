@@ -14,7 +14,7 @@ public enum DossierStatus
 /// documents follow through those orders so nothing is duplicated. The DOS- number is
 /// claimed from the tenant counter like every other numbered record.
 /// </summary>
-public class TransportDossier : AuditableTenantEntity
+public class TransportDossier : AuditableTenantEntity, IVersionedEntity
 {
     public string DossierNumber { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;

@@ -61,7 +61,7 @@ public class DossierServiceTests
         var sut = h.Sut();
 
         var first = await sut.CreateAsync(new SaveDossierRequest("Project A", CustomerId: h.CustomerId), CancellationToken.None);
-        var second = await sut.CreateAsync(new SaveDossierRequest("Project B"), CancellationToken.None);
+        var second = await sut.CreateAsync(new SaveDossierRequest("Project B", CustomerId: h.CustomerId), CancellationToken.None);
 
         Assert.Equal("DOS-0001", first.DossierNumber);
         Assert.Equal("DOS-0002", second.DossierNumber);
@@ -76,17 +76,23 @@ public class DossierServiceTests
         using var _ = h.Db;
         var sut = h.Sut();
 
-        var noTitle = await Assert.ThrowsAsync<DomainValidationException>(
+        // Fast create (dossier-foundation wave): the customer is the ONLY required field;
+        // a blank title falls back to "klant — datum".
+        var noCustomer = await Assert.ThrowsAsync<DomainValidationException>(
             () => sut.CreateAsync(new SaveDossierRequest("  "), CancellationToken.None));
-        Assert.Contains("title", noTitle.FieldErrors!.Keys);
+        Assert.Contains("customerId", noCustomer.FieldErrors!.Keys);
 
         var badCustomer = await Assert.ThrowsAsync<DomainValidationException>(
             () => sut.CreateAsync(new SaveDossierRequest("X", CustomerId: Guid.NewGuid()), CancellationToken.None));
         Assert.Contains("customerId", badCustomer.FieldErrors!.Keys);
 
         var badResponsible = await Assert.ThrowsAsync<DomainValidationException>(
-            () => sut.CreateAsync(new SaveDossierRequest("X", ResponsibleUserId: Guid.NewGuid()), CancellationToken.None));
+            () => sut.CreateAsync(new SaveDossierRequest("X", CustomerId: h.CustomerId, ResponsibleUserId: Guid.NewGuid()), CancellationToken.None));
         Assert.Contains("responsibleUserId", badResponsible.FieldErrors!.Keys);
+
+        var defaultTitle = await sut.CreateAsync(
+            new SaveDossierRequest(null, CustomerId: h.CustomerId, DossierDate: new DateOnly(2026, 8, 12)), CancellationToken.None);
+        Assert.Equal("Klant BV — 12-08-2026", defaultTitle.Title);
     }
 
     [Fact]
@@ -95,7 +101,7 @@ public class DossierServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var sut = h.Sut();
-        var dossier = await sut.CreateAsync(new SaveDossierRequest("Project"), CancellationToken.None);
+        var dossier = await sut.CreateAsync(new SaveDossierRequest("Project", CustomerId: h.CustomerId), CancellationToken.None);
 
         var linked = await sut.LinkOrderAsync(dossier.Id, new LinkDossierOrderRequest(h.OrderId), CancellationToken.None);
         var order = Assert.Single(linked!.Orders);
@@ -120,7 +126,7 @@ public class DossierServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var sut = h.Sut();
-        var dossier = await sut.CreateAsync(new SaveDossierRequest("Project"), CancellationToken.None);
+        var dossier = await sut.CreateAsync(new SaveDossierRequest("Project", CustomerId: h.CustomerId), CancellationToken.None);
 
         await Assert.ThrowsAsync<DomainValidationException>(
             () => sut.LinkOrderAsync(dossier.Id, new LinkDossierOrderRequest(Guid.NewGuid()), CancellationToken.None));
@@ -132,8 +138,8 @@ public class DossierServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var sut = h.Sut();
-        var first = await sut.CreateAsync(new SaveDossierRequest("Origineel"), CancellationToken.None);
-        var second = await sut.CreateAsync(new SaveDossierRequest("Vervolg"), CancellationToken.None);
+        var first = await sut.CreateAsync(new SaveDossierRequest("Origineel", CustomerId: h.CustomerId), CancellationToken.None);
+        var second = await sut.CreateAsync(new SaveDossierRequest("Vervolg", CustomerId: h.CustomerId), CancellationToken.None);
 
         var self = await Assert.ThrowsAsync<DomainValidationException>(
             () => sut.AddRelationAsync(first.Id, new AddDossierRelationRequest(first.Id, "FollowUp"), CancellationToken.None));
@@ -166,7 +172,7 @@ public class DossierServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var sut = h.Sut();
-        var dossier = await sut.CreateAsync(new SaveDossierRequest("Claimdossier"), CancellationToken.None);
+        var dossier = await sut.CreateAsync(new SaveDossierRequest("Claimdossier", CustomerId: h.CustomerId), CancellationToken.None);
 
         h.Db.Context.Incidents.Add(new Incident
         {
@@ -209,7 +215,7 @@ public class DossierServiceTests
     {
         var h = await SeedAsync();
         using var _ = h.Db;
-        var dossier = await h.Sut().CreateAsync(new SaveDossierRequest("Privaat"), CancellationToken.None);
+        var dossier = await h.Sut().CreateAsync(new SaveDossierRequest("Privaat", CustomerId: h.CustomerId), CancellationToken.None);
 
         Assert.Null(await h.Sut(tenantId: Guid.NewGuid()).GetAsync(dossier.Id, CancellationToken.None));
         Assert.Empty(await h.Sut(tenantId: Guid.NewGuid()).ListAsync(null, null, null, CancellationToken.None));
@@ -221,8 +227,11 @@ public class DossierServiceTests
         var h = await SeedAsync();
         using var _ = h.Db;
         var sut = h.Sut();
+        var otherCustomerId = Guid.NewGuid();
+        h.Db.Context.Customers.Add(new Customer { Id = otherCustomerId, TenantId = h.TenantId, CustomerNumber = "KL-2", Name = "Andere BV" });
+        await h.Db.Context.SaveChangesAsync();
         await sut.CreateAsync(new SaveDossierRequest("Retourproject", CustomerId: h.CustomerId), CancellationToken.None);
-        var toClose = await sut.CreateAsync(new SaveDossierRequest("Afgerond werk"), CancellationToken.None);
+        var toClose = await sut.CreateAsync(new SaveDossierRequest("Afgerond werk", CustomerId: otherCustomerId), CancellationToken.None);
         await sut.CloseAsync(toClose.Id, CancellationToken.None);
 
         Assert.Equal(2, (await sut.ListAsync(null, null, null, CancellationToken.None)).Count);

@@ -127,7 +127,12 @@ public record TransportOrderDetailDto(
     int? IncludedUnloadingMinutesOverride = null,
     decimal? ExtraTimeHourlyRateOverride = null,
     int? ExtraTimeRoundingStepMinutes = null,
-    int? ExtraTimeMinimumBillableMinutes = null);
+    int? ExtraTimeMinimumBillableMinutes = null,
+    /// <summary>Concurrency token; echo on update — a mismatch yields 409 with the current state.</summary>
+    Guid Version = default,
+    /// <summary>Containing dossier (wrapper or user-created); the detail header links to it.</summary>
+    Guid? DossierId = null,
+    string? DossierNumber = null);
 
 /// <summary>Snapshot line of the price calculation stored on the order.</summary>
 public record OrderPricingLineDto(
@@ -388,7 +393,13 @@ public record CreateTransportOrderRequest(
     int? IncludedUnloadingMinutesOverride = null,
     decimal? ExtraTimeHourlyRateOverride = null,
     int? ExtraTimeRoundingStepMinutes = null,
-    int? ExtraTimeMinimumBillableMinutes = null);
+    int? ExtraTimeMinimumBillableMinutes = null,
+    /// <summary>
+    /// Dossier this order is created inside (dossier-originated create). Absent → the order
+    /// gets its own auto-created wrapper dossier so EVERY order lives in a dossier without
+    /// callers (EDI, portal, legacy API) changing anything.
+    /// </summary>
+    Guid? DossierId = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -434,7 +445,9 @@ public record UpdateTransportOrderRequest(
     int? IncludedUnloadingMinutesOverride = null,
     decimal? ExtraTimeHourlyRateOverride = null,
     int? ExtraTimeRoundingStepMinutes = null,
-    int? ExtraTimeMinimumBillableMinutes = null);
+    int? ExtraTimeMinimumBillableMinutes = null,
+    /// <summary>Expected concurrency token; null (legacy clients) skips the check.</summary>
+    Guid? Version = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 
@@ -448,6 +461,8 @@ public enum TransportOrderOperationOutcome
     InvalidReference,
     InvalidState,
     ValidationFailed,
+    /// <summary>Optimistic-concurrency mismatch; <c>Order</c> carries the CURRENT state so the client can rebase.</summary>
+    VersionConflict,
 }
 
 public record TransportOrderOperationResult(
@@ -458,4 +473,7 @@ public record TransportOrderOperationResult(
     public static TransportOrderOperationResult InvalidReference(string error) => new(TransportOrderOperationOutcome.InvalidReference, null, error);
     public static TransportOrderOperationResult InvalidState(string error) => new(TransportOrderOperationOutcome.InvalidState, null, error);
     public static TransportOrderOperationResult Invalid(string error) => new(TransportOrderOperationOutcome.ValidationFailed, null, error);
+    public static TransportOrderOperationResult Conflict(TransportOrderDetailDto current) => new(
+        TransportOrderOperationOutcome.VersionConflict, current,
+        "Deze opdracht is intussen door iemand anders gewijzigd. Herlaad en probeer opnieuw.");
 }

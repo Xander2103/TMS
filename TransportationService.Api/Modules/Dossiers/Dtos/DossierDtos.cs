@@ -49,6 +49,39 @@ public record DossierFinancialSummaryDto(
     decimal EstimatedIncidentCost,
     decimal ActualIncidentCost);
 
+/// <summary>One activity card on the dossier: type capabilities + the linked execution record.</summary>
+public record DossierActivityDto(
+    Guid Id,
+    Guid ActivityTypeId,
+    string ActivityTypeCode,
+    string ActivityTypeName,
+    string? Icon,
+    bool HasStops,
+    bool SupportsGoods,
+    bool AllowsDuration,
+    int Sequence,
+    string? Label,
+    Guid? LinkedTransportOrderId,
+    string? LinkedOrderNumber,
+    string? LinkedOrderStatus,
+    Guid? LinkedActivityId,
+    DateOnly? PlannedDate,
+    decimal? DurationHours,
+    string? Notes);
+
+/// <summary>
+/// One actionable attention item (additive readiness projection — never a new order status).
+/// Section is the dossier-page anchor the frontend scrolls/opens; Stage names the workflow
+/// dimension so later waves add producers without schema change.
+/// </summary>
+public record ReadinessIssueDto(
+    string Code,
+    string Severity,   // Info | Warning | Blocking
+    string Message,
+    string Section,    // algemeen | activiteiten | route | goederen | prijs
+    string? Field,
+    string Stage);     // Planning | Warehouse | Execution | Commercial | Invoice
+
 public record DossierDetailDto(
     Guid Id,
     string DossierNumber,
@@ -65,14 +98,43 @@ public record DossierDetailDto(
     IReadOnlyList<DossierOrderDto> Orders,
     IReadOnlyList<DossierRelationDto> Relations,
     IReadOnlyList<DossierIncidentDto> Incidents,
-    DossierFinancialSummaryDto Financials);
+    DossierFinancialSummaryDto Financials,
+    string? CustomerReference = null,
+    DateOnly? DossierDate = null,
+    Guid? LegalEntityId = null,
+    string? LegalEntityName = null,
+    Guid Version = default,
+    IReadOnlyList<DossierActivityDto>? Activities = null,
+    IReadOnlyList<ReadinessIssueDto>? Readiness = null);
 
 public record SaveDossierRequest(
-    string Title,
+    /// <summary>Optional since the dossier-foundation wave: defaults to "{klant} — {datum}".</summary>
+    string? Title = null,
     string? Description = null,
     Guid? CustomerId = null,
     Guid? ResponsibleUserId = null,
-    string? Notes = null);
+    string? Notes = null,
+    string? CustomerReference = null,
+    DateOnly? DossierDate = null,
+    /// <summary>Fast-create template: the quick-start activity type to start with.</summary>
+    Guid? ActivityTypeId = null,
+    /// <summary>Expected concurrency token on update; null (legacy clients) skips the check.</summary>
+    Guid? Version = null);
+
+public record ChangeDossierEntityRequest(Guid LegalEntityId, Guid? Version = null);
+
+public record SaveDossierActivityRequest(
+    Guid ActivityTypeId,
+    string? Label = null,
+    DateOnly? PlannedDate = null,
+    decimal? DurationHours = null,
+    Guid? LinkedActivityId = null,
+    string? Notes = null,
+    /// <summary>HasStops types only: also create a draft order inside this dossier and link it.</summary>
+    bool CreateLinkedOrder = false,
+    Guid? Version = null);
+
+public record ReorderDossierActivitiesRequest(IReadOnlyList<Guid> ActivityIds, Guid? Version = null);
 
 public record LinkDossierOrderRequest(Guid TransportOrderId);
 

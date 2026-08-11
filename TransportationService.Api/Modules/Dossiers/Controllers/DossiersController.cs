@@ -11,10 +11,17 @@ namespace TransportationService.Api.Modules.Dossiers.Controllers;
 public class DossiersController : ControllerBase
 {
     private readonly IDossierService _service;
+    private readonly IDossierActivityService _activityService;
+    private readonly IDossierReadinessService _readinessService;
 
-    public DossiersController(IDossierService service)
+    public DossiersController(
+        IDossierService service,
+        IDossierActivityService activityService,
+        IDossierReadinessService readinessService)
     {
         _service = service;
+        _activityService = activityService;
+        _readinessService = readinessService;
     }
 
     [HttpGet]
@@ -63,6 +70,59 @@ public class DossiersController : ControllerBase
     {
         var dossier = await _service.ReopenAsync(id, cancellationToken);
         return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    [HttpPut("{id:guid}/legal-entity")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> ChangeLegalEntity(
+        Guid id, ChangeDossierEntityRequest request, CancellationToken cancellationToken)
+    {
+        var dossier = await _service.ChangeLegalEntityAsync(id, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    [HttpPost("{id:guid}/activities")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> AddActivity(
+        Guid id, SaveDossierActivityRequest request, CancellationToken cancellationToken)
+    {
+        var dossier = await _activityService.AddAsync(id, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    [HttpPut("{id:guid}/activities/{activityId:guid}")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> UpdateActivity(
+        Guid id, Guid activityId, SaveDossierActivityRequest request, CancellationToken cancellationToken)
+    {
+        var dossier = await _activityService.UpdateAsync(id, activityId, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    [HttpDelete("{id:guid}/activities/{activityId:guid}")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> DeleteActivity(
+        Guid id, Guid activityId, [FromQuery] Guid? version, CancellationToken cancellationToken)
+    {
+        var dossier = await _activityService.DeleteAsync(id, activityId, version, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    [HttpPost("{id:guid}/activities/reorder")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> ReorderActivities(
+        Guid id, ReorderDossierActivitiesRequest request, CancellationToken cancellationToken)
+    {
+        var dossier = await _activityService.ReorderAsync(id, request, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
+    /// <summary>Dashboard tile: open dossiers with structural attention.</summary>
+    [HttpGet("attention-count")]
+    [RequirePermission(PermissionCodes.DossiersView, PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<object>> AttentionCount(CancellationToken cancellationToken)
+    {
+        return Ok(new { Count = await _readinessService.CountDossiersWithAttentionAsync(cancellationToken) });
     }
 
     [HttpPost("{id:guid}/orders")]
