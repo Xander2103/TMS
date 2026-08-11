@@ -9,6 +9,13 @@
     "Invoiced": "Invoiced",
     "Cancelled": "Cancelled"
   },
+  "exceptionStatus": {
+    "Open": "Open",
+    "Investigating": "Under investigation",
+    "Resolved": "Resolved",
+    "Rejected": "Rejected",
+    "CustomerActionRequired": "Action required from you"
+  },
   "stopType": {
     "Loading": "Loading",
     "Unloading": "Unloading"

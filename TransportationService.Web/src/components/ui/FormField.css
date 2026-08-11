@@ -5,7 +5,7 @@
 }
 
 .ui-form-field > label {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: var(--text-h);
 }
@@ -14,18 +14,27 @@
   color: #dc2626;
 }
 
+/* Control text tracks the document size (1rem = 18px desktop / 16px ≤1024px) instead of a
+   fixed 15px: readable on desktop, and ≥16px on mobile so iOS does not zoom on focus.
+   min-height keeps every control a comfortable ~44px touch target. */
 .ui-form-field input,
 .ui-form-field select,
 .ui-form-field textarea {
   font: inherit;
-  font-size: 15px;
-  padding: 9px 12px;
+  font-size: 1rem;
+  line-height: 1.4;
+  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
   color: var(--text-h);
   width: 100%;
   box-sizing: border-box;
+}
+
+.ui-form-field input,
+.ui-form-field select {
+  min-height: 44px;
 }
 
 .ui-form-field input:focus,
@@ -43,11 +52,11 @@
 }
 
 .ui-form-field-hint {
-  font-size: 13px;
+  font-size: 0.75rem;
   color: var(--text);
 }
 
 .ui-form-field-error {
-  font-size: 13px;
+  font-size: 0.75rem;
   color: #dc2626;
 }

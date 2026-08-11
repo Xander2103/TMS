@@ -17,7 +17,7 @@ import {
   type PortalDocument,
   type PortalOrderDetail,
 } from '../api/customerPortalApi'
-import { orderStatusLabel, stopTypeLabel, unitTypeLabel } from './portalStatusLabels'
+import { exceptionStatusLabel, orderStatusLabel, stopTypeLabel, unitTypeLabel } from './portalStatusLabels'
 import './customer-portal-pages.css'
 
 function formatWindow(t: TranslateFn, from: string | null, to: string | null): string {
@@ -118,7 +118,7 @@ export function CustomerPortalOrderDetailPage() {
             {order.exceptions.map((exception, index) => (
               <li key={index} className="cpp-row">
                 <span>{exception.description}</span>
-                <Badge tone="warning">{exception.status}</Badge>
+                <Badge tone="warning">{exceptionStatusLabel(t, exception.status)}</Badge>
               </li>
             ))}
           </ul>

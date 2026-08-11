@@ -9,10 +9,14 @@
   align-items: center;
 }
 
+/* Sizing mirrors FormField controls (1rem text, ~44px height) so a searchable select never
+   looks smaller than the plain inputs beside it. */
 .ui-searchable-select-control input {
   font: inherit;
-  font-size: 15px;
-  padding: 9px 56px 9px 12px;
+  font-size: 1rem;
+  line-height: 1.4;
+  padding: 10px 56px 10px 12px;
+  min-height: 44px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
@@ -82,7 +86,7 @@
   padding: 8px 10px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 1rem;
   color: var(--text-h);
 }
 

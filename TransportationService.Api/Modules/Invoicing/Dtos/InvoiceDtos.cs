@@ -74,7 +74,9 @@ public record UninvoicedOrderDto(
     string GoodsDescription,
     string? FirstLoadingCity,
     string? LastUnloadingCity,
-    decimal? AgreedPrice);
+    decimal? AgreedPrice,
+    /// <summary>The order's issuing entity; null on pre-entity legacy orders (invoiceable under any entity).</summary>
+    Guid? LegalEntityId = null);
 
 public record ManualInvoiceLineInput(
     string Description,

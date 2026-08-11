@@ -159,7 +159,7 @@ public class InvoiceService : IInvoiceService
                         && o.Status == TransportOrderStatus.Completed
                         && !invoicedOrderIds.Contains(o.Id))
             .OrderBy(o => o.OrderDate)
-            .Select(o => new { o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription, o.AgreedPrice })
+            .Select(o => new { o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription, o.AgreedPrice, o.LegalEntityId })
             .ToListAsync(cancellationToken);
 
         var orderIds = orders.Select(o => o.Id).ToList();
@@ -185,7 +185,8 @@ public class InvoiceService : IInvoiceService
                 o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription ?? string.Empty,
                 orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
                 orderStops.LastOrDefault(s => s.StopType == StopType.Unloading)?.City,
-                o.AgreedPrice);
+                o.AgreedPrice,
+                o.LegalEntityId);
         }).ToList();
     }
 
@@ -266,6 +267,30 @@ public class InvoiceService : IInvoiceService
                     e => e.TenantId == tenantId && e.Id == customerDefault && e.IsActive, cancellationToken)
                 : null;
             legalEntity ??= await GetDefaultLegalEntityAsync(cancellationToken);
+        }
+
+        // One invoice = one issuing entity: every selected order must belong to the resolved
+        // entity. A mismatch is a validation error — the entity is never silently switched to
+        // make the batch valid. Orders without an entity (pre-entity legacy data) are exempt.
+        var orderEntityIds = orderDtos
+            .Where(o => o.LegalEntityId is not null)
+            .Select(o => o.LegalEntityId!.Value)
+            .Distinct()
+            .ToList();
+        if (orderEntityIds.Count > 1)
+        {
+            return InvoiceOperationResult.Invalid(
+                "De geselecteerde opdrachten horen bij verschillende facturerende entiteiten en kunnen niet op één factuur gecombineerd worden.");
+        }
+
+        if (orderEntityIds.Count == 1 && orderEntityIds[0] != legalEntity?.Id)
+        {
+            var mismatched = string.Join(", ", orderDtos
+                .Where(o => o.LegalEntityId == orderEntityIds[0])
+                .Select(o => o.OrderNumber));
+            return InvoiceOperationResult.Invalid(
+                $"De facturerende entiteit van de factuur wijkt af van die van opdracht(en) {mismatched}. " +
+                "Kies de entiteit van de opdrachten of pas de opdrachten aan.");
         }
 
         // Invoice period drives the numbering sequence: default = invoice-date month; an
@@ -690,6 +715,28 @@ public class InvoiceService : IInvoiceService
             {
                 return InvoiceOperationResult.InvalidState(
                     "Deze factuur heeft geen geldige facturerende entiteit en kan niet worden verzonden.");
+            }
+
+            // Hard entity gate (also covers drafts that predate the create-time validation):
+            // an order-backed line whose order carries a different issuing entity blocks Send.
+            var lineOrderIds = invoice.Lines
+                .Where(l => l.TransportOrderId is not null)
+                .Select(l => l.TransportOrderId!.Value)
+                .Distinct()
+                .ToList();
+            if (lineOrderIds.Count > 0)
+            {
+                var mismatchedOrders = await _dbContext.TransportOrders
+                    .Where(o => o.TenantId == _tenantContext.TenantId && lineOrderIds.Contains(o.Id)
+                                && o.LegalEntityId != null && o.LegalEntityId != invoice.LegalEntityId)
+                    .Select(o => o.OrderNumber)
+                    .ToListAsync(cancellationToken);
+                if (mismatchedOrders.Count > 0)
+                {
+                    return InvoiceOperationResult.InvalidState(
+                        $"De facturerende entiteit wijkt af van die van opdracht(en) {string.Join(", ", mismatchedOrders)}. " +
+                        "Corrigeer de factuur of de opdrachten voor verzending.");
+                }
             }
 
             var customerChecks = await _dbContext.Customers

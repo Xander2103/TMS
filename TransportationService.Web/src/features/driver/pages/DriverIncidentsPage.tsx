@@ -7,6 +7,12 @@ import { listMyTrips } from '../../my-trips/api/myTripsApi'
 import type { MyTrip } from '../../my-trips/types'
 import { createMyIncident, listMyIncidents, type MyIncident } from '../api/driverApi'
 import { DRIVER_INCIDENT_SEVERITIES, DRIVER_INCIDENT_TYPES } from '../types'
+import {
+  INCIDENT_SEVERITY_LABELS,
+  INCIDENT_STATUS_LABELS,
+  type IncidentSeverity,
+  type IncidentStatus,
+} from '../../incidents/types'
 
 /**
  * Driver incident reporting on the shared incident register. Works offline: a report
@@ -131,11 +137,11 @@ export function DriverIncidentsPage() {
             <div className="drv-fact-row">
               <strong>{incident.title}</strong>
               <Badge tone={incident.severity === 'Critical' || incident.severity === 'High' ? 'danger' : 'warning'}>
-                {incident.severity}
+                {INCIDENT_SEVERITY_LABELS[incident.severity as IncidentSeverity] ?? incident.severity}
               </Badge>
             </div>
             <div className="drv-fact-row">
-              <span>{incident.status}</span>
+              <span>{INCIDENT_STATUS_LABELS[incident.status as IncidentStatus] ?? incident.status}</span>
               <span className="drv-muted">{new Date(incident.createdAt).toLocaleString('nl-BE')}</span>
             </div>
           </li>

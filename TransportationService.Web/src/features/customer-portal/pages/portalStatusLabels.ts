@@ -18,6 +18,10 @@ export function orderStatusLabel(t: TranslateFn, code: string): string {
   return statusLabel(t, 'orders.status', code)
 }
 
+export function exceptionStatusLabel(t: TranslateFn, code: string): string {
+  return statusLabel(t, 'orders.exceptionStatus', code)
+}
+
 export function stopTypeLabel(t: TranslateFn, code: string): string {
   return statusLabel(t, 'orders.stopType', code)
 }
