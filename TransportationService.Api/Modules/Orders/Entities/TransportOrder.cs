@@ -64,6 +64,13 @@ public class TransportOrder : AuditableTenantEntity
 
     public DateOnly OrderDate { get; set; }
 
+    /// <summary>
+    /// Optimistic-concurrency token (Trip pattern): bumped by the service on every mutation.
+    /// Clients echo it; a mismatch yields HTTP 409 carrying the current state. Null from a
+    /// client skips the check so legacy/EDI/portal callers keep working.
+    /// </summary>
+    public Guid Version { get; set; } = Guid.NewGuid();
+
     public TransportOrderStatus Status { get; set; } = TransportOrderStatus.Draft;
 
     public OrderPriority Priority { get; set; } = OrderPriority.Normal;

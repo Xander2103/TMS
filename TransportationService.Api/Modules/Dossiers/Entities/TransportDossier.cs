@@ -20,13 +20,42 @@ public class TransportDossier : AuditableTenantEntity
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
 
+    /// <summary>Required for dossiers created since the dossier-foundation wave; legacy rows may be null.</summary>
     public Guid? CustomerId { get; set; }
     public Guid? ResponsibleUserId { get; set; }
+
+    /// <summary>The customer's own reference for this case (PO, project code, ...).</summary>
+    public string? CustomerReference { get; set; }
+
+    /// <summary>Business date of the case; null only on pre-wave legacy rows (fall back to CreatedAt).</summary>
+    public DateOnly? DossierDate { get; set; }
+
+    /// <summary>
+    /// Selling own company, inherited from the customer default (else tenant default) at
+    /// creation. Changing it afterwards is permission-gated and audited old→new.
+    /// </summary>
+    public Guid? LegalEntityId { get; set; }
 
     public DossierStatus Status { get; set; } = DossierStatus.Open;
     public DateTime? ClosedAt { get; set; }
 
     public string? Notes { get; set; }
+
+    /// <summary>
+    /// Optimistic-concurrency token (Trip pattern): bumped by the service on every mutation,
+    /// echoed by clients; a mismatch yields HTTP 409 carrying the current state. Null from a
+    /// client skips the check (legacy/EDI callers).
+    /// </summary>
+    public Guid Version { get; set; } = Guid.NewGuid();
+
+    /// <summary>
+    /// Set only on wrapper dossiers created by the backfill migration / auto-wrap for a
+    /// pre-existing order. Doubles as the idempotency key: the filtered unique index makes a
+    /// second wrapper for the same order impossible.
+    /// </summary>
+    public Guid? OriginTransportOrderId { get; set; }
+
+    public List<DossierActivity> Activities { get; set; } = [];
 }
 
 /// <summary>Link between a dossier and a transport order; one active link per pair.</summary>

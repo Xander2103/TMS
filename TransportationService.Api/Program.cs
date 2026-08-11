@@ -317,6 +317,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Fleet.Services.IFle
 // Dossiers & incidents
 builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierService,
     TransportationService.Api.Modules.Dossiers.Services.DossierService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IActivityTypeSeeder,
+    TransportationService.Api.Modules.Dossiers.Services.ActivityTypeSeeder>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IIncidentService,
     TransportationService.Api.Modules.Incidents.Services.IncidentService>();
 

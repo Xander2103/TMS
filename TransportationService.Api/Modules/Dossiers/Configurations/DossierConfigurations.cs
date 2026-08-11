@@ -17,12 +17,75 @@ public class TransportDossierConfiguration : IEntityTypeConfiguration<TransportD
         builder.Property(d => d.Description).HasMaxLength(2000);
         builder.Property(d => d.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(d => d.Notes).HasMaxLength(4000);
+        builder.Property(d => d.CustomerReference).HasMaxLength(100);
+
+        builder.HasOne<Organization.Entities.LegalEntity>().WithMany().HasForeignKey(d => d.LegalEntityId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<TransportOrder>().WithMany().HasForeignKey(d => d.OriginTransportOrderId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasMany(d => d.Activities).WithOne().HasForeignKey(a => a.DossierId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(d => new { d.TenantId, d.DossierNumber }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(d => new { d.TenantId, d.Status });
         builder.HasIndex(d => new { d.TenantId, d.CustomerId });
+        // Idempotency key of the order-wrapper backfill/auto-wrap: at most one wrapper per order, ever.
+        builder.HasIndex(d => d.OriginTransportOrderId, "UX_transport_dossiers_origin_order")
+            .IsUnique()
+            .HasFilter("\"OriginTransportOrderId\" IS NOT NULL");
 
         builder.HasQueryFilter(d => !d.IsDeleted);
+    }
+}
+
+public class ActivityTypeConfiguration : IEntityTypeConfiguration<ActivityType>
+{
+    public void Configure(EntityTypeBuilder<ActivityType> builder)
+    {
+        builder.ToTable("activity_types");
+        builder.HasKey(t => t.Id);
+
+        builder.Property(t => t.Code).HasMaxLength(50).IsRequired();
+        builder.Property(t => t.Name).HasMaxLength(100).IsRequired();
+        builder.Property(t => t.Icon).HasMaxLength(50);
+        builder.Property(t => t.KpiCategory).HasMaxLength(50);
+
+        builder.HasIndex(t => new { t.TenantId, t.Code }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        // Mirrors LegalEntity.IsDefault: at most one active system-default transport type per tenant.
+        builder.HasIndex(t => t.TenantId, "UX_activity_types_default_transport")
+            .IsUnique()
+            .HasFilter("\"IsSystemDefaultTransport\" = true AND \"IsActive\" = true AND \"IsDeleted\" = false");
+
+        builder.HasQueryFilter(t => !t.IsDeleted);
+    }
+}
+
+public class DossierActivityConfiguration : IEntityTypeConfiguration<DossierActivity>
+{
+    public void Configure(EntityTypeBuilder<DossierActivity> builder)
+    {
+        builder.ToTable("dossier_activities");
+        builder.HasKey(a => a.Id);
+
+        builder.Property(a => a.Label).HasMaxLength(200);
+        builder.Property(a => a.Notes).HasMaxLength(2000);
+        builder.Property(a => a.DurationHours).HasPrecision(8, 2);
+
+        builder.HasOne(a => a.ActivityType).WithMany().HasForeignKey(a => a.ActivityTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<TransportOrder>().WithMany().HasForeignKey(a => a.LinkedTransportOrderId)
+            .OnDelete(DeleteBehavior.SetNull);
+        // Restrict avoids a second cascade path via the dossier; the service clears
+        // accompaniment links before an activity is removed.
+        builder.HasOne<DossierActivity>().WithMany().HasForeignKey(a => a.LinkedActivityId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(a => new { a.TenantId, a.DossierId });
+        builder.HasIndex(a => new { a.TenantId, a.ActivityTypeId });
+        builder.HasIndex(a => new { a.TenantId, a.LinkedTransportOrderId })
+            .HasFilter("\"LinkedTransportOrderId\" IS NOT NULL");
+
+        builder.HasQueryFilter(a => !a.IsDeleted);
     }
 }
 
