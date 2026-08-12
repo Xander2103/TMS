@@ -1871,6 +1871,74 @@ public class TransportOrderService : ITransportOrderService
                 .FirstOrDefaultAsync(cancellationToken);
     }
 
+    private sealed record WarehouseActivityCounts(
+        decimal? ScannedIn, decimal? ScannedOut, decimal? Picked, decimal? PalletDays);
+
+    /// <summary>
+    /// P7: the ACTUAL warehouse activity of the order's packages, for event-sourced services
+    /// (QuantitySource ScannedIn/ScannedOut/Picked/PalletDays). Skipped entirely (null) when
+    /// the tenant has no such service — the legacy pricing path costs nothing extra. Counts
+    /// are distinct packages, so scan replays never inflate a quantity; pallet-days follow
+    /// the storage clock (started days, open stays counted to today).
+    /// </summary>
+    private async Task<WarehouseActivityCounts?> ResolveWarehouseActivityAsync(
+        TransportOrder order, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var hasEventSourcedService = await _dbContext.ServiceOptions.AsNoTracking()
+            .AnyAsync(o => o.TenantId == tenantId && o.IsActive && o.QuantitySource != "Ordered", cancellationToken);
+        if (!hasEventSourcedService)
+        {
+            return null;
+        }
+
+        var packageIds = await _dbContext.Packages.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && p.TransportOrderId == order.Id)
+            .Select(p => p.Id)
+            .ToListAsync(cancellationToken);
+        if (packageIds.Count == 0)
+        {
+            return new WarehouseActivityCounts(null, null, null, null);
+        }
+
+        var events = await _dbContext.PackageEvents.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && packageIds.Contains(e.PackageId))
+            .Select(e => new { e.PackageId, e.EventType })
+            .ToListAsync(cancellationToken);
+        var inTypes = new[]
+        {
+            Modules.Packages.Entities.PackageEventType.Received,
+            Modules.Packages.Entities.PackageEventType.ReturnedToDepot,
+        };
+        var outTypes = new[]
+        {
+            Modules.Packages.Entities.PackageEventType.LoadScan,
+            Modules.Packages.Entities.PackageEventType.ReturnLoaded,
+            Modules.Packages.Entities.PackageEventType.RedeliveryLoaded,
+            Modules.Packages.Entities.PackageEventType.ReturnedToSender,
+        };
+        decimal? Count(Func<Modules.Packages.Entities.PackageEventType, bool> match)
+        {
+            var count = events.Where(e => match(e.EventType)).Select(e => e.PackageId).Distinct().Count();
+            return count > 0 ? count : null;
+        }
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var stays = await _dbContext.StorageStays.AsNoTracking()
+            .Where(s => s.TenantId == tenantId && packageIds.Contains(s.PackageId))
+            .Select(s => new { s.InAt, s.OutAt })
+            .ToListAsync(cancellationToken);
+        decimal? palletDays = stays.Count > 0
+            ? stays.Sum(s => Math.Max(1m, (decimal)Math.Ceiling(((s.OutAt ?? now) - s.InAt).TotalDays)))
+            : null;
+
+        return new WarehouseActivityCounts(
+            Count(t => inTypes.Contains(t)),
+            Count(t => outTypes.Contains(t)),
+            Count(t => t == Modules.Packages.Entities.PackageEventType.Staged),
+            palletDays);
+    }
+
     /// <summary>
     /// P6: the order's linked dossier activity type for activity-bound pricing. Checks the
     /// change tracker FIRST — at creation time the auto-wrap activity is staged in the same
@@ -2140,6 +2208,7 @@ public class TransportOrderService : ITransportOrderService
                     (s.PlannedFrom ?? s.PlannedTo) is { } planned ? DateOnly.FromDateTime(planned) : null))
                 .ToList();
 
+            var warehouseActivity = await ResolveWarehouseActivityAsync(order, cancellationToken);
             var groups = await BuildPricingGroupsAsync(order, cargoItems, cancellationToken);
             if (groups.Count == 0 && lines.Count > 0)
             {
@@ -2164,6 +2233,10 @@ public class TransportOrderService : ITransportOrderService
                 MoffettRequired: order.MoffettRequired,
                 IsReturnMovement: order.IsReturnMovement,
                 ActivityTypeId: activityTypeHint ?? await ResolveLinkedActivityTypeAsync(order, cancellationToken),
+                ScannedInCount: warehouseActivity?.ScannedIn,
+                ScannedOutCount: warehouseActivity?.ScannedOut,
+                PickedCount: warehouseActivity?.Picked,
+                PalletDays: warehouseActivity?.PalletDays,
                 CargoLineCount: cargoItems?.Count(c => !c.IsDeleted),
                 OneOff: oneOff,
                 ActualLoadingMinutes: actualLoadingMinutes,

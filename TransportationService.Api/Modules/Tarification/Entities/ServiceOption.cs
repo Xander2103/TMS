@@ -40,6 +40,15 @@ public class ServiceOption : AuditableTenantEntity
 
     /// <summary>Only charged/auto-applied when the order requires ADR; otherwise informational.</summary>
     public bool OnlyForAdr { get; set; }
+
+    /// <summary>
+    /// P7: where the billable quantity comes from. Ordered (default) = order/goods lines
+    /// (legacy behavior). ScannedIn / ScannedOut / Picked = the ACTUAL warehouse custody
+    /// events of the order's packages (handling-in, handling-out, picking); PalletDays =
+    /// the storage-clock derivation. An explicitly entered quantity always wins (manual
+    /// correction), and recalculation stays idempotent via the per-service LineKey merge.
+    /// </summary>
+    public string QuantitySource { get; set; } = "Ordered";
 }
 
 /// <summary>

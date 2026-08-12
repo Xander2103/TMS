@@ -160,7 +160,9 @@ public record ServiceOptionDto(
     IReadOnlyList<ServiceTimeConditionDto>? TimeConditions = null,
     /// <summary>Wave 2: sales code for service lines of this option (wins over rule/agreement).</summary>
     Guid? SalesCategoryId = null,
-    string? SalesCategoryName = null);
+    string? SalesCategoryName = null,
+    /// <summary>P7: Ordered | ScannedIn | ScannedOut | Picked | PalletDays.</summary>
+    string QuantitySource = "Ordered");
 
 /// <summary>One time-based condition row of a service option (wave 2026-08-04 §16/§17).</summary>
 public record ServiceTimeConditionDto(
@@ -183,7 +185,9 @@ public record SaveServiceOptionRequest(
     IReadOnlyList<Guid>? WarehouseIds = null,
     /// <summary>Wave 2026-08-04 §16: time-based stop conditions; null = leave unchanged is NOT supported — the list replaces.</summary>
     IReadOnlyList<ServiceTimeConditionDto>? TimeConditions = null,
-    Guid? SalesCategoryId = null);
+    Guid? SalesCategoryId = null,
+    /// <summary>P7: Ordered (default) | ScannedIn | ScannedOut | Picked | PalletDays.</summary>
+    string QuantitySource = "Ordered");
 
 // --- Customer pricing configuration ---
 
@@ -371,7 +375,13 @@ public record PriceCalculationRequest(
     bool? MoffettRequired = null,
     bool? IsReturnMovement = null,
     /// <summary>The order's linked dossier activity type; drives ActivityType-bound rules/conditions.</summary>
-    Guid? ActivityTypeId = null);
+    Guid? ActivityTypeId = null,
+    // P7: ACTUAL warehouse activity of the order's packages (null = no scans known yet) —
+    // feeds services whose QuantitySource is ScannedIn/ScannedOut/Picked/PalletDays.
+    decimal? ScannedInCount = null,
+    decimal? ScannedOutCount = null,
+    decimal? PickedCount = null,
+    decimal? PalletDays = null);
 
 /// <summary>
 /// One stop's time facts for time-based service conditions (wave 2026-08-04 §16).

@@ -949,17 +949,30 @@ public class PricingEngine : IPricingEngine
                 // cargo line happens to share that same code — preferring Groups wholesale would
                 // silently drop a primary-unit service back to zero whenever cargo detail exists
                 // only for a different unit.
-                var derived = option.UnitTypeId is { } unitTypeId
-                    ? (request.Lines.Any(l => l.UnitTypeId == unitTypeId)
-                        ? request.Lines.Where(l => l.UnitTypeId == unitTypeId).Sum(l => l.Quantity)
-                        : (request.Groups ?? []).SelectMany(g => g.Units).Where(u => u.UnitTypeId == unitTypeId).Sum(u => u.Quantity))
-                    : 0m;
+                // P7: an event-sourced service counts ACTUAL scans instead of ordered goods —
+                // handling-in/out and picking follow the warehouse floor, not the order form.
+                var scanDerived = option.QuantitySource switch
+                {
+                    "ScannedIn" => request.ScannedInCount,
+                    "ScannedOut" => request.ScannedOutCount,
+                    "Picked" => request.PickedCount,
+                    _ => null,
+                };
+                var derived = option.QuantitySource is "ScannedIn" or "ScannedOut" or "Picked"
+                    ? scanDerived ?? 0m
+                    : option.UnitTypeId is { } unitTypeId
+                        ? (request.Lines.Any(l => l.UnitTypeId == unitTypeId)
+                            ? request.Lines.Where(l => l.UnitTypeId == unitTypeId).Sum(l => l.Quantity)
+                            : (request.Groups ?? []).SelectMany(g => g.Units).Where(u => u.UnitTypeId == unitTypeId).Sum(u => u.Quantity))
+                        : 0m;
                 var qty = enteredQuantity is { } q1 && q1 > 0 ? q1 : derived;
                 var unitName = option.UnitTypeId is { } uid ? serviceUnitNames.GetValueOrDefault(uid, "eenheid") : "eenheid";
                 if (qty <= 0)
                 {
-                    lines.Add(new PriceBreakdownLine(
-                        $"{option.Name}: geen {unitName} op deze order", 0m, source, Informational: true));
+                    var emptyLabel = option.QuantitySource is "ScannedIn" or "ScannedOut" or "Picked"
+                        ? $"{option.Name}: nog geen scans geregistreerd"
+                        : $"{option.Name}: geen {unitName} op deze order";
+                    lines.Add(new PriceBreakdownLine(emptyLabel, 0m, source, Informational: true));
                     continue;
                 }
 
@@ -1043,10 +1056,16 @@ public class PricingEngine : IPricingEngine
             else if (option.Kind is SurchargeKind.PerDay or SurchargeKind.PerPalletDay)
             {
                 var dayWord = option.Kind == SurchargeKind.PerDay ? "dagen" : "pallet-dagen";
-                if (enteredQuantity is not { } dayQty || dayQty <= 0)
+                // P7: a PalletDays-sourced service derives from the storage clock; an entered
+                // quantity still wins (manual correction). Legacy options keep requiring input.
+                var dayDerived = option.QuantitySource == "PalletDays" ? request.PalletDays : null;
+                var effectiveDayQty = enteredQuantity is { } entered && entered > 0 ? entered : dayDerived;
+                if (effectiveDayQty is not { } dayQty || dayQty <= 0)
                 {
-                    lines.Add(new PriceBreakdownLine(
-                        $"{option.Name}: geef het aantal {dayWord} op", 0m, source, Informational: true));
+                    var emptyDayLabel = option.QuantitySource == "PalletDays"
+                        ? $"{option.Name}: nog geen opslagverblijven gekend"
+                        : $"{option.Name}: geef het aantal {dayWord} op";
+                    lines.Add(new PriceBreakdownLine(emptyDayLabel, 0m, source, Informational: true));
                     continue;
                 }
 

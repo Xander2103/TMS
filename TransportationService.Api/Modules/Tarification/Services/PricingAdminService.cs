@@ -2142,12 +2142,15 @@ public class PricingAdminService : IPricingAdminService
 
         if (request.Kind == SurchargeKind.PerUnit)
         {
-            if (request.UnitTypeId is null)
+            // P7: scan-sourced services count physical packages — the managed unit is optional
+            // there (the scanner doesn't care which commercial unit the goods were ordered in).
+            var scanSourced = request.QuantitySource is "ScannedIn" or "ScannedOut" or "Picked";
+            if (request.UnitTypeId is null && !scanSourced)
             {
                 throw new DomainValidationException("unitTypeId", "Kies de eenheid waarop deze service telt.");
             }
 
-            if (!await _dbContext.UnitTypes.AnyAsync(
+            if (request.UnitTypeId is not null && !await _dbContext.UnitTypes.AnyAsync(
                     u => u.TenantId == TenantId && u.Id == request.UnitTypeId && u.IsActive, cancellationToken))
             {
                 throw new InvalidTenantReferenceException("eenheid");
@@ -2247,12 +2250,19 @@ public class PricingAdminService : IPricingAdminService
 
     private void ApplyOption(ServiceOption option, SaveServiceOptionRequest request)
     {
+        if (request.QuantitySource is not ("Ordered" or "ScannedIn" or "ScannedOut" or "Picked" or "PalletDays"))
+        {
+            throw new DomainValidationException("quantitySource",
+                "Ongeldige hoeveelheidsbron. Toegestaan: Ordered, ScannedIn, ScannedOut, Picked of PalletDays.");
+        }
+
         option.Code = request.Code.Trim().ToUpperInvariant();
         option.Name = request.Name.Trim();
         option.Kind = request.Kind;
         option.DefaultValue = request.DefaultValue;
         option.IsActive = request.IsActive;
         option.SortOrder = request.SortOrder;
+        option.QuantitySource = request.QuantitySource;
         option.Description = Clean(request.Description);
         option.InvoiceDescription = Clean(request.InvoiceDescription);
         option.SelectableInOrders = request.SelectableInOrders;
@@ -2301,7 +2311,8 @@ public class PricingAdminService : IPricingAdminService
             conditions[o.Id].Select(id => warehouseNames.GetValueOrDefault(id, "?")).ToList(),
             timeConditions[o.Id].ToList(),
             o.SalesCategoryId,
-            o.SalesCategoryId is { } scid ? salesCategoryNames.GetValueOrDefault(scid) : null)).ToList();
+            o.SalesCategoryId is { } scid ? salesCategoryNames.GetValueOrDefault(scid) : null,
+            o.QuantitySource)).ToList();
     }
 
     private async Task<IReadOnlyList<PriceRuleDto>> MapRulesAsync(IReadOnlyList<PriceRule> rules, CancellationToken cancellationToken)
