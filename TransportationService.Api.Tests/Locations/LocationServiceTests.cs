@@ -231,4 +231,101 @@ public class LocationServiceTests
         Assert.False(options[0].IsDefaultUnloadingLocation);
         Assert.Equal("Antwerpen", options[0].City);
     }
+
+    // --- Locations-UX wave: customer sort + per-customer grouping ---------------------------
+
+    private async Task<(Harness H, Guid CustomerAId, Guid CustomerBId)> SeedGroupedAsync()
+    {
+        var h = await SeedAsync();
+        var customerA = Guid.NewGuid();
+        var customerB = Guid.NewGuid();
+        h.Db.Context.Customers.AddRange(
+            new TransportationService.Api.Modules.Partners.Entities.Customer
+            {
+                Id = customerA, TenantId = h.TenantId, CustomerNumber = "KL-1", Name = "Alfa BV", IsActive = true,
+            },
+            new TransportationService.Api.Modules.Partners.Entities.Customer
+            {
+                Id = customerB, TenantId = h.TenantId, CustomerNumber = "KL-2", Name = "Beta BV", IsActive = true,
+            });
+        await h.Db.Context.SaveChangesAsync();
+        await h.Sut.CreateAsync(CreateRequest("A-2", "Magazijn Leuven") with { CustomerId = customerA }, CancellationToken.None);
+        await h.Sut.CreateAsync(CreateRequest("A-1", "Depot Brussel") with { CustomerId = customerA }, CancellationToken.None);
+        await h.Sut.CreateAsync(CreateRequest("B-1", "Leverpunt Gent") with { CustomerId = customerB }, CancellationToken.None);
+        await h.Sut.CreateAsync(CreateRequest("X-1", "Vrij terrein"), CancellationToken.None);
+        return (h, customerA, customerB);
+    }
+
+    [Fact]
+    public async Task Search_SortsByCustomerAndStatus_ServerSide()
+    {
+        var (h, _, _) = await SeedGroupedAsync();
+        using var _d = h.Db;
+
+        var byCustomer = await h.Sut.SearchAsync(null, null, null, null, null, null,
+            "customer", "asc", PageRequest.Of(1, 20), CancellationToken.None);
+        // Null customer sorts first ascending; then Alfa, then Beta.
+        Assert.Equal(["Vrij terrein", "Depot Brussel", "Magazijn Leuven", "Leverpunt Gent"],
+            byCustomer.Items.Select(i => i.Name).ToArray());
+
+        await h.Sut.SetActiveAsync(byCustomer.Items[1].Id,
+            new SetLocationActiveRequest(false), CancellationToken.None);
+        var byStatus = await h.Sut.SearchAsync(null, null, null, null, null, null,
+            "status", "asc", PageRequest.Of(1, 20), CancellationToken.None);
+        Assert.False(byStatus.Items[0].IsActive); // inactive first ascending
+    }
+
+    [Fact]
+    public async Task Grouped_PagesOverGroups_UnlinkedBucketLast_InnerSortApplied()
+    {
+        var (h, customerA, _) = await SeedGroupedAsync();
+        using var _d = h.Db;
+
+        var all = await h.Sut.SearchGroupedAsync(null, null, null, null, null, null,
+            innerSort: "name", PageRequest.Of(1, 10), CancellationToken.None);
+
+        // Three groups: Alfa, Beta, then the unlinked bucket LAST.
+        Assert.Equal(3, all.TotalCount);
+        Assert.Equal(["Alfa BV", "Beta BV", null], all.Items.Select(g => g.CustomerName).ToArray());
+        Assert.Equal(["Depot Brussel", "Magazijn Leuven"],
+            all.Items[0].Locations.Select(l => l.Name).ToArray());
+
+        // Inner sort by code flips Alfa's order (A-1 Depot, A-2 Magazijn stays but proves key).
+        var byCode = await h.Sut.SearchGroupedAsync(null, null, null, null, null, null,
+            innerSort: "code", PageRequest.Of(1, 10), CancellationToken.None);
+        Assert.Equal(["A-1", "A-2"], byCode.Items[0].Locations.Select(l => l.Code).ToArray());
+
+        // Honest paging: page size 1 returns ONE whole group and the true group total.
+        var pageOne = await h.Sut.SearchGroupedAsync(null, null, null, null, null, null,
+            "name", PageRequest.Of(1, 1), CancellationToken.None);
+        Assert.Equal(3, pageOne.TotalCount);
+        var alfa = Assert.Single(pageOne.Items);
+        Assert.Equal("Alfa BV", alfa.CustomerName);
+        Assert.Equal(2, alfa.Locations.Count);
+
+        // Customer filter narrows to that customer's single group.
+        var filtered = await h.Sut.SearchGroupedAsync(null, null, null, customerA, null, null,
+            "name", PageRequest.Of(1, 10), CancellationToken.None);
+        Assert.Single(filtered.Items);
+        Assert.Equal("Alfa BV", filtered.Items[0].CustomerName);
+    }
+
+    [Fact]
+    public async Task Grouped_IsTenantIsolated()
+    {
+        var (h, _, _) = await SeedGroupedAsync();
+        using var _d = h.Db;
+        var foreignTenant = Guid.NewGuid();
+        h.Db.Context.Tenants.Add(new Tenant { Id = foreignTenant, Name = "Other", Slug = "other", IsActive = true, CreatedAt = Now.UtcDateTime });
+        await h.Db.Context.SaveChangesAsync();
+        var foreignSut = new LocationService(h.Db.Context, new DevTenantContext(foreignTenant),
+            new AuditService(h.Db.Context, new DevTenantContext(foreignTenant), new DevCurrentUserContext(null)),
+            new CountryCodeValidator(h.Db.Context));
+
+        var foreign = await foreignSut.SearchGroupedAsync(null, null, null, null, null, null,
+            "name", PageRequest.Of(1, 10), CancellationToken.None);
+
+        Assert.Equal(0, foreign.TotalCount);
+        Assert.Empty(foreign.Items);
+    }
 }

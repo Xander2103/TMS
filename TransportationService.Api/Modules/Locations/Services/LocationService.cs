@@ -70,25 +70,125 @@ public class LocationService : ILocationService
                 (l.PostalCode != null && l.PostalCode.ToLower().Contains(term)));
         }
 
+        // Join BEFORE ordering so the customer column is a first-class, server-side sort key.
+        var joined = from l in query
+                     join c in _dbContext.Customers.AsNoTracking().Where(cu => cu.TenantId == _tenantContext.TenantId)
+                         on l.CustomerId equals c.Id into custs
+                     from c in custs.DefaultIfEmpty()
+                     select new { Location = l, CustomerName = c != null ? (string?)c.Name : null };
+
         var descending = string.Equals(dir, "desc", StringComparison.OrdinalIgnoreCase);
-        query = (sort?.ToLowerInvariant()) switch
+        joined = (sort?.ToLowerInvariant()) switch
         {
-            "code" => descending ? query.OrderByDescending(l => l.Code) : query.OrderBy(l => l.Code),
-            "city" => descending ? query.OrderByDescending(l => l.City) : query.OrderBy(l => l.City),
-            "type" => descending ? query.OrderByDescending(l => l.Type) : query.OrderBy(l => l.Type),
-            _ => descending ? query.OrderByDescending(l => l.Name) : query.OrderBy(l => l.Name),
+            "code" => descending ? joined.OrderByDescending(x => x.Location.Code) : joined.OrderBy(x => x.Location.Code),
+            "city" => descending ? joined.OrderByDescending(x => x.Location.City) : joined.OrderBy(x => x.Location.City),
+            "type" => descending ? joined.OrderByDescending(x => x.Location.Type) : joined.OrderBy(x => x.Location.Type),
+            "customer" => descending
+                ? joined.OrderByDescending(x => x.CustomerName).ThenBy(x => x.Location.Name)
+                : joined.OrderBy(x => x.CustomerName).ThenBy(x => x.Location.Name),
+            "status" => descending
+                ? joined.OrderByDescending(x => x.Location.IsActive).ThenBy(x => x.Location.Name)
+                : joined.OrderBy(x => x.Location.IsActive).ThenBy(x => x.Location.Name),
+            _ => descending ? joined.OrderByDescending(x => x.Location.Name) : joined.OrderBy(x => x.Location.Name),
         };
 
-        var projected = from l in query
-                        join c in _dbContext.Customers.AsNoTracking().Where(cu => cu.TenantId == _tenantContext.TenantId)
-                            on l.CustomerId equals c.Id into custs
-                        from c in custs.DefaultIfEmpty()
-                        select new LocationListItemDto(
-                            l.Id, l.Code, l.Name, l.Type, l.City, l.CountryCode,
-                            c != null ? c.Name : null, l.IsActive,
-                            l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation, l.IsDefaultBillingLocation);
+        var projected = joined.Select(x => new LocationListItemDto(
+            x.Location.Id, x.Location.Code, x.Location.Name, x.Location.Type, x.Location.City,
+            x.Location.CountryCode, x.CustomerName, x.Location.IsActive,
+            x.Location.IsDefaultLoadingLocation, x.Location.IsDefaultUnloadingLocation,
+            x.Location.IsDefaultBillingLocation));
 
         return await projected.ToPagedResultAsync(page, dto => dto, cancellationToken);
+    }
+
+    /// <summary>
+    /// Locations-UX wave: the per-customer view. Server-side grouping with HONEST paging —
+    /// the page unit is the GROUP (customer, or the unlinked bucket), never a slice of
+    /// locations that would tear a customer across pages. All Search filters apply first;
+    /// groups order by customer name with the unlinked bucket last; locations within a group
+    /// order by the requested inner sort (name | code | city).
+    /// </summary>
+    public async Task<PagedResult<LocationGroupDto>> SearchGroupedAsync(
+        string? search, LocationType? type, bool? isActive, Guid? customerId,
+        string? country, string? postalCode, string? innerSort,
+        PageRequest page, CancellationToken cancellationToken)
+    {
+        var query = TenantScoped().AsNoTracking();
+        if (type is { } t) query = query.Where(l => l.Type == t);
+        if (isActive is { } active) query = query.Where(l => l.IsActive == active);
+        if (customerId is { } cust) query = query.Where(l => l.CustomerId == cust);
+        if (!string.IsNullOrWhiteSpace(country))
+        {
+            var cc = country.Trim().ToUpperInvariant();
+            query = query.Where(l => l.CountryCode == cc);
+        }
+
+        if (!string.IsNullOrWhiteSpace(postalCode))
+        {
+            var pc = postalCode.Trim().ToLowerInvariant();
+            query = query.Where(l => l.PostalCode != null && l.PostalCode.ToLower().StartsWith(pc));
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLowerInvariant();
+            query = query.Where(l =>
+                l.Code.ToLower().Contains(term) ||
+                l.Name.ToLower().Contains(term) ||
+                (l.City != null && l.City.ToLower().Contains(term)) ||
+                (l.PostalCode != null && l.PostalCode.ToLower().Contains(term)));
+        }
+
+        var joined = from l in query
+                     join c in _dbContext.Customers.AsNoTracking().Where(cu => cu.TenantId == _tenantContext.TenantId)
+                         on l.CustomerId equals c.Id into custs
+                     from c in custs.DefaultIfEmpty()
+                     select new { Location = l, CustomerName = c != null ? (string?)c.Name : null };
+
+        // Page over the distinct groups (customer name, unlinked last), then load ONLY the
+        // locations of the paged groups — two queries, correct totals, no client-side slicing.
+        var groupKeys = joined
+            .Select(x => new { x.Location.CustomerId, x.CustomerName })
+            .Distinct()
+            .OrderBy(g => g.CustomerName == null)
+            .ThenBy(g => g.CustomerName);
+        var totalGroups = await groupKeys.CountAsync(cancellationToken);
+        var pagedKeys = await groupKeys
+            .Skip((page.Page - 1) * page.PageSize)
+            .Take(page.PageSize)
+            .ToListAsync(cancellationToken);
+
+        var pagedCustomerIds = pagedKeys.Where(k => k.CustomerId is not null).Select(k => k.CustomerId).ToList();
+        var includeUnlinked = pagedKeys.Any(k => k.CustomerId is null);
+        var rows = await joined
+            .Where(x => (x.Location.CustomerId != null && pagedCustomerIds.Contains(x.Location.CustomerId))
+                        || (includeUnlinked && x.Location.CustomerId == null))
+            .Select(x => new
+            {
+                x.Location.CustomerId, x.CustomerName,
+                Dto = new LocationListItemDto(
+                    x.Location.Id, x.Location.Code, x.Location.Name, x.Location.Type, x.Location.City,
+                    x.Location.CountryCode, x.CustomerName, x.Location.IsActive,
+                    x.Location.IsDefaultLoadingLocation, x.Location.IsDefaultUnloadingLocation,
+                    x.Location.IsDefaultBillingLocation),
+            })
+            .ToListAsync(cancellationToken);
+
+        IOrderedEnumerable<LocationListItemDto> InnerOrder(IEnumerable<LocationListItemDto> items) =>
+            (innerSort?.ToLowerInvariant()) switch
+            {
+                "code" => items.OrderBy(i => i.Code, StringComparer.OrdinalIgnoreCase),
+                "city" => items.OrderBy(i => i.City, StringComparer.OrdinalIgnoreCase),
+                _ => items.OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase),
+            };
+
+        var groups = pagedKeys
+            .Select(key => new LocationGroupDto(
+                key.CustomerId, key.CustomerName,
+                InnerOrder(rows.Where(r => r.CustomerId == key.CustomerId).Select(r => r.Dto)).ToList()))
+            .ToList();
+
+        return new PagedResult<LocationGroupDto>(groups, totalGroups, page.Page, page.PageSize);
     }
 
     public async Task<IReadOnlyList<LocationOptionDto>> GetOptionsAsync(

@@ -11,6 +11,12 @@ public interface ILocationService
         string? country, string? postalCode,
         string? sort, string? dir, PageRequest page, CancellationToken cancellationToken);
 
+    /// <summary>Per-customer view: pages over GROUPS (customer / unlinked bucket).</summary>
+    Task<PagedResult<LocationGroupDto>> SearchGroupedAsync(
+        string? search, LocationType? type, bool? isActive, Guid? customerId,
+        string? country, string? postalCode, string? innerSort,
+        PageRequest page, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<LocationOptionDto>> GetOptionsAsync(LocationType? type, Guid? customerId, CancellationToken cancellationToken);
 
     /// <param name="canViewSensitive">When false, the sensitive AccessCode is returned as null.</param>

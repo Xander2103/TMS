@@ -49,6 +49,26 @@ public class LocationsController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Per-customer view: pages over groups; every Search filter applies.</summary>
+    [HttpGet("grouped")]
+    [RequirePermission(PermissionCodes.LocationsView)]
+    public async Task<ActionResult<PagedResult<LocationGroupDto>>> Grouped(
+        [FromQuery] string? search,
+        [FromQuery] LocationType? type,
+        [FromQuery] bool? isActive,
+        [FromQuery] Guid? customerId,
+        [FromQuery] string? country,
+        [FromQuery] string? postalCode,
+        [FromQuery] string? innerSort,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await _service.SearchGroupedAsync(
+            search, type, isActive, customerId, country, postalCode, innerSort,
+            PageRequest.Of(page, pageSize), cancellationToken));
+    }
+
     [HttpGet("options")]
     [RequirePermission(PermissionCodes.LocationsView)]
     public async Task<ActionResult<IReadOnlyList<LocationOptionDto>>> Options(

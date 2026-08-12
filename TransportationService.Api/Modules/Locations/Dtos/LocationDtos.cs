@@ -2,6 +2,11 @@ using TransportationService.Api.Modules.Locations.Entities;
 
 namespace TransportationService.Api.Modules.Locations.Dtos;
 
+/// <summary>One group of the per-customer locations view; CustomerId null = the
+/// "Ongekoppelde locaties" bucket (rendered last).</summary>
+public record LocationGroupDto(
+    Guid? CustomerId, string? CustomerName, IReadOnlyList<LocationListItemDto> Locations);
+
 public record LocationListItemDto(
     Guid Id,
     string Code,
