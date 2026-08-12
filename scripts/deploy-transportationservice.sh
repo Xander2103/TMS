@@ -160,7 +160,11 @@ dotnet restore "$API_PROJECT/$API_PROJECT.csproj"
 step "Stap 5/18: Backend bouwen (Release)"
 # Eén Release-build; 'dotnet ef ... --no-build --configuration Release' hergebruikt
 # deze output, dus er volgt géén tweede (Debug-)compilatie voor de migraties.
-dotnet build "$API_PROJECT/$API_PROJECT.csproj" -c Release --no-restore
+# SourceRevisionId stempelt de commit in de InformationalVersion ("0.2.0+<sha>") —
+# de Systeeminformatie-pagina toont zo altijd de ECHT draaiende build.
+SHORT_SHA="${GIT_COMMIT:0:8}"
+dotnet build "$API_PROJECT/$API_PROJECT.csproj" -c Release --no-restore \
+    -p:SourceRevisionId="$SHORT_SHA"
 
 # --- Steps 6-7: frontend -----------------------------------------------------
 step "Stap 6/18: Frontend-dependencies installeren"
@@ -172,6 +176,8 @@ step "Stap 7/18: Frontend-productiebuild"
     note "VITE_API_BASE_URL ontbreekt in $ENV_FILE — de bundle zou naar de dev-API wijzen."
     exit 1
 }
+# Buildinfo voor de Systeeminformatie-pagina (frontendversie/commit).
+export VITE_BUILD_COMMIT="${GIT_COMMIT:0:8}"
 npm run build
 popd >/dev/null
 
@@ -241,6 +247,19 @@ note "Migratieresultaat: $MIGRATION_RESULT"
 step "Stap 14a/18: Backend publiceren naar nieuwe release-map"
 RELEASE_DIR="$RELEASES_DIR/$(date '+%Y%m%d-%H%M%S')-${GIT_COMMIT:0:8}"
 dotnet publish "$API_PROJECT/$API_PROJECT.csproj" -c Release --no-build -o "$RELEASE_DIR"
+
+# Deployment-metadata voor de Systeeminformatie-pagina: het bestand in de LIVE
+# release-map is de waarheid over wat draait — nooit git HEAD (dat is hooguit kandidaat).
+APP_VERSION="$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props | head -1 || printf '0.0.0')"
+cat > "$RELEASE_DIR/deployment.json" <<METADATA
+{
+  "version": "$APP_VERSION",
+  "commit": "$SHORT_SHA",
+  "ref": "$DEPLOY_BRANCH",
+  "deployedAtUtc": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+  "environment": "${ASPNETCORE_ENVIRONMENT}"
+}
+METADATA
 PREVIOUS_RELEASE="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
 ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
 note "Nieuwe release: $RELEASE_DIR"

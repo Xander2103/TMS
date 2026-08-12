@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    SINGLE source of the application version (systeeminformatie-wave). Bump the semver here
+    and ONLY here — no other source file carries a version. The exact live build stays
+    traceable because the deploy script stamps the Git commit into the build:
+
+      dotnet build/publish -p:SourceRevisionId=<short-sha>
+
+    which the SDK appends to the InformationalVersion as "0.2.0+<sha>". Local builds without
+    the stamp simply show "0.2.0". The Systeeminformatie page splits the two: version for
+    humans, commit for traceability. Never hand-edit versions elsewhere.
+  -->
+  <PropertyGroup>
+    <Version>0.2.0</Version>
+    <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

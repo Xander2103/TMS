@@ -82,6 +82,7 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Edi.Entities.TradingPartner> TradingPartners => Set<TransportationService.Api.Modules.Edi.Entities.TradingPartner>();
     public DbSet<TransportationService.Api.Modules.Edi.Entities.EdiPartnerLocation> EdiPartnerLocations => Set<TransportationService.Api.Modules.Edi.Entities.EdiPartnerLocation>();
     public DbSet<TransportationService.Api.Modules.Edi.Entities.EdiMessage> EdiMessages => Set<TransportationService.Api.Modules.Edi.Entities.EdiMessage>();
+    public DbSet<TransportationService.Api.Modules.SystemAdmin.Entities.DatabaseBackup> DatabaseBackups => Set<TransportationService.Api.Modules.SystemAdmin.Entities.DatabaseBackup>();
     public DbSet<TransportationService.Api.Modules.OrderImport.Entities.OrderImportProfile> OrderImportProfiles => Set<TransportationService.Api.Modules.OrderImport.Entities.OrderImportProfile>();
     public DbSet<TransportationService.Api.Modules.OrderImport.Entities.OrderImportBatch> OrderImportBatches => Set<TransportationService.Api.Modules.OrderImport.Entities.OrderImportBatch>();
     public DbSet<TransportationService.Api.Modules.OrderImport.Entities.OrderImportRow> OrderImportRows => Set<TransportationService.Api.Modules.OrderImport.Entities.OrderImportRow>();

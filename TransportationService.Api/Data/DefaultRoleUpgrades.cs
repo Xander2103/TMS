@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 28;
+    public const int CurrentVersion = 29;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -527,6 +527,14 @@ public static class DefaultRoleUpgrades
             {
                 ["management"] = [PermissionCodes.ProblemsApproveCharge],
                 ["boekhouding"] = [PermissionCodes.ProblemsApproveCharge],
+            }),
+        new(29,
+            "Settings/system wave 2026-08: Systeeminformatie + back-upoverzicht voor management. "
+            + "Back-upacties (create/download/delete/restore) krijgen BEWUST geen sjabloon — "
+            + "die kent een beheerder per persoon toe.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["management"] = [PermissionCodes.SystemInfoView, PermissionCodes.BackupsView],
             }),
     ];
 }

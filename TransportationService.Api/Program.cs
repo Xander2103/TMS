@@ -336,6 +336,17 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.
 builder.Services.AddScoped<TransportationService.Api.Modules.OrderImport.Services.IOrderImportService,
     TransportationService.Api.Modules.OrderImport.Services.OrderImportService>();
 
+// Settings/system wave 2026-08: Systeeminformatie + back-upbeheer.
+builder.Services.Configure<TransportationService.Api.Modules.SystemAdmin.Services.BackupOptions>(
+    builder.Configuration.GetSection(TransportationService.Api.Modules.SystemAdmin.Services.BackupOptions.SectionName));
+builder.Services.AddScoped<TransportationService.Api.Modules.SystemAdmin.Services.ISystemInfoService,
+    TransportationService.Api.Modules.SystemAdmin.Services.SystemInfoService>();
+builder.Services.AddSingleton<TransportationService.Api.Modules.SystemAdmin.Services.IBackupProcessRunner,
+    TransportationService.Api.Modules.SystemAdmin.Services.ProcessBackupRunner>();
+builder.Services.AddScoped<TransportationService.Api.Modules.SystemAdmin.Services.IBackupService,
+    TransportationService.Api.Modules.SystemAdmin.Services.BackupService>();
+builder.Services.AddHostedService<TransportationService.Api.Modules.SystemAdmin.Services.AutomaticBackupHostedService>();
+
 builder.Services.AddScoped<TransportationService.Api.Modules.Reference.Services.IUnitTypeMasterService,
     TransportationService.Api.Modules.Reference.Services.UnitTypeMasterService>();
 

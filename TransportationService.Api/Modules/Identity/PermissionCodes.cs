@@ -259,6 +259,16 @@ public static class PermissionCodes
     // --- Incidents ---
     /// <summary>Wave 6: approve/reject charging a problem to the customer (creates the sales line, audited).</summary>
     public const string ProblemsApproveCharge = "problems.approve_charge";
+
+    // Systeeminformatie & back-ups (settings/system wave 2026-08): system-level surfaces.
+    // Backups are HIGH-RISK — view is the only code granted to a default template; create/
+    // download/delete/restore are deliberate per-admin grants, never template defaults.
+    public const string SystemInfoView = "system_info.view";
+    public const string BackupsView = "backups.view";
+    public const string BackupsCreate = "backups.create";
+    public const string BackupsDownload = "backups.download";
+    public const string BackupsDelete = "backups.delete";
+    public const string BackupsRestore = "backups.restore";
     public const string IncidentsView = "incidents.view";
     public const string IncidentsManage = "incidents.manage";
 
@@ -580,6 +590,12 @@ public static class PermissionCodes
         (IncidentsView, "incidents", "view", "Incidenten bekijken"),
         (IncidentsManage, "incidents", "manage", "Incidenten registreren en afhandelen"),
         (ProblemsApproveCharge, "problems", "approve_charge", "Doorrekening van een probleem aan de klant goed- of afkeuren (maakt de verkooplijn aan, geauditeerd)"),
+        (SystemInfoView, "system_info", "view", "Systeeminformatie bekijken (versie, omgeving, databankstatus)"),
+        (BackupsView, "backups", "view", "Databaseback-ups en retentiebeleid bekijken"),
+        (BackupsCreate, "backups", "create", "Handmatige databaseback-up maken"),
+        (BackupsDownload, "backups", "download", "Databaseback-up downloaden"),
+        (BackupsDelete, "backups", "delete", "Databaseback-up verwijderen (beschermde back-ups uitgezonderd)"),
+        (BackupsRestore, "backups", "restore", "Databaseback-up TERUGZETTEN — destructief, vervangt de huidige data"),
         (TariffsView, "tariffs", "view", "Tarievenkaarten bekijken en prijzen berekenen"),
         (TariffsManage, "tariffs", "manage", "Tarievenkaarten beheren"),
         (TariffsImport, "tariffs", "import", "Tarieventabellen exporteren/importeren via Excel"),

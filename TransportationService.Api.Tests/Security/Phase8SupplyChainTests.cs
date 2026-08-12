@@ -37,6 +37,8 @@ public class Phase8SupplyChainTests
         [PermissionCodes.MessagesSendBulk] = "InternalMessageService.SendAsync bulk-targeting gate",
         [PermissionCodes.PortalMessagesSendBulk] = "PortalMessageService.SendAsync multi-customer gate",
         [PermissionCodes.OrdersAssign] = "TripsController order-to-trip assignment gate",
+        [PermissionCodes.BackupsDelete] = "BackupService.DeleteAsync fail-closed gate (settings/system wave)",
+        [PermissionCodes.BackupsRestore] = "BackupService.RestoreAsync fail-closed gate (settings/system wave)",
 
         // Lookup-/settings-screens: enforced fail-closed inside LookupControllerBase (View on
         // Search/Options/GetById, Manage on Create/Update/Delete) — the code varies per concrete
