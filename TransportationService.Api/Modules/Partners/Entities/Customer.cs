@@ -47,6 +47,14 @@ public class Customer : AuditableTenantEntity
     /// acts on it, until then it is a hint in the invoice builder.
     /// </summary>
     public string InvoiceGrouping { get; set; } = "Manual";
+
+    /// <summary>
+    /// Follow-up wave P1: who supplies the transport document for this customer's orders.
+    /// GenerateOwn (default) = we generate our delivery note/CMR; CustomerDocument = the
+    /// customer supplies their own paperwork (own generation suppressed in batches);
+    /// PerOrder = decide on each dossier/order. Stored as string (append-safe).
+    /// </summary>
+    public string DocumentStrategy { get; set; } = "GenerateOwn";
     public int PaymentTermDays { get; set; } = 30;
     public string? DefaultLanguageCode { get; set; }
     public string CurrencyCode { get; set; } = "EUR";

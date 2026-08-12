@@ -128,6 +128,7 @@ public class CustomerService : ICustomerService
         customer.DefaultLegalEntityId = await EnsureLegalEntityInTenantAsync(request.DefaultLegalEntityId, cancellationToken);
         await ApplyAllowedLegalEntitiesAsync(customer, request.AllowedLegalEntityIds, cancellationToken);
         ApplyInvoiceGrouping(customer, request.InvoiceGrouping);
+        ApplyDocumentStrategy(customer, request.DocumentStrategy);
         await ApplyVatAndPeppolProfileAsync(customer,
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
@@ -305,6 +306,7 @@ public class CustomerService : ICustomerService
         customer.DefaultLegalEntityId = await EnsureLegalEntityInTenantAsync(request.DefaultLegalEntityId, cancellationToken);
         await ApplyAllowedLegalEntitiesAsync(customer, request.AllowedLegalEntityIds, cancellationToken);
         ApplyInvoiceGrouping(customer, request.InvoiceGrouping);
+        ApplyDocumentStrategy(customer, request.DocumentStrategy);
         await ApplyVatAndPeppolProfileAsync(customer,
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
@@ -855,6 +857,24 @@ public class CustomerService : ICustomerService
         customer.InvoiceGrouping = normalized;
     }
 
+    /// <summary>P1: who supplies the transport document. Null = leave as-is.</summary>
+    private static void ApplyDocumentStrategy(Customer customer, string? requested)
+    {
+        if (requested is null)
+        {
+            return;
+        }
+
+        var normalized = requested.Trim();
+        if (normalized is not ("GenerateOwn" or "CustomerDocument" or "PerOrder"))
+        {
+            throw new DomainValidationException("documentStrategy",
+                "Ongeldige documentstrategie. Toegestaan: GenerateOwn, CustomerDocument of PerOrder.");
+        }
+
+        customer.DocumentStrategy = normalized;
+    }
+
     /// <summary>
     /// Wave 2 (spec Part O): replaces the customer's allowed-issuing-entities set. Null = leave
     /// as-is; empty = clear (every active entity allowed). Whatever the effective set becomes,
@@ -935,7 +955,7 @@ public class CustomerService : ICustomerService
         c.DefaultLegalEntityId,
         c.PeppolEnabled, c.PeppolDeliveryPreference.ToString(), c.BuyerReference,
         c.PeppolValidationStatus.ToString(), c.PeppolValidatedAt, c.PeppolValidationReference,
-        allowedLegalEntityIds, c.InvoiceGrouping);
+        allowedLegalEntityIds, c.InvoiceGrouping, c.DocumentStrategy);
 
     private Task<List<Guid>> LoadAllowedLegalEntityIdsAsync(Guid customerId, CancellationToken cancellationToken) =>
         _dbContext.CustomerAllowedLegalEntities.AsNoTracking()

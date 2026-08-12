@@ -83,7 +83,9 @@ public record CustomerDetailDto(
     /// <summary>Wave 2: allowed issuing entities; empty = every active entity is allowed.</summary>
     IReadOnlyList<Guid>? AllowedLegalEntityIds = null,
     /// <summary>Wave 2: PerDossier | Weekly | Monthly | ByReference | Manual (default).</summary>
-    string InvoiceGrouping = "Manual");
+    string InvoiceGrouping = "Manual",
+    /// <summary>P1: GenerateOwn | CustomerDocument | PerOrder — who supplies the transport document.</summary>
+    string DocumentStrategy = "GenerateOwn");
 
 public record CreateCustomerRequest(
     string Name,
@@ -129,7 +131,9 @@ public record CreateCustomerRequest(
     /// <summary>Wave 2: allowed issuing entities; null = leave as-is, empty = clear (all allowed).</summary>
     IReadOnlyList<Guid>? AllowedLegalEntityIds = null,
     /// <summary>Wave 2: invoice grouping preference; null = leave as-is (Manual on create).</summary>
-    string? InvoiceGrouping = null);
+    string? InvoiceGrouping = null,
+    /// <summary>P1: document strategy; null = leave as-is (GenerateOwn on create).</summary>
+    string? DocumentStrategy = null);
 
 public record UpdateCustomerRequest(
     string Name,
@@ -173,7 +177,9 @@ public record UpdateCustomerRequest(
     /// <summary>Wave 2: allowed issuing entities; null = leave as-is, empty = clear (all allowed).</summary>
     IReadOnlyList<Guid>? AllowedLegalEntityIds = null,
     /// <summary>Wave 2: invoice grouping preference; null = leave as-is.</summary>
-    string? InvoiceGrouping = null);
+    string? InvoiceGrouping = null,
+    /// <summary>P1: document strategy; null = leave as-is.</summary>
+    string? DocumentStrategy = null);
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
 

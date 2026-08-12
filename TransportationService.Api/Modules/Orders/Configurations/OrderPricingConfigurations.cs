@@ -96,3 +96,15 @@ public class TransportOrderDocumentConfiguration : IEntityTypeConfiguration<Tran
         builder.HasQueryFilter(d => !d.IsDeleted);
     }
 }
+
+public class TenantDocumentRuleConfiguration : IEntityTypeConfiguration<TenantDocumentRule>
+{
+    public void Configure(EntityTypeBuilder<TenantDocumentRule> builder)
+    {
+        builder.ToTable("tenant_document_rules");
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.DocumentKind).IsRequired().HasMaxLength(20);
+        builder.HasIndex(r => new { r.TenantId, r.Priority });
+        builder.HasQueryFilter(r => !r.IsDeleted);
+    }
+}

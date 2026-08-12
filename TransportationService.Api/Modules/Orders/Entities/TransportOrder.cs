@@ -117,6 +117,14 @@ public class TransportOrder : AuditableTenantEntity, IVersionedEntity
     public bool CraneRequired { get; set; }
 
     /// <summary>
+    /// Follow-up wave P1: per-order transport-document choice, overriding the customer's
+    /// DocumentStrategy. Null = inherit (or "decide later" when the customer strategy is
+    /// PerOrder); Own = generate our document; CustomerDocument = customer paperwork is
+    /// used (own generation excluded from batches); NoneRequired = no document needed.
+    /// </summary>
+    public string? DocumentPreference { get; set; }
+
+    /// <summary>
     /// The effective order price used by invoicing. Equal to <see cref="CalculatedPrice"/>
     /// unless a manual override was applied (<see cref="PriceIsManual"/>) or no pricing
     /// configuration exists (legacy manual entry).

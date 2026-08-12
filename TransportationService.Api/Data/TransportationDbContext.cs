@@ -56,6 +56,7 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportOrderServiceLine> TransportOrderServiceLines => Set<TransportOrderServiceLine>();
     public DbSet<TransportOrderPricingSnapshot> TransportOrderPricingSnapshots => Set<TransportOrderPricingSnapshot>();
     public DbSet<TransportOrderDocument> TransportOrderDocuments => Set<TransportOrderDocument>();
+    public DbSet<TenantDocumentRule> TenantDocumentRules => Set<TenantDocumentRule>();
     public DbSet<TransportOrderStatusHistory> TransportOrderStatusHistories => Set<TransportOrderStatusHistory>();
     public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException> ExecutionExceptions => Set<TransportationService.Api.Modules.Exceptions.Entities.ExecutionException>();
     public DbSet<TransportationService.Api.Modules.Exceptions.Entities.ExceptionPhoto> ExceptionPhotos => Set<TransportationService.Api.Modules.Exceptions.Entities.ExceptionPhoto>();
@@ -99,6 +100,7 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Dossiers.Entities.ActivityType> ActivityTypes => Set<TransportationService.Api.Modules.Dossiers.Entities.ActivityType>();
     public DbSet<TransportationService.Api.Modules.Dossiers.Entities.DossierActivity> DossierActivities => Set<TransportationService.Api.Modules.Dossiers.Entities.DossierActivity>();
     public DbSet<TransportationService.Api.Modules.Incidents.Entities.Incident> Incidents => Set<TransportationService.Api.Modules.Incidents.Entities.Incident>();
+    public DbSet<TransportationService.Api.Modules.Incidents.Entities.IncidentChargePolicy> IncidentChargePolicies => Set<TransportationService.Api.Modules.Incidents.Entities.IncidentChargePolicy>();
 
     // Tarification
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.RateCard> RateCards => Set<TransportationService.Api.Modules.Tarification.Entities.RateCard>();
