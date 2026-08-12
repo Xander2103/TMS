@@ -1,5 +1,7 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { apiClient } from '../../api/apiClient'
+import { setDateFormatPreference } from '../../utils/dates'
 import { useActionQueueSync } from '../../hooks/useActionQueueSync'
 import { useShortcutRegistry } from '../../hooks/useShortcutRegistry'
 import { NotificationBell } from '../../features/notifications/components/NotificationBell'
@@ -23,6 +25,15 @@ export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false)
   // Offline queues (scans + driver actions) replay automatically when the connection returns.
   const queues = useActionQueueSync()
+
+  // Regional display preferences: ONE fetch per session drives the central date formatter
+  // (utils/dates.ts). Until it resolves the Belgian default applies; failure is non-fatal.
+  useEffect(() => {
+    apiClient
+      .getJson<{ dateFormat: string }>('/api/company-settings/display')
+      .then((prefs) => setDateFormatPreference(prefs.dateFormat))
+      .catch(() => {})
+  }, [])
   // Central keyboard shortcuts: mod+K/'/' palette, 'g x' navigation chords, '?' help.
   const shortcuts = useShortcutRegistry()
 

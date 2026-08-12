@@ -12,6 +12,7 @@ import {
   INVENTORY_STATUS_TONES,
   type InventoryStatus,
 } from '../inventoryStatus'
+import { formatDate } from '../../../utils/dates'
 import './InventoryOverviewPage.css'
 
 /** Statussen waarvoor bovenaan een teltegel staat (klik = filter). */
@@ -104,7 +105,7 @@ export function InventoryOverviewPage() {
     {
       key: 'mutatie',
       header: 'Laatste mutatie',
-      render: (row) => (row.lastMovementAt ? new Date(row.lastMovementAt).toLocaleDateString('nl-BE') : '—'),
+      render: (row) => (row.lastMovementAt ? formatDate(row.lastMovementAt) : '—'),
     },
     {
       key: 'acties',

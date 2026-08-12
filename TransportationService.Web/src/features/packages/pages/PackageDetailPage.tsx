@@ -24,10 +24,11 @@ import {
   type PackageLabelVersion,
   type PackageTimelineEvent,
 } from '../types'
+import { formatDateTime as formatDateTimeIso } from '../../../utils/dates'
 import '../components/packages.css'
 
 function formatDateTime(value: string | null): string {
-  return value ? value.slice(0, 16).replace('T', ' ') : '—'
+  return value ? formatDateTimeIso(value) : '—'
 }
 
 /**

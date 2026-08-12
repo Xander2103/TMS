@@ -60,7 +60,9 @@ public class TenantSettings
     public decimal DefaultVatRatePercent { get; set; } = 21m;
 
     // Localisation / formatting
-    public string DateFormat { get; set; } = "dd-MM-yyyy";
+    /// <summary>Regional display preference; closed catalog (CompanySettingsService.
+    /// SupportedDateFormats). Belgian default dd/MM/yyyy; existing tenants keep their value.</summary>
+    public string DateFormat { get; set; } = "dd/MM/yyyy";
     public string DecimalSeparator { get; set; } = ",";
     public string DefaultWeightUnit { get; set; } = "kg";
     public string DefaultDistanceUnit { get; set; } = "km";

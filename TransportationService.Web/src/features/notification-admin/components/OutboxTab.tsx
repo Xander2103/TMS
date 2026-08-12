@@ -9,6 +9,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { listOutbox, rejectOutboxMessage, releaseOutboxMessage, retryOutboxMessage } from '../api/notificationAdminApi'
 import { kindLabel, type MessageChannel, type OutboxRow, type OutboxStatus } from '../types'
+import { formatDateTime } from '../../../utils/dates'
 
 const PAGE_SIZE = 25
 
@@ -123,7 +124,7 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
   }
 
   const baseColumns: Column<OutboxRow>[] = [
-    { key: 'createdAt', header: 'Datum', render: (r) => r.createdAt.slice(0, 16).replace('T', ' ') },
+    { key: 'createdAt', header: 'Datum', render: (r) => formatDateTime(r.createdAt) },
     { key: 'channel', header: 'Kanaal', render: (r) => CHANNEL_LABELS[r.channel] },
     { key: 'kind', header: 'Soort', render: (r) => kindLabel(r.kind) },
     {

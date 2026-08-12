@@ -7,6 +7,7 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { useToast } from '../../../components/ui/toastContext'
 import { apiClient, ApiError } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
+import { formatDateTime } from '../../../utils/dates'
 
 type SyncStatus = 'Pending' | 'Synced' | 'Failed' | 'Cancelled'
 type SyncOperation = 'Upsert' | 'Cancel'
@@ -132,7 +133,7 @@ export function IntegrationsPage() {
         <tbody>
           {(items?.items ?? []).map((row) => (
             <tr key={row.id}>
-              <td>{row.createdAt.slice(0, 16).replace('T', ' ')}</td>
+              <td>{formatDateTime(row.createdAt)}</td>
               <td>
                 {EVENT_LABELS[row.eventType] ?? row.eventType}
                 {row.operation === 'Cancel' && ' (annulering)'}

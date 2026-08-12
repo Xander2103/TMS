@@ -36,6 +36,7 @@ import {
   type StockMovement,
   type VariantValueInput,
 } from '../inventoryApi'
+import { formatDateTime } from '../../../utils/dates'
 import { TemplateFormModal } from '../TemplateFormModal'
 import { NegativeStockConfirmModal } from '../components/NegativeStockConfirmModal'
 import { StockThresholdsCard } from '../components/StockThresholdsCard'
@@ -683,7 +684,7 @@ export function IssuedItemTemplateDetailPage() {
               <tbody>
                 {visibleMovements.map((movement) => (
                   <tr key={movement.id}>
-                    <td>{new Date(movement.timestamp).toLocaleString('nl-BE')}</td>
+                    <td>{formatDateTime(movement.timestamp)}</td>
                     <td>{STOCK_MOVEMENT_LABELS[movement.movementType]}</td>
                     <td>{movement.variantLabel ?? '—'}</td>
                     <td>{movement.quantity > 0 ? `+${movement.quantity}` : movement.quantity}</td>

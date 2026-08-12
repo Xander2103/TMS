@@ -4,6 +4,7 @@ import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import { listMyDocuments } from '../api/driverApi'
 import { DRIVER_DOCUMENT_TYPE_LABELS, type DriverDocument } from '../types'
+import { formatDate } from '../../../utils/dates'
 
 /** Documents of the assets on the driver's active trips — nothing else is ever listed. */
 export function DriverDocumentsPage() {
@@ -61,7 +62,7 @@ export function DriverDocumentsPage() {
             <div className="drv-badges">
               {doc.expiryDate && (
                 <Badge tone={new Date(doc.expiryDate) < new Date() ? 'danger' : 'neutral'}>
-                  Vervalt {new Date(`${doc.expiryDate}T00:00:00`).toLocaleDateString('nl-BE')}
+                  Vervalt {formatDate(doc.expiryDate)}
                 </Badge>
               )}
               {doc.fileAvailable ? (

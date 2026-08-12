@@ -34,6 +34,7 @@ import {
   type IncidentStatus,
   type IncidentType,
 } from '../types'
+import { formatDate } from '../../../utils/dates'
 
 interface FormState {
   title: string
@@ -283,8 +284,8 @@ export function IncidentDetailPage() {
       {!isNew && (
         <p>
           <Badge tone={INCIDENT_STATUS_TONE[incident!.status]}>{INCIDENT_STATUS_LABELS[incident!.status]}</Badge>{' '}
-          Gemeld op {incident!.createdAt.slice(0, 10)}
-          {incident!.resolvedAt && <> · Afgehandeld op {incident!.resolvedAt.slice(0, 10)}</>}
+          Gemeld op {formatDate(incident!.createdAt)}
+          {incident!.resolvedAt && <> · Afgehandeld op {formatDate(incident!.resolvedAt)}</>}
         </p>
       )}
       {!isNew && incident!.resolution && (

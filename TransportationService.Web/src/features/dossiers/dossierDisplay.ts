@@ -1,3 +1,4 @@
+import { formatDate as formatDatePreference } from '../../utils/dates'
 import { ORDER_STATUS_LABELS, type TransportOrderStatus } from '../transport-orders/types'
 import type { DossierDetail } from './types'
 
@@ -6,10 +7,9 @@ export function formatDuration(hours: number): string {
   return `${hours.toLocaleString('nl-BE', { maximumFractionDigits: 2 })} u`
 }
 
-/** "12-08-2026" from an ISO date. */
+/** Tenant-format date from an ISO date — delegates to the central formatter. */
 export function formatDate(iso: string): string {
-  const [year, month, day] = iso.slice(0, 10).split('-')
-  return `${day}-${month}-${year}`
+  return formatDatePreference(iso)
 }
 
 /** Worst-first ranking for the derived operational chip (§11). */

@@ -35,10 +35,11 @@ import {
   type ExceptionSeverity,
   type ExecutionExceptionStatus,
 } from '../types'
+import { formatDateTime as formatDateTimeIso } from '../../../utils/dates'
 import '../components/exceptions.css'
 
 function formatDateTime(value: string | null): string {
-  return value ? value.slice(0, 16).replace('T', ' ') : '—'
+  return value ? formatDateTimeIso(value) : '—'
 }
 
 /** Dispositions offered per current package status; the server re-validates via the lifecycle machine. */

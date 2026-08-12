@@ -7,6 +7,7 @@ import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { ETA_SOURCE_LABELS } from '../../operations/types'
 import { getMyDashboard } from '../api/driverApi'
 import type { MyDashboard } from '../types'
+import { formatDate } from '../../../utils/dates'
 
 const SNAPSHOT_PREFIX = 'ts.driverSnapshot.v1'
 
@@ -116,7 +117,7 @@ export function DriverHomePage() {
           </>
         ) : (
           <p className="drv-muted">Geen actieve rit. {dashboard.nextTrip
-            ? `Volgende: ${dashboard.nextTrip.tripNumber} op ${new Date(`${dashboard.nextTrip.tripDate}T00:00:00`).toLocaleDateString('nl-BE')}.`
+            ? `Volgende: ${dashboard.nextTrip.tripNumber} op ${formatDate(dashboard.nextTrip.tripDate)}.`
             : 'Er staat niets gepland.'}</p>
         )}
       </section>
@@ -146,7 +147,7 @@ export function DriverHomePage() {
           <h2>Volgende rit</h2>
           <div className="drv-fact-row">
             <strong>{dashboard.nextTrip.tripNumber}</strong>
-            <span>{new Date(`${dashboard.nextTrip.tripDate}T00:00:00`).toLocaleDateString('nl-BE')}</span>
+            <span>{formatDate(dashboard.nextTrip.tripDate)}</span>
           </div>
         </section>
       )}

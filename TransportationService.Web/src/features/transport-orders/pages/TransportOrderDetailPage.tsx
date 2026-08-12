@@ -56,13 +56,13 @@ import {
   type TransportOrderStatus,
   type TransportOrderStop,
 } from '../types'
+import { formatDate, formatDateTime, parseIsoDate } from '../../../utils/dates'
 import './transport-orders.css'
 
 function formatWindow(from: string | null, to: string | null): string {
-  const fmt = (value: string) => value.slice(0, 16).replace('T', ' ')
-  if (from && to) return `${fmt(from)} – ${fmt(to)}`
-  if (from) return `vanaf ${fmt(from)}`
-  if (to) return `tot ${fmt(to)}`
+  if (from && to) return `${formatDateTime(from)} – ${formatDateTime(to)}`
+  if (from) return `vanaf ${formatDateTime(from)}`
+  if (to) return `tot ${formatDateTime(to)}`
   return '—'
 }
 
@@ -88,11 +88,10 @@ function stopTimeRequirementBadge(stop: TransportOrderStop): string {
 
 /** "04/08/2026 om 20:59" — the confirmation stamp next to the prominent total (§9). */
 function formatConfirmedStamp(isoUtc: string): string {
-  const date = new Date(isoUtc.endsWith('Z') ? isoUtc : `${isoUtc}Z`)
-  return `${date.toLocaleDateString('nl-BE')} om ${date.toLocaleTimeString('nl-BE', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })}`
+  const date = parseIsoDate(isoUtc)
+  if (!date || Number.isNaN(date.getTime())) return ''
+  const time = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  return `${formatDate(isoUtc)} om ${time}`
 }
 
 /**

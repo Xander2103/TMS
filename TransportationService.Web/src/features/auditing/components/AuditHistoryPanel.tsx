@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { apiClient } from '../../../api/apiClient'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useAuth } from '../../auth/authContextValue'
+import { formatDateTime } from '../../../utils/dates'
 import { formatAuditValues } from '../formatAuditValues'
 import './AuditHistoryPanel.css'
 
@@ -71,7 +72,7 @@ export function AuditHistoryPanel({ entityType, entityId }: { entityType: string
       key: 'timestamp',
       header: 'Tijdstip',
       width: '180px',
-      render: (row) => new Date(row.timestamp).toLocaleString('nl-BE'),
+      render: (row) => formatDateTime(row.timestamp),
     },
     { key: 'action', header: 'Actie', width: '160px', render: (row) => ACTION_LABELS[row.action] ?? row.action },
     {

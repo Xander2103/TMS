@@ -36,6 +36,7 @@ import {
   type UpdateLineInput,
 } from '../types'
 import { formatPeriod, monthInputToPeriod, periodToMonthInput } from '../utils/invoicePeriod'
+import { formatDate } from '../../../utils/dates'
 import './invoices.css'
 
 interface EditableLine extends UpdateLineInput {
@@ -662,7 +663,7 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
               <tr key={attachment.id}>
                 <td>{attachment.fileName}</td>
                 <td>{formatFileSize(attachment.sizeBytes)}</td>
-                <td>{attachment.uploadedAt.slice(0, 10)}</td>
+                <td>{formatDate(attachment.uploadedAt)}</td>
                 <td>
                   <label className="inv-attachment-toggle">
                     <input

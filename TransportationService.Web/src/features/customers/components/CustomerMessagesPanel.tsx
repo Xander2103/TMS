@@ -8,12 +8,8 @@ import {
   sendCustomerMessage,
   type CustomerMessage,
 } from '../api/customerMessagesApi'
+import { formatDateTime } from '../../../utils/dates'
 import './customerMessagesPanel.css'
-
-function formatDateTime(iso: string): string {
-  const date = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`)
-  return date.toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
-}
 
 interface CustomerMessagesPanelProps {
   customerId: string

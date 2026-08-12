@@ -40,6 +40,7 @@ import { DossierPriceSummary } from '../components/DossierPriceSummary'
 import { DossierRouteSummary } from '../components/DossierRouteSummary'
 import { GoodsDrawer } from '../components/GoodsDrawer'
 import { RouteDrawer } from '../components/RouteDrawer'
+import { formatDate as formatIsoDate } from '../../../utils/dates'
 import '../../dashboard/pages/dashboard.css'
 import './dossiers.css'
 import './dossier-detail.css'
@@ -393,9 +394,9 @@ export function DossierDetailPage() {
         {dossier.description && <p>{dossier.description}</p>}
         {dossier.notes ? <p>{dossier.notes}</p> : <p className="placeholder-text">Geen notities.</p>}
         <p className="placeholder-text">
-          Aangemaakt op {dossier.createdAt.slice(0, 10)}
+          Aangemaakt op {formatIsoDate(dossier.createdAt)}
           {dossier.responsibleName && <> · Verantwoordelijke: {dossier.responsibleName}</>}
-          {dossier.closedAt && <> · Gesloten op {dossier.closedAt.slice(0, 10)}</>}
+          {dossier.closedAt && <> · Gesloten op {formatIsoDate(dossier.closedAt)}</>}
         </p>
       </details>
 

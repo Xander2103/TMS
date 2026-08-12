@@ -17,6 +17,7 @@ import {
   type EdiPartner,
   type EdiStatus,
 } from '../api/ediApi'
+import { formatDateTime } from '../../../utils/dates'
 import { MessageDetailModal } from './MessageDetailModal'
 
 const PAGE_SIZE = 25
@@ -95,7 +96,7 @@ export function MessagesTab({ canRetry }: MessagesTabProps) {
   }
 
   const columns: Column<EdiMessageRow>[] = [
-    { key: 'createdAt', header: 'Ontvangen/verzonden', render: (r) => r.createdAt.slice(0, 16).replace('T', ' ') },
+    { key: 'createdAt', header: 'Ontvangen/verzonden', render: (r) => formatDateTime(r.createdAt) },
     { key: 'direction', header: 'Richting', render: (r) => (r.direction === 'Inbound' ? '↓ in' : '↑ uit') },
     { key: 'partner', header: 'Partner', render: (r) => <code>{r.partnerCode}</code> },
     { key: 'type', header: 'Type', render: (r) => r.messageType },

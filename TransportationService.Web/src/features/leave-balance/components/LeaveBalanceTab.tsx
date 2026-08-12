@@ -10,6 +10,7 @@ import {
   setLeaveEntitlement,
 } from '../api/leaveBalanceApi'
 import { LEAVE_ADJUSTMENT_KIND_LABELS, type EmployeeLeaveBalance, type LeaveAdjustment, type LeaveAdjustmentKind, type LeaveBalanceRow } from '../types'
+import { formatDate } from '../../../utils/dates'
 import { LeaveBalanceTable } from './LeaveBalanceTable'
 import { SetEntitlementDialog } from './SetEntitlementDialog'
 import { AdjustBalanceDialog } from './AdjustBalanceDialog'
@@ -146,7 +147,7 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
               {history.items.map((a) => (
                 <li key={a.id}>
                   <strong>{a.days > 0 ? `+${a.days}` : a.days}</strong> · {LEAVE_ADJUSTMENT_KIND_LABELS[a.kind]} ·{' '}
-                  {new Date(a.createdAt).toLocaleDateString('nl-BE')} — {a.reason}
+                  {formatDate(a.createdAt)} — {a.reason}
                 </li>
               ))}
             </ul>

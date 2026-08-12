@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { KpiCard } from '../../kpi/components/KpiCard'
 import { Badge } from '../../../components/ui/Badge'
 import { listMessages, getStats, STATUS_LABELS, STATUS_TONE, type EdiMessageRow, type EdiStats } from '../api/ediApi'
-
-function formatDateTime(value: string): string {
-  return value.slice(0, 16).replace('T', ' ')
-}
+import { formatDateTime } from '../../../utils/dates'
 
 /** Stat tiles (dashboard tile vocabulary, shared with the KPI module) plus a 10-row recent-activity glance. */
 export function DashboardTab() {

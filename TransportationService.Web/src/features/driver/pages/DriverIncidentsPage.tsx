@@ -7,6 +7,7 @@ import { listMyTrips } from '../../my-trips/api/myTripsApi'
 import type { MyTrip } from '../../my-trips/types'
 import { createMyIncident, listMyIncidents, type MyIncident } from '../api/driverApi'
 import { DRIVER_INCIDENT_SEVERITIES, DRIVER_INCIDENT_TYPES } from '../types'
+import { formatDate, formatDateTime } from '../../../utils/dates'
 import {
   INCIDENT_SEVERITY_LABELS,
   INCIDENT_STATUS_LABELS,
@@ -119,7 +120,7 @@ export function DriverIncidentsPage() {
             <option value="">Geen rit</option>
             {trips.map((trip) => (
               <option key={trip.id} value={trip.id}>
-                {trip.tripNumber} · {new Date(`${trip.tripDate}T00:00:00`).toLocaleDateString('nl-BE')}
+                {trip.tripNumber} · {formatDate(trip.tripDate)}
               </option>
             ))}
           </select>
@@ -142,7 +143,7 @@ export function DriverIncidentsPage() {
             </div>
             <div className="drv-fact-row">
               <span>{INCIDENT_STATUS_LABELS[incident.status as IncidentStatus] ?? incident.status}</span>
-              <span className="drv-muted">{new Date(incident.createdAt).toLocaleString('nl-BE')}</span>
+              <span className="drv-muted">{formatDateTime(incident.createdAt)}</span>
             </div>
           </li>
         ))}

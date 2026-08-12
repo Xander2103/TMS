@@ -6,6 +6,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { getMessage, replayMessage, STATUS_LABELS, STATUS_TONE, type EdiMessageDetail } from '../api/ediApi'
+import { formatDateTime } from '../../../utils/dates'
 
 interface MessageDetailModalProps {
   id: string
@@ -97,7 +98,7 @@ export function MessageDetailModal({ id, canRetry, onClose, onReplayed }: Messag
             <dt>Poging</dt>
             <dd>{message.attemptCount} / 3</dd>
             <dt>Datum</dt>
-            <dd>{message.createdAt.slice(0, 16).replace('T', ' ')}</dd>
+            <dd>{formatDateTime(message.createdAt)}</dd>
             <dt>Externe referentie</dt>
             <dd>{message.externalReference ?? '—'}</dd>
             <dt>Fout</dt>

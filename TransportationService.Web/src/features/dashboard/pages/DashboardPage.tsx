@@ -9,11 +9,11 @@ import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE } from '../../transport-orders/t
 import { getDashboard } from '../api/dashboardApi'
 import { DASHBOARD_TILE_GROUPS, type DashboardExtras, type DashboardTile } from '../dashboardConfig'
 import type { Dashboard } from '../types'
+import { formatDateTime } from '../../../utils/dates'
 import './dashboard.css'
 
 function formatPinnedAt(iso: string): string {
-  const date = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : `${iso}Z`)
-  return date.toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
+  return formatDateTime(iso)
 }
 
 /** One clickable KPI tile-grid, reused by every tile group. */

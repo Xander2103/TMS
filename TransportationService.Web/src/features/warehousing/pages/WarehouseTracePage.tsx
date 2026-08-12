@@ -22,6 +22,7 @@ import {
 import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
 import type { Warehouse } from '../types'
+import { formatDateTime } from '../../../utils/dates'
 
 const SCAN_TYPE_LABELS: Record<WarehouseScanType, string> = {
   Received: 'Ontvangst',
@@ -213,7 +214,7 @@ export function WarehouseTracePage() {
               {trace.lastEvents.map((event, index) => (
                 <tr key={index}>
                   <td>{event.eventType}</td>
-                  <td>{new Date(event.occurredAt).toLocaleString('nl-BE')}</td>
+                  <td>{formatDateTime(event.occurredAt)}</td>
                   <td>{event.locationCode ?? '—'}</td>
                   <td>{event.tripNumber ?? '—'}</td>
                 </tr>

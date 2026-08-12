@@ -4,6 +4,7 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { getTransportOrderTimeline, type OrderTimelineEvent } from '../api/transportOrdersApi'
+import { formatDateTime } from '../../../utils/dates'
 
 const CATEGORY_LABELS: Record<string, { label: string; tone: BadgeTone }> = {
   order: { label: 'Opdracht', tone: 'neutral' },
@@ -14,7 +15,7 @@ const CATEGORY_LABELS: Record<string, { label: string; tone: BadgeTone }> = {
 }
 
 function formatTimestamp(value: string): string {
-  return value.slice(0, 16).replace('T', ' ')
+  return formatDateTime(value)
 }
 
 /**

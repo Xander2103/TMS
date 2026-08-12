@@ -16,6 +16,7 @@ import {
   type PeppolIncomingDocument,
   type PeppolIncomingStatus,
 } from '../api/peppolApi'
+import { formatDateTime } from '../../../utils/dates'
 
 const PAGE_SIZE = 25
 
@@ -112,7 +113,7 @@ export function IncomingTab() {
       align: 'right',
       render: (r) => (r.amount != null ? euro(r.amount, r.currency ?? 'EUR') : '—'),
     },
-    { key: 'receivedAt', header: 'Ontvangen', render: (r) => r.receivedAt.slice(0, 16).replace('T', ' ') },
+    { key: 'receivedAt', header: 'Ontvangen', render: (r) => formatDateTime(r.receivedAt) },
     {
       key: 'status',
       header: 'Status',

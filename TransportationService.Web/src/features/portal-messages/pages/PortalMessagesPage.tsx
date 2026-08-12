@@ -23,6 +23,7 @@ import {
   type PortalMessageDisplayMode,
   type PortalMessagePriority,
 } from '../api/portalMessagesApi'
+import { formatDateTime } from '../../../utils/dates'
 import './portal-messages.css'
 
 const PRIORITY_LABELS: Record<PortalMessagePriority, string> = { Normal: 'Normaal', High: 'Hoog', Urgent: 'Dringend' }
@@ -41,7 +42,7 @@ const DISPLAY_MODE_HINTS: Record<PortalMessageDisplayMode, string> = {
 }
 
 function formatTimestamp(iso: string): string {
-  return iso.slice(0, 16).replace('T', ' ')
+  return formatDateTime(iso)
 }
 
 function fromDateTimeLocal(value: string): string | null {

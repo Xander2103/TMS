@@ -1,3 +1,5 @@
+import { formatDate } from '../../utils/dates'
+
 /** Compacte relatieve tijd in het Nederlands, bv. "5 min geleden". Ouder dan een week wordt een datum. */
 export function formatRelativeTime(iso: string, now: Date = new Date()): string {
   const then = new Date(iso)
@@ -9,5 +11,5 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
   const days = Math.floor(hours / 24)
   if (days === 1) return 'gisteren'
   if (days < 7) return `${days} dagen geleden`
-  return then.toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return formatDate(iso)
 }

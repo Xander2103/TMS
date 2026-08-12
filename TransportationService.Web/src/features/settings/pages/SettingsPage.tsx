@@ -10,6 +10,7 @@ import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { getCompanySettings, updateCompanySettings } from '../api/settingsApi'
+import { DATE_FORMAT_OPTIONS, formatExample, setDateFormatPreference } from '../../../utils/dates'
 import type { CompanySettings } from '../types'
 import './settings.css'
 
@@ -119,6 +120,8 @@ export function SettingsPage() {
       const updated = await updateCompanySettings(form)
       setLoaded(updated)
       setForm(updated)
+      // The central date formatter follows the saved preference immediately.
+      setDateFormatPreference(updated.dateFormat)
       showSuccess('Bedrijfsinstellingen opgeslagen.')
     } catch (err) {
       // Preserve the backend's specific validation message (e.g. an unknown country code).
@@ -210,13 +213,36 @@ export function SettingsPage() {
         </section>
 
         <section className="settings-card">
-          <h2>Lokalisatie &amp; notatie</h2>
+          <h2>Regionale instellingen</h2>
+          <p className="settings-hint">
+            Bepaalt hoe datums en getallen overal in de applicatie worden weergegeven.
+            Opslag in de databank blijft altijd genormaliseerd — dit is enkel weergave.
+          </p>
           <div className="settings-grid">
+            <FormField label="Datumnotatie" htmlFor="f-dateFormat" required>
+              <select
+                id="f-dateFormat"
+                value={form.dateFormat}
+                disabled={!canManage || saving}
+                onChange={(e) => setField('dateFormat', e.target.value)}
+              >
+                {DATE_FORMAT_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option.toUpperCase()} — bv. {formatExample(option)}
+                  </option>
+                ))}
+              </select>
+            </FormField>
             {text('defaultLanguage', 'Standaardtaal', { required: true, maxLength: 10 })}
             {text('timezone', 'Tijdzone', { required: true })}
-            {text('defaultCurrency', 'Valuta (ISO)', { required: true, maxLength: 3 })}
-            {text('dateFormat', 'Datumnotatie', { required: true })}
             {text('decimalSeparator', 'Decimaalteken', { required: true, maxLength: 1 })}
+          </div>
+        </section>
+
+        <section className="settings-card">
+          <h2>Eenheden &amp; valuta</h2>
+          <div className="settings-grid">
+            {text('defaultCurrency', 'Valuta (ISO)', { required: true, maxLength: 3 })}
             {text('defaultWeightUnit', 'Gewichtseenheid', { required: true })}
             {text('defaultDistanceUnit', 'Afstandseenheid', { required: true })}
           </div>

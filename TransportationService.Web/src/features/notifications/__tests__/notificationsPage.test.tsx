@@ -63,7 +63,8 @@ describe('NotificationsPage', () => {
     const ackButtons = screen.getAllByRole('button', { name: /bevestigen$/i })
     expect(ackButtons).toHaveLength(1)
     expect(ackButtons[0]).toHaveAccessibleName('Melding "Bevestiging nodig" bevestigen')
-    expect(screen.getByText(/Bevestigd op 2026-07-31 10:00/)).toBeInTheDocument()
+    // Tenant default dd/MM/yyyy HH:mm; assert shape rather than the exact hour (runner timezone).
+    expect(screen.getByText(/Bevestigd op \d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/)).toBeInTheDocument()
 
     await userEvent.click(ackButtons[0])
     expect(api.acknowledgeNotification).toHaveBeenCalledWith('ack-1')

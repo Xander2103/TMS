@@ -24,6 +24,7 @@ import {
   type OrderImportRow,
   type OrderImportRowStatus,
 } from '../api/orderImportsApi'
+import { formatDateTime } from '../../../utils/dates'
 import './order-imports.css'
 
 const PAGE_SIZE = 25
@@ -191,7 +192,7 @@ export function OrderImportsPage() {
       key: 'createdAt',
       header: 'Geüpload',
       width: '160px',
-      render: (row) => new Date(row.createdAt).toLocaleString('nl-BE'),
+      render: (row) => formatDateTime(row.createdAt),
     },
     {
       key: 'actions',

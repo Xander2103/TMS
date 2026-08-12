@@ -23,6 +23,7 @@ import {
   type ExecutionExceptionStatus,
   type ExecutionExceptionType,
 } from '../types'
+import { formatDateTime } from '../../../utils/dates'
 import '../components/exceptions.css'
 
 const PAGE_SIZE = 25
@@ -81,7 +82,7 @@ export function ExceptionsPage() {
       key: 'occurredAt',
       header: 'Gemeld',
       width: '140px',
-      render: (r) => r.occurredAt.slice(0, 16).replace('T', ' '),
+      render: (r) => formatDateTime(r.occurredAt),
     },
     {
       key: 'type',

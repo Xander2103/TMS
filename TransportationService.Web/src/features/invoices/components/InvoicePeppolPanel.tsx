@@ -19,16 +19,13 @@ import {
   type PeppolTransmission,
 } from '../../peppol/api/peppolApi'
 import { euro, type InvoiceStatus } from '../types'
+import { formatDateTime } from '../../../utils/dates'
 import '../../peppol/pages/peppol.css'
 
 interface InvoicePeppolPanelProps {
   invoiceId: string
   invoiceNumber: string
   invoiceStatus: InvoiceStatus
-}
-
-function formatDateTime(value: string): string {
-  return value.slice(0, 16).replace('T', ' ')
 }
 
 /**

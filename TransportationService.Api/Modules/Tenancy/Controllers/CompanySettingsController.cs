@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TransportationService.Api.Modules.Identity;
 using TransportationService.Api.Modules.Identity.Authorization;
@@ -22,6 +23,18 @@ public class CompanySettingsController : ControllerBase
     public async Task<ActionResult<CompanySettingsDto>> Get(CancellationToken cancellationToken)
     {
         return Ok(await _service.GetAsync(cancellationToken));
+    }
+
+    /// <summary>Regional display preferences for EVERY signed-in user (the central date
+    /// formatter needs them app-wide) — deliberately without a permission gate: nothing in
+    /// here is sensitive, it is presentation configuration only.</summary>
+    [HttpGet("display")]
+    [Authorize]
+    public async Task<ActionResult<DisplayPreferencesDto>> Display(CancellationToken cancellationToken)
+    {
+        var settings = await _service.GetAsync(cancellationToken);
+        return Ok(new DisplayPreferencesDto(
+            settings.DateFormat, settings.DecimalSeparator, settings.Timezone, settings.DefaultLanguage));
     }
 
     [HttpPut]

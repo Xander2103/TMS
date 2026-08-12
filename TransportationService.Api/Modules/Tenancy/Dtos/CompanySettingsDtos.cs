@@ -1,6 +1,10 @@
 namespace TransportationService.Api.Modules.Tenancy.Dtos;
 
 /// <summary>Full company/tenant settings, returned to the settings screen.</summary>
+/// <summary>Regional display preferences, safe for every signed-in user (presentation only).</summary>
+public record DisplayPreferencesDto(
+    string DateFormat, string DecimalSeparator, string Timezone, string DefaultLanguage);
+
 public record CompanySettingsDto(
     // Company profile
     string? CompanyLegalName,

@@ -21,10 +21,11 @@ import {
   type PodDetail,
   type PodOutcome,
 } from '../types'
+import { formatDateTime as formatDateTimeIso } from '../../../utils/dates'
 import '../components/pod.css'
 
 function formatDateTime(value: string | null): string {
-  return value ? value.slice(0, 16).replace('T', ' ') : '—'
+  return value ? formatDateTimeIso(value) : '—'
 }
 
 const OUTCOMES: PodOutcome[] = ['Complete', 'Partial', 'Refused']

@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button'
 import {
   CONFLICT_SEVERITY_META, TRIP_STATUS_LABELS, TRIP_STATUS_TONE, type TripDetail,
 } from '../../planning/types'
+import { formatDate, formatDateTime } from '../../../utils/dates'
 
 interface TripInspectorProps {
   trip: TripDetail | null
@@ -44,7 +45,7 @@ export function TripInspector({
           <dl className="pc-inspector-facts">
             <div>
               <dt>Datum</dt>
-              <dd>{new Date(`${trip.tripDate}T00:00:00`).toLocaleDateString('nl-BE')}</dd>
+              <dd>{formatDate(trip.tripDate)}</dd>
             </div>
             <div>
               <dt>Chauffeur</dt>
@@ -137,7 +138,7 @@ export function TripInspector({
                 {trip.overrides.map((entry) => (
                   <li key={entry.id}>
                     <span className="pc-muted">
-                      {new Date(entry.occurredAt).toLocaleString('nl-BE')} · {entry.actorName ?? 'Onbekend'}
+                      {formatDateTime(entry.occurredAt)} · {entry.actorName ?? 'Onbekend'}
                     </span>
                     <span>{entry.reason}</span>
                   </li>

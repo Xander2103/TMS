@@ -11,6 +11,7 @@ import {
   LOCATION_SOURCE_LABELS, formatDelay,
   type AlertStatus, type OperationalAlert, type OperationsOverview,
 } from '../types'
+import { formatDateTime } from '../../../utils/dates'
 import './operations.css'
 
 const POLL_INTERVAL_MS = 30_000
@@ -194,7 +195,7 @@ export function OperationsPage() {
                   <div className="ops-alert-top">
                     <Badge tone={meta.tone}>{meta.label}</Badge>
                     <span className="ops-sub">{ALERT_CATEGORY_LABELS[alert.category] ?? alert.category}</span>
-                    <span className="ops-sub">{new Date(alert.createdAt).toLocaleString('nl-BE')}</span>
+                    <span className="ops-sub">{formatDateTime(alert.createdAt)}</span>
                   </div>
                   <strong>{alert.title}</strong>
                   <p>{alert.message}</p>

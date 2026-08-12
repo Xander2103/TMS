@@ -20,10 +20,11 @@ import {
   type NotificationCategory,
   type NotificationPreference,
 } from '../api/notificationsApi'
+import { formatDateTime } from '../../../utils/dates'
 import './notifications.css'
 
 function formatMoment(value: string): string {
-  return value.slice(0, 16).replace('T', ' ')
+  return formatDateTime(value)
 }
 
 export function NotificationsPage() {

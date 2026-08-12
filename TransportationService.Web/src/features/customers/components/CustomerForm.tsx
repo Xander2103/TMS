@@ -18,6 +18,7 @@ import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { validateVatNumber } from '../utils/vatNumber'
 import { resolveRateOptions } from '../utils/vatTreatment'
+import { formatDateTime } from '../../../utils/dates'
 import { PeppolFieldGroup } from './PeppolFieldGroup'
 import { combinePeppolValue, peppolFormatError } from '../utils/peppolValue'
 import { CUSTOMER_SECTION_FIELD_KEYS, isKlantgegevensFieldKey } from './customerSections'
@@ -135,10 +136,6 @@ type PeppolVerifyState =
   | { kind: 'busy' }
   | { kind: 'error'; message: string }
   | { kind: 'result'; result: CustomerPeppolVerifyResult }
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
-}
 
 export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, editPanels, stagedLocationsSlot }: CustomerFormProps) {
   const languages = useLookupOptions('/api/languages')

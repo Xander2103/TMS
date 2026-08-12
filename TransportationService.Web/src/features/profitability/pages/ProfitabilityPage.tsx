@@ -13,6 +13,7 @@ import {
   COST_TYPE_LABELS, DIMENSION_LABELS, REVENUE_SOURCE_LABELS, formatEuro, marginTone,
   type ProfitabilityDimension, type ProfitabilityGroup, type ProfitabilityOverview, type TripExplanation,
 } from '../types'
+import { formatDate } from '../../../utils/dates'
 import './profitability.css'
 
 function isoDaysAgo(days: number): string {
@@ -156,7 +157,7 @@ export function ProfitabilityPage() {
               {(overview?.trips ?? []).map((trip) => (
                 <tr key={trip.tripId}>
                   <td><strong>{trip.tripNumber}</strong>{trip.isFinalized && <span className="pf-note"> ✓ afgerond</span>}</td>
-                  <td>{new Date(`${trip.tripDate}T00:00:00`).toLocaleDateString('nl-BE')}</td>
+                  <td>{formatDate(trip.tripDate)}</td>
                   <td>{trip.customerSummary ?? '—'}</td>
                   <td>{trip.driverName ?? '—'}</td>
                   <td>

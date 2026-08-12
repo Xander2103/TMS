@@ -25,6 +25,7 @@ import {
   type PlanningResources, type UnplannedOrder,
 } from '../types'
 import { shiftAnchor, toIsoDate, viewDates, type BoardViewDays } from '../utils/boardMath'
+import { formatDate } from '../../../utils/dates'
 import './planning-center.css'
 
 const FILTER_STORAGE_KEY = 'ts.planningCenter.filters'
@@ -304,7 +305,7 @@ export function PlanningCenterPage() {
       void runMutation(
         () => rescheduleTrip(payload.id, dateIso, null, null, payload.version),
         {
-          success: `${payload.label} verplaatst naar ${new Date(`${dateIso}T00:00:00`).toLocaleDateString('nl-BE')}.`,
+          success: `${payload.label} verplaatst naar ${formatDate(dateIso)}.`,
           reloadResources: true,
           overrideRetry: (reason) => rescheduleTrip(payload.id, dateIso, null, null, payload.version, true, reason),
         },
@@ -475,7 +476,7 @@ export function PlanningCenterPage() {
                   )
                 }}
               >
-                <strong>{trip.tripNumber}</strong> · {new Date(`${trip.tripDate}T00:00:00`).toLocaleDateString('nl-BE')}
+                <strong>{trip.tripNumber}</strong> · {formatDate(trip.tripDate)}
                 {trip.driverName ? ` · ${trip.driverName}` : ''} · {trip.orderCount} opdr.
               </button>
             ))}

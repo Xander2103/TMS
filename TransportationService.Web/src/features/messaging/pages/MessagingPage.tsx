@@ -10,6 +10,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { apiClient, ApiError } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
+import { formatDateTime } from '../../../utils/dates'
 import './messaging.css'
 
 type MessageChannel = 'Email' | 'Sms'
@@ -223,7 +224,7 @@ export function MessagingPage() {
         <tbody>
           {(outbox?.items ?? []).map((row) => (
             <tr key={row.id}>
-              <td>{row.createdAt.slice(0, 16).replace('T', ' ')}</td>
+              <td>{formatDateTime(row.createdAt)}</td>
               <td>
                 {row.channel === 'Email' ? '✉' : '📱'} {row.channel}
                 {row.isFallback && <Badge tone="warning">fallback</Badge>}

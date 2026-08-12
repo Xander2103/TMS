@@ -32,6 +32,7 @@ import {
   type MessagePriority,
   type MessageRecipientOption,
 } from '../api/inboxApi'
+import { formatDateTime } from '../../../utils/dates'
 import './inbox.css'
 
 const PRIORITY_LABELS: Record<MessagePriority, string> = { Normal: 'Normaal', High: 'Hoog', Urgent: 'Dringend' }
@@ -46,7 +47,7 @@ const EMAIL_STATUS_LABELS: Record<EmailDeliveryStatus, string> = {
 }
 
 function formatTimestamp(value: string): string {
-  return value.slice(0, 16).replace('T', ' ')
+  return formatDateTime(value)
 }
 
 function fromDateTimeLocal(value: string): string | null {
