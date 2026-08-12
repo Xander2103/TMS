@@ -6,7 +6,8 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { createTrip, listTrips } from '../api/planningApi'
+import { createTrip, getPlanningProposals, listTrips, type PlanningProposals, type TourProposal } from '../api/planningApi'
+import { describeApiError } from '../../../api/problemDetails'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE, TRIP_STATUSES, type TripListItem, type TripStatus } from '../types'
 import './planning.css'
 
@@ -156,6 +157,102 @@ export function PlanningPage() {
           </tbody>
         </table>
       )}
+
+      <TourProposalsPanel />
     </div>
+  )
+}
+
+/**
+ * Wave 7: transparante ritvoorstellen — te plannen orders per leverzone (zelfde zoneconcept
+ * als de prijzen), achterstand eerst, elke uitsluiting met reden. "Maak rit" gebruikt de
+ * gewone rit-aanmaak, dus alle conflict- en rechtenlogica geldt onverkort.
+ */
+function TourProposalsPanel() {
+  const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+  const { showSuccess, showError } = useToast()
+  const canCreate = hasPermission('planning.create')
+
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [proposals, setProposals] = useState<PlanningProposals | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    getPlanningProposals(date)
+      .then(setProposals)
+      .catch(() => setProposals(null))
+  }, [date])
+
+  async function accept(proposal: TourProposal) {
+    setBusy(true)
+    try {
+      const trip = await createTrip({
+        tripDate: date, driverId: null, vehicleId: null, trailerId: null,
+        plannedStart: null, plannedEnd: null,
+        notes: `Voorstel zone ${proposal.zoneCode}`,
+        orderIds: proposal.orders.map((o) => o.transportOrderId),
+        plannedDistanceKm: null, plannedEmptyKm: null,
+      })
+      showSuccess(`Rit ${trip.tripNumber} aangemaakt met ${proposal.orders.length} order(s).`)
+      navigate(`/trips/${trip.id}`)
+    } catch (err) {
+      showError(describeApiError(err, 'De rit kon niet worden aangemaakt.').message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="ui-form-section">
+      <div className="wh-trace-bar">
+        <h2 style={{ margin: 0 }}>Ritvoorstellen</h2>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="Voorsteldatum" />
+      </div>
+      {proposals === null && <p className="placeholder-text">Voorstellen laden…</p>}
+      {proposals !== null && proposals.proposals.length === 0 && (
+        <p className="placeholder-text">Geen te plannen orders voor deze datum.</p>
+      )}
+      {proposals?.proposals.map((proposal) => (
+        <div key={proposal.zoneCode + proposal.zoneName} className="wh-card">
+          <div className="wh-card-head">
+            <div>
+              <h3 style={{ margin: 0 }}>
+                {proposal.zoneName} {proposal.zoneCode !== '—' && <code>{proposal.zoneCode}</code>}
+              </h3>
+              <p className="wh-muted">
+                {proposal.orders.length} order(s) · {proposal.totalWeightKg.toFixed(0)} kg
+                {proposal.totalLoadingMeters > 0 && ` · ${proposal.totalLoadingMeters.toFixed(1)} ldm`}
+                {proposal.totalPallets > 0 && ` · ${proposal.totalPallets} pallets`}
+              </p>
+            </div>
+            {canCreate && proposal.zoneCode !== '—' && (
+              <Button variant="secondary" disabled={busy} onClick={() => void accept(proposal)}>
+                Maak rit
+              </Button>
+            )}
+          </div>
+          {proposal.explanations.map((line, index) => (
+            <p key={index} className="wh-muted">{line}</p>
+          ))}
+          <p>
+            {proposal.orders.map((order) => (
+              <span key={order.transportOrderId} style={{ marginRight: 12 }}>
+                {order.overdue && <Badge tone="warning">achterstand</Badge>}{' '}
+                <code>{order.orderNumber}</code> {order.deliveryCity ?? ''} {order.deliveryPostalCode ?? ''}
+              </span>
+            ))}
+          </p>
+        </div>
+      ))}
+      {proposals !== null && proposals.excluded.length > 0 && (
+        <div className="wh-card">
+          <h3 style={{ margin: 0 }}>Niet voorgesteld</h3>
+          {proposals.excluded.map((reason, index) => (
+            <p key={index} className="wh-muted">{reason}</p>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }

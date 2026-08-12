@@ -61,6 +61,15 @@ public class TripsController : ControllerBase
     private ObjectResult AssignForbidden() => StatusCode(StatusCodes.Status403Forbidden,
         new { message = "Je hebt geen recht om opdrachten aan ritten te koppelen (orders.assign)." });
 
+    /// <summary>Wave 7: transparent tour proposals — accepting one is simply POST /api/trips
+    /// with the proposal's order ids (all existing conflict/permission machinery applies).</summary>
+    [HttpGet("/api/planning/proposals")]
+    [RequirePermission(PermissionCodes.PlanningView)]
+    public async Task<ActionResult<PlanningProposalsDto>> Proposals(
+        [FromQuery] DateOnly? date, [FromServices] IPlanningProposalService proposals, CancellationToken cancellationToken)
+        => Ok(await proposals.GetProposalsAsync(
+            date ?? DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken));
+
     [HttpPost]
     [RequirePermission(PermissionCodes.PlanningCreate)]
     public async Task<ActionResult<TripDetailDto>> Create(CreateTripRequest request, CancellationToken cancellationToken)
