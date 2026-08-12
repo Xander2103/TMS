@@ -32,6 +32,7 @@ const DashboardPage = lazyPage(() => import('../features/dashboard/pages/Dashboa
 const TransportOrdersPage = lazyPage(() => import('../features/transport-orders/pages/TransportOrdersPage'), 'TransportOrdersPage')
 const NewTransportOrderPage = lazyPage(() => import('../features/transport-orders/pages/NewTransportOrderPage'), 'NewTransportOrderPage')
 const TransportOrderDetailPage = lazyPage(() => import('../features/transport-orders/pages/TransportOrderDetailPage'), 'TransportOrderDetailPage')
+const OrderImportsPage = lazyPage(() => import('../features/order-imports/pages/OrderImportsPage'), 'OrderImportsPage')
 const PlanningPage = lazyPage(() => import('../features/planning/pages/PlanningPage'), 'PlanningPage')
 const PlanningCenterPage = lazyPage(() => import('../features/planning-center/pages/PlanningCenterPage'), 'PlanningCenterPage')
 const OperationsPage = lazyPage(() => import('../features/operations/pages/OperationsPage'), 'OperationsPage')
@@ -194,6 +195,7 @@ const router = createBrowserRouter(
           <Route path="/transport-orders" element={<TransportOrdersPage />} />
           <Route path="/transport-orders/new" element={<NewTransportOrderPage />} />
           <Route path="/transport-orders/:id" element={<TransportOrderDetailPage />} />
+          <Route path="/order-imports" element={<OrderImportsPage />} />
           <Route path="/planning" element={<PlanningPage />} />
           <Route path="/planning-center" element={<PlanningCenterPage />} />
           <Route path="/operations" element={<OperationsPage />} />

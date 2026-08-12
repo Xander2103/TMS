@@ -94,6 +94,7 @@ describe('getNavModules — §14 target tree', () => {
     expect(dossiers.items!.map((i) => [i.to, i.label])).toEqual([
       ['/dossiers', 'Dossiers'],
       ['/transport-orders', 'Opdrachten (klassiek)'],
+      ['/order-imports', 'Excel-import'],
     ])
   })
 

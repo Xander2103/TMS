@@ -161,6 +161,7 @@ export function getNavModules(): NavModule[] {
         // opdrachtenlijst blijft als secundaire ingang bestaan.
         { label: 'Dossiers', to: '/dossiers', permissions: ['dossiers.view', 'dossiers.manage'] },
         { label: 'Opdrachten (klassiek)', to: '/transport-orders', permissions: ['orders.view', 'orders.manage'] },
+        { label: 'Excel-import', to: '/order-imports', permissions: ['orders.create', 'orders.manage'] },
       ],
     },
     {

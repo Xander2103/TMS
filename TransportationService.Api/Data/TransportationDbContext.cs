@@ -82,6 +82,9 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Edi.Entities.TradingPartner> TradingPartners => Set<TransportationService.Api.Modules.Edi.Entities.TradingPartner>();
     public DbSet<TransportationService.Api.Modules.Edi.Entities.EdiPartnerLocation> EdiPartnerLocations => Set<TransportationService.Api.Modules.Edi.Entities.EdiPartnerLocation>();
     public DbSet<TransportationService.Api.Modules.Edi.Entities.EdiMessage> EdiMessages => Set<TransportationService.Api.Modules.Edi.Entities.EdiMessage>();
+    public DbSet<TransportationService.Api.Modules.OrderImport.Entities.OrderImportProfile> OrderImportProfiles => Set<TransportationService.Api.Modules.OrderImport.Entities.OrderImportProfile>();
+    public DbSet<TransportationService.Api.Modules.OrderImport.Entities.OrderImportBatch> OrderImportBatches => Set<TransportationService.Api.Modules.OrderImport.Entities.OrderImportBatch>();
+    public DbSet<TransportationService.Api.Modules.OrderImport.Entities.OrderImportRow> OrderImportRows => Set<TransportationService.Api.Modules.OrderImport.Entities.OrderImportRow>();
     public DbSet<TransportationService.Api.Modules.Integrations.Entities.CalendarSyncItem> CalendarSyncItems => Set<TransportationService.Api.Modules.Integrations.Entities.CalendarSyncItem>();
     public DbSet<TransportationService.Api.Modules.Identity.Entities.RoleTemplateState> RoleTemplateStates => Set<TransportationService.Api.Modules.Identity.Entities.RoleTemplateState>();
     public DbSet<TransportationService.Api.Modules.Packages.Entities.Package> Packages => Set<TransportationService.Api.Modules.Packages.Entities.Package>();

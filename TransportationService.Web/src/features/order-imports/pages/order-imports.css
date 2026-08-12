@@ -1,0 +1,56 @@
+.oi-upload-card {
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  background: var(--color-surface, #fff);
+}
+
+.oi-upload-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+}
+
+.oi-upload-form > * {
+  min-width: 200px;
+}
+
+.oi-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  white-space: nowrap;
+}
+
+.oi-form-error {
+  color: var(--color-danger, #b91c1c);
+  margin-top: 8px;
+}
+
+.oi-detail {
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-top: 16px;
+}
+
+.oi-detail h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.oi-row-error {
+  color: var(--color-danger, #b91c1c);
+}
+
+.oi-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-primary, #2563eb);
+  cursor: pointer;
+  text-decoration: underline;
+}
