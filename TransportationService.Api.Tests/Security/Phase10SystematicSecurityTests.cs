@@ -31,6 +31,12 @@ public class Phase10SystematicSecurityTests
         "AuthController.Me",
         "MeController.ChangePassword",
 
+        // Regional display preferences (settings/system wave): presentation configuration
+        // only (date format, separators, timezone, language) — deliberately available to
+        // every signed-in user because the central date formatter needs it app-wide.
+        // Nothing sensitive is exposed; writes stay behind company_settings.manage.
+        "CompanySettingsController.Display",
+
         // Employee self-service portal: every query resolves the caller's OWN employee link
         // (MyEmployeeIdAsync) — no foreign id is accepted anywhere.
         "MeController.Profile",
