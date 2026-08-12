@@ -85,3 +85,153 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Systeeminformatie: definitielijst binnen een instellingenkaart. */
+.sysinfo-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px 24px;
+  align-items: baseline;
+}
+
+.sysinfo-list dt {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.sysinfo-list dd {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-h);
+  min-width: 0;
+}
+
+.sysinfo-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.sysinfo-truncate {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.sysinfo-latency {
+  margin-left: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* Back-ups: retentiebanner + opslagwaarschuwing. */
+.sysbackups-banner {
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--text-h);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.sysbackups-storage-warning {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--text-h);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.sysbackups-note {
+  font-size: 13px;
+  color: var(--text);
+  margin: -8px 0 16px;
+}
+
+.sysbackups-schema {
+  display: inline-block;
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.sysbackups-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.sysbackups-row-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.sysbackups-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.sysbackups-link:disabled {
+  color: var(--text);
+  opacity: 0.5;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.sysbackups-link-danger {
+  color: var(--danger);
+}
+
+/* Terugzetten: rode waarschuwing + bevestigingsveld in de modal. */
+.sysbackups-restore-warning {
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--text-h);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin: 16px 0;
+}
+
+.sysbackups-restore-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.sysbackups-restore-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.sysbackups-restore-success {
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--text-h);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  margin-top: 16px;
+}
