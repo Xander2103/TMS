@@ -54,6 +54,7 @@ const TIME_CONDITION_KIND_LABELS: Record<ServiceTimeCondition['kind'], string> =
   StopTimeAfter: 'Na een uur',
   AppointmentRequired: 'Afspraak verplicht',
   Weekend: 'Weekend',
+  Holiday: 'Feestdag',
 }
 
 const TIME_CONDITION_SCOPE_LABELS: Record<ServiceTimeCondition['stopScope'], string> = {
@@ -73,7 +74,9 @@ function timeConditionSummary(condition: ServiceTimeCondition): string {
         ? `${scope} na ${time ?? '?'}`
         : condition.kind === 'AppointmentRequired'
           ? `${scope}: afspraak verplicht`
-          : `${scope}: weekend`
+          : condition.kind === 'Holiday'
+            ? `${scope}: feestdag`
+            : `${scope}: weekend`
   const extras = [
     condition.priority !== 0 ? `prioriteit ${condition.priority}` : null,
     condition.allowStacking ? 'stapelt' : null,
@@ -92,6 +95,7 @@ const VALUE_LABEL_BY_KIND: Partial<Record<SurchargeKind, string>> = {
   PerLdm: 'Standaardprijs per laadmeter (€)',
   PerDay: 'Standaardprijs per dag (€)',
   PerPalletDay: 'Standaardprijs per pallet/dag (€)',
+  PerKm: 'Standaardprijs per km (€)',
 }
 
 /**

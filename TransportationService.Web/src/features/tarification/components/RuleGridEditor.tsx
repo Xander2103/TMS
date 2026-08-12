@@ -66,6 +66,7 @@ function ruleToInput(rule: PriceRule): PriceRuleInput {
     maximumAmount: rule.maximumAmount,
     bracketMode: rule.bracketMode,
     salesCategoryId: rule.salesCategoryId,
+    originZoneId: rule.originZoneId,
   }
 }
 
@@ -285,6 +286,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                 <th>Basis</th>
                 <th>Eenheid</th>
                 <th>Zone</th>
+                <th title="Herkomstzone: de regel geldt alleen als de eerste laadstop in deze zone valt; leeg = elke herkomst">Van zone</th>
                 <th>Prioriteit</th>
                 <th>Prijs / staffelprijs</th>
                 <th>Extra / eenheid</th>
@@ -373,6 +375,21 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           value={rule.zoneId ?? ''}
                           disabled={!canManage}
                           onChange={(e) => void saveRule(rule, { zoneId: e.target.value || null })}
+                        >
+                          <option value="">— Alle —</option>
+                          {zones.map((zone) => (
+                            <option key={zone.id} value={zone.id}>
+                              {zone.code}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          aria-label={`Herkomstzone voor ${rule.name}`}
+                          value={rule.originZoneId ?? ''}
+                          disabled={!canManage}
+                          onChange={(e) => void saveRule(rule, { originZoneId: e.target.value || null })}
                         >
                           <option value="">— Alle —</option>
                           {zones.map((zone) => (
@@ -563,7 +580,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         <Fragment key={bracket.id ?? `${rule.id}-bracket-${index}`}>
                         <tr className="rule-grid-bracket-row">
                           <td>↳ Staffel {bracketRangeLabel(bracket)}</td>
-                          <td colSpan={4}>—</td>
+                          <td colSpan={5}>—</td>
                           <td>
                             <input
                               aria-label={`Staffel ${index + 1} van ${rule.name} prijs`}
@@ -684,7 +701,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                             <td>
                               ↳ <Badge tone="info">Klantafwijking</Badge> <span>{override.customerName}</span>
                             </td>
-                            <td colSpan={4}>—</td>
+                            <td colSpan={5}>—</td>
                             <td>€ {override.price.toFixed(2)}</td>
                             <td>{override.pricePerExtraUnit !== null ? `€ ${override.pricePerExtraUnit.toFixed(2)}` : '—'}</td>
                             <td colSpan={5}>—</td>
@@ -712,7 +729,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         .filter((o) => o.orphaned)
                         .map((override) => (
                           <tr key={override.id} className="rule-grid-bracket-row rule-grid-override-row">
-                            <td colSpan={20}>
+                            <td colSpan={21}>
                               ⚠ Klantafwijking van {override.customerName} (staffel {override.fromQuantity}–
                               {override.toQuantity ?? 'open'}) verwijst naar een rij die niet meer bestaat en wordt niet
                               toegepast.
@@ -732,7 +749,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         ))}
                     {expanded && canManage && (
                       <tr className="rule-grid-bracket-row">
-                        <td colSpan={21}>
+                        <td colSpan={22}>
                           <button type="button" className="issued-items-link" onClick={() => addBracket(rule)}>
                             + Staffelrij
                           </button>

@@ -10,6 +10,7 @@ export type SurchargeKind =
   | 'PerLdm'
   | 'PerDay'
   | 'PerPalletDay'
+  | 'PerKm'
 
 export const SURCHARGE_KIND_LABELS: Record<SurchargeKind, string> = {
   Fixed: 'Vast bedrag',
@@ -23,6 +24,7 @@ export const SURCHARGE_KIND_LABELS: Record<SurchargeKind, string> = {
   PerLdm: 'Per laadmeter',
   PerDay: 'Per dag',
   PerPalletDay: 'Per pallet/dag',
+  PerKm: 'Per km (bv. Maut)',
 }
 
 /** Calculation bases that need a managed unit (Kind == 'PerUnit' only, e.g. Colli, Pallet). */

@@ -402,7 +402,7 @@ export interface OrderPricingSnapshot {
 export interface OrderServiceLine {
   serviceOptionId: string | null
   name: string
-  kind: 'Percent' | 'Fixed' | 'PerHour' | 'PerStop' | 'PerUnit' | 'PerOrderLine' | 'PerKg' | 'PerM3' | 'PerLdm' | 'PerDay' | 'PerPalletDay'
+  kind: 'Percent' | 'Fixed' | 'PerHour' | 'PerStop' | 'PerUnit' | 'PerOrderLine' | 'PerKg' | 'PerM3' | 'PerLdm' | 'PerDay' | 'PerPalletDay' | 'PerKm'
   value: number
   amount: number
   quantity?: number | null

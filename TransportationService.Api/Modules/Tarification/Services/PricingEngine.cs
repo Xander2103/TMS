@@ -40,6 +40,11 @@ public class PricingEngine : IPricingEngine
         string? configurationError = null;
 
         var zone = await ResolveZoneAsync(request.DeliveryCountryCode, request.DeliveryPostalCode, cancellationToken);
+        // Wave 3 §2: the origin (first loading stop) resolves through the same zone mechanism;
+        // a rule with OriginZoneId only matches when the origin lands in that zone.
+        var originZone = await ResolveZoneAsync(request.OriginCountryCode, request.OriginPostalCode, cancellationToken);
+        bool OriginMatches(PriceRule rule) =>
+            rule.OriginZoneId == null || (originZone is not null && rule.OriginZoneId == originZone.Id);
 
         var unitTypeIds = request.Lines.Select(l => l.UnitTypeId).Distinct().ToList();
         var unitNames = await _dbContext.UnitTypes.AsNoTracking()
@@ -214,6 +219,7 @@ public class PricingEngine : IPricingEngine
             var unitName = unitNames.GetValueOrDefault(line.UnitTypeId, "eenheid");
             var forUnit = allCandidates
                 .Where(c => c.Rule.UnitTypeId == line.UnitTypeId && (c.Rule.ZoneId == null || (zone is not null && c.Rule.ZoneId == zone.Id)))
+                .Where(c => OriginMatches(c.Rule))
                 .ToList();
             var (candidate, conflicts) = SelectRule(forUnit);
             if (conflicts is not null)
@@ -278,6 +284,7 @@ public class PricingEngine : IPricingEngine
                             or PriceRuleBasis.PerTon or PriceRuleBasis.WeightBracket
                             or PriceRuleBasis.PerLoadingMeter or PriceRuleBasis.PerVolume or PriceRuleBasis.PerStop
                         && (c.Rule.ZoneId == null || (zone is not null && c.Rule.ZoneId == zone.Id)))
+            .Where(c => OriginMatches(c.Rule))
             .ToList();
 
         if (anyRuleMatched)
@@ -715,6 +722,16 @@ public class PricingEngine : IPricingEngine
         // --- Wave 2026-08-04 §16/§17: time-based stop conditions -------------------------------
         var stopTimes = request.StopTimes ?? [];
 
+        // Wave 3 §4: tenant holidays feed the Holiday condition — loaded once per calculation,
+        // only for the dates the stops actually mention.
+        var stopDates = stopTimes.Where(s => s.PlannedDate is not null).Select(s => s.PlannedDate!.Value).Distinct().ToList();
+        var holidayDates = stopDates.Count == 0
+            ? new HashSet<DateOnly>()
+            : (await _dbContext.TenantHolidays.AsNoTracking()
+                .Where(hd => hd.TenantId == tenantId && stopDates.Contains(hd.Date))
+                .Select(hd => hd.Date)
+                .ToListAsync(cancellationToken)).ToHashSet();
+
         bool ScopeMatches(ServiceConditionStopScope scope, StopTimeInput stop) =>
             scope == ServiceConditionStopScope.Any
             || (scope == ServiceConditionStopScope.Unloading) == stop.IsUnloading;
@@ -733,6 +750,8 @@ public class PricingEngine : IPricingEngine
                 ScopeMatches(row.StopScope, s) && s.AppointmentRequired),
             ServiceConditionKind.Weekend => stopTimes.Any(s => ScopeMatches(row.StopScope, s)
                 && s.PlannedDate is { } day && day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday),
+            ServiceConditionKind.Holiday => stopTimes.Any(s => ScopeMatches(row.StopScope, s)
+                && s.PlannedDate is { } holidayDay && holidayDates.Contains(holidayDay)),
             _ => true,
         };
 
@@ -994,6 +1013,21 @@ public class PricingEngine : IPricingEngine
                 quantity = qty;
                 amount = decimal.Round(value * qty.Value, 2);
                 label = $"{option.Name} ({qty.Value:0.##} ldm)";
+            }
+            else if (option.Kind == SurchargeKind.PerKm)
+            {
+                // Wave 3 §3 (Maut as sales concept): amount = tarief × orderafstand.
+                var qty = enteredQuantity is { } q6 && q6 > 0 ? q6 : request.DistanceKm;
+                // Explicit 0 km treated the same as unknown — no silent €0 charge line.
+                if (qty is null or <= 0)
+                {
+                    lines.Add(new PriceBreakdownLine($"{option.Name}: geen afstand gekend", 0m, source, Informational: true));
+                    continue;
+                }
+
+                quantity = qty;
+                amount = decimal.Round(value * qty.Value, 2);
+                label = $"{option.Name} ({qty.Value:0.##} km)";
             }
             else if (option.Kind is SurchargeKind.PerDay or SurchargeKind.PerPalletDay)
             {
@@ -1325,7 +1359,11 @@ public class PricingEngine : IPricingEngine
             return (null, null);
         }
 
-        int Score(RuleCandidate candidate) => candidate.Tier * 4 + (candidate.Rule.ZoneId is not null ? 2 : 0);
+        // Specificity: tier dominates; destination zone beats origin zone (Wave 3 §2 — max
+        // combined zone bonus 3 stays below one tier step of 4).
+        int Score(RuleCandidate candidate) => candidate.Tier * 4
+            + (candidate.Rule.ZoneId is not null ? 2 : 0)
+            + (candidate.Rule.OriginZoneId is not null ? 1 : 0);
 
         var ordered = candidates.OrderByDescending(Score).ThenByDescending(c => c.Rule.Priority).ToList();
         var top = ordered.Where(c => Score(c) == Score(ordered[0]) && c.Rule.Priority == ordered[0].Rule.Priority).ToList();

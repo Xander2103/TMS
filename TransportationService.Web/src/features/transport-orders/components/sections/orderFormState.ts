@@ -97,6 +97,7 @@ export const SERVICE_KIND_LABELS: Record<ServiceOption['kind'], string> = {
   PerLdm: 'Per laadmeter',
   PerDay: 'Per dag',
   PerPalletDay: 'Per pallet-dag',
+  PerKm: 'Per km',
 }
 
 export function numberOrNullFrom(value: string): number | null {

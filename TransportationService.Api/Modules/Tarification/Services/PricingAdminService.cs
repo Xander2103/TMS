@@ -63,6 +63,11 @@ public interface IPricingAdminService
     Task<ServiceOptionDto?> UpdateServiceOptionAsync(Guid id, SaveServiceOptionRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteServiceOptionAsync(Guid id, CancellationToken cancellationToken);
 
+    // Wave 3 §4: tenant holidays driving Holiday time surcharges.
+    Task<IReadOnlyList<TenantHolidayDto>> ListHolidaysAsync(CancellationToken cancellationToken);
+    Task<TenantHolidayDto> CreateHolidayAsync(SaveTenantHolidayRequest request, CancellationToken cancellationToken);
+    Task<bool> DeleteHolidayAsync(Guid id, CancellationToken cancellationToken);
+
     Task<CustomerPricingConfigDto?> GetCustomerConfigAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerPricingConfigDto?> SaveCustomerConfigAsync(Guid customerId, SaveCustomerPricingConfigRequest request, CancellationToken cancellationToken);
 
@@ -1391,6 +1396,55 @@ public class PricingAdminService : IPricingAdminService
         return true;
     }
 
+    // --- Tenant holidays (Wave 3 §4) ---
+
+    public async Task<IReadOnlyList<TenantHolidayDto>> ListHolidaysAsync(CancellationToken cancellationToken) =>
+        await _dbContext.TenantHolidays.AsNoTracking()
+            .Where(h => h.TenantId == TenantId)
+            .OrderBy(h => h.Date)
+            .Select(h => new TenantHolidayDto(h.Id, h.Date, h.Name))
+            .ToListAsync(cancellationToken);
+
+    public async Task<TenantHolidayDto> CreateHolidayAsync(SaveTenantHolidayRequest request, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new DomainValidationException("name", "De naam van de feestdag is verplicht.");
+        }
+
+        if (await _dbContext.TenantHolidays.AnyAsync(
+                h => h.TenantId == TenantId && h.Date == request.Date, cancellationToken))
+        {
+            throw new DomainValidationException("date", "Voor deze datum bestaat al een feestdag.");
+        }
+
+        var holiday = new TenantHoliday
+        {
+            Id = Guid.NewGuid(), TenantId = TenantId, Date = request.Date, Name = request.Name.Trim(),
+        };
+        _dbContext.TenantHolidays.Add(holiday);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("TenantHoliday", holiday.Id.ToString(), "Created", null,
+            new { holiday.Date, holiday.Name }, cancellationToken);
+        return new TenantHolidayDto(holiday.Id, holiday.Date, holiday.Name);
+    }
+
+    public async Task<bool> DeleteHolidayAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var holiday = await _dbContext.TenantHolidays.FirstOrDefaultAsync(
+            h => h.TenantId == TenantId && h.Id == id, cancellationToken);
+        if (holiday is null)
+        {
+            return false;
+        }
+
+        _dbContext.Remove(holiday);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("TenantHoliday", holiday.Id.ToString(), "Deleted",
+            new { holiday.Date, holiday.Name }, null, cancellationToken);
+        return true;
+    }
+
     // --- Customer pricing configuration ---
 
     public async Task<CustomerPricingConfigDto?> GetCustomerConfigAsync(Guid customerId, CancellationToken cancellationToken)
@@ -1847,6 +1901,13 @@ public class PricingAdminService : IPricingAdminService
 
         await ValidateSalesCategoryAsync(request.SalesCategoryId, cancellationToken);
 
+        if (request.OriginZoneId is { } originZoneId
+            && !await _dbContext.PricingZones.AnyAsync(
+                z => z.TenantId == TenantId && z.Id == originZoneId, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("zone van herkomst");
+        }
+
         var orderMeasureBasis = request.Basis
             is PriceRuleBasis.Fixed or PriceRuleBasis.PerKm or PriceRuleBasis.PerPallet or PriceRuleBasis.PerTon
             or PriceRuleBasis.PerLoadingMeter or PriceRuleBasis.PerVolume or PriceRuleBasis.PerStop;
@@ -2041,6 +2102,7 @@ public class PricingAdminService : IPricingAdminService
         rule.OversizeWidthCm = request.OversizeWidthCm;
         rule.OversizeBillableFactor = request.OversizeBillableFactor;
         rule.SalesCategoryId = request.SalesCategoryId;
+        rule.OriginZoneId = request.OriginZoneId;
         foreach (var bracket in request.Brackets ?? [])
         {
             var entity = new PriceRuleBracket
@@ -2237,7 +2299,9 @@ public class PricingAdminService : IPricingAdminService
         var tenantId = TenantId;
         var customerIds = rules.Where(r => r.CustomerId.HasValue).Select(r => r.CustomerId!.Value).Distinct().ToList();
         var unitIds = rules.Where(r => r.UnitTypeId.HasValue).Select(r => r.UnitTypeId!.Value).Distinct().ToList();
-        var zoneIds = rules.Where(r => r.ZoneId.HasValue).Select(r => r.ZoneId!.Value).Distinct().ToList();
+        var zoneIds = rules.Where(r => r.ZoneId.HasValue).Select(r => r.ZoneId!.Value)
+            .Concat(rules.Where(r => r.OriginZoneId.HasValue).Select(r => r.OriginZoneId!.Value))
+            .Distinct().ToList();
         var agreementIds = rules.Where(r => r.AgreementId.HasValue).Select(r => r.AgreementId!.Value).Distinct().ToList();
 
         var customers = await _dbContext.Customers.AsNoTracking()
@@ -2279,7 +2343,9 @@ public class PricingAdminService : IPricingAdminService
             rule.MinimumQuantity, rule.QuantityRoundingStep,
             rule.MaximumAmount, rule.BracketMode,
             rule.SalesCategoryId,
-            rule.SalesCategoryId is { } rscid ? salesCategoryNames.GetValueOrDefault(rscid) : null))
+            rule.SalesCategoryId is { } rscid ? salesCategoryNames.GetValueOrDefault(rscid) : null,
+            rule.OriginZoneId,
+            rule.OriginZoneId is { } ozid ? zones.GetValueOrDefault(ozid) : null))
             .ToList();
     }
 

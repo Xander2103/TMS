@@ -62,6 +62,12 @@ public record SavePricingAgreementRequest(
     int? IncludedCombinedMinutes = null, decimal? ExtraHourlyRate = null,
     Guid? SalesCategoryId = null);
 
+// --- Tenant holidays (Wave 3 §4: drive Holiday time surcharges) ---
+
+public record TenantHolidayDto(Guid Id, DateOnly Date, string Name);
+
+public record SaveTenantHolidayRequest(DateOnly Date, string Name);
+
 // --- Pricing agreement assignments (shared tables → customers) ---
 
 public record PricingAgreementAssignmentDto(
@@ -94,7 +100,10 @@ public record PriceRuleDto(
     BracketSelectionMode BracketMode = BracketSelectionMode.Absolute,
     /// <summary>Wave 2: sales code for lines priced by this rule (wins over the agreement's).</summary>
     Guid? SalesCategoryId = null,
-    string? SalesCategoryName = null);
+    string? SalesCategoryName = null,
+    /// <summary>Wave 3 §2: origin-zone dimension — set: only matches when the first loading stop lands in this zone.</summary>
+    Guid? OriginZoneId = null,
+    string? OriginZoneName = null);
 
 public record SavePriceRuleBracketRequest(
     decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit,
@@ -108,7 +117,8 @@ public record SavePriceRuleRequest(
     decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null,
     decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null,
     decimal? MaximumAmount = null, BracketSelectionMode BracketMode = BracketSelectionMode.Absolute,
-    Guid? SalesCategoryId = null);
+    Guid? SalesCategoryId = null,
+    Guid? OriginZoneId = null);
 
 // --- Bracket-row customer overrides ("klantafwijkingen") ---
 
@@ -323,6 +333,9 @@ public record PriceCalculationRequest(
     /// <summary>Measured loading/unloading minutes from stop executions, for included-time extra-time proposals.</summary>
     decimal? ActualLoadingMinutes = null,
     decimal? ActualUnloadingMinutes = null,
+    /// <summary>Wave 3 §2: FIRST LOADING stop — resolves the origin zone for O/D-dimension rules.</summary>
+    string? OriginCountryCode = null,
+    string? OriginPostalCode = null,
     /// <summary>
     /// Per-stop (or otherwise combinable) unit groups for combined-unit degression discounts
     /// (spec §29-31). Null/empty => the engine falls back to one "order" group built from

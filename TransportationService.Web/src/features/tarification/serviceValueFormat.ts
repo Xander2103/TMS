@@ -26,6 +26,8 @@ export const formatServiceValue = (kind: SurchargeKind, value: number, unitName?
       return `€ ${value.toFixed(2)}/dag`
     case 'PerPalletDay':
       return `€ ${value.toFixed(2)}/pallet-dag`
+    case 'PerKm':
+      return `€ ${value.toFixed(2)}/km`
     default:
       return `€ ${value.toFixed(2)}`
   }

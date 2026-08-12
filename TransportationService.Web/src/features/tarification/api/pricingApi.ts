@@ -126,6 +126,21 @@ export interface PricingAgreementInput {
   salesCategoryId?: string | null
 }
 
+// --- Tenant holidays (Wave 3 §4: drive Feestdag time surcharges) ---
+
+export interface TenantHoliday {
+  id: string
+  /** "yyyy-MM-dd" */
+  date: string
+  name: string
+}
+
+export const listTenantHolidays = (): Promise<TenantHoliday[]> => apiClient.getJson('/api/pricing/holidays')
+export const createTenantHoliday = (input: { date: string; name: string }): Promise<TenantHoliday> =>
+  apiClient.postJson('/api/pricing/holidays', input)
+export const deleteTenantHoliday = (id: string): Promise<void> =>
+  apiClient.deleteRequest(`/api/pricing/holidays/${id}`)
+
 export const listPricingAgreements = (customerId?: string): Promise<PricingAgreement[]> =>
   apiClient.getJson(`/api/pricing/agreements${customerId ? `?customerId=${customerId}` : ''}`)
 /** Every agreement of the tenant regardless of customer — the "Tarieventabellen" overview. */
@@ -295,6 +310,9 @@ export interface PriceRule {
   /** Wave 2: sales code for lines priced by this rule (wins over the agreement's). */
   salesCategoryId?: string | null
   salesCategoryName?: string | null
+  /** Wave 3 §2: origin-zone dimension — set: only matches when the first loading stop lands in this zone. */
+  originZoneId?: string | null
+  originZoneName?: string | null
 }
 
 export interface PriceRuleBracketInput {
@@ -330,6 +348,7 @@ export interface PriceRuleInput {
   maximumAmount?: number | null
   bracketMode?: BracketSelectionMode
   salesCategoryId?: string | null
+  originZoneId?: string | null
 }
 
 // --- Bracket-row customer overrides ("klantafwijkingen") ---
@@ -419,7 +438,7 @@ export interface ServiceOption {
 
 /** One time-based condition row of a service option (wave 2026-08-04 §16/§17). */
 export interface ServiceTimeCondition {
-  kind: 'StopTimeBefore' | 'StopTimeAfter' | 'AppointmentRequired' | 'Weekend'
+  kind: 'StopTimeBefore' | 'StopTimeAfter' | 'AppointmentRequired' | 'Weekend' | 'Holiday'
   stopScope: 'Any' | 'Loading' | 'Unloading'
   /** "HH:mm[:ss]" — StopTimeBefore/StopTimeAfter only. */
   timeOfDay: string | null
@@ -630,6 +649,9 @@ export interface PricePreviewInput {
   palletCount: number | null
   /** Wave 3 §1: laadmeters — voedt PerLdm-tarieven en ldm-staffelgrenzen. */
   loadingMeters?: number | null
+  /** Wave 3 §2: eerste laadstop — bepaalt de herkomstzone voor O/D-regels. */
+  originCountryCode?: string | null
+  originPostalCode?: string | null
   serviceOptionIds: string[]
   services?: { serviceOptionId: string; quantity: number | null }[]
   /** Drives OnlyForAdr service options. */

@@ -147,9 +147,11 @@ export function useOrderPricePreview(
     oneOffIncludedUnloadingMinutes, oneOffIncludedCombinedMinutes, oneOffExtraHourlyRate, oneOffNotes,
   } = values
   const lastUnloading = [...stops].reverse().find((s) => s.stopType === 'Unloading')
+  const firstLoading = stops.find((s) => s.stopType === 'Loading')
   const previewKey = JSON.stringify([
     customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount, distanceKm, loadingMeters,
-    lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds, serviceQuantities,
+    lastUnloading?.postalCode, lastUnloading?.countryCode, firstLoading?.postalCode, firstLoading?.countryCode,
+    selectedServiceOptionIds, serviceQuantities,
     servicePallets, serviceDays, touchedWarehouseIds,
     adrRequired, cargoItems.map((c) => [c.quantityUnitCode, c.expectedQuantity, c.totalWeightKg, c.palletCount]),
     stops.map((s) => [s.stopType, s.timeRequirement, s.timeReqFrom, s.timeReqTo, s.appointmentRequired, s.date]),
@@ -193,6 +195,8 @@ export function useOrderPricePreview(
         lines,
         deliveryCountryCode: lastUnloading?.countryCode || null,
         deliveryPostalCode: lastUnloading?.postalCode || null,
+        originCountryCode: firstLoading?.countryCode || null,
+        originPostalCode: firstLoading?.postalCode || null,
         weightKg: effectiveWeightKg,
         distanceKm: distanceKm === '' ? null : Number(distanceKm),
         loadingMeters: loadingMeters === '' ? null : Number(loadingMeters),

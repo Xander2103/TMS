@@ -144,4 +144,156 @@ public class PricingGeneralizationTests
             () => h.Orders.UpdateAsync(order.Id, update, CancellationToken.None));
         Assert.Contains("vergrendeld", ex.Message);
     }
+
+    // --- §2: origin zone / O-D dimension -----------------------------------------------------
+
+    private static async Task<Guid> ZoneAsync(Harness h, string code, string postalFrom, string postalTo)
+    {
+        var zone = new PricingZone { Id = Guid.NewGuid(), TenantId = h.TenantId, Code = code, Name = code, IsActive = true };
+        zone.Areas.Add(new PricingZoneArea
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, ZoneId = zone.Id,
+            CountryCode = "BE", PostalCodeFrom = postalFrom, PostalCodeTo = postalTo,
+        });
+        h.Db.Context.PricingZones.Add(zone);
+        await h.Db.Context.SaveChangesAsync();
+        return zone.Id;
+    }
+
+    private static CreateTransportOrderRequest OdRequest(Guid customerId, string loadingPostal) => new(
+        customerId, "REF-1", new DateOnly(2026, 8, 12), "Machinetransport", null, null, null, null, null, false, false,
+        null, null,
+        [
+            new TransportOrderStopInput(StopType.Loading, null, null, null, loadingPostal, "Laadplaats", "BE", null, null, null, null),
+            new TransportOrderStopInput(StopType.Unloading, null, null, null, "3500", "Hasselt", "BE", null, null, null, null),
+        ],
+        DistanceKm: 100);
+
+    [Fact]
+    public async Task OriginZoneRule_AppliesOnlyWhenTheFirstLoadingStopLandsInTheZone()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var antwerpZoneId = await ZoneAsync(h, "ANT", "2000", "2999");
+        // Generic km rate 1.50; Antwerp-origin km rate 2.00 (more specific → wins for Antwerp).
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, null, PriceRuleBasis.PerKm, null,
+            "Km algemeen", new DateOnly(2026, 1, 1), null, true, 1.50m, null, null), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, null, PriceRuleBasis.PerKm, null,
+            "Km vanuit Antwerpen", new DateOnly(2026, 1, 1), null, true, 2.00m, null, null,
+            OriginZoneId: antwerpZoneId), CancellationToken.None);
+
+        var fromAntwerp = await h.Orders.CreateAsync(OdRequest(h.CustomerId, "2000"), CancellationToken.None);
+        Assert.Equal(200.00m, fromAntwerp.Order!.AgreedPrice);
+
+        var fromGhent = await h.Orders.CreateAsync(OdRequest(h.CustomerId, "9000"), CancellationToken.None);
+        Assert.Equal(150.00m, fromGhent.Order!.AgreedPrice);
+    }
+
+    [Fact]
+    public async Task DestinationZone_StaysTheStrongerTiebreaker_OverOriginZone()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var antwerpZoneId = await ZoneAsync(h, "ANT", "2000", "2999");
+        var limburgZoneId = await ZoneAsync(h, "LIM", "3500", "3999");
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, null, PriceRuleBasis.PerKm, limburgZoneId,
+            "Km naar Limburg", new DateOnly(2026, 1, 1), null, true, 3.00m, null, null), CancellationToken.None);
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, null, PriceRuleBasis.PerKm, null,
+            "Km vanuit Antwerpen", new DateOnly(2026, 1, 1), null, true, 2.00m, null, null,
+            OriginZoneId: antwerpZoneId), CancellationToken.None);
+
+        // Both match (origin Antwerpen, destination Limburg): the destination-zone rule wins.
+        var created = await h.Orders.CreateAsync(OdRequest(h.CustomerId, "2000"), CancellationToken.None);
+        Assert.Equal(300.00m, created.Order!.AgreedPrice);
+    }
+
+    // --- §3: Maut as a sales-side PerKm service ----------------------------------------------
+
+    [Fact]
+    public async Task PerKmService_AutoApplies_TimesTheOrderDistance()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            h.CustomerId, null, PriceRuleBasis.PerKm, null,
+            "Kilometertarief", new DateOnly(2026, 1, 1), null, true, 1.50m, null, null), CancellationToken.None);
+        await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "MAUT", "Maut-toeslag", SurchargeKind.PerKm, 0.19m, true, 0, AutoApply: true), CancellationToken.None);
+
+        var created = await h.Orders.CreateAsync(Request(h.CustomerId, distanceKm: 100), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        var maut = await h.Db.Context.TransportOrderServiceLines
+            .SingleAsync(l => l.TransportOrderId == created.Order!.Id);
+        Assert.Equal(19.00m, maut.Amount);
+        Assert.Equal(100m, maut.Quantity);
+        // 100 × 1.50 base + 19.00 Maut.
+        Assert.Equal(169.00m, created.Order.AgreedPrice);
+    }
+
+    [Fact]
+    public async Task PerKmService_WithoutDistance_StaysInformational_NeverASilentZeroCharge()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "MAUT", "Maut-toeslag", SurchargeKind.PerKm, 0.19m, true, 0, AutoApply: true), CancellationToken.None);
+
+        var created = await h.Orders.CreateAsync(Request(h.CustomerId), CancellationToken.None);
+
+        Assert.Equal(TransportOrderOperationOutcome.Success, created.Outcome);
+        Assert.Empty(await h.Db.Context.TransportOrderServiceLines
+            .Where(l => l.TransportOrderId == created.Order!.Id).ToListAsync());
+    }
+
+    // --- §4: holiday calendar ----------------------------------------------------------------
+
+    [Fact]
+    public async Task HolidayCondition_FiresOnAConfiguredHoliday_NotOnOrdinaryDays()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateHolidayAsync(new SaveTenantHolidayRequest(
+            new DateOnly(2026, 11, 11), "Wapenstilstand"), CancellationToken.None);
+        await h.Admin.CreateServiceOptionAsync(new SaveServiceOptionRequest(
+            "FEEST", "Feestdagtoeslag", SurchargeKind.Fixed, 75m, true, 0, AutoApply: true,
+            TimeConditions: [new ServiceTimeConditionDto(ServiceConditionKind.Holiday)]), CancellationToken.None);
+
+        CreateTransportOrderRequest DatedRequest(DateTime plannedUnloading) => new(
+            h.CustomerId, "REF-1", new DateOnly(2026, 11, 10), "Pallets", null, null, null, null, null, false, false,
+            null, null,
+            [
+                Stop(StopType.Loading, "Antwerpen"),
+                new TransportOrderStopInput(StopType.Unloading, null, null, null, "3500", "Hasselt", "BE",
+                    plannedUnloading, plannedUnloading.AddHours(2), null, null),
+            ]);
+
+        var onHoliday = await h.Orders.CreateAsync(
+            DatedRequest(new DateTime(2026, 11, 11, 9, 0, 0)), CancellationToken.None);
+        var holidayLine = await h.Db.Context.TransportOrderServiceLines
+            .SingleAsync(l => l.TransportOrderId == onHoliday.Order!.Id);
+        Assert.Equal(75m, holidayLine.Amount);
+
+        var ordinaryDay = await h.Orders.CreateAsync(
+            DatedRequest(new DateTime(2026, 11, 12, 9, 0, 0)), CancellationToken.None);
+        Assert.Empty(await h.Db.Context.TransportOrderServiceLines
+            .Where(l => l.TransportOrderId == ordinaryDay.Order!.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task HolidayAdmin_RejectsDuplicateDates()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await h.Admin.CreateHolidayAsync(new SaveTenantHolidayRequest(
+            new DateOnly(2026, 12, 25), "Kerstmis"), CancellationToken.None);
+
+        await Assert.ThrowsAsync<TransportationService.Api.Common.DomainValidationException>(
+            () => h.Admin.CreateHolidayAsync(new SaveTenantHolidayRequest(
+                new DateOnly(2026, 12, 25), "Dubbel"), CancellationToken.None));
+    }
 }

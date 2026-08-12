@@ -55,6 +55,23 @@ public class PricingController : ControllerBase
     public async Task<IActionResult> DeleteZone(Guid id, CancellationToken cancellationToken) =>
         await _admin.DeleteZoneAsync(id, cancellationToken) ? NoContent() : NotFound();
 
+    // --- Tenant holidays (Wave 3 §4: drive Holiday time surcharges) ---
+
+    [HttpGet("api/pricing/holidays")]
+    [RequirePermission(PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<IReadOnlyList<TenantHolidayDto>>> ListHolidays(CancellationToken cancellationToken) =>
+        Ok(await _admin.ListHolidaysAsync(cancellationToken));
+
+    [HttpPost("api/pricing/holidays")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<ActionResult<TenantHolidayDto>> CreateHoliday(SaveTenantHolidayRequest request, CancellationToken cancellationToken) =>
+        Ok(await _admin.CreateHolidayAsync(request, cancellationToken));
+
+    [HttpDelete("api/pricing/holidays/{id:guid}")]
+    [RequirePermission(PermissionCodes.TariffsManage)]
+    public async Task<IActionResult> DeleteHoliday(Guid id, CancellationToken cancellationToken) =>
+        await _admin.DeleteHolidayAsync(id, cancellationToken) ? NoContent() : NotFound();
+
     // --- Pricing agreements (rate cards) ---
 
     [HttpGet("api/pricing/agreements")]

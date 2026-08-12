@@ -2044,6 +2044,11 @@ public class TransportOrderService : ITransportOrderService
                 .OrderBy(s => s.Sequence)
                 .ToList();
             var delivery = unloadingStops.LastOrDefault();
+            // Wave 3 §2: the FIRST loading stop resolves the origin zone (O/D-dimension rules).
+            var origin = order.Stops
+                .Where(s => !s.IsDeleted && s.StopType == StopType.Loading)
+                .OrderBy(s => s.Sequence)
+                .FirstOrDefault();
             var (actualLoadingMinutes, actualUnloadingMinutes) = await ComputeActualStopMinutesAsync(order, cancellationToken);
             var oneOff = order.PricingSource == OrderPricingSource.OneOff
                 ? new OneOffPricingInput(
@@ -2127,6 +2132,8 @@ public class TransportOrderService : ITransportOrderService
                 OneOff: oneOff,
                 ActualLoadingMinutes: actualLoadingMinutes,
                 ActualUnloadingMinutes: actualUnloadingMinutes,
+                OriginCountryCode: origin?.CountryCode,
+                OriginPostalCode: origin?.PostalCode,
                 Groups: groups.Count > 0 ? groups : null,
                 WarehouseIds: warehouseIds,
                 IncludedTimeOverrides: includedTimeOverrides,

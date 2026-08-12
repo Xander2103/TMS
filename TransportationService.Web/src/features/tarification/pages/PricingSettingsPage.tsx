@@ -11,15 +11,19 @@ import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   createPricingZone,
+  createTenantHoliday,
   deletePricingZone,
+  deleteTenantHoliday,
   listPricingZones,
+  listTenantHolidays,
   updatePricingZone,
   type PricingZone,
+  type TenantHoliday,
 } from '../api/pricingApi'
 import { ServiceOptionsEditor } from '../components/ServiceOptionsEditor'
 import { UnitTypeMasterEditor } from '../components/UnitTypeMasterEditor'
 
-type TabId = 'zones' | 'diensten' | 'eenheden'
+type TabId = 'zones' | 'diensten' | 'eenheden' | 'feestdagen'
 
 interface ZoneDraft {
   zone: PricingZone | null
@@ -47,6 +51,11 @@ export function PricingSettingsPage() {
   const [deleteZone, setDeleteZone] = useState<PricingZone | null>(null)
   const [busy, setBusy] = useState(false)
 
+  // Wave 3 §4: feestdagen die Feestdag-toeslagcondities voeden.
+  const [holidays, setHolidays] = useState<TenantHoliday[]>([])
+  const [holidayDate, setHolidayDate] = useState('')
+  const [holidayName, setHolidayName] = useState('')
+
   const reload = useCallback(() => {
     listPricingZones()
       .then((zoneData) => {
@@ -54,7 +63,37 @@ export function PricingSettingsPage() {
         setLoadError(null)
       })
       .catch(() => setLoadError('De prijsinstellingen konden niet worden geladen.'))
+    listTenantHolidays()
+      .then(setHolidays)
+      .catch(() => {})
   }, [])
+
+  async function addHoliday(event: FormEvent) {
+    event.preventDefault()
+    if (!holidayDate || !holidayName.trim()) return
+    setBusy(true)
+    try {
+      await createTenantHoliday({ date: holidayDate, name: holidayName.trim() })
+      showSuccess('Feestdag toegevoegd.')
+      setHolidayDate('')
+      setHolidayName('')
+      reload()
+    } catch (err) {
+      showError(describeApiError(err, 'De feestdag kon niet worden toegevoegd.').message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeHoliday(holiday: TenantHoliday) {
+    try {
+      await deleteTenantHoliday(holiday.id)
+      showSuccess('Feestdag verwijderd.')
+      reload()
+    } catch (err) {
+      showError(describeApiError(err, 'De feestdag kon niet worden verwijderd.').message)
+    }
+  }
 
   useEffect(() => {
     reload()
@@ -104,6 +143,7 @@ export function PricingSettingsPage() {
           { id: 'zones', label: 'Zones', badge: zones.length || undefined },
           { id: 'diensten', label: 'Diensten & toeslagen' },
           { id: 'eenheden', label: 'Eenheden' },
+          { id: 'feestdagen', label: 'Feestdagen', badge: holidays.length || undefined },
         ]}
         activeId={tab}
         onChange={(next) => setTab(next as TabId)}
@@ -176,6 +216,66 @@ export function PricingSettingsPage() {
         <TabPanel tabId="eenheden">
           {/* Same editor as Stamgegevens → Eenheden: one source of truth for unit master data. */}
           <UnitTypeMasterEditor />
+        </TabPanel>
+      )}
+
+      {tab === 'feestdagen' && (
+        <TabPanel tabId="feestdagen">
+          <p className="ui-form-section-description">
+            Feestdagen sturen toeslagen met de conditie &lsquo;Feestdag&rsquo; op diensten &amp; toeslagen —
+            een stop gepland op zo&apos;n datum activeert de toeslag, net zoals de weekendconditie.
+          </p>
+          {canManage && (
+            <form className="tof-documents-toolbar" onSubmit={(e) => void addHoliday(e)}>
+              <input
+                type="date"
+                value={holidayDate}
+                onChange={(e) => setHolidayDate(e.target.value)}
+                aria-label="Datum feestdag"
+                disabled={busy}
+              />
+              <input
+                value={holidayName}
+                onChange={(e) => setHolidayName(e.target.value)}
+                placeholder="Naam (bv. Wapenstilstand)"
+                maxLength={200}
+                aria-label="Naam feestdag"
+                disabled={busy}
+              />
+              <Button type="submit" disabled={busy || !holidayDate || !holidayName.trim()}>+ Feestdag</Button>
+            </form>
+          )}
+          {holidays.length === 0 && <p className="placeholder-text">Nog geen feestdagen geconfigureerd.</p>}
+          {holidays.length > 0 && (
+            <table className="issued-items-table">
+              <thead>
+                <tr>
+                  <th>Datum</th>
+                  <th>Naam</th>
+                  {canManage && <th aria-label="Acties" />}
+                </tr>
+              </thead>
+              <tbody>
+                {holidays.map((holiday) => (
+                  <tr key={holiday.id}>
+                    <td>{holiday.date}</td>
+                    <td>{holiday.name}</td>
+                    {canManage && (
+                      <td className="issued-items-row-actions">
+                        <button
+                          type="button"
+                          className="issued-items-link issued-items-link-danger"
+                          onClick={() => void removeHoliday(holiday)}
+                        >
+                          Verwijderen
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </TabPanel>
       )}
 
