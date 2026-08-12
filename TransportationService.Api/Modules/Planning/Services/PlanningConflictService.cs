@@ -564,6 +564,27 @@ public class PlanningConflictService : IPlanningConflictService
             }
         }
 
+        // P10: an ADR order needs a driver actually HOLDING a valid ADR certificate — not just
+        // "no expired qualifications". Name-matched ("ADR") because qualification types are
+        // tenant-defined; a tenant without any ADR type gets the explicit warning instead.
+        var tripNeedsAdr = await _dbContext.TripOrders.AsNoTracking()
+            .Where(to => to.TenantId == tenantId && to.TripId == trip.Id && !to.IsDeleted)
+            .Join(_dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId),
+                to => to.TransportOrderId, o => o.Id, (to, o) => o.AdrRequired)
+            .AnyAsync(adr => adr, cancellationToken);
+        if (tripNeedsAdr)
+        {
+            var hasValidAdr = qualifications.Any(q =>
+                q.Name.Contains("ADR", StringComparison.OrdinalIgnoreCase)
+                && _statusCalculator.CalculateEffectiveStatus(q.Qualification, today, warningDays)
+                    is QualificationStatus.Valid or QualificationStatus.ExpiringSoon);
+            if (!hasValidAdr)
+            {
+                conflicts.Add(new(PlanningConflictCode.DriverNotReady, true,
+                    $"ADR-transport: {driverName} heeft geen geldig ADR-certificaat."));
+            }
+        }
+
         var doubleBooked = await OtherTripAsync(trip, t => t.DriverId == driverId, cancellationToken);
         if (doubleBooked is not null)
         {

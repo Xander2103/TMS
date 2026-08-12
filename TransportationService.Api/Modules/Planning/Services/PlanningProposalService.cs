@@ -12,7 +12,10 @@ public sealed record ProposalOrderDto(
     Guid TransportOrderId, string OrderNumber, string CustomerName, DateOnly OrderDate,
     string? DeliveryCity, string? DeliveryPostalCode,
     decimal? WeightKg, decimal? LoadingMeters, int? PalletCount,
-    bool Overdue);
+    bool Overdue,
+    /// <summary>P10: per-order feasibility notes (ADR/uitrusting/venster/openingsuren) —
+    /// infeasibility is explained, never hidden.</summary>
+    IReadOnlyList<string> Constraints);
 
 public sealed record TourProposalDto(
     string ZoneCode, string ZoneName,
@@ -71,6 +74,7 @@ public class PlanningProposalService : IPlanningProposalService
                 {
                     o.Id, o.OrderNumber, o.OrderDate, CustomerName = c.Name,
                     o.WeightKg, o.LoadingMeters, o.PalletCount,
+                    o.AdrRequired, o.CraneRequired, o.PlateauRequired, o.MoffettRequired,
                 })
             .ToListAsync(cancellationToken);
 
@@ -81,11 +85,37 @@ public class PlanningProposalService : IPlanningProposalService
                 .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId)
                             && s.StopType == StopType.Unloading)
                 .OrderBy(s => s.Sequence)
-                .Select(s => new { s.TransportOrderId, s.City, s.PostalCode, s.CountryCode })
+                .Select(s => new
+                {
+                    s.TransportOrderId, s.City, s.PostalCode, s.CountryCode,
+                    s.RequestedFrom, s.RequestedTo, s.LocationId,
+                })
                 .ToListAsync(cancellationToken);
         var deliveryByOrder = deliveries
             .GroupBy(d => d.TransportOrderId)
             .ToDictionary(g => g.Key, g => g.Last());
+
+        // P10: opening hours of the delivery locations, for the proposal date's weekday.
+        var locationIds = deliveries.Where(d => d.LocationId is not null)
+            .Select(d => d.LocationId!.Value).Distinct().ToList();
+        var isoDay = (int)date.DayOfWeek == 0 ? 7 : (int)date.DayOfWeek;
+        var openingByLocation = locationIds.Count == 0
+            ? []
+            : (await _dbContext.Set<Modules.Locations.Entities.LocationOpeningInterval>().AsNoTracking()
+                .Where(i => i.TenantId == tenantId && locationIds.Contains(i.LocationId) && i.DayOfWeek == isoDay)
+                .ToListAsync(cancellationToken))
+                .GroupBy(i => i.LocationId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        var hasOpeningData = (await _dbContext.Set<Modules.Locations.Entities.LocationOpeningInterval>().AsNoTracking()
+            .Where(i => i.TenantId == tenantId && locationIds.Contains(i.LocationId))
+            .Select(i => i.LocationId)
+            .Distinct()
+            .ToListAsync(cancellationToken)).ToHashSet();
+
+        // Capacity signal: the largest active vehicle bounds what one tour can carry.
+        var maxPayload = await _dbContext.Vehicles.AsNoTracking()
+            .Where(v => v.TenantId == tenantId && v.IsActive && v.PayloadKg != null)
+            .MaxAsync(v => (decimal?)v.PayloadKg, cancellationToken);
 
         var zones = await _dbContext.PricingZones.AsNoTracking()
             .Include(z => z.Areas)
@@ -111,11 +141,58 @@ public class PlanningProposalService : IPlanningProposalService
                 byZone[key] = bucket;
             }
 
+            // P10: explain what a feasible assignment must satisfy — data permitting.
+            var constraints = new List<string>();
+            if (order.AdrRequired)
+            {
+                constraints.Add("ADR: vereist een ADR-geschikt voertuig/aanhanger en chauffeur.");
+            }
+
+            if (order.CraneRequired)
+            {
+                constraints.Add("Kraan vereist: kies een voertuig met kraan.");
+            }
+
+            if (order.PlateauRequired)
+            {
+                constraints.Add("Plateau vereist.");
+            }
+
+            if (order.MoffettRequired)
+            {
+                constraints.Add("Moffett/meeneemheftruck vereist.");
+            }
+
+            if (delivery.RequestedFrom is not null || delivery.RequestedTo is not null)
+            {
+                var windowText = $"{delivery.RequestedFrom:HH:mm}–{delivery.RequestedTo:HH:mm}";
+                constraints.Add($"Gevraagd venster {windowText}.");
+            }
+
+            if (delivery.LocationId is { } deliveryLocation && hasOpeningData.Contains(deliveryLocation))
+            {
+                var intervals = openingByLocation.GetValueOrDefault(deliveryLocation);
+                if (intervals is null or { Count: 0 })
+                {
+                    constraints.Add("Losadres is gesloten op deze dag (openingsuren).");
+                }
+                else if (delivery.RequestedFrom is { } requestedFrom)
+                {
+                    var requestedTime = TimeOnly.FromDateTime(requestedFrom);
+                    if (!intervals.Any(i => requestedTime >= i.FromTime && requestedTime <= i.ToTime))
+                    {
+                        var hours = string.Join(", ", intervals.Select(i => $"{i.FromTime:HH\\:mm}–{i.ToTime:HH\\:mm}"));
+                        constraints.Add($"Gevraagd venster valt buiten de openingsuren ({hours}).");
+                    }
+                }
+            }
+
             bucket.Orders.Add(new ProposalOrderDto(
                 order.Id, order.OrderNumber, order.CustomerName, order.OrderDate,
                 delivery.City, delivery.PostalCode,
                 order.WeightKg, order.LoadingMeters, order.PalletCount,
-                Overdue: order.OrderDate < date));
+                Overdue: order.OrderDate < date,
+                Constraints: constraints));
         }
 
         var proposals = byZone
@@ -136,6 +213,21 @@ public class PlanningProposalService : IPlanningProposalService
                 if (overdueCount > 0)
                 {
                     explanations.Add($"{overdueCount} order(s) van eerdere dagen staan bovenaan (achterstand eerst).");
+                }
+
+                // P10: capacity signal against the LARGEST active vehicle — a tour heavier than
+                // that cannot be assigned as one trip, and the proposal says so upfront.
+                var totalWeight = ordered.Sum(o => o.WeightKg ?? 0m);
+                if (maxPayload is { } payload && totalWeight > payload)
+                {
+                    explanations.Add(
+                        $"Totaalgewicht {totalWeight:0.#} kg overschrijdt het grootste voertuig ({payload:0.#} kg) — splits deze tour.");
+                }
+
+                var equipmentCount = ordered.Count(o => o.Constraints.Count > 0);
+                if (equipmentCount > 0)
+                {
+                    explanations.Add($"{equipmentCount} order(s) hebben voorwaarden (ADR/uitrusting/venster) — zie de orderregels.");
                 }
 
                 return new TourProposalDto(

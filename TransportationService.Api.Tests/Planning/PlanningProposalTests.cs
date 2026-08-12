@@ -117,4 +117,34 @@ public class PlanningProposalTests
         Assert.DoesNotContain("ORD-1", orders);
         Assert.Contains("ORD-2", orders);
     }
+
+    [Fact]
+    public async Task Proposals_ExplainConstraints_AdrEquipmentAndCapacity()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var today = new DateOnly(2026, 8, 12);
+        var adr = Order(h, "ORD-1", today, "2000", weight: 9000);
+        adr.AdrRequired = true;
+        adr.MoffettRequired = true;
+        var plain = Order(h, "ORD-2", today, "2100", weight: 8000);
+        // The tenant's largest vehicle carries 10 t — this 17 t tour cannot be one trip.
+        h.Db.Context.Vehicles.Add(new TransportationService.Api.Modules.Fleet.Entities.Vehicle
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, InternalNumber = "VRT-1", LicensePlate = "1-ABC-123",
+            PayloadKg = 10000, IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var result = await h.Sut.GetProposalsAsync(today, CancellationToken.None);
+
+        var ant = Assert.Single(result.Proposals, p => p.ZoneCode == "ANT");
+        var adrOrder = Assert.Single(ant.Orders, o => o.OrderNumber == "ORD-1");
+        Assert.Contains(adrOrder.Constraints, c => c.Contains("ADR"));
+        Assert.Contains(adrOrder.Constraints, c => c.Contains("Moffett"));
+        Assert.Empty(Assert.Single(ant.Orders, o => o.OrderNumber == "ORD-2").Constraints);
+        // Infeasibility is explained, never hidden.
+        Assert.Contains(ant.Explanations, e => e.Contains("overschrijdt het grootste voertuig"));
+        Assert.Contains(ant.Explanations, e => e.Contains("voorwaarden"));
+    }
 }
