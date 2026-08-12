@@ -132,6 +132,13 @@ die winnen van bedrijfsbrede tabellen; zones (op basis van land + postcode, zowe
 herkomst als bestemming) verfijnen de keuze. De uitkomst wordt als bevroren
 **verkooplijnen** op de opdracht bewaard, met per lijn de herkomst van de prijs.
 
+Tariefregels kunnen daarnaast aan een **activiteitstype** gebonden zijn: zo bestaan
+bijvoorbeeld kraan- en plateautarieven naast elkaar binnen één dossier, en wint de
+activiteitsspecifieke regel altijd van de algemene regel. Op de opdracht geeft u ook aan
+of een **plateau** of een **Moffett** (meeneemheftruck) vereist is en of het om een
+**retourbeweging** gaat — diensten en toeslagen kunnen op die kenmerken (net als op
+kraan, ADR of activiteitstype) voorwaardelijk worden gemaakt.
+
 Ontbrekende invoer levert nooit een stille €0: de betrokken regel wordt overgeslagen met
 een leesbare toelichting (bv. "overgeslagen (geen afstand gekend)").
 
@@ -165,6 +172,12 @@ diensten, tijdseisen); notities en planningsvensters blijven gewoon bewerkbaar.
   ADR-toeslag) worden automatisch toegepast wanneer ze zo geconfigureerd zijn, of kiest u
   expliciet in de sectie *Services & toeslagen*. Voor diensten *Per dag* en
   *Per pallet/dag* vult u het aantal dagen (en pallets) in.
+- Diensten kunnen hun aantal ook uit de **werkelijke magazijnscans** halen (instelling
+  *Bron van het aantal* op de dienst): inslag, uitslag en picking tellen dan de effectief
+  gescande colli, en *Pallet-dagen* volgt de opslagklok (hoofdstuk 6). Handmatig
+  ingevulde aantallen winnen altijd; zijn er nog geen scans, dan verschijnt een
+  informatieve lijn — nooit een stille €0. Herberekenen werkt scan-gedreven aantallen
+  veilig bij zonder handmatige correcties te verliezen.
 - **Voorgestelde toeslagen** (bv. extra laad-/lostijd boven de inbegrepen tijd) tellen
   pas mee nadat u ze bevestigt.
 - Voor eenmalig prijswerk kan een opdracht een **eenmalige prijsafspraak** dragen (vast
@@ -252,16 +265,24 @@ Op de planningpagina staat het paneel **Ritvoorstellen**:
    orders met totalen (gewicht, laadmeters, pallets) en een leesbare toelichting.
 3. Orders met een verstreken datum staan vooraan (achterstand eerst); orders zonder
    passende zone staan transparant in een groep "Ongezoneerd", met reden.
-4. Klik **Maak rit** om van een voorstel een rit te maken — alle bestaande toewijzings- en
-   conflictcontroles blijven gelden.
+4. Per order verklaart het voorstel de **randvoorwaarden**: ADR, kraan, plateau, Moffett,
+   het gevraagde tijdvenster en de openingsuren van de loslocatie. Per voorstel staat
+   bovendien een **capaciteitssignaal**: de totalen afgezet tegen het grootste actieve
+   voertuig.
+5. Klik **Maak rit** om van een voorstel een rit te maken — alle bestaande toewijzings- en
+   conflictcontroles blijven gelden. Nieuw en blokkerend: een **ADR-order** kan alleen op
+   een rit met een chauffeur die een geldige ADR-kwalificatie heeft.
 
 ### 7.3 Live opvolging en ETA
 
-**Planning → Live opvolging** (`/operations`) volgt de uitvoering in realtime. Per stop
+**Planning → Live opvolging** (`/operations`) volgt de uitvoering in realtime. Bij de
+**start van een rit** worden de ETA's van alle stops meteen gezet en krijgt elke klant op
+de rit één "chauffeur onderweg"-bericht (nooit dubbel per rit en order). Per stop
 berekent het systeem een **verwachte aankomsttijd (ETA)**, mede op basis van gemeten
-stoptijden per locatie; de dispatcher kan ETA's overschrijven. Verschuift een ETA meer dan
-de ingestelde drempel (tenant-instelling), dan wordt de klant automatisch per e-mail
-verwittigd — ook wanneer de stop nog op tijd is.
+stoptijden per locatie; herberekening gebeurt bij elke statuswijziging én bij aankomst,
+afronden of overslaan van een stop. De dispatcher kan ETA's overschrijven. Verschuift een
+ETA meer dan de ingestelde drempel (instelbaar in de bedrijfsinstellingen), dan wordt de
+klant automatisch per e-mail verwittigd — ook wanneer de stop nog op tijd is.
 
 ---
 
@@ -341,12 +362,32 @@ In het paneel **Verantwoordelijkheid & doorrekening**:
 Interne verantwoordelijkheid (Eigen organisatie / Chauffeur / Leverancier) kan nooit
 worden doorgerekend; die kosten blijven intern.
 
-### 9.4 Herlevering
+Aanvullend kan de beheerder onder **Parameters → Beheer → Doorrekenbeleid** een
+**doorrekenbeleid** vastleggen per klant en/of incidenttype: *Nooit*, *Voorstellen* of
+*Automatisch* (met standaardbedrag). Het meest specifieke beleid wint en wordt precies
+één keer toegepast zodra de verantwoordelijkheid op *Klant* landt. *Automatisch* boekt de
+lijn via hetzelfde mechanisme als een handmatige goedkeuring (geauditeerd en omkeerbaar
+zolang de prijs niet vergrendeld is); *Nooit* blokkeert ook het handmatig voorstellen van
+een doorrekening. Eigen fouten kunnen ook met een beleid nooit worden doorgerekend.
+
+### 9.4 Mislukte levering en herleveringsmodus
+
+Een stop die als **Mislukt** wordt afgesloten, maakt automatisch **één incident** aan
+(nooit dubbel per stop), gekoppeld aan de order, de rit, de klant en het dossier. Wat er
+daarna gebeurt, bepaalt de bedrijfsinstelling **Herleveringsmodus**:
+
+- **Handmatig** — u beslist zelf over een herlevering (zie 9.5);
+- **Voorstellen** — het incident krijgt de vlag **"Herlevering aanbevolen"**;
+- **Automatisch** — de herleveringsorder wordt meteen aangemaakt.
+
+### 9.5 Herlevering
 
 Met **Herlevering aanmaken** dupliceert u de gekoppelde order als nieuwe conceptorder in
 **hetzelfde dossier** (zelfde klant, goederen en stops, referentie "HERLEVERING {origineel
 nummer}"). Er is maximaal één herlevering per incident; de kost van de herlevering volgt
-hetzelfde doorrekeningsproces op de nieuwe order.
+hetzelfde doorrekeningsproces op de nieuwe order. Een herleveringsorder (handmatig of
+automatisch) krijgt als datum de **eerstvolgende werkdag** — weekends en de dagen uit de
+feestdagkalender worden overgeslagen.
 
 ---
 
@@ -357,14 +398,55 @@ hetzelfde doorrekeningsproces op de nieuwe order.
 - **E-mails naar klanten** (o.a. ETA-updates, orderstatus, factuur- en Peppol-meldingen)
   lopen via een uitgaande wachtrij (outbox) met automatische herkansingen; mislukte
   berichten alarmeren de verantwoordelijken en kunnen handmatig opnieuw worden verstuurd.
+- **Controle vóór verzending**: gevoelige klantmails (standaard: schademelding, mislukte
+  levering en vertraging) worden eerst vastgehouden in een **controlewachtrij**. Een
+  medewerker met berichtenbeheer geeft ze **vrij** of **wijst ze af** in het
+  controle-tabblad van het meldingenbeheer. Alleen e-mail aan klanten wordt vastgehouden;
+  interne meldingen nooit. Per gebeurtenis kan de beheerder de controlestap aan- of
+  uitzetten.
 - Welke gebeurtenissen een melding of e-mail opleveren, aan wie en in welke taal, beheert
   de beheerder onder **Parameters → Koppelingen & meldingen → Meldingen en e-mails**; per
   klant zijn afwijkingen mogelijk, en portaalklanten beheren hun eigen voorkeuren (zie
   hoofdstuk 13).
+- De meldingsvoorkeuren van een klant (portaal of klantafwijkingen) gaan uitsluitend over
+  de acht instelbare klantberichten (orderbevestiging, tijdvenster, onderweg, ETA,
+  vertraging, geleverd, afleverbewijs, factuur). Systeemberichten — zoals
+  portaaluitnodigingen of antwoorden op berichten — worden door die voorkeuren nooit
+  onbedoeld uitgeschakeld.
 
 ---
 
 ## 11. Documenten: leveringsbon & CMR
+
+### 11.1 Wie maakt het vervoersdocument? (documentstrategie)
+
+Per klant legt u op de klantfiche de **documentstrategie** vast:
+
+- **Zelf aanmaken** — wij drukken de leveringsbon of CMR;
+- **Klantdocument** — de klant levert zijn eigen documenten mee, wij drukken niets;
+- **Per opdracht kiezen** — de keuze wordt per opdracht gemaakt.
+
+Op de opdracht kan altijd worden afgeweken (*Eigen document*, *Klantdocument* of *Geen
+document nodig*). Het orderdetail toont steeds de **uiteindelijke beslissing mét de
+reden**; de volgorde is: keuze op de opdracht → klantstandaard → documentregels →
+ingebouwde standaard.
+
+De **documentregels** beheert de beheerder onder **Parameters → Beheer → Documentregels**:
+regels op prioriteit die op grensoverschrijdend vervoer, ADR en/of activiteitstype
+matchen en het documenttype bepalen. Zonder passende regel gelden de ingebouwde
+standaarden: ADR → CMR, grensoverschrijdend → CMR, anders leveringsbon. Staat een
+opdracht op *Per opdracht kiezen* zonder dat de keuze gemaakt is, dan telt dat als
+**ontbrekende informatie** — er wordt dan nooit automatisch gedrukt.
+
+### 11.2 Documenten per dag (klantbatch)
+
+Op de klantfiche staat de kaart **"Documenten per dag"**: kies een datum en u ziet per
+soort de aantallen (eigen leveringsbonnen, CMR's, klantdocumenten, geen document en nog
+te beslissen), met per order de reden. Met één klik downloadt u de **samengevoegde PDF**
+per soort — desgewenst beperkt tot geselecteerde orders. Ook de ritbatches (zie 11.3)
+slaan orders met een klantdocument of zonder documentplicht automatisch over.
+
+### 11.3 Afdrukken per opdracht en per rit
 
 - **Per opdracht**: op het orderdetail staan de knoppen **Leveringsbon** en **CMR**. Het
   systeem genereert de PDF uit de bevroren ordergegevens: afzender = de facturerende
@@ -392,9 +474,14 @@ werkplek van de backoffice:
 
 - **Factuurvoorstellen** — orders die klaar zijn, gegroepeerd volgens de
   **factuurgroepering** van de klant: *Eén factuur per dossier*, *Wekelijks verzamelen*,
-  *Maandelijks verzamelen*, *Per klantreferentie* of *Handmatig*. Met **Maak factuur**
+  *Maandelijks verzamelen*, *Per klantreferentie* of *Handmatig*. Binnen een voorstel
+  kunt u met **selectievakjes** een deel van de orders kiezen. Met **Maak factuur**
   maakt u de factuur in één klik; u komt direct op het factuurdetail.
 - **Nakijken vóór facturatie** — per order de reden(en) waarom die nog niet klaar is.
+- **Uitstellen** — een order die (nog) niet gefactureerd mag worden, stelt u uit tot een
+  datum, met reden. Uitgestelde orders verdwijnen uit de voorstellen en de nakijklijst en
+  staan in een eigen sectie **"Uitgesteld"** tot de datum verstrijkt of u het uitstel
+  opheft.
 - **Goedgekeurde doorrekeningen — handmatig toe te voegen** — incident-toeslagen die zijn
   goedgekeurd nadat de prijs al vergrendeld of gefactureerd was; deze voegt u handmatig
   als factuurlijn toe.
@@ -442,7 +529,35 @@ Nederlands, Frans en Engels:
 
 ---
 
-## 14. Verder lezen
+## 14. Excel-orderimport
+
+Onder **Dossiers → Excel-import** (`/order-imports`) importeert u opdrachten in bulk uit
+een Excel-bestand:
+
+1. Kies een **importprofiel** (kolomtoewijzing). Elke omgeving heeft het standaardprofiel
+   **"Generiek v1"**; de beheerder kan extra profielen aanmaken.
+2. Upload het bestand en start eerst een **proefrun (dry-run)**: elke rij wordt
+   gevalideerd en u ziet vooraf wat er aangemaakt, overgeslagen of geweigerd zou worden.
+3. Bij de echte import wordt elke rij afzonderlijk verwerkt: een foute rij krijgt een
+   leesbare foutmelding en blokkeert de rest van het bestand nooit. Rijen met een al
+   bestaande klantreferentie worden overgeslagen (geen dubbels), en een identiek bestand
+   dat eerder al werd geïmporteerd, wordt in zijn geheel geweigerd.
+4. Geïmporteerde opdrachten doorlopen precies hetzelfde aanmaakproces als handmatige
+   opdrachten — elke import-order krijgt dus gegarandeerd zijn (wikkel)dossier.
+
+---
+
+## 15. Rapportage per activiteitstype (KPI)
+
+De KPI-pagina bevat de sectie **Activiteiten**: per activiteitstype het aantal
+activiteiten, de gekoppelde orders, de omzet en het aantal herleveringen, met een
+roll-up per KPI-categorie en de pallet-dagen voor opslag. Kraan- en plateauwerk binnen
+één dossier tellen hier apart — precies waarvoor de activiteitsdimensie bedoeld is.
+Opvragen kan ook via `GET /api/kpi/activities`.
+
+---
+
+## 16. Verder lezen
 
 - Snelgidsen per rol: `docs/delivery/quick-guides/`
   (dispatcher, magazijn, chauffeur, facturatie-backoffice, beheerder).

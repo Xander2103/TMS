@@ -49,13 +49,41 @@ de verkoopcode op het moment van facturatie. De code wordt bepaald door:
   (bv. "NL = BE +30%"), **Toeslagen**, **Kortingen**, **Prijsaanpassing** (geplande
   verhogingen met ingangsdatum), **Versies** en de **Controle**-sectie die
   configuratiefouten en -waarschuwingen rapporteert. Excel-export/-import maakt een
-  rondgang met preview mogelijk.
+  rondgang met preview mogelijk. Een tariefregel kan aan een **activiteitstype** gebonden
+  worden (bv. aparte kraan- en plateautarieven binnen één dossier); zo'n regel wint
+  altijd van een algemene regel.
 - **Parameters → Prijzen → Prijsinstellingen** (`/settings/pricing`): **zones** (land +
   postcodereeksen — hetzelfde zoneconcept dat ook de ritvoorstellen gebruikt), **diensten
-  & toeslagen** (incl. automatisch toepassen, ADR-, magazijn-, tijd-, weekend- en
-  feestdagvoorwaarden, en het soort *Per km* voor bv. een Maut-toeslag), **eenheden** en
-  de **feestdagkalender** die de feestdagtoeslagen stuurt.
+  & toeslagen** (incl. automatisch toepassen, ADR-, kraan-, plateau-, Moffett-, retour-,
+  activiteitstype-, magazijn-, tijd-, weekend- en feestdagvoorwaarden, en het soort
+  *Per km* voor bv. een Maut-toeslag), **eenheden** en de **feestdagkalender** die de
+  feestdagtoeslagen stuurt.
+- Per dienst kiest u de **Bron van het aantal**: *Besteld* (standaard), *Ingescand in*,
+  *Ingescand uit*, *Picking* of *Pallet-dagen*. Scan-gedreven diensten tellen de
+  werkelijke magazijnscans (unieke colli); *Pallet-dagen* volgt de opslagklok. Handmatig
+  ingevulde aantallen op een order winnen altijd; zonder scans verschijnt een
+  informatieve lijn, nooit €0.
 - **Parameters → Prijzen → Kostentarieven** (`/cost-rates`) voor de kostzijde van ritten.
+
+## Documentregels
+
+**Parameters → Beheer → Documentregels** (`/settings/document-rules`): regels op
+prioriteit die bepalen welk vervoersdocument een opdracht krijgt, op basis van
+grensoverschrijdend vervoer, ADR en/of activiteitstype. De volgorde van beslissen is
+altijd: keuze op de opdracht → **documentstrategie van de klant** (op de klantfiche:
+*Zelf aanmaken*, *Klantdocument* of *Per opdracht kiezen*) → documentregels → ingebouwde
+standaard (ADR → CMR, grensoverschrijdend → CMR, anders leveringsbon). Een opdracht op
+*Per opdracht kiezen* zonder gemaakte keuze telt als ontbrekende informatie en wordt
+nooit automatisch gedrukt.
+
+## Doorrekenbeleid (incidenten)
+
+**Parameters → Beheer → Doorrekenbeleid** (`/settings/charge-policies`, recht
+*problems.approve_charge*): per klant en/of incidenttype de modus **Nooit**,
+**Voorstellen** of **Automatisch**, met optioneel standaardbedrag. Het meest specifieke
+beleid wint en vuurt één keer zodra de verantwoordelijkheid van een incident op *Klant*
+landt. *Automatisch* boekt via hetzelfde geauditeerde mechanisme als een handmatige
+goedkeuring; *Nooit* blokkeert ook handmatig voorstellen.
 
 ## Eigen bedrijven (facturerende entiteiten)
 
@@ -71,7 +99,11 @@ stil (klantstandaard → bedrijfsstandaard).
 (`/settings/notifications`), met tabbladen:
 
 - **Gebeurtenissen** — de volledige cataloog per groep; per gebeurtenis aan/uit, kanalen
-  (in-app / e-mail) en de ontvangers.
+  (in-app / e-mail), de ontvangers en de schakelaar **Controle vóór verzending** (leeg =
+  catalogusstandaard; schade, mislukte levering en vertraging staan standaard op
+  controle). Alleen klantmail wordt vastgehouden.
+- **Te controleren** — de controlewachtrij: vastgehouden klantmails **vrijgeven** of
+  **afwijzen** (recht *messaging.manage*).
 - **Sjablonen** — e-mailsjablonen per tenant en per klant, met placeholder-controle en
   voorbeeldweergave.
 - **Ontvangers** — uitleg van de ontvangertypes (klantcontact, communicatieregel,
@@ -94,9 +126,20 @@ Aanvullend: **Escalatieregels** (`/settings/escalations`), **EDI** (`/edi`) en
   Klantportaal mededelingen** (`/settings/portal-announcements`); gerichte
   (meertalige) portaalberichten via **Portaalberichten** (`/settings/portal-messages`).
 
+## Excel-importprofielen
+
+**Dossiers → Excel-import** (`/order-imports`): elke omgeving krijgt automatisch het
+importprofiel **"Generiek v1"**; extra profielen definiëren per profiel de
+kolomtoewijzing (JSON) van het Excel-bestand naar de ordervelden. Importeurs draaien
+eerst een proefrun; identieke bestanden worden geweigerd en dubbele klantreferenties
+overgeslagen.
+
 ## Overige instellingen
 
-- **Parameters → Instellingen** (`/settings`): bedrijfsgegevens en algemene instellingen.
+- **Parameters → Instellingen** (`/settings`): bedrijfsgegevens en algemene
+  instellingen, waaronder nu ook de **herleveringsmodus** (*Handmatig* / *Voorstellen* /
+  *Automatisch* — wat er gebeurt na een mislukte stop) en de **ETA-drempel**
+  (minuten verschuiving waarboven de klant automatisch gemaild wordt).
 - **Personeel-configuratie**: Verlof (types & saldi) (`/settings/leave`),
   HR-herinneringen (`/settings/hr-reminders`), Bedrijfsmiddelen-sjablonen
   (`/settings/issued-item-templates`), Taaksjablonen (`/settings/task-templates`).

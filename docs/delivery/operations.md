@@ -36,11 +36,12 @@ ook een idempotent SQL-script gegenereerd en door een DBA beoordeeld worden:
 dotnet ef migrations script --idempotent --project TransportationService.Api -o migrate.sql
 ```
 
-### 1.2 Redesign-migraties (dossier-centric redesign, Waves 0–6)
+### 1.2 Redesign-migraties (dossier-centric redesign, Waves 0–6 + afrondingsgolf P0–P13)
 
-De volgende acht migraties vormen samen de redesign. Ze zijn **allemaal reeds toegepast op de
-dev-database** en zijn **strikt additief**: in geen enkele `Up()` komt een `DropTable` of
-`DropColumn` voor. Volgorde (= volgorde van toepassing):
+De volgende veertien migraties vormen samen de redesign (nr. 1–8) en de afrondingsgolf
+P0–P13 (nr. 9–14). Ze zijn **allemaal reeds toegepast op de dev-database** en zijn
+**strikt additief**: in geen enkele `Up()` komt een `DropTable` of `DropColumn` voor.
+Volgorde (= volgorde van toepassing):
 
 | # | Migratie | Nieuwe tabellen | Wijzigingen aan bestaande tabellen |
 |---|---|---|---|
@@ -52,6 +53,20 @@ dev-database** en zijn **strikt additief**: in geen enkele `Up()` komt een `Drop
 | 6 | `20260812081943_StorageStays` | `storage_stays` | — |
 | 7 | `20260812083503_ProblemsResponsibilityCharge` | — | `incidents`: +8 kolommen (`ResponsibleParty`, `ResponsibilityNotes`, `Charge*`, `LinkedRedeliveryOrderId`) |
 | 8 | `20260812085739_EtaShiftThreshold` | — | `tenant_settings`: +`EtaShiftNotifyMinutes` (nullable) |
+| 9 | `20260812170208_DocumentStrategy` | `tenant_document_rules` | `customers`: +`DocumentStrategy`; `transport_orders`: +`DocumentPreference` |
+| 10 | `20260812171230_RedeliveryAndChargePolicy` | `incident_charge_policies` | `tenant_settings`: +`RedeliveryMode`; `incidents`: +`SourceStopId` (unieke gefilterde index — max. één auto-incident per mislukte stop) + `RedeliverySuggested` |
+| 11 | `20260812172239_PricingDimensions` | — | `price_rules`: +`ActivityTypeId`; `transport_orders`: +`PlateauRequired`, `MoffettRequired`, `IsReturnMovement` |
+| 12 | `20260812173308_ServiceQuantitySource` | — | `service_options`: +`QuantitySource` |
+| 13 | `20260812174522_OrderImport` | `order_import_profiles`, `order_import_batches`, `order_import_rows` | `notification_rules`: +`RequiresReview` (nullable) |
+| 14 | `20260812175816_InvoiceSnooze` | — | `transport_orders`: +`InvoiceSnoozeUntil`, `InvoiceSnoozeReason` |
+
+De afrondingsgolf voegt ook nieuwe **instellingsoppervlakken** toe die na een deploy geen
+extra configuratie vereisen maar wel bekend moeten zijn bij de beheerder:
+**Documentregels** (`/settings/document-rules`), **Doorrekenbeleid**
+(`/settings/charge-policies`), en in de bedrijfsinstellingen de **herleveringsmodus**
+(`RedeliveryMode`, default `Manual` = gedrag van vóór de golf) en de **ETA-drempel**
+(`EtaShiftNotifyMinutes`, nu instelbaar via de UI; leeg = functie uit). Het
+Excel-importprofiel "Generiek v1" wordt per tenant idempotent geseed bij eerste gebruik.
 
 ### 1.3 Verifiëren
 
@@ -64,7 +79,7 @@ ORDER BY "MigrationId" DESC
 LIMIT 10;
 ```
 
-Verwacht: `20260812085739_EtaShiftThreshold` bovenaan, met daaronder de zeven overige
+Verwacht: `20260812175816_InvoiceSnooze` bovenaan, met daaronder de dertien overige
 redesign-migraties in aflopende volgorde. Alternatief vanaf de buildmachine:
 `dotnet ef migrations list --project TransportationService.Api` (toegepaste migraties zonder
 `(Pending)`-markering).
@@ -283,8 +298,12 @@ draaiende API-instantie volstaat; bij meerdere instanties draaien de sweeps dubb
 | `NotificationMaintenanceHostedService` | 6 u | Verlopen notificaties archiveren; gearchiveerd > 180 dagen soft-deleten (batches van 500) |
 
 Er bestaat **geen** aparte ETA-hosted-service: ETA-berekening en de bijbehorende
-notificaties (drempel `TenantSettings.EtaShiftNotifyMinutes`, Wave 8-migratie) lopen
-synchroon mee in `EtaService` tijdens rituitvoering.
+notificaties (drempel `TenantSettings.EtaShiftNotifyMinutes`, sinds de afrondingsgolf
+instelbaar via de bedrijfsinstellingen-UI) lopen synchroon mee in `EtaService` tijdens
+rituitvoering — inclusief het zetten van ETA's en de "chauffeur onderweg"-berichten bij
+ritstart. Ook de controlewachtrij voor gevoelige klantmail (`AwaitingReview`) vergt geen
+aparte job: vastgehouden berichten worden pas door de bestaande `OutboxDispatcher`
+opgepikt nadat iemand ze vrijgeeft.
 
 ---
 
@@ -300,7 +319,7 @@ Na elke deploy:
 1. **Opstartlog controleren** — geen exceptions van `StartupSecurityValidator`; regels van
    `DossierBackfillSeeder` ("created N wrapper dossiers" of stil bij 0) en geen
    seeder-fouten.
-2. **Migratiestand** — `__EFMigrationsHistory` eindigt op `20260812085739_EtaShiftThreshold`
+2. **Migratiestand** — `__EFMigrationsHistory` eindigt op `20260812175816_InvoiceSnooze`
    (§1.3).
 3. **Login** — `POST /api/auth/login` met een geldig account: 200, access token + HttpOnly
    refresh-cookie; fout wachtwoord: 401 en (na herhaling) rate limiting/lockout.
@@ -350,6 +369,10 @@ alleen te overwegen met een verse back-up en een expliciet besluit:
   verplicht — dat **faalt** zodra er losse magazijnscans (NULL-waarden) bestaan.
 - `ProblemsResponsibilityCharge` en `EtaShiftThreshold` terugrollen wist respectievelijk
   verantwoordelijkheids-/doorrekenbeslissingen op incidenten en de ETA-notificatiedrempel.
+- De zes migraties van de afrondingsgolf (nr. 9–14) terugrollen verwijdert de
+  documentregels, het doorrekenbeleid en de importprofielen/-batches met hun volledige
+  inhoud, plus de documentkeuze-, uitrusting- en uitstelkolommen op orders en de
+  koppeling mislukte stop → incident.
 
 Let op: seeder-effecten (wrapper-dossiers, activiteitstypes, geclaimde dossiernummers) staan
 buiten het migratiemechanisme en worden door een schema-rollback deels vernietigd, deels

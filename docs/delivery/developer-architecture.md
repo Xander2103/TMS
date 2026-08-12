@@ -1,7 +1,8 @@
-# Developer architecture — dossier-centric redesign (Waves 0–11)
+# Developer architecture — dossier-centric redesign (Waves 0–11 + completion wave)
 
 *Last updated: 2026-08-12, branch `nav-redesign`. Covers commits `e07dca4` (Wave 0) … `1080dda`
-(Wave 11: customer-portal POD summary + notification preferences).*
+(Wave 11: customer-portal POD summary + notification preferences), plus the follow-up
+completion wave P0–P13 (`255a593` … `0ecad13`, §17).*
 
 This document is the developer-facing map of what the redesign added and how the pieces fit.
 Every claim below was verified against the code on this branch. It deliberately does not repeat
@@ -148,18 +149,21 @@ match wins. Destination = last unloading stop, origin = first loading stop (reso
 `TransportOrderService` ~2046–2051). Origin match: `rule.OriginZoneId == null ||` order's origin
 zone equals it.
 
-**Rule selection** (`SelectRule`, ~line 1355) — the load-bearing specificity score:
+**Rule selection** (`SelectRule`) — the load-bearing specificity score (P6 added the activity
+dimension; legacy rules keep their exact relative order):
 
 ```csharp
-int Score(RuleCandidate c) => c.Tier * 4
-    + (c.Rule.ZoneId is not null ? 2 : 0)
-    + (c.Rule.OriginZoneId is not null ? 1 : 0);
+int Score(RuleCandidate candidate) => candidate.Tier * 8
+    + (candidate.Rule.ActivityTypeId is not null ? 4 : 0)
+    + (candidate.Rule.ZoneId is not null ? 2 : 0)
+    + (candidate.Rule.OriginZoneId is not null ? 1 : 0);
 ```
 
-Tier: customer-private agreement = 2, shared+assigned = 1, company default = 0. Destination zone
-beats origin zone; the max combined zone bonus (3) stays below one tier step (4). An exact tie is a
-**blocking configuration error**, never an arbitrary pick. (Note: [docs/pricing.md](../pricing.md)
-§4 still shows the pre-Wave-3 formula without the origin `+1` — see §17.)
+Tier: customer-private agreement = 2, shared+assigned = 1, company default = 0. Activity beats
+both zone dimensions; destination zone beats origin zone; the max within-tier bonus (4+2+1=7)
+stays below one tier step (8). An exact tie is a **blocking configuration error**, never an
+arbitrary pick. (Note: [docs/pricing.md](../pricing.md) §4 still shows the pre-Wave-3 formula
+without the origin `+1` and activity `+4` bonuses — see §18.)
 
 **PerKm — two independent mechanisms**, both fed by `order.DistanceKm`:
 1. `PriceRuleBasis.PerKm` order-level rules: `(BaseAmount ?? 0) + (UnitPrice ?? 0) * km`; a null
@@ -216,7 +220,9 @@ barcodes and unexpected statuses are never dropped — they become warning ledge
 (`ScanResult.UnexpectedItem` / outcome `"UnexpectedStatus"`). `Moved`/`Staged` never change
 lifecycle status; `Received`/`Return` may, but only through `PackageLifecycleMachine.IsAllowed`.
 `Package.CurrentWarehouseLocationId` is a projection ("physical reality wins" — updated whenever a
-location was scanned); the append-only `PackageEvent` trail is the source of truth.
+location was scanned, and since the completion wave **cleared by `StorageClockInterceptor` on every
+leave event**, so goods on a vehicle never keep showing a warehouse location — §5, §17 P0); the
+append-only `PackageEvent` trail is the source of truth.
 
 **Idempotency.** Key = `(TenantId, ClientEventId)`:
 - app-level pre-check returns replay feedback from the stored row;
@@ -260,7 +266,10 @@ overrides `SavingChangesAsync` and watches newly `Added` `PackageEvent`s whose t
 finds the package's open stay — change-tracker first, then DB — and sets
 `OutAt = leave.OccurredAt`, `OutPackageEventId = leave.Id`. Because it is an interceptor, **every
 current and future leave path closes the clock** without each call site knowing about storage, and
-the close lands in the same transaction as the leave event. Registration (`Program.cs:131–144`):
+the close lands in the same transaction as the leave event. The same hook also nulls
+`Package.CurrentWarehouseLocationId` (completion wave P0): goods that physically left must never
+show a warehouse location, and a later failed delivery on the road cannot resurrect one — only a
+real warehouse scan sets it again. Registration (`Program.cs:131–144`):
 singleton, third in the interceptor chain after `AuditingSaveChangesInterceptor` and
 `OrderStatusHistoryInterceptor` (audit stamps land first). History is frozen: corrections close and
 reopen; a closed stay is never rewritten.
@@ -311,7 +320,10 @@ the invoice-control workspace surfaces it as a pending charge (§11).
 `orders.create|manage`): one redelivery per incident, requires a linked order. Copies cargo scalars
 (`GoodsDescription`, quantities, `WeightKg`, `DistanceKm`, `LoadingMeters`, ADR/crane flags,
 `LegalEntityId`) and the stop skeleton; stamps `CustomerReference = "HERLEVERING {orderNumber}"`;
-copies **no** price fields, dates or packages. The new Draft order joins the **same dossier**
+copies **no** price fields or packages, and dates the new order to the next working day
+(`BusinessDayCalculator.NextWorkingDay`: weekends + `tenant_holidays` skipped — completion wave
+P4, which also added the failed-stop auto-incident and `TenantSettings.RedeliveryMode`, §17).
+The new Draft order joins the **same dossier**
 (wrapper-by-origin → earliest `DossierOrder` link → `incident.DossierId`), original packages flip
 to `RedeliveryPlanned` where the lifecycle machine allows, and the number is claimed via
 `TenantNumbering.SaveWithClaimedNumberAsync`.
@@ -339,8 +351,10 @@ A proposal is **read-only and non-persisted** — no entity, no table, no status
 3. Within a zone: overdue orders first (`OrderDate < date`), then postal code as a route-proximity
    proxy.
 4. The heuristic must explain itself: every proposal carries Dutch `Explanations`, and every
-   dropped candidate lands in `Excluded` with a reason (currently only "geen losstop") — no silent
-   drops.
+   dropped candidate lands in `Excluded` with a reason — no silent drops. Since the completion
+   wave (P10) each order also carries per-order constraint notes (ADR, crane, plateau, Moffett,
+   requested window, delivery-location opening hours) and each proposal a capacity signal vs the
+   largest active vehicle (§17).
 
 **There is no accept/reject endpoint.** Accepting a proposal = `POST /api/trips` with the
 proposal's order ids, so all existing conflict/permission machinery applies (`planning.create`,
@@ -384,7 +398,10 @@ adds just this column). In `RecordChangeAsync`, mutually exclusive with the beca
 - `null` threshold = pre-Wave-8 behaviour only (opt-in per tenant).
 
 Customer message idempotency key: `eta_update:{stopId}:{eta:yyyyMMddHHmm}` — minute granularity
-dedupes same-minute recomputes. Caveat: the threshold currently has **no API/UI surface** (§17).
+dedupes same-minute recomputes. The threshold is exposed through the company-settings API/UI since
+the completion wave (P8), which also completed the lifecycle: trip start seeds ETAs and queues
+`driver_en_route` per customer order, and recalculation runs on stop arrive/complete/skip as well
+as on status transitions (§17).
 
 ## 9. Notifications & messaging profiles
 
@@ -413,6 +430,9 @@ global tenant filter is open) and stamps `TenantId` explicitly. Providers are fa
 **MessagingProfile** is per owner `(OwnerType, OwnerId)` — customer or employee: channel toggles,
 address overrides, `EnabledKindsJson` (null = all kinds), `PreferredLanguage`, quiet hours
 (midnight-spanning windows handled), fallback channel. **Absent row = email on, defaults.**
+Since the completion wave (P0) a customer's `EnabledKinds` list is interpreted strictly against
+`MessageKinds.CustomerConfigurable` (8 kinds, the same set the portal preference screen shows):
+kinds outside it — invites, replies, order acceptance — are **never** suppressed by the list.
 Admin: `GET/PUT /api/messaging/profiles/{ownerType}/{ownerId}` (`messaging.manage`).
 
 **Templates** resolve `(customer, lang) → (customer, nl) → (tenant, lang) → (tenant, nl) →
@@ -579,7 +599,7 @@ filtered against the `PortalNotificationKinds` allowlist (order confirmation, ti
 en-route, ETA, delay, delivered, POD, invoice); language restricted to nl/fr/en.
 
 **Extension checklist for a new portal endpoint:** service method returns `PortalResult<T>`;
-first statement resolves the customer (prefer the `c.IsActive` variant, see §17); every query
+first statement resolves the customer (prefer the `c.IsActive` variant, see §18); every query
 filters tenant **and** resolved customer; foreign ids mismatching → `NotFound()`; controller is a
 one-liner through `Handle(...)` with a `customer_portal.*` permission; byte-serving endpoints
 re-check visibility before reading storage.
@@ -651,7 +671,7 @@ var allowed = _permissionService is not null && userId is { } uid
 
 Redesign examples: `DossierService.ChangeLegalEntityAsync` (`dossiers.override_entity`, plus a
 mandatory reason for non-default targets), `TransportOrderService.UpdateAsync` entity gate (same
-code; no reason required — see §17), `IncidentService.DecideChargeAsync`
+code; no reason required — see §18), `IncidentService.DecideChargeAsync`
 (`problems.approve_charge`).
 
 **Role template versioning.** `DefaultRoleUpgrades.CurrentVersion = 28`. Each `UpgradeStep` lists
@@ -721,7 +741,9 @@ exist anywhere in the API project.
 
 ## 16. Migrations added by the redesign (list, order, additive nature)
 
-Location: `TransportationService.Api/Migrations/`. All eight are **additive**: no `Up()` contains
+Location: `TransportationService.Api/Migrations/`. This section lists the redesign's original
+eight migrations; the completion wave added six more, documented in §17. All eight are
+**additive**: no `Up()` contains
 a `DropColumn`, `DropTable`, `DropIndex`, `DropForeignKey` or `RenameColumn`. The only
 `AlterColumn`s are NOT NULL → NULL relaxations on `scan_events` (non-destructive going up; the
 `Down()` direction is lossy).
@@ -742,51 +764,142 @@ filtered unique indexes. Backfill notes: `transport_orders.Version` defaults to 
 first modification; `InvoiceReadiness` defaults to `''` until `InvoiceReadinessEvaluator` first
 runs; `DossierBackfillSeeder` wraps pre-existing orders at startup.
 
-## 17. Known limitations / deferred items
+## 17. Completion wave (P0–P13)
 
-Verified in code on this branch; roughly ordered by impact.
+*Commits `255a593` … `0ecad13` (backend; one frontend commit lands separately). Six additive
+migrations, all applied (table at the end of this section).*
+
+**P0 — two projection/suppression fixes.** `StorageClockInterceptor` now also clears
+`Package.CurrentWarehouseLocationId` on every leave event (§5): goods that left on a vehicle
+never keep a warehouse location, and only a real warehouse scan sets one again.
+`MessageKinds.CustomerConfigurable` (8 kinds) became the single source of truth for customer
+preference suppression: a customer's `EnabledKinds` list only governs those kinds, so system
+mail can no longer be silenced by a portal preference save (§9 — the former limitation is gone).
+
+**P1–P3 — document strategy.** `Customer.DocumentStrategy` (`GenerateOwn|CustomerDocument|
+PerOrder`) + `TransportOrder.DocumentPreference` (`Own|CustomerDocument|NoneRequired|null`,
+`PUT api/orders/{id}/documents/preference`). `DocumentStrategyResolver`
+(`Modules/Orders/Services/DocumentStrategyResolver.cs`, static) resolves precedence:
+**order override > customer default > `TenantDocumentRule` rows (by `Priority`, first row whose
+cross-border/ADR/activity-type criteria all match) > built-in defaults** (ADR→CMR,
+cross-border→CMR, else delivery note). Undecided (`PerOrder` without an order choice) counts as
+missing info and is never auto-printed. The order detail shows the resolved decision with its
+reason. Customer+date batch: `GET api/customers/{id}/documents/preview?date=` (counts per kind +
+per-order reasons) and `GET api/customers/{id}/documents/{kind}?date=&orderIds=` (merged PDF);
+trip batches now skip customer-document/none orders. Admin UI: `/settings/document-rules`.
+
+**P4 — redelivery automation.** `TenantSettings.RedeliveryMode` (`Manual|Propose|Automatic`,
+company settings). A `Failed` stop auto-creates exactly one incident per stop (idempotent via a
+unique index on `incidents.SourceStopId`) linked to order/trip/customer/dossier; `Propose` sets
+`RedeliverySuggested` ("Herlevering aanbevolen"); `Automatic` creates the redelivery order
+immediately. All redelivery orders date to the next working day
+(`BusinessDayCalculator.NextWorkingDay`, weekends + `tenant_holidays` skipped).
+
+**P5 — charge policies.** `IncidentChargePolicy` (customer? × incident type? × mode
+`Never|Propose|Auto` + default amount), admin at `/settings/charge-policies`
+(`problems.approve_charge`). Resolution is most-specific-first; a policy fires once, when
+responsibility lands on `"Customer"`. `Auto` books the pricing line through the same mechanics as
+manual approval (audited, reversible until the price locks); `Never` also blocks manual
+proposing. Internal responsibility can still never be charged.
+
+**P6 — pricing dimensions.** `PriceRule.ActivityTypeId` with the new byte-stable specificity
+score `Tier*8 + activity*4 + destZone*2 + originZone*1` (§3). Order flags
+`PlateauRequired`/`MoffettRequired`/`IsReturnMovement`; new `ServiceConditionKind` members
+`Crane|Plateau|Moffett|ReturnMovement|ActivityType`.
+
+**P7 — scan-driven service quantities.** `ServiceOption.QuantitySource`
+(`Ordered|ScannedIn|ScannedOut|Picked|PalletDays`): handling-in/out/picking count actual
+distinct-package scan events; `PalletDays` follows the storage clock (§5). Entered quantities
+always win; recalculation stays idempotent through the `LineKey` merge; no scans → informational
+line, never a silent €0.
+
+**P8 — ETA lifecycle completed.** Trip start seeds ETAs and queues one `driver_en_route`
+customer message per trip+order (idempotent); recalculation runs on stop arrive/complete/skip as
+well as on transitions; `EtaShiftNotifyMinutes` is exposed in the company-settings API/UI.
+Built-in FR/EN templates added for `order_accepted`/`order_rejected`/`order_info_requested`.
+
+**P9 — sensitive-communication review.** New `OutboxStatus.AwaitingReview`;
+`NotificationRule.RequiresReview` (nullable — null falls back to the catalog's
+`DefaultRequiresReview`; damage/failed-delivery/delay default to review). Only customer-owned
+mail is ever held. `POST api/messaging/outbox/{id}/release|reject` (`messaging.manage`) + a
+review tab in the notification admin. Producers wired: `order_damage_registered` (damage
+incident with a linked order) and `order_failed_delivery` (failed stop).
+
+**P10 — planning proposal constraints.** Per-order constraint notes (ADR, crane, plateau,
+Moffett, requested window, delivery-location opening hours) and a per-proposal capacity signal vs
+the largest active vehicle (§7). New trip-level blocking rule: an ADR order requires a driver
+with a valid ADR(-named) qualification.
+
+**P11 — activity KPI.** `GET /api/kpi/activities` (`ActivityKpiService`, `Modules/Reporting`):
+per-activity-type rows (count, linked orders, revenue, redeliveries), per-`KpiCategory` rollup
+and pallet-days; crane and plateau inside one dossier count separately. "Activiteiten" section on
+the KPI page.
+
+**P12 — invoice snooze.** `TransportOrder.InvoiceSnoozeUntil`/`InvoiceSnoozeReason`;
+`PUT /api/invoice-control/orders/{orderId}/snooze`. Snoozed orders leave proposals and the review
+list but stay visible in a dedicated "Uitgesteld" section; the workspace gained proposal-level
+order-selection checkboxes.
+
+**P13 — Excel order import.** `Modules/OrderImport` + `/order-imports` page.
+`OrderImportProfile` ("Generiek v1" seeded per tenant; column mapping stored as JSON), dry-run
+validation, SHA-256 duplicate-file refusal (app-level check — the `(TenantId, Sha256)` index is
+deliberately non-unique), per-row errors and reference-dedupe skips. **Row isolation:** each row
+is processed independently — a failing row records its error without aborting the batch. Rows are
+created through the normal `ITransportOrderService.CreateAsync`, so every imported order gets the
+wrapper-dossier guarantee (§1).
+
+**Migrations (all additive, all applied)** — continuing the §16 numbering:
+
+| # | Migration | What it adds |
+|---|---|---|
+| 9 | `20260812170208_DocumentStrategy` | `customers.DocumentStrategy`, `transport_orders.DocumentPreference`, table `tenant_document_rules` (+priority index) |
+| 10 | `20260812171230_RedeliveryAndChargePolicy` | `tenant_settings.RedeliveryMode`; `incidents.SourceStopId` (unique filtered index) + `RedeliverySuggested`; table `incident_charge_policies` |
+| 11 | `20260812172239_PricingDimensions` | `price_rules.ActivityTypeId`; `transport_orders.PlateauRequired`/`MoffettRequired`/`IsReturnMovement` |
+| 12 | `20260812173308_ServiceQuantitySource` | `service_options.QuantitySource` |
+| 13 | `20260812174522_OrderImport` | Tables `order_import_profiles`/`order_import_batches`/`order_import_rows`; `notification_rules.RequiresReview` (nullable) |
+| 14 | `20260812175816_InvoiceSnooze` | `transport_orders.InvoiceSnoozeUntil`/`InvoiceSnoozeReason` |
+
+## 18. Known limitations / deferred items
+
+Verified in code on this branch; roughly ordered by impact. (Two former entries were resolved by
+the completion wave: `EtaShiftNotifyMinutes` now has a company-settings UI, and portal
+notification preferences can no longer suppress non-portal message kinds — see §17 P0/P8.)
 
 1. **PDFsharp fonts are Windows-only.** No `IFontResolver` is registered; all four renderers rely
    on `GlobalFontSettings.UseWindowsFontsUnderWindows` + "Arial". Linux/container hosting requires
    a font resolver first (§10).
-2. **`EtaShiftNotifyMinutes` has no API/UI surface.** It is absent from `CompanySettingsDtos` /
-   `CompanySettingsService`; today it can only be set directly in the database (§8).
-3. **Manual-price orders don't auto-absorb approved charges.** When `order.PriceIsManual`,
+2. **Manual-price orders don't auto-absorb approved charges.** When `order.PriceIsManual`,
    `IncidentService.DecideChargeAsync` creates the pricing line but deliberately does not bump
    `AgreedPrice`, so the invoice's base line will not include the charge automatically (§6).
-4. **Portal notification preferences write the whole messaging profile.** The portal-saved
-   `EnabledKindsJson` is the same column the admin `messaging.manage` UI writes, so a portal user
-   submitting a subset also suppresses non-portal kinds (e.g. `portal_user_invited`,
-   `customer_message_reply`) for that customer (§12).
-5. **Entity-gate asymmetry.** `DossierService.ChangeLegalEntityAsync` requires a mandatory reason
+3. **Entity-gate asymmetry.** `DossierService.ChangeLegalEntityAsync` requires a mandatory reason
    for non-default targets; the `TransportOrderService.UpdateAsync` gate checks the same
    `dossiers.override_entity` permission but requires no reason (§14).
-6. **Portal customer resolution is inconsistent about `Customer.IsActive`.**
+4. **Portal customer resolution is inconsistent about `Customer.IsActive`.**
    `PortalDocumentService`/`PortalInvoiceService` require an active customer;
    `CustomerPortalService.MyCustomerAsync` and `PortalDashboardService` do not — a deactivated
    customer loses documents/invoices but still resolves for orders/dashboard (§12).
-7. **`docs/pricing.md` §4 is stale**: the specificity formula there predates the origin-zone `+1`
-   bonus and `tenant_holidays` (§3).
-8. **Zone deletion guard misses origin references.** `PricingAdminService.DeleteZoneAsync` checks
+5. **`docs/pricing.md` §4 is stale**: the specificity formula there predates the origin-zone `+1`
+   and activity-type `+4` bonuses and `tenant_holidays` (§3).
+6. **Zone deletion guard misses origin references.** `PricingAdminService.DeleteZoneAsync` checks
    only `PriceRules.ZoneId`; a zone used solely as `OriginZoneId` passes the app guard and fails on
    the DB `Restrict` FK as a raw `DbUpdateException` instead of a friendly validation error (§3).
-9. **`MessagingProfile.ExtraRecipientsJson` is inert** — documented as "each queued separately"
+7. **`MessagingProfile.ExtraRecipientsJson` is inert** — documented as "each queued separately"
     but read by neither `MessageOutboxService` nor `MessageDispatcher`. Likewise
     `MessageTemplate.BodyHtml` is sanitized on save but not consumed by outbound rendering (§9).
-10. **`AcceptProposalRequest` is a vestigial DTO** in `PlanningProposalService.cs`, referenced
+8. **`AcceptProposalRequest` is a vestigial DTO** in `PlanningProposalService.cs`, referenced
     nowhere — not an API contract (§7). The proposal candidate window also has no lower date bound:
     arbitrarily old confirmed orders keep surfacing, flagged `Overdue`.
-11. **`IPackageEventWriter.Stage(...)` has no location parameter**; the scan service stamps
+9. **`IPackageEventWriter.Stage(...)` has no location parameter**; the scan service stamps
     `WarehouseLocationId` on the custody event manually afterwards (§4). Scan replay feedback
     returns `LocationCode` as null (only the id is echoed).
-12. **Trip-bound depot returns don't open the storage clock** until the package is received at the
+10. **Trip-bound depot returns don't open the storage clock** until the package is received at the
     warehouse station, because the trip event doesn't know the warehouse (documented in
     [docs/storage.md](../storage.md), §5).
-13. **`Incident.ResponsibleParty` accepts unknown values silently**, falling back to `"Unknown"`
+11. **`Incident.ResponsibleParty` accepts unknown values silently**, falling back to `"Unknown"`
     without a validation error (§6).
-14. **Document kinds are untyped strings** (`"DeliveryNote"`/`"Cmr"` across renderer, service and
+12. **Document kinds are untyped strings** (`"DeliveryNote"`/`"Cmr"` across renderer, service and
     controller); `NormalizeKind` silently maps unknown values to DeliveryNote after the
     controller-side allowlist (§10).
-16. Pre-existing deferred hardening items (frontend lint, NU1903, OPS checklist) are tracked
+13. Pre-existing deferred hardening items (frontend lint, NU1903, OPS checklist) are tracked
     outside this document — see the memory/known-issues notes and
     [docs/security/operational-checklist.md](../security/operational-checklist.md).

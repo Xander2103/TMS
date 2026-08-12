@@ -33,8 +33,12 @@
 1. Open **Planning → Ritlijst** (`/planning`) en gebruik het paneel **Ritvoorstellen**:
    kies de datum, bekijk de voorstellen per **leverzone** (met gewicht/ldm/pallet-totalen;
    achterstand staat vooraan, orders zonder zone staan onder "Ongezoneerd" met reden).
+   Per order ziet u de **randvoorwaarden** (ADR, kraan, plateau, Moffett, gevraagd
+   tijdvenster, openingsuren van de loslocatie) en per voorstel een
+   **capaciteitssignaal** tegenover het grootste actieve voertuig.
 2. Klik **Maak rit** om een voorstel om te zetten in een rit — bestaande toewijzings- en
-   conflictcontroles blijven gelden.
+   conflictcontroles blijven gelden. Blokkerend: een **ADR-order** vereist een chauffeur
+   met een geldige ADR-kwalificatie op de rit.
 3. Of plan visueel via **Planning → Planbord** (`/planning-center`).
 4. Druk vanaf het ritdetail de documenten af: **CMR's (rit)** en **Leveringsbonnen (rit)**
    (één PDF in routevolgorde).
@@ -46,15 +50,24 @@
   drempel wordt de klant automatisch gemaild.
 - **Vandaag → Meldingen** en **Berichten** houden u op de hoogte; klantvragen uit het
   portaal beantwoordt u via de berichtenthread van de order.
+- Gevoelige klantmails (schade, mislukte levering, vertraging) wachten in de
+  **controlewachtrij** van het meldingenbeheer: met berichtenbeheer geeft u ze daar vrij
+  of wijst u ze af vóór ze de klant bereiken.
 
 ## 6. Problemen afhandelen
 
 1. **Vandaag → Problemen → Incidenten** (`/incidents`): de verenigde lijst toont open
    incidenten én uitvoeringsafwijkingen.
-2. Leg op het incident de **verantwoordelijke partij** vast (Onbekend / Klant / Eigen
+2. Een **mislukte stop** maakt automatisch één incident aan (nooit dubbel), gekoppeld
+   aan order, rit, klant en dossier. Afhankelijk van de **herleveringsmodus**
+   (bedrijfsinstelling) toont het incident **"Herlevering aanbevolen"** (Voorstellen) of
+   staat de herleveringsorder er al (Automatisch).
+3. Leg op het incident de **verantwoordelijke partij** vast (Onbekend / Klant / Eigen
    organisatie / Chauffeur / Leverancier) met toelichting.
-3. Bij verantwoordelijkheid *Klant*: **Doorrekening voorstellen** (bedrag +
+4. Bij verantwoordelijkheid *Klant*: **Doorrekening voorstellen** (bedrag +
    omschrijving); management of boekhouding keurt goed — de verkooplijn komt dan
-   automatisch op de order.
-4. Moet er opnieuw geleverd worden: **Herlevering aanmaken** — een nieuwe conceptorder in
-   hetzelfde dossier met referentie "HERLEVERING {origineel}".
+   automatisch op de order. Een **doorrekenbeleid** per klant/incidenttype kan dit ook
+   automatisch boeken of juist volledig blokkeren.
+5. Moet er opnieuw geleverd worden: **Herlevering aanmaken** — een nieuwe conceptorder in
+   hetzelfde dossier met referentie "HERLEVERING {origineel}", gedateerd op de
+   **eerstvolgende werkdag** (weekends en feestdagen worden overgeslagen).

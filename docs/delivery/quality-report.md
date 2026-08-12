@@ -1,6 +1,8 @@
 # Kwaliteitsrapport — dossiergericht TMS-redesign (eindoplevering 2026-08-12)
 
 Branch: `nav-redesign`. Alle werk is additief; geen V2-duplicaatmodules.
+Dit rapport dekt de basisoplevering (Waves 0–11) én de afrondingsgolf (P0–P13,
+zie §9) die de gaten uit de implementatie-audit sloot.
 
 ## 1. Commits (chronologisch)
 
@@ -98,5 +100,46 @@ bedoelde boom gezet en de suite is opnieuw volledig groen gedraaid.
 
 ## 8. Smoke-verificatie
 
-Zie `docs/delivery/tester-checklist.md` (22 scenario's) voor de handmatige
+Zie `docs/delivery/tester-checklist.md` (52 scenario's) voor de handmatige
 end-to-end-acceptatie; de geautomatiseerde suites hierboven dekken de regressies.
+
+## 9. Afrondingsgolf P0–P13 (2026-08-12)
+
+Gestart vanuit de factuele implementatie-audit; sluit de functionele gaten vóór de
+gebruikersacceptatie. Commits:
+
+| Commit | Inhoud |
+|--------|--------|
+| `1996d4f` | P0 — locatieprojectie bij vertrek + voorkeuren-oversuppressie (2 correctheidsfouten) |
+| `255a593` | P1-P3 backend — klantdocumentstrategie, documentregels/resolver, dagbatch per klant |
+| `5aa7fef` | P1-P3 frontend — klantinstelling, orderkeuze, dagbatchkaart, regeleditor |
+| `cd070a0` | P4-P5 backend — herleveringsautomatisering (werkdaglogica) + doorrekenbeleid |
+| `d23e908` | P4-P5 frontend — instellingen, incidentaanbeveling, doorrekenbeleid-pagina |
+| `d54e7a0` | P6 — prijsdimensies activiteit/plateau/Moffett/retour (legacy byte-stabiel) |
+| `7297919` | P7 — diensthoeveelheden uit echte scans/opslagklok (idempotent) |
+| `d6e4491` | P8-P9 — ETA-levenscyclus compleet + controle op gevoelige berichten |
+| `f033c1e` | P10 — voorstellen verklaren randvoorwaarden; rit-ADR-chauffeursregel |
+| `995179d` | P11 — KPI per activiteit (kraan vs plateau apart) |
+| `9c8883a` | P12 — factuur uitstellen, zichtbaar geparkeerd |
+| `0ecad13` | P13 — Excel-orderimport (vierde genormaliseerd instroomkanaal) |
+| _(slot)_ | frontendafronding (ordervlaggen, regeldimensie, hoeveelheidsbron, controlewachtrij, facturatieselectie, voorstel-voorwaarden) + documentatie |
+
+Nieuwe migraties (allemaal additief en toegepast): `DocumentStrategy`,
+`RedeliveryAndChargePolicy`, `PricingDimensions`, `ServiceQuantitySource`,
+`OrderImport` (draagt ook NotificationRule.RequiresReview), `InvoiceSnooze`.
+
+Gesloten t.o.v. de audit: klantdocument-onderdrukking (C→A), dagbatch per
+klant+datum (C→A), automatische documentstrategie (C→A), uitstellen in facturatie
+(C→A), Excel-import (C→A), herleveringsautomatisering (B→A), doorrekenbeleid
+(B→A), prijsdimensies plateau/Moffett/retour/activiteit (C→A), scan-gedreven
+handling/opslagdiensten (B→A), ETA-drempel-UI en herberekening (B→A),
+controlewachtrij gevoelige berichten (B→A), voorstel-randvoorwaarden (B→A),
+activiteits-KPI (B→A), plus de twee incidentele defecten.
+
+Bewust open (zie ook traceerbaarheidsmatrix): vooraf-communicatie van
+leververwachtingen (venster-/planningsmails zonder producer), reistijdbewuste
+venstervalidatie binnen een voorgestelde tour, automatische periodieke
+opslagfacturen.
+
+Eindstand testsuites na de afrondingsgolf: ZIE EINDRUN (wordt na de slotgates
+ingevuld).

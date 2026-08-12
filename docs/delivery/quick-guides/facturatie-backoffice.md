@@ -23,10 +23,15 @@ niet-geprijsde goederen vereist een apart recht én een reden.
    gefactureerd was. Voeg deze zelf als factuurlijn toe — het systeem herinnert u eraan
    tot het gebeurd is.
 2. **Factuurvoorstellen** — orders die klaar zijn, gegroepeerd per klant volgens diens
-   groeperingsvoorkeur. Klik **Maak factuur**: de factuur wordt aangemaakt met alle orders
-   van het voorstel en u komt direct op het factuurdetail.
+   groeperingsvoorkeur. Met de **selectievakjes** factureert u desgewenst maar een deel
+   van een voorstel. Klik **Maak factuur**: de factuur wordt aangemaakt met de gekozen
+   orders en u komt direct op het factuurdetail.
 3. **Nakijken vóór facturatie** — per order de reden(en) waarom die nog niet klaar is;
    werk deze uitzonderingen weg (herberekenen, POD opvragen, prijs bevestigen).
+4. **Uitstellen (snooze)** — een order die nog niet mee mag, stelt u uit tot een datum,
+   met reden. Uitgestelde orders verdwijnen uit de voorstellen en de nakijklijst en
+   blijven zichtbaar in de eigen sectie **"Uitgesteld"** tot de datum verstrijkt of u
+   het uitstel opheft. Elke uitstel-actie wordt geauditeerd.
 
 ## Groeperingsvoorkeuren per klant
 
@@ -48,6 +53,20 @@ voorstel (bedrag + omschrijving) wordt door management of boekhouding **goedgeke
 afgekeurd**; goedkeuring maakt automatisch een verkooplijn op de order (reden
 "Incident: …"). Was de prijs al vergrendeld/gefactureerd, dan verschijnt de toeslag in de
 facturatiecontrole als handmatig toe te voegen lijn.
+
+Onder **Parameters → Beheer → Doorrekenbeleid** (`/settings/charge-policies`) kan per
+klant en/of incidenttype een beleid staan: **Nooit**, **Voorstellen** of **Automatisch**
+(met standaardbedrag). Het meest specifieke beleid wint en vuurt één keer, zodra de
+verantwoordelijkheid op *Klant* landt. *Automatisch* boekt de lijn via hetzelfde
+mechanisme als een handmatige goedkeuring — geauditeerd en omkeerbaar zolang de prijs
+niet vergrendeld is; *Nooit* blokkeert ook handmatig voorstellen. Eigen fouten kunnen
+nooit worden doorgerekend.
+
+## Vastgehouden klantmail (controlewachtrij)
+
+Gevoelige klantmails (standaard: schade, mislukte levering en vertraging) worden niet
+meteen verstuurd maar wachten in de **controlewachtrij** van het meldingenbeheer. Iemand
+met berichtenbeheer geeft ze vrij of wijst ze af; alleen klantmail wordt vastgehouden.
 
 ## Peppol verzenden
 

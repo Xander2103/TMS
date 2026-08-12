@@ -39,6 +39,11 @@ ze aan de dispatch, ze verdwijnen nooit stilletjes.
 Scan of zoek een barcode op **Trace & voorraad**: u ziet het collonummer, de huidige
 locatie, de gekoppelde order en klant, en de laatste tien bewegingen.
 
+Zodra een collo op een rit geladen wordt (of definitief vertrekt), wordt zijn
+magazijnlocatie automatisch **gewist**: goederen die op de vrachtwagen staan, tonen dus
+nooit meer een magazijnlocatie. Alleen een echte magazijnscan (Ontvangst, Verplaatsen,
+Retour inboeken) zet opnieuw een locatie.
+
 ## Voorraadoverzicht
 
 Hetzelfde scherm toont per magazijn de colli per locatie, met twee signalen:
@@ -57,3 +62,10 @@ Hetzelfde scherm toont per magazijn de colli per locatie, met twee signalen:
   de basis voor de opslagfacturatie.
 - Let op: een ritgebonden depot-retour opent de klok pas wanneer u het collo op het
   magazijnstation inboekt.
+
+## Uw scans sturen de facturatie
+
+Diensten zoals inslag, uitslag en picking kunnen hun aantallen rechtstreeks uit de
+**werkelijke scan-events** halen, en pallet-dagen volgen de opslagklok. Correct en
+volledig scannen is dus ook commercieel belangrijk: te weinig scannen betekent te weinig
+aanrekenen. Handmatig ingevulde aantallen op de order winnen altijd van de scan-telling.

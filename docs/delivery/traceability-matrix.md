@@ -32,3 +32,31 @@ Commits: Wave 0 `e07dca4` … Wave 11 (zie kwaliteitsrapport voor de volledige l
 | 25 | Tenant-isolatie, audit, permissies behouden | Elke nieuwe service: tenant-filters, audit-records, fail-closed rechten; service-side codes geregistreerd | `Phase8SupplyChainTests.ServiceSideEnforcedCodes` | Phase8-suite | ✅ | — |
 
 Legende: ✅ = geïmplementeerd, getest en gecommit op branch `nav-redesign`.
+
+## Afrondingsgolf (P0–P13, 2026-08-12)
+
+Sluit de gaten uit de implementatie-audit; waar een rij hierboven een beperking
+noemde die hieronder is opgelost, geldt deze tabel.
+
+| P | Vereiste | Implementatie | Commit | Test(en) | Status |
+|---|---|---|---|---|---|
+| 0a | Magazijnlocatie klopt na vertrek | `StorageClockInterceptor` wist `CurrentWarehouseLocationId` bij elk vertrek-event | `1996d4f` | `LocationProjection_FollowsTheFullCustodyChain`, partiële-uitslag-pipeline | ✅ |
+| 0b | Voorkeurenlijst onderdrukt nooit niet-regelbare soorten | `MessageKinds.CustomerConfigurable` als enige bron; outbox toetst enkel die catalogus | `1996d4f` | `Queue_CustomerEnabledKinds_OnlyGovernTheConfigurableCatalog` | ✅ |
+| 1 | Klantdocumentstrategie + orderkeuze | `Customer.DocumentStrategy`, `TransportOrder.DocumentPreference`, PUT preference (audit) | `255a593`/`5aa7fef` | `DocumentStrategyTests` (precedentie, uitleg) | ✅ |
+| 2 | Configureerbare documentregels + resolver | `DocumentStrategyResolver` + `TenantDocumentRule` + `/settings/document-rules` | `255a593`/`5aa7fef` | regelprioriteit-, activiteitsregel-, ingebouwde-standaardtests | ✅ |
+| 3 | Dagbatch per klant+datum met voorvertoning | preview + batch-endpoints, ritbatch respecteert strategie, kaart op klantfiche | `255a593`/`5aa7fef` | dagpreview-/dagbatch-/ritbatchuitsluitingstests | ✅ |
+| 4 | (Semi-)automatische herlevering | `RedeliveryMode` Manual/Propose/Automatic, idempotent stop-incident, volgende werkdag | `cd070a0`/`d23e908` | `FailedDeliveryAndChargePolicyTests` (replays, modi, werkdag) | ✅ |
+| 5 | Configureerbaar doorrekenbeleid | `IncidentChargePolicy` Never/Propose/Auto, meest-specifiek-wint, invariant eigen-fout | `cd070a0`/`d23e908` | Never blokkeert, Propose stelt voor, Auto boekt, eigen fout nooit | ✅ |
+| 6 | Prijsdimensies activiteit/uitrusting/retour | `PriceRule.ActivityTypeId`, ordervlaggen plateau/Moffett/retour, 5 nieuwe dienstvoorwaarden | `d54e7a0` | `PricingDimensionTests` (A–E incl. legacy byte-stabiel) | ✅ |
+| 7 | Diensten uit echte magazijnevents | `ServiceOption.QuantitySource` (ScannedIn/Out/Picked/PalletDays), distinct-pakket-telling, LineKey-idempotent | `7297919` | `EventDerivedChargeTests` | ✅ |
+| 8 | ETA-levenscyclus compleet | ritstart-seed + driver_en_route (idempotent), herberekening op alle stopovergangen, drempel-UI, FR/EN-ordersjablonen | `d6e4491` (+ UI in `d23e908`) | bestaande ETA-suites + review-test | ✅ (venstercommunicatie vooraf blijft beperkt tot portaalweergave) |
+| 9 | Controle op gevoelige berichten | `AwaitingReview`-status, `NotificationRule.RequiresReview` (catalogusstandaard schade/mislukt/vertraging), vrijgeven/afwijzen + audit, producers schade & mislukte levering | `d6e4491` | `Queue_RequiresReview_HoldsTheMessage…` | ✅ |
+| 10 | Voorstellen verklaren randvoorwaarden | per-order Constraints (ADR/uitrusting/venster/openingsuren) + capaciteitssignaal; rit-ADR-chauffeursregel | `f033c1e` | `Proposals_ExplainConstraints_AdrEquipmentAndCapacity` | ✅ (reistijd-/venstervolgorde binnen tour blijft heuristisch) |
+| 11 | KPI per activiteit | `/api/kpi/activities`, kraan/plateau apart uit één dossier, omzet/herleveringen/pallet-dagen | `995179d` | `ActivityKpiTests` (5) | ✅ |
+| 12 | Factuur uitstellen + selectie | snooze-velden + endpoint + sectie "Uitgesteld", voorstel-selectievakjes | `9c8883a` (+ UI) | `Snooze_ParksTheOrder…` | ✅ |
+| 13 | Excel-orderimport | profielen ("Generiek v1"), dry-run, checksum-/referentie-dedupe, rij-isolatie, wrapper-dossiergarantie | `0ecad13` | `OrderImportTests` (7) | ✅ |
+
+Nog open na de afrondingsgolf (bewust): vooraf-communicatie van leververwachtingen
+(order_planned/venster-mails hebben nog geen producer), reistijdbewuste
+venstervalidatie binnen een voorgestelde tour, en automatische periodieke
+opslagfacturen (pallet-dagen voeden nu wél de dienstlijnen per order).
