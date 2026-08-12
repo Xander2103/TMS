@@ -127,6 +127,21 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
       )}
 
       <h3>Herlevering</h3>
+      {incident.redeliverySuggested && !incident.linkedRedeliveryOrderNumber && (
+        <p
+          role="status"
+          style={{
+            background: 'var(--warning-bg)',
+            border: '1px solid var(--warning-border)',
+            color: 'var(--warning)',
+            borderRadius: 8,
+            padding: '8px 12px',
+            fontWeight: 600,
+          }}
+        >
+          ⚠ Herlevering aanbevolen na mislukte levering — controleer en maak aan.
+        </p>
+      )}
       {incident.linkedRedeliveryOrderId ? (
         <p>
           Herleveringsorder: <strong>{incident.linkedRedeliveryOrderNumber}</strong>

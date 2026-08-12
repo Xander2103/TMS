@@ -76,6 +76,8 @@ export interface IncidentDetail {
   /** Wave 6 §3: aangemaakte herleveringsorder. */
   linkedRedeliveryOrderId: string | null
   linkedRedeliveryOrderNumber: string | null
+  /** Herlevering aanbevolen na een mislukte levering (RedeliveryMode Propose/Automatic). */
+  redeliverySuggested: boolean
 }
 
 export interface IncidentInput {

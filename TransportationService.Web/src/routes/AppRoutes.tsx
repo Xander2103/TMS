@@ -112,6 +112,7 @@ const NewLocationPage = lazyPage(() => import('../features/locations/pages/NewLo
 const LocationDetailPage = lazyPage(() => import('../features/locations/pages/LocationDetailPage'), 'LocationDetailPage')
 const SettingsPage = lazyPage(() => import('../features/settings/pages/SettingsPage'), 'SettingsPage')
 const DocumentRulesPage = lazyPage(() => import('../features/settings/pages/DocumentRulesPage'), 'DocumentRulesPage')
+const ChargePoliciesPage = lazyPage(() => import('../features/settings/pages/ChargePoliciesPage'), 'ChargePoliciesPage')
 const LegalEntitiesPage = lazyPage(() => import('../features/legal-entities/pages/LegalEntitiesPage'), 'LegalEntitiesPage')
 const IssuedItemTemplatesPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemTemplatesPage'), 'IssuedItemTemplatesPage')
 const IssuedItemTemplateDetailPage = lazyPage(() => import('../features/issued-items/pages/IssuedItemTemplateDetailPage'), 'IssuedItemTemplateDetailPage')
@@ -281,6 +282,7 @@ const router = createBrowserRouter(
           <Route path="/master-data/:resource" element={<LookupPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/document-rules" element={<DocumentRulesPage />} />
+          <Route path="/settings/charge-policies" element={<ChargePoliciesPage />} />
           <Route path="/settings/legal-entities" element={<LegalEntitiesPage />} />
           <Route path="/settings/issued-item-templates" element={<IssuedItemTemplatesPage />} />
           <Route path="/settings/issued-item-templates/:id" element={<IssuedItemTemplateDetailPage />} />

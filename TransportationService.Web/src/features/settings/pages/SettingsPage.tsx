@@ -284,6 +284,37 @@ export function SettingsPage() {
                 <option value="Blocking">Blokkerend</option>
               </select>
             </FormField>
+            <FormField
+              label="Herlevering bij mislukte stop"
+              htmlFor="set-redelivery-mode"
+              hint="Wat gebeurt er nadat een stop als mislukt is gemeld?"
+            >
+              <select
+                id="set-redelivery-mode"
+                value={form.redeliveryMode}
+                onChange={(e) => setField('redeliveryMode', e.target.value)}
+                disabled={!canManage || saving}
+              >
+                <option value="Manual">Handmatig (enkel incident)</option>
+                <option value="Propose">Voorstellen aan dispatch</option>
+                <option value="Automatic">Automatisch aanmaken (volgende werkdag)</option>
+              </select>
+            </FormField>
+            <FormField
+              label="Klantmelding bij ETA-verschuiving (minuten)"
+              htmlFor="set-eta-shift-notify"
+              hint="Leeg = geen drempelmeldingen."
+            >
+              <input
+                id="set-eta-shift-notify"
+                type="number"
+                min={1}
+                max={720}
+                value={form.etaShiftNotifyMinutes ?? ''}
+                disabled={!canManage || saving}
+                onChange={(e) => setField('etaShiftNotifyMinutes', e.target.value === '' ? null : Number(e.target.value))}
+              />
+            </FormField>
           </div>
         </section>
 

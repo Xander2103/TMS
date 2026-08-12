@@ -33,6 +33,10 @@ export interface CompanySettings {
   trainingConflictSeverity: string
   capacityConflictSeverity: string
   shiftOverlapConflictSeverity: string
+  /** Manual | Propose | Automatic: wat er gebeurt met een herlevering na een mislukte stop. */
+  redeliveryMode: string
+  /** Drempel (1-720 min) voor klantmeldingen bij ETA-verschuiving; null = geen drempelmeldingen. */
+  etaShiftNotifyMinutes: number | null
   qualificationExpiryWarningDays: number
   employeeNumberPrefix: string | null
   employeeNumberNextValue: number
