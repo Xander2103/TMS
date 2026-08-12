@@ -81,6 +81,8 @@ export function EventRuleModal({ rule, onClose, onSaved }: EventRuleModalProps) 
           type: r.type,
           value: RECIPIENT_TYPES_WITH_VALUE.includes(r.type) ? (r.value?.trim() || null) : null,
         })),
+        // Echo the effective review setting — the modal edits recipients/channels, not the hold.
+        requiresReview: rule.requiresReview,
       })
       showSuccess('Meldingsregel opgeslagen.')
       onSaved()

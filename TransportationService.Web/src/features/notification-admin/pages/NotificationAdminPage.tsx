@@ -11,7 +11,7 @@ import { RecipientsInfoTab } from '../components/RecipientsInfoTab'
 import { TemplatesTab } from '../components/TemplatesTab'
 import './notification-admin.css'
 
-const TAB_IDS = ['gebeurtenissen', 'sjablonen', 'ontvangers', 'klantafwijkingen', 'verzonden', 'mislukt'] as const
+const TAB_IDS = ['gebeurtenissen', 'sjablonen', 'ontvangers', 'klantafwijkingen', 'controle', 'verzonden', 'mislukt'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 /**
@@ -36,6 +36,7 @@ export function NotificationAdminPage() {
     list.push({ id: 'ontvangers', label: 'Ontvangers' })
     list.push({ id: 'klantafwijkingen', label: 'Klantafwijkingen' })
     if (canMessaging) {
+      list.push({ id: 'controle', label: 'Wacht op controle' })
       list.push({ id: 'verzonden', label: 'Verzonden berichten' })
       list.push({ id: 'mislukt', label: 'Mislukte berichten' })
     }
@@ -84,6 +85,11 @@ export function NotificationAdminPage() {
       {tab === 'klantafwijkingen' && (
         <TabPanel tabId="klantafwijkingen">
           <CustomerOverridesTab canManage={canManageRules} />
+        </TabPanel>
+      )}
+      {tab === 'controle' && canMessaging && (
+        <TabPanel tabId="controle">
+          <OutboxTab variant="review" />
         </TabPanel>
       )}
       {tab === 'verzonden' && canMessaging && (

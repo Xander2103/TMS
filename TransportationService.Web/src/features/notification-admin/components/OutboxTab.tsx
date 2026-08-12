@@ -7,7 +7,7 @@ import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
-import { listOutbox, retryOutboxMessage } from '../api/notificationAdminApi'
+import { listOutbox, rejectOutboxMessage, releaseOutboxMessage, retryOutboxMessage } from '../api/notificationAdminApi'
 import { kindLabel, type MessageChannel, type OutboxRow, type OutboxStatus } from '../types'
 
 const PAGE_SIZE = 25
@@ -28,14 +28,16 @@ function RelatedEntityCell({ type, id }: { type: string | null; id: string | nul
 }
 
 interface OutboxTabProps {
-  /** 'sent' shows the delivered-message columns; 'failed' shows failure reason + retry. */
-  variant: 'sent' | 'failed'
+  /** 'sent' shows the delivered-message columns; 'failed' shows failure reason + retry;
+   * 'review' (P9) shows review-held messages with release/reject actions. */
+  variant: 'sent' | 'failed' | 'review'
   /** Failed tab only: lets the user flip between genuinely failed and deliberately suppressed rows. */
   includeSuppressedToggle?: boolean
 }
 
-/** Shared outbox table for "Verzonden berichten" (Status=Sent) and "Mislukte berichten"
- * (Status=Failed, with a toggle to Suppressed) — same filters, different columns. */
+/** Shared outbox table for "Verzonden berichten" (Status=Sent), "Mislukte berichten"
+ * (Status=Failed, with a toggle to Suppressed) and "Wacht op controle"
+ * (Status=AwaitingReview) — same filters, different columns. */
 export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTabProps) {
   const { showSuccess, showError } = useToast()
   const [search, setSearch] = useState('')
@@ -51,7 +53,11 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
     loadedKey: '',
   })
 
-  const status: OutboxStatus = variant === 'sent' ? 'Sent' : suppressedOnly ? 'Suppressed' : 'Failed'
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+
+  const status: OutboxStatus =
+    variant === 'sent' ? 'Sent' : variant === 'review' ? 'AwaitingReview' : suppressedOnly ? 'Suppressed' : 'Failed'
   // Identifies the current request; isLoading is derived from whether the loaded result matches
   // it, so state is only ever mutated inside the async .then/.catch callbacks below (never
   // synchronously in the effect body) — mirrors hooks/usePagedQuery.ts.
@@ -94,6 +100,28 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
     }
   }
 
+  async function release(id: string) {
+    try {
+      await releaseOutboxMessage(id)
+      showSuccess('Bericht vrijgegeven — het wordt verzonden.')
+      setReloadToken((t) => t + 1)
+    } catch (err) {
+      showError(describeApiError(err, 'Vrijgeven is mislukt.').message)
+    }
+  }
+
+  async function confirmReject(id: string) {
+    try {
+      await rejectOutboxMessage(id, rejectReason.trim() || null)
+      showSuccess('Bericht afgewezen — het wordt niet verzonden.')
+      setRejectTargetId(null)
+      setRejectReason('')
+      setReloadToken((t) => t + 1)
+    } catch (err) {
+      showError(describeApiError(err, 'Afwijzen is mislukt.').message)
+    }
+  }
+
   const baseColumns: Column<OutboxRow>[] = [
     { key: 'createdAt', header: 'Datum', render: (r) => r.createdAt.slice(0, 16).replace('T', ' ') },
     { key: 'channel', header: 'Kanaal', render: (r) => CHANNEL_LABELS[r.channel] },
@@ -114,6 +142,58 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
             key: 'related',
             header: 'Gekoppelde entiteit',
             render: (r) => <RelatedEntityCell type={r.relatedEntityType} id={r.relatedEntityId} />,
+          },
+        ]
+      : variant === 'review'
+      ? [
+          ...baseColumns,
+          { key: 'subject', header: 'Onderwerp', render: (r) => r.subject ?? '—' },
+          {
+            key: 'related',
+            header: 'Gekoppelde entiteit',
+            render: (r) => <RelatedEntityCell type={r.relatedEntityType} id={r.relatedEntityId} />,
+          },
+          {
+            key: 'actions',
+            header: '',
+            render: (r) =>
+              rejectTargetId === r.id ? (
+                <span className="notification-admin-inline-field">
+                  <input
+                    aria-label={`Reden van afwijzing voor ${r.recipientAddress}`}
+                    placeholder="Reden van afwijzing"
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                  />
+                  <Button variant="ghost" onClick={() => void confirmReject(r.id)}>
+                    Bevestig afwijzen
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setRejectTargetId(null)
+                      setRejectReason('')
+                    }}
+                  >
+                    Annuleren
+                  </Button>
+                </span>
+              ) : (
+                <>
+                  <Button variant="ghost" onClick={() => void release(r.id)}>
+                    Vrijgeven
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setRejectTargetId(r.id)
+                      setRejectReason('')
+                    }}
+                  >
+                    Afwijzen
+                  </Button>
+                </>
+              ),
           },
         ]
       : [

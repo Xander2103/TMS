@@ -35,6 +35,8 @@ export interface ProposalOrder {
   loadingMeters: number | null
   palletCount: number | null
   overdue: boolean
+  /** P10: haalbaarheidsvoorwaarden per order (ADR/uitrusting/venster/openingsuren) — nooit verborgen. */
+  constraints: string[]
 }
 
 export interface TourProposal {

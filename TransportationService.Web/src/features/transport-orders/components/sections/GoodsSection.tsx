@@ -30,6 +30,13 @@ interface GoodsSectionProps {
   setAdrRequired: (value: boolean) => void
   craneRequired: boolean
   setCraneRequired: (value: boolean) => void
+  /** P6: uitrusting/beweging-prijsdimensies (naast ADR/kraan). */
+  plateauRequired: boolean
+  setPlateauRequired: (value: boolean) => void
+  moffettRequired: boolean
+  setMoffettRequired: (value: boolean) => void
+  isReturnMovement: boolean
+  setIsReturnMovement: (value: boolean) => void
   /** True once any cargo line exists: the header inputs make way for the derived summary. */
   derivedFromCargo: boolean
   cargoSummary: CargoSummary | null
@@ -73,6 +80,12 @@ export function GoodsSection({
   setAdrRequired,
   craneRequired,
   setCraneRequired,
+  plateauRequired,
+  setPlateauRequired,
+  moffettRequired,
+  setMoffettRequired,
+  isReturnMovement,
+  setIsReturnMovement,
   derivedFromCargo,
   cargoSummary,
   cargoItems,
@@ -183,6 +196,18 @@ export function GoodsSection({
         <label className="tof-checkbox">
           <input type="checkbox" checked={craneRequired} onChange={(e) => setCraneRequired(e.target.checked)} disabled={saving} />
           Kraan vereist
+        </label>
+        <label className="tof-checkbox">
+          <input type="checkbox" checked={plateauRequired} onChange={(e) => setPlateauRequired(e.target.checked)} disabled={saving} />
+          Plateau vereist
+        </label>
+        <label className="tof-checkbox">
+          <input type="checkbox" checked={moffettRequired} onChange={(e) => setMoffettRequired(e.target.checked)} disabled={saving} />
+          Moffett/meeneemheftruck vereist
+        </label>
+        <label className="tof-checkbox">
+          <input type="checkbox" checked={isReturnMovement} onChange={(e) => setIsReturnMovement(e.target.checked)} disabled={saving} />
+          Retourrit (retour)
         </label>
       </div>
 

@@ -88,6 +88,9 @@ export interface ControlOrder {
   customerReference: string | null
   invoiceReadiness: string
   reasons: string[]
+  /** P12: uitgesteld tot deze datum (buiten de voorstellen, apart getoond). */
+  snoozedUntil: string | null
+  snoozeReason: string | null
 }
 
 export interface InvoiceProposal {
@@ -103,10 +106,23 @@ export interface InvoiceControl {
   proposals: InvoiceProposal[]
   needsReview: ControlOrder[]
   pendingCharges: string[]
+  /** P12: uitgestelde orders — buiten de voorstellen tot hun datum, nooit verborgen. */
+  snoozed: ControlOrder[]
 }
 
 export function getInvoiceControl(): Promise<InvoiceControl> {
   return apiClient.getJson('/api/invoice-control')
+}
+
+export interface SnoozeOrderInput {
+  /** null = uitstel opheffen. */
+  until: string | null
+  reason: string | null
+}
+
+/** P12: stelt de facturatie van een order uit (of heft het uitstel op met until = null). */
+export function snoozeInvoiceControlOrder(orderId: string, input: SnoozeOrderInput): Promise<void> {
+  return apiClient.putJson<void, SnoozeOrderInput>(`/api/invoice-control/orders/${orderId}/snooze`, input)
 }
 
 export function createInvoice(input: CreateInvoiceInput): Promise<InvoiceDetail> {

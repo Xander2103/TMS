@@ -43,6 +43,9 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
   const [loadingMeters, setLoadingMeters] = useState(order.loadingMeters == null ? '' : String(order.loadingMeters))
   const [adrRequired, setAdrRequired] = useState(order.adrRequired)
   const [craneRequired, setCraneRequired] = useState(order.craneRequired)
+  const [plateauRequired, setPlateauRequired] = useState(order.plateauRequired ?? false)
+  const [moffettRequired, setMoffettRequired] = useState(order.moffettRequired ?? false)
+  const [isReturnMovement, setIsReturnMovement] = useState(order.isReturnMovement ?? false)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,6 +92,9 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
       loadingMeters,
       adrRequired,
       craneRequired,
+      plateauRequired,
+      moffettRequired,
+      isReturnMovement,
     }
   }
 
@@ -131,6 +137,9 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
     setLoadingMeters(conflict.loadingMeters == null ? '' : String(conflict.loadingMeters))
     setAdrRequired(conflict.adrRequired)
     setCraneRequired(conflict.craneRequired)
+    setPlateauRequired(conflict.plateauRequired ?? false)
+    setMoffettRequired(conflict.moffettRequired ?? false)
+    setIsReturnMovement(conflict.isReturnMovement ?? false)
     setDirty(false)
     setConflict(null)
     setError(null)
@@ -170,6 +179,12 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
           setAdrRequired={touch(setAdrRequired)}
           craneRequired={craneRequired}
           setCraneRequired={touch(setCraneRequired)}
+          plateauRequired={plateauRequired}
+          setPlateauRequired={touch(setPlateauRequired)}
+          moffettRequired={moffettRequired}
+          setMoffettRequired={touch(setMoffettRequired)}
+          isReturnMovement={isReturnMovement}
+          setIsReturnMovement={touch(setIsReturnMovement)}
           derivedFromCargo={derivedFromCargo}
           cargoSummary={cargoSummary}
           cargoItems={cargoItems}

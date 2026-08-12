@@ -362,6 +362,10 @@ export interface OrderFormValues {
   loadingMeters: string
   adrRequired: boolean
   craneRequired: boolean
+  /** P6: uitrusting/beweging-prijsdimensies (naast ADR/kraan). */
+  plateauRequired: boolean
+  moffettRequired: boolean
+  isReturnMovement: boolean
   agreedPrice: string
   notes: string
   legalEntityId: string

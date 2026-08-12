@@ -25,6 +25,7 @@ import {
   type UnitTypeSettings,
 } from '../api/pricingApi'
 import { listSalesCategories, type SalesCategory } from '../../accounting/api/accountingApi'
+import { listActivityTypes, type ActivityType } from '../../dossiers/api/activityTypesApi'
 import { BracketOverrideDialog } from './BracketOverrideDialog'
 import './ruleGridEditor.css'
 
@@ -67,6 +68,7 @@ function ruleToInput(rule: PriceRule): PriceRuleInput {
     bracketMode: rule.bracketMode,
     salesCategoryId: rule.salesCategoryId,
     originZoneId: rule.originZoneId,
+    activityTypeId: rule.activityTypeId,
   }
 }
 
@@ -98,6 +100,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [zones, setZones] = useState<PricingZone[]>([])
   const [salesCategories, setSalesCategories] = useState<SalesCategory[]>([])
+  const [activityTypes, setActivityTypes] = useState<ActivityType[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [rowErrors, setRowErrors] = useState<Record<string, FieldErrors>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -129,6 +132,10 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
     // Sales codes feed the optional verkoopcategorie column; unavailable is fine.
     listSalesCategories()
       .then(setSalesCategories)
+      .catch(() => {})
+    // Activity types feed the optional activiteitstype column (P6); unavailable is fine.
+    listActivityTypes()
+      .then(setActivityTypes)
       .catch(() => {})
   }, [agreementId])
 
@@ -287,6 +294,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                 <th>Eenheid</th>
                 <th>Zone</th>
                 <th title="Herkomstzone: de regel geldt alleen als de eerste laadstop in deze zone valt; leeg = elke herkomst">Van zone</th>
+                <th title="Activiteitstype: de regel geldt alleen voor orders van dit dossieractiviteitstype; leeg = elke activiteit">Activiteitstype</th>
                 <th>Prioriteit</th>
                 <th>Prijs / staffelprijs</th>
                 <th>Extra / eenheid</th>
@@ -395,6 +403,21 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           {zones.map((zone) => (
                             <option key={zone.id} value={zone.id}>
                               {zone.code}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          aria-label={`Activiteitstype voor ${rule.name}`}
+                          value={rule.activityTypeId ?? ''}
+                          disabled={!canManage}
+                          onChange={(e) => void saveRule(rule, { activityTypeId: e.target.value || null })}
+                        >
+                          <option value="">— Alle —</option>
+                          {activityTypes.map((type) => (
+                            <option key={type.id} value={type.id}>
+                              {type.name}
                             </option>
                           ))}
                         </select>
@@ -580,7 +603,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         <Fragment key={bracket.id ?? `${rule.id}-bracket-${index}`}>
                         <tr className="rule-grid-bracket-row">
                           <td>↳ Staffel {bracketRangeLabel(bracket)}</td>
-                          <td colSpan={5}>—</td>
+                          <td colSpan={6}>—</td>
                           <td>
                             <input
                               aria-label={`Staffel ${index + 1} van ${rule.name} prijs`}
@@ -701,7 +724,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                             <td>
                               ↳ <Badge tone="info">Klantafwijking</Badge> <span>{override.customerName}</span>
                             </td>
-                            <td colSpan={5}>—</td>
+                            <td colSpan={6}>—</td>
                             <td>€ {override.price.toFixed(2)}</td>
                             <td>{override.pricePerExtraUnit !== null ? `€ ${override.pricePerExtraUnit.toFixed(2)}` : '—'}</td>
                             <td colSpan={5}>—</td>
@@ -729,7 +752,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         .filter((o) => o.orphaned)
                         .map((override) => (
                           <tr key={override.id} className="rule-grid-bracket-row rule-grid-override-row">
-                            <td colSpan={21}>
+                            <td colSpan={22}>
                               ⚠ Klantafwijking van {override.customerName} (staffel {override.fromQuantity}–
                               {override.toQuantity ?? 'open'}) verwijst naar een rij die niet meer bestaat en wordt niet
                               toegepast.
@@ -749,7 +772,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         ))}
                     {expanded && canManage && (
                       <tr className="rule-grid-bracket-row">
-                        <td colSpan={22}>
+                        <td colSpan={23}>
                           <button type="button" className="issued-items-link" onClick={() => addBracket(rule)}>
                             + Staffelrij
                           </button>

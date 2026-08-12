@@ -40,6 +40,8 @@ export interface NotificationRule {
   recipients: RecipientSpec[]
   isCustomized: boolean
   peppolPending: boolean
+  /** P9: klantmail van deze gebeurtenis wordt vastgehouden voor controle door dispatch. */
+  requiresReview: boolean
 }
 
 export interface UpsertNotificationRuleInput {
@@ -48,6 +50,8 @@ export interface UpsertNotificationRuleInput {
   emailEnabled: boolean
   allowCustomerOverride: boolean
   recipients: RecipientSpec[]
+  /** P9: null = catalogusstandaard voor deze gebeurtenis behouden. */
+  requiresReview: boolean | null
 }
 
 export interface CustomerNotificationOverride {
@@ -58,7 +62,7 @@ export interface CustomerNotificationOverride {
 }
 
 export type MessageChannel = 'Email' | 'Sms'
-export type OutboxStatus = 'Pending' | 'Sent' | 'Failed' | 'Suppressed'
+export type OutboxStatus = 'Pending' | 'Sent' | 'Failed' | 'Suppressed' | 'AwaitingReview'
 
 export interface OutboxRow {
   id: string

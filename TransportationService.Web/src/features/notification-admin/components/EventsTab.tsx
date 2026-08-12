@@ -68,7 +68,10 @@ export function EventsTab({ canManage }: EventsTabProps) {
     reload()
   }, [reload])
 
-  async function toggleField(rule: NotificationRule, field: 'enabled' | 'inAppEnabled' | 'emailEnabled') {
+  async function toggleField(
+    rule: NotificationRule,
+    field: 'enabled' | 'inAppEnabled' | 'emailEnabled' | 'requiresReview',
+  ) {
     try {
       await updateNotificationRule(rule.eventKey, {
         enabled: field === 'enabled' ? !rule.enabled : rule.enabled,
@@ -76,6 +79,9 @@ export function EventsTab({ canManage }: EventsTabProps) {
         emailEnabled: field === 'emailEnabled' ? !rule.emailEnabled : rule.emailEnabled,
         allowCustomerOverride: rule.allowCustomerOverride,
         recipients: rule.recipients,
+        // The DTO value is the effective (rule ?? catalog) setting; echoing it keeps the
+        // behaviour stable when another field is toggled, flipping it changes the review hold.
+        requiresReview: field === 'requiresReview' ? !rule.requiresReview : rule.requiresReview,
       })
       showSuccess('Meldingsregel bijgewerkt.')
       reload()
@@ -144,6 +150,21 @@ export function EventsTab({ canManage }: EventsTabProps) {
             </Badge>
           ))}
         </div>
+      ),
+    },
+    {
+      key: 'requiresReview',
+      header: 'Controle vóór verzenden',
+      render: (rule) => (
+        <label className="notification-admin-checkbox" title="Klantmail wordt vastgehouden tot een dispatcher die vrijgeeft (tab 'Wacht op controle').">
+          <input
+            type="checkbox"
+            aria-label={`Controle vóór verzenden: ${rule.label}`}
+            checked={rule.requiresReview}
+            disabled={!canManage || rule.peppolPending}
+            onChange={() => void toggleField(rule, 'requiresReview')}
+          />
+        </label>
       ),
     },
     {

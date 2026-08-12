@@ -34,6 +34,7 @@ function rule(overrides: Partial<NotificationRule> = {}): NotificationRule {
     recipients: [{ type: 'InternalPermission', value: 'orders.change_status' }],
     isCustomized: false,
     peppolPending: false,
+    requiresReview: false,
     ...overrides,
   }
 }
@@ -67,6 +68,7 @@ describe('EventsTab', () => {
         emailEnabled: false,
         allowCustomerOverride: false,
         recipients: [{ type: 'InternalPermission', value: 'orders.change_status' }],
+        requiresReview: false,
       }),
     )
   })

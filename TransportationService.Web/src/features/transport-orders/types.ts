@@ -213,6 +213,10 @@ export interface TransportOrderDetail {
   loadingMeters?: number | null
   adrRequired: boolean
   craneRequired: boolean
+  /** P6: uitrusting/beweging-prijsdimensies (naast ADR/kraan). */
+  plateauRequired?: boolean
+  moffettRequired?: boolean
+  isReturnMovement?: boolean
   agreedPrice: number | null
   notes: string | null
   cancellationReason: string | null
@@ -480,6 +484,10 @@ export interface TransportOrderInput {
   loadingMeters?: number | null
   adrRequired: boolean
   craneRequired: boolean
+  /** P6: uitrusting/beweging-prijsdimensies; weggelaten = false op de server. */
+  plateauRequired?: boolean
+  moffettRequired?: boolean
+  isReturnMovement?: boolean
   agreedPrice: number | null
   notes: string | null
   stops: StopInput[]

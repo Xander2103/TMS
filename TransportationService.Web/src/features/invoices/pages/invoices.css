@@ -300,3 +300,11 @@
   color: #92400e;
   cursor: help;
 }
+
+/* P12: inline datum+reden invoer voor het uitstellen van een order in de facturatiecontrole. */
+.inv-snooze-editor {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}

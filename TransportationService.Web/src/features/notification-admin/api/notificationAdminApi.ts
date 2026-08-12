@@ -113,3 +113,13 @@ export function listOutbox(query: OutboxQuery): Promise<PagedResult<OutboxRow>> 
 export function retryOutboxMessage(id: string): Promise<void> {
   return apiClient.postJson<void, Record<string, never>>(`/api/messaging/outbox/${id}/retry`, {})
 }
+
+/** P9: geeft een vastgehouden bericht vrij — het gaat de normale verzendwachtrij in. */
+export function releaseOutboxMessage(id: string): Promise<void> {
+  return apiClient.postJson<void, Record<string, never>>(`/api/messaging/outbox/${id}/release`, {})
+}
+
+/** P9: wijst een vastgehouden bericht af — het wordt onderdrukt met de reden. */
+export function rejectOutboxMessage(id: string, reason: string | null): Promise<void> {
+  return apiClient.postJson<void, { reason: string | null }>(`/api/messaging/outbox/${id}/reject`, { reason })
+}

@@ -12,6 +12,8 @@ vi.mock('../../../components/ui/toastContext', () => ({
 const api = vi.hoisted(() => ({
   listOutbox: vi.fn(),
   retryOutboxMessage: vi.fn(),
+  releaseOutboxMessage: vi.fn(),
+  rejectOutboxMessage: vi.fn(),
 }))
 vi.mock('../api/notificationAdminApi', () => api)
 
@@ -76,5 +78,54 @@ describe('OutboxTab (failed variant)', () => {
     await user.click(screen.getByLabelText('Onderdrukte berichten tonen'))
 
     await waitFor(() => expect(api.listOutbox).toHaveBeenCalledWith(expect.objectContaining({ status: 'Suppressed' })))
+  })
+})
+
+describe('OutboxTab (review variant — P9 "Wacht op controle")', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    api.releaseOutboxMessage.mockResolvedValue(undefined)
+    api.rejectOutboxMessage.mockResolvedValue(undefined)
+  })
+
+  function reviewRow(overrides: Partial<OutboxRow> = {}): OutboxRow {
+    return failedRow({ status: 'AwaitingReview', failureReason: null, attemptCount: 0, ...overrides })
+  }
+
+  it('lists AwaitingReview messages and releases one back into the send queue', async () => {
+    const user = userEvent.setup()
+    api.listOutbox.mockResolvedValue({ items: [reviewRow()], totalCount: 1, page: 1, pageSize: 25 })
+
+    render(
+      <MemoryRouter>
+        <OutboxTab variant="review" />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText('Haven BV · haven@klant.test')).toBeInTheDocument()
+    expect(api.listOutbox).toHaveBeenCalledWith(expect.objectContaining({ status: 'AwaitingReview' }))
+
+    await user.click(screen.getByRole('button', { name: 'Vrijgeven' }))
+
+    await waitFor(() => expect(api.releaseOutboxMessage).toHaveBeenCalledWith('msg-1'))
+    await waitFor(() => expect(api.listOutbox).toHaveBeenCalledTimes(2))
+  })
+
+  it('rejects a message with an inline reason', async () => {
+    const user = userEvent.setup()
+    api.listOutbox.mockResolvedValue({ items: [reviewRow()], totalCount: 1, page: 1, pageSize: 25 })
+
+    render(
+      <MemoryRouter>
+        <OutboxTab variant="review" />
+      </MemoryRouter>,
+    )
+
+    await user.click(await screen.findByRole('button', { name: 'Afwijzen' }))
+    await user.type(screen.getByLabelText('Reden van afwijzing voor haven@klant.test'), 'Verkeerde ontvanger')
+    await user.click(screen.getByRole('button', { name: 'Bevestig afwijzen' }))
+
+    await waitFor(() => expect(api.rejectOutboxMessage).toHaveBeenCalledWith('msg-1', 'Verkeerde ontvanger'))
+    await waitFor(() => expect(api.listOutbox).toHaveBeenCalledTimes(2))
   })
 })

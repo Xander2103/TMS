@@ -235,14 +235,19 @@ function TourProposalsPanel() {
           {proposal.explanations.map((line, index) => (
             <p key={index} className="wh-muted">{line}</p>
           ))}
-          <p>
+          <div>
             {proposal.orders.map((order) => (
-              <span key={order.transportOrderId} style={{ marginRight: 12 }}>
+              <div key={order.transportOrderId} style={{ marginBottom: 4 }}>
                 {order.overdue && <Badge tone="warning">achterstand</Badge>}{' '}
                 <code>{order.orderNumber}</code> {order.deliveryCity ?? ''} {order.deliveryPostalCode ?? ''}
-              </span>
+                {order.constraints.map((constraint, index) => (
+                  <p key={index} className="wh-muted" style={{ margin: '2px 0 0 16px' }}>
+                    <Badge tone="warning">voorwaarde</Badge> {constraint}
+                  </p>
+                ))}
+              </div>
             ))}
-          </p>
+          </div>
         </div>
       ))}
       {proposals !== null && proposals.excluded.length > 0 && (

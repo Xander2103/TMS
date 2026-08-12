@@ -14,8 +14,11 @@ import {
   deleteServiceOption,
   listServiceOptions,
   listUnitTypeSettings,
+  SCAN_QUANTITY_SOURCES,
+  SERVICE_QUANTITY_SOURCE_LABELS,
   updateServiceOption,
   type ServiceOption,
+  type ServiceQuantitySource,
   type ServiceTimeCondition,
   type UnitTypeSettings,
 } from '../api/pricingApi'
@@ -47,6 +50,7 @@ interface OptionDraft {
   warehouseIds: string[]
   timeConditions: TimeConditionDraft[]
   salesCategoryId: string
+  quantitySource: ServiceQuantitySource
 }
 
 const TIME_CONDITION_KIND_LABELS: Record<ServiceTimeCondition['kind'], string> = {
@@ -167,6 +171,7 @@ export function ServiceOptionsEditor() {
             onlyForAdr: option.onlyForAdr,
             warehouseIds: option.warehouseIds ?? [],
             salesCategoryId: option.salesCategoryId ?? '',
+            quantitySource: option.quantitySource ?? 'Ordered',
             timeConditions: (option.timeConditions ?? []).map((c) => ({
               kind: c.kind,
               stopScope: c.stopScope,
@@ -191,6 +196,7 @@ export function ServiceOptionsEditor() {
             warehouseIds: [],
             timeConditions: [],
             salesCategoryId: '',
+            quantitySource: 'Ordered',
           },
     )
   }
@@ -215,6 +221,7 @@ export function ServiceOptionsEditor() {
         onlyForAdr: draft.onlyForAdr,
         warehouseIds: draft.warehouseIds,
         salesCategoryId: draft.salesCategoryId || null,
+        quantitySource: draft.quantitySource,
         timeConditions: draft.timeConditions.map((c) => ({
           kind: c.kind,
           stopScope: c.stopScope,
@@ -271,6 +278,9 @@ export function ServiceOptionsEditor() {
               <td>
                 {formatServiceValue(option.kind, option.defaultValue, option.unitTypeName)}
                 {option.autoApply && <Badge tone="info">Automatisch</Badge>}
+                {option.quantitySource && option.quantitySource !== 'Ordered' && (
+                  <Badge tone="info">{SERVICE_QUANTITY_SOURCE_LABELS[option.quantitySource]}</Badge>
+                )}
                 {option.onlyForAdr && <Badge tone="warning">Alleen bij ADR</Badge>}
                 {(option.warehouseNames?.length ?? 0) > 0 && (
                   <Badge tone="warning">Magazijn: {option.warehouseNames!.join(', ')}</Badge>
@@ -344,8 +354,34 @@ export function ServiceOptionsEditor() {
                 <input id="opt-value" type="number" step="0.01" value={draft.defaultValue} onChange={(e) => setDraft((d) => (d ? { ...d, defaultValue: e.target.value } : d))} />
               </FormField>
             </div>
+            <FormField
+              label="Hoeveelheid uit"
+              htmlFor="opt-quantity-source"
+              hint="Waar de factureerbare hoeveelheid vandaan komt: de bestelde aantallen of de werkelijke magazijnactiviteit (scans/picks/opslagdagen)."
+            >
+              <select
+                id="opt-quantity-source"
+                value={draft.quantitySource}
+                onChange={(e) => setDraft((d) => (d ? { ...d, quantitySource: e.target.value as ServiceQuantitySource } : d))}
+              >
+                {Object.entries(SERVICE_QUANTITY_SOURCE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
             {draft.kind === 'PerUnit' && (
-              <FormField label="Eenheid" htmlFor="opt-unit" required hint="De eenheid waarvan het aantal op de order deze service telt (bv. Colli, Pallet).">
+              <FormField
+                label="Eenheid"
+                htmlFor="opt-unit"
+                required={!SCAN_QUANTITY_SOURCES.includes(draft.quantitySource)}
+                hint={
+                  SCAN_QUANTITY_SOURCES.includes(draft.quantitySource)
+                    ? 'Optioneel bij een scanbron: er wordt op fysieke pakketten geteld, niet op een besteleenheid.'
+                    : 'De eenheid waarvan het aantal op de order deze service telt (bv. Colli, Pallet).'
+                }
+              >
                 <select id="opt-unit" value={draft.unitTypeId} onChange={(e) => setDraft((d) => (d ? { ...d, unitTypeId: e.target.value } : d))}>
                   <option value="">— Kies eenheid —</option>
                   {activeUnits.map((unit) => (

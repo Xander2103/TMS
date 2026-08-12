@@ -704,7 +704,11 @@ export function TransportOrderDetailPage() {
                 <dd>
                   {order.adrRequired && <Badge tone="danger">ADR</Badge>}
                   {order.craneRequired && <Badge tone="info">Kraan</Badge>}
-                  {!order.adrRequired && !order.craneRequired && '—'}
+                  {order.plateauRequired && <Badge tone="info">Plateau</Badge>}
+                  {order.moffettRequired && <Badge tone="info">Moffett</Badge>}
+                  {order.isReturnMovement && <Badge tone="neutral">Retour</Badge>}
+                  {!order.adrRequired && !order.craneRequired && !order.plateauRequired &&
+                    !order.moffettRequired && !order.isReturnMovement && '—'}
                 </dd>
               </div>
             </dl>

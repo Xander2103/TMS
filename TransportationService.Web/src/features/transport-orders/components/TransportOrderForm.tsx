@@ -94,6 +94,9 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   )
   const [adrRequired, setAdrRequired] = useState(order?.adrRequired ?? false)
   const [craneRequired, setCraneRequired] = useState(order?.craneRequired ?? false)
+  const [plateauRequired, setPlateauRequired] = useState(order?.plateauRequired ?? false)
+  const [moffettRequired, setMoffettRequired] = useState(order?.moffettRequired ?? false)
+  const [isReturnMovement, setIsReturnMovement] = useState(order?.isReturnMovement ?? false)
   const [agreedPrice, setAgreedPrice] = useState(
     order?.agreedPrice === null || order === undefined ? '' : String(order.agreedPrice),
   )
@@ -204,7 +207,8 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     customerId, customerReference, orderDate, goodsDescription,
     quantity, quantityUnit, quantityUnitCode, weightKg, volumeM3, palletCount,
     distanceKm, loadingMeters,
-    adrRequired, craneRequired, agreedPrice, notes, legalEntityId,
+    adrRequired, craneRequired, plateauRequired, moffettRequired, isReturnMovement,
+    agreedPrice, notes, legalEntityId,
     dieselSurchargeOverride, dieselSurchargePercentOverride, dieselSurchargeOverrideReason,
     stops, cargoItems,
     serviceOptions, selectedServiceOptionIds, serviceQuantities, servicePallets, serviceDays, serviceNotes,
@@ -364,6 +368,8 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
             quantityUnitCode, setQuantityUnitCode, weightKg, setWeightKg, volumeM3, setVolumeM3,
             palletCount, setPalletCount, distanceKm, setDistanceKm, loadingMeters, setLoadingMeters,
             adrRequired, setAdrRequired, craneRequired, setCraneRequired,
+            plateauRequired, setPlateauRequired, moffettRequired, setMoffettRequired,
+            isReturnMovement, setIsReturnMovement,
             derivedFromCargo, cargoSummary, cargoItems, stops, unitOptions, preferredUnits,
             setCargo, applyCargoUnit, cargoDimensionsFixed, saving, errors,
           }}

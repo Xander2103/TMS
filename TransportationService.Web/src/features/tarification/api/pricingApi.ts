@@ -313,6 +313,9 @@ export interface PriceRule {
   /** Wave 3 §2: origin-zone dimension — set: only matches when the first loading stop lands in this zone. */
   originZoneId?: string | null
   originZoneName?: string | null
+  /** P6: activiteitsdimensie — gezet: de regel geldt alleen voor orders van dit dossieractiviteitstype. */
+  activityTypeId?: string | null
+  activityTypeName?: string | null
 }
 
 export interface PriceRuleBracketInput {
@@ -349,6 +352,8 @@ export interface PriceRuleInput {
   bracketMode?: BracketSelectionMode
   salesCategoryId?: string | null
   originZoneId?: string | null
+  /** P6: activiteitsdimensie (null = elke activiteit). */
+  activityTypeId?: string | null
 }
 
 // --- Bracket-row customer overrides ("klantafwijkingen") ---
@@ -408,6 +413,20 @@ export const deletePriceRule = (id: string): Promise<void> => apiClient.deleteRe
 
 // --- Service options ---
 
+/** P7: waar de factureerbare hoeveelheid van een dienst vandaan komt. */
+export type ServiceQuantitySource = 'Ordered' | 'ScannedIn' | 'ScannedOut' | 'Picked' | 'PalletDays'
+
+export const SERVICE_QUANTITY_SOURCE_LABELS: Record<ServiceQuantitySource, string> = {
+  Ordered: 'Bestelde aantallen (standaard)',
+  ScannedIn: 'Gescand IN (magazijn)',
+  ScannedOut: 'Gescand UIT',
+  Picked: 'Gepickt (klaargezet)',
+  PalletDays: 'Pallet-dagen (opslagklok)',
+}
+
+/** Scan-gebaseerde bronnen tellen fysieke pakketten — een beheerde eenheid is daar optioneel. */
+export const SCAN_QUANTITY_SOURCES: ServiceQuantitySource[] = ['ScannedIn', 'ScannedOut', 'Picked']
+
 export interface ServiceOption {
   id: string
   code: string
@@ -434,6 +453,8 @@ export interface ServiceOption {
   /** Wave 2: sales code for service lines of this option (wins over rule/agreement). */
   salesCategoryId?: string | null
   salesCategoryName?: string | null
+  /** P7: bron van de factureerbare hoeveelheid; afwezig = Ordered. */
+  quantitySource?: ServiceQuantitySource
 }
 
 /** One time-based condition row of a service option (wave 2026-08-04 §16/§17). */
@@ -466,6 +487,8 @@ export interface ServiceOptionInput {
   /** Wave 2026-08-04 §16: time-based stop conditions; the list replaces the stored rows. */
   timeConditions?: ServiceTimeCondition[] | null
   salesCategoryId?: string | null
+  /** P7: bron van de factureerbare hoeveelheid; weggelaten = Ordered. */
+  quantitySource?: ServiceQuantitySource
 }
 
 export const listServiceOptions = (includeInactive = false, forOrderEntry = false): Promise<ServiceOption[]> => {
