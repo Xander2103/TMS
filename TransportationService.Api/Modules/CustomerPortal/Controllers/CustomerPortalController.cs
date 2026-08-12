@@ -50,6 +50,19 @@ public class CustomerPortalController : ControllerBase
         SetLanguageRequest request, CancellationToken cancellationToken) =>
         Handle(await _service.SetLanguageAsync(request.Language, cancellationToken));
 
+    // Wave 11: the customer's own notification preferences (MessagingProfile surface).
+
+    [HttpGet("notification-preferences")]
+    [RequirePermission(PermissionCodes.CustomerPortalView)]
+    public async Task<ActionResult<PortalNotificationPreferencesDto>> NotificationPreferences(CancellationToken cancellationToken) =>
+        Handle(await _service.GetNotificationPreferencesAsync(cancellationToken));
+
+    [HttpPut("notification-preferences")]
+    [RequirePermission(PermissionCodes.CustomerPortalView)]
+    public async Task<ActionResult<PortalNotificationPreferencesDto>> SaveNotificationPreferences(
+        SavePortalNotificationPreferencesRequest request, CancellationToken cancellationToken) =>
+        Handle(await _service.SaveNotificationPreferencesAsync(request, cancellationToken));
+
     [HttpGet("orders")]
     [RequirePermission(PermissionCodes.CustomerPortalView)]
     public async Task<ActionResult<IReadOnlyList<PortalOrderListItemDto>>> Orders(CancellationToken cancellationToken) =>

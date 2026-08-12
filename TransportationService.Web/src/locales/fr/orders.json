@@ -75,6 +75,14 @@
       "adr": "ADR"
     },
     "remarksTitle": "Vos remarques",
+    "podTitle": "Preuve de livraison",
+    "podDeliveredAt": "Livré le {time}",
+    "podRecipient": "Réceptionné par {name}",
+    "podOutcomes": {
+      "Complete": "Livraison complète",
+      "Partial": "Livraison partielle",
+      "Refused": "Refusé"
+    },
     "documentsTitle": "Documents",
     "loading": "Chargement de la commande...",
     "loadError": "La commande n'a pas pu être chargée."

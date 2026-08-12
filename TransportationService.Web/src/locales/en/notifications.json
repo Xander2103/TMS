@@ -17,5 +17,32 @@
   "publishedOn": "Published on {date}",
   "acknowledgedOn": "Confirmed on {date}",
   "viewOrder": "View order",
-  "viewInvoice": "View invoice"
+  "viewInvoice": "View invoice",
+  "preferences": {
+    "title": "Notification preferences",
+    "subtitle": "Choose how and about what we keep you informed.",
+    "loading": "Loading preferences...",
+    "loadError": "The preferences could not be loaded.",
+    "channelsTitle": "Channels",
+    "email": "Email notifications",
+    "sms": "SMS notifications",
+    "languageTitle": "Notification language",
+    "languageAuto": "Automatic (portal language)",
+    "kindsTitle": "What would you like to be notified about?",
+    "kindsHint": "Nothing checked means: all notifications.",
+    "save": "Save preferences",
+    "saving": "Saving…",
+    "saved": "Your preferences have been saved.",
+    "saveError": "The preferences could not be saved.",
+    "kinds": {
+      "order_confirmation": "Order confirmation",
+      "time_window_confirmation": "Time window confirmation",
+      "driver_en_route": "Driver en route",
+      "eta_update": "Updated arrival time",
+      "delay": "Delay",
+      "delivery_completed": "Delivery completed",
+      "pod_available": "Proof of delivery available",
+      "invoice_sent": "Invoice sent"
+    }
+  }
 }

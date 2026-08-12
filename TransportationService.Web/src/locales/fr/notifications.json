@@ -17,5 +17,32 @@
   "publishedOn": "Publié le {date}",
   "acknowledgedOn": "Confirmé le {date}",
   "viewOrder": "Voir la commande",
-  "viewInvoice": "Voir la facture"
+  "viewInvoice": "Voir la facture",
+  "preferences": {
+    "title": "Préférences de notification",
+    "subtitle": "Choisissez comment et pour quoi nous vous tenons informé.",
+    "loading": "Chargement des préférences...",
+    "loadError": "Les préférences n'ont pas pu être chargées.",
+    "channelsTitle": "Canaux",
+    "email": "Notifications par e-mail",
+    "sms": "Notifications par SMS",
+    "languageTitle": "Langue des notifications",
+    "languageAuto": "Automatique (langue du portail)",
+    "kindsTitle": "Pour quoi souhaitez-vous être notifié ?",
+    "kindsHint": "Rien de coché signifie : toutes les notifications.",
+    "save": "Enregistrer les préférences",
+    "saving": "Enregistrement…",
+    "saved": "Vos préférences ont été enregistrées.",
+    "saveError": "Les préférences n'ont pas pu être enregistrées.",
+    "kinds": {
+      "order_confirmation": "Confirmation de commande",
+      "time_window_confirmation": "Confirmation du créneau horaire",
+      "driver_en_route": "Chauffeur en route",
+      "eta_update": "Heure d'arrivée mise à jour",
+      "delay": "Retard",
+      "delivery_completed": "Livraison terminée",
+      "pod_available": "Preuve de livraison disponible",
+      "invoice_sent": "Facture envoyée"
+    }
+  }
 }

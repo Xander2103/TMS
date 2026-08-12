@@ -212,4 +212,78 @@ public class CustomerPortalServiceTests
         Assert.Equal(h.CustomerId, stored.CustomerId);
         Assert.Equal(LocationType.CustomerLocation, stored.Type);
     }
+
+    [Fact]
+    public async Task NotificationPreferences_DefaultsThenRoundTrip_FilteringUnknownKinds()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.For(h.PortalUserId);
+
+        // No profile yet: sensible defaults, full kind catalog exposed.
+        var defaults = await sut.GetNotificationPreferencesAsync(CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.Success, defaults.Outcome);
+        Assert.True(defaults.Value!.EmailEnabled);
+        Assert.False(defaults.Value.SmsEnabled);
+        Assert.Null(defaults.Value.EnabledKinds);
+        Assert.NotEmpty(defaults.Value.AvailableKinds);
+
+        var saved = await sut.SaveNotificationPreferencesAsync(new SavePortalNotificationPreferencesRequest(
+            EmailEnabled: true, SmsEnabled: true, PreferredLanguage: "fr",
+            EnabledKinds: [defaults.Value.AvailableKinds[0], "totally-internal-kind"]), CancellationToken.None);
+
+        Assert.Equal(PortalOutcomeKind.Success, saved.Outcome);
+        Assert.True(saved.Value!.SmsEnabled);
+        Assert.Equal("fr", saved.Value.PreferredLanguage);
+        // The unknown/internal kind is silently dropped; only the customer-facing kind survives.
+        var kind = Assert.Single(saved.Value.EnabledKinds!);
+        Assert.Equal(defaults.Value.AvailableKinds[0], kind);
+
+        // The stored profile is the customer's messaging profile — the same one the dispatcher sees.
+        var profile = h.Db.Context.Set<TransportationService.Api.Modules.Messaging.Entities.MessagingProfile>()
+            .Single(p => p.OwnerId == h.CustomerId);
+        Assert.Equal(TransportationService.Api.Modules.Messaging.Entities.MessageOwnerType.Customer, profile.OwnerType);
+        Assert.Equal("fr", profile.PreferredLanguage);
+
+        var unlinked = await h.For(h.UnlinkedUserId).GetNotificationPreferencesAsync(CancellationToken.None);
+        Assert.Equal(PortalOutcomeKind.NoCustomerLink, unlinked.Outcome);
+    }
+
+    [Fact]
+    public async Task GetMyOrder_ShowsPodSummary_OnlyWhenCurrentAndCustomerVisible()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var sut = h.For(h.PortalUserId);
+
+        var submitted = await sut.SubmitOrderAsync(Request(h), CancellationToken.None);
+        var orderId = submitted.Value!.Id;
+        var stopId = h.Db.Context.TransportOrderStops.First(s => s.TransportOrderId == orderId).Id;
+
+        var trip = new TransportationService.Api.Modules.Planning.Entities.Trip
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TripNumber = "TR-POD", TripDate = new DateOnly(2026, 7, 21),
+        };
+        h.Db.Context.Trips.Add(trip);
+        var pod = new TransportationService.Api.Modules.Pod.Entities.ProofOfDelivery
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, TripId = trip.Id,
+            TransportOrderId = orderId, TransportOrderStopId = stopId,
+            RecipientName = "R. Ontvanger", Outcome = TransportationService.Api.Modules.Pod.Entities.PodOutcome.Complete,
+            DeliveredAt = Now.UtcDateTime, IsCurrent = true, CustomerVisible = true,
+        };
+        h.Db.Context.ProofsOfDelivery.Add(pod);
+        await h.Db.Context.SaveChangesAsync();
+
+        var detail = await sut.GetMyOrderAsync(orderId, CancellationToken.None);
+        Assert.NotNull(detail.Value!.Pod);
+        Assert.Equal("R. Ontvanger", detail.Value.Pod!.RecipientName);
+        Assert.Equal("Complete", detail.Value.Pod.Outcome);
+
+        // A proof hidden from the customer disappears from the portal view entirely.
+        pod.CustomerVisible = false;
+        await h.Db.Context.SaveChangesAsync();
+        var hidden = await sut.GetMyOrderAsync(orderId, CancellationToken.None);
+        Assert.Null(hidden.Value!.Pod);
+    }
 }

@@ -56,6 +56,13 @@ export interface PortalException {
   occurredAt: string
 }
 
+/** Wave 11: klantzichtbare samenvatting van het leveringsbewijs (data, geen bestanden). */
+export interface PortalPodSummary {
+  deliveredAt: string
+  recipientName: string
+  outcome: 'Complete' | 'Partial' | 'Refused' | null
+}
+
 export interface PortalOrderDetail {
   id: string
   orderNumber: string
@@ -71,6 +78,8 @@ export interface PortalOrderDetail {
   exceptions: PortalException[]
   /** Wave 8: verwachte aankomst aan de (laatste) losstop — het trackingantwoord. */
   expectedDeliveryEta?: string | null
+  /** Wave 11: leveringsbewijs zodra er een actueel, klantzichtbaar POD bestaat. */
+  pod?: PortalPodSummary | null
 }
 
 export interface PortalStopInput {
@@ -147,6 +156,33 @@ export function createPortalLocation(input: {
   countryCode: string | null
 }): Promise<PortalLocation> {
   return apiClient.postJson<PortalLocation, typeof input>('/api/customer-portal/locations', input)
+}
+
+// --- Notification preferences (Wave 11: MessagingProfile surface of the linked customer) ---
+
+export interface PortalNotificationPreferences {
+  emailEnabled: boolean
+  smsEnabled: boolean
+  preferredLanguage: 'nl' | 'fr' | 'en' | null
+  /** Ingeschakelde klantgerichte meldingssoorten; null = alle soorten. */
+  enabledKinds: string[] | null
+  availableKinds: string[]
+}
+
+export function getPortalNotificationPreferences(): Promise<PortalNotificationPreferences> {
+  return apiClient.getJson<PortalNotificationPreferences>('/api/customer-portal/notification-preferences')
+}
+
+export function savePortalNotificationPreferences(input: {
+  emailEnabled: boolean
+  smsEnabled: boolean
+  preferredLanguage: string | null
+  enabledKinds: string[] | null
+}): Promise<PortalNotificationPreferences> {
+  return apiClient.putJson<PortalNotificationPreferences, typeof input>(
+    '/api/customer-portal/notification-preferences',
+    input,
+  )
 }
 
 // --- Portal user management (customer_portal.manage_users) ---

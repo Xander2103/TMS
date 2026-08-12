@@ -93,6 +93,7 @@ const CustomerPortalMessagesPage = lazyPage(() => import('../features/customer-p
 const CustomerPortalNoticesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalNoticesPage'), 'CustomerPortalNoticesPage')
 const PortalMessagesPage = lazyPage(() => import('../features/portal-messages/pages/PortalMessagesPage'), 'PortalMessagesPage')
 const CustomerPortalUsersPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalUsersPage'), 'CustomerPortalUsersPage')
+const CustomerPortalPreferencesPage = lazyPage(() => import('../features/customer-portal/pages/CustomerPortalPreferencesPage'), 'CustomerPortalPreferencesPage')
 const PortalAnnouncementsSettingsPage = lazyPage(() => import('../features/customer-portal/pages/PortalAnnouncementsSettingsPage'), 'PortalAnnouncementsSettingsPage')
 const ForgotPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ForgotPasswordPage')
 const ResetPasswordPage = lazyPage(() => import('../features/auth/PasswordFlowPages'), 'ResetPasswordPage')
@@ -183,6 +184,7 @@ const router = createBrowserRouter(
           <Route path="/klantportaal/berichten" element={<CustomerPortalMessagesPage />} />
           <Route path="/klantportaal/mededelingen" element={<CustomerPortalNoticesPage />} />
           <Route path="/klantportaal/gebruikers" element={<CustomerPortalUsersPage />} />
+          <Route path="/klantportaal/voorkeuren" element={<CustomerPortalPreferencesPage />} />
         </Route>
         <Route element={<InternalOnly />}>
         <Route element={<AppLayout />}>

@@ -75,6 +75,14 @@
       "adr": "ADR"
     },
     "remarksTitle": "Your remarks",
+    "podTitle": "Proof of delivery",
+    "podDeliveredAt": "Delivered on {time}",
+    "podRecipient": "Received by {name}",
+    "podOutcomes": {
+      "Complete": "Delivered in full",
+      "Partial": "Partially delivered",
+      "Refused": "Refused"
+    },
     "documentsTitle": "Documents",
     "loading": "Loading order...",
     "loadError": "The order could not be loaded."

@@ -75,6 +75,14 @@
       "adr": "ADR"
     },
     "remarksTitle": "Uw opmerkingen",
+    "podTitle": "Leveringsbewijs",
+    "podDeliveredAt": "Geleverd op {time}",
+    "podRecipient": "In ontvangst genomen door {name}",
+    "podOutcomes": {
+      "Complete": "Volledig geleverd",
+      "Partial": "Gedeeltelijk geleverd",
+      "Refused": "Geweigerd"
+    },
     "documentsTitle": "Documenten",
     "loading": "Opdracht laden...",
     "loadError": "De opdracht kon niet worden geladen."

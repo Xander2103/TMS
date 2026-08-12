@@ -101,6 +101,25 @@ export function CustomerPortalOrderDetailPage() {
         </p>
       )}
 
+      {order.pod && (
+        <section className="cpp-panel">
+          <h2>{t('orders.detail.podTitle')}</h2>
+          <ul className="cpp-list">
+            <li className="cpp-row">
+              <span>{t('orders.detail.podDeliveredAt', { time: order.pod.deliveredAt.slice(0, 16).replace('T', ' ') })}</span>
+              {order.pod.outcome && (
+                <Badge tone={order.pod.outcome === 'Complete' ? 'success' : 'warning'}>
+                  {t(`orders.detail.podOutcomes.${order.pod.outcome}`)}
+                </Badge>
+              )}
+            </li>
+            <li className="cpp-row">
+              <span>{t('orders.detail.podRecipient', { name: order.pod.recipientName })}</span>
+            </li>
+          </ul>
+        </section>
+      )}
+
       {order.timeline.length > 0 && (
         <section className="cpp-panel">
           <h2>{t('orders.detail.statusTitle')}</h2>

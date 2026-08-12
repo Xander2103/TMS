@@ -31,6 +31,11 @@ public interface ICustomerPortalService
 
     Task<PortalResult<IReadOnlyList<PortalLocationDto>>> ListMyLocationsAsync(CancellationToken cancellationToken);
 
+    // Wave 11: the customer's own notification preferences.
+    Task<PortalResult<PortalNotificationPreferencesDto>> GetNotificationPreferencesAsync(CancellationToken cancellationToken);
+    Task<PortalResult<PortalNotificationPreferencesDto>> SaveNotificationPreferencesAsync(
+        SavePortalNotificationPreferencesRequest request, CancellationToken cancellationToken);
+
     Task<PortalResult<PortalLocationDto>> CreateMyLocationAsync(PortalCreateLocationRequest request, CancellationToken cancellationToken);
 }
 
@@ -367,6 +372,13 @@ public class CustomerPortalService : ICustomerPortalService
                 .Select(e => (DateTime?)e.CurrentEta)
                 .FirstOrDefaultAsync(cancellationToken);
 
+        // Wave 11: proof-of-delivery summary (data, never the stored files) once a current POD exists.
+        var pod = await _dbContext.ProofsOfDelivery.AsNoTracking()
+            .Where(p => p.TenantId == tenantId && p.TransportOrderId == order.Id && p.IsCurrent && p.CustomerVisible)
+            .OrderByDescending(p => p.DeliveredAt)
+            .Select(p => new PortalPodSummaryDto(p.DeliveredAt, p.RecipientName, p.Outcome.ToString()))
+            .FirstOrDefaultAsync(cancellationToken);
+
         return new PortalOrderDetailDto(
             order.Id, order.OrderNumber, order.OrderDate, order.Status, order.CustomerReference,
             order.GoodsDescription, order.Notes, order.CancellationReason,
@@ -379,6 +391,74 @@ public class CustomerPortalService : ICustomerPortalService
                     : c.Description,
                 c.ExpectedQuantity, c.QuantityUnit, c.UnitType, c.AdrRequired)).ToList(),
             timeline, exceptions,
-            expectedDelivery);
+            expectedDelivery, pod);
+    }
+
+    /// <summary>Customer-facing message kinds a portal user may toggle (Wave 11).</summary>
+    private static readonly string[] PortalNotificationKinds =
+    [
+        Modules.Messaging.Entities.MessageKinds.OrderConfirmation,
+        Modules.Messaging.Entities.MessageKinds.TimeWindowConfirmation,
+        Modules.Messaging.Entities.MessageKinds.DriverEnRoute,
+        Modules.Messaging.Entities.MessageKinds.EtaUpdate,
+        Modules.Messaging.Entities.MessageKinds.Delay,
+        Modules.Messaging.Entities.MessageKinds.DeliveryCompleted,
+        Modules.Messaging.Entities.MessageKinds.PodAvailable,
+        Modules.Messaging.Entities.MessageKinds.InvoiceSent,
+    ];
+
+    public async Task<PortalResult<PortalNotificationPreferencesDto>> GetNotificationPreferencesAsync(
+        CancellationToken cancellationToken)
+    {
+        if (await MyCustomerAsync(cancellationToken) is not { } me)
+        {
+            return PortalResult<PortalNotificationPreferencesDto>.NoCustomerLink();
+        }
+
+        var profile = await _dbContext.Set<Modules.Messaging.Entities.MessagingProfile>().AsNoTracking()
+            .FirstOrDefaultAsync(p => p.TenantId == _tenantContext.TenantId
+                                      && p.OwnerType == Modules.Messaging.Entities.MessageOwnerType.Customer
+                                      && p.OwnerId == me.CustomerId, cancellationToken);
+        var enabled = profile?.EnabledKindsJson is { Length: > 0 } json
+            ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(json)
+            : null;
+        return PortalResult<PortalNotificationPreferencesDto>.Success(new PortalNotificationPreferencesDto(
+            profile?.EmailEnabled ?? true, profile?.SmsEnabled ?? false, profile?.PreferredLanguage,
+            enabled, PortalNotificationKinds));
+    }
+
+    public async Task<PortalResult<PortalNotificationPreferencesDto>> SaveNotificationPreferencesAsync(
+        SavePortalNotificationPreferencesRequest request, CancellationToken cancellationToken)
+    {
+        if (await MyCustomerAsync(cancellationToken) is not { } me)
+        {
+            return PortalResult<PortalNotificationPreferencesDto>.NoCustomerLink();
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var profile = await _dbContext.Set<Modules.Messaging.Entities.MessagingProfile>()
+            .FirstOrDefaultAsync(p => p.TenantId == tenantId
+                                      && p.OwnerType == Modules.Messaging.Entities.MessageOwnerType.Customer
+                                      && p.OwnerId == me.CustomerId, cancellationToken);
+        if (profile is null)
+        {
+            profile = new Modules.Messaging.Entities.MessagingProfile
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId,
+                OwnerType = Modules.Messaging.Entities.MessageOwnerType.Customer, OwnerId = me.CustomerId,
+            };
+            _dbContext.Add(profile);
+        }
+
+        profile.EmailEnabled = request.EmailEnabled;
+        profile.SmsEnabled = request.SmsEnabled;
+        profile.PreferredLanguage = request.PreferredLanguage is "nl" or "fr" or "en" ? request.PreferredLanguage : null;
+        // Only the customer-facing subset is toggleable from the portal; null = all kinds.
+        profile.EnabledKindsJson = request.EnabledKinds is null
+            ? null
+            : System.Text.Json.JsonSerializer.Serialize(
+                request.EnabledKinds.Where(k => PortalNotificationKinds.Contains(k)).Distinct().ToList());
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return await GetNotificationPreferencesAsync(cancellationToken);
     }
 }

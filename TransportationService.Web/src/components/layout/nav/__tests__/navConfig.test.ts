@@ -114,11 +114,11 @@ describe('getNavModules — §14 target tree', () => {
     expect(byRoute.get('/dock-planning')).toBe('Dockplanning')
   })
 
-  it('moves Locaties and Facturatie (Facturen + Peppol) under Klanten', () => {
+  it('moves Locaties and Facturatie (Facturen + Facturatiecontrole + Peppol) under Klanten', () => {
     const klanten = modules.find((m) => m.id === 'klanten')!
     expect(klanten.items!.map((i) => i.to)).toEqual(['/customers', '/locations'])
     const facturatie = klanten.subgroups!.find((s) => s.label === 'Facturatie')!
-    expect(facturatie.items.map((i) => i.to)).toEqual(['/invoices', '/peppol'])
+    expect(facturatie.items.map((i) => i.to)).toEqual(['/invoices', '/invoice-control', '/peppol'])
   })
 
   it('hides the driver surfaces from the internal sidebar (routes stay reachable)', () => {
@@ -200,7 +200,7 @@ describe('getNavModules — role-scoped sidebars (§14)', () => {
 
     const magazijn = visible.find((vm) => vm.module.id === 'magazijn')!
     expect(leavesOf(magazijn).map((i) => i.label)).toEqual([
-      'Laden & scannen', 'Magazijnen (beheer)', 'Dockplanning',
+      'Laden & scannen', 'Trace & voorraad', 'Magazijnen (beheer)', 'Dockplanning',
     ])
   })
 })

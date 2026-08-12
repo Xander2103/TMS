@@ -17,5 +17,32 @@
   "publishedOn": "Gepubliceerd op {date}",
   "acknowledgedOn": "Bevestigd op {date}",
   "viewOrder": "Bekijk opdracht",
-  "viewInvoice": "Bekijk factuur"
+  "viewInvoice": "Bekijk factuur",
+  "preferences": {
+    "title": "Meldingsvoorkeuren",
+    "subtitle": "Kies hoe en waarover wij u op de hoogte houden.",
+    "loading": "Voorkeuren laden...",
+    "loadError": "De voorkeuren konden niet worden geladen.",
+    "channelsTitle": "Kanalen",
+    "email": "E-mailmeldingen",
+    "sms": "Sms-meldingen",
+    "languageTitle": "Taal van meldingen",
+    "languageAuto": "Automatisch (portaaltaal)",
+    "kindsTitle": "Waarover wilt u meldingen ontvangen?",
+    "kindsHint": "Niets aangevinkt betekent: alle meldingen.",
+    "save": "Voorkeuren opslaan",
+    "saving": "Opslaan…",
+    "saved": "Uw voorkeuren zijn opgeslagen.",
+    "saveError": "De voorkeuren konden niet worden opgeslagen.",
+    "kinds": {
+      "order_confirmation": "Opdrachtbevestiging",
+      "time_window_confirmation": "Bevestiging van het tijdvenster",
+      "driver_en_route": "Chauffeur onderweg",
+      "eta_update": "Bijgewerkte aankomsttijd",
+      "delay": "Vertraging",
+      "delivery_completed": "Levering afgerond",
+      "pod_available": "Leveringsbewijs beschikbaar",
+      "invoice_sent": "Factuur verzonden"
+    }
+  }
 }

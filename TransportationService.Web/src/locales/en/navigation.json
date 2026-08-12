@@ -8,5 +8,6 @@
   "documents": "Documents",
   "invoices": "Invoices",
   "messages": "Messages",
-  "users": "Users"
+  "users": "Users",
+  "preferences": "Preferences"
 }

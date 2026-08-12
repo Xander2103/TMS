@@ -52,7 +52,27 @@ public record PortalOrderDetailDto(
     IReadOnlyList<PortalTimelineEventDto> Timeline,
     IReadOnlyList<PortalExceptionDto> Exceptions,
     /// <summary>Wave 8: expected arrival at the (last) delivery stop — the tracking answer.</summary>
-    DateTime? ExpectedDeliveryEta = null);
+    DateTime? ExpectedDeliveryEta = null,
+    /// <summary>Wave 11: delivery proof summary once a current POD exists.</summary>
+    PortalPodSummaryDto? Pod = null);
+
+/// <summary>Wave 11: what the customer may see of the proof of delivery (data, not files).</summary>
+public record PortalPodSummaryDto(DateTime DeliveredAt, string RecipientName, string? Outcome);
+
+/// <summary>Wave 11: the customer's own notification preferences (MessagingProfile surface).</summary>
+public record PortalNotificationPreferencesDto(
+    bool EmailEnabled,
+    bool SmsEnabled,
+    string? PreferredLanguage,
+    /// <summary>Enabled customer-facing kinds; null = all.</summary>
+    IReadOnlyList<string>? EnabledKinds,
+    IReadOnlyList<string> AvailableKinds);
+
+public record SavePortalNotificationPreferencesRequest(
+    bool EmailEnabled,
+    bool SmsEnabled,
+    string? PreferredLanguage,
+    IReadOnlyList<string>? EnabledKinds);
 
 public record PortalStopInput(
     StopType StopType,
