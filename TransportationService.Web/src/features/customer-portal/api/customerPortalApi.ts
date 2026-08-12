@@ -69,6 +69,8 @@ export interface PortalOrderDetail {
   cargoItems: PortalCargo[]
   timeline: PortalTimelineEvent[]
   exceptions: PortalException[]
+  /** Wave 8: verwachte aankomst aan de (laatste) losstop — het trackingantwoord. */
+  expectedDeliveryEta?: string | null
 }
 
 export interface PortalStopInput {

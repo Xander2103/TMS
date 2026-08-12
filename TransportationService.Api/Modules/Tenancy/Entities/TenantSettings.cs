@@ -67,6 +67,10 @@ public class TenantSettings
 
     // Transport operation defaults
     public int DefaultLoadingMinutes { get; set; } = 30;
+
+    /// <summary>Wave 8: message the customer when a stop's ETA shifts by at least this many
+    /// minutes (also while still on time). Null = only the existing outside-window messaging.</summary>
+    public int? EtaShiftNotifyMinutes { get; set; }
     public int DefaultUnloadingMinutes { get; set; } = 30;
 
     // Schedule-conflict severities (ConflictSeverity names; unknown values fall back to Warning)

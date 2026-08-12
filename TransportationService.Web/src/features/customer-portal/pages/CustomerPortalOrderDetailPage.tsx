@@ -94,6 +94,13 @@ export function CustomerPortalOrderDetailPage() {
         </p>
       )}
 
+      {order.expectedDeliveryEta && (
+        <p className="cpp-eta" role="status">
+          {t('orders.detail.expectedDelivery')}:{' '}
+          <strong>{new Date(order.expectedDeliveryEta).toLocaleString()}</strong>
+        </p>
+      )}
+
       {order.timeline.length > 0 && (
         <section className="cpp-panel">
           <h2>{t('orders.detail.statusTitle')}</h2>

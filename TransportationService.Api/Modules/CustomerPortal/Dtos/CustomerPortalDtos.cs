@@ -50,7 +50,9 @@ public record PortalOrderDetailDto(
     IReadOnlyList<PortalStopDto> Stops,
     IReadOnlyList<PortalCargoDto> CargoItems,
     IReadOnlyList<PortalTimelineEventDto> Timeline,
-    IReadOnlyList<PortalExceptionDto> Exceptions);
+    IReadOnlyList<PortalExceptionDto> Exceptions,
+    /// <summary>Wave 8: expected arrival at the (last) delivery stop — the tracking answer.</summary>
+    DateTime? ExpectedDeliveryEta = null);
 
 public record PortalStopInput(
     StopType StopType,

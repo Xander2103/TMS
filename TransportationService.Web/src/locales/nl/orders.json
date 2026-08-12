@@ -56,6 +56,7 @@
     "messagesButton": "Berichten over deze opdracht",
     "cancelledReason": "Geannuleerd: {reason}",
     "statusTitle": "Status",
+    "expectedDelivery": "Verwachte levering",
     "attentionTitle": "Aandachtspunten",
     "stopsTitle": "Stops",
     "stopColumns": {

@@ -353,6 +353,20 @@ public class CustomerPortalService : ICustomerPortalService
             .Select(e => new PortalExceptionDto(e.Type.ToString(), e.Description, e.Status.ToString(), e.OccurredAt))
             .ToListAsync(cancellationToken);
 
+        // Wave 8: the live ETA of the LAST unloading stop, straight from the dispatcher's ETA
+        // machinery (overrides included) — the portal's tracking answer.
+        var unloadingStopIds = order.Stops
+            .Where(s => s.StopType == StopType.Unloading)
+            .Select(s => s.Id)
+            .ToList();
+        var expectedDelivery = unloadingStopIds.Count == 0
+            ? null
+            : await _dbContext.StopEtas.AsNoTracking()
+                .Where(e => e.TenantId == tenantId && unloadingStopIds.Contains(e.TransportOrderStopId))
+                .OrderByDescending(e => e.CurrentEta)
+                .Select(e => (DateTime?)e.CurrentEta)
+                .FirstOrDefaultAsync(cancellationToken);
+
         return new PortalOrderDetailDto(
             order.Id, order.OrderNumber, order.OrderDate, order.Status, order.CustomerReference,
             order.GoodsDescription, order.Notes, order.CancellationReason,
@@ -364,6 +378,7 @@ public class CustomerPortalService : ICustomerPortalService
                     ? $"{c.ExpectedQuantity:0.##} × {c.QuantityUnitCode ?? c.UnitTypeLabel ?? "stuks"}"
                     : c.Description,
                 c.ExpectedQuantity, c.QuantityUnit, c.UnitType, c.AdrRequired)).ToList(),
-            timeline, exceptions);
+            timeline, exceptions,
+            expectedDelivery);
     }
 }
