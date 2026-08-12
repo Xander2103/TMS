@@ -57,4 +57,41 @@ public class IncidentsController : ControllerBase
         var incident = await _service.ChangeStatusAsync(id, request, cancellationToken);
         return incident is null ? NotFound() : Ok(incident);
     }
+
+    // --- Wave 6 §4: unified problem view ---
+
+    [HttpGet("/api/problems")]
+    [RequirePermission(PermissionCodes.IncidentsView, PermissionCodes.IncidentsManage)]
+    public async Task<ActionResult<IReadOnlyList<ProblemListItemDto>>> ListProblems(CancellationToken cancellationToken)
+        => Ok(await _service.ListProblemsAsync(cancellationToken));
+
+    // --- Wave 6: charge decision + linked redelivery ---
+
+    [HttpPost("{id:guid}/charge/propose")]
+    [RequirePermission(PermissionCodes.IncidentsManage)]
+    public async Task<ActionResult<IncidentDetailDto>> ProposeCharge(
+        Guid id, ProposeIncidentChargeRequest request, CancellationToken cancellationToken)
+    {
+        var incident = await _service.ProposeChargeAsync(id, request, cancellationToken);
+        return incident is null ? NotFound() : Ok(incident);
+    }
+
+    // The attribute gate stays IncidentsManage: the SERVICE enforces problems.approve_charge
+    // fail-closed (registered in Phase8SupplyChainTests), mirroring the L7 override pattern.
+    [HttpPost("{id:guid}/charge/decide")]
+    [RequirePermission(PermissionCodes.IncidentsManage)]
+    public async Task<ActionResult<IncidentDetailDto>> DecideCharge(
+        Guid id, DecideIncidentChargeRequest request, CancellationToken cancellationToken)
+    {
+        var incident = await _service.DecideChargeAsync(id, request, cancellationToken);
+        return incident is null ? NotFound() : Ok(incident);
+    }
+
+    [HttpPost("{id:guid}/redelivery")]
+    [RequirePermission(PermissionCodes.OrdersCreate, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<IncidentDetailDto>> CreateRedelivery(Guid id, CancellationToken cancellationToken)
+    {
+        var incident = await _service.CreateRedeliveryAsync(id, cancellationToken);
+        return incident is null ? NotFound() : Ok(incident);
+    }
 }

@@ -257,6 +257,8 @@ public static class PermissionCodes
     public const string ActivityTypesManage = "activity_types.manage";
 
     // --- Incidents ---
+    /// <summary>Wave 6: approve/reject charging a problem to the customer (creates the sales line, audited).</summary>
+    public const string ProblemsApproveCharge = "problems.approve_charge";
     public const string IncidentsView = "incidents.view";
     public const string IncidentsManage = "incidents.manage";
 
@@ -577,6 +579,7 @@ public static class PermissionCodes
         (ActivityTypesManage, "activity_types", "manage", "Activiteitstypes beheren"),
         (IncidentsView, "incidents", "view", "Incidenten bekijken"),
         (IncidentsManage, "incidents", "manage", "Incidenten registreren en afhandelen"),
+        (ProblemsApproveCharge, "problems", "approve_charge", "Doorrekening van een probleem aan de klant goed- of afkeuren (maakt de verkooplijn aan, geauditeerd)"),
         (TariffsView, "tariffs", "view", "Tarievenkaarten bekijken en prijzen berekenen"),
         (TariffsManage, "tariffs", "manage", "Tarievenkaarten beheren"),
         (TariffsImport, "tariffs", "import", "Tarieventabellen exporteren/importeren via Excel"),

@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 27;
+    public const int CurrentVersion = 28;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -518,6 +518,15 @@ public static class DefaultRoleUpgrades
             {
                 ["management"] = [PermissionCodes.DossiersOverrideEntity],
                 ["boekhouding"] = [PermissionCodes.DossiersOverrideEntity],
+            }),
+        new(28,
+            "Problems wave 2026-08-12: charging a problem to the customer is an approval-gated "
+            + "decision (creates the sales line) — proposing stays incidents.manage, deciding "
+            + "needs problems.approve_charge.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["management"] = [PermissionCodes.ProblemsApproveCharge],
+                ["boekhouding"] = [PermissionCodes.ProblemsApproveCharge],
             }),
     ];
 }

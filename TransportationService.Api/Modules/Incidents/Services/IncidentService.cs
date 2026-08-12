@@ -23,6 +23,12 @@ public interface IIncidentService
 
     Task<IncidentDetailDto?> ChangeStatusAsync(Guid id, ChangeIncidentStatusRequest request, CancellationToken cancellationToken);
 
+    // Wave 6: charge decision + linked redelivery + unified problem list.
+    Task<IncidentDetailDto?> ProposeChargeAsync(Guid id, ProposeIncidentChargeRequest request, CancellationToken cancellationToken);
+    Task<IncidentDetailDto?> DecideChargeAsync(Guid id, DecideIncidentChargeRequest request, CancellationToken cancellationToken);
+    Task<IncidentDetailDto?> CreateRedeliveryAsync(Guid id, CancellationToken cancellationToken);
+    Task<IReadOnlyList<ProblemListItemDto>> ListProblemsAsync(CancellationToken cancellationToken);
+
     /// <summary>Incidents stamped with this driver (driver-app "my incidents" list).</summary>
     Task<IReadOnlyList<IncidentListItemDto>> ListForDriverAsync(Guid driverId, CancellationToken cancellationToken);
 }
@@ -46,19 +52,25 @@ public class IncidentService : IIncidentService
     private readonly IAuditService _auditService;
     private readonly INotificationService _notificationService;
     private readonly TimeProvider _timeProvider;
+    private readonly Modules.Identity.Services.IPermissionAuthorizationService? _permissionService;
+    private readonly Modules.Identity.Services.ICurrentUserContext? _currentUser;
 
     public IncidentService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
         INotificationService notificationService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        Modules.Identity.Services.IPermissionAuthorizationService? permissionService = null,
+        Modules.Identity.Services.ICurrentUserContext? currentUser = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _notificationService = notificationService;
         _timeProvider = timeProvider;
+        _permissionService = permissionService;
+        _currentUser = currentUser;
     }
 
     public async Task<IReadOnlyList<IncidentListItemDto>> ListAsync(
@@ -372,6 +384,307 @@ public class IncidentService : IIncidentService
         return (incidentType, severity);
     }
 
+    // --- Wave 6 §4: the unified problem view -------------------------------------------------
+
+    /// <summary>OPEN incidents + OPEN execution exceptions in one list — one place to work
+    /// problems, each row linking to its own detail (incident page / trip).</summary>
+    public async Task<IReadOnlyList<ProblemListItemDto>> ListProblemsAsync(CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        var incidents = await _dbContext.Incidents.AsNoTracking()
+            .Where(i => i.TenantId == tenantId
+                        && (i.Status == IncidentStatus.New || i.Status == IncidentStatus.InProgress))
+            .Select(i => new
+            {
+                i.Id, i.Title, Severity = i.Severity.ToString(), Status = i.Status.ToString(),
+                OccurredAt = i.CreatedAt, i.TransportOrderId, i.TripId, i.DossierId,
+                i.ResponsibleParty, i.ChargeDecision,
+            })
+            .ToListAsync(cancellationToken);
+
+        var exceptions = await _dbContext.ExecutionExceptions.AsNoTracking()
+            .Where(e => e.TenantId == tenantId
+                        && (e.Status == Modules.Exceptions.Entities.ExecutionExceptionStatus.Open
+                            || e.Status == Modules.Exceptions.Entities.ExecutionExceptionStatus.Investigating
+                            || e.Status == Modules.Exceptions.Entities.ExecutionExceptionStatus.CustomerActionRequired))
+            .Select(e => new
+            {
+                e.Id, Title = e.Type.ToString() + ": " + e.Description,
+                Severity = e.Severity.ToString(), Status = e.Status.ToString(),
+                e.OccurredAt, e.TransportOrderId, TripId = (Guid?)e.TripId,
+            })
+            .ToListAsync(cancellationToken);
+
+        var orderIds = incidents.Select(i => i.TransportOrderId)
+            .Concat(exceptions.Select(e => e.TransportOrderId))
+            .Where(id => id != null).Select(id => id!.Value).Distinct().ToList();
+        var orderNumbers = orderIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.TransportOrders.AsNoTracking()
+                .Where(o => o.TenantId == tenantId && orderIds.Contains(o.Id))
+                .ToDictionaryAsync(o => o.Id, o => o.OrderNumber, cancellationToken);
+        var tripIds = incidents.Select(i => i.TripId).Concat(exceptions.Select(e => e.TripId))
+            .Where(id => id != null).Select(id => id!.Value).Distinct().ToList();
+        var tripNumbers = tripIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.Trips.AsNoTracking()
+                .Where(t => t.TenantId == tenantId && tripIds.Contains(t.Id))
+                .ToDictionaryAsync(t => t.Id, t => t.TripNumber, cancellationToken);
+        var dossierIds = incidents.Where(i => i.DossierId != null).Select(i => i.DossierId!.Value).Distinct().ToList();
+        var dossierNumbers = dossierIds.Count == 0
+            ? new Dictionary<Guid, string>()
+            : await _dbContext.TransportDossiers.AsNoTracking()
+                .Where(d => d.TenantId == tenantId && dossierIds.Contains(d.Id))
+                .ToDictionaryAsync(d => d.Id, d => d.DossierNumber, cancellationToken);
+
+        return incidents
+            .Select(i => new ProblemListItemDto(
+                i.Id, "Incident", i.Title, i.Severity, i.Status, i.OccurredAt,
+                i.TransportOrderId is { } oid ? orderNumbers.GetValueOrDefault(oid) : null,
+                i.TripId is { } tid ? tripNumbers.GetValueOrDefault(tid) : null, i.TripId,
+                i.DossierId is { } did ? dossierNumbers.GetValueOrDefault(did) : null, i.DossierId,
+                i.ResponsibleParty, i.ChargeDecision))
+            .Concat(exceptions.Select(e => new ProblemListItemDto(
+                e.Id, "Exception", e.Title, e.Severity, e.Status, e.OccurredAt,
+                e.TransportOrderId is { } oid ? orderNumbers.GetValueOrDefault(oid) : null,
+                e.TripId is { } tid ? tripNumbers.GetValueOrDefault(tid) : null, e.TripId,
+                null, null)))
+            .OrderByDescending(p => p.OccurredAt)
+            .ToList();
+    }
+
+    // --- Wave 6 §2: approval-gated charge decision -------------------------------------------
+
+    public async Task<IncidentDetailDto?> ProposeChargeAsync(
+        Guid id, ProposeIncidentChargeRequest request, CancellationToken cancellationToken)
+    {
+        var incident = await _dbContext.Incidents.FirstOrDefaultAsync(
+            i => i.TenantId == _tenantContext.TenantId && i.Id == id, cancellationToken);
+        if (incident is null)
+        {
+            return null;
+        }
+
+        if (request.Amount <= 0 || string.IsNullOrWhiteSpace(request.Description))
+        {
+            throw new DomainValidationException("amount", "Geef een positief bedrag en een omschrijving op.");
+        }
+
+        if (incident.ChargeDecision == "Approved")
+        {
+            throw new DomainValidationException("Deze doorrekening is al goedgekeurd en kan niet meer worden gewijzigd.");
+        }
+
+        if (incident.ResponsibleParty != "Customer")
+        {
+            throw new DomainValidationException(
+                "Alleen problemen met verantwoordelijkheid 'Klant' kunnen worden doorgerekend; interne kosten blijven intern.");
+        }
+
+        var before = new { incident.ChargeDecision, incident.ChargeAmount };
+        incident.ChargeDecision = "Proposed";
+        incident.ChargeAmount = decimal.Round(request.Amount, 2);
+        incident.ChargeDescription = request.Description.Trim();
+        incident.ChargeDecidedByUserId = null;
+        incident.ChargeDecidedAt = null;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync(EntityType, incident.Id.ToString(), "ChargeProposed", before,
+            new { incident.ChargeDecision, incident.ChargeAmount, incident.ChargeDescription }, cancellationToken);
+        return await MapDetailAsync(incident, cancellationToken);
+    }
+
+    public async Task<IncidentDetailDto?> DecideChargeAsync(
+        Guid id, DecideIncidentChargeRequest request, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var incident = await _dbContext.Incidents.FirstOrDefaultAsync(
+            i => i.TenantId == tenantId && i.Id == id, cancellationToken);
+        if (incident is null)
+        {
+            return null;
+        }
+
+        // Fail-closed (L7 house rule): no wired authorization = no approval rights, ever.
+        var userId = _currentUser?.CurrentUserId;
+        var allowed = _permissionService is not null && userId is { } uid
+            && await _permissionService.UserHasPermissionAsync(
+                uid, Modules.Identity.PermissionCodes.ProblemsApproveCharge, cancellationToken);
+        if (!allowed)
+        {
+            throw new DomainValidationException("Je hebt geen rechten om doorrekeningen goed of af te keuren.");
+        }
+
+        if (incident.ChargeDecision != "Proposed")
+        {
+            throw new DomainValidationException("Er staat geen voorgestelde doorrekening open op dit incident.");
+        }
+
+        var before = new { incident.ChargeDecision, incident.ChargeAmount };
+        incident.ChargeDecision = request.Approve ? "Approved" : "Rejected";
+        incident.ChargeDecidedByUserId = userId;
+        incident.ChargeDecidedAt = _timeProvider.GetUtcNow().UtcDateTime;
+
+        string? lineNote = null;
+        if (request.Approve && incident.TransportOrderId is { } chargeOrderId)
+        {
+            // The sales line lands on the linked order via the EXISTING manual-line mechanics
+            // — from there the normal invoice flow picks it up. A locked/invoiced price
+            // refuses; the approval stays recorded and Wave 10 surfaces it as manual work.
+            var snapshot = await _dbContext.TransportOrderPricingSnapshots.FirstOrDefaultAsync(
+                s => s.TenantId == tenantId && s.TransportOrderId == chargeOrderId, cancellationToken);
+            if (snapshot is { Status: Modules.Orders.Entities.OrderPricingStatus.Locked
+                or Modules.Orders.Entities.OrderPricingStatus.Invoiced })
+            {
+                lineNote = "De prijs van de gekoppelde order is vergrendeld/gefactureerd — voeg de lijn handmatig toe bij facturatie.";
+            }
+            else
+            {
+                var order = await _dbContext.TransportOrders.FirstOrDefaultAsync(
+                    o => o.TenantId == tenantId && o.Id == chargeOrderId, cancellationToken);
+                if (order is not null)
+                {
+                    var maxSequence = await _dbContext.TransportOrderPricingLines
+                        .Where(l => l.TenantId == tenantId && l.TransportOrderId == chargeOrderId)
+                        .Select(l => (int?)l.Sequence)
+                        .MaxAsync(cancellationToken) ?? 0;
+                    _dbContext.TransportOrderPricingLines.Add(new Modules.Orders.Entities.TransportOrderPricingLine
+                    {
+                        Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = chargeOrderId,
+                        Sequence = maxSequence + 1,
+                        Label = incident.ChargeDescription ?? $"Doorrekening incident",
+                        Amount = incident.ChargeAmount ?? 0m,
+                        Source = "Manueel", Kind = Modules.Orders.Entities.OrderPriceLineKind.Manual,
+                        AdjustReason = $"Incident: {incident.Title}",
+                        AdjustedByUserId = userId,
+                        AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime,
+                        LineKey = $"manual:{Guid.NewGuid()}",
+                    });
+                    if (!order.PriceIsManual)
+                    {
+                        order.AgreedPrice = (order.AgreedPrice ?? 0m) + (incident.ChargeAmount ?? 0m);
+                    }
+
+                    if (snapshot is not null)
+                    {
+                        snapshot.LinesTotal = (snapshot.LinesTotal ?? 0m) + (incident.ChargeAmount ?? 0m);
+                    }
+
+                    await Modules.Orders.Services.InvoiceReadinessEvaluator.EvaluateAsync(
+                        _dbContext, order, cancellationToken);
+                }
+            }
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync(EntityType, incident.Id.ToString(),
+            request.Approve ? "ChargeApproved" : "ChargeRejected", before,
+            new { incident.ChargeDecision, incident.ChargeAmount, Note = lineNote }, cancellationToken);
+        return await MapDetailAsync(incident, cancellationToken);
+    }
+
+    // --- Wave 6 §3: linked redelivery --------------------------------------------------------
+
+    public async Task<IncidentDetailDto?> CreateRedeliveryAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var incident = await _dbContext.Incidents.FirstOrDefaultAsync(
+            i => i.TenantId == tenantId && i.Id == id, cancellationToken);
+        if (incident is null)
+        {
+            return null;
+        }
+
+        if (incident.LinkedRedeliveryOrderId is not null)
+        {
+            throw new DomainValidationException("Voor dit incident bestaat al een herleveringsorder.");
+        }
+
+        if (incident.TransportOrderId is not { } originalOrderId)
+        {
+            throw new DomainValidationException("Koppel eerst de originele order aan het incident.");
+        }
+
+        var original = await _dbContext.TransportOrders
+            .Include(o => o.Stops)
+            .FirstOrDefaultAsync(o => o.TenantId == tenantId && o.Id == originalOrderId, cancellationToken);
+        if (original is null)
+        {
+            throw new DomainValidationException("De gekoppelde order bestaat niet meer.");
+        }
+
+        var settings = await _dbContext.TenantSettings.FirstOrDefaultAsync(
+            s => s.TenantId == tenantId, cancellationToken);
+        var redelivery = new Modules.Orders.Entities.TransportOrder
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, CustomerId = original.CustomerId,
+            OrderDate = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime),
+            Status = Modules.Orders.Entities.TransportOrderStatus.Draft,
+            CustomerReference = $"HERLEVERING {original.OrderNumber}",
+            GoodsDescription = original.GoodsDescription,
+            Quantity = original.Quantity, QuantityUnit = original.QuantityUnit,
+            QuantityUnitCode = original.QuantityUnitCode,
+            WeightKg = original.WeightKg, VolumeM3 = original.VolumeM3,
+            PalletCount = original.PalletCount, DistanceKm = original.DistanceKm,
+            LoadingMeters = original.LoadingMeters,
+            AdrRequired = original.AdrRequired, CraneRequired = original.CraneRequired,
+            LegalEntityId = original.LegalEntityId,
+            Notes = $"Herlevering wegens incident: {incident.Title}",
+            Stops = original.Stops.Where(s => !s.IsDeleted).OrderBy(s => s.Sequence)
+                .Select(s => new Modules.Orders.Entities.TransportOrderStop
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, Sequence = s.Sequence,
+                    StopType = s.StopType, LocationId = s.LocationId, LocationName = s.LocationName,
+                    Address = s.Address, PostalCode = s.PostalCode, City = s.City, CountryCode = s.CountryCode,
+                    Reference = s.Reference, Instructions = s.Instructions,
+                })
+                .ToList(),
+        };
+        _dbContext.TransportOrders.Add(redelivery);
+
+        // Into the SAME dossier as the original (its wrapper or first user link) — one file.
+        var dossierId = await _dbContext.TransportDossiers
+                .Where(d => d.TenantId == tenantId && d.OriginTransportOrderId == originalOrderId)
+                .Select(d => (Guid?)d.Id)
+                .FirstOrDefaultAsync(cancellationToken)
+            ?? await _dbContext.DossierOrders
+                .Where(l => l.TenantId == tenantId && l.TransportOrderId == originalOrderId)
+                .OrderBy(l => l.CreatedAt)
+                .Select(l => (Guid?)l.DossierId)
+                .FirstOrDefaultAsync(cancellationToken)
+            ?? incident.DossierId;
+        if (dossierId is { } targetDossierId)
+        {
+            _dbContext.DossierOrders.Add(new Modules.Dossiers.Entities.DossierOrder
+            {
+                Id = Guid.NewGuid(), TenantId = tenantId,
+                DossierId = targetDossierId, TransportOrderId = redelivery.Id,
+            });
+        }
+
+        // Original packages flip to RedeliveryPlanned where the lifecycle allows it.
+        var packages = await _dbContext.Packages
+            .Where(p => p.TenantId == tenantId && p.TransportOrderId == originalOrderId)
+            .ToListAsync(cancellationToken);
+        foreach (var package in packages.Where(p =>
+                     Modules.Packages.Services.PackageLifecycleMachine.IsAllowed(
+                         p.CurrentLifecycleStatus, Modules.Packages.Entities.PackageLifecycleStatus.RedeliveryPlanned)))
+        {
+            package.CurrentLifecycleStatus = Modules.Packages.Entities.PackageLifecycleStatus.RedeliveryPlanned;
+        }
+
+        incident.LinkedRedeliveryOrderId = redelivery.Id;
+        await Common.Persistence.TenantNumbering.SaveWithClaimedNumberAsync(
+            _dbContext, settings,
+            () => redelivery.OrderNumber = settings is null
+                ? $"ORD-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}"
+                : $"{settings.OrderNumberPrefix}{settings.OrderNumberNextValue++:0000}",
+            cancellationToken);
+        await _auditService.RecordAsync(EntityType, incident.Id.ToString(), "RedeliveryCreated", null,
+            new { RedeliveryOrderId = redelivery.Id, redelivery.OrderNumber }, cancellationToken);
+        return await MapDetailAsync(incident, cancellationToken);
+    }
+
     private static void Apply(Incident incident, SaveIncidentRequest request, IncidentType incidentType, IncidentSeverity severity)
     {
         incident.Title = request.Title.Trim();
@@ -394,6 +707,11 @@ public class IncidentService : IIncidentService
         incident.TripId = request.TripId;
         incident.DossierId = request.DossierId;
         incident.DueDate = request.DueDate;
+        // Wave 6 §1: responsibility attribution (validated set; unknown input falls back).
+        incident.ResponsibleParty = request.ResponsibleParty is "Customer" or "Own" or "Driver" or "Supplier"
+            ? request.ResponsibleParty
+            : "Unknown";
+        incident.ResponsibilityNotes = Trim(request.ResponsibilityNotes);
     }
 
     private async Task NotifyResponsibleAsync(Incident incident, CancellationToken cancellationToken)
@@ -461,7 +779,14 @@ public class IncidentService : IIncidentService
             incident.DueDate, incident.Resolution, incident.ResolvedAt, incident.CreatedAt,
             Transitions.TryGetValue(incident.Status, out var allowed)
                 ? allowed.Select(s => s.ToString()).ToList()
-                : []);
+                : [],
+            incident.ResponsibleParty, incident.ResponsibilityNotes,
+            incident.ChargeDecision, incident.ChargeAmount, incident.ChargeDescription,
+            incident.LinkedRedeliveryOrderId,
+            incident.LinkedRedeliveryOrderId is { } redeliveryId
+                ? await _dbContext.TransportOrders.AsNoTracking()
+                    .Where(o => o.Id == redeliveryId).Select(o => (string?)o.OrderNumber).FirstOrDefaultAsync(cancellationToken)
+                : null);
     }
 
     private DateOnly Today => DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);

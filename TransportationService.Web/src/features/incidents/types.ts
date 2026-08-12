@@ -66,6 +66,16 @@ export interface IncidentDetail {
   resolvedAt: string | null
   createdAt: string
   allowedStatusChanges: IncidentStatus[]
+  /** Wave 6 §1: Unknown | Customer | Own | Driver | Supplier. */
+  responsibleParty: string
+  responsibilityNotes: string | null
+  /** Wave 6 §2: None | Proposed | Approved | Rejected. */
+  chargeDecision: string
+  chargeAmount: number | null
+  chargeDescription: string | null
+  /** Wave 6 §3: aangemaakte herleveringsorder. */
+  linkedRedeliveryOrderId: string | null
+  linkedRedeliveryOrderNumber: string | null
 }
 
 export interface IncidentInput {
@@ -86,6 +96,24 @@ export interface IncidentInput {
   dossierId: string | null
   vehicleId: string | null
   dueDate: string | null
+  /** Wave 6 §1. */
+  responsibleParty?: string
+  responsibilityNotes?: string | null
+}
+
+export const RESPONSIBLE_PARTY_LABELS: Record<string, string> = {
+  Unknown: 'Onbekend',
+  Customer: 'Klant',
+  Own: 'Eigen organisatie',
+  Driver: 'Chauffeur',
+  Supplier: 'Leverancier',
+}
+
+export const CHARGE_DECISION_LABELS: Record<string, string> = {
+  None: 'Geen doorrekening',
+  Proposed: 'Voorgesteld',
+  Approved: 'Goedgekeurd',
+  Rejected: 'Afgekeurd',
 }
 
 export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {

@@ -26,6 +26,40 @@ export function updateIncident(id: string, input: IncidentInput): Promise<Incide
   return apiClient.putJson<IncidentDetail, IncidentInput>(`/api/incidents/${id}`, input)
 }
 
+// --- Wave 6: doorrekening + herlevering + verenigde problemenlijst ---
+
+export function proposeIncidentCharge(id: string, amount: number, description: string): Promise<IncidentDetail> {
+  return apiClient.postJson(`/api/incidents/${id}/charge/propose`, { amount, description })
+}
+
+export function decideIncidentCharge(id: string, approve: boolean): Promise<IncidentDetail> {
+  return apiClient.postJson(`/api/incidents/${id}/charge/decide`, { approve })
+}
+
+export function createIncidentRedelivery(id: string): Promise<IncidentDetail> {
+  return apiClient.postJson(`/api/incidents/${id}/redelivery`, {})
+}
+
+export interface ProblemListItem {
+  id: string
+  kind: 'Incident' | 'Exception'
+  title: string
+  severity: string
+  status: string
+  occurredAt: string
+  orderNumber: string | null
+  tripNumber: string | null
+  tripId: string | null
+  dossierNumber: string | null
+  dossierId: string | null
+  responsibleParty: string
+  chargeDecision: string
+}
+
+export function listProblems(): Promise<ProblemListItem[]> {
+  return apiClient.getJson('/api/problems')
+}
+
 export function changeIncidentStatus(
   id: string,
   input: { status: string; resolution?: string | null },

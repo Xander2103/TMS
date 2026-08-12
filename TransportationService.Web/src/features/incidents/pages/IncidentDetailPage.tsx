@@ -21,11 +21,13 @@ import { getUsers } from '../../users/api/usersApi'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 import { listDossiers } from '../../dossiers/api/dossiersApi'
 import { changeIncidentStatus, createIncident, getIncident, updateIncident } from '../api/incidentsApi'
+import { IncidentChargePanel } from '../components/IncidentChargePanel'
 import {
   INCIDENT_SEVERITY_LABELS,
   INCIDENT_STATUS_LABELS,
   INCIDENT_STATUS_TONE,
   INCIDENT_TYPE_LABELS,
+  RESPONSIBLE_PARTY_LABELS,
   type IncidentDetail,
   type IncidentInput,
   type IncidentSeverity,
@@ -51,6 +53,9 @@ interface FormState {
   financialImpact: string
   estimatedCost: string
   actualCost: string
+  /** Wave 6 §1. */
+  responsibleParty: string
+  responsibilityNotes: string
 }
 
 const EMPTY_FORM: FormState = {
@@ -71,6 +76,8 @@ const EMPTY_FORM: FormState = {
   financialImpact: '',
   estimatedCost: '',
   actualCost: '',
+  responsibleParty: 'Unknown',
+  responsibilityNotes: '',
 }
 
 function toForm(incident: IncidentDetail): FormState {
@@ -92,6 +99,8 @@ function toForm(incident: IncidentDetail): FormState {
     financialImpact: incident.financialImpact ?? '',
     estimatedCost: incident.estimatedCost !== null ? String(incident.estimatedCost) : '',
     actualCost: incident.actualCost !== null ? String(incident.actualCost) : '',
+    responsibleParty: incident.responsibleParty,
+    responsibilityNotes: incident.responsibilityNotes ?? '',
   }
 }
 
@@ -114,6 +123,8 @@ function toInput(form: FormState): IncidentInput {
     dossierId: form.dossierId,
     vehicleId: form.vehicleId,
     dueDate: form.dueDate || null,
+    responsibleParty: form.responsibleParty,
+    responsibilityNotes: form.responsibilityNotes || null,
   }
 }
 
@@ -281,6 +292,7 @@ export function IncidentDetailPage() {
           <p>{incident!.resolution}</p>
         </FormSection>
       )}
+      {!isNew && <IncidentChargePanel incident={incident!} onUpdated={setIncident} />}
 
       <form onSubmit={(event) => void submit(event)}>
         <ValidationSummary message={formError} fieldErrors={fieldErrors} />
@@ -348,6 +360,33 @@ export function IncidentDetailPage() {
                 </option>
               ))}
             </select>
+          </FormField>
+          <FormField
+            label="Verantwoordelijke partij"
+            htmlFor="inc-responsible-party"
+            hint="Alleen 'Klant' kan worden doorgerekend; interne kosten blijven intern."
+          >
+            <select
+              id="inc-responsible-party"
+              value={form.responsibleParty}
+              onChange={(event) => set('responsibleParty', event.target.value)}
+              disabled={!editable}
+            >
+              {Object.entries(RESPONSIBLE_PARTY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Toelichting verantwoordelijkheid" htmlFor="inc-responsibility-notes">
+            <input
+              id="inc-responsibility-notes"
+              value={form.responsibilityNotes}
+              onChange={(event) => set('responsibilityNotes', event.target.value)}
+              maxLength={2000}
+              disabled={!editable}
+            />
           </FormField>
           <FormField label="Oorzaak" htmlFor="inc-cause" error={getFieldError(fieldErrors, 'cause')}>
             <textarea

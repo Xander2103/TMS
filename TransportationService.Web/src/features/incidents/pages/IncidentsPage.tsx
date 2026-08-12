@@ -7,7 +7,8 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { useAuth } from '../../auth/authContextValue'
-import { listIncidents } from '../api/incidentsApi'
+import { listIncidents, listProblems, type ProblemListItem } from '../api/incidentsApi'
+import { CHARGE_DECISION_LABELS } from '../types'
 import {
   INCIDENT_SEVERITY_LABELS,
   INCIDENT_SEVERITY_TONE,
@@ -126,6 +127,65 @@ export function IncidentsPage() {
       {!error && incidents.length > 0 && (
         <DataTable columns={columns} rows={incidents} rowKey={(row) => row.id} onRowClick={(row) => navigate(`/incidents/${row.id}`)} />
       )}
+
+      <ProblemsPanel />
     </div>
+  )
+}
+
+/**
+ * Wave 6 §4: de verenigde problemenlijst — open incidenten én open uitvoerings-
+ * uitzonderingen in één overzicht; elke rij linkt naar zijn eigen detail.
+ */
+function ProblemsPanel() {
+  const navigate = useNavigate()
+  const [problems, setProblems] = useState<ProblemListItem[] | null>(null)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    listProblems()
+      .then(setProblems)
+      .catch(() => setProblems([]))
+  }, [open])
+
+  return (
+    <section className="ui-form-section">
+      <button type="button" className="issued-items-link" onClick={() => setOpen((o) => !o)}>
+        {open ? 'Alle open problemen verbergen' : 'Alle open problemen (incidenten + uitvoeringsuitzonderingen)'}
+      </button>
+      {open && problems !== null && (
+        problems.length === 0
+          ? <p className="placeholder-text">Geen open problemen.</p>
+          : (
+            <table className="issued-items-table">
+              <thead>
+                <tr><th>Soort</th><th>Omschrijving</th><th>Ernst</th><th>Status</th><th>Order</th><th>Rit</th><th>Doorrekening</th></tr>
+              </thead>
+              <tbody>
+                {problems.map((problem) => (
+                  <tr
+                    key={`${problem.kind}-${problem.id}`}
+                    className="inv-order-row"
+                    onClick={() => navigate(problem.kind === 'Incident'
+                      ? `/incidents/${problem.id}`
+                      : problem.tripId
+                        ? `/trips/${problem.tripId}`
+                        : '/incidents')}
+                  >
+                    <td>{problem.kind === 'Incident' ? 'Incident' : 'Uitzondering'}</td>
+                    <td>{problem.title}</td>
+                    <td>{problem.severity}</td>
+                    <td>{problem.status}</td>
+                    <td>{problem.orderNumber ?? '—'}</td>
+                    <td>{problem.tripNumber ?? '—'}</td>
+                    <td>{problem.kind === 'Incident' ? (CHARGE_DECISION_LABELS[problem.chargeDecision] ?? problem.chargeDecision) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )
+      )}
+    </section>
   )
 }

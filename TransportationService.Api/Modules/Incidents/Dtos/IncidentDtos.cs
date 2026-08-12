@@ -48,7 +48,17 @@ public record IncidentDetailDto(
     string? Resolution,
     DateTime? ResolvedAt,
     DateTime CreatedAt,
-    IReadOnlyList<string> AllowedStatusChanges);
+    IReadOnlyList<string> AllowedStatusChanges,
+    /// <summary>Wave 6 §1: Unknown | Customer | Own | Driver | Supplier.</summary>
+    string ResponsibleParty = "Unknown",
+    string? ResponsibilityNotes = null,
+    /// <summary>Wave 6 §2: None | Proposed | Approved | Rejected.</summary>
+    string ChargeDecision = "None",
+    decimal? ChargeAmount = null,
+    string? ChargeDescription = null,
+    /// <summary>Wave 6 §3: the redelivery order created from this incident.</summary>
+    Guid? LinkedRedeliveryOrderId = null,
+    string? LinkedRedeliveryOrderNumber = null);
 
 public record SaveIncidentRequest(
     string Title,
@@ -72,6 +82,32 @@ public record SaveIncidentRequest(
     Guid? DossierId = null,
     DateOnly? DueDate = null,
     /// <summary>Offline-replay idempotency key (driver app); a repeated key returns the stored incident.</summary>
-    Guid? ClientRequestId = null);
+    Guid? ClientRequestId = null,
+    /// <summary>Wave 6 §1: Unknown | Customer | Own | Driver | Supplier.</summary>
+    string ResponsibleParty = "Unknown",
+    string? ResponsibilityNotes = null);
+
+/// <summary>Wave 6 §4: one row of the unified problem list (incidents + execution exceptions).</summary>
+public record ProblemListItemDto(
+    Guid Id,
+    /// <summary>"Incident" | "Exception" — drives the link target.</summary>
+    string Kind,
+    string Title,
+    string Severity,
+    string Status,
+    DateTime OccurredAt,
+    string? OrderNumber,
+    string? TripNumber,
+    Guid? TripId,
+    string? DossierNumber,
+    Guid? DossierId,
+    string ResponsibleParty = "Unknown",
+    string ChargeDecision = "None");
+
+/// <summary>Wave 6 §2: propose charging this problem to the customer (incidents.manage).</summary>
+public record ProposeIncidentChargeRequest(decimal Amount, string Description);
+
+/// <summary>Wave 6 §2: approve/reject the proposed charge (problems.approve_charge).</summary>
+public record DecideIncidentChargeRequest(bool Approve);
 
 public record ChangeIncidentStatusRequest(string Status, string? Resolution = null);

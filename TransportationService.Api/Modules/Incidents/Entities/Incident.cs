@@ -76,4 +76,24 @@ public class Incident : AuditableTenantEntity
 
     /// <summary>Client idempotency key of the create request (driver-app offline replay).</summary>
     public Guid? ClientRequestId { get; set; }
+
+    // --- Wave 6 §1: responsibility attribution (additive) ---
+
+    /// <summary>Unknown | Customer | Own | Driver | Supplier — who caused/bears the problem.</summary>
+    public string ResponsibleParty { get; set; } = "Unknown";
+    public string? ResponsibilityNotes { get; set; }
+
+    // --- Wave 6 §2: approval-gated charge decision ---
+
+    /// <summary>None | Proposed | Approved | Rejected. Approving needs problems.approve_charge
+    /// (v28) and creates a Manual pricing line on the linked order when possible.</summary>
+    public string ChargeDecision { get; set; } = "None";
+    public decimal? ChargeAmount { get; set; }
+    public string? ChargeDescription { get; set; }
+    public Guid? ChargeDecidedByUserId { get; set; }
+    public DateTime? ChargeDecidedAt { get; set; }
+
+    // --- Wave 6 §3: linked redelivery ---
+
+    public Guid? LinkedRedeliveryOrderId { get; set; }
 }

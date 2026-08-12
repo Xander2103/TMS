@@ -17,6 +17,11 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
 
         builder.Property(i => i.CustomTypeName).HasMaxLength(100);
         builder.Property(i => i.Title).HasMaxLength(200).IsRequired();
+        builder.Property(i => i.ResponsibleParty).HasMaxLength(20);
+        builder.Property(i => i.ResponsibilityNotes).HasMaxLength(2000);
+        builder.Property(i => i.ChargeDecision).HasMaxLength(20);
+        builder.Property(i => i.ChargeAmount).HasPrecision(12, 2);
+        builder.Property(i => i.ChargeDescription).HasMaxLength(500);
         builder.Property(i => i.Description).HasMaxLength(4000).IsRequired();
         builder.Property(i => i.Cause).HasMaxLength(2000);
         builder.Property(i => i.CustomerImpact).HasMaxLength(1000);

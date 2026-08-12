@@ -28,6 +28,7 @@ public class Phase8SupplyChainTests
         [PermissionCodes.OrdersLockPrice] = "TransportOrderService pricing-status transitions (L7)",
         [PermissionCodes.OrdersConfirmIncompletePrice] = "TransportOrderService.ConfirmOrderPricingAsync unpriced-goods override gate (wave 2026-08-04 §10)",
         [PermissionCodes.DossiersOverrideEntity] = "DossierService.ChangeLegalEntityAsync + TransportOrderService entity-change gate (Wave 2 §2)",
+        [PermissionCodes.ProblemsApproveCharge] = "IncidentService.DecideChargeAsync approval gate (Wave 6 §2)",
         [PermissionCodes.EmployeePlanningConflictOverride] = "planning conflict-override flow",
         [PermissionCodes.ScanningOverride] = "scan pipeline override gate",
         [PermissionCodes.PackagesRelabel] = "PackagesController.PrintLabels reprint gate",
