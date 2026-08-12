@@ -74,6 +74,13 @@
   color: #b45309;
 }
 
+/* Wave 2 §4: informational grouping-preference hint under the customer picker. */
+.inv-grouping-hint {
+  margin: -4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted, #64748b);
+}
+
 .inv-meta {
   margin: -8px 0 16px;
   font-size: 14px;
@@ -272,4 +279,24 @@
   .inv-manual-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* Wave 2 §6: readiness chip in the uninvoiced-orders table. */
+.inv-readiness {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inv-readiness-ready {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.inv-readiness-review {
+  background: #fef3c7;
+  color: #92400e;
+  cursor: help;
 }

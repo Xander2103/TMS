@@ -119,33 +119,29 @@ public class DossierReadinessService : IDossierReadinessService
             }
         }
 
-        // Commercial completeness from the frozen coverage snapshots (Full/Partial/None per
-        // goods line). Wave 2 turns this into a typed queryable column; the JSON parse here
-        // is bounded by the handful of linked orders on one dossier.
+        // Commercial completeness from the typed coverage column (Wave 2 §5) — no JSON parse;
+        // the backfill seeder derived the column for pre-wave snapshots at startup.
         var snapshots = await _dbContext.TransportOrderPricingSnapshots.AsNoTracking()
-            .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId) && s.CoverageJson != null)
+            .Where(s => s.TenantId == tenantId && orderIds.Contains(s.TransportOrderId)
+                        && (s.CoverageStatus == "Partial" || s.CoverageStatus == "None" || s.IsStale))
             .Join(_dbContext.TransportOrders.AsNoTracking(), s => s.TransportOrderId, o => o.Id,
-                (s, o) => new { s.CoverageJson, o.OrderNumber })
+                (s, o) => new { s.CoverageStatus, s.IsStale, o.OrderNumber })
             .ToListAsync(cancellationToken);
         foreach (var snapshot in snapshots)
         {
-            List<CoverageEntry>? entries;
-            try
-            {
-                entries = JsonSerializer.Deserialize<List<CoverageEntry>>(
-                    snapshot.CoverageJson!, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            }
-            catch (JsonException)
-            {
-                continue; // a malformed legacy blob must never break the dossier page
-            }
-
-            var incomplete = entries?.Count(e => e.Status is not null && e.Status != "Full") ?? 0;
-            if (incomplete > 0)
+            if (snapshot.CoverageStatus is "Partial" or "None")
             {
                 issues.Add(new ReadinessIssueDto(
                     "pricing.incomplete", "Warning",
-                    $"{snapshot.OrderNumber}: {incomplete} onderdeel/onderdelen zonder volledige prijs.",
+                    $"{snapshot.OrderNumber}: niet alle onderdelen hebben een volledige prijs.",
+                    "prijs", null, "Commercial"));
+            }
+
+            if (snapshot.IsStale)
+            {
+                issues.Add(new ReadinessIssueDto(
+                    "pricing.stale", "Warning",
+                    $"{snapshot.OrderNumber}: prijs verouderd — herbereken.",
                     "prijs", null, "Commercial"));
             }
         }
@@ -154,10 +150,10 @@ public class DossierReadinessService : IDossierReadinessService
     }
 
     /// <remarks>
-    /// Structural attention only (no activities yet, or a transport activity without its
-    /// order): the pricing dimension lives in an unqueryable JSON blob until Wave 2 adds the
-    /// typed coverage column, and silently pretending it is covered here would be worse than
-    /// the honest approximation.
+    /// Structural attention (no activities yet, or a transport activity without its order)
+    /// plus, since Wave 2 §5, the pricing dimension via the typed coverage column: an open
+    /// dossier with a linked order whose coverage is Partial/None or whose price went stale
+    /// counts as needing attention — the Wave 1 gap closes.
     /// </remarks>
     public async Task<int> CountDossiersWithAttentionAsync(CancellationToken cancellationToken)
     {
@@ -169,7 +165,13 @@ public class DossierReadinessService : IDossierReadinessService
                 || _dbContext.DossierActivities
                     .Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId == null)
                     .Join(_dbContext.ActivityTypes, a => a.ActivityTypeId, t => t.Id, (a, t) => t.HasStops)
-                    .Any(hasStops => hasStops))
+                    .Any(hasStops => hasStops)
+                || _dbContext.DossierActivities
+                    .Where(a => a.DossierId == d.Id && a.LinkedTransportOrderId != null)
+                    .Join(_dbContext.TransportOrderPricingSnapshots,
+                        a => a.LinkedTransportOrderId, s => s.TransportOrderId,
+                        (a, s) => new { s.CoverageStatus, s.IsStale })
+                    .Any(s => s.CoverageStatus == "Partial" || s.CoverageStatus == "None" || s.IsStale))
             .CountAsync(cancellationToken);
     }
 }

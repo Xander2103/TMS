@@ -223,6 +223,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   // Legal-entity options for the default billing entity; empty on load failure or no permission.
   const [legalEntities, setLegalEntities] = useState<LegalEntityOption[]>([])
   const [defaultLegalEntityId, setDefaultLegalEntityId] = useState<string>(initial?.defaultLegalEntityId ?? '')
+  const [allowedLegalEntityIds, setAllowedLegalEntityIds] = useState<string[]>(initial?.allowedLegalEntityIds ?? [])
   useEffect(() => {
     let mounted = true
     getLegalEntityOptions()
@@ -238,6 +239,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   }, [])
 
   const [invoiceEmail, setInvoiceEmail] = useState(initial?.invoiceEmail ?? '')
+  const [invoiceGrouping, setInvoiceGrouping] = useState(initial?.invoiceGrouping ?? 'Manual')
   const [invoiceLanguageCode, setInvoiceLanguageCode] = useState(initial?.invoiceLanguageCode ?? '')
   const [paymentTermDays, setPaymentTermDays] = useState(String(initial?.paymentTermDays ?? 30))
   const [defaultLanguageCode, setDefaultLanguageCode] = useState(initial?.defaultLanguageCode ?? '')
@@ -1046,6 +1048,19 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
           <FormField label="Facturatie-e-mail" htmlFor="c-invoice-email">
             <input id="c-invoice-email" type="email" value={invoiceEmail} onChange={(e) => setInvoiceEmail(e.target.value)} maxLength={250} />
           </FormField>
+          <FormField
+            label="Factuurgroepering"
+            htmlFor="c-invoice-grouping"
+            hint="Hoe deze klant facturen verwacht. Handmatig = vandaag; automatische voorstellen volgen later."
+          >
+            <select id="c-invoice-grouping" value={invoiceGrouping} onChange={(e) => setInvoiceGrouping(e.target.value)}>
+              <option value="Manual">Handmatig (standaard)</option>
+              <option value="PerDossier">Eén factuur per dossier</option>
+              <option value="Weekly">Wekelijks verzamelen</option>
+              <option value="Monthly">Maandelijks verzamelen</option>
+              <option value="ByReference">Per klantreferentie</option>
+            </select>
+          </FormField>
           <FormField label="Factuurtaal" htmlFor="c-invoice-lang" hint="Leeg = voorkeurstaal.">
             <select id="c-invoice-lang" value={invoiceLanguageCode} onChange={(e) => setInvoiceLanguageCode(e.target.value)}>
               <option value="">— Zelfde als voorkeurstaal —</option>
@@ -1074,6 +1089,28 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 </option>
               ))}
             </select>
+          </FormField>
+          <FormField
+            label="Toegestane facturerende entiteiten"
+            htmlFor="c-allowed-entities"
+            hint="Niets aangevinkt = alle actieve entiteiten toegestaan. Bij een selectie moet de standaardentiteit erin zitten; dossiers/orders/facturen buiten de lijst worden geweigerd."
+          >
+            <div id="c-allowed-entities" className="customer-form-requirements">
+              {legalEntities.filter((entity) => entity.isActive).map((entity) => (
+                <label key={entity.id} className="customer-form-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={allowedLegalEntityIds.includes(entity.id)}
+                    onChange={(e) =>
+                      setAllowedLegalEntityIds((ids) =>
+                        e.target.checked ? [...ids, entity.id] : ids.filter((id) => id !== entity.id),
+                      )
+                    }
+                  />
+                  {entity.displayName}
+                </label>
+              ))}
+            </div>
           </FormField>
           <div className="customer-form-requirements form-span-all">
             <label className="customer-form-checkbox">
@@ -1251,9 +1288,11 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       city: nullable(city),
       countryCode: countryCode || null,
       invoiceEmail: nullable(invoiceEmail),
+      invoiceGrouping,
       paymentTermDays: Number.isFinite(Number(paymentTermDays)) ? Number(paymentTermDays) : 0,
       defaultLanguageCode: defaultLanguageCode || null,
       defaultLegalEntityId: defaultLegalEntityId || null,
+      allowedLegalEntityIds,
       notes: nullable(notes),
       vatNotes: nullable(vatNotes),
       bankName: nullable(bankName),

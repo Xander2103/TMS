@@ -605,6 +605,11 @@ export function TransportOrderDetailPage() {
               Bevestigd terwijl niet alle goederen geprijsd zijn: {order.pricingSnapshot.confirmedWithUnpricedGoodsReason}
             </p>
           )}
+          {order.pricingSnapshot?.isStale && (
+            <p className="to-price-summary-warning" role="alert">
+              Prijs verouderd — de goederen of voorwaarden zijn gewijzigd na de laatste berekening. Herbereken de prijs.
+            </p>
+          )}
         </section>
       )}
 

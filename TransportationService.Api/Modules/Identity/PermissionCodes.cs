@@ -249,6 +249,8 @@ public static class PermissionCodes
     // --- Transport dossiers ---
     public const string DossiersView = "dossiers.view";
     public const string DossiersManage = "dossiers.manage";
+    /// <summary>Wave 2: move a dossier/order to another issuing entity than the customer default (reason required, audited).</summary>
+    public const string DossiersOverrideEntity = "dossiers.override_entity";
 
     // --- Activity types (tenant-configurable dossier activity catalogue) ---
     public const string ActivityTypesView = "activity_types.view";
@@ -570,6 +572,7 @@ public static class PermissionCodes
         (MessagesCancel, "messages", "cancel", "Interne berichten van anderen intrekken"),
         (DossiersView, "dossiers", "view", "Transportdossiers bekijken"),
         (DossiersManage, "dossiers", "manage", "Transportdossiers beheren (aanmaken, koppelen, sluiten)"),
+        (DossiersOverrideEntity, "dossiers", "override_entity", "Dossier of order naar een andere facturerende entiteit dan de klantstandaard verplaatsen (met reden, geauditeerd)"),
         (ActivityTypesView, "activity_types", "view", "Activiteitstypes bekijken"),
         (ActivityTypesManage, "activity_types", "manage", "Activiteitstypes beheren"),
         (IncidentsView, "incidents", "view", "Incidenten bekijken"),

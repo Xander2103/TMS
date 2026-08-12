@@ -300,6 +300,10 @@ export interface CustomerDetail extends CustomerVatProfile {
   peppolValidationStatus: PeppolValidationStatus
   peppolValidatedAt: string | null
   peppolValidationReference: string | null
+  /** Wave 2: toegestane facturerende entiteiten; leeg = alle actieve entiteiten toegestaan. */
+  allowedLegalEntityIds?: string[] | null
+  /** Wave 2: PerDossier | Weekly | Monthly | ByReference | Manual. */
+  invoiceGrouping?: string
   contacts: CustomerContact[]
 }
 
@@ -336,6 +340,10 @@ export interface CustomerInput extends CustomerVatProfile {
   bankAccountNumber: string | null
   /** Standaard facturerende entiteit voor deze klant (null = tenant-standaard). */
   defaultLegalEntityId: string | null
+  /** Wave 2: toegestane facturerende entiteiten; leeg = alle, null/weggelaten = ongewijzigd. */
+  allowedLegalEntityIds?: string[] | null
+  /** Wave 2: factuurgroepering; weggelaten = ongewijzigd (Manual bij aanmaak). */
+  invoiceGrouping?: string | null
 }
 
 export interface UpdateCustomerInput extends CustomerInput {

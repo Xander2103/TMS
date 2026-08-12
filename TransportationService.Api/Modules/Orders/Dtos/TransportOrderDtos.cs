@@ -171,7 +171,11 @@ public record OrderPricingSnapshotDto(
     Guid? ConfirmedByUserId = null,
     string? ConfirmedByName = null,
     /// <summary>Non-null: the price was confirmed DESPITE unpriced goods, with this reason (visible warning).</summary>
-    string? ConfirmedWithUnpricedGoodsReason = null);
+    string? ConfirmedWithUnpricedGoodsReason = null,
+    /// <summary>Wave 2 §5: typed coverage projection (Full | Partial | None | NotApplicable).</summary>
+    string? CoverageStatus = null,
+    /// <summary>Wave 2 §5: pricing inputs changed without a recalculation — "Prijs verouderd".</summary>
+    bool IsStale = false);
 
 /// <summary>
 /// Pricing coverage of one commercial goods line/unit (wave 2026-08-04 §7). Status: "Full"

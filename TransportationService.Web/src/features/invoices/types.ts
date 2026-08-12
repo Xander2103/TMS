@@ -97,6 +97,10 @@ export interface UninvoicedOrder {
   firstLoadingCity: string | null
   lastUnloadingCity: string | null
   agreedPrice: number | null
+  /** Wave 2 §6: NotReady | ReadyForInvoice | ReviewRequired — informatief, nooit blokkerend. */
+  invoiceReadiness?: string
+  /** Puntkomma-gescheiden redencodes bij ReviewRequired (bv. pricing.stale;pod.missing). */
+  invoiceReadinessReasons?: string | null
 }
 
 export interface ManualLineInput {

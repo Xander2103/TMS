@@ -295,7 +295,16 @@ export function InvoiceDetailPage() {
                     <select
                       aria-label={`Verkoopcategorie voor ${line.description || 'nieuwe lijn'}`}
                       value={line.salesCategoryId ?? ''}
-                      onChange={(e) => setLine(line.key, { salesCategoryId: e.target.value || null })}
+                      onChange={(e) => {
+                        const categoryId = e.target.value || null
+                        // Wave 2 §3 (InvoiceTextResolver): an empty description takes the code's
+                        // invoice text (invoiceDescriptionNl, terugval naam) — nooit overschrijven.
+                        const category = salesCategories.find((c) => c.id === categoryId)
+                        const prefill = !line.description.trim() && category
+                          ? { description: category.invoiceDescriptionNl ?? category.name }
+                          : {}
+                        setLine(line.key, { salesCategoryId: categoryId, ...prefill })
+                      }}
                       disabled={busy}
                     >
                       <option value="">— Geen —</option>

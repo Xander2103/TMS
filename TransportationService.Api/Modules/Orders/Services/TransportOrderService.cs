@@ -508,7 +508,30 @@ public class TransportOrderService : ITransportOrderService
         // Null keeps the current entity (never silently cleared); explicit ids are validated.
         if (request.LegalEntityId is { } requestedEntity && requestedEntity != order.LegalEntityId)
         {
+            // Wave 2 (spec Part O): changing an order to a NON-default entity is the same audited
+            // right as moving a dossier — dossiers.manage/orders.edit alone no longer suffices.
+            var entityCustomerDefault = await _dbContext.Customers
+                .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == order.CustomerId)
+                .Select(c => c.DefaultLegalEntityId)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (requestedEntity != entityCustomerDefault)
+            {
+                var entityUserId = _currentUser?.CurrentUserId;
+                var mayOverrideEntity = _permissionService is not null
+                    && entityUserId is { } euid
+                    && await _permissionService.UserHasPermissionAsync(
+                        euid, PermissionCodes.DossiersOverrideEntity, cancellationToken);
+                if (!mayOverrideEntity)
+                {
+                    return TransportOrderOperationResult.Invalid(
+                        "Je hebt geen rechten om deze order naar een andere entiteit dan de klantstandaard te verplaatsen.");
+                }
+            }
+
+            var previousEntityId = order.LegalEntityId;
             order.LegalEntityId = await ResolveOrderLegalEntityAsync(requestedEntity, order.CustomerId, cancellationToken);
+            await _auditService.RecordAsync(EntityType, order.Id.ToString(), "LegalEntityChanged",
+                new { LegalEntityId = previousEntityId }, new { order.LegalEntityId }, cancellationToken);
         }
 
         // Wholesale stop replacement; removal is soft, so the trail stays auditable. The
@@ -568,6 +591,8 @@ public class TransportOrderService : ITransportOrderService
             return pricingError;
         }
 
+        // Wave 2 §6: pricing/coverage may have changed — keep the readiness projection current.
+        await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var cargoAfter = replacementCargo
@@ -619,6 +644,15 @@ public class TransportOrderService : ITransportOrderService
             {
                 throw new Common.DomainValidationException("legalEntityId",
                     "De gekozen facturerende entiteit bestaat niet of is niet actief.");
+            }
+
+            // Wave 2 (spec Part O): an explicit entity outside the customer's allowed set is a
+            // validation error naming the allowed entities. The inherited default below needs no
+            // check — CustomerService keeps the default inside the set.
+            if (await Modules.Partners.Services.CustomerEntityPolicy.ValidateAsync(
+                    _dbContext, _tenantContext.TenantId, customerId, id, cancellationToken) is { } policyError)
+            {
+                throw new Common.DomainValidationException("legalEntityId", policyError);
             }
 
             return id;
@@ -785,6 +819,9 @@ public class TransportOrderService : ITransportOrderService
         var wasSubmitted = order.Status == TransportOrderStatus.Submitted;
         var before = new { order.Status };
         order.Status = target;
+        // Wave 2 §6: readiness is a projection of the current state — recompute on every
+        // status change (Completed evaluates the rules; anything else resets to NotReady).
+        await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "StatusChanged", before,
@@ -859,6 +896,7 @@ public class TransportOrderService : ITransportOrderService
             order.CancellationReason = null;
         }
 
+        await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "StatusCorrected", before,
@@ -1745,7 +1783,9 @@ public class TransportOrderService : ITransportOrderService
                 ConfirmedAtUtc: snapshotEntity.ConfirmedAtUtc,
                 ConfirmedByUserId: snapshotEntity.ConfirmedByUserId,
                 ConfirmedByName: snapshotEntity.ConfirmedByName,
-                ConfirmedWithUnpricedGoodsReason: snapshotEntity.ConfirmedWithUnpricedGoodsReason);
+                ConfirmedWithUnpricedGoodsReason: snapshotEntity.ConfirmedWithUnpricedGoodsReason,
+                CoverageStatus: snapshotEntity.CoverageStatus,
+                IsStale: snapshotEntity.IsStale);
         var serviceLines = await _dbContext.TransportOrderServiceLines.AsNoTracking()
             .Where(l => l.TenantId == _tenantContext.TenantId && l.TransportOrderId == order.Id)
             .OrderBy(l => l.NameSnapshot)
@@ -2321,7 +2361,23 @@ public class TransportOrderService : ITransportOrderService
                 .Concat(unpricedCargoCoverage)
                 .ToList();
             snapshot.CoverageJson = coverage.Count > 0 ? JsonSerializer.Serialize(coverage, CoverageJsonOptions) : null;
+            // Wave 2 §5: the typed, queryable projection of the same coverage (worst entry
+            // wins); a fresh calculation is by definition not stale.
+            snapshot.CoverageStatus = coverage.Count == 0
+                ? "NotApplicable"
+                : coverage.Any(c => c.Status == "None") ? "None"
+                : coverage.Any(c => c.Status == "Partial") ? "Partial"
+                : "Full";
+            snapshot.IsStale = false;
             // Status is deliberately left untouched — a save never resets Draft/Reviewed.
+        }
+        else if (existingSnapshot is not null
+                 && await PricingInputsChangedAsync(order, requestedAgreedPrice, priceIsManual, overrideReason,
+                     engineSelections, cancellationToken))
+        {
+            // Wave 2 §5: pricing-relevant inputs changed but no recalculation ran (no engine
+            // configuration) — never silently recalculate, flag the frozen numbers instead.
+            existingSnapshot.IsStale = true;
         }
 
         return null;
@@ -2768,6 +2824,7 @@ public class TransportOrderService : ITransportOrderService
         }
 
         await RecomputeLinesTotalAndAgreedPriceAsync(order, cancellationToken);
+        await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "lines_adjusted", auditBefore, auditAfter, cancellationToken);
 
@@ -2915,6 +2972,7 @@ public class TransportOrderService : ITransportOrderService
 
         var before = new { snapshot.Status };
         snapshot.Status = target;
+        await InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, order, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("OrderPricing", orderId.ToString(), "status_changed", before, new { snapshot.Status }, cancellationToken);
 

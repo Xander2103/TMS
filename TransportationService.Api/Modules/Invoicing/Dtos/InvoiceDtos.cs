@@ -76,7 +76,11 @@ public record UninvoicedOrderDto(
     string? LastUnloadingCity,
     decimal? AgreedPrice,
     /// <summary>The order's issuing entity; null on pre-entity legacy orders (invoiceable under any entity).</summary>
-    Guid? LegalEntityId = null);
+    Guid? LegalEntityId = null,
+    /// <summary>Wave 2 §6: NotReady | ReadyForInvoice | ReviewRequired — informational, never a gate.</summary>
+    string InvoiceReadiness = "NotReady",
+    /// <summary>Semicolon-separated reason codes when ReviewRequired (e.g. pricing.stale;pod.missing).</summary>
+    string? InvoiceReadinessReasons = null);
 
 public record ManualInvoiceLineInput(
     string Description,

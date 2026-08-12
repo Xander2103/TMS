@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 26;
+    public const int CurrentVersion = 27;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -509,6 +509,15 @@ public static class DefaultRoleUpgrades
                 ["planner"] = [PermissionCodes.ActivityTypesView],
                 ["dispatcher"] = [PermissionCodes.ActivityTypesView],
                 ["management"] = [PermissionCodes.ActivityTypesView, PermissionCodes.ActivityTypesManage],
+            }),
+        new(27,
+            "Commercial foundation wave 2026-08-12: moving a dossier/order to another issuing "
+            + "entity than the customer default becomes a separate audited right with a "
+            + "mandatory reason — dossiers.manage alone no longer suffices.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["management"] = [PermissionCodes.DossiersOverrideEntity],
+                ["boekhouding"] = [PermissionCodes.DossiersOverrideEntity],
             }),
     ];
 }

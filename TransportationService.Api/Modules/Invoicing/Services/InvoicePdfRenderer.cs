@@ -32,7 +32,9 @@ public sealed record InvoicePdfSnapshot(
     string Currency,
     string? Notes,
     bool IsCreditNote = false,
-    string? CreditedInvoiceNumber = null);
+    string? CreditedInvoiceNumber = null,
+    /// <summary>Wave 2: document language frozen on the invoice; unknown/missing = Dutch.</summary>
+    string? LanguageCode = null);
 
 /// <summary>
 /// Renders a one-page-per-overflow invoice PDF: header (seller + optional logo), invoice meta,
@@ -61,6 +63,7 @@ public static class InvoicePdfRenderer
 
     public static byte[] Render(InvoicePdfSnapshot invoice)
     {
+        var strings = InvoicePdfStrings.For(invoice.LanguageCode);
         using var document = new PdfDocument();
         var page = document.AddPage();
         var gfx = XGraphics.FromPdfPage(page);
@@ -96,7 +99,7 @@ public static class InvoicePdfRenderer
 
         if (invoice.SellerVatNumber is { Length: > 0 })
         {
-            gfx.DrawString($"BTW: {invoice.SellerVatNumber}", Body, XBrushes.Black, new XPoint(margin, y + 10));
+            gfx.DrawString($"{strings.VatNumberLabel}: {invoice.SellerVatNumber}", Body, XBrushes.Black, new XPoint(margin, y + 10));
             y += 14;
         }
 
@@ -106,33 +109,33 @@ public static class InvoicePdfRenderer
 
         // --- Invoice meta + customer block, side by side ---
         var metaX = margin + width * 0.55;
-        gfx.DrawString(invoice.IsCreditNote ? "CREDITNOTA" : "FACTUUR", Heading, XBrushes.Black, new XPoint(metaX, y + 9));
+        gfx.DrawString(invoice.IsCreditNote ? strings.CreditNoteTitle : strings.Title, Heading, XBrushes.Black, new XPoint(metaX, y + 9));
         y += 16;
         gfx.DrawString(
-            $"{(invoice.IsCreditNote ? "Creditnotanummer" : "Factuurnummer")}: {invoice.InvoiceNumber}",
+            $"{(invoice.IsCreditNote ? strings.CreditNoteNumberLabel : strings.InvoiceNumberLabel)}: {invoice.InvoiceNumber}",
             Body, XBrushes.Black, new XPoint(metaX, y + 9));
         var customerY = y - 16;
         y += 14;
-        gfx.DrawString($"Datum: {invoice.InvoiceDate:dd-MM-yyyy}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
+        gfx.DrawString($"{strings.DateLabel}: {invoice.InvoiceDate.ToString(strings.DateFormat)}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
         y += 14;
         if (!invoice.IsCreditNote)
         {
-            gfx.DrawString($"Vervaldatum: {invoice.DueDate:dd-MM-yyyy}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
+            gfx.DrawString($"{strings.DueDateLabel}: {invoice.DueDate.ToString(strings.DateFormat)}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
             y += 14;
         }
 
         if (invoice.CreditedInvoiceNumber is { Length: > 0 })
         {
-            gfx.DrawString($"Crediteert factuur: {invoice.CreditedInvoiceNumber}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
+            gfx.DrawString($"{strings.CreditsInvoiceLabel}: {invoice.CreditedInvoiceNumber}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
             y += 14;
         }
         if (invoice.PurchaseOrderNumber is { Length: > 0 })
         {
-            gfx.DrawString($"PO-nummer: {invoice.PurchaseOrderNumber}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
+            gfx.DrawString($"{strings.PoNumberLabel}: {invoice.PurchaseOrderNumber}", Body, XBrushes.Black, new XPoint(metaX, y + 9));
             y += 14;
         }
 
-        gfx.DrawString("Factuuradres", Heading, XBrushes.Black, new XPoint(margin, customerY + 9));
+        gfx.DrawString(strings.BillingAddressHeading, Heading, XBrushes.Black, new XPoint(margin, customerY + 9));
         var cy = customerY + 14;
         gfx.DrawString(invoice.CustomerName, BodyBold, XBrushes.Black, new XPoint(margin, cy + 9));
         cy += 14;
@@ -144,7 +147,7 @@ public static class InvoicePdfRenderer
 
         if (invoice.CustomerVatNumber is { Length: > 0 })
         {
-            gfx.DrawString($"BTW: {invoice.CustomerVatNumber}", Body, XBrushes.Black, new XPoint(margin, cy + 9));
+            gfx.DrawString($"{strings.VatNumberLabel}: {invoice.CustomerVatNumber}", Body, XBrushes.Black, new XPoint(margin, cy + 9));
             cy += 14;
         }
 
@@ -159,11 +162,11 @@ public static class InvoicePdfRenderer
 
         void DrawTableHeader()
         {
-            gfx.DrawString("Omschrijving", Heading, XBrushes.Black, new XPoint(colDesc, y + 9));
-            gfx.DrawString("Aantal", Heading, XBrushes.Black, new XPoint(colQty, y + 9));
-            gfx.DrawString("Prijs", Heading, XBrushes.Black, new XPoint(colPrice, y + 9));
-            gfx.DrawString("BTW%", Heading, XBrushes.Black, new XPoint(colVat, y + 9));
-            gfx.DrawString("Totaal", Heading, XBrushes.Black, new XPoint(colTotal, y + 9));
+            gfx.DrawString(strings.DescriptionColumn, Heading, XBrushes.Black, new XPoint(colDesc, y + 9));
+            gfx.DrawString(strings.QuantityColumn, Heading, XBrushes.Black, new XPoint(colQty, y + 9));
+            gfx.DrawString(strings.PriceColumn, Heading, XBrushes.Black, new XPoint(colPrice, y + 9));
+            gfx.DrawString(strings.VatColumn, Heading, XBrushes.Black, new XPoint(colVat, y + 9));
+            gfx.DrawString(strings.TotalColumn, Heading, XBrushes.Black, new XPoint(colTotal, y + 9));
             y += 14;
             gfx.DrawLine(new XPen(XColors.Black, 0.75), margin, y, margin + width, y);
             y += 8;
@@ -218,12 +221,12 @@ public static class InvoicePdfRenderer
 
         if (byRate.Count > 0)
         {
-            gfx.DrawString("BTW-overzicht", Heading, XBrushes.Black, new XPoint(margin, y + 9));
+            gfx.DrawString(strings.VatBreakdownHeading, Heading, XBrushes.Black, new XPoint(margin, y + 9));
             y += 14;
             foreach (var group in byRate)
             {
                 gfx.DrawString(
-                    $"{group.Rate:0.##}% over {invoice.Currency} {group.Base:0.00} = {invoice.Currency} {group.Vat:0.00}",
+                    $"{group.Rate:0.##}% {strings.VatOverWord} {invoice.Currency} {group.Base:0.00} = {invoice.Currency} {group.Vat:0.00}",
                     Small, XBrushes.Black, new XPoint(margin, y + 8));
                 y += 12;
             }
@@ -242,23 +245,23 @@ public static class InvoicePdfRenderer
             y += 15;
         }
 
-        TotalLine("Subtotaal", invoice.Subtotal, Body);
-        TotalLine("BTW", invoice.VatAmount, Body);
+        TotalLine(strings.SubtotalLabel, invoice.Subtotal, Body);
+        TotalLine(strings.VatLabel, invoice.VatAmount, Body);
         gfx.DrawLine(new XPen(XColors.Black, 0.75), totalsX, y, totalsX + totalsWidth, y);
         y += 4;
-        TotalLine("Totaal", invoice.Total, BodyBold);
+        TotalLine(strings.TotalLabel, invoice.Total, BodyBold);
         y += 12;
 
         // --- Payment block ---
         if (invoice.SellerIban is { Length: > 0 })
         {
-            gfx.DrawString("Betaalgegevens", Heading, XBrushes.Black, new XPoint(margin, y + 9));
+            gfx.DrawString(strings.PaymentHeading, Heading, XBrushes.Black, new XPoint(margin, y + 9));
             y += 14;
             gfx.DrawString(
                 $"IBAN: {invoice.SellerIban}" + (invoice.SellerBic is { Length: > 0 } bic ? $"  BIC: {bic}" : string.Empty),
                 Body, XBrushes.Black, new XPoint(margin, y + 9));
             y += 14;
-            gfx.DrawString($"Mededeling: {invoice.InvoiceNumber}", Body, XBrushes.Black, new XPoint(margin, y + 9));
+            gfx.DrawString($"{strings.PaymentReferenceLabel}: {invoice.InvoiceNumber}", Body, XBrushes.Black, new XPoint(margin, y + 9));
             y += 14;
         }
 

@@ -33,6 +33,7 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
   const [entityDialog, setEntityDialog] = useState(false)
   const [entities, setEntities] = useState<LegalEntityOption[]>([])
   const [entityId, setEntityId] = useState('')
+  const [entityReason, setEntityReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const menuRef = useRef<HTMLDetailsElement>(null)
@@ -49,6 +50,7 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
 
   function openEntityDialog() {
     setEntityId(dossier.legalEntityId ?? '')
+    setEntityReason('')
     setError(null)
     setEntityDialog(true)
   }
@@ -61,7 +63,8 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
     setBusy(true)
     setError(null)
     try {
-      const updated = await changeDossierLegalEntity(dossier.id, entityId, dossier.version)
+      const updated = await changeDossierLegalEntity(
+        dossier.id, entityId, dossier.version, entityReason.trim() || undefined)
       onUpdated(updated)
       setEntityDialog(false)
     } catch (err) {
@@ -169,6 +172,19 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
                 </option>
               ))}
             </select>
+          </FormField>
+          <FormField
+            label="Reden"
+            htmlFor="dh-entity-reason"
+            hint="Verplicht bij een andere entiteit dan de klantstandaard (vereist het recht 'entiteit overschrijven'; wordt mee gelogd)."
+          >
+            <input
+              id="dh-entity-reason"
+              value={entityReason}
+              onChange={(event) => setEntityReason(event.target.value)}
+              disabled={busy}
+              maxLength={500}
+            />
           </FormField>
         </Modal>
       )}

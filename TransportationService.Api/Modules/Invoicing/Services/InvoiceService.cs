@@ -159,7 +159,11 @@ public class InvoiceService : IInvoiceService
                         && o.Status == TransportOrderStatus.Completed
                         && !invoicedOrderIds.Contains(o.Id))
             .OrderBy(o => o.OrderDate)
-            .Select(o => new { o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription, o.AgreedPrice, o.LegalEntityId })
+            .Select(o => new
+            {
+                o.Id, o.OrderNumber, o.OrderDate, o.GoodsDescription, o.AgreedPrice, o.LegalEntityId,
+                o.InvoiceReadiness, o.InvoiceReadinessReasons,
+            })
             .ToListAsync(cancellationToken);
 
         var orderIds = orders.Select(o => o.Id).ToList();
@@ -186,7 +190,8 @@ public class InvoiceService : IInvoiceService
                 orderStops.FirstOrDefault(s => s.StopType == StopType.Loading)?.City,
                 orderStops.LastOrDefault(s => s.StopType == StopType.Unloading)?.City,
                 o.AgreedPrice,
-                o.LegalEntityId);
+                o.LegalEntityId,
+                o.InvoiceReadiness, o.InvoiceReadinessReasons);
         }).ToList();
     }
 
@@ -196,7 +201,11 @@ public class InvoiceService : IInvoiceService
 
         var customerVat = await _dbContext.Customers
             .Where(c => c.Id == request.CustomerId && c.TenantId == tenantId)
-            .Select(c => new { c.VatTreatment, c.DefaultVatRatePercent, c.DefaultLegalEntityId, c.VatNumber })
+            .Select(c => new
+            {
+                c.VatTreatment, c.DefaultVatRatePercent, c.DefaultLegalEntityId, c.VatNumber,
+                c.InvoiceLanguageCode, c.DefaultLanguageCode,
+            })
             .FirstOrDefaultAsync(cancellationToken);
         if (customerVat is null)
         {
@@ -293,6 +302,14 @@ public class InvoiceService : IInvoiceService
                 "Kies de entiteit van de opdrachten of pas de opdrachten aan.");
         }
 
+        // Wave 2 (spec Part O): the invoice entity must also be in the customer's allowed set
+        // (empty set = no restriction) — the same policy the dossier/order side enforces.
+        if (await Modules.Partners.Services.CustomerEntityPolicy.ValidateAsync(
+                _dbContext, tenantId, request.CustomerId, legalEntity?.Id, cancellationToken) is { } entityPolicyError)
+        {
+            return InvoiceOperationResult.Invalid(entityPolicyError);
+        }
+
         // Invoice period drives the numbering sequence: default = invoice-date month; an
         // explicitly picked earlier month is allowed (invoicing July in August), a future
         // month never is.
@@ -315,6 +332,8 @@ public class InvoiceService : IInvoiceService
             DueDate = invoiceDate.AddDays(settings?.PaymentTermDays ?? 30),
             Currency = legalEntity?.DefaultCurrency ?? settings?.DefaultCurrency ?? "EUR",
             Notes = Trim(request.Notes),
+            // Wave 2 §3: the document language freezes at creation, like the seller snapshot.
+            LanguageCode = customerVat.InvoiceLanguageCode ?? customerVat.DefaultLanguageCode ?? "nl",
         };
 
         // Snapshotted service lines become separate invoice lines; the base transport line
@@ -1153,6 +1172,7 @@ public class InvoiceService : IInvoiceService
             DueDate = today.AddDays(settings?.PaymentTermDays ?? 30),
             Currency = original.Currency,
             PurchaseOrderNumber = original.PurchaseOrderNumber,
+            LanguageCode = original.LanguageCode,
             Notes = $"Creditnota voor factuur {original.InvoiceNumber}.",
             // Snapshot copy FROM the credited document, never from live master data: the credit
             // note must mirror exactly what it credits.

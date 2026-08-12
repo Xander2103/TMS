@@ -5,7 +5,7 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
-import { searchCustomers } from '../../customers/api/customersApi'
+import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
 import { getPoPolicy } from '../../customers/api/customerBillingConfigApi'
 import { getActiveLegalEntity, getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
@@ -21,6 +21,22 @@ interface ManualRow extends ManualLineInput {
 
 let manualKey = 0
 
+/** Wave 2 §6: readable tooltip for the semicolon-separated readiness reason codes. */
+function READINESS_REASON_LABELS(reasons: string | null | undefined): string {
+  if (!reasons) return 'Nakijken vóór facturatie.'
+  const labels: Record<string, string> = {
+    'pricing.none': 'nog geen prijs',
+    'pricing.coverage.partial': 'niet alle onderdelen geprijsd',
+    'pricing.coverage.none': 'geen onderdeel volledig geprijsd',
+    'pricing.stale': 'prijs verouderd — herbereken',
+    'pod.missing': 'afleverbewijs ontbreekt',
+  }
+  return reasons
+    .split(';')
+    .map((code) => labels[code] ?? code)
+    .join(', ')
+}
+
 /** Invoice builder: pick a customer, tick completed orders, add manual lines. */
 export function NewInvoicePage() {
   const navigate = useNavigate()
@@ -34,6 +50,7 @@ export function NewInvoicePage() {
   const [notes, setNotes] = useState('')
   const [poNumber, setPoNumber] = useState('')
   const [poPolicyRequired, setPoPolicyRequired] = useState(false)
+  const [invoiceGrouping, setInvoiceGrouping] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const [entities, setEntities] = useState<LegalEntityOption[]>([])
@@ -145,6 +162,13 @@ export function NewInvoicePage() {
     setSelectedOrderIds([])
     setPoNumber('')
     setPoPolicyRequired(false)
+    // Wave 2 §4: hint only — the proposal engine that acts on the preference is Wave 10.
+    setInvoiceGrouping(null)
+    if (value) {
+      getCustomer(value)
+        .then((detail) => setInvoiceGrouping(detail.invoiceGrouping ?? null))
+        .catch(() => {})
+    }
   }
 
   function toggleOrder(id: string) {
@@ -223,6 +247,14 @@ export function NewInvoicePage() {
             ))}
           </select>
         </FormField>
+        {invoiceGrouping && invoiceGrouping !== 'Manual' && (
+          <p className="inv-grouping-hint" role="note">
+            {invoiceGrouping === 'PerDossier' && 'Deze klant verwacht één factuur per dossier.'}
+            {invoiceGrouping === 'Weekly' && 'Deze klant verwacht een wekelijkse verzamelfactuur.'}
+            {invoiceGrouping === 'Monthly' && 'Deze klant verwacht een maandelijkse verzamelfactuur.'}
+            {invoiceGrouping === 'ByReference' && 'Deze klant verwacht één factuur per klantreferentie.'}
+          </p>
+        )}
 
         <div className="inv-entity-period">
           <FormField label="Facturerende entiteit" htmlFor="inv-legal-entity">
@@ -283,6 +315,7 @@ export function NewInvoicePage() {
                     <th>Goederen</th>
                     <th>Route</th>
                     <th>Prijs</th>
+                    <th>Facturatie</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -306,6 +339,20 @@ export function NewInvoicePage() {
                         {order.firstLoadingCity ?? '?'} → {order.lastUnloadingCity ?? '?'}
                       </td>
                       <td>{order.agreedPrice !== null ? euro(order.agreedPrice) : '—'}</td>
+                      <td>
+                        {order.invoiceReadiness === 'ReadyForInvoice' && (
+                          <span className="inv-readiness inv-readiness-ready">Klaar</span>
+                        )}
+                        {order.invoiceReadiness === 'ReviewRequired' && (
+                          <span
+                            className="inv-readiness inv-readiness-review"
+                            title={READINESS_REASON_LABELS(order.invoiceReadinessReasons)}
+                          >
+                            Nakijken
+                          </span>
+                        )}
+                        {(!order.invoiceReadiness || order.invoiceReadiness === 'NotReady') && '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

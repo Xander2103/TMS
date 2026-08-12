@@ -121,7 +121,10 @@ public record SaveDossierRequest(
     /// <summary>Expected concurrency token on update; null (legacy clients) skips the check.</summary>
     Guid? Version = null);
 
-public record ChangeDossierEntityRequest(Guid LegalEntityId, Guid? Version = null);
+public record ChangeDossierEntityRequest(
+    Guid LegalEntityId, Guid? Version = null,
+    /// <summary>Wave 2: mandatory when the target differs from the customer default (audited old→new+reason).</summary>
+    string? Reason = null);
 
 public record SaveDossierActivityRequest(
     Guid ActivityTypeId,

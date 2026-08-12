@@ -28,10 +28,12 @@ export function createDossierFast(input: NewDossierInput): Promise<DossierDetail
   return apiClient.postJson<DossierDetail, NewDossierInput>('/api/dossiers', input)
 }
 
-export function changeDossierLegalEntity(id: string, legalEntityId: string, version?: string): Promise<DossierDetail> {
-  return apiClient.putJson<DossierDetail, { legalEntityId: string; version?: string }>(
+export function changeDossierLegalEntity(
+  id: string, legalEntityId: string, version?: string, reason?: string,
+): Promise<DossierDetail> {
+  return apiClient.putJson<DossierDetail, { legalEntityId: string; version?: string; reason?: string }>(
     `/api/dossiers/${id}/legal-entity`,
-    { legalEntityId, version },
+    { legalEntityId, version, reason },
   )
 }
 

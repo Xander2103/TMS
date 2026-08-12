@@ -46,19 +46,25 @@ public class DossierService : IDossierService
     private readonly IAuditService _auditService;
     private readonly TimeProvider _timeProvider;
     private readonly IDossierReadinessService _readinessService;
+    private readonly Modules.Identity.Services.IPermissionAuthorizationService? _permissionService;
+    private readonly Modules.Identity.Services.ICurrentUserContext? _currentUser;
 
     public DossierService(
         TransportationDbContext dbContext,
         ITenantContext tenantContext,
         IAuditService auditService,
         TimeProvider timeProvider,
-        IDossierReadinessService? readinessService = null)
+        IDossierReadinessService? readinessService = null,
+        Modules.Identity.Services.IPermissionAuthorizationService? permissionService = null,
+        Modules.Identity.Services.ICurrentUserContext? currentUser = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
         _timeProvider = timeProvider;
         _readinessService = readinessService ?? new DossierReadinessService(dbContext, tenantContext);
+        _permissionService = permissionService;
+        _currentUser = currentUser;
     }
 
     public async Task<IReadOnlyList<DossierListItemDto>> ListAsync(
@@ -400,11 +406,50 @@ public class DossierService : IDossierService
             return await GetAsync(id, cancellationToken);
         }
 
+        // Wave 2 (spec Part O): the target must be in the customer's allowed set, and moving
+        // AWAY from the customer default is a separate audited right with a mandatory reason —
+        // dossiers.manage alone no longer suffices for cross-entity moves. A customer-less
+        // dossier has no policy or default to compare against.
+        if (dossier.CustomerId is { } policyCustomerId
+            && await Modules.Partners.Services.CustomerEntityPolicy.ValidateAsync(
+                _dbContext, tenantId, policyCustomerId, request.LegalEntityId, cancellationToken) is { } policyError)
+        {
+            throw new DomainValidationException("legalEntityId", policyError);
+        }
+
+        var customerDefault = dossier.CustomerId is { } defaultCustomerId
+            ? await _dbContext.Customers
+                .Where(c => c.TenantId == tenantId && c.Id == defaultCustomerId)
+                .Select(c => c.DefaultLegalEntityId)
+                .FirstOrDefaultAsync(cancellationToken)
+            : null;
+        var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+        if (customerDefault is null || request.LegalEntityId != customerDefault)
+        {
+            // Fail-closed: no wired authorization service means NO override rights.
+            var userId = _currentUser?.CurrentUserId;
+            var allowed = _permissionService is not null
+                && userId is { } uid
+                && await _permissionService.UserHasPermissionAsync(
+                    uid, Modules.Identity.PermissionCodes.DossiersOverrideEntity, cancellationToken);
+            if (!allowed)
+            {
+                throw new DomainValidationException("legalEntityId",
+                    "Je hebt geen rechten om dit dossier naar een andere entiteit dan de klantstandaard te verplaatsen.");
+            }
+
+            if (reason is null)
+            {
+                throw new DomainValidationException("reason",
+                    "Een reden is verplicht bij een afwijkende facturerende entiteit.");
+            }
+        }
+
         dossier.LegalEntityId = request.LegalEntityId;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, dossier.Id.ToString(), "LegalEntityChanged",
-            new { LegalEntityId = previous }, new { dossier.LegalEntityId }, cancellationToken);
+            new { LegalEntityId = previous }, new { dossier.LegalEntityId, Reason = reason }, cancellationToken);
 
         return await GetAsync(id, cancellationToken);
     }

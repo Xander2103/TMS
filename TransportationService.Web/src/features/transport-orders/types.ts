@@ -389,6 +389,10 @@ export interface OrderPricingSnapshot {
   confirmedByName?: string | null
   /** Non-null: confirmed despite unpriced goods — keep a visible warning attached. */
   confirmedWithUnpricedGoodsReason?: string | null
+  /** Wave 2 §5: typed coverage projection (Full | Partial | None | NotApplicable). */
+  coverageStatus?: string | null
+  /** Wave 2 §5: pricing inputs changed without a recalculation — "Prijs verouderd". */
+  isStale?: boolean
 }
 
 export interface OrderServiceLine {

@@ -118,7 +118,8 @@ public class InvoicePdfService : IInvoicePdfService
             invoice.Currency,
             invoice.Notes,
             invoice.Kind == InvoiceKind.CreditNote,
-            creditedInvoiceNumber);
+            creditedInvoiceNumber,
+            invoice.LanguageCode);
 
         var bytes = InvoicePdfRenderer.Render(snapshot);
         var prefix = invoice.Kind == InvoiceKind.CreditNote ? "creditnota" : "factuur";

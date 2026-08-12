@@ -223,7 +223,7 @@ public class MessageOutboxService : IMessageOutboxService
             return (resolved.Subject, resolved.Body);
         }
 
-        var builtIn = BuiltInMessageTemplates.Resolve(kind, channel);
+        var builtIn = BuiltInMessageTemplates.Resolve(kind, channel, language);
         return (builtIn.Subject, builtIn.Body);
     }
 

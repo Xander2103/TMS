@@ -900,6 +900,11 @@ public class TripService : ITripService
                     TransportOrderStatus.Confirmed,
                 _ => order.Status,
             };
+            // Wave 2 §6: trip completion is one of the readiness transition points. The trip's
+            // own Completed status is unsaved here — assert the execution fact explicitly.
+            await Modules.Orders.Services.InvoiceReadinessEvaluator.EvaluateAsync(
+                _dbContext, order, cancellationToken,
+                tripExecutedOverride: target == TripStatus.Completed ? true : null);
         }
     }
 

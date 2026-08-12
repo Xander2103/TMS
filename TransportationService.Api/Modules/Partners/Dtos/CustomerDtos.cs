@@ -79,7 +79,11 @@ public record CustomerDetailDto(
     string? BuyerReference = null,
     string PeppolValidationStatus = "Unknown",
     DateTime? PeppolValidatedAt = null,
-    string? PeppolValidationReference = null);
+    string? PeppolValidationReference = null,
+    /// <summary>Wave 2: allowed issuing entities; empty = every active entity is allowed.</summary>
+    IReadOnlyList<Guid>? AllowedLegalEntityIds = null,
+    /// <summary>Wave 2: PerDossier | Weekly | Monthly | ByReference | Manual (default).</summary>
+    string InvoiceGrouping = "Manual");
 
 public record CreateCustomerRequest(
     string Name,
@@ -121,7 +125,11 @@ public record CreateCustomerRequest(
     bool PeppolEnabled = false,
     string? PeppolDeliveryPreference = null,
     string? BuyerReference = null,
-    IReadOnlyList<CreateCustomerContactRequest>? Contacts = null);
+    IReadOnlyList<CreateCustomerContactRequest>? Contacts = null,
+    /// <summary>Wave 2: allowed issuing entities; null = leave as-is, empty = clear (all allowed).</summary>
+    IReadOnlyList<Guid>? AllowedLegalEntityIds = null,
+    /// <summary>Wave 2: invoice grouping preference; null = leave as-is (Manual on create).</summary>
+    string? InvoiceGrouping = null);
 
 public record UpdateCustomerRequest(
     string Name,
@@ -161,7 +169,11 @@ public record UpdateCustomerRequest(
     Guid? DefaultLegalEntityId = null,
     bool PeppolEnabled = false,
     string? PeppolDeliveryPreference = null,
-    string? BuyerReference = null);
+    string? BuyerReference = null,
+    /// <summary>Wave 2: allowed issuing entities; null = leave as-is, empty = clear (all allowed).</summary>
+    IReadOnlyList<Guid>? AllowedLegalEntityIds = null,
+    /// <summary>Wave 2: invoice grouping preference; null = leave as-is.</summary>
+    string? InvoiceGrouping = null);
 
 public record SetCustomerBlockedRequest(bool IsBlocked, string? Reason);
 

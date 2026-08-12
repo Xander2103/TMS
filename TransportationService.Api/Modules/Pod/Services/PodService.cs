@@ -168,7 +168,17 @@ public class PodService : IPodService
         _dbContext.Add(pod);
         // Every package at the stop gets a PodFinalized custody event in the same save.
         await _tripPackageService.StagePodFinalizedAsync(tripId, stopId, pod.Version, cancellationToken);
+        // Wave 2 §6: a finalized POD can flip a completed order to ReadyForInvoice. The new POD
+        // row is still untracked-in-db, so the evaluator's own query would miss it — evaluate
+        // after the save that persists both.
         await _dbContext.SaveChangesAsync(cancellationToken);
+        var readinessOrder = await _dbContext.TransportOrders.FirstOrDefaultAsync(
+            o => o.TenantId == _tenantContext.TenantId && o.Id == pod.TransportOrderId, cancellationToken);
+        if (readinessOrder is not null)
+        {
+            await Modules.Orders.Services.InvoiceReadinessEvaluator.EvaluateAsync(_dbContext, readinessOrder, cancellationToken);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
 
         await _auditService.RecordAsync(EntityType, pod.Id.ToString(), "Finalised", null,
             new { pod.TripId, pod.TransportOrderStopId, pod.RecipientName, pod.Outcome, pod.Version }, cancellationToken);

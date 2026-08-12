@@ -85,7 +85,8 @@ public class CustomerService : ICustomerService
         }
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
-        return MapToDetail(customer, categoryName);
+        return MapToDetail(customer, categoryName,
+            await LoadAllowedLegalEntityIdsAsync(customer.Id, cancellationToken));
     }
 
     public async Task<CustomerDetailDto> CreateAsync(CreateCustomerRequest request, CancellationToken cancellationToken, bool canManageFiscal = true)
@@ -125,6 +126,8 @@ public class CustomerService : ICustomerService
             request.Nickname, request.CompanyNumber, request.CurrencyCode,
             request.Iban, request.Bic, request.BankName, request.BankAccountNumber);
         customer.DefaultLegalEntityId = await EnsureLegalEntityInTenantAsync(request.DefaultLegalEntityId, cancellationToken);
+        await ApplyAllowedLegalEntitiesAsync(customer, request.AllowedLegalEntityIds, cancellationToken);
+        ApplyInvoiceGrouping(customer, request.InvoiceGrouping);
         await ApplyVatAndPeppolProfileAsync(customer,
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
@@ -203,7 +206,8 @@ public class CustomerService : ICustomerService
         await transaction.CommitAsync(cancellationToken);
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
-        return MapToDetail(customer, categoryName);
+        return MapToDetail(customer, categoryName,
+            await LoadAllowedLegalEntityIdsAsync(customer.Id, cancellationToken));
     }
 
     /// <summary>Validates and materializes one contact input; <paramref name="fieldPrefix"/> shapes error paths.</summary>
@@ -299,6 +303,8 @@ public class CustomerService : ICustomerService
             request.Nickname, request.CompanyNumber, request.CurrencyCode,
             request.Iban, request.Bic, request.BankName, request.BankAccountNumber);
         customer.DefaultLegalEntityId = await EnsureLegalEntityInTenantAsync(request.DefaultLegalEntityId, cancellationToken);
+        await ApplyAllowedLegalEntitiesAsync(customer, request.AllowedLegalEntityIds, cancellationToken);
+        ApplyInvoiceGrouping(customer, request.InvoiceGrouping);
         await ApplyVatAndPeppolProfileAsync(customer,
             request.VatTreatment, request.DefaultVatRatePercent, request.VatCountryCode, request.VatNotes,
             request.PeppolId, request.PeppolScheme, request.InvoiceLanguageCode,
@@ -312,7 +318,8 @@ public class CustomerService : ICustomerService
             await BuildCustomerSnapshotAsync(customer, cancellationToken), cancellationToken);
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
-        return MapToDetail(customer, categoryName);
+        return MapToDetail(customer, categoryName,
+            await LoadAllowedLegalEntityIdsAsync(customer.Id, cancellationToken));
     }
 
     /// <summary>
@@ -428,7 +435,8 @@ public class CustomerService : ICustomerService
         }
 
         var categoryName = await ResolveCategoryNameAsync(customer.CategoryId, cancellationToken);
-        return MapToDetail(customer, categoryName);
+        return MapToDetail(customer, categoryName,
+            await LoadAllowedLegalEntityIdsAsync(customer.Id, cancellationToken));
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken)
@@ -828,6 +836,75 @@ public class CustomerService : ICustomerService
         return legalEntityId;
     }
 
+    /// <summary>Wave 2 §4: stores the invoice grouping preference; the proposal engine that acts
+    /// on it is Wave 10. Null = leave as-is; Manual = today's behavior.</summary>
+    private static void ApplyInvoiceGrouping(Customer customer, string? requested)
+    {
+        if (requested is null)
+        {
+            return;
+        }
+
+        var normalized = requested.Trim();
+        if (normalized is not ("PerDossier" or "Weekly" or "Monthly" or "ByReference" or "Manual"))
+        {
+            throw new DomainValidationException("invoiceGrouping",
+                "Ongeldige factuurgroepering. Toegestaan: PerDossier, Weekly, Monthly, ByReference of Manual.");
+        }
+
+        customer.InvoiceGrouping = normalized;
+    }
+
+    /// <summary>
+    /// Wave 2 (spec Part O): replaces the customer's allowed-issuing-entities set. Null = leave
+    /// as-is; empty = clear (every active entity allowed). Whatever the effective set becomes,
+    /// a configured DefaultLegalEntityId must be inside it — the dossier/order/invoice guards
+    /// rely on that invariant to skip re-checking inherited defaults. Returns the effective set
+    /// for the detail DTO.
+    /// </summary>
+    private async Task<List<Guid>> ApplyAllowedLegalEntitiesAsync(
+        Customer customer, IReadOnlyList<Guid>? requestedIds, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var existing = await _dbContext.CustomerAllowedLegalEntities
+            .Where(x => x.TenantId == tenantId && x.CustomerId == customer.Id)
+            .ToListAsync(cancellationToken);
+
+        var effective = requestedIds is null
+            ? existing.Select(x => x.LegalEntityId).ToList()
+            : requestedIds.Distinct().ToList();
+
+        if (requestedIds is not null && effective.Count > 0)
+        {
+            var validCount = await _dbContext.LegalEntities.CountAsync(
+                e => e.TenantId == tenantId && effective.Contains(e.Id) && e.IsActive, cancellationToken);
+            if (validCount != effective.Count)
+            {
+                throw new InvalidTenantReferenceException("facturerende entiteit");
+            }
+        }
+
+        if (effective.Count > 0 && customer.DefaultLegalEntityId is { } defaultId && !effective.Contains(defaultId))
+        {
+            throw new DomainValidationException("allowedLegalEntityIds",
+                "De standaardentiteit van de klant moet in de lijst van toegestane entiteiten staan.");
+        }
+
+        if (requestedIds is not null)
+        {
+            _dbContext.RemoveRange(existing.Where(x => !effective.Contains(x.LegalEntityId)));
+            foreach (var entityId in effective.Where(id => existing.All(x => x.LegalEntityId != id)))
+            {
+                _dbContext.CustomerAllowedLegalEntities.Add(new CustomerAllowedLegalEntity
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, CustomerId = customer.Id, LegalEntityId = entityId,
+                });
+            }
+        }
+
+        return effective;
+    }
+
     private async Task EnsureContactDepartmentInTenantAsync(Guid? departmentId, CancellationToken cancellationToken)
     {
         if (departmentId is { } id && !await _dbContext.Set<ContactDepartment>()
@@ -842,7 +919,8 @@ public class CustomerService : ICustomerService
             c.DisplayName, c.Nickname, c.MobilePhone, c.DepartmentId, c.PreferredLanguageCode, c.IsActive,
             c.ContactType.ToString());
 
-    private static CustomerDetailDto MapToDetail(Customer c, string? categoryName) => new(
+    private static CustomerDetailDto MapToDetail(
+        Customer c, string? categoryName, IReadOnlyList<Guid>? allowedLegalEntityIds = null) => new(
         c.Id, c.CustomerNumber, c.Name, c.LegalName, c.VatNumber, c.CategoryId, categoryName,
         c.Email, c.PhoneNumber, c.Website,
         c.Street, c.HouseNumber, c.PostalCode, c.City, c.CountryCode,
@@ -856,5 +934,12 @@ public class CustomerService : ICustomerService
         c.Iban, c.Bic, c.BankName, c.BankAccountNumber,
         c.DefaultLegalEntityId,
         c.PeppolEnabled, c.PeppolDeliveryPreference.ToString(), c.BuyerReference,
-        c.PeppolValidationStatus.ToString(), c.PeppolValidatedAt, c.PeppolValidationReference);
+        c.PeppolValidationStatus.ToString(), c.PeppolValidatedAt, c.PeppolValidationReference,
+        allowedLegalEntityIds, c.InvoiceGrouping);
+
+    private Task<List<Guid>> LoadAllowedLegalEntityIdsAsync(Guid customerId, CancellationToken cancellationToken) =>
+        _dbContext.CustomerAllowedLegalEntities.AsNoTracking()
+            .Where(x => x.TenantId == _tenantContext.TenantId && x.CustomerId == customerId)
+            .Select(x => x.LegalEntityId)
+            .ToListAsync(cancellationToken);
 }
