@@ -163,6 +163,103 @@ public class StorageClockTests
     }
 
     [Fact]
+    public async Task LocationProjection_FollowsTheFullCustodyChain()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        // IN: location set.
+        await h.Scans.SubmitAsync(new WarehouseScanRequest(
+            "PKG-00001-AAAA", ScanType.Received, h.ZoneId), CancellationToken.None);
+        var package = await h.Db.Context.Packages.SingleAsync(p => p.Id == h.PackageId);
+        Assert.Equal(h.ZoneId, package.CurrentWarehouseLocationId);
+
+        // MOVE: location changes.
+        var zoneB = Guid.NewGuid();
+        h.Db.Context.WarehouseLocations.Add(new WarehouseLocation
+        {
+            Id = zoneB, TenantId = h.TenantId, WarehouseId = h.WarehouseId, Code = "B", Name = "Zone B", Kind = "Zone", IsActive = true,
+        });
+        await h.Db.Context.SaveChangesAsync();
+        await h.Scans.SubmitAsync(new WarehouseScanRequest(
+            "PKG-00001-AAAA", ScanType.Moved, zoneB), CancellationToken.None);
+        await h.Db.Context.Entry(package).ReloadAsync();
+        Assert.Equal(zoneB, package.CurrentWarehouseLocationId);
+
+        // LOAD-OUT: physical departure clears the projection in the same save.
+        h.Writer.Stage(package, PackageEventType.LoadScan,
+            PackageLifecycleStatus.AwaitingLoading, PackageLifecycleStatus.Loaded);
+        package.CurrentLifecycleStatus = PackageLifecycleStatus.Loaded;
+        await h.Db.Context.SaveChangesAsync();
+        await h.Db.Context.Entry(package).ReloadAsync();
+        Assert.Null(package.CurrentWarehouseLocationId);
+
+        // FAILED DELIVERY on the road: still no warehouse location — the goods are on the truck.
+        package.CurrentLifecycleStatus = PackageLifecycleStatus.Refused;
+        await h.Db.Context.SaveChangesAsync();
+        await h.Db.Context.Entry(package).ReloadAsync();
+        Assert.Null(package.CurrentWarehouseLocationId);
+
+        // REAL RETURN SCAN: only now is the package physically back on a location.
+        await h.Scans.SubmitAsync(new WarehouseScanRequest(
+            "PKG-00001-AAAA", ScanType.Return, h.ZoneId), CancellationToken.None);
+        await h.Db.Context.Entry(package).ReloadAsync();
+        Assert.Equal(h.ZoneId, package.CurrentWarehouseLocationId);
+        Assert.Equal(PackageLifecycleStatus.ReturnedToDepot, package.CurrentLifecycleStatus);
+    }
+
+    [Fact]
+    public async Task PartialOutbound_ThroughTheScanPipeline_SplitsTheAccrual()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        // Five units scanned IN through the real pipeline.
+        var packageIds = new List<Guid> { h.PackageId };
+        for (var i = 2; i <= 5; i++)
+        {
+            var id = Guid.NewGuid();
+            packageIds.Add(id);
+            h.Db.Context.Packages.Add(new Package
+            {
+                Id = id, TenantId = h.TenantId, TransportOrderId = h.OrderId,
+                PackageNumber = $"PKG-0000{i}", BarcodeValue = $"PKG-0000{i}-AAAA",
+                CurrentLifecycleStatus = PackageLifecycleStatus.Labelled,
+            });
+            h.Db.Context.PackageBarcodes.Add(new PackageBarcode
+            {
+                Id = Guid.NewGuid(), TenantId = h.TenantId, PackageId = id,
+                Value = $"PKG-0000{i}-AAAA", Type = PackageBarcodeType.Code128, IsActive = true,
+            });
+        }
+        await h.Db.Context.SaveChangesAsync();
+        for (var i = 1; i <= 5; i++)
+        {
+            await h.Scans.SubmitAsync(new WarehouseScanRequest(
+                $"PKG-0000{i}-AAAA", ScanType.Received, h.ZoneId), CancellationToken.None);
+        }
+        Assert.Equal(5, await h.Db.Context.StorageStays.CountAsync(s => s.OutAt == null));
+
+        // Two of the five leave on a truck; their clocks stop, the other three keep running.
+        foreach (var id in packageIds.Take(2))
+        {
+            var p = await h.Db.Context.Packages.SingleAsync(x => x.Id == id);
+            h.Writer.Stage(p, PackageEventType.LoadScan,
+                PackageLifecycleStatus.AwaitingLoading, PackageLifecycleStatus.Loaded);
+            p.CurrentLifecycleStatus = PackageLifecycleStatus.Loaded;
+        }
+        await h.Db.Context.SaveChangesAsync();
+
+        Assert.Equal(3, await h.Db.Context.StorageStays.CountAsync(s => s.OutAt == null));
+        Assert.Equal(2, await h.Db.Context.StorageStays.CountAsync(s => s.OutAt != null));
+        Assert.Equal(3, await h.Db.Context.Packages.CountAsync(p => p.CurrentWarehouseLocationId != null));
+
+        var billing = await h.Billing.ComputeAsync(
+            h.CustomerId, new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 20), CancellationToken.None);
+        Assert.Equal(3, billing.OpenStays);
+    }
+
+    [Fact]
     public async Task Billing_IgnoresStaysEntirelyOutsideThePeriod()
     {
         var h = await SeedAsync();

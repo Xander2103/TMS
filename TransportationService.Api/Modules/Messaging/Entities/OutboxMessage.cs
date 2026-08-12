@@ -125,6 +125,20 @@ public static class MessageKinds
     /// durable storage (C3).
     /// </summary>
     public static bool CarriesOneTimeCredential(string kind) => kind == PortalUserInvited;
+
+    /// <summary>
+    /// The ONLY kinds a customer may toggle through the portal preference screen. A customer
+    /// profile's EnabledKinds list is interpreted strictly against this set: kinds outside it
+    /// (order acceptance, portal replies, invites, …) are never suppressed by the list, so a
+    /// customer restricting the configurable kinds can never unknowingly silence system events
+    /// the preference UI does not even show. Single source of truth — the portal preference
+    /// endpoint exposes exactly this catalog.
+    /// </summary>
+    public static readonly IReadOnlyList<string> CustomerConfigurable =
+    [
+        OrderConfirmation, TimeWindowConfirmation, DriverEnRoute, EtaUpdate,
+        Delay, DeliveryCompleted, PodAvailable, InvoiceSent,
+    ];
 }
 
 /// <summary>

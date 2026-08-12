@@ -141,6 +141,15 @@ public class MessageOutboxService : IMessageOutboxService
             return true;
         }
 
+        // Customer preference lists only govern the portal-configurable catalog: a kind the
+        // preference UI cannot show (order acceptance, invites, replies, …) must never be
+        // silenced merely because the customer narrowed the configurable set.
+        if (profile.OwnerType == MessageOwnerType.Customer
+            && !MessageKinds.CustomerConfigurable.Contains(kind, StringComparer.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         try
         {
             var kinds = JsonSerializer.Deserialize<List<string>>(json) ?? [];

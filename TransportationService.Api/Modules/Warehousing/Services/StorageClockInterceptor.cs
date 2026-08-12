@@ -12,6 +12,9 @@ namespace TransportationService.Api.Modules.Warehousing.Services;
 /// dispositions) and closes the package's open <see cref="StorageStay"/> in the same save —
 /// one central hook instead of edits in every staging site, so future leave paths are covered
 /// automatically. Opening a stay stays explicit (WarehouseScanService knows the warehouse).
+/// The same hook clears the package's <c>CurrentWarehouseLocationId</c> projection: goods that
+/// physically left on a vehicle must never keep showing a warehouse location, and a later
+/// failed delivery on the road must not resurrect one — only a real warehouse scan sets it.
 /// </summary>
 public sealed class StorageClockInterceptor : SaveChangesInterceptor
 {
@@ -46,6 +49,17 @@ public sealed class StorageClockInterceptor : SaveChangesInterceptor
                 {
                     open.OutAt = leave.OccurredAt;
                     open.OutPackageEventId = leave.Id;
+                }
+
+                // Physical departure ends the location projection (same unit of work).
+                var package = db.ChangeTracker.Entries<Package>()
+                        .Select(e => e.Entity)
+                        .FirstOrDefault(p => p.TenantId == leave.TenantId && p.Id == leave.PackageId)
+                    ?? await db.Packages
+                        .FirstOrDefaultAsync(p => p.TenantId == leave.TenantId && p.Id == leave.PackageId, cancellationToken);
+                if (package is not null)
+                {
+                    package.CurrentWarehouseLocationId = null;
                 }
             }
         }

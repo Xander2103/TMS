@@ -394,18 +394,11 @@ public class CustomerPortalService : ICustomerPortalService
             expectedDelivery, pod);
     }
 
-    /// <summary>Customer-facing message kinds a portal user may toggle (Wave 11).</summary>
-    private static readonly string[] PortalNotificationKinds =
-    [
-        Modules.Messaging.Entities.MessageKinds.OrderConfirmation,
-        Modules.Messaging.Entities.MessageKinds.TimeWindowConfirmation,
-        Modules.Messaging.Entities.MessageKinds.DriverEnRoute,
-        Modules.Messaging.Entities.MessageKinds.EtaUpdate,
-        Modules.Messaging.Entities.MessageKinds.Delay,
-        Modules.Messaging.Entities.MessageKinds.DeliveryCompleted,
-        Modules.Messaging.Entities.MessageKinds.PodAvailable,
-        Modules.Messaging.Entities.MessageKinds.InvoiceSent,
-    ];
+    /// <summary>Customer-facing message kinds a portal user may toggle (Wave 11). Single source
+    /// of truth lives in Messaging: the outbox interprets a customer's EnabledKinds list strictly
+    /// against this same set, so the preference screen and the suppression rule can never drift.</summary>
+    private static IReadOnlyList<string> PortalNotificationKinds =>
+        Modules.Messaging.Entities.MessageKinds.CustomerConfigurable;
 
     public async Task<PortalResult<PortalNotificationPreferencesDto>> GetNotificationPreferencesAsync(
         CancellationToken cancellationToken)
