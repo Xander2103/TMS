@@ -30,6 +30,8 @@ export function orderValuesFromDetail(order: TransportOrderDetail, serviceOption
     weightKg: str(order.weightKg),
     volumeM3: str(order.volumeM3),
     palletCount: str(order.palletCount),
+    distanceKm: str(order.distanceKm),
+    loadingMeters: str(order.loadingMeters),
     adrRequired: order.adrRequired,
     craneRequired: order.craneRequired,
     agreedPrice: str(order.agreedPrice),

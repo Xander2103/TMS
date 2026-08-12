@@ -355,6 +355,10 @@ export interface OrderFormValues {
   weightKg: string
   volumeM3: string
   palletCount: string
+  /** Wave 3 §1: geplande afstand in km — voedt PerKm-tarieven en km-diensten (Maut). */
+  distanceKm: string
+  /** Wave 3 §1: laadmeters — voedt PerLdm-tarieven en ldm-staffelgrenzen. */
+  loadingMeters: string
   adrRequired: boolean
   craneRequired: boolean
   agreedPrice: string

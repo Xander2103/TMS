@@ -21,6 +21,11 @@ interface GoodsSectionProps {
   setVolumeM3: (value: string) => void
   palletCount: string
   setPalletCount: (value: string) => void
+  /** Wave 3 §1: geplande afstand (km) en laadmeters — optioneel, voeden PerKm/PerLdm-prijzen. */
+  distanceKm: string
+  setDistanceKm: (value: string) => void
+  loadingMeters: string
+  setLoadingMeters: (value: string) => void
   adrRequired: boolean
   setAdrRequired: (value: boolean) => void
   craneRequired: boolean
@@ -60,6 +65,10 @@ export function GoodsSection({
   setVolumeM3,
   palletCount,
   setPalletCount,
+  distanceKm,
+  setDistanceKm,
+  loadingMeters,
+  setLoadingMeters,
   adrRequired,
   setAdrRequired,
   craneRequired,
@@ -130,6 +139,12 @@ export function GoodsSection({
           <div className="tof-row tof-row-4">
             <FormField label="Paletten" htmlFor="to-pallets">
               <input id="to-pallets" type="number" min={0} value={palletCount} onChange={(e) => setPalletCount(e.target.value)} disabled={saving} />
+            </FormField>
+            <FormField label="Laadmeters" htmlFor="to-ldm" hint="Voedt ldm-tarieven en -staffels.">
+              <input id="to-ldm" type="number" min={0} step="0.01" value={loadingMeters} onChange={(e) => setLoadingMeters(e.target.value)} disabled={saving} />
+            </FormField>
+            <FormField label="Afstand (km)" htmlFor="to-distance" hint="Voedt km-tarieven en km-diensten (bv. Maut).">
+              <input id="to-distance" type="number" min={0} step="0.01" value={distanceKm} onChange={(e) => setDistanceKm(e.target.value)} disabled={saving} />
             </FormField>
           </div>
         </>

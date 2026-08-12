@@ -132,7 +132,11 @@ public record TransportOrderDetailDto(
     Guid Version = default,
     /// <summary>Containing dossier (wrapper or user-created); the detail header links to it.</summary>
     Guid? DossierId = null,
-    string? DossierNumber = null);
+    string? DossierNumber = null,
+    /// <summary>Wave 3 §1: planned distance in km (PerKm bases/services).</summary>
+    decimal? DistanceKm = null,
+    /// <summary>Wave 3 §1: loading meters (PerLoadingMeter bases, ldm bracket caps).</summary>
+    decimal? LoadingMeters = null);
 
 /// <summary>Snapshot line of the price calculation stored on the order.</summary>
 public record OrderPricingLineDto(
@@ -403,7 +407,11 @@ public record CreateTransportOrderRequest(
     /// gets its own auto-created wrapper dossier so EVERY order lives in a dossier without
     /// callers (EDI, portal, legacy API) changing anything.
     /// </summary>
-    Guid? DossierId = null);
+    Guid? DossierId = null,
+    /// <summary>Wave 3 §1: planned distance in km (PerKm bases/services) — optional.</summary>
+    decimal? DistanceKm = null,
+    /// <summary>Wave 3 §1: loading meters (PerLoadingMeter bases, ldm bracket caps) — optional.</summary>
+    decimal? LoadingMeters = null);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -451,7 +459,11 @@ public record UpdateTransportOrderRequest(
     int? ExtraTimeRoundingStepMinutes = null,
     int? ExtraTimeMinimumBillableMinutes = null,
     /// <summary>Expected concurrency token; null (legacy clients) skips the check.</summary>
-    Guid? Version = null);
+    Guid? Version = null,
+    /// <summary>Wave 3 §1: planned distance in km (PerKm bases/services) — optional.</summary>
+    decimal? DistanceKm = null,
+    /// <summary>Wave 3 §1: loading meters (PerLoadingMeter bases, ldm bracket caps) — optional.</summary>
+    decimal? LoadingMeters = null);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

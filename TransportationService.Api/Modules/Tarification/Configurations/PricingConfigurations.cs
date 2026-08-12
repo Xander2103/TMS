@@ -47,6 +47,8 @@ public class PriceRuleConfiguration : IEntityTypeConfiguration<PriceRule>
         builder.Property(r => r.BracketMode).HasConversion<string>().HasMaxLength(20).HasDefaultValue(BracketSelectionMode.Absolute);
         builder.HasOne<Modules.Accounting.Entities.SalesCategory>().WithMany()
             .HasForeignKey(r => r.SalesCategoryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PricingZone>().WithMany()
+            .HasForeignKey(r => r.OriginZoneId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(r => r.BaseAmount).HasPrecision(12, 2);
         builder.Property(r => r.MinimumQuantity).HasPrecision(12, 3);
         builder.Property(r => r.QuantityRoundingStep).HasPrecision(8, 3);
@@ -303,5 +305,18 @@ public class CombinedUnitDiscountTierConfiguration : IEntityTypeConfiguration<Co
         builder.Property(t => t.Percent).HasPrecision(7, 3);
         builder.HasIndex(t => new { t.TenantId, t.DiscountId });
         builder.HasQueryFilter(t => !t.IsDeleted);
+    }
+}
+
+public class TenantHolidayConfiguration : IEntityTypeConfiguration<TenantHoliday>
+{
+    public void Configure(EntityTypeBuilder<TenantHoliday> builder)
+    {
+        builder.ToTable("tenant_holidays");
+        builder.HasKey(h => h.Id);
+        builder.Property(h => h.Name).IsRequired().HasMaxLength(200);
+        // One row per date per tenant; soft-deleted rows free the slot again.
+        builder.HasIndex(h => new { h.TenantId, h.Date }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        builder.HasQueryFilter(h => !h.IsDeleted);
     }
 }

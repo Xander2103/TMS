@@ -77,6 +77,10 @@ public class PriceRule : AuditableTenantEntity
     /// </summary>
     public Guid? SalesCategoryId { get; set; }
 
+    /// <summary>Wave 3 §2: origin-zone dimension — set: the rule only matches when the order's
+    /// FIRST LOADING stop resolves to this zone (destination stays the stronger tiebreaker).</summary>
+    public Guid? OriginZoneId { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public string Currency { get; set; } = "EUR";
     public DateOnly EffectiveFrom { get; set; }

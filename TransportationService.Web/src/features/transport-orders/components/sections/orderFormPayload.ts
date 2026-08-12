@@ -72,6 +72,8 @@ export function buildSubmitPayload(values: OrderFormValues): TransportOrderInput
     weightKg: values.weightKg === '' ? null : Number(values.weightKg),
     volumeM3: values.volumeM3 === '' ? null : Number(values.volumeM3),
     palletCount: values.palletCount === '' ? null : Number(values.palletCount),
+    distanceKm: values.distanceKm === '' ? null : Number(values.distanceKm),
+    loadingMeters: values.loadingMeters === '' ? null : Number(values.loadingMeters),
     adrRequired: values.adrRequired,
     craneRequired: values.craneRequired,
     agreedPrice: values.agreedPrice === '' ? null : Number(values.agreedPrice),

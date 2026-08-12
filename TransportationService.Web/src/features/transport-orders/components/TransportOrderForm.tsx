@@ -86,6 +86,12 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   const [palletCount, setPalletCount] = useState(
     order?.palletCount === null || order === undefined ? '' : String(order.palletCount),
   )
+  const [distanceKm, setDistanceKm] = useState(
+    order?.distanceKm === null || order?.distanceKm === undefined ? '' : String(order.distanceKm),
+  )
+  const [loadingMeters, setLoadingMeters] = useState(
+    order?.loadingMeters === null || order?.loadingMeters === undefined ? '' : String(order.loadingMeters),
+  )
   const [adrRequired, setAdrRequired] = useState(order?.adrRequired ?? false)
   const [craneRequired, setCraneRequired] = useState(order?.craneRequired ?? false)
   const [agreedPrice, setAgreedPrice] = useState(
@@ -197,6 +203,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   const values: OrderFormValues = {
     customerId, customerReference, orderDate, goodsDescription,
     quantity, quantityUnit, quantityUnitCode, weightKg, volumeM3, palletCount,
+    distanceKm, loadingMeters,
     adrRequired, craneRequired, agreedPrice, notes, legalEntityId,
     dieselSurchargeOverride, dieselSurchargePercentOverride, dieselSurchargeOverrideReason,
     stops, cargoItems,
@@ -355,7 +362,8 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           {...{
             goodsDescription, setGoodsDescription, quantity, setQuantity, quantityUnit,
             quantityUnitCode, setQuantityUnitCode, weightKg, setWeightKg, volumeM3, setVolumeM3,
-            palletCount, setPalletCount, adrRequired, setAdrRequired, craneRequired, setCraneRequired,
+            palletCount, setPalletCount, distanceKm, setDistanceKm, loadingMeters, setLoadingMeters,
+            adrRequired, setAdrRequired, craneRequired, setCraneRequired,
             derivedFromCargo, cargoSummary, cargoItems, stops, unitOptions, preferredUnits,
             setCargo, applyCargoUnit, cargoDimensionsFixed, saving, errors,
           }}

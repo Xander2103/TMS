@@ -66,6 +66,9 @@ public enum SurchargeKind
 
     /// <summary>Amount × an entered number of pallet-days (e.g. palletopslag). Service options only.</summary>
     PerPalletDay = 10,
+
+    /// <summary>Wave 3 §3: amount × the order's DistanceKm (e.g. Maut-toeslag €0,19/km). Service options only.</summary>
+    PerKm = 11,
 }
 
 /// <summary>A named surcharge on a rate card (e.g. fuel %, ADR fixed fee).</summary>

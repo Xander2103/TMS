@@ -69,6 +69,9 @@ public enum ServiceConditionKind
 
     /// <summary>Wave 2026-08-04 §16: a matching stop is planned on a Saturday or Sunday.</summary>
     Weekend = 4,
+
+    /// <summary>Wave 3 §4: a matching stop is planned on a tenant-configured holiday (tenant_holidays).</summary>
+    Holiday = 5,
 }
 
 /// <summary>Which stops a time-based condition looks at (wave 2026-08-04 §16).</summary>

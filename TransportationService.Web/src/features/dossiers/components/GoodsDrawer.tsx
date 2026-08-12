@@ -39,6 +39,8 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
   const [weightKg, setWeightKg] = useState(order.weightKg == null ? '' : String(order.weightKg))
   const [volumeM3, setVolumeM3] = useState(order.volumeM3 == null ? '' : String(order.volumeM3))
   const [palletCount, setPalletCount] = useState(order.palletCount == null ? '' : String(order.palletCount))
+  const [distanceKm, setDistanceKm] = useState(order.distanceKm == null ? '' : String(order.distanceKm))
+  const [loadingMeters, setLoadingMeters] = useState(order.loadingMeters == null ? '' : String(order.loadingMeters))
   const [adrRequired, setAdrRequired] = useState(order.adrRequired)
   const [craneRequired, setCraneRequired] = useState(order.craneRequired)
   const [dirty, setDirty] = useState(false)
@@ -83,6 +85,8 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
       weightKg,
       volumeM3,
       palletCount,
+      distanceKm,
+      loadingMeters,
       adrRequired,
       craneRequired,
     }
@@ -123,6 +127,8 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
     setWeightKg(conflict.weightKg == null ? '' : String(conflict.weightKg))
     setVolumeM3(conflict.volumeM3 == null ? '' : String(conflict.volumeM3))
     setPalletCount(conflict.palletCount == null ? '' : String(conflict.palletCount))
+    setDistanceKm(conflict.distanceKm == null ? '' : String(conflict.distanceKm))
+    setLoadingMeters(conflict.loadingMeters == null ? '' : String(conflict.loadingMeters))
     setAdrRequired(conflict.adrRequired)
     setCraneRequired(conflict.craneRequired)
     setDirty(false)
@@ -156,6 +162,10 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
           setVolumeM3={touch(setVolumeM3)}
           palletCount={palletCount}
           setPalletCount={touch(setPalletCount)}
+          distanceKm={distanceKm}
+          setDistanceKm={touch(setDistanceKm)}
+          loadingMeters={loadingMeters}
+          setLoadingMeters={touch(setLoadingMeters)}
           adrRequired={adrRequired}
           setAdrRequired={touch(setAdrRequired)}
           craneRequired={craneRequired}

@@ -24,6 +24,8 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
         builder.Property(o => o.QuantityUnitCode).HasMaxLength(30);
         builder.Property(o => o.WeightKg).HasPrecision(12, 2);
         builder.Property(o => o.VolumeM3).HasPrecision(12, 2);
+        builder.Property(o => o.DistanceKm).HasPrecision(10, 2);
+        builder.Property(o => o.LoadingMeters).HasPrecision(8, 2);
         builder.Property(o => o.AgreedPrice).HasPrecision(12, 2);
         builder.Property(o => o.DieselSurchargePercentOverride).HasPrecision(5, 2);
         builder.Property(o => o.DieselSurchargeOverrideReason).HasMaxLength(500);

@@ -207,6 +207,10 @@ export interface TransportOrderDetail {
   weightKg: number | null
   volumeM3: number | null
   palletCount: number | null
+  /** Wave 3 §1: geplande afstand in km (PerKm-tarieven en km-diensten). */
+  distanceKm?: number | null
+  /** Wave 3 §1: laadmeters (PerLdm-tarieven en ldm-staffelgrenzen). */
+  loadingMeters?: number | null
   adrRequired: boolean
   craneRequired: boolean
   agreedPrice: number | null
@@ -472,6 +476,8 @@ export interface TransportOrderInput {
   weightKg: number | null
   volumeM3: number | null
   palletCount: number | null
+  distanceKm?: number | null
+  loadingMeters?: number | null
   adrRequired: boolean
   craneRequired: boolean
   agreedPrice: number | null

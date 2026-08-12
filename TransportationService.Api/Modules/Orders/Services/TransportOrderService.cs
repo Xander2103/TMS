@@ -276,6 +276,8 @@ public class TransportOrderService : ITransportOrderService
             QuantityUnitCode = NormalizeUnitCode(request.QuantityUnitCode),
             WeightKg = NonNegative(request.WeightKg),
             VolumeM3 = NonNegative(request.VolumeM3),
+            DistanceKm = NonNegative(request.DistanceKm),
+            LoadingMeters = NonNegative(request.LoadingMeters),
             PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null,
             AdrRequired = request.AdrRequired,
             CraneRequired = request.CraneRequired,
@@ -486,6 +488,8 @@ public class TransportOrderService : ITransportOrderService
         order.QuantityUnitCode = NormalizeUnitCode(request.QuantityUnitCode);
         order.WeightKg = NonNegative(request.WeightKg);
         order.VolumeM3 = NonNegative(request.VolumeM3);
+        order.DistanceKm = NonNegative(request.DistanceKm);
+        order.LoadingMeters = NonNegative(request.LoadingMeters);
         order.PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null;
         order.AdrRequired = request.AdrRequired;
         order.CraneRequired = request.CraneRequired;
@@ -1824,7 +1828,8 @@ public class TransportOrderService : ITransportOrderService
             order.OneOffExtraHourlyRate, order.OneOffNotes, totalWithProposed,
             order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
             order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
-            order.Version, dossierRef?.Id, dossierRef?.DossierNumber);
+            order.Version, dossierRef?.Id, dossierRef?.DossierNumber,
+            order.DistanceKm, order.LoadingMeters);
     }
 
     /// <summary>
@@ -2112,9 +2117,10 @@ public class TransportOrderService : ITransportOrderService
             result = await _pricingEngine.CalculateAsync(new PriceCalculationRequest(
                 order.CustomerId, order.OrderDate, lines,
                 delivery?.CountryCode, delivery?.PostalCode,
-                order.WeightKg, null, order.PalletCount,
+                order.WeightKg, order.DistanceKm, order.PalletCount,
                 [], Services: engineSelections,
                 VolumeM3: order.VolumeM3,
+                LoadingMeters: order.LoadingMeters,
                 StopCount: unloadingStops.Count > 0 ? unloadingStops.Count : null,
                 AdrRequired: order.AdrRequired,
                 CargoLineCount: cargoItems?.Count(c => !c.IsDeleted),
@@ -2515,6 +2521,8 @@ public class TransportOrderService : ITransportOrderService
             || OneOffChanged(nameof(TransportOrder.QuantityUnitCode))
             || OneOffChanged(nameof(TransportOrder.WeightKg))
             || OneOffChanged(nameof(TransportOrder.VolumeM3))
+            || OneOffChanged(nameof(TransportOrder.DistanceKm))
+            || OneOffChanged(nameof(TransportOrder.LoadingMeters))
             || OneOffChanged(nameof(TransportOrder.PalletCount))
             || OneOffChanged(nameof(TransportOrder.AdrRequired)))
         {

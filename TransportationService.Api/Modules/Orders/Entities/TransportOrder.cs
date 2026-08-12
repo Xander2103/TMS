@@ -106,6 +106,12 @@ public class TransportOrder : AuditableTenantEntity, IVersionedEntity
     public string? QuantityUnitCode { get; set; }
     public decimal? WeightKg { get; set; }
     public decimal? VolumeM3 { get; set; }
+
+    /// <summary>Wave 3 §1: planned distance in km — feeds PerKm rule bases and PerKm services (Maut).</summary>
+    public decimal? DistanceKm { get; set; }
+
+    /// <summary>Wave 3 §1: loading meters — feeds PerLoadingMeter bases and LoadingMetersTo bracket caps.</summary>
+    public decimal? LoadingMeters { get; set; }
     public int? PalletCount { get; set; }
     public bool AdrRequired { get; set; }
     public bool CraneRequired { get; set; }

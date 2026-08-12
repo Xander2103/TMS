@@ -141,13 +141,14 @@ export function useOrderPricePreview(
   const [preview, setPreview] = useState<PriceCalculationResult | null>(null)
   const {
     customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount, adrRequired,
+    distanceKm, loadingMeters,
     selectedServiceOptionIds, serviceQuantities, servicePallets, serviceDays, stops, cargoItems,
     pricingSource, oneOffFixedAmount, oneOffTimeMode, oneOffIncludedLoadingMinutes,
     oneOffIncludedUnloadingMinutes, oneOffIncludedCombinedMinutes, oneOffExtraHourlyRate, oneOffNotes,
   } = values
   const lastUnloading = [...stops].reverse().find((s) => s.stopType === 'Unloading')
   const previewKey = JSON.stringify([
-    customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount,
+    customerId, orderDate, quantity, quantityUnitCode, weightKg, palletCount, distanceKm, loadingMeters,
     lastUnloading?.postalCode, lastUnloading?.countryCode, selectedServiceOptionIds, serviceQuantities,
     servicePallets, serviceDays, touchedWarehouseIds,
     adrRequired, cargoItems.map((c) => [c.quantityUnitCode, c.expectedQuantity, c.totalWeightKg, c.palletCount]),
@@ -193,7 +194,8 @@ export function useOrderPricePreview(
         deliveryCountryCode: lastUnloading?.countryCode || null,
         deliveryPostalCode: lastUnloading?.postalCode || null,
         weightKg: effectiveWeightKg,
-        distanceKm: null,
+        distanceKm: distanceKm === '' ? null : Number(distanceKm),
+        loadingMeters: loadingMeters === '' ? null : Number(loadingMeters),
         palletCount: effectivePalletCount,
         serviceOptionIds: selectedServiceOptionIds,
         services: buildServiceSelections(values),
