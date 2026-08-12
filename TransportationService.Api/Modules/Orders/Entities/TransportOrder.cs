@@ -126,6 +126,11 @@ public class TransportOrder : AuditableTenantEntity, IVersionedEntity
     /// <summary>This order is a return movement (retour) — drives ReturnMovement pricing.</summary>
     public bool IsReturnMovement { get; set; }
 
+    // P12: invoice postponement (snooze) — the order stays out of the invoice proposals
+    // until the date passes; visible in its own workspace section, never silently hidden.
+    public DateOnly? InvoiceSnoozeUntil { get; set; }
+    public string? InvoiceSnoozeReason { get; set; }
+
     /// <summary>
     /// Follow-up wave P1: per-order transport-document choice, overriding the customer's
     /// DocumentStrategy. Null = inherit (or "decide later" when the customer strategy is

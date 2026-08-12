@@ -8,7 +8,9 @@ namespace TransportationService.Api.Modules.Invoicing.Services;
 public sealed record ControlOrderDto(
     Guid TransportOrderId, string OrderNumber, DateOnly OrderDate, decimal? AgreedPrice,
     string? DossierNumber, string? CustomerReference,
-    string InvoiceReadiness, IReadOnlyList<string> Reasons);
+    string InvoiceReadiness, IReadOnlyList<string> Reasons,
+    /// <summary>P12: postponed until this date (excluded from proposals, shown separately).</summary>
+    DateOnly? SnoozedUntil = null, string? SnoozeReason = null);
 
 public sealed record InvoiceProposalDto(
     Guid CustomerId, string CustomerName, string Grouping,
@@ -23,7 +25,9 @@ public sealed record InvoiceControlDto(
     /// <summary>Completed but ReviewRequired orders with their readiness reasons.</summary>
     IReadOnlyList<ControlOrderDto> NeedsReview,
     /// <summary>Approved incident charges whose sales line could not land (locked/invoiced order).</summary>
-    IReadOnlyList<string> PendingCharges);
+    IReadOnlyList<string> PendingCharges,
+    /// <summary>P12: postponed orders — out of the proposals until their date, never hidden.</summary>
+    IReadOnlyList<ControlOrderDto> Snoozed);
 
 public interface IInvoiceControlService
 {
@@ -43,11 +47,15 @@ public class InvoiceControlService : IInvoiceControlService
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
 
-    public InvoiceControlService(TransportationDbContext dbContext, ITenantContext tenantContext)
+    public InvoiceControlService(
+        TransportationDbContext dbContext, ITenantContext tenantContext, TimeProvider? timeProvider = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
+
+    private readonly TimeProvider _timeProvider;
 
     public async Task<InvoiceControlDto> GetAsync(CancellationToken cancellationToken)
     {
@@ -66,6 +74,7 @@ public class InvoiceControlService : IInvoiceControlService
                 {
                     o.Id, o.OrderNumber, o.OrderDate, o.AgreedPrice, o.CustomerReference,
                     o.InvoiceReadiness, o.InvoiceReadinessReasons,
+                    o.InvoiceSnoozeUntil, o.InvoiceSnoozeReason,
                     CustomerId = c.Id, CustomerName = c.Name, c.InvoiceGrouping,
                 })
             .ToListAsync(cancellationToken);
@@ -87,10 +96,21 @@ public class InvoiceControlService : IInvoiceControlService
                 o.Id, o.OrderNumber, o.OrderDate, o.AgreedPrice,
                 dossierByOrder.GetValueOrDefault(o.Id), o.CustomerReference,
                 o.InvoiceReadiness,
-                o.InvoiceReadinessReasons?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []));
+                o.InvoiceReadinessReasons?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? [],
+                o.InvoiceSnoozeUntil, o.InvoiceSnoozeReason));
+
+        // P12: an active snooze parks the order — out of proposals AND review, but always
+        // visible in its own section. An expired snooze simply stops applying.
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        bool IsSnoozed(DateOnly? until) => until is { } u && u > today;
+        var snoozed = orders
+            .Where(o => IsSnoozed(o.InvoiceSnoozeUntil))
+            .OrderBy(o => o.InvoiceSnoozeUntil)
+            .Select(o => dtoById[o.Id])
+            .ToList();
 
         var needsReview = orders
-            .Where(o => o.InvoiceReadiness == "ReviewRequired")
+            .Where(o => o.InvoiceReadiness == "ReviewRequired" && !IsSnoozed(o.InvoiceSnoozeUntil))
             .OrderBy(o => o.OrderDate)
             .Select(o => dtoById[o.Id])
             .ToList();
@@ -105,7 +125,7 @@ public class InvoiceControlService : IInvoiceControlService
         };
 
         var proposals = orders
-            .Where(o => o.InvoiceReadiness == "ReadyForInvoice")
+            .Where(o => o.InvoiceReadiness == "ReadyForInvoice" && !IsSnoozed(o.InvoiceSnoozeUntil))
             .GroupBy(o => new
             {
                 o.CustomerId, o.CustomerName, o.InvoiceGrouping,
@@ -130,6 +150,6 @@ public class InvoiceControlService : IInvoiceControlService
                 (x, o) => $"{o.OrderNumber}: € {x.ChargeAmount:0.00} — {x.Title} (prijs vergrendeld; voeg de lijn handmatig toe bij facturatie)")
             .ToListAsync(cancellationToken);
 
-        return new InvoiceControlDto(proposals, needsReview, pendingCharges);
+        return new InvoiceControlDto(proposals, needsReview, pendingCharges, snoozed);
     }
 }

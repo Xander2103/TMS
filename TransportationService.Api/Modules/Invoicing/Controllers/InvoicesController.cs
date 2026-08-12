@@ -67,6 +67,37 @@ public class InvoicesController : ControllerBase
         [FromServices] IInvoiceControlService control, CancellationToken cancellationToken)
         => Ok(await control.GetAsync(cancellationToken));
 
+    public record SnoozeOrderRequest(DateOnly? Until, string? Reason);
+
+    /// <summary>P12: postpone (or clear: Until = null) an order's invoicing — audited, and the
+    /// workspace shows postponed orders in their own section until the date passes.</summary>
+    [HttpPut("/api/invoice-control/orders/{orderId:guid}/snooze")]
+    [RequirePermission(PermissionCodes.InvoicesEdit, PermissionCodes.InvoicesCreate)]
+    public async Task<IActionResult> Snooze(
+        Guid orderId, SnoozeOrderRequest request,
+        [FromServices] TransportationService.Api.Data.TransportationDbContext dbContext,
+        [FromServices] TransportationService.Api.Modules.Tenancy.Services.ITenantContext tenantContext,
+        [FromServices] TransportationService.Api.Modules.Auditing.Services.IAuditService auditService,
+        CancellationToken cancellationToken)
+    {
+        var order = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            dbContext.TransportOrders,
+            o => o.TenantId == tenantContext.TenantId && o.Id == orderId, cancellationToken);
+        if (order is null)
+        {
+            return NotFound();
+        }
+
+        var before = new { order.InvoiceSnoozeUntil, order.InvoiceSnoozeReason };
+        order.InvoiceSnoozeUntil = request.Until;
+        order.InvoiceSnoozeReason = request.Until is null ? null : request.Reason?.Trim();
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await auditService.RecordAsync("TransportOrder", order.Id.ToString(),
+            request.Until is null ? "InvoiceSnoozeCleared" : "InvoiceSnoozed", before,
+            new { order.InvoiceSnoozeUntil, order.InvoiceSnoozeReason }, cancellationToken);
+        return NoContent();
+    }
+
     /// <summary>Next expected invoice number for an entity + period (informative, never claims).</summary>
     [HttpGet("next-number")]
     [RequirePermission(PermissionCodes.InvoicesView, PermissionCodes.InvoicesCreate)]

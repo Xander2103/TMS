@@ -122,4 +122,30 @@ public class InvoiceControlTests
         Assert.Contains("ORD-9", pending);
         Assert.Contains("180", pending);
     }
+
+    [Fact]
+    public async Task Snooze_ParksTheOrderOutsideProposals_UntilTheDatePasses()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customer = Customer(h, "Klant BV", "Manual");
+        var ready = Order(h, customer, "ORD-1", "ReadyForInvoice");
+        var snoozedActive = Order(h, customer, "ORD-2", "ReadyForInvoice");
+        snoozedActive.InvoiceSnoozeUntil = new DateOnly(2099, 1, 1);
+        snoozedActive.InvoiceSnoozeReason = "Wacht op creditnota klant";
+        var snoozedExpired = Order(h, customer, "ORD-3", "ReadyForInvoice");
+        snoozedExpired.InvoiceSnoozeUntil = new DateOnly(2020, 1, 1);
+        await h.Db.Context.SaveChangesAsync();
+
+        var control = await h.Sut.GetAsync(CancellationToken.None);
+
+        // The active snooze is out of the proposal but visible in its own section; the
+        // expired snooze simply stopped applying.
+        var proposal = Assert.Single(control.Proposals);
+        Assert.Equal(2, proposal.Orders.Count);
+        Assert.DoesNotContain(proposal.Orders, o => o.OrderNumber == "ORD-2");
+        var parked = Assert.Single(control.Snoozed);
+        Assert.Equal("ORD-2", parked.OrderNumber);
+        Assert.Equal("Wacht op creditnota klant", parked.SnoozeReason);
+    }
 }
