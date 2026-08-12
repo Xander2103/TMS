@@ -82,6 +82,7 @@ function parametersModule(): NavModule {
           { label: 'Rollen & rechten', to: '/roles', permissions: ['roles.view'] },
           { label: 'Functie → rol', to: '/job-function-mappings', permissions: ['roles.view', 'roles.manage_permissions'] },
           { label: 'Boekhouding', to: '/settings/accounting', permissions: ['accounting.view', 'accounting.manage'] },
+          { label: 'Documentregels', to: '/settings/document-rules', permissions: ['company_settings.view', 'company_settings.manage'] },
           { label: 'Eigen bedrijven', to: '/settings/legal-entities', permissions: ['legal_entities.view', 'legal_entities.manage'] },
           { label: 'Klantportaal mededelingen', to: '/settings/portal-announcements', permissions: ['portal_announcements.manage'] },
           { label: 'Portaalberichten', to: '/settings/portal-messages', permissions: ['portal_messages.view', 'portal_messages.send'] },

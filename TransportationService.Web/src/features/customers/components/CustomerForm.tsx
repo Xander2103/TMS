@@ -34,11 +34,13 @@ import {
 import {
   CUSTOMER_CONTACT_TYPE_LABELS,
   CUSTOMER_CONTACT_TYPES,
+  CUSTOMER_DOCUMENT_STRATEGY_LABELS,
   PEPPOL_DELIVERY_PREFERENCE_LABELS,
   VAT_TREATMENT_LABELS,
   type CompanyRegistryResult,
   type CustomerContactType,
   type CustomerDetail,
+  type CustomerDocumentStrategy,
   type CustomerInput,
   type CustomerPeppolVerifyResult,
   type PeppolDeliveryPreference,
@@ -240,6 +242,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
 
   const [invoiceEmail, setInvoiceEmail] = useState(initial?.invoiceEmail ?? '')
   const [invoiceGrouping, setInvoiceGrouping] = useState(initial?.invoiceGrouping ?? 'Manual')
+  const [documentStrategy, setDocumentStrategy] = useState(initial?.documentStrategy ?? 'GenerateOwn')
   const [invoiceLanguageCode, setInvoiceLanguageCode] = useState(initial?.invoiceLanguageCode ?? '')
   const [paymentTermDays, setPaymentTermDays] = useState(String(initial?.paymentTermDays ?? 30))
   const [defaultLanguageCode, setDefaultLanguageCode] = useState(initial?.defaultLanguageCode ?? '')
@@ -1061,6 +1064,21 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               <option value="ByReference">Per klantreferentie</option>
             </select>
           </FormField>
+          <FormField
+            label="Transportdocumenten"
+            htmlFor="c-document-strategy"
+            hint="Bepaalt wie de leveringsbon/CMR aanlevert; per opdracht blijft een afwijkende keuze mogelijk."
+          >
+            <select id="c-document-strategy" value={documentStrategy} onChange={(e) => setDocumentStrategy(e.target.value)}>
+              {(Object.entries(CUSTOMER_DOCUMENT_STRATEGY_LABELS) as [CustomerDocumentStrategy, string][]).map(
+                ([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ),
+              )}
+            </select>
+          </FormField>
           <FormField label="Factuurtaal" htmlFor="c-invoice-lang" hint="Leeg = voorkeurstaal.">
             <select id="c-invoice-lang" value={invoiceLanguageCode} onChange={(e) => setInvoiceLanguageCode(e.target.value)}>
               <option value="">— Zelfde als voorkeurstaal —</option>
@@ -1289,6 +1307,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       countryCode: countryCode || null,
       invoiceEmail: nullable(invoiceEmail),
       invoiceGrouping,
+      documentStrategy,
       paymentTermDays: Number.isFinite(Number(paymentTermDays)) ? Number(paymentTermDays) : 0,
       defaultLanguageCode: defaultLanguageCode || null,
       defaultLegalEntityId: defaultLegalEntityId || null,

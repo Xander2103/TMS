@@ -19,6 +19,7 @@ import { changeCustomerNumber, removeCustomerContact } from '../api/customersApi
 import { getCustomerMessagesUnreadCount } from '../api/customerMessagesApi'
 import { CustomerForm } from '../components/CustomerForm'
 import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
+import { CustomerDayDocumentsCard } from '../components/CustomerDayDocumentsCard'
 import { CustomerHistoryPanel } from '../components/CustomerHistoryPanel'
 import { CustomerMessagesPanel } from '../components/CustomerMessagesPanel'
 import { CustomerLocationsPanel } from '../components/CustomerLocationsPanel'
@@ -47,6 +48,7 @@ export function CustomerDetailPage() {
   const canViewBilling = hasAnyPermission(['customers.view'])
   const canOverrideNumber = hasPermission('customers.override_number')
   const canViewMessages = hasPermission('customer_messages.view')
+  const canViewOrders = hasAnyPermission(['orders.view', 'orders.manage'])
 
   const [activeTab, setActiveTab] = useState('general')
   const [isEditing, setIsEditing] = useState(false)
@@ -406,6 +408,7 @@ export function CustomerDetailPage() {
               </dl>
             </div>
               </div>
+              {canViewOrders && id && <CustomerDayDocumentsCard customerId={id} />}
             </TabPanel>
           )}
 

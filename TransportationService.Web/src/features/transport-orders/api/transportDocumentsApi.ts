@@ -1,7 +1,38 @@
 import { apiBaseUrl } from '../../../config/env'
+import { apiClient } from '../../../api/apiClient'
 import { getAccessToken } from '../../auth/authStorage'
 
 export type TransportDocumentKind = 'delivery-note' | 'cmr'
+
+/** Documentkeuze op orderniveau; null = volgens klantinstelling/regels. */
+export type OrderDocumentPreference = 'Own' | 'CustomerDocument' | 'NoneRequired'
+
+/** Resultaat van de documentstrategie-resolver voor één order (GET .../documents/strategy). */
+export interface OrderDocumentStrategy {
+  kind: 'DeliveryNote' | 'Cmr' | null
+  usesCustomerDocument: boolean
+  noneRequired: boolean
+  undecided: boolean
+  source: 'OrderOverride' | 'CustomerDefault' | 'TenantRule' | 'BuiltInDefault'
+  reason: string
+  orderPreference: OrderDocumentPreference | null
+  customerStrategy: string
+}
+
+export function getOrderDocumentStrategy(orderId: string): Promise<OrderDocumentStrategy> {
+  return apiClient.getJson<OrderDocumentStrategy>(`/api/orders/${orderId}/documents/strategy`)
+}
+
+/** Zet (of wist, met null) de documentkeuze van deze opdracht; geeft de nieuwe strategie terug. */
+export function setOrderDocumentPreference(
+  orderId: string,
+  preference: OrderDocumentPreference | null,
+): Promise<OrderDocumentStrategy> {
+  return apiClient.putJson<OrderDocumentStrategy, { preference: OrderDocumentPreference | null }>(
+    `/api/orders/${orderId}/documents/preference`,
+    { preference },
+  )
+}
 
 async function downloadPdf(url: string, fallbackName: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}${url}`, {

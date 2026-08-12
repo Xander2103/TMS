@@ -497,3 +497,15 @@
 .peppol-status-not-validated {
   color: var(--text);
 }
+
+/* Documenten per dag (documentstrategie): datum + voorvertoning + batch-downloads. */
+.customer-day-documents {
+  margin-top: 16px;
+}
+.customer-day-documents-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}

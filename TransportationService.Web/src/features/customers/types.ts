@@ -98,6 +98,15 @@ export interface RegistryLookupResponse {
   result: CompanyRegistryResult | null
 }
 
+/** Documentstrategie: wie het transportdocument (leveringsbon/CMR) aanlevert. */
+export type CustomerDocumentStrategy = 'GenerateOwn' | 'CustomerDocument' | 'PerOrder'
+
+export const CUSTOMER_DOCUMENT_STRATEGY_LABELS: Record<CustomerDocumentStrategy, string> = {
+  GenerateOwn: 'Wij genereren het document',
+  CustomerDocument: 'Klant levert het document aan',
+  PerOrder: 'Per opdracht beslissen',
+}
+
 /** Provenance of the grouped Peppol control's current value, shown as a status chip. */
 export type PeppolStatus = 'auto' | 'manual' | 'not-found' | 'not-validated'
 
@@ -304,6 +313,8 @@ export interface CustomerDetail extends CustomerVatProfile {
   allowedLegalEntityIds?: string[] | null
   /** Wave 2: PerDossier | Weekly | Monthly | ByReference | Manual. */
   invoiceGrouping?: string
+  /** GenerateOwn | CustomerDocument | PerOrder — wie het transportdocument aanlevert. */
+  documentStrategy?: string
   contacts: CustomerContact[]
 }
 
@@ -344,6 +355,8 @@ export interface CustomerInput extends CustomerVatProfile {
   allowedLegalEntityIds?: string[] | null
   /** Wave 2: factuurgroepering; weggelaten = ongewijzigd (Manual bij aanmaak). */
   invoiceGrouping?: string | null
+  /** Documentstrategie; weggelaten = ongewijzigd (GenerateOwn bij aanmaak). */
+  documentStrategy?: string | null
 }
 
 export interface UpdateCustomerInput extends CustomerInput {

@@ -287,6 +287,42 @@
   }
 }
 
+/* Documentstrategie (leveringsbon/CMR) onder de header: reden + orderkeuze. */
+.to-doc-strategy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+
+.to-doc-strategy p {
+  margin: 0;
+}
+
+.to-doc-strategy-notice {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.to-doc-strategy-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.to-doc-strategy-choice select {
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
 .to-cancel-reason {
   background: var(--danger-bg);
   border: 1px solid var(--danger-border);

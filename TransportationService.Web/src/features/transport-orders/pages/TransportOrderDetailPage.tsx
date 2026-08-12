@@ -31,6 +31,7 @@ import {
 import { TransportOrderForm } from '../components/TransportOrderForm'
 import { UnitSelect } from '../components/UnitSelect'
 import { OrderDocumentsPanel } from '../components/OrderDocumentsPanel'
+import { OrderDocumentStrategyPanel } from '../components/OrderDocumentStrategyPanel'
 import { OrderPortalReviewPanel } from '../components/OrderPortalReviewPanel'
 import { OrderTimelinePanel } from '../components/OrderTimelinePanel'
 import { CustomerMessagesPanel } from '../../customers/components/CustomerMessagesPanel'
@@ -596,6 +597,9 @@ export function TransportOrderDetailPage() {
           Geannuleerd: {order.cancellationReason}
         </p>
       )}
+
+      {/* Documentstrategie bij de Wave 9-knoppen in de header: reden + orderkeuze. */}
+      {!editing && <OrderDocumentStrategyPanel orderId={order.id} />}
 
       {/* Wave 2026-08-04 §9: prominent total + separate order/price status near the header. */}
       {!editing && (order.pricingSnapshot || totalPrice !== null) && (

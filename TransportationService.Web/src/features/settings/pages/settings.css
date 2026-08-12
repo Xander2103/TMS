@@ -64,6 +64,15 @@
   border-color: var(--accent);
 }
 
+/* Documentregels: compact prioriteitsveld in de regeltabel. */
+.settings-doc-rules-priority {
+  width: 6em;
+  padding: 6px 10px;
+  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 .settings-hint {
   margin-top: 12px;
   font-size: 13px;

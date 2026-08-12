@@ -1,4 +1,6 @@
 import { apiClient } from '../../../api/apiClient'
+import { apiBaseUrl } from '../../../config/env'
+import { getAccessToken } from '../../auth/authStorage'
 import type { PagedResult } from '../../../api/types'
 import type {
   ChangeCustomerNumberInput,
@@ -81,6 +83,56 @@ export function setCustomerBlocked(id: string, isBlocked: boolean, reason: strin
     `/api/customers/${id}/blocked`,
     { isBlocked, reason },
   )
+}
+
+/** Eén orderregel in de documentvoorvertoning per dag. */
+export interface CustomerDayDocumentRow {
+  orderId: string
+  orderNumber: string
+  unloadingCity: string | null
+  kind: 'DeliveryNote' | 'Cmr' | null
+  source: string
+  reason: string
+  usesCustomerDocument: boolean
+  noneRequired: boolean
+  undecided: boolean
+}
+
+/** Voorvertoning van de te genereren documenten voor één leveringsdag (orders.view). */
+export interface CustomerDayDocumentsPreview {
+  date: string
+  totalOrders: number
+  ownDeliveryNotes: number
+  ownCmrs: number
+  customerDocuments: number
+  noneRequired: number
+  undecided: number
+  rows: CustomerDayDocumentRow[]
+}
+
+export function getCustomerDayDocumentsPreview(id: string, date: string): Promise<CustomerDayDocumentsPreview> {
+  return apiClient.getJson<CustomerDayDocumentsPreview>(`/api/customers/${id}/documents/preview?date=${date}`)
+}
+
+/** Batch-PDF (leveringsbonnen of CMR's) van één leveringsdag, zelfde blob-idioom als Wave 9. */
+export async function downloadCustomerDayDocuments(
+  id: string,
+  kind: 'delivery-note' | 'cmr',
+  date: string,
+): Promise<void> {
+  const response = await fetch(`${apiBaseUrl}/api/customers/${id}/documents/${kind}?date=${date}`, {
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+  })
+  if (!response.ok) throw new Error('De documenten konden niet worden gegenereerd.')
+  const blob = await response.blob()
+  const disposition = response.headers.get('content-disposition')
+  const fileName = disposition?.match(/filename="?([^";]+)"?/)?.[1] ?? `${kind}-${date}.pdf`
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = fileName
+  anchor.click()
+  URL.revokeObjectURL(objectUrl)
 }
 
 export function addCustomerContact(customerId: string, input: CustomerContactInput): Promise<CustomerContact> {
