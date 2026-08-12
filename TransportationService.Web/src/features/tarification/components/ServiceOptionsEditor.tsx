@@ -21,6 +21,7 @@ import {
 } from '../api/pricingApi'
 import { listWarehouses } from '../../warehousing/api/warehousingApi'
 import type { Warehouse } from '../../warehousing/types'
+import { listSalesCategories, type SalesCategory } from '../../accounting/api/accountingApi'
 
 interface TimeConditionDraft {
   kind: ServiceTimeCondition['kind']
@@ -45,6 +46,7 @@ interface OptionDraft {
   onlyForAdr: boolean
   warehouseIds: string[]
   timeConditions: TimeConditionDraft[]
+  salesCategoryId: string
 }
 
 const TIME_CONDITION_KIND_LABELS: Record<ServiceTimeCondition['kind'], string> = {
@@ -106,6 +108,7 @@ export function ServiceOptionsEditor() {
   const [options, setOptions] = useState<ServiceOption[] | null>(null)
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [salesCategories, setSalesCategories] = useState<SalesCategory[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [draft, setDraft] = useState<OptionDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
@@ -126,6 +129,10 @@ export function ServiceOptionsEditor() {
     // Warehouses feed the optional warehouse condition; unavailable (no permission) is fine.
     listWarehouses()
       .then(setWarehouses)
+      .catch(() => {})
+    // Sales codes feed the optional verkoopcategorie; unavailable is fine (field stays empty).
+    listSalesCategories()
+      .then(setSalesCategories)
       .catch(() => {})
   }, [canView])
 
@@ -155,6 +162,7 @@ export function ServiceOptionsEditor() {
             autoApply: option.autoApply,
             onlyForAdr: option.onlyForAdr,
             warehouseIds: option.warehouseIds ?? [],
+            salesCategoryId: option.salesCategoryId ?? '',
             timeConditions: (option.timeConditions ?? []).map((c) => ({
               kind: c.kind,
               stopScope: c.stopScope,
@@ -178,6 +186,7 @@ export function ServiceOptionsEditor() {
             onlyForAdr: false,
             warehouseIds: [],
             timeConditions: [],
+            salesCategoryId: '',
           },
     )
   }
@@ -201,6 +210,7 @@ export function ServiceOptionsEditor() {
         autoApply: draft.autoApply,
         onlyForAdr: draft.onlyForAdr,
         warehouseIds: draft.warehouseIds,
+        salesCategoryId: draft.salesCategoryId || null,
         timeConditions: draft.timeConditions.map((c) => ({
           kind: c.kind,
           stopScope: c.stopScope,
@@ -347,6 +357,14 @@ export function ServiceOptionsEditor() {
             </FormField>
             <FormField label="Factuuromschrijving" htmlFor="opt-invoice" hint="Leeg = de naam van de dienst.">
               <input id="opt-invoice" value={draft.invoiceDescription} onChange={(e) => setDraft((d) => (d ? { ...d, invoiceDescription: e.target.value } : d))} maxLength={300} />
+            </FormField>
+            <FormField label="Verkoopcategorie" htmlFor="opt-sales-cat" hint="Verkoopcode op factuurlijnen van deze dienst. Leeg = standaardrol Supplementen.">
+              <select id="opt-sales-cat" value={draft.salesCategoryId} onChange={(e) => setDraft((d) => (d ? { ...d, salesCategoryId: e.target.value } : d))}>
+                <option value="">— Standaard (Supplementen) —</option>
+                {salesCategories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </FormField>
             <label className="tof-checkbox">
               <input type="checkbox" checked={draft.selectableInOrders} onChange={(e) => setDraft((d) => (d ? { ...d, selectableInOrders: e.target.checked } : d))} />

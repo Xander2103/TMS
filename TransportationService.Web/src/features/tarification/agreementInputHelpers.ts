@@ -26,5 +26,6 @@ export function agreementToInput(agreement: PricingAgreement): PricingAgreementI
     includedUnloadingMinutes: agreement.includedUnloadingMinutes,
     includedCombinedMinutes: agreement.includedCombinedMinutes,
     extraHourlyRate: agreement.extraHourlyRate,
+    salesCategoryId: agreement.salesCategoryId,
   }
 }

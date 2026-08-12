@@ -32,6 +32,20 @@ vi.mock('../../api/pricingApi', async (importOriginal) => {
   }
 })
 
+vi.mock('../../../accounting/api/accountingApi', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../../accounting/api/accountingApi')>()
+  return {
+    ...original,
+    listSalesCategories: () => Promise.resolve([
+      {
+        id: 'cat-handling', code: 'HANDLING', name: 'Handling', systemRole: 'None',
+        ledgerAccountId: null, ledgerAccountNumber: null, ledgerAccountName: null,
+        isActive: true, sortOrder: 0,
+      },
+    ]),
+  }
+})
+
 function makeOption(overrides: Partial<ServiceOption> = {}): ServiceOption {
   return {
     id: 'opt-1',
@@ -108,6 +122,24 @@ describe('ServiceOptionsEditor — warehouse calculation bases', () => {
     expect(payload).toEqual(expect.objectContaining({
       code: 'PALUIT', kind: 'PerUnit', unitTypeId: 'u-colli', autoApply: true, onlyForAdr: true,
     }))
+  })
+
+  it('saves the chosen verkoopcategorie and defaults to the Supplementen role (wave 2)', async () => {
+    const user = userEvent.setup()
+    render(<ServiceOptionsEditor />)
+
+    await user.click(await screen.findByRole('button', { name: '+ Dienst' }))
+    const dialog = await screen.findByRole('dialog')
+
+    await user.type(within(dialog).getByLabelText('Code *'), 'WACHT')
+    await user.type(within(dialog).getByLabelText('Naam *'), 'Wachttijd')
+    await user.selectOptions(within(dialog).getByLabelText(/Verkoopcategorie/), 'cat-handling')
+    await user.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+
+    await waitFor(() => expect(state.create).toHaveBeenCalled())
+    expect(state.create.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ code: 'WACHT', salesCategoryId: 'cat-handling' }),
+    )
   })
 })
 

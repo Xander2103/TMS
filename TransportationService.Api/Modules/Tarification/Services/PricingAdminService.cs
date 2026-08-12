@@ -679,12 +679,24 @@ public class PricingAdminService : IPricingAdminService
         }
     }
 
+    /// <summary>Wave 2: a sales code on a pricing object must be an own-tenant category.</summary>
+    private async Task ValidateSalesCategoryAsync(Guid? salesCategoryId, CancellationToken cancellationToken)
+    {
+        if (salesCategoryId is { } id
+            && !await _dbContext.SalesCategories.AnyAsync(c => c.TenantId == TenantId && c.Id == id, cancellationToken))
+        {
+            throw new InvalidTenantReferenceException("verkoopcategorie");
+        }
+    }
+
     private async Task ValidateAgreementAsync(SavePricingAgreementRequest request, Guid? agreementId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             throw new DomainValidationException("name", "De naam is verplicht.");
         }
+
+        await ValidateSalesCategoryAsync(request.SalesCategoryId, cancellationToken);
 
         if (request.EffectiveUntil is { } until && until < request.EffectiveFrom)
         {
@@ -834,6 +846,7 @@ public class PricingAdminService : IPricingAdminService
         agreement.IncludedUnloadingMinutes = request.IncludedUnloadingMinutes;
         agreement.IncludedCombinedMinutes = request.IncludedCombinedMinutes;
         agreement.ExtraHourlyRate = request.ExtraHourlyRate;
+        agreement.SalesCategoryId = request.SalesCategoryId;
         foreach (var surcharge in request.Surcharges ?? [])
         {
             var entity = new PricingAgreementSurcharge
@@ -905,6 +918,11 @@ public class PricingAdminService : IPricingAdminService
         var zoneNames = await _dbContext.PricingZones.AsNoTracking()
             .Where(z => z.TenantId == tenantId && modifierZoneIds.Contains(z.Id))
             .ToDictionaryAsync(z => z.Id, z => z.Name, cancellationToken);
+        var salesCategoryIds = agreements.Where(a => a.SalesCategoryId.HasValue)
+            .Select(a => a.SalesCategoryId!.Value).Distinct().ToList();
+        var salesCategoryNames = await _dbContext.SalesCategories.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && salesCategoryIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
 
         return agreements.Select(a =>
         {
@@ -926,7 +944,9 @@ public class PricingAdminService : IPricingAdminService
                         m.ZoneId is { } zid ? zoneNames.GetValueOrDefault(zid) : null,
                         m.Percent, m.FixedAmount))
                     .ToList(),
-                a.IncludedLoadingMinutes, a.IncludedUnloadingMinutes, a.IncludedCombinedMinutes, a.ExtraHourlyRate);
+                a.IncludedLoadingMinutes, a.IncludedUnloadingMinutes, a.IncludedCombinedMinutes, a.ExtraHourlyRate,
+                a.SalesCategoryId,
+                a.SalesCategoryId is { } scid ? salesCategoryNames.GetValueOrDefault(scid) : null);
         }).ToList();
     }
 
@@ -1825,6 +1845,8 @@ public class PricingAdminService : IPricingAdminService
             throw new DomainValidationException("name", "De naam is verplicht.");
         }
 
+        await ValidateSalesCategoryAsync(request.SalesCategoryId, cancellationToken);
+
         var orderMeasureBasis = request.Basis
             is PriceRuleBasis.Fixed or PriceRuleBasis.PerKm or PriceRuleBasis.PerPallet or PriceRuleBasis.PerTon
             or PriceRuleBasis.PerLoadingMeter or PriceRuleBasis.PerVolume or PriceRuleBasis.PerStop;
@@ -2018,6 +2040,7 @@ public class PricingAdminService : IPricingAdminService
         rule.OversizeLengthCm = request.OversizeLengthCm;
         rule.OversizeWidthCm = request.OversizeWidthCm;
         rule.OversizeBillableFactor = request.OversizeBillableFactor;
+        rule.SalesCategoryId = request.SalesCategoryId;
         foreach (var bracket in request.Brackets ?? [])
         {
             var entity = new PriceRuleBracket
@@ -2046,6 +2069,8 @@ public class PricingAdminService : IPricingAdminService
         {
             throw new DomainValidationException("code", "Code en naam zijn verplicht.");
         }
+
+        await ValidateSalesCategoryAsync(request.SalesCategoryId, cancellationToken);
 
         if (request.DefaultValue < 0)
         {
@@ -2162,6 +2187,7 @@ public class PricingAdminService : IPricingAdminService
         option.UnitTypeId = request.Kind == SurchargeKind.PerUnit ? request.UnitTypeId : null;
         option.AutoApply = request.AutoApply;
         option.OnlyForAdr = request.OnlyForAdr;
+        option.SalesCategoryId = request.SalesCategoryId;
     }
 
     private async Task<ServiceOptionDto> MapOptionAsync(ServiceOption option, CancellationToken cancellationToken) =>
@@ -2189,6 +2215,11 @@ public class PricingAdminService : IPricingAdminService
         var warehouseNames = await _dbContext.Warehouses.AsNoTracking()
             .Where(w => w.TenantId == TenantId && warehouseIds.Contains(w.Id))
             .ToDictionaryAsync(w => w.Id, w => w.Name, cancellationToken);
+        var salesCategoryIds = options.Where(o => o.SalesCategoryId.HasValue)
+            .Select(o => o.SalesCategoryId!.Value).Distinct().ToList();
+        var salesCategoryNames = await _dbContext.SalesCategories.AsNoTracking()
+            .Where(c => c.TenantId == TenantId && salesCategoryIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
         return options.Select(o => new ServiceOptionDto(
             o.Id, o.Code, o.Name, o.Kind, o.DefaultValue, o.IsActive, o.SortOrder,
             o.Description, o.InvoiceDescription, o.SelectableInOrders,
@@ -2196,7 +2227,9 @@ public class PricingAdminService : IPricingAdminService
             o.AutoApply, o.OnlyForAdr,
             conditions[o.Id].ToList(),
             conditions[o.Id].Select(id => warehouseNames.GetValueOrDefault(id, "?")).ToList(),
-            timeConditions[o.Id].ToList())).ToList();
+            timeConditions[o.Id].ToList(),
+            o.SalesCategoryId,
+            o.SalesCategoryId is { } scid ? salesCategoryNames.GetValueOrDefault(scid) : null)).ToList();
     }
 
     private async Task<IReadOnlyList<PriceRuleDto>> MapRulesAsync(IReadOnlyList<PriceRule> rules, CancellationToken cancellationToken)
@@ -2219,6 +2252,11 @@ public class PricingAdminService : IPricingAdminService
         var agreements = await _dbContext.PricingAgreements.AsNoTracking()
             .Where(a => a.TenantId == tenantId && agreementIds.Contains(a.Id))
             .ToDictionaryAsync(a => a.Id, a => a.Name, cancellationToken);
+        var salesCategoryIds = rules.Where(r => r.SalesCategoryId.HasValue)
+            .Select(r => r.SalesCategoryId!.Value).Distinct().ToList();
+        var salesCategoryNames = await _dbContext.SalesCategories.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && salesCategoryIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
 
         return rules.Select(rule => new PriceRuleDto(
             rule.Id, rule.CustomerId,
@@ -2239,7 +2277,9 @@ public class PricingAdminService : IPricingAdminService
             rule.Priority, rule.BaseAmount,
             rule.OversizeLengthCm, rule.OversizeWidthCm, rule.OversizeBillableFactor,
             rule.MinimumQuantity, rule.QuantityRoundingStep,
-            rule.MaximumAmount, rule.BracketMode))
+            rule.MaximumAmount, rule.BracketMode,
+            rule.SalesCategoryId,
+            rule.SalesCategoryId is { } rscid ? salesCategoryNames.GetValueOrDefault(rscid) : null))
             .ToList();
     }
 

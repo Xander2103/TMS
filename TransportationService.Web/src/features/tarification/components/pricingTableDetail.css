@@ -74,3 +74,20 @@
   color: var(--warning);
   border-color: var(--warning-border);
 }
+
+/* Wave 2: table-level default sales code above the rule grid. */
+.pricing-table-sales-category {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.pricing-table-sales-category label {
+  font-weight: 600;
+}
+
+.pricing-table-sales-category select {
+  min-width: 16rem;
+}

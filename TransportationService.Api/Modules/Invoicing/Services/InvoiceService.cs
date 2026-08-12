@@ -328,15 +328,36 @@ public class InvoiceService : IInvoiceService
                 .GroupBy(l => l.TransportOrderId)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-        // Sales categorisation (§7.2): system roles categorise structurally — the base transport
-        // line, the service/supplement lines and the diesel lines; manual lines carry the
-        // caller's explicit choice. The mapping itself resolves at Send, never here.
+        // Sales categorisation (§7.2 + Wave 2): the sales code frozen on the order's price and
+        // service lines wins (stamped from service option → rule → agreement at calculation);
+        // system roles stay the structural fallback — the base transport line, the
+        // service/supplement lines and the diesel lines; manual lines carry the caller's
+        // explicit choice. The ledger mapping itself resolves at Send, never here.
         await _accounting.EnsureSeededAsync(cancellationToken);
         var salesCategories = await _dbContext.SalesCategories.AsNoTracking()
             .Where(c => c.TenantId == tenantId && c.IsActive)
             .ToListAsync(cancellationToken);
+        var activeCategoryById = salesCategories.ToDictionary(c => c.Id);
         Guid? CategoryForRole(Modules.Accounting.Entities.SalesCategorySystemRole role) =>
             salesCategories.FirstOrDefault(c => c.SystemRole == role)?.Id;
+
+        // The stamped codes of the lines that make up the aggregated base transport amount: one
+        // unanimous code moves the base line off the Transport role; a mix stays on the role
+        // (one aggregate line cannot represent two codes — Wave 3 may split it).
+        var stampedCategoriesByOrder = selectedOrderIds.Count == 0
+            ? new Dictionary<Guid, List<Guid>>()
+            : (await _dbContext.TransportOrderPricingLines.AsNoTracking()
+                .Where(l => l.TenantId == tenantId && selectedOrderIds.Contains(l.TransportOrderId)
+                            && !l.Informational && !l.Proposed && l.SalesCategoryId != null)
+                .Select(l => new { l.TransportOrderId, l.SalesCategoryId })
+                .ToListAsync(cancellationToken))
+                .GroupBy(l => l.TransportOrderId)
+                .ToDictionary(g => g.Key, g => g.Select(l => l.SalesCategoryId!.Value).Distinct().ToList());
+        Guid? StampedBaseCategory(Guid orderId)
+        {
+            var stamped = stampedCategoriesByOrder.GetValueOrDefault(orderId);
+            return stamped is [var single] && activeCategoryById.ContainsKey(single) ? single : null;
+        }
         var transportCategoryId = CategoryForRole(Modules.Accounting.Entities.SalesCategorySystemRole.Transport);
         var surchargeCategoryId = CategoryForRole(Modules.Accounting.Entities.SalesCategorySystemRole.Surcharge);
         var dieselCategoryId = CategoryForRole(Modules.Accounting.Entities.SalesCategorySystemRole.Diesel);
@@ -367,7 +388,7 @@ public class InvoiceService : IInvoiceService
                 Quantity = 1m,
                 UnitPrice = (order.AgreedPrice ?? 0m) - serviceTotal,
                 VatRatePercent = vatRate,
-                SalesCategoryId = transportCategoryId,
+                SalesCategoryId = StampedBaseCategory(order.Id) ?? transportCategoryId,
             });
             foreach (var serviceLine in orderServiceLines)
             {
@@ -386,7 +407,9 @@ public class InvoiceService : IInvoiceService
                     Quantity = 1m,
                     UnitPrice = serviceLine.Amount,
                     VatRatePercent = vatRate,
-                    SalesCategoryId = surchargeCategoryId,
+                    SalesCategoryId = serviceLine.SalesCategoryId is { } stamped && activeCategoryById.ContainsKey(stamped)
+                        ? stamped
+                        : surchargeCategoryId,
                     UnitCode = serviceLine.Kind == Modules.Tarification.Entities.SurchargeKind.PerHour ? "HUR" : "C62",
                 });
             }
@@ -404,7 +427,13 @@ public class InvoiceService : IInvoiceService
                 UnitPrice = manual.UnitPrice,
                 VatRatePercent = manual.VatRatePercent ?? vatRate,
                 SalesCategoryId = manual.SalesCategoryId,
-                UnitCode = NormalizeUnitCode(manual.UnitCode),
+                // Wave 2: the sales code's default unit fills in when the caller gave none
+                // (NormalizeUnitCode itself falls back to C62 when both are empty).
+                UnitCode = NormalizeUnitCode(
+                    Trim(manual.UnitCode)
+                    ?? (manual.SalesCategoryId is { } mcid
+                        ? activeCategoryById.GetValueOrDefault(mcid)?.DefaultUnitCode
+                        : null)),
             });
         }
 
@@ -1035,6 +1064,7 @@ public class InvoiceService : IInvoiceService
                 c.Id, c.Name, c.LedgerAccountId,
                 AccountNumber = (string?)c.LedgerAccount!.AccountNumber,
                 AccountName = (string?)c.LedgerAccount.Name,
+                c.VatCategoryOverride,
             })
             .ToDictionaryAsync(c => c.Id, cancellationToken);
 
@@ -1056,6 +1086,9 @@ public class InvoiceService : IInvoiceService
             line.LedgerAccountId = category.LedgerAccountId;
             line.LedgerAccountNumberSnapshot = category.AccountNumber;
             line.LedgerAccountNameSnapshot = category.AccountName;
+            // Wave 2: a sales code can force the UNCL5305 VAT category; an explicit line value
+            // always wins, and null keeps the customer's VAT-treatment chain authoritative.
+            line.VatCategoryCode ??= category.VatCategoryOverride;
         }
     }
 

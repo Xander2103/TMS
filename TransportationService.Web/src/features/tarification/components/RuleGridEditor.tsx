@@ -24,6 +24,7 @@ import {
   type PricingZone,
   type UnitTypeSettings,
 } from '../api/pricingApi'
+import { listSalesCategories, type SalesCategory } from '../../accounting/api/accountingApi'
 import { BracketOverrideDialog } from './BracketOverrideDialog'
 import './ruleGridEditor.css'
 
@@ -64,6 +65,7 @@ function ruleToInput(rule: PriceRule): PriceRuleInput {
     quantityRoundingStep: rule.quantityRoundingStep,
     maximumAmount: rule.maximumAmount,
     bracketMode: rule.bracketMode,
+    salesCategoryId: rule.salesCategoryId,
   }
 }
 
@@ -94,6 +96,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
   const [rules, setRules] = useState<PriceRule[] | null>(null)
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [zones, setZones] = useState<PricingZone[]>([])
+  const [salesCategories, setSalesCategories] = useState<SalesCategory[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [rowErrors, setRowErrors] = useState<Record<string, FieldErrors>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -122,6 +125,10 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
         setOverridesByRule(Object.fromEntries(bracketRules.map((r, i) => [r.id, loaded[i]])))
       })
       .catch(() => setLoadError('De prijsregels konden niet worden geladen.'))
+    // Sales codes feed the optional verkoopcategorie column; unavailable is fine.
+    listSalesCategories()
+      .then(setSalesCategories)
+      .catch(() => {})
   }, [agreementId])
 
   useEffect(() => {
@@ -293,6 +300,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                 <th>Ldm tot</th>
                 <th>Geldig van</th>
                 <th>Geldig tot</th>
+                <th title="Verkoopcode op factuurlijnen uit deze regel; leeg = code van de tabel, anders standaardrol Transport">Verkoopcategorie</th>
                 {canManage && <th aria-label="Acties" />}
               </tr>
             </thead>
@@ -518,6 +526,21 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           }}
                         />
                       </td>
+                      <td>
+                        <select
+                          aria-label={`Verkoopcategorie voor ${rule.name}`}
+                          value={rule.salesCategoryId ?? ''}
+                          disabled={!canManage}
+                          onChange={(e) => void saveRule(rule, { salesCategoryId: e.target.value || null })}
+                        >
+                          <option value="">— Van tabel —</option>
+                          {salesCategories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                       {canManage && (
                         <td className="issued-items-row-actions">
                           <button type="button" className="issued-items-link" onClick={() => void duplicateRule(rule)}>
@@ -634,7 +657,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                               }}
                             />
                           </td>
-                          <td colSpan={2}>—</td>
+                          <td colSpan={3}>—</td>
                           {canManage && (
                             <td className="issued-items-row-actions">
                               {rule.customerId === null && (
@@ -668,6 +691,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                             <td colSpan={5}>—</td>
                             <td>{override.effectiveFrom ?? '—'}</td>
                             <td>{override.effectiveUntil ?? '—'}</td>
+                            <td>—</td>
                             {canManage && (
                               <td className="issued-items-row-actions">
                                 <button
@@ -688,7 +712,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         .filter((o) => o.orphaned)
                         .map((override) => (
                           <tr key={override.id} className="rule-grid-bracket-row rule-grid-override-row">
-                            <td colSpan={19}>
+                            <td colSpan={20}>
                               ⚠ Klantafwijking van {override.customerName} (staffel {override.fromQuantity}–
                               {override.toQuantity ?? 'open'}) verwijst naar een rij die niet meer bestaat en wordt niet
                               toegepast.
@@ -708,7 +732,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         ))}
                     {expanded && canManage && (
                       <tr className="rule-grid-bracket-row">
-                        <td colSpan={20}>
+                        <td colSpan={21}>
                           <button type="button" className="issued-items-link" onClick={() => addBracket(rule)}>
                             + Staffelrij
                           </button>

@@ -12,7 +12,9 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { AGREEMENT_STATUS_TONE, agreementSamenstelling, agreementStatus } from '../agreementStatus'
-import { getPricingAgreement, type PricingAgreement } from '../api/pricingApi'
+import { getPricingAgreement, updatePricingAgreement, type PricingAgreement } from '../api/pricingApi'
+import { listSalesCategories, type SalesCategory } from '../../accounting/api/accountingApi'
+import { agreementToInput } from '../agreementInputHelpers'
 import { downloadAgreementExport } from '../api/pricingImportApi'
 import { AgreementAdjustmentsPanel } from '../components/AgreementAdjustmentsPanel'
 import { AgreementAssignmentsPanel } from '../components/AgreementAssignmentsPanel'
@@ -69,6 +71,7 @@ export function PricingTableDetailPage() {
   const canView = hasPermission('tariffs.view') || canManage || canImport
 
   const [agreement, setAgreement] = useState<PricingAgreement | null>(null)
+  const [salesCategories, setSalesCategories] = useState<SalesCategory[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<TabId>('regels')
   // The "Excel-import" wizard card creates an empty table and lands here with ?import=1 so the
@@ -88,7 +91,25 @@ export function PricingTableDetailPage() {
 
   useEffect(() => {
     reload()
+    // Sales codes feed the table-level verkoopcategorie; unavailable is fine.
+    listSalesCategories()
+      .then(setSalesCategories)
+      .catch(() => {})
   }, [reload])
+
+  async function saveSalesCategory(salesCategoryId: string | null) {
+    if (!agreement) return
+    try {
+      const updated = await updatePricingAgreement(agreement.id, {
+        ...agreementToInput(agreement),
+        salesCategoryId,
+      })
+      setAgreement(updated)
+      showSuccess('Verkoopcategorie opgeslagen.')
+    } catch (err) {
+      showError(describeApiError(err, 'De verkoopcategorie kon niet worden opgeslagen.').message)
+    }
+  }
 
   function closeImportDialog() {
     setImportOpen(false)
@@ -182,6 +203,25 @@ export function PricingTableDetailPage() {
 
       {activeTab === 'regels' && (
         <TabPanel tabId="regels">
+          <div className="pricing-table-sales-category">
+            <label htmlFor="table-sales-cat">Standaard verkoopcategorie</label>
+            <select
+              id="table-sales-cat"
+              value={agreement.salesCategoryId ?? ''}
+              disabled={!canManage}
+              onChange={(e) => void saveSalesCategory(e.target.value || null)}
+            >
+              <option value="">— Standaardrol Transport —</option>
+              {salesCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+            <span className="customer-form-muted">
+              Verkoopcode voor factuurlijnen uit deze tabel; een regel met eigen code wint.
+            </span>
+          </div>
           <RuleGridEditor agreementId={id} agreementCustomerId={agreement.customerId} canManage={canManage} />
         </TabPanel>
       )}

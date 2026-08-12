@@ -101,6 +101,9 @@ export interface PricingAgreement {
   includedCombinedMinutes: number | null
   /** Hourly rate charged for time beyond the included allowance (proposal until confirmed). */
   extraHourlyRate: number | null
+  /** Wave 2: default sales code for this agreement's rules (a rule's own code wins). */
+  salesCategoryId?: string | null
+  salesCategoryName?: string | null
 }
 
 export interface PricingAgreementInput {
@@ -120,6 +123,7 @@ export interface PricingAgreementInput {
   includedUnloadingMinutes?: number | null
   includedCombinedMinutes?: number | null
   extraHourlyRate?: number | null
+  salesCategoryId?: string | null
 }
 
 export const listPricingAgreements = (customerId?: string): Promise<PricingAgreement[]> =>
@@ -288,6 +292,9 @@ export interface PriceRule {
   /** Cap on the rule amount, applied after minimumAmount. */
   maximumAmount: number | null
   bracketMode: BracketSelectionMode
+  /** Wave 2: sales code for lines priced by this rule (wins over the agreement's). */
+  salesCategoryId?: string | null
+  salesCategoryName?: string | null
 }
 
 export interface PriceRuleBracketInput {
@@ -322,6 +329,7 @@ export interface PriceRuleInput {
   quantityRoundingStep?: number | null
   maximumAmount?: number | null
   bracketMode?: BracketSelectionMode
+  salesCategoryId?: string | null
 }
 
 // --- Bracket-row customer overrides ("klantafwijkingen") ---
@@ -404,6 +412,9 @@ export interface ServiceOption {
   warehouseNames?: string[] | null
   /** Wave 2026-08-04 §16: time-based stop conditions. */
   timeConditions?: ServiceTimeCondition[] | null
+  /** Wave 2: sales code for service lines of this option (wins over rule/agreement). */
+  salesCategoryId?: string | null
+  salesCategoryName?: string | null
 }
 
 /** One time-based condition row of a service option (wave 2026-08-04 §16/§17). */
@@ -435,6 +446,7 @@ export interface ServiceOptionInput {
   warehouseIds?: string[] | null
   /** Wave 2026-08-04 §16: time-based stop conditions; the list replaces the stored rows. */
   timeConditions?: ServiceTimeCondition[] | null
+  salesCategoryId?: string | null
 }
 
 export const listServiceOptions = (includeInactive = false, forOrderEntry = false): Promise<ServiceOption[]> => {

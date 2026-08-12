@@ -39,6 +39,9 @@ interface CategoryDraft {
   name: string
   systemRole: SalesCategorySystemRole
   isActive: boolean
+  invoiceDescriptionNl: string
+  defaultUnitCode: string
+  vatCategoryOverride: string
 }
 
 /**
@@ -142,6 +145,9 @@ export function AccountingSettingsPage() {
         ledgerAccountId: categoryDraft.category?.ledgerAccountId ?? null,
         isActive: categoryDraft.isActive,
         sortOrder: categoryDraft.category?.sortOrder ?? categories!.length,
+        invoiceDescriptionNl: categoryDraft.invoiceDescriptionNl.trim() || null,
+        defaultUnitCode: categoryDraft.defaultUnitCode.trim() || null,
+        vatCategoryOverride: categoryDraft.vatCategoryOverride || null,
       }
       if (categoryDraft.category) {
         await updateSalesCategory(categoryDraft.category.id, input)
@@ -181,7 +187,10 @@ export function AccountingSettingsPage() {
           {canManage && (
             <Button variant="secondary" onClick={() => {
               setDraftError(null)
-              setCategoryDraft({ category: null, code: '', name: '', systemRole: 'None', isActive: true })
+              setCategoryDraft({
+                category: null, code: '', name: '', systemRole: 'None', isActive: true,
+                invoiceDescriptionNl: '', defaultUnitCode: '', vatCategoryOverride: '',
+              })
             }}>
               + Verkoopcategorie
             </Button>
@@ -251,6 +260,9 @@ export function AccountingSettingsPage() {
                           name: category.name,
                           systemRole: category.systemRole,
                           isActive: category.isActive,
+                          invoiceDescriptionNl: category.invoiceDescriptionNl ?? '',
+                          defaultUnitCode: category.defaultUnitCode ?? '',
+                          vatCategoryOverride: category.vatCategoryOverride ?? '',
                         })
                       }}
                     >
@@ -407,6 +419,30 @@ export function AccountingSettingsPage() {
                 {Object.entries(SYSTEM_ROLE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
+              </select>
+            </FormField>
+            <FormField label="Factuuromschrijving" htmlFor="sc-invoice-desc" hint="Leeg = de naam van de categorie.">
+              <input id="sc-invoice-desc" value={categoryDraft.invoiceDescriptionNl} maxLength={300}
+                onChange={(e) => setCategoryDraft((d) => (d ? { ...d, invoiceDescriptionNl: e.target.value } : d))} />
+            </FormField>
+            <FormField label="Standaard eenheid" htmlFor="sc-unit" hint="UN/ECE-code voor handmatige factuurlijnen met deze code, bv. C62, HUR, KGM.">
+              <input id="sc-unit" value={categoryDraft.defaultUnitCode} maxLength={10}
+                onChange={(e) => setCategoryDraft((d) => (d ? { ...d, defaultUnitCode: e.target.value } : d))} />
+            </FormField>
+            <FormField
+              label="Btw-categorie (afwijking)"
+              htmlFor="sc-vat"
+              hint="Dwingt de UNCL5305-btw-categorie voor lijnen met deze code af; leeg = de btw-regeling van de klant beslist (de norm)."
+            >
+              <select id="sc-vat" value={categoryDraft.vatCategoryOverride}
+                onChange={(e) => setCategoryDraft((d) => (d ? { ...d, vatCategoryOverride: e.target.value } : d))}>
+                <option value="">— Geen (btw-regeling klant) —</option>
+                <option value="S">S — Standaardtarief</option>
+                <option value="Z">Z — Nultarief</option>
+                <option value="E">E — Vrijgesteld</option>
+                <option value="AE">AE — Btw verlegd</option>
+                <option value="K">K — Intracommunautair</option>
+                <option value="G">G — Export buiten EU</option>
               </select>
             </FormField>
             <label className="tof-checkbox">

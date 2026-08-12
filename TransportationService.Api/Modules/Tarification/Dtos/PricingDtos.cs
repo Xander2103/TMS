@@ -43,7 +43,10 @@ public record PricingAgreementDto(
     /// <summary>Included loading+unloading minutes combined. Mutually exclusive with the per-activity fields.</summary>
     int? IncludedCombinedMinutes = null,
     /// <summary>Hourly rate charged for time beyond the included allowance (proposal until confirmed).</summary>
-    decimal? ExtraHourlyRate = null);
+    decimal? ExtraHourlyRate = null,
+    /// <summary>Wave 2: default sales code for this agreement's rules (a rule's own code wins).</summary>
+    Guid? SalesCategoryId = null,
+    string? SalesCategoryName = null);
 
 public record SavePricingAgreementSurchargeRequest(string Name, SurchargeKind Kind, decimal Value);
 
@@ -56,7 +59,8 @@ public record SavePricingAgreementRequest(
     bool IsShared = false, decimal? MaximumAmount = null,
     Guid? BaseAgreementId = null, IReadOnlyList<SavePricingAgreementModifierRequest>? Modifiers = null,
     int? IncludedLoadingMinutes = null, int? IncludedUnloadingMinutes = null,
-    int? IncludedCombinedMinutes = null, decimal? ExtraHourlyRate = null);
+    int? IncludedCombinedMinutes = null, decimal? ExtraHourlyRate = null,
+    Guid? SalesCategoryId = null);
 
 // --- Pricing agreement assignments (shared tables → customers) ---
 
@@ -87,7 +91,10 @@ public record PriceRuleDto(
     /// <summary>Cap on the rule amount, applied after MinimumAmount.</summary>
     decimal? MaximumAmount = null,
     /// <summary>QuantityBracket only: Absolute (bracket price) or PerNextUnit (sum per piece).</summary>
-    BracketSelectionMode BracketMode = BracketSelectionMode.Absolute);
+    BracketSelectionMode BracketMode = BracketSelectionMode.Absolute,
+    /// <summary>Wave 2: sales code for lines priced by this rule (wins over the agreement's).</summary>
+    Guid? SalesCategoryId = null,
+    string? SalesCategoryName = null);
 
 public record SavePriceRuleBracketRequest(
     decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit,
@@ -100,7 +107,8 @@ public record SavePriceRuleRequest(
     Guid? AgreementId = null, int Priority = 0, decimal? BaseAmount = null,
     decimal? OversizeLengthCm = null, decimal? OversizeWidthCm = null, decimal? OversizeBillableFactor = null,
     decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null,
-    decimal? MaximumAmount = null, BracketSelectionMode BracketMode = BracketSelectionMode.Absolute);
+    decimal? MaximumAmount = null, BracketSelectionMode BracketMode = BracketSelectionMode.Absolute,
+    Guid? SalesCategoryId = null);
 
 // --- Bracket-row customer overrides ("klantafwijkingen") ---
 
@@ -134,7 +142,10 @@ public record ServiceOptionDto(
     IReadOnlyList<Guid>? WarehouseIds = null,
     IReadOnlyList<string>? WarehouseNames = null,
     /// <summary>Wave 2026-08-04 §16: time-based stop conditions (before/after/appointment/weekend).</summary>
-    IReadOnlyList<ServiceTimeConditionDto>? TimeConditions = null);
+    IReadOnlyList<ServiceTimeConditionDto>? TimeConditions = null,
+    /// <summary>Wave 2: sales code for service lines of this option (wins over rule/agreement).</summary>
+    Guid? SalesCategoryId = null,
+    string? SalesCategoryName = null);
 
 /// <summary>One time-based condition row of a service option (wave 2026-08-04 §16/§17).</summary>
 public record ServiceTimeConditionDto(
@@ -154,7 +165,8 @@ public record SaveServiceOptionRequest(
     /// <summary>Warehouse condition (OR within the list, AND with the ADR flag); null/empty = all orders.</summary>
     IReadOnlyList<Guid>? WarehouseIds = null,
     /// <summary>Wave 2026-08-04 §16: time-based stop conditions; null = leave unchanged is NOT supported — the list replaces.</summary>
-    IReadOnlyList<ServiceTimeConditionDto>? TimeConditions = null);
+    IReadOnlyList<ServiceTimeConditionDto>? TimeConditions = null,
+    Guid? SalesCategoryId = null);
 
 // --- Customer pricing configuration ---
 

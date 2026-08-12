@@ -2116,6 +2116,34 @@ public class TransportOrderService : ITransportOrderService
         _dbContext.RemoveRange(obsoleteLines);
         _dbContext.RemoveRange(existingServices);
 
+        // Wave 2: resolve the sales code per engine line (rule's wins over the engaged
+        // agreement's; a service option carries its own) and freeze it on the persisted lines,
+        // so invoicing and KPIs can group without re-resolving masterdata later.
+        var categoryRuleIds = (result?.Lines ?? [])
+            .Where(l => l.RuleId is not null).Select(l => l.RuleId!.Value).Distinct().ToList();
+        var categoryAgreementIds = (result?.Lines ?? [])
+            .Where(l => l.AgreementId is not null).Select(l => l.AgreementId!.Value).Distinct().ToList();
+        var categoryOptionIds = (result?.ServiceLines ?? [])
+            .Select(l => l.ServiceOptionId).Distinct().ToList();
+        var ruleCategoryById = categoryRuleIds.Count == 0
+            ? new Dictionary<Guid, Guid?>()
+            : await _dbContext.PriceRules.AsNoTracking()
+                .Where(r => r.TenantId == tenantId && categoryRuleIds.Contains(r.Id))
+                .ToDictionaryAsync(r => r.Id, r => r.SalesCategoryId, cancellationToken);
+        var agreementCategoryById = categoryAgreementIds.Count == 0
+            ? new Dictionary<Guid, Guid?>()
+            : await _dbContext.PricingAgreements.AsNoTracking()
+                .Where(a => a.TenantId == tenantId && categoryAgreementIds.Contains(a.Id))
+                .ToDictionaryAsync(a => a.Id, a => a.SalesCategoryId, cancellationToken);
+        var optionCategoryById = categoryOptionIds.Count == 0
+            ? new Dictionary<Guid, Guid?>()
+            : await _dbContext.ServiceOptions.AsNoTracking()
+                .Where(o => o.TenantId == tenantId && categoryOptionIds.Contains(o.Id))
+                .ToDictionaryAsync(o => o.Id, o => o.SalesCategoryId, cancellationToken);
+        Guid? ResolveLineSalesCategory(Modules.Tarification.Dtos.PriceBreakdownLine line) =>
+            (line.RuleId is { } rid ? ruleCategoryById.GetValueOrDefault(rid) : null)
+            ?? (line.AgreementId is { } aid ? agreementCategoryById.GetValueOrDefault(aid) : null);
+
         // --- Merge fresh engine lines into the surviving Manual/AutoAdjusted lines ------------
         var mergedLines = new List<TransportOrderPricingLine>();
         var sequence = 0;
@@ -2135,6 +2163,7 @@ public class TransportOrderService : ITransportOrderService
                 matchedAdjusted.ActualQuantity = line.ActualQuantity;
                 matchedAdjusted.RuleId = line.RuleId;
                 matchedAdjusted.ServiceOptionId = line.ServiceOptionId;
+                matchedAdjusted.SalesCategoryId = ResolveLineSalesCategory(line);
                 // The user's own Label/Quantity/UnitPrice/Amount/AdjustReason/AdjustedBy/At stay;
                 // only the engine-derived baseline (Original*) refreshes to the fresh calculation.
                 matchedAdjusted.OriginalQuantity = line.BillableQuantity ?? line.ActualQuantity;
@@ -2161,6 +2190,7 @@ public class TransportOrderService : ITransportOrderService
                 Quantity = line.BillableQuantity,
                 UnitPrice = DeriveUnitPrice(line.LineKey, line.Amount, line.BillableQuantity),
                 RuleId = line.RuleId, ServiceOptionId = line.ServiceOptionId, LineKey = line.LineKey,
+                SalesCategoryId = ResolveLineSalesCategory(line),
             });
         }
 
@@ -2243,6 +2273,7 @@ public class TransportOrderService : ITransportOrderService
                 DayCount = selection?.DayCount,
                 InvoiceDescriptionSnapshot = serviceLine.InvoiceLabel,
                 Note = selection?.Note,
+                SalesCategoryId = optionCategoryById.GetValueOrDefault(serviceLine.ServiceOptionId),
             });
         }
 

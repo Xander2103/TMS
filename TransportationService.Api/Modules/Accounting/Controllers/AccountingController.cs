@@ -53,7 +53,8 @@ public class AccountingController : ControllerBase
         => await _service.DeleteLedgerAccountAsync(id, cancellationToken) ? NoContent() : NotFound();
 
     [HttpGet("sales-categories")]
-    [RequirePermission(PermissionCodes.AccountingView, PermissionCodes.AccountingManage, PermissionCodes.InvoicesView, PermissionCodes.InvoicesEdit)]
+    [RequirePermission(PermissionCodes.AccountingView, PermissionCodes.AccountingManage, PermissionCodes.InvoicesView,
+        PermissionCodes.InvoicesEdit, PermissionCodes.TariffsView, PermissionCodes.TariffsManage)]
     public async Task<ActionResult<IReadOnlyList<SalesCategoryDto>>> ListSalesCategories(
         [FromQuery] bool includeInactive = false, CancellationToken cancellationToken = default)
         => Ok(await _service.ListSalesCategoriesAsync(includeInactive, cancellationToken));

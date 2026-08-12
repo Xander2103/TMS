@@ -159,7 +159,8 @@ public class AccountingService : IAccountingService
             .Select(c => new SalesCategoryDto(
                 c.Id, c.Code, c.Name, c.SystemRole,
                 c.LedgerAccountId, c.LedgerAccount!.AccountNumber, c.LedgerAccount.Name,
-                c.IsActive, c.SortOrder))
+                c.IsActive, c.SortOrder,
+                c.InvoiceDescriptionNl, c.DefaultUnitCode, c.VatCategoryOverride))
             .ToListAsync(cancellationToken);
     }
 
@@ -292,12 +293,28 @@ public class AccountingService : IAccountingService
             }
         }
 
+        // UNCL5305 subset the VAT chain understands (VatTreatmentCatalog); anything else would
+        // produce UBL that validators reject.
+        var vatOverride = string.IsNullOrWhiteSpace(request.VatCategoryOverride)
+            ? null
+            : request.VatCategoryOverride.Trim().ToUpperInvariant();
+        if (vatOverride is not null && vatOverride is not ("S" or "Z" or "E" or "AE" or "K" or "G"))
+        {
+            throw new DomainValidationException("vatCategoryOverride",
+                "Ongeldige btw-categorie. Toegestaan: S, Z, E, AE, K of G (UNCL5305).");
+        }
+
         category.Code = request.Code.Trim().ToUpperInvariant();
         category.Name = request.Name.Trim();
         category.SystemRole = request.SystemRole;
         category.LedgerAccountId = request.LedgerAccountId;
         category.IsActive = request.IsActive;
         category.SortOrder = request.SortOrder;
+        category.InvoiceDescriptionNl = string.IsNullOrWhiteSpace(request.InvoiceDescriptionNl)
+            ? null : request.InvoiceDescriptionNl.Trim();
+        category.DefaultUnitCode = string.IsNullOrWhiteSpace(request.DefaultUnitCode)
+            ? null : request.DefaultUnitCode.Trim().ToUpperInvariant();
+        category.VatCategoryOverride = vatOverride;
     }
 
     private static LedgerAccountDto Map(LedgerAccount account) =>
@@ -312,6 +329,7 @@ public class AccountingService : IAccountingService
         return new SalesCategoryDto(
             category.Id, category.Code, category.Name, category.SystemRole,
             category.LedgerAccountId, account?.AccountNumber, account?.Name,
-            category.IsActive, category.SortOrder);
+            category.IsActive, category.SortOrder,
+            category.InvoiceDescriptionNl, category.DefaultUnitCode, category.VatCategoryOverride);
     }
 }

@@ -21,7 +21,16 @@ export interface LedgerAccountInput {
 
 export type SalesCategorySystemRole = 'None' | 'Transport' | 'Surcharge' | 'Diesel'
 
-export interface SalesCategory {
+export interface SalesCategoryWave2Fields {
+  /** Invoice-line text for this sales code; null falls back to name. */
+  invoiceDescriptionNl?: string | null
+  /** Default managed unit for manual invoice lines with this code. */
+  defaultUnitCode?: string | null
+  /** UNCL5305 VAT category forced by this code; null = customer VAT treatment decides. */
+  vatCategoryOverride?: string | null
+}
+
+export interface SalesCategory extends SalesCategoryWave2Fields {
   id: string
   code: string
   name: string
@@ -38,6 +47,9 @@ export interface SalesCategoryInput {
   name: string
   systemRole: SalesCategorySystemRole
   ledgerAccountId: string | null
+  invoiceDescriptionNl?: string | null
+  defaultUnitCode?: string | null
+  vatCategoryOverride?: string | null
   isActive: boolean
   sortOrder: number
 }
