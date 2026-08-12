@@ -43,6 +43,10 @@ public record CompanySettingsDto(
     string TrainingConflictSeverity,
     string ShiftOverlapConflictSeverity,
     string CapacityConflictSeverity,
+    // P4: Manual | Propose | Automatic — what a failed delivery stop triggers.
+    string RedeliveryMode,
+    // P8: message the customer when a stop ETA shifts ≥ X minutes; null = off.
+    int? EtaShiftNotifyMinutes,
     // Qualifications
     int QualificationExpiryWarningDays,
     // Numbering
@@ -104,4 +108,6 @@ public record UpdateCompanySettingsRequest(
     int DefaultPageSize,
     string? LogoReference,
     // Trailing default: existing positional callers keep compiling; the JSON binder maps by name.
-    string CapacityConflictSeverity = "Warning");
+    string CapacityConflictSeverity = "Warning",
+    string RedeliveryMode = "Manual",
+    int? EtaShiftNotifyMinutes = null);

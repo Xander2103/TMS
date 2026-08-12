@@ -58,7 +58,9 @@ public record IncidentDetailDto(
     string? ChargeDescription = null,
     /// <summary>Wave 6 §3: the redelivery order created from this incident.</summary>
     Guid? LinkedRedeliveryOrderId = null,
-    string? LinkedRedeliveryOrderNumber = null);
+    string? LinkedRedeliveryOrderNumber = null,
+    /// <summary>P4 "Propose" mode: dispatch sees an explicit redelivery recommendation.</summary>
+    bool RedeliverySuggested = false);
 
 public record SaveIncidentRequest(
     string Title,

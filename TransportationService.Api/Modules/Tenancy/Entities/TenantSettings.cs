@@ -80,6 +80,13 @@ public class TenantSettings
     /// <summary>How exceeding vehicle/trailer capacity behaves in planning: Warning or Blocking.</summary>
     public string CapacityConflictSeverity { get; set; } = "Warning";
 
+    /// <summary>
+    /// Follow-up wave P4: what a failed delivery stop triggers. Manual (default) = incident
+    /// only; Propose = incident carries a redelivery recommendation for dispatch; Automatic =
+    /// the linked redelivery order is created immediately (next working day, same dossier).
+    /// </summary>
+    public string RedeliveryMode { get; set; } = "Manual";
+
     // Package (colli) numbering
     public string? PackageNumberPrefix { get; set; } = "PKG-";
     public int PackageNumberNextValue { get; set; } = 1;

@@ -105,6 +105,10 @@ public class CompanySettingsService : ICompanySettingsService
         settings.TrainingConflictSeverity = NormalizeSeverity(request.TrainingConflictSeverity);
         settings.ShiftOverlapConflictSeverity = NormalizeSeverity(request.ShiftOverlapConflictSeverity);
         settings.CapacityConflictSeverity = NormalizeSeverity(request.CapacityConflictSeverity);
+        settings.RedeliveryMode = request.RedeliveryMode is "Propose" or "Automatic" ? request.RedeliveryMode : "Manual";
+        settings.EtaShiftNotifyMinutes = request.EtaShiftNotifyMinutes is >= 1 and <= 720
+            ? request.EtaShiftNotifyMinutes
+            : null;
         settings.QualificationExpiryWarningDays = Clamp(request.QualificationExpiryWarningDays, 0, 365);
 
         settings.EmployeeNumberPrefix = Trim(request.EmployeeNumberPrefix);
@@ -162,6 +166,7 @@ public class CompanySettingsService : ICompanySettingsService
         s.Iban, s.InvoiceEmail, s.PaymentTermDays, s.DefaultVatRatePercent,
         s.DefaultLoadingMinutes, s.DefaultUnloadingMinutes,
         s.TrainingConflictSeverity, s.ShiftOverlapConflictSeverity, s.CapacityConflictSeverity,
+        s.RedeliveryMode, s.EtaShiftNotifyMinutes,
         s.QualificationExpiryWarningDays,
         s.EmployeeNumberPrefix, s.EmployeeNumberNextValue,
         s.CustomerNumberPrefix, s.CustomerNumberNextValue,

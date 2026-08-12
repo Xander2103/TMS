@@ -331,6 +331,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.I
     TransportationService.Api.Modules.Dossiers.Services.ActivityTypeService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IIncidentService,
     TransportationService.Api.Modules.Incidents.Services.IncidentService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IFailedDeliveryHandler,
+    TransportationService.Api.Modules.Incidents.Services.FailedDeliveryService>();
 
 builder.Services.AddScoped<TransportationService.Api.Modules.Reference.Services.IUnitTypeMasterService,
     TransportationService.Api.Modules.Reference.Services.UnitTypeMasterService>();

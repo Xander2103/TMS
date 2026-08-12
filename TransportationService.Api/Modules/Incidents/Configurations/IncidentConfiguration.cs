@@ -40,6 +40,26 @@ public class IncidentConfiguration : IEntityTypeConfiguration<Incident>
             .IsUnique()
             .HasFilter("\"ClientRequestId\" IS NOT NULL AND \"IsDeleted\" = false");
 
+        // P4: at most one auto-created incident per failed stop, however often events replay.
+        builder.HasIndex(i => new { i.TenantId, i.SourceStopId })
+            .IsUnique()
+            .HasFilter("\"SourceStopId\" IS NOT NULL AND \"IsDeleted\" = false");
+
         builder.HasQueryFilter(i => !i.IsDeleted);
+    }
+}
+
+public class IncidentChargePolicyConfiguration : IEntityTypeConfiguration<IncidentChargePolicy>
+{
+    public void Configure(EntityTypeBuilder<IncidentChargePolicy> builder)
+    {
+        builder.ToTable("incident_charge_policies");
+        builder.HasKey(p => p.Id);
+        builder.Property(p => p.IncidentType).HasMaxLength(30);
+        builder.Property(p => p.Mode).IsRequired().HasMaxLength(20);
+        builder.Property(p => p.DefaultAmount).HasPrecision(12, 2);
+        builder.Property(p => p.DefaultDescription).HasMaxLength(500);
+        builder.HasIndex(p => new { p.TenantId, p.CustomerId, p.IncidentType });
+        builder.HasQueryFilter(p => !p.IsDeleted);
     }
 }

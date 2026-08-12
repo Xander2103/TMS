@@ -203,6 +203,12 @@ public class IncidentService : IIncidentService
             cancellationToken);
         await NotifyResponsibleAsync(incident, cancellationToken);
 
+        // P5: an incident born with customer responsibility triggers the charge policy too.
+        if (incident.ResponsibleParty == "Customer" && incident.ChargeDecision == "None")
+        {
+            await ApplyChargePolicyAsync(incident, cancellationToken);
+        }
+
         return (await GetAsync(incident.Id, cancellationToken))!;
     }
 
@@ -230,6 +236,7 @@ public class IncidentService : IIncidentService
         }
 
         var previousResponsible = incident.ResponsibleUserId;
+        var previousParty = incident.ResponsibleParty;
         var (incidentType, severityValue) = await ValidateAsync(request, tenantId, cancellationToken);
         Apply(incident, request, incidentType, severityValue);
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -241,7 +248,67 @@ public class IncidentService : IIncidentService
             await NotifyResponsibleAsync(incident, cancellationToken);
         }
 
+        // P5: the configurable charge policy fires exactly once, when responsibility lands on
+        // the customer and no charge decision exists yet. Never widens WHO pays — only Customer.
+        if (previousParty != "Customer" && incident.ResponsibleParty == "Customer"
+            && incident.ChargeDecision == "None")
+        {
+            await ApplyChargePolicyAsync(incident, cancellationToken);
+        }
+
         return await MapDetailAsync(incident, cancellationToken);
+    }
+
+    /// <summary>P5: resolves the most specific charge policy (customer+type &gt; customer &gt;
+    /// type &gt; tenant default) and applies its mode. Auto without an amount degrades to Propose.</summary>
+    private async Task ApplyChargePolicyAsync(Incident incident, CancellationToken cancellationToken)
+    {
+        var policy = await ResolveChargePolicyAsync(incident, cancellationToken);
+        if (policy is null || policy.Mode == "Never")
+        {
+            return;
+        }
+
+        var amount = policy.DefaultAmount ?? incident.EstimatedCost;
+        if (amount is not > 0m)
+        {
+            return; // nothing sensible to propose automatically; manual flow stays available
+        }
+
+        var description = policy.DefaultDescription
+            ?? $"Doorrekening {incident.CustomTypeName ?? incident.IncidentType.ToString()}: {incident.Title}";
+        var before = new { incident.ChargeDecision, incident.ChargeAmount };
+        incident.ChargeDecision = "Proposed";
+        incident.ChargeAmount = decimal.Round(amount.Value, 2);
+        incident.ChargeDescription = description;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync(EntityType, incident.Id.ToString(), "ChargeProposedByPolicy", before,
+            new { incident.ChargeDecision, incident.ChargeAmount, PolicyId = policy.Id, policy.Mode }, cancellationToken);
+
+        if (policy.Mode == "Auto")
+        {
+            // The configured policy IS the standing approval; the line lands via the same
+            // mechanics as a manual approval and stays reversible while the price is unlocked.
+            await ApplyApprovedChargeAsync(incident, decidedByUserId: null, cancellationToken);
+            await _auditService.RecordAsync(EntityType, incident.Id.ToString(), "ChargeAutoApprovedByPolicy",
+                null, new { PolicyId = policy.Id, incident.ChargeAmount }, cancellationToken);
+        }
+    }
+
+    private async Task<IncidentChargePolicy?> ResolveChargePolicyAsync(
+        Incident incident, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var typeName = incident.IncidentType.ToString();
+        var candidates = await _dbContext.IncidentChargePolicies
+            .Where(p => p.TenantId == tenantId
+                        && (p.CustomerId == null || p.CustomerId == incident.CustomerId)
+                        && (p.IncidentType == null || p.IncidentType == typeName))
+            .ToListAsync(cancellationToken);
+        return candidates
+            .OrderByDescending(p => (p.CustomerId is not null ? 2 : 0) + (p.IncidentType is not null ? 1 : 0))
+            .ThenByDescending(p => p.CreatedAt)
+            .FirstOrDefault();
     }
 
     public async Task<IncidentDetailDto?> ChangeStatusAsync(Guid id, ChangeIncidentStatusRequest request, CancellationToken cancellationToken)
@@ -482,6 +549,13 @@ public class IncidentService : IIncidentService
                 "Alleen problemen met verantwoordelijkheid 'Klant' kunnen worden doorgerekend; interne kosten blijven intern.");
         }
 
+        // P5: a configured Never-policy switches customer-fault charging off entirely.
+        if (await ResolveChargePolicyAsync(incident, cancellationToken) is { Mode: "Never" })
+        {
+            throw new DomainValidationException(
+                "Doorrekenen is per beleid uitgeschakeld voor deze klant/dit incidenttype.");
+        }
+
         var before = new { incident.ChargeDecision, incident.ChargeAmount };
         incident.ChargeDecision = "Proposed";
         incident.ChargeAmount = decimal.Round(request.Amount, 2);
@@ -526,54 +600,9 @@ public class IncidentService : IIncidentService
         incident.ChargeDecidedAt = _timeProvider.GetUtcNow().UtcDateTime;
 
         string? lineNote = null;
-        if (request.Approve && incident.TransportOrderId is { } chargeOrderId)
+        if (request.Approve)
         {
-            // The sales line lands on the linked order via the EXISTING manual-line mechanics
-            // — from there the normal invoice flow picks it up. A locked/invoiced price
-            // refuses; the approval stays recorded and Wave 10 surfaces it as manual work.
-            var snapshot = await _dbContext.TransportOrderPricingSnapshots.FirstOrDefaultAsync(
-                s => s.TenantId == tenantId && s.TransportOrderId == chargeOrderId, cancellationToken);
-            if (snapshot is { Status: Modules.Orders.Entities.OrderPricingStatus.Locked
-                or Modules.Orders.Entities.OrderPricingStatus.Invoiced })
-            {
-                lineNote = "De prijs van de gekoppelde order is vergrendeld/gefactureerd — voeg de lijn handmatig toe bij facturatie.";
-            }
-            else
-            {
-                var order = await _dbContext.TransportOrders.FirstOrDefaultAsync(
-                    o => o.TenantId == tenantId && o.Id == chargeOrderId, cancellationToken);
-                if (order is not null)
-                {
-                    var maxSequence = await _dbContext.TransportOrderPricingLines
-                        .Where(l => l.TenantId == tenantId && l.TransportOrderId == chargeOrderId)
-                        .Select(l => (int?)l.Sequence)
-                        .MaxAsync(cancellationToken) ?? 0;
-                    _dbContext.TransportOrderPricingLines.Add(new Modules.Orders.Entities.TransportOrderPricingLine
-                    {
-                        Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = chargeOrderId,
-                        Sequence = maxSequence + 1,
-                        Label = incident.ChargeDescription ?? $"Doorrekening incident",
-                        Amount = incident.ChargeAmount ?? 0m,
-                        Source = "Manueel", Kind = Modules.Orders.Entities.OrderPriceLineKind.Manual,
-                        AdjustReason = $"Incident: {incident.Title}",
-                        AdjustedByUserId = userId,
-                        AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime,
-                        LineKey = $"manual:{Guid.NewGuid()}",
-                    });
-                    if (!order.PriceIsManual)
-                    {
-                        order.AgreedPrice = (order.AgreedPrice ?? 0m) + (incident.ChargeAmount ?? 0m);
-                    }
-
-                    if (snapshot is not null)
-                    {
-                        snapshot.LinesTotal = (snapshot.LinesTotal ?? 0m) + (incident.ChargeAmount ?? 0m);
-                    }
-
-                    await Modules.Orders.Services.InvoiceReadinessEvaluator.EvaluateAsync(
-                        _dbContext, order, cancellationToken);
-                }
-            }
+            lineNote = await ApplyApprovedChargeAsync(incident, userId, cancellationToken);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -581,6 +610,73 @@ public class IncidentService : IIncidentService
             request.Approve ? "ChargeApproved" : "ChargeRejected", before,
             new { incident.ChargeDecision, incident.ChargeAmount, Note = lineNote }, cancellationToken);
         return await MapDetailAsync(incident, cancellationToken);
+    }
+
+    /// <summary>
+    /// Shared by manual approval AND the P5 Auto policy: marks the charge Approved and lands
+    /// the sales line on the linked order via the EXISTING manual-line mechanics — from there
+    /// the normal invoice flow picks it up. A locked/invoiced price refuses; the approval
+    /// stays recorded and the invoice-control workspace surfaces it as manual work. The line
+    /// stays reversible (editable/removable) until the price snapshot is locked at invoicing.
+    /// Caller saves.
+    /// </summary>
+    private async Task<string?> ApplyApprovedChargeAsync(
+        Incident incident, Guid? decidedByUserId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        incident.ChargeDecision = "Approved";
+        incident.ChargeDecidedByUserId = decidedByUserId;
+        incident.ChargeDecidedAt = _timeProvider.GetUtcNow().UtcDateTime;
+
+        if (incident.TransportOrderId is not { } chargeOrderId)
+        {
+            return null;
+        }
+
+        var snapshot = await _dbContext.TransportOrderPricingSnapshots.FirstOrDefaultAsync(
+            s => s.TenantId == tenantId && s.TransportOrderId == chargeOrderId, cancellationToken);
+        if (snapshot is { Status: Modules.Orders.Entities.OrderPricingStatus.Locked
+            or Modules.Orders.Entities.OrderPricingStatus.Invoiced })
+        {
+            return "De prijs van de gekoppelde order is vergrendeld/gefactureerd — voeg de lijn handmatig toe bij facturatie.";
+        }
+
+        var order = await _dbContext.TransportOrders.FirstOrDefaultAsync(
+            o => o.TenantId == tenantId && o.Id == chargeOrderId, cancellationToken);
+        if (order is null)
+        {
+            return null;
+        }
+
+        var maxSequence = await _dbContext.TransportOrderPricingLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == chargeOrderId)
+            .Select(l => (int?)l.Sequence)
+            .MaxAsync(cancellationToken) ?? 0;
+        _dbContext.TransportOrderPricingLines.Add(new Modules.Orders.Entities.TransportOrderPricingLine
+        {
+            Id = Guid.NewGuid(), TenantId = tenantId, TransportOrderId = chargeOrderId,
+            Sequence = maxSequence + 1,
+            Label = incident.ChargeDescription ?? $"Doorrekening incident",
+            Amount = incident.ChargeAmount ?? 0m,
+            Source = "Manueel", Kind = Modules.Orders.Entities.OrderPriceLineKind.Manual,
+            AdjustReason = $"Incident: {incident.Title}",
+            AdjustedByUserId = decidedByUserId,
+            AdjustedAtUtc = _timeProvider.GetUtcNow().UtcDateTime,
+            LineKey = $"manual:{Guid.NewGuid()}",
+        });
+        if (!order.PriceIsManual)
+        {
+            order.AgreedPrice = (order.AgreedPrice ?? 0m) + (incident.ChargeAmount ?? 0m);
+        }
+
+        if (snapshot is not null)
+        {
+            snapshot.LinesTotal = (snapshot.LinesTotal ?? 0m) + (incident.ChargeAmount ?? 0m);
+        }
+
+        await Modules.Orders.Services.InvoiceReadinessEvaluator.EvaluateAsync(
+            _dbContext, order, cancellationToken);
+        return null;
     }
 
     // --- Wave 6 §3: linked redelivery --------------------------------------------------------
@@ -615,10 +711,18 @@ public class IncidentService : IIncidentService
 
         var settings = await _dbContext.TenantSettings.FirstOrDefaultAsync(
             s => s.TenantId == tenantId, cancellationToken);
+
+        // P4: the redelivery targets the next WORKING day (skipping weekends + tenant holidays).
+        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        var holidays = (await _dbContext.TenantHolidays.AsNoTracking()
+                .Where(h => h.TenantId == tenantId && h.Date > today && h.Date <= today.AddDays(60))
+                .Select(h => h.Date)
+                .ToListAsync(cancellationToken))
+            .ToHashSet();
         var redelivery = new Modules.Orders.Entities.TransportOrder
         {
             Id = Guid.NewGuid(), TenantId = tenantId, CustomerId = original.CustomerId,
-            OrderDate = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime),
+            OrderDate = BusinessDayCalculator.NextWorkingDay(today, holidays),
             Status = Modules.Orders.Entities.TransportOrderStatus.Draft,
             CustomerReference = $"HERLEVERING {original.OrderNumber}",
             GoodsDescription = original.GoodsDescription,
@@ -786,7 +890,8 @@ public class IncidentService : IIncidentService
             incident.LinkedRedeliveryOrderId is { } redeliveryId
                 ? await _dbContext.TransportOrders.AsNoTracking()
                     .Where(o => o.Id == redeliveryId).Select(o => (string?)o.OrderNumber).FirstOrDefaultAsync(cancellationToken)
-                : null);
+                : null,
+            incident.RedeliverySuggested);
     }
 
     private DateOnly Today => DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);

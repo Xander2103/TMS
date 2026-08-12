@@ -96,4 +96,36 @@ public class Incident : AuditableTenantEntity
     // --- Wave 6 §3: linked redelivery ---
 
     public Guid? LinkedRedeliveryOrderId { get; set; }
+
+    // --- Follow-up wave P4: automatic failed-delivery incidents ---
+
+    /// <summary>The failed stop this incident was auto-created for (idempotency key: at most
+    /// one auto-incident per stop, however often the driver event replays).</summary>
+    public Guid? SourceStopId { get; set; }
+
+    /// <summary>P4 "Propose" mode: dispatch sees an explicit redelivery recommendation.</summary>
+    public bool RedeliverySuggested { get; set; }
+}
+
+/// <summary>
+/// Follow-up wave P5: one configurable charge-decision rule. Resolution is most-specific-first
+/// (customer+type &gt; customer &gt; type &gt; tenant default). The hard invariant remains ABOVE
+/// policy: only ResponsibleParty == Customer can ever be charged — a policy can only decide
+/// HOW customer-fault charging behaves (Never | Propose | Auto), never widen who pays.
+/// </summary>
+public class IncidentChargePolicy : AuditableTenantEntity
+{
+    /// <summary>Null = applies to every customer.</summary>
+    public Guid? CustomerId { get; set; }
+
+    /// <summary>IncidentType name (string, append-safe); null = applies to every type.</summary>
+    public string? IncidentType { get; set; }
+
+    /// <summary>Never | Propose | Auto.</summary>
+    public string Mode { get; set; } = "Propose";
+
+    /// <summary>Amount used by Auto (required) and pre-filled by Propose.</summary>
+    public decimal? DefaultAmount { get; set; }
+
+    public string? DefaultDescription { get; set; }
 }

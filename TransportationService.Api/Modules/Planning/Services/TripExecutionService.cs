@@ -35,7 +35,8 @@ public class TripExecutionService : ITripExecutionService
         ITripPlanningSyncService planningSyncService,
         ITripPackageService tripPackageService,
         INotificationService notificationService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        Modules.Incidents.Services.IFailedDeliveryHandler? failedDeliveryHandler = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -46,7 +47,10 @@ public class TripExecutionService : ITripExecutionService
         _tripPackageService = tripPackageService;
         _notificationService = notificationService;
         _timeProvider = timeProvider;
+        _failedDeliveryHandler = failedDeliveryHandler;
     }
+
+    private readonly Modules.Incidents.Services.IFailedDeliveryHandler? _failedDeliveryHandler;
 
     /// <summary>Driver id of the logged-in user, resolved via the user's employee link; null when not a driver.</summary>
     private async Task<Guid?> CurrentDriverIdAsync(CancellationToken cancellationToken)
@@ -373,6 +377,13 @@ public class TripExecutionService : ITripExecutionService
         await _auditService.RecordAsync(EntityType, execution.Id.ToString(), target.ToString(),
             new { Status = from },
             new { execution.TripId, execution.TransportOrderStopId, execution.Status, Reason = reason }, cancellationToken);
+
+        // P4: a failed stop triggers the failed-delivery automation (idempotent, never throws).
+        if (target == StopExecutionStatus.Failed && _failedDeliveryHandler is not null)
+        {
+            await _failedDeliveryHandler.HandleStopFailureAsync(
+                trip.Id, execution.TransportOrderStopId, reason, cancellationToken);
+        }
 
         // Keep the personnel-planning entry's actual times fresh while the trip runs.
         var actualsSync = await _planningSyncService.ApplyActualsAsync(trip.Id, cancellationToken);
