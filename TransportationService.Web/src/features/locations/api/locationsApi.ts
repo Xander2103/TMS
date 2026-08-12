@@ -1,6 +1,6 @@
 import { apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
-import type { LocationDetail, LocationInput, LocationListItem, LocationOption, LocationType } from '../types'
+import type { LocationDetail, LocationGroup, LocationInput, LocationListItem, LocationOption, LocationType } from '../types'
 
 export interface SearchLocationsParams {
   search?: string
@@ -28,6 +28,34 @@ export function searchLocations(params: SearchLocationsParams): Promise<PagedRes
   query.set('page', String(params.page))
   query.set('pageSize', String(params.pageSize))
   return apiClient.getJson<PagedResult<LocationListItem>>(`/api/locations?${query.toString()}`)
+}
+
+export interface SearchLocationsGroupedParams {
+  search?: string
+  type?: LocationType
+  isActive?: boolean
+  customerId?: string
+  country?: string
+  postalCode?: string
+  /** Sort of the locations WITHIN each group; groups themselves order by customer name. */
+  innerSort?: 'name' | 'code' | 'city'
+  page: number
+  pageSize: number
+}
+
+/** Per-customer view: pages over GROUPS (customer / unlinked bucket last), never tearing a customer across pages. */
+export function searchLocationsGrouped(params: SearchLocationsGroupedParams): Promise<PagedResult<LocationGroup>> {
+  const query = new URLSearchParams()
+  if (params.search) query.set('search', params.search)
+  if (params.type) query.set('type', params.type)
+  if (params.isActive !== undefined) query.set('isActive', String(params.isActive))
+  if (params.customerId) query.set('customerId', params.customerId)
+  if (params.country) query.set('country', params.country)
+  if (params.postalCode) query.set('postalCode', params.postalCode)
+  if (params.innerSort) query.set('innerSort', params.innerSort)
+  query.set('page', String(params.page))
+  query.set('pageSize', String(params.pageSize))
+  return apiClient.getJson<PagedResult<LocationGroup>>(`/api/locations/grouped?${query.toString()}`)
 }
 
 export function getLocationOptions(type?: LocationType, customerId?: string): Promise<LocationOption[]> {

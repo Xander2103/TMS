@@ -62,6 +62,16 @@ export interface LocationListItem {
   isDefaultBillingLocation: boolean
 }
 
+/**
+ * One group of the per-customer overview (GET /api/locations/grouped). Paging happens over
+ * GROUPS; `customerName` null identifies the "Ongekoppelde locaties" bucket (sorted last).
+ */
+export interface LocationGroup {
+  customerId: string | null
+  customerName: string | null
+  locations: LocationListItem[]
+}
+
 export interface LocationOption {
   id: string
   code: string

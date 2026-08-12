@@ -304,6 +304,14 @@
 
 .customer-locations-new {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.customer-locations-new a {
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .customer-locations-code {

@@ -10,6 +10,8 @@ export interface SectionDef {
   optional?: boolean
   hasError?: boolean
   complete?: boolean
+  /** Optional "bevat gegevens" (●) / "leeg" (○) indicator — see {@link SectionNavItem.filled}. */
+  filled?: boolean
   /** Embedded self-saving panel: the shared Save/Cancel actions are hidden on this section. */
   panel?: boolean
   render: () => ReactNode
@@ -42,6 +44,7 @@ export function SectionedForm({ sections, activeId, onActiveChange, actions, ori
     optional: s.optional,
     hasError: s.hasError,
     complete: s.complete,
+    filled: s.filled,
   }))
 
   const body = (

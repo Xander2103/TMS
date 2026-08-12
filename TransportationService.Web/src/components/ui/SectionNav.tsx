@@ -6,6 +6,13 @@ export interface SectionNavItem {
   optional?: boolean
   hasError?: boolean
   complete?: boolean
+  /**
+   * Optional third state between `complete` and untouched: the section holds (optional)
+   * data without being "af". `true` renders a ● indicator, an explicit `false` on an
+   * optional section renders a subtle ○ ("leeg"). Leave undefined (existing callers) for
+   * the classic two-state behaviour — nothing changes for them.
+   */
+  filled?: boolean
 }
 
 interface SectionNavProps {
@@ -66,6 +73,12 @@ export function SectionNav({ items, activeId, onActiveChange, orientation = 'hor
             {item.hasError && <span className="ui-section-tab-error" aria-label="bevat fouten">!</span>}
             {!item.hasError && item.complete && (
               <span className="ui-section-tab-complete" aria-hidden="true">✓</span>
+            )}
+            {!item.hasError && !item.complete && item.filled === true && (
+              <span className="ui-section-tab-filled" aria-label="bevat gegevens" title="Bevat gegevens">●</span>
+            )}
+            {!item.hasError && !item.complete && item.filled === false && item.optional && (
+              <span className="ui-section-tab-empty" aria-label="leeg (optioneel)" title="Leeg (optioneel)">○</span>
             )}
           </button>
         )

@@ -223,6 +223,8 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
         {canCreate && (
           <span className="customer-locations-new">
             <Button onClick={() => setShowQuickCreate(true)}>+ Adres toevoegen</Button>
+            {/* Full form (all sections) with this customer preselected via the query param. */}
+            <Link to={`/locations/new?customerId=${customerId}`}>Nieuwe locatie voor deze klant</Link>
           </span>
         )}
       </div>

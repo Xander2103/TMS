@@ -21,7 +21,7 @@
 .ohe-day-row {
   display: flex;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 5px 12px;
   align-items: flex-start;
 }
 
@@ -39,9 +39,14 @@
 
 .ohe-day-body {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
   flex: 1;
+  min-width: 0;
+}
+
+.ohe-day-body .ohe-interval {
   min-width: 0;
 }
 

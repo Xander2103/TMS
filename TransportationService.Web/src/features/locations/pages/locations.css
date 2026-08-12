@@ -1,3 +1,5 @@
+/* ---- Overview: filter bar ---------------------------------------------------------------- */
+
 .locations-filters {
   display: flex;
   align-items: center;
@@ -15,6 +17,10 @@
   border-radius: 6px;
 }
 
+.locations-customer-filter {
+  min-width: 220px;
+}
+
 .locations-country-filter {
   min-width: 180px;
 }
@@ -30,7 +36,275 @@
   border-radius: 6px;
 }
 
-.locations-row-actions {
+/* ---- Overview: view toggle (Plat | Per klant) --------------------------------------------- */
+
+.locations-view-toggle {
   display: inline-flex;
+  align-items: center;
   gap: 6px;
+  margin-left: auto;
+}
+
+.locations-view-toggle-label {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.locations-view-toggle-button {
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.locations-view-toggle-button[aria-pressed='true'] {
+  background: var(--accent, #2563eb);
+  border-color: var(--accent, #2563eb);
+  color: #fff;
+  font-weight: 600;
+}
+
+.locations-view-toggle-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---- Overview: rows & grouped view -------------------------------------------------------- */
+
+.locations-row-inactive {
+  opacity: 0.6;
+}
+
+.locations-grouped {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.locations-grouped-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.locations-grouped-toolbar select {
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-h);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.locations-group-heading {
+  margin: 0;
+}
+
+.locations-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-h);
+  text-align: left;
+}
+
+.locations-group-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.locations-group-chevron {
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+}
+
+.locations-group-count {
+  font-weight: 400;
+  color: var(--text-muted, #6b7280);
+}
+
+/* ---- Detail: header ----------------------------------------------------------------------- */
+
+.location-detail-subtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.location-detail-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---- Detail: card grid -------------------------------------------------------------------- */
+
+.location-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .location-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .location-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.location-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  background: var(--bg);
+}
+
+.location-card-wide {
+  grid-column: 1 / -1;
+}
+
+.location-card-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #6b7280);
+}
+
+.location-card-body {
+  font-size: 15px;
+  color: var(--text);
+}
+
+.location-card-body dl {
+  margin: 0;
+}
+
+.location-card-row {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 4px 12px;
+  padding: 3px 0;
+}
+
+.location-card-row dt {
+  color: var(--text-muted, #6b7280);
+  font-size: 14px;
+}
+
+.location-card-row dd {
+  margin: 0;
+  color: var(--text-h);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.location-card-empty {
+  margin: 0;
+  color: var(--text-muted, #6b7280);
+  font-size: 14px;
+  font-style: italic;
+}
+
+.location-card-address {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--text-h);
+}
+
+.location-card-muted {
+  margin: 6px 0 0;
+  color: var(--text-muted, #6b7280);
+  font-size: 14px;
+}
+
+/* Openingsuren: compact day table, "Gesloten" clearly muted. */
+.location-hours-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.location-hours-table th {
+  text-align: left;
+  font-weight: 600;
+  width: 44px;
+  padding: 2px 8px 2px 0;
+  vertical-align: top;
+}
+
+.location-hours-table td {
+  padding: 2px 0;
+}
+
+.location-hours-closed {
+  color: var(--text-muted, #6b7280);
+  font-style: italic;
+}
+
+/* Operationeel: subgroups + ✓-list of active flags only. */
+.location-operational-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px 24px;
+}
+
+.location-operational-group h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--text-h);
+}
+
+.location-flag-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.location-flag-check {
+  color: var(--success, #16a34a);
+  font-weight: 600;
+}
+
+/* Interne informatie: visually distinct, never confused with public data. */
+.location-card-internal {
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(234, 179, 8, 0.45);
+}
+
+.location-card-internal-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #a16207;
 }

@@ -53,6 +53,16 @@
 .ui-section-tab-complete {
   color: var(--success);
 }
+.ui-section-tab-filled {
+  color: var(--accent, #2563eb);
+  font-size: 0.65rem;
+  line-height: 1;
+}
+.ui-section-tab-empty {
+  color: var(--text-muted, #6b7280);
+  font-size: 0.65rem;
+  line-height: 1;
+}
 .ui-sectioned-form-body {
   padding-top: 1rem;
 }
