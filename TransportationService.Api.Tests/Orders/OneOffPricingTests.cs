@@ -161,7 +161,7 @@ public class OneOffPricingTests
         var task = (Task<TransportOrderOperationResult?>)method.Invoke(h.Sut, new object?[]
         {
             order, order.AgreedPrice, Array.Empty<OrderServiceInput>(),
-            false, null, null, CancellationToken.None,
+            false, null, null, CancellationToken.None, null, // P6: activityTypeHint
         })!;
         var error = await task;
         Assert.Null(error);

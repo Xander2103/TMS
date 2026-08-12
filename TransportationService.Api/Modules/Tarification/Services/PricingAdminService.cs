@@ -2103,6 +2103,7 @@ public class PricingAdminService : IPricingAdminService
         rule.OversizeBillableFactor = request.OversizeBillableFactor;
         rule.SalesCategoryId = request.SalesCategoryId;
         rule.OriginZoneId = request.OriginZoneId;
+        rule.ActivityTypeId = request.ActivityTypeId;
         foreach (var bracket in request.Brackets ?? [])
         {
             var entity = new PriceRuleBracket
@@ -2181,6 +2182,13 @@ public class PricingAdminService : IPricingAdminService
                 throw new DomainValidationException("timeConditions",
                     "Magazijnvoorwaarden worden via de magazijnselectie beheerd.");
             }
+
+            // P6: an activity condition must say WHICH activity.
+            if (condition.Kind is ServiceConditionKind.ActivityType && condition.ActivityTypeId is null)
+            {
+                throw new DomainValidationException("timeConditions",
+                    "Kies het activiteitstype van de voorwaarde.");
+            }
         }
     }
 
@@ -2214,15 +2222,16 @@ public class PricingAdminService : IPricingAdminService
         ServiceOption option, IReadOnlyList<ServiceTimeConditionDto>? timeConditions, CancellationToken cancellationToken)
     {
         var wanted = (timeConditions ?? [])
-            .Select(c => (c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking))
+            .Select(c => (c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking, c.ActivityTypeId))
             .Distinct()
             .ToHashSet();
         var existing = await _dbContext.ServiceOptionConditions
             .Where(c => c.TenantId == TenantId && c.ServiceOptionId == option.Id && c.Kind != ServiceConditionKind.Warehouse)
             .ToListAsync(cancellationToken);
-        _dbContext.RemoveRange(existing.Where(c => !wanted.Contains((c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking))));
+        _dbContext.RemoveRange(existing.Where(c =>
+            !wanted.Contains((c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking, c.ActivityTypeId))));
         var kept = existing
-            .Select(c => (c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking))
+            .Select(c => (c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking, c.ActivityTypeId))
             .ToHashSet();
         foreach (var row in wanted.Except(kept))
         {
@@ -2231,6 +2240,7 @@ public class PricingAdminService : IPricingAdminService
                 Id = Guid.NewGuid(), TenantId = TenantId, ServiceOptionId = option.Id,
                 Kind = row.Kind, StopScope = row.StopScope, TimeOfDay = row.TimeOfDay,
                 Priority = row.Priority, AllowStacking = row.AllowStacking,
+                ActivityTypeId = row.ActivityTypeId,
             });
         }
     }
@@ -2272,7 +2282,7 @@ public class PricingAdminService : IPricingAdminService
         var timeConditions = allConditions
             .Where(c => c.Kind != ServiceConditionKind.Warehouse)
             .ToLookup(c => c.ServiceOptionId,
-                c => new ServiceTimeConditionDto(c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking));
+                c => new ServiceTimeConditionDto(c.Kind, c.StopScope, c.TimeOfDay, c.Priority, c.AllowStacking, c.ActivityTypeId));
         var warehouseIds = conditions.SelectMany(g => g).Distinct().ToList();
         var warehouseNames = await _dbContext.Warehouses.AsNoTracking()
             .Where(w => w.TenantId == TenantId && warehouseIds.Contains(w.Id))
@@ -2321,6 +2331,11 @@ public class PricingAdminService : IPricingAdminService
         var salesCategoryNames = await _dbContext.SalesCategories.AsNoTracking()
             .Where(c => c.TenantId == tenantId && salesCategoryIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, c => c.Name, cancellationToken);
+        var activityTypeIds = rules.Where(r => r.ActivityTypeId.HasValue)
+            .Select(r => r.ActivityTypeId!.Value).Distinct().ToList();
+        var activityTypeNames = await _dbContext.ActivityTypes.AsNoTracking()
+            .Where(t => t.TenantId == tenantId && activityTypeIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, t => t.Name, cancellationToken);
 
         return rules.Select(rule => new PriceRuleDto(
             rule.Id, rule.CustomerId,
@@ -2345,7 +2360,9 @@ public class PricingAdminService : IPricingAdminService
             rule.SalesCategoryId,
             rule.SalesCategoryId is { } rscid ? salesCategoryNames.GetValueOrDefault(rscid) : null,
             rule.OriginZoneId,
-            rule.OriginZoneId is { } ozid ? zones.GetValueOrDefault(ozid) : null))
+            rule.OriginZoneId is { } ozid ? zones.GetValueOrDefault(ozid) : null,
+            rule.ActivityTypeId,
+            rule.ActivityTypeId is { } atid ? activityTypeNames.GetValueOrDefault(atid) : null))
             .ToList();
     }
 

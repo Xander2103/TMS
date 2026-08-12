@@ -103,7 +103,10 @@ public record PriceRuleDto(
     string? SalesCategoryName = null,
     /// <summary>Wave 3 §2: origin-zone dimension — set: only matches when the first loading stop lands in this zone.</summary>
     Guid? OriginZoneId = null,
-    string? OriginZoneName = null);
+    string? OriginZoneName = null,
+    /// <summary>P6: activity dimension — set: only matches orders of this dossier activity type.</summary>
+    Guid? ActivityTypeId = null,
+    string? ActivityTypeName = null);
 
 public record SavePriceRuleBracketRequest(
     decimal FromQuantity, decimal? ToQuantity, decimal Price, decimal? PricePerExtraUnit,
@@ -118,7 +121,9 @@ public record SavePriceRuleRequest(
     decimal? MinimumQuantity = null, decimal? QuantityRoundingStep = null,
     decimal? MaximumAmount = null, BracketSelectionMode BracketMode = BracketSelectionMode.Absolute,
     Guid? SalesCategoryId = null,
-    Guid? OriginZoneId = null);
+    Guid? OriginZoneId = null,
+    /// <summary>P6: activity dimension (null = every activity).</summary>
+    Guid? ActivityTypeId = null);
 
 // --- Bracket-row customer overrides ("klantafwijkingen") ---
 
@@ -166,7 +171,9 @@ public record ServiceTimeConditionDto(
     /// <summary>Competition priority among matched Before (resp. After) conditions; higher wins.</summary>
     int Priority = 0,
     /// <summary>Opt-in stacking: never competes, always applies when matched.</summary>
-    bool AllowStacking = false);
+    bool AllowStacking = false,
+    /// <summary>Kind == ActivityType only: the dossier activity type to match (P6).</summary>
+    Guid? ActivityTypeId = null);
 
 public record SaveServiceOptionRequest(
     string Code, string Name, SurchargeKind Kind, decimal DefaultValue, bool IsActive, int SortOrder,
@@ -357,7 +364,14 @@ public record PriceCalculationRequest(
     /// Wave 2026-08-04 §16: per-stop time requirements + appointment flag + planned date,
     /// feeding time-based service conditions. Null/empty = no time conditions can match.
     /// </summary>
-    IReadOnlyList<StopTimeInput>? StopTimes = null);
+    IReadOnlyList<StopTimeInput>? StopTimes = null,
+    // P6: equipment/movement/activity pricing dimensions (null = unknown, conditions don't match).
+    bool? CraneRequired = null,
+    bool? PlateauRequired = null,
+    bool? MoffettRequired = null,
+    bool? IsReturnMovement = null,
+    /// <summary>The order's linked dossier activity type; drives ActivityType-bound rules/conditions.</summary>
+    Guid? ActivityTypeId = null);
 
 /// <summary>
 /// One stop's time facts for time-based service conditions (wave 2026-08-04 §16).

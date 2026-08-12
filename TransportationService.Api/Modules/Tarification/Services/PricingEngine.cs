@@ -154,10 +154,14 @@ public class PricingEngine : IPricingEngine
             }
         }
 
+        // P6: an activity-bound rule only matches orders OF that activity; a rule without the
+        // dimension keeps matching everything (legacy tariffs stay byte-stable).
+        var activityTypeId = request.ActivityTypeId;
         var candidateRules = await _dbContext.PriceRules.AsNoTracking()
             .Include(r => r.Brackets)
             .Where(r => r.TenantId == tenantId && r.IsActive
                         && (r.CustomerId == null || r.CustomerId == request.CustomerId)
+                        && (r.ActivityTypeId == null || r.ActivityTypeId == activityTypeId)
                         && r.EffectiveFrom <= request.Date
                         && (r.EffectiveUntil == null || r.EffectiveUntil >= request.Date))
             .ToListAsync(cancellationToken);
@@ -752,6 +756,13 @@ public class PricingEngine : IPricingEngine
                 && s.PlannedDate is { } day && day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday),
             ServiceConditionKind.Holiday => stopTimes.Any(s => ScopeMatches(row.StopScope, s)
                 && s.PlannedDate is { } holidayDay && holidayDates.Contains(holidayDay)),
+            // P6: order-level equipment/movement/activity conditions — null (unknown) never matches.
+            ServiceConditionKind.Crane => request.CraneRequired == true,
+            ServiceConditionKind.Plateau => request.PlateauRequired == true,
+            ServiceConditionKind.Moffett => request.MoffettRequired == true,
+            ServiceConditionKind.ReturnMovement => request.IsReturnMovement == true,
+            ServiceConditionKind.ActivityType =>
+                row.ActivityTypeId is { } conditionActivity && request.ActivityTypeId == conditionActivity,
             _ => true,
         };
 
@@ -1359,9 +1370,11 @@ public class PricingEngine : IPricingEngine
             return (null, null);
         }
 
-        // Specificity: tier dominates; destination zone beats origin zone (Wave 3 §2 — max
-        // combined zone bonus 3 stays below one tier step of 4).
-        int Score(RuleCandidate candidate) => candidate.Tier * 4
+        // Specificity: tier dominates; activity (P6) beats both zone dimensions; destination
+        // zone beats origin zone (Wave 3 §2). Max within-tier bonus 4+2+1=7 stays below one
+        // tier step of 8, and rules without the new dimension keep their exact relative order.
+        int Score(RuleCandidate candidate) => candidate.Tier * 8
+            + (candidate.Rule.ActivityTypeId is not null ? 4 : 0)
             + (candidate.Rule.ZoneId is not null ? 2 : 0)
             + (candidate.Rule.OriginZoneId is not null ? 1 : 0);
 

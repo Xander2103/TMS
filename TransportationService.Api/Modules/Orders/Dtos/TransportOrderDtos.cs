@@ -136,7 +136,11 @@ public record TransportOrderDetailDto(
     /// <summary>Wave 3 §1: planned distance in km (PerKm bases/services).</summary>
     decimal? DistanceKm = null,
     /// <summary>Wave 3 §1: loading meters (PerLoadingMeter bases, ldm bracket caps).</summary>
-    decimal? LoadingMeters = null);
+    decimal? LoadingMeters = null,
+    // P6: equipment/movement pricing dimensions.
+    bool PlateauRequired = false,
+    bool MoffettRequired = false,
+    bool IsReturnMovement = false);
 
 /// <summary>Snapshot line of the price calculation stored on the order.</summary>
 public record OrderPricingLineDto(
@@ -411,7 +415,11 @@ public record CreateTransportOrderRequest(
     /// <summary>Wave 3 §1: planned distance in km (PerKm bases/services) — optional.</summary>
     decimal? DistanceKm = null,
     /// <summary>Wave 3 §1: loading meters (PerLoadingMeter bases, ldm bracket caps) — optional.</summary>
-    decimal? LoadingMeters = null);
+    decimal? LoadingMeters = null,
+    // P6: equipment/movement pricing dimensions.
+    bool PlateauRequired = false,
+    bool MoffettRequired = false,
+    bool IsReturnMovement = false);
 
 public record UpdateTransportOrderRequest(
     Guid CustomerId,
@@ -463,7 +471,11 @@ public record UpdateTransportOrderRequest(
     /// <summary>Wave 3 §1: planned distance in km (PerKm bases/services) — optional.</summary>
     decimal? DistanceKm = null,
     /// <summary>Wave 3 §1: loading meters (PerLoadingMeter bases, ldm bracket caps) — optional.</summary>
-    decimal? LoadingMeters = null);
+    decimal? LoadingMeters = null,
+    // P6: equipment/movement pricing dimensions.
+    bool PlateauRequired = false,
+    bool MoffettRequired = false,
+    bool IsReturnMovement = false);
 
 public record ChangeTransportOrderStatusRequest(TransportOrderStatus Status);
 

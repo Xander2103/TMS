@@ -72,6 +72,22 @@ public enum ServiceConditionKind
 
     /// <summary>Wave 3 §4: a matching stop is planned on a tenant-configured holiday (tenant_holidays).</summary>
     Holiday = 5,
+
+    // P6: equipment/movement/activity conditions (order-level flags, not stop-scoped).
+    /// <summary>The order requires a crane (TransportOrder.CraneRequired).</summary>
+    Crane = 6,
+
+    /// <summary>The order requires a plateau/flatbed (TransportOrder.PlateauRequired).</summary>
+    Plateau = 7,
+
+    /// <summary>The order requires a Moffett/kooiaap (TransportOrder.MoffettRequired).</summary>
+    Moffett = 8,
+
+    /// <summary>The order is a return movement (TransportOrder.IsReturnMovement).</summary>
+    ReturnMovement = 9,
+
+    /// <summary>The order's linked dossier activity has the type in <see cref="ServiceOptionCondition.ActivityTypeId"/>.</summary>
+    ActivityType = 10,
 }
 
 /// <summary>Which stops a time-based condition looks at (wave 2026-08-04 §16).</summary>
@@ -96,6 +112,9 @@ public class ServiceOptionCondition : AuditableTenantEntity
 
     /// <summary>StopTimeBefore/StopTimeAfter: the configured threshold (never hardcoded).</summary>
     public TimeOnly? TimeOfDay { get; set; }
+
+    /// <summary>Kind == ActivityType: the dossier activity type this condition matches (P6).</summary>
+    public Guid? ActivityTypeId { get; set; }
 
     /// <summary>
     /// Wave 2026-08-04 §17: among competing matched StopTimeBefore (or StopTimeAfter) options

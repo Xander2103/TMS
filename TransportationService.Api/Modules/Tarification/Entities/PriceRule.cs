@@ -81,6 +81,11 @@ public class PriceRule : AuditableTenantEntity
     /// FIRST LOADING stop resolves to this zone (destination stays the stronger tiebreaker).</summary>
     public Guid? OriginZoneId { get; set; }
 
+    /// <summary>P6: activity dimension — set: the rule only matches orders whose linked dossier
+    /// activity has this type (crane pricing vs plateau pricing in one dossier). Specificity:
+    /// an activity match outranks both zone dimensions but never a tier step.</summary>
+    public Guid? ActivityTypeId { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public string Currency { get; set; } = "EUR";
     public DateOnly EffectiveFrom { get; set; }

@@ -116,6 +116,16 @@ public class TransportOrder : AuditableTenantEntity, IVersionedEntity
     public bool AdrRequired { get; set; }
     public bool CraneRequired { get; set; }
 
+    // P6: equipment/movement pricing dimensions (additive; false = legacy behavior).
+    /// <summary>The delivery needs a plateau (flatbed) — drives Plateau service conditions.</summary>
+    public bool PlateauRequired { get; set; }
+
+    /// <summary>The delivery needs a truck-mounted forklift (Moffett/kooiaap).</summary>
+    public bool MoffettRequired { get; set; }
+
+    /// <summary>This order is a return movement (retour) — drives ReturnMovement pricing.</summary>
+    public bool IsReturnMovement { get; set; }
+
     /// <summary>
     /// Follow-up wave P1: per-order transport-document choice, overriding the customer's
     /// DocumentStrategy. Null = inherit (or "decide later" when the customer strategy is

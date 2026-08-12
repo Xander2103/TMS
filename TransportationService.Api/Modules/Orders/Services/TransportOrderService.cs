@@ -281,6 +281,9 @@ public class TransportOrderService : ITransportOrderService
             PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null,
             AdrRequired = request.AdrRequired,
             CraneRequired = request.CraneRequired,
+            PlateauRequired = request.PlateauRequired,
+            MoffettRequired = request.MoffettRequired,
+            IsReturnMovement = request.IsReturnMovement,
             Priority = request.Priority ?? OrderPriority.Normal,
             AgreedPrice = NonNegative(request.AgreedPrice),
             Notes = Trim(request.Notes),
@@ -300,7 +303,10 @@ public class TransportOrderService : ITransportOrderService
         var cargoItems = BuildCargoItems(order.Id, request.CargoItems, order.Stops);
         DeriveSummaryFromCargo(order, cargoItems);
         if (await ApplyPricingAsync(order, request.AgreedPrice, ResolveServiceSelections(request.Services, request.ServiceOptionIds),
-                request.PriceIsManual, request.PriceOverrideReason, cargoItems, cancellationToken) is { } pricingError)
+                request.PriceIsManual, request.PriceOverrideReason, cargoItems, cancellationToken,
+                // P6: the wrapper activity is staged AFTER pricing (pricing failures must leave
+                // the tracker clean), so its already-resolved type is passed as an explicit hint.
+                activityTypeHint: wrapperTransportType?.Id) is { } pricingError)
         {
             return pricingError;
         }
@@ -493,6 +499,9 @@ public class TransportOrderService : ITransportOrderService
         order.PalletCount = request.PalletCount is { } p ? Math.Max(0, p) : null;
         order.AdrRequired = request.AdrRequired;
         order.CraneRequired = request.CraneRequired;
+        order.PlateauRequired = request.PlateauRequired;
+        order.MoffettRequired = request.MoffettRequired;
+        order.IsReturnMovement = request.IsReturnMovement;
         // Null = unchanged, so older clients that don't send a priority never reset it.
         order.Priority = request.Priority ?? order.Priority;
         order.Notes = Trim(request.Notes);
@@ -1829,7 +1838,8 @@ public class TransportOrderService : ITransportOrderService
             order.IncludedLoadingMinutesOverride, order.IncludedUnloadingMinutesOverride,
             order.ExtraTimeHourlyRateOverride, order.ExtraTimeRoundingStepMinutes, order.ExtraTimeMinimumBillableMinutes,
             order.Version, dossierRef?.Id, dossierRef?.DossierNumber,
-            order.DistanceKm, order.LoadingMeters);
+            order.DistanceKm, order.LoadingMeters,
+            order.PlateauRequired, order.MoffettRequired, order.IsReturnMovement);
     }
 
     /// <summary>
@@ -1859,6 +1869,27 @@ public class TransportOrderService : ITransportOrderService
                 .Where(t => t.TenantId == tenantId && t.IsActive && t.HasStops)
                 .OrderBy(t => t.SortOrder)
                 .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// P6: the order's linked dossier activity type for activity-bound pricing. Checks the
+    /// change tracker FIRST — at creation time the auto-wrap activity is staged in the same
+    /// save and not yet queryable.
+    /// </summary>
+    private async Task<Guid?> ResolveLinkedActivityTypeAsync(
+        TransportOrder order, CancellationToken cancellationToken)
+    {
+        var staged = _dbContext.ChangeTracker.Entries<Modules.Dossiers.Entities.DossierActivity>()
+            .Select(e => e.Entity)
+            .Where(a => a.TenantId == order.TenantId && a.LinkedTransportOrderId == order.Id)
+            .OrderBy(a => a.Sequence)
+            .Select(a => (Guid?)a.ActivityTypeId)
+            .FirstOrDefault();
+        return staged ?? await _dbContext.DossierActivities.AsNoTracking()
+            .Where(a => a.TenantId == order.TenantId && a.LinkedTransportOrderId == order.Id)
+            .OrderBy(a => a.Sequence)
+            .Select(a => (Guid?)a.ActivityTypeId)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     /// <summary>
@@ -1936,7 +1967,7 @@ public class TransportOrderService : ITransportOrderService
     private async Task<TransportOrderOperationResult?> ApplyPricingAsync(
         TransportOrder order, decimal? requestedAgreedPrice, IReadOnlyList<OrderServiceInput> serviceSelections,
         bool priceIsManual, string? overrideReason, IReadOnlyList<CargoItem>? cargoItems,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Guid? activityTypeHint = null)
     {
         var tenantId = _tenantContext.TenantId;
 
@@ -2128,6 +2159,11 @@ public class TransportOrderService : ITransportOrderService
                 LoadingMeters: order.LoadingMeters,
                 StopCount: unloadingStops.Count > 0 ? unloadingStops.Count : null,
                 AdrRequired: order.AdrRequired,
+                CraneRequired: order.CraneRequired,
+                PlateauRequired: order.PlateauRequired,
+                MoffettRequired: order.MoffettRequired,
+                IsReturnMovement: order.IsReturnMovement,
+                ActivityTypeId: activityTypeHint ?? await ResolveLinkedActivityTypeAsync(order, cancellationToken),
                 CargoLineCount: cargoItems?.Count(c => !c.IsDeleted),
                 OneOff: oneOff,
                 ActualLoadingMinutes: actualLoadingMinutes,
