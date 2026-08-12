@@ -195,6 +195,7 @@ export function getNavModules(): NavModule[] {
           label: 'Facturatie',
           items: [
             { label: 'Facturen', to: '/invoices', permissions: ['invoices.view'] },
+            { label: 'Facturatiecontrole', to: '/invoice-control', permissions: ['invoices.view'] },
             { label: 'Peppol', to: '/peppol', permissions: ['peppol.view'] },
           ],
         },

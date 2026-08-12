@@ -77,6 +77,38 @@ export interface CreateInvoiceInput {
   invoicePeriodMonth?: number | null
 }
 
+// --- Wave 10: facturatiecontrole ---
+
+export interface ControlOrder {
+  transportOrderId: string
+  orderNumber: string
+  orderDate: string
+  agreedPrice: number | null
+  dossierNumber: string | null
+  customerReference: string | null
+  invoiceReadiness: string
+  reasons: string[]
+}
+
+export interface InvoiceProposal {
+  customerId: string
+  customerName: string
+  grouping: string
+  groupLabel: string
+  orders: ControlOrder[]
+  totalAmount: number
+}
+
+export interface InvoiceControl {
+  proposals: InvoiceProposal[]
+  needsReview: ControlOrder[]
+  pendingCharges: string[]
+}
+
+export function getInvoiceControl(): Promise<InvoiceControl> {
+  return apiClient.getJson('/api/invoice-control')
+}
+
 export function createInvoice(input: CreateInvoiceInput): Promise<InvoiceDetail> {
   return apiClient.postJson<InvoiceDetail, CreateInvoiceInput>('/api/invoices', input)
 }

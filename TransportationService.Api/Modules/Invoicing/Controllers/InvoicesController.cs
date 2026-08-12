@@ -59,6 +59,14 @@ public class InvoicesController : ControllerBase
         return Ok(await _service.ListUninvoicedOrdersAsync(customerId, cancellationToken));
     }
 
+    /// <summary>Wave 10: the invoice-control workspace — proposals per grouping preference,
+    /// review queue with readiness reasons, pending incident charges.</summary>
+    [HttpGet("/api/invoice-control")]
+    [RequirePermission(PermissionCodes.InvoicesView, PermissionCodes.InvoicesEdit)]
+    public async Task<ActionResult<InvoiceControlDto>> Control(
+        [FromServices] IInvoiceControlService control, CancellationToken cancellationToken)
+        => Ok(await control.GetAsync(cancellationToken));
+
     /// <summary>Next expected invoice number for an entity + period (informative, never claims).</summary>
     [HttpGet("next-number")]
     [RequirePermission(PermissionCodes.InvoicesView, PermissionCodes.InvoicesCreate)]

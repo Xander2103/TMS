@@ -36,6 +36,7 @@ import {
   type TripDetail,
   type TripStatus,
 } from '../types'
+import { downloadTripDocuments } from '../../transport-orders/api/transportDocumentsApi'
 import './planning.css'
 
 export function TripDetailPage() {
@@ -349,6 +350,23 @@ export function TripDetailPage() {
         action={
           <span className="pl-header-actions">
             <Badge tone={TRIP_STATUS_TONE[trip.status]}>{TRIP_STATUS_LABELS[trip.status]}</Badge>
+            {/* Wave 9: één samengevoegde PDF per rit, in routevolgorde. */}
+            <Button
+              variant="secondary"
+              onClick={() => void downloadTripDocuments(trip.id, 'cmr', trip.tripNumber)
+                .catch(() => showError('De CMR-bundel kon niet worden gegenereerd.'))}
+              disabled={busy}
+            >
+              CMR&apos;s (rit)
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void downloadTripDocuments(trip.id, 'delivery-note', trip.tripNumber)
+                .catch(() => showError('De leveringsbonnen konden niet worden gegenereerd.'))}
+              disabled={busy}
+            >
+              Leveringsbonnen (rit)
+            </Button>
             {hasPermission('planning.edit') &&
               trip.allowedTransitions.map((target) => (
                 <Button

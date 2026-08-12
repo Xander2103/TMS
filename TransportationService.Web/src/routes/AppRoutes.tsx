@@ -63,6 +63,7 @@ const PortalQualificationsPage = lazyPage(() => import('../features/portal/pages
 const PortalProfilePage = lazyPage(() => import('../features/portal/pages/PortalProfilePage'), 'PortalProfilePage')
 const InvoicesPage = lazyPage(() => import('../features/invoices/pages/InvoicesPage'), 'InvoicesPage')
 const NewInvoicePage = lazyPage(() => import('../features/invoices/pages/NewInvoicePage'), 'NewInvoicePage')
+const InvoiceControlPage = lazyPage(() => import('../features/invoices/pages/InvoiceControlPage'), 'InvoiceControlPage')
 const InvoiceDetailPage = lazyPage(() => import('../features/invoices/pages/InvoiceDetailPage'), 'InvoiceDetailPage')
 const NotificationsPage = lazyPage(() => import('../features/notifications/pages/NotificationsPage'), 'NotificationsPage')
 const CustomersPage = lazyPage(() => import('../features/customers/pages/CustomersPage'), 'CustomersPage')
@@ -215,6 +216,7 @@ const router = createBrowserRouter(
           <Route path="/my-trips" element={<MyTripsPage />} />
           <Route path="/my-trips/:id" element={<TripExecutionPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />
+          <Route path="/invoice-control" element={<InvoiceControlPage />} />
           <Route path="/invoices/new" element={<NewInvoicePage />} />
           <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />

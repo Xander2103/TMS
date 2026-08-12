@@ -39,6 +39,7 @@ import { OrderPackagesPanel } from '../../packages/components/OrderPackagesPanel
 import { UNIT_TYPE_LABELS } from '../../packages/types'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CustomerPackagesSummary } from '../../packages/components/CustomerPackagesSummary'
+import { downloadOrderDocument } from '../api/transportDocumentsApi'
 import {
   ORDER_PRICE_LINE_KIND_TONE,
   ORDER_STATUS_LABELS,
@@ -534,6 +535,23 @@ export function TransportOrderDetailPage() {
               </Link>
             )}
             <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
+            {/* Wave 9: leveringsbon/CMR uit de bevroren ordergegevens. */}
+            <Button
+              variant="secondary"
+              onClick={() => void downloadOrderDocument(order.id, 'delivery-note', order.orderNumber)
+                .catch(() => showError('De leveringsbon kon niet worden gegenereerd.'))}
+              disabled={busy}
+            >
+              Leveringsbon
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void downloadOrderDocument(order.id, 'cmr', order.orderNumber)
+                .catch(() => showError('De CMR kon niet worden gegenereerd.'))}
+              disabled={busy}
+            >
+              CMR
+            </Button>
             {editable && !editing && (
               <Button variant="secondary" onClick={() => setEditing(true)} disabled={busy}>
                 Bewerken
