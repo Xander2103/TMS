@@ -29,6 +29,9 @@ public class TransportOrderConfiguration : IEntityTypeConfiguration<TransportOrd
         builder.Property(o => o.DieselSurchargeOverrideReason).HasMaxLength(500);
         builder.Property(o => o.Notes).HasMaxLength(4000);
         builder.Property(o => o.CancellationReason).HasMaxLength(500);
+        builder.Property(o => o.InvoiceReadiness).HasMaxLength(20);
+        builder.Property(o => o.InvoiceReadinessReasons).HasMaxLength(500);
+        builder.HasIndex(o => new { o.TenantId, o.InvoiceReadiness });
 
         builder.Property(o => o.PricingSource).HasConversion<string>().HasMaxLength(20);
         builder.Property(o => o.OneOffFixedAmount).HasPrecision(12, 2);

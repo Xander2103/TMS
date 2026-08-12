@@ -47,6 +47,7 @@ public class TransportOrderPricingSnapshotConfiguration : IEntityTypeConfigurati
         builder.Property(s => s.OverrideAmount).HasPrecision(12, 2);
         builder.Property(s => s.OverrideReason).HasMaxLength(500);
         builder.Property(s => s.Explanation).HasMaxLength(4000);
+        builder.Property(s => s.CoverageStatus).HasMaxLength(20);
         builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(s => s.LinesTotal).HasPrecision(12, 2);
         builder.Property(s => s.ConfirmedByName).HasMaxLength(200);

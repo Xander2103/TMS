@@ -40,6 +40,13 @@ public class Customer : AuditableTenantEntity
 
     // Commercial terms
     public string? InvoiceEmail { get; set; }
+
+    /// <summary>
+    /// Invoice grouping preference (Wave 2): PerDossier | Weekly | Monthly | ByReference |
+    /// Manual (default = today's free choice). Stored as string; the Wave-10 proposal engine
+    /// acts on it, until then it is a hint in the invoice builder.
+    /// </summary>
+    public string InvoiceGrouping { get; set; } = "Manual";
     public int PaymentTermDays { get; set; } = 30;
     public string? DefaultLanguageCode { get; set; }
     public string CurrencyCode { get; set; } = "EUR";

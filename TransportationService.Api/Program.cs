@@ -622,6 +622,10 @@ using (var referenceScope = app.Services.CreateScope())
     // query per tenant returning nothing).
     await TransportationService.Api.Modules.Dossiers.Services.DossierBackfillSeeder.SyncAsync(
         referenceDbContext, app.Logger);
+
+    // Wave 2: typed coverage roll-up for pre-wave pricing snapshots (idempotent, indexed-only).
+    await TransportationService.Api.Modules.Orders.Services.CoverageStatusBackfillSeeder.SyncAsync(
+        referenceDbContext);
 }
 
 // Development-only setup

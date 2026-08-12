@@ -28,6 +28,7 @@ public class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         builder.Property(i => i.Notes).HasMaxLength(4000);
         builder.Property(i => i.Kind).HasConversion<string>().HasMaxLength(20).HasDefaultValue(InvoiceKind.Invoice);
         builder.Property(i => i.PaymentReference).HasMaxLength(30);
+        builder.Property(i => i.LanguageCode).HasMaxLength(5);
 
         builder.HasIndex(i => new { i.TenantId, i.InvoiceNumber })
             .IsUnique()

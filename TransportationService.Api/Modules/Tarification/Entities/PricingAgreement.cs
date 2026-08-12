@@ -33,6 +33,9 @@ public class PricingAgreement : AuditableTenantEntity
     /// </summary>
     public bool IsShared { get; set; }
 
+    /// <summary>Default sales code for rules of this table (Wave 2); a rule's own code wins.</summary>
+    public Guid? SalesCategoryId { get; set; }
+
     /// <summary>Optional internal commercial background (e.g. why this customer prices lower).</summary>
     public string? Notes { get; set; }
 

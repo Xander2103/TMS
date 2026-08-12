@@ -98,6 +98,12 @@ public class TransportOrderPricingLine : AuditableTenantEntity
     public Guid? ServiceOptionId { get; set; }
 
     /// <summary>
+    /// Sales-code snapshot resolved at line creation (Wave 2; rule → agreement → none).
+    /// Deliberately no FK: history stays byte-stable whatever happens to the category.
+    /// </summary>
+    public Guid? SalesCategoryId { get; set; }
+
+    /// <summary>
     /// Stable merge key stamped by the engine (or "manual:{guid}" for free lines): the single
     /// source of truth used to match an existing adjusted/manual line against a fresh
     /// recalculation instead of delete-all-rewrite (spec ch. 24-26).
@@ -159,6 +165,20 @@ public class TransportOrderPricingSnapshot : AuditableTenantEntity
     /// </summary>
     public string? CoverageJson { get; set; }
 
+    /// <summary>
+    /// Typed, queryable roll-up of CoverageJson (Wave 2): Full | Partial | None |
+    /// NotApplicable — worst entry wins. Written wherever CoverageJson is written; the
+    /// startup seeder derives it once for pre-wave rows.
+    /// </summary>
+    public string? CoverageStatus { get; set; }
+
+    /// <summary>
+    /// Wave 2: pricing inputs changed after this snapshot was calculated (Draft/Reviewed
+    /// only — Locked/Invoiced keep refusing edits). A stale price is visibly outdated and
+    /// never silently recalculated; explicit recalculation/save clears the flag.
+    /// </summary>
+    public bool IsStale { get; set; }
+
     /// <summary>Wave 2026-08-04 §8: when/by whom the price was confirmed (visible workflow "Bevestigd").</summary>
     public DateTime? ConfirmedAtUtc { get; set; }
     public Guid? ConfirmedByUserId { get; set; }
@@ -200,4 +220,10 @@ public class TransportOrderServiceLine : AuditableTenantEntity
 
     /// <summary>Optional free-text note the user attaches to a manually selected service (e.g. "Afgesproken met klant").</summary>
     public string? Note { get; set; }
+
+    /// <summary>
+    /// Sales-code snapshot resolved at line creation (Wave 2; option → agreement → none).
+    /// Deliberately no FK: history stays byte-stable whatever happens to the category.
+    /// </summary>
+    public Guid? SalesCategoryId { get; set; }
 }

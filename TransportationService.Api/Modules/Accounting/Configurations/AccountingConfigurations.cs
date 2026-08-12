@@ -28,6 +28,9 @@ public class SalesCategoryConfiguration : IEntityTypeConfiguration<SalesCategory
         builder.Property(c => c.Code).IsRequired().HasMaxLength(50);
         builder.Property(c => c.Name).IsRequired().HasMaxLength(200);
         builder.Property(c => c.SystemRole).HasConversion<string>().HasMaxLength(20);
+        builder.Property(c => c.InvoiceDescriptionNl).HasMaxLength(300);
+        builder.Property(c => c.DefaultUnitCode).HasMaxLength(20);
+        builder.Property(c => c.VatCategoryOverride).HasMaxLength(5);
         builder.HasOne(c => c.LedgerAccount).WithMany().HasForeignKey(c => c.LedgerAccountId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(c => new { c.TenantId, c.Code }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasIndex(c => c.TenantId);

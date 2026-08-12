@@ -45,6 +45,8 @@ public class PriceRuleConfiguration : IEntityTypeConfiguration<PriceRule>
         builder.Property(r => r.MinimumAmount).HasPrecision(12, 2);
         builder.Property(r => r.MaximumAmount).HasPrecision(12, 2);
         builder.Property(r => r.BracketMode).HasConversion<string>().HasMaxLength(20).HasDefaultValue(BracketSelectionMode.Absolute);
+        builder.HasOne<Modules.Accounting.Entities.SalesCategory>().WithMany()
+            .HasForeignKey(r => r.SalesCategoryId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(r => r.BaseAmount).HasPrecision(12, 2);
         builder.Property(r => r.MinimumQuantity).HasPrecision(12, 3);
         builder.Property(r => r.QuantityRoundingStep).HasPrecision(8, 3);
@@ -71,6 +73,8 @@ public class PricingAgreementConfiguration : IEntityTypeConfiguration<PricingAgr
         builder.Property(a => a.MaximumAmount).HasPrecision(12, 2);
         builder.Property(a => a.Notes).HasMaxLength(2000);
         builder.Property(a => a.ExtraHourlyRate).HasPrecision(10, 2);
+        builder.HasOne<Modules.Accounting.Entities.SalesCategory>().WithMany()
+            .HasForeignKey(a => a.SalesCategoryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany(a => a.Surcharges).WithOne().HasForeignKey(s => s.AgreementId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(a => a.Assignments).WithOne(x => x.Agreement).HasForeignKey(x => x.AgreementId).OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(a => a.Modifiers).WithOne().HasForeignKey(m => m.AgreementId).OnDelete(DeleteBehavior.Cascade);
@@ -180,6 +184,8 @@ public class ServiceOptionConfiguration : IEntityTypeConfiguration<ServiceOption
         builder.Property(o => o.DefaultValue).HasPrecision(12, 2);
         builder.Property(o => o.Description).HasMaxLength(1000);
         builder.Property(o => o.InvoiceDescription).HasMaxLength(300);
+        builder.HasOne<Modules.Accounting.Entities.SalesCategory>().WithMany()
+            .HasForeignKey(o => o.SalesCategoryId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(o => new { o.TenantId, o.Code }).IsUnique().HasFilter("\"IsDeleted\" = false");
         builder.HasQueryFilter(o => !o.IsDeleted);
     }

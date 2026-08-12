@@ -74,6 +74,17 @@ public class TransportOrder : AuditableTenantEntity, IVersionedEntity
 
     public TransportOrderStatus Status { get; set; } = TransportOrderStatus.Draft;
 
+    /// <summary>
+    /// Persisted invoice-readiness projection (Wave 2): NotReady | ReadyForInvoice |
+    /// ReviewRequired. Maintained by InvoiceReadinessEvaluator on completion/pricing/POD
+    /// transitions — deterministic and idempotent; the Wave-10 workspace filters on it.
+    /// Never a member of TransportOrderStatus (additive projection by design).
+    /// </summary>
+    public string InvoiceReadiness { get; set; } = "NotReady";
+
+    /// <summary>Semicolon-separated reason codes when ReviewRequired (e.g. "pricing.incomplete;pod.missing").</summary>
+    public string? InvoiceReadinessReasons { get; set; }
+
     public OrderPriority Priority { get; set; } = OrderPriority.Normal;
 
     /// <summary>

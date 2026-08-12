@@ -19,6 +19,9 @@ public class ServiceOption : AuditableTenantEntity
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
 
+    /// <summary>Sales code for service lines of this option (Wave 2); wins over rule/agreement codes.</summary>
+    public Guid? SalesCategoryId { get; set; }
+
     /// <summary>Internal description for admins.</summary>
     public string? Description { get; set; }
 

@@ -71,6 +71,12 @@ public class PriceRule : AuditableTenantEntity
     /// <summary>Optional zone dimension; null = applies to every destination.</summary>
     public Guid? ZoneId { get; set; }
 
+    /// <summary>
+    /// Sales code for lines this rule produces (Wave 2); null falls back to the agreement's
+    /// code, then the system-role defaults at invoicing. Resolution is frozen on the line.
+    /// </summary>
+    public Guid? SalesCategoryId { get; set; }
+
     public string Name { get; set; } = string.Empty;
     public string Currency { get; set; } = "EUR";
     public DateOnly EffectiveFrom { get; set; }

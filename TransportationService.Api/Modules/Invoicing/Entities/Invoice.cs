@@ -78,6 +78,13 @@ public class Invoice : AuditableTenantEntity
 
     public InvoiceKind Kind { get; set; } = InvoiceKind.Invoice;
 
+    /// <summary>
+    /// Document language, frozen at creation from Customer.InvoiceLanguageCode ??
+    /// DefaultLanguageCode ?? "nl" (Wave 2). Drives the PDF string catalog; later master-data
+    /// changes never re-language an existing invoice.
+    /// </summary>
+    public string? LanguageCode { get; set; }
+
     /// <summary>For credit notes: the invoice being (partially) credited.</summary>
     public Guid? CreditedInvoiceId { get; set; }
 

@@ -32,6 +32,7 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.Property(c => c.City).HasMaxLength(100);
         builder.Property(c => c.CountryCode).HasMaxLength(2);
         builder.Property(c => c.InvoiceEmail).HasMaxLength(250);
+        builder.Property(c => c.InvoiceGrouping).HasMaxLength(20);
         builder.Property(c => c.DefaultLanguageCode).HasMaxLength(10);
         builder.Property(c => c.Notes).HasMaxLength(2000);
         builder.Property(c => c.BlockReason).HasMaxLength(500);

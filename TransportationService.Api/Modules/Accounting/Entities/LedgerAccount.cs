@@ -52,4 +52,16 @@ public class SalesCategory : AuditableTenantEntity
 
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }
+
+    /// <summary>Invoice-line text for this sales code (Wave 2); null falls back to Name.</summary>
+    public string? InvoiceDescriptionNl { get; set; }
+
+    /// <summary>Default managed unit for manual lines with this code (Wave 2).</summary>
+    public string? DefaultUnitCode { get; set; }
+
+    /// <summary>
+    /// UNCL5305 VAT category forced by this sales code (Wave 2); null = the customer's VAT
+    /// treatment decides (VatTreatmentCatalog chain, the default and the norm).
+    /// </summary>
+    public string? VatCategoryOverride { get; set; }
 }
