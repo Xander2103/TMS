@@ -9,6 +9,7 @@ import { KpiCard } from '../components/KpiCard'
 import { KpiExportControl } from '../components/KpiExportControl'
 import { PackageReportsControl } from '../../packages/components/PackageReportsControl'
 import { KpiFilterBar } from '../components/KpiFilterBar'
+import { KpiActivitiesSection } from '../components/KpiActivitiesSection'
 import { num, pct, presetRange, type KpiDashboard, type KpiFilterState } from '../types'
 import '../components/kpi.css'
 
@@ -203,6 +204,8 @@ export function KpiDashboardPage() {
           )}
         </>
       )}
+
+      <KpiActivitiesSection from={filter.from} to={filter.to} />
     </div>
   )
 }

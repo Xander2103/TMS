@@ -333,6 +333,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.
     TransportationService.Api.Modules.Incidents.Services.IncidentService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Incidents.Services.IFailedDeliveryHandler,
     TransportationService.Api.Modules.Incidents.Services.FailedDeliveryService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.OrderImport.Services.IOrderImportService,
+    TransportationService.Api.Modules.OrderImport.Services.OrderImportService>();
 
 builder.Services.AddScoped<TransportationService.Api.Modules.Reference.Services.IUnitTypeMasterService,
     TransportationService.Api.Modules.Reference.Services.UnitTypeMasterService>();
@@ -470,6 +472,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.
     TransportationService.Api.Modules.Reporting.Services.KpiQueryService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.IKpiExportService,
     TransportationService.Api.Modules.Reporting.Services.KpiExportService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Reporting.Services.IActivityKpiService,
+    TransportationService.Api.Modules.Reporting.Services.ActivityKpiService>();
 
 // Packages: tracked cargo units, barcode registry and immutable chain of custody
 builder.Services.AddScoped<TransportationService.Api.Modules.Packages.Services.IPackageService,

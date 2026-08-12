@@ -61,6 +61,43 @@ export interface TripProfitabilityRow {
   isFinalized: boolean
 }
 
+/** P11: one row per activity type (a dossier with crane + plateau feeds both rows). */
+export interface ActivityKpiRow {
+  activityTypeId: string
+  code: string
+  name: string
+  kpiCategory: string | null
+  activityCount: number
+  linkedOrderCount: number
+  revenue: number
+  redeliveryCount: number
+}
+
+export interface ActivityKpiCategoryRow {
+  kpiCategory: string | null
+  activityCount: number
+  linkedOrderCount: number
+  revenue: number
+  redeliveryCount: number
+}
+
+export interface ActivityKpiTotals {
+  activityCount: number
+  linkedOrderCount: number
+  revenue: number
+  redeliveryCount: number
+}
+
+export interface ActivityKpiReport {
+  from: string
+  to: string
+  rows: ActivityKpiRow[]
+  totals: ActivityKpiTotals
+  /** Started pallet-days of storage stays overlapping the period; null when none. */
+  palletDays: number | null
+  perCategory: ActivityKpiCategoryRow[]
+}
+
 export interface KpiFilterState {
   from: string
   to: string
