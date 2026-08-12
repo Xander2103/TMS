@@ -16,7 +16,10 @@ public sealed record WarehouseScanRequest(
     Guid? WarehouseLocationId = null,
     /// <summary>Client idempotency key: replaying the same key returns the original outcome.</summary>
     Guid? ClientEventId = null,
-    string? DeviceInfo = null);
+    string? DeviceInfo = null,
+    /// <summary>Wave 5: the scanning station's warehouse — opens the storage clock on
+    /// Received/Return even without a specific location (a location implies its warehouse).</summary>
+    Guid? WarehouseId = null);
 
 public sealed record WarehouseScanFeedbackDto(
     string Outcome,
@@ -120,6 +123,16 @@ public class WarehouseScanService : IWarehouseScanService
                 null, null, null, null, null, null);
         }
 
+        if (location is null && request.WarehouseId is { } stationWarehouseId
+            && !await _dbContext.Warehouses.AnyAsync(
+                w => w.TenantId == tenantId && w.Id == stationWarehouseId, cancellationToken))
+        {
+            return new WarehouseScanFeedbackDto(
+                "InvalidWarehouse", ScanFeedbackLevel.Error,
+                "Het gekozen magazijn bestaat niet.",
+                null, null, null, null, null, null);
+        }
+
         var resolution = await _barcodes.ResolveAsync(request.Barcode.Trim(), cancellationToken);
         var now = _timeProvider.GetUtcNow().UtcDateTime;
 
@@ -217,6 +230,31 @@ public class WarehouseScanService : IWarehouseScanService
                 DeviceInfo: request.DeviceInfo, ClientEventId: request.ClientEventId));
         // The custody event's location stamp (the writer has no location parameter yet).
         custodyEvent.WarehouseLocationId = location?.Id;
+
+        // Wave 5 §1: the OPEN side of the storage clock. A successful arrival/check-in opens
+        // (or refreshes) the package's stay; a move updates the stay's location. Closing runs
+        // centrally in the StorageClockInterceptor on leave-type custody events.
+        var effectiveWarehouseId = location?.WarehouseId ?? request.WarehouseId;
+        if (level != ScanFeedbackLevel.Warning
+            && request.ScanType is ScanType.Received or ScanType.Return or ScanType.Moved)
+        {
+            var openStay = await _dbContext.StorageStays.FirstOrDefaultAsync(
+                s => s.TenantId == tenantId && s.PackageId == package.Id && s.OutAt == null, cancellationToken);
+            if (openStay is not null)
+            {
+                openStay.WarehouseLocationId = location?.Id ?? openStay.WarehouseLocationId;
+            }
+            else if (effectiveWarehouseId is { } stayWarehouseId
+                     && request.ScanType is ScanType.Received or ScanType.Return)
+            {
+                _dbContext.StorageStays.Add(new Modules.Warehousing.Entities.StorageStay
+                {
+                    Id = Guid.NewGuid(), TenantId = tenantId, PackageId = package.Id,
+                    WarehouseId = stayWarehouseId, WarehouseLocationId = location?.Id,
+                    InAt = now, InPackageEventId = custodyEvent.Id,
+                });
+            }
+        }
 
         await SaveWithReplayGuardAsync(request.ClientEventId, cancellationToken);
 

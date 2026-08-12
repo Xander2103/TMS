@@ -131,6 +131,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 // Cross-cutting persistence behaviour (audit stamps, soft delete, order status history)
 builder.Services.AddSingleton<AuditingSaveChangesInterceptor>();
 builder.Services.AddSingleton<TransportationService.Api.Modules.Orders.Services.OrderStatusHistoryInterceptor>();
+builder.Services.AddSingleton<TransportationService.Api.Modules.Warehousing.Services.StorageClockInterceptor>();
 
 // PostgreSQL + EF Core
 builder.Services.AddDbContext<TransportationDbContext>((serviceProvider, options) =>
@@ -138,7 +139,8 @@ builder.Services.AddDbContext<TransportationDbContext>((serviceProvider, options
         .UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
         .AddInterceptors(
             serviceProvider.GetRequiredService<AuditingSaveChangesInterceptor>(),
-            serviceProvider.GetRequiredService<TransportationService.Api.Modules.Orders.Services.OrderStatusHistoryInterceptor>())
+            serviceProvider.GetRequiredService<TransportationService.Api.Modules.Orders.Services.OrderStatusHistoryInterceptor>(),
+            serviceProvider.GetRequiredService<TransportationService.Api.Modules.Warehousing.Services.StorageClockInterceptor>())
 );
 
 // Identity en permissions
@@ -362,6 +364,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Service
     TransportationService.Api.Modules.Warehousing.Services.WarehouseAdminService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Services.IWarehouseTraceService,
     TransportationService.Api.Modules.Warehousing.Services.WarehouseTraceService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Services.IStorageBillingService,
+    TransportationService.Api.Modules.Warehousing.Services.StorageBillingService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Services.IDockPlanningService,
     TransportationService.Api.Modules.Warehousing.Services.DockPlanningService>();
 

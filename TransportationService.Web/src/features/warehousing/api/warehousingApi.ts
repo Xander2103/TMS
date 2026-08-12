@@ -142,6 +142,22 @@ export function getWarehouseOverview(warehouseId: string): Promise<WarehouseOver
   return apiClient.getJson(`/api/warehouses/${warehouseId}/overview`)
 }
 
+// --- Wave 5 §2: pallet-day derivation from the storage clock ---
+
+export interface StorageBilling {
+  customerId: string
+  from: string
+  to: string
+  totalPalletDays: number
+  openStays: number
+  perOrder: { transportOrderId: string; orderNumber: string; packageCount: number; palletDays: number }[]
+  perWarehouse: { warehouseId: string; warehouseName: string; palletDays: number }[]
+}
+
+export function getCustomerStorage(customerId: string, from: string, to: string): Promise<StorageBilling> {
+  return apiClient.getJson(`/api/customers/${customerId}/storage?from=${from}&to=${to}`)
+}
+
 export function getDockBoard(warehouseId: string, date: string): Promise<DockBoard> {
   return apiClient.getJson<DockBoard>(`/api/dock-appointments/board?warehouseId=${warehouseId}&date=${date}`)
 }

@@ -245,6 +245,7 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.ServiceOption> ServiceOptions => Set<TransportationService.Api.Modules.Tarification.Entities.ServiceOption>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.TenantHoliday> TenantHolidays => Set<TransportationService.Api.Modules.Tarification.Entities.TenantHoliday>();
     public DbSet<TransportationService.Api.Modules.Warehousing.Entities.WarehouseLocation> WarehouseLocations => Set<TransportationService.Api.Modules.Warehousing.Entities.WarehouseLocation>();
+    public DbSet<TransportationService.Api.Modules.Warehousing.Entities.StorageStay> StorageStays => Set<TransportationService.Api.Modules.Warehousing.Entities.StorageStay>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.CustomerServiceOptionPrice> CustomerServiceOptionPrices => Set<TransportationService.Api.Modules.Tarification.Entities.CustomerServiceOptionPrice>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.CustomerPreferredUnit> CustomerPreferredUnits => Set<TransportationService.Api.Modules.Tarification.Entities.CustomerPreferredUnit>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreement> PricingAgreements => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreement>();

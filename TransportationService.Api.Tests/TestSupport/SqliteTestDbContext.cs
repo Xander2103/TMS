@@ -28,10 +28,11 @@ public sealed class SqliteTestDbContext : IDisposable
         var interceptor = new AuditingSaveChangesInterceptor(new HttpContextAccessor(), TimeProvider.System);
         var statusHistoryInterceptor = new TransportationService.Api.Modules.Orders.Services.OrderStatusHistoryInterceptor(
             new HttpContextAccessor(), TimeProvider.System);
+        var storageClockInterceptor = new TransportationService.Api.Modules.Warehousing.Services.StorageClockInterceptor();
 
         _options = new DbContextOptionsBuilder<TransportationDbContext>()
             .UseSqlite(_connection)
-            .AddInterceptors(interceptor, statusHistoryInterceptor)
+            .AddInterceptors(interceptor, statusHistoryInterceptor, storageClockInterceptor)
             .Options;
 
         Context = new TransportationDbContext(_options, new FixedTenantQueryFilterAccessor(ambientTenantId));

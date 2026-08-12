@@ -7,16 +7,20 @@ import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import {
+  getCustomerStorage,
   getWarehouseOverview,
   listWarehouseLocations,
   listWarehouses,
   submitWarehouseScan,
   traceWarehousePackage,
+  type StorageBilling,
   type WarehouseLocation,
   type WarehouseOverview,
   type WarehouseScanType,
   type WarehouseTrace,
 } from '../api/warehousingApi'
+import { searchCustomers } from '../../customers/api/customersApi'
+import type { CustomerListItem } from '../../customers/types'
 import type { Warehouse } from '../types'
 
 const SCAN_TYPE_LABELS: Record<WarehouseScanType, string> = {
@@ -49,6 +53,13 @@ export function WarehouseTracePage() {
   const [overview, setOverview] = useState<WarehouseOverview | null>(null)
   const [busy, setBusy] = useState(false)
 
+  // Wave 5 §2: opslag per klant en periode (pallet-dagen uit de bewegingsklok).
+  const [customers, setCustomers] = useState<CustomerListItem[]>([])
+  const [storageCustomerId, setStorageCustomerId] = useState('')
+  const [storageFrom, setStorageFrom] = useState(() => new Date().toISOString().slice(0, 8) + '01')
+  const [storageTo, setStorageTo] = useState(() => new Date().toISOString().slice(0, 10))
+  const [storage, setStorage] = useState<StorageBilling | null>(null)
+
   useEffect(() => {
     listWarehouses()
       .then((data) => {
@@ -56,7 +67,19 @@ export function WarehouseTracePage() {
         if (data.length > 0) setWarehouseId((current) => current || data[0].id)
       })
       .catch(() => {})
+    searchCustomers({ isActive: true, page: 1, pageSize: 200 })
+      .then((result) => setCustomers(result.items))
+      .catch(() => {})
   }, [])
+
+  async function lookupStorage() {
+    if (!storageCustomerId || !storageFrom || !storageTo) return
+    try {
+      setStorage(await getCustomerStorage(storageCustomerId, storageFrom, storageTo))
+    } catch (err) {
+      showError(describeApiError(err, 'De opslagberekening kon niet worden geladen.').message)
+    }
+  }
 
   useEffect(() => {
     if (!warehouseId) return
@@ -226,6 +249,56 @@ export function WarehouseTracePage() {
           ))}
         </section>
       )}
+
+      <section className="wh-card">
+        <h2>Opslag per klant (pallet-dagen)</h2>
+        <p className="wh-muted">
+          Berekend uit de bewegingsklok (ontvangst tot vertrek, per begonnen dag). Handmatig
+          ingevulde dagen op een order winnen altijd.
+        </p>
+        <div className="wh-trace-bar">
+          <select value={storageCustomerId} onChange={(e) => setStorageCustomerId(e.target.value)} aria-label="Klant">
+            <option value="">Selecteer een klant…</option>
+            {customers.map((customer) => (
+              <option key={customer.id} value={customer.id}>{customer.name}</option>
+            ))}
+          </select>
+          <input type="date" value={storageFrom} onChange={(e) => setStorageFrom(e.target.value)} aria-label="Van" />
+          <input type="date" value={storageTo} onChange={(e) => setStorageTo(e.target.value)} aria-label="Tot" />
+          <Button type="button" variant="secondary" onClick={() => void lookupStorage()} disabled={!storageCustomerId}>
+            Bereken
+          </Button>
+        </div>
+        {storage && (
+          <div>
+            <p>
+              Totaal: <strong>{storage.totalPalletDays} pallet-dagen</strong>
+              {storage.openStays > 0 && <span className="wh-muted"> · {storage.openStays} colli nog aanwezig</span>}
+            </p>
+            {storage.perOrder.length > 0 && (
+              <table className="issued-items-table">
+                <thead>
+                  <tr><th>Order</th><th>Colli</th><th>Pallet-dagen</th></tr>
+                </thead>
+                <tbody>
+                  {storage.perOrder.map((row) => (
+                    <tr key={row.transportOrderId}>
+                      <td>{row.orderNumber}</td>
+                      <td>{row.packageCount}</td>
+                      <td>{row.palletDays}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {storage.perWarehouse.length > 1 && (
+              <p className="wh-muted">
+                {storage.perWarehouse.map((w) => `${w.warehouseName}: ${w.palletDays}`).join(' · ')}
+              </p>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   )
 }

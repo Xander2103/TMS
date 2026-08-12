@@ -104,3 +104,21 @@ public class WarehouseLocationConfiguration : IEntityTypeConfiguration<Warehouse
         builder.HasQueryFilter(l => !l.IsDeleted);
     }
 }
+
+public class StorageStayConfiguration : IEntityTypeConfiguration<StorageStay>
+{
+    public void Configure(EntityTypeBuilder<StorageStay> builder)
+    {
+        builder.ToTable("storage_stays");
+        builder.HasKey(s => s.Id);
+        builder.HasOne<Warehouse>().WithMany().HasForeignKey(s => s.WarehouseId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(s => new { s.TenantId, s.PackageId });
+        builder.HasIndex(s => new { s.TenantId, s.WarehouseId, s.OutAt });
+        // At most one OPEN stay per package.
+        builder.HasIndex(s => new { s.TenantId, s.PackageId })
+            .HasFilter("\"OutAt\" IS NULL AND \"IsDeleted\" = false")
+            .IsUnique()
+            .HasDatabaseName("UX_storage_stays_open_per_package");
+        builder.HasQueryFilter(s => !s.IsDeleted);
+    }
+}

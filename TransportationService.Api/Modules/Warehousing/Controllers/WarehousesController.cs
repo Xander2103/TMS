@@ -136,4 +136,20 @@ public class WarehousesController : ControllerBase
             id, DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken);
         return overview is null ? NotFound() : Ok(overview);
     }
+
+    // --- Wave 5 §2: pallet-day derivation from the storage clock (read-only) ---
+
+    [HttpGet("/api/customers/{customerId:guid}/storage")]
+    [RequirePermission(PermissionCodes.WarehouseView, PermissionCodes.WarehouseManage, PermissionCodes.TariffsView, PermissionCodes.InvoicesView)]
+    public async Task<ActionResult<StorageBillingDto>> CustomerStorage(
+        Guid customerId, [FromQuery] DateOnly from, [FromQuery] DateOnly to,
+        [FromServices] IStorageBillingService billing, CancellationToken cancellationToken)
+    {
+        if (to < from)
+        {
+            return BadRequest();
+        }
+
+        return Ok(await billing.ComputeAsync(customerId, from, to, cancellationToken));
+    }
 }
