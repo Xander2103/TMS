@@ -41,7 +41,25 @@ describe('RootRedirect', () => {
     expect(screen.getByText('Klantportaal shell')).toBeInTheDocument()
   })
 
-  it('sends an internal user (no customerId) to /transport-orders', () => {
+  it('sends an internal user with dossiers.view to /dossiers (Wave 1 landing)', () => {
+    auth.customerId = null
+    auth.permissions = ['orders.view', 'dossiers.view']
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route path="/" element={<RootRedirect />} />
+          <Route path="/klantportaal" element={<div>Klantportaal shell</div>} />
+          <Route path="/dossiers" element={<div>Dossierlijst</div>} />
+          <Route path="/transport-orders" element={<div>Interne app</div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText('Dossierlijst')).toBeInTheDocument()
+  })
+
+  it('sends an internal user WITHOUT dossiers.view to /transport-orders (fallback)', () => {
     auth.customerId = null
     auth.permissions = ['orders.view']
 
@@ -50,6 +68,7 @@ describe('RootRedirect', () => {
         <Routes>
           <Route path="/" element={<RootRedirect />} />
           <Route path="/klantportaal" element={<div>Klantportaal shell</div>} />
+          <Route path="/dossiers" element={<div>Dossierlijst</div>} />
           <Route path="/transport-orders" element={<div>Interne app</div>} />
         </Routes>
       </MemoryRouter>,

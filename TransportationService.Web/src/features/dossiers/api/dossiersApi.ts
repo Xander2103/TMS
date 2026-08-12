@@ -10,6 +10,11 @@ export function listDossiers(params: { search?: string; status?: string; custome
   return apiClient.getJson<DossierListItem[]>(`/api/dossiers${suffix}`)
 }
 
+/** Dashboardtegel "Dossiers met aandacht": open dossiers met structurele aandachtspunten. */
+export function getDossierAttentionCount(): Promise<number> {
+  return apiClient.getJson<{ count: number }>('/api/dossiers/attention-count').then((r) => r.count)
+}
+
 export function getDossier(id: string): Promise<DossierDetail> {
   return apiClient.getJson<DossierDetail>(`/api/dossiers/${id}`)
 }

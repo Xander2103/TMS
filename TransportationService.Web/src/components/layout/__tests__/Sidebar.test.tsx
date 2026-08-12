@@ -52,10 +52,10 @@ describe('Sidebar', () => {
     auth.userId = 'u1'
   })
 
-  it('hides modules the user has no permission for, keeps ungated Communicatie', () => {
+  it('hides modules the user has no permission for, keeps Vandaag (ungated Berichten/Meldingen)', () => {
     renderSidebar()
-    expect(screen.queryByRole('button', { name: /Beheer/ })).toBeNull()
-    expect(screen.getByRole('button', { name: /Communicatie/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Parameters/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /Vandaag/ })).toBeInTheDocument()
   })
 
   it('shows a permitted module and auto-expands the active one', () => {

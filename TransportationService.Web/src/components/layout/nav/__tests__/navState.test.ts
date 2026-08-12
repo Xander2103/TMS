@@ -21,18 +21,18 @@ describe('findActiveModuleId', () => {
 })
 
 describe('filterModule', () => {
-  const transport = modules.find((m) => m.id === 'transport')!
+  const planning = modules.find((m) => m.id === 'planning')!
   const portaal = modules.find((m) => m.id === 'portaal')!
 
   it('drops items the user lacks permission for and hides an emptied module', () => {
     const none = () => false
-    expect(filterModule(transport, { hasAnyPermission: none, hasEmployee: false, query: '' })).toBeNull()
+    expect(filterModule(planning, { hasAnyPermission: none, hasEmployee: false, query: '' })).toBeNull()
   })
 
   it('keeps only permitted items', () => {
     const only = (codes: string[]) => codes.includes('planning.view')
-    const vm = filterModule(transport, { hasAnyPermission: only, hasEmployee: false, query: '' })!
-    expect(vm.items.map((i) => i.to)).toEqual(['/planning', '/planning-center'])
+    const vm = filterModule(planning, { hasAnyPermission: only, hasEmployee: false, query: '' })!
+    expect(vm.items.map((i) => i.to)).toEqual(['/planning-center', '/planning'])
   })
 
   it('hides an employee-only module when the user has no employee link', () => {
@@ -41,25 +41,25 @@ describe('filterModule', () => {
   })
 
   it('narrows items by case-insensitive query and drops non-matching modules', () => {
-    const vm = filterModule(transport, { hasAnyPermission: allowAll, hasEmployee: false, query: 'plan' })!
-    expect(vm.items.map((i) => i.label)).toEqual(['Planning', 'Planbord'])
-    expect(filterModule(transport, { hasAnyPermission: allowAll, hasEmployee: false, query: 'zzz' })).toBeNull()
+    const vm = filterModule(planning, { hasAnyPermission: allowAll, hasEmployee: false, query: 'planbord' })!
+    expect(vm.items.map((i) => i.label)).toEqual(['Planbord'])
+    expect(filterModule(planning, { hasAnyPermission: allowAll, hasEmployee: false, query: 'zzz' })).toBeNull()
   })
 
   it('filters subgroup items and drops emptied subgroups', () => {
-    const master = modules.find((m) => m.id === 'stamgegevens')!
-    const vm = filterModule(master, { hasAnyPermission: allowAll, hasEmployee: false, query: 'categorie' })!
-    expect(vm.subgroups.map((s) => s.label)).toEqual(['Categorieën'])
+    const parameters = modules.find((m) => m.id === 'parameters')!
+    const vm = filterModule(parameters, { hasAnyPermission: allowAll, hasEmployee: false, query: 'categorie' })!
+    expect(vm.subgroups.map((s) => s.label)).toEqual(['Stamgegevens'])
   })
 })
 
 describe('moduleHasUnread', () => {
   it('is true only when a badged item exists and the count is positive', () => {
-    const comms = filterModule(modules.find((m) => m.id === 'communicatie')!, { hasAnyPermission: allowAll, hasEmployee: false, query: '' })!
-    expect(moduleHasUnread(comms, 3)).toBe(true)
-    expect(moduleHasUnread(comms, 0)).toBe(false)
-    const transport = filterModule(modules.find((m) => m.id === 'transport')!, { hasAnyPermission: allowAll, hasEmployee: false, query: '' })!
-    expect(moduleHasUnread(transport, 3)).toBe(false)
+    const vandaag = filterModule(modules.find((m) => m.id === 'vandaag')!, { hasAnyPermission: allowAll, hasEmployee: false, query: '' })!
+    expect(moduleHasUnread(vandaag, 3)).toBe(true)
+    expect(moduleHasUnread(vandaag, 0)).toBe(false)
+    const planning = filterModule(modules.find((m) => m.id === 'planning')!, { hasAnyPermission: allowAll, hasEmployee: false, query: '' })!
+    expect(moduleHasUnread(planning, 3)).toBe(false)
   })
 })
 

@@ -16,6 +16,31 @@ vi.mock('../../api/dashboardApi', () => ({
   getDashboard: () => Promise.resolve(state.dashboard),
 }))
 
+// Het dashboard is sinds Wave 1 §16 rolgericht: tegelgroepen renderen alleen voor hun
+// audience. De tests sturen de zichtbaarheid via deze permissieset.
+const auth = vi.hoisted(() => ({ permissions: [] as string[] }))
+vi.mock('../../../auth/authContextValue', () => ({
+  useAuth: () => ({
+    status: 'authenticated' as const,
+    user: { id: 'u1', firstName: 'Ada', lastName: 'Byron', tenantName: 'Acme', employeeId: null },
+    login: vi.fn(),
+    logout: vi.fn(),
+    hasPermission: (code: string) => auth.permissions.includes(code),
+    hasAnyPermission: (codes: string[]) => codes.some((c) => auth.permissions.includes(c)),
+  }),
+}))
+
+const attention = vi.hoisted(() => ({ count: 0 }))
+vi.mock('../../../dossiers/api/dossiersApi', () => ({
+  getDossierAttentionCount: () => Promise.resolve(attention.count),
+}))
+
+/** Broad internal permission set matching the pre-§16 "sees everything" behavior. */
+const BROAD_PERMISSIONS = [
+  'dashboard.view', 'planning.view', 'orders.view',
+  'inventory.view', 'tasks.view_own', 'tasks.view_team', 'tasks.view_all',
+]
+
 function baseDashboard(): Dashboard {
   return {
     ordersOpenCount: 0,
@@ -60,6 +85,8 @@ describe('DashboardPage — voorraad- en taaktegels', () => {
   beforeEach(() => {
     navigate.mockClear()
     state.dashboard = baseDashboard()
+    auth.permissions = [...BROAD_PERMISSIONS]
+    attention.count = 0
   })
 
   it('hides the Voorraad and Taken sections when the api returns null for them', async () => {
@@ -178,10 +205,71 @@ describe('DashboardPage — voorraad- en taaktegels', () => {
   })
 })
 
+describe('DashboardPage — rolgerichte tegelgroepen (§16)', () => {
+  beforeEach(() => {
+    navigate.mockClear()
+    state.dashboard = baseDashboard()
+    attention.count = 0
+  })
+
+  it('dispatcher sees the planning group but NOT the HR group (despite CommonView perms)', async () => {
+    // Subset of the seeded dispatcher template relevant to the dashboard, incl. the
+    // CommonView employees/absences codes that must NOT surface the HR group.
+    auth.permissions = [
+      'dashboard.view', 'planning.view', 'orders.view', 'dossiers.view',
+      'incidents.view', 'exceptions.view', 'employees.view', 'absences.view',
+      'vehicles.view', 'reports.view', 'warehouse.view',
+    ]
+    renderPage()
+
+    expect(await screen.findByRole('heading', { name: 'Planning & uitvoering' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Personeel' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Chauffeurs afwezig vandaag/ })).not.toBeInTheDocument()
+    // No invoicing permissions → no backoffice group either.
+    expect(screen.queryByRole('heading', { name: 'Facturatie & administratie' })).not.toBeInTheDocument()
+  })
+
+  it('renders the fetched dossier attention count and links the tile to /dossiers', async () => {
+    const user = userEvent.setup()
+    auth.permissions = ['dashboard.view', 'planning.view', 'dossiers.view']
+    attention.count = 7
+
+    renderPage()
+
+    const tile = await screen.findByRole('button', { name: /Dossiers met aandacht/ })
+    expect(tile).toHaveTextContent('7')
+    expect(tile).toHaveClass('db-kpi-alert')
+    await user.click(tile)
+    expect(navigate).toHaveBeenCalledWith('/dossiers')
+  })
+
+  it('does not render the attention tile for users without dossiers.view (no fetch)', async () => {
+    auth.permissions = ['dashboard.view', 'planning.view']
+    attention.count = 7
+
+    renderPage()
+
+    await screen.findByRole('heading', { name: 'Planning & uitvoering' })
+    expect(screen.queryByRole('button', { name: /Dossiers met aandacht/ })).not.toBeInTheDocument()
+  })
+
+  it('hides planning and order panels for a backoffice-only permission set', async () => {
+    auth.permissions = ['dashboard.view', 'invoices.view']
+    renderPage()
+
+    expect(await screen.findByRole('heading', { name: 'Facturatie & administratie' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Planning & uitvoering' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Ritten vandaag' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Recente opdrachten' })).not.toBeInTheDocument()
+  })
+})
+
 describe('DashboardPage — Aandachtspunten personeel', () => {
   beforeEach(() => {
     navigate.mockClear()
     state.dashboard = baseDashboard()
+    auth.permissions = [...BROAD_PERMISSIONS]
+    attention.count = 0
   })
 
   it('does not render the panel when there are no pinned notes', async () => {

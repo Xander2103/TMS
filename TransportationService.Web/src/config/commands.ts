@@ -38,7 +38,7 @@ export const APP_COMMANDS: AppCommand[] = [
     route: '/planning-center', permissions: ['planning.view'], group: 'Navigeren',
   },
   {
-    id: 'go-operations', label: 'Operationeel centrum openen', keywords: 'operations control live',
+    id: 'go-operations', label: 'Live opvolging openen', keywords: 'operations control live operationeel centrum',
     route: '/operations', permissions: ['operations.view'], group: 'Navigeren',
   },
   {
@@ -58,8 +58,12 @@ export const APP_COMMANDS: AppCommand[] = [
     route: '/dock-planning', permissions: ['warehouse.view', 'warehouse.schedule'], group: 'Navigeren',
   },
   {
-    id: 'go-warehouses', label: 'Magazijnen openen', keywords: 'warehouse depots',
+    id: 'go-warehouses', label: 'Magazijnen (beheer) openen', keywords: 'warehouse depots',
     route: '/warehouses', permissions: ['warehouse.view', 'warehouse.manage'], group: 'Navigeren',
+  },
+  {
+    id: 'go-warehouse-scanning', label: 'Laden & scannen openen', keywords: 'warehouse magazijn laadlijst scannen',
+    route: '/warehouse', permissions: ['warehouse.view'], group: 'Navigeren',
   },
   {
     id: 'go-packages', label: 'Colli zoeken', keywords: 'package barcode pakket',
