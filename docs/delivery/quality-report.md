@@ -141,5 +141,13 @@ leververwachtingen (venster-/planningsmails zonder producer), reistijdbewuste
 venstervalidatie binnen een voorgestelde tour, automatische periodieke
 opslagfacturen.
 
-Eindstand testsuites na de afrondingsgolf: ZIE EINDRUN (wordt na de slotgates
-ingevuld).
+Eindstand na de slotgates van de afrondingsgolf (2026-08-12):
+
+| Poort | Resultaat |
+|-------|-----------|
+| Backend `dotnet test` | ✅ 2003 geslaagd, 0 gefaald (was 1961 vóór de golf; +42) |
+| Frontend `npm test` | ✅ 917 geslaagd, 0 gefaald, 176 testbestanden (was 901; +16) |
+| Typecheck `npx tsc --noEmit` | ✅ geen fouten |
+| Lint `npm run lint` | ✅ enkel de 3 gekende pre-existing employees-fouten |
+| Productiebuild `npm run build` | ✅ geslaagd (gekende onschadelijke dynamic-import-melding) |
+| Migraties | ✅ alle 14 redesign-migraties toegepast, geen openstaande |
