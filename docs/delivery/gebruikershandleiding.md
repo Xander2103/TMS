@@ -557,7 +557,47 @@ Opvragen kan ook via `GET /api/kpi/activities`.
 
 ---
 
-## 16. Verder lezen
+## 16. Regionale instellingen, systeeminformatie, back-ups en de vernieuwde locaties
+
+### 16.1 Regionale instellingen
+
+Onder **Parameters → Instellingen → Regionale instellingen** bepaalt de beheerder hoe
+datums overal in de applicatie worden weergegeven. Kies uit DD/MM/YYYY (Belgische
+standaard, bv. 12/08/2026), MM/DD/YYYY (08/12/2026) of YYYY-MM-DD (2026-08-12) — elk met
+een live voorbeeld. De keuze geldt direct voor élk scherm; opslag in de databank blijft
+altijd genormaliseerd. Het klantportaal volgt bewust de taal van de klant, niet deze
+instelling.
+
+### 16.2 Systeeminformatie
+
+**Parameters → Beheer → Systeeminformatie** toont voor de beheerder: omgeving, versie,
+build (exacte commit), laatste deployment, API- en databankstatus, en de laatst
+toegepaste databankmigratie. Zo weet u altijd exact welke versie draait.
+
+### 16.3 Back-ups
+
+Het tabblad **Back-ups** toont alle databaseback-ups (datum, type, grootte, schema,
+status, reden) plus het retentiebeleid. Bevoegde beheerders kunnen een nieuwe back-up
+maken, downloaden of verwijderen (de nieuwste back-up is beschermd). **Terugzetten** is
+een destructieve actie: u ziet exact welke back-up, krijgt een waarschuwing dat de
+huidige data vervangen wordt, typt de exacte bestandsnaam ter bevestiging, en het systeem
+maakt éérst automatisch een veiligheidsback-up. Alles wordt geauditeerd.
+
+### 16.4 Locaties
+
+Het locatieoverzicht filtert op zoekterm, status, type, klant, land en postcode, sorteert
+op elke kolom en kent twee weergaven: **Plat** en **Per klant** (inklapbare groepen per
+klant, ongekoppelde locaties onderaan). De detailpagina toont de operationele kern in
+kaarten naast elkaar (adres, contact, openingsuren, planning, operationeel, instructies,
+interne informatie — die laatste alleen voor interne gebruikers), met headeracties
+Bewerken / Dupliceren / Deactiveren. Het formulier werkt in secties (Algemeen t/m
+Planning) met statusindicatoren per sectie (✓ vereist in orde, ● gegevens aanwezig,
+! fout, ○ leeg) en springt bij een fout rechtstreeks naar het juiste veld. Vanuit een
+klantfiche maakt u met één klik een nieuwe locatie voor die klant.
+
+---
+
+## 17. Verder lezen
 
 - Snelgidsen per rol: `docs/delivery/quick-guides/`
   (dispatcher, magazijn, chauffeur, facturatie-backoffice, beheerder).

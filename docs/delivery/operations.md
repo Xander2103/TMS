@@ -59,6 +59,7 @@ Volgorde (= volgorde van toepassing):
 | 12 | `20260812173308_ServiceQuantitySource` | — | `service_options`: +`QuantitySource` |
 | 13 | `20260812174522_OrderImport` | `order_import_profiles`, `order_import_batches`, `order_import_rows` | `notification_rules`: +`RequiresReview` (nullable) |
 | 14 | `20260812175816_InvoiceSnooze` | — | `transport_orders`: +`InvoiceSnoozeUntil`, `InvoiceSnoozeReason` |
+| 15 | `DatabaseBackups` (settings/system-wave) | `database_backups` (systeemniveau, bewust zonder TenantId — permissiegestuurd) | — |
 
 De afrondingsgolf voegt ook nieuwe **instellingsoppervlakken** toe die na een deploy geen
 extra configuratie vereisen maar wel bekend moeten zijn bij de beheerder:
@@ -404,6 +405,44 @@ Voor uitgebreidere smoke-runs bestaat het vaste patroon van `smoke-*.mjs`-script
 login + API-flows) uit eerdere milestones; die staan buiten de repo in sessie-scratchpads.
 
 ---
+
+## 6b. Systeeminformatie, versies en back-upbeheer (settings/system-wave 2026-08)
+
+### Versiestrategie
+
+- Het semver staat op ÉÉN plek: `Directory.Build.props` (`<Version>0.2.0</Version>`).
+  Releases bumpen alleen dat bestand.
+- Het deployscript stempelt de commit met `-p:SourceRevisionId=<sha>`; de
+  InformationalVersion wordt "0.2.0+<sha>" en de Systeeminformatie-pagina splitst dat in
+  versie + build. `deployment.json` in de release-map (geschreven door het script) is de
+  waarheid over wat LIVE draait — git HEAD is hooguit een kandidaat.
+- Frontendbuilds krijgen `VITE_BUILD_COMMIT` mee voor dezelfde traceerbaarheid.
+
+### Systeeminformatie
+
+`GET /api/system-info` (permissie `system_info.view`; pagina Instellingen →
+Systeeminformatie): omgeving, versie, build, laatste deployment, API-/databankstatus met
+latency, laatst toegepaste migratie en openstaande migraties. Verbindingsdetails lekken
+nooit; een onbereikbare databank toont enkel "Unavailable".
+
+### Back-upbeheer
+
+- Opslag: `Backups:Directory` (default `App_Data/backups`, altijd buiten de webroot);
+  `Backups:ExternalDirectories` kan de dumpmap van het deployscript alleen-lezen tonen
+  (type Pre-deployment). `Backups:PgDumpPath`/`PgRestorePath` wijzen naar de binaries.
+- Permissies: `backups.view` (rollen v29: management) en de bewuste per-beheerder-rechten
+  `backups.create/download/delete/restore`. Delete en restore zijn bovendien fail-closed
+  in de service zelf.
+- Retentie: `Backups:AutomaticRetentionDays` / `PreRestoreRetentionDays` (default 30);
+  de nieuwste voltooide back-up en een lopende restore zijn beschermd; handmatige
+  back-ups worden nooit automatisch verwijderd. Dagelijkse automatische back-up via
+  `Backups:AutomaticEnabled` (default aan) op `Backups:AutomaticHourUtc` (default 02:00).
+- **Terugzetten** (nooit "activeren"): vereist het exact getypte bestandsnaam als
+  bevestiging, maakt éérst een veiligheidsback-up (bron PreRestore), sluit andere
+  databankverbindingen, draait `pg_restore --clean --if-exists --exit-on-error` en doet
+  een healthcheck. Herstart daarna de API-service gecontroleerd (seeders/caches) en werk
+  verificatiechecklist §6 af. Alles is geauditeerd (create/download/delete/restore/
+  retentie-opruiming).
 
 ## 7. Rollback-overwegingen
 

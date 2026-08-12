@@ -145,3 +145,15 @@ overgeslagen.
   (`/settings/issued-item-templates`), Taaksjablonen (`/settings/task-templates`).
 - **Stamgegevens**: eenheden, services & toeslagen en de registry-gedreven lijsten
   (organisatie, referentie, categorieën) onder **Parameters → Stamgegevens**.
+
+## Regionale instellingen, systeeminformatie & back-ups (2026-08)
+
+- **Datumnotatie**: Instellingen → Regionale instellingen — gesloten lijst met live
+  voorbeeld; geldt meteen voor de hele applicatie (weergave, nooit opslag).
+- **Systeeminformatie** (Parameters → Beheer, `system_info.view`): omgeving, versie,
+  build-commit, laatste deployment, API-/databankstatus, laatst toegepaste migratie.
+- **Back-ups** (`backups.view` voor het overzicht; create/download/delete/restore zijn
+  bewuste per-beheerder-rechten): nieuwe back-up, downloaden, verwijderen (nieuwste is
+  beschermd) en **terugzetten** met getypte bestandsnaam-bevestiging en automatische
+  veiligheidsback-up vooraf. Retentie: automatisch/pre-restore 30 dagen; handmatig nooit
+  automatisch verwijderd. Herstart na een restore de API-service gecontroleerd.
