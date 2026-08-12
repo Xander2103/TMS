@@ -27,6 +27,18 @@ public record SaveDockRequest(
     bool AllowsLoading, bool AllowsUnloading, bool AllowsAdr, bool Refrigerated,
     decimal? MaxVehicleLengthM, decimal? MaxVehicleHeightM, bool IsActive, string? Notes);
 
+// --- Warehouse locations (Wave 4 §1: warehouse → zone → position) ---
+
+public record WarehouseLocationDto(
+    Guid Id, Guid WarehouseId, Guid? ParentId, string Code, string Name, string Kind,
+    bool IsActive, int SortOrder,
+    /// <summary>Packages currently projected onto this location (informational).</summary>
+    int PackageCount = 0);
+
+public record SaveWarehouseLocationRequest(
+    string Code, string Name, Guid? ParentId = null, string Kind = "Zone",
+    bool IsActive = true, int SortOrder = 0);
+
 // --- Appointments ---
 
 public record DockConflictDto(

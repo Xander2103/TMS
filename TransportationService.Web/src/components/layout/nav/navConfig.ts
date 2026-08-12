@@ -177,6 +177,7 @@ export function getNavModules(): NavModule[] {
       icon: Warehouse,
       items: [
         { label: 'Laden & scannen', to: '/warehouse', permissions: ['warehouse.view'] },
+        { label: 'Trace & voorraad', to: '/warehouse/trace', permissions: ['warehouse.view', 'scanning.execute'] },
         { label: 'Magazijnen (beheer)', to: '/warehouses', permissions: ['warehouse.view', 'warehouse.manage'] },
         { label: 'Dockplanning', to: '/dock-planning', permissions: ['warehouse.view', 'warehouse.schedule'] },
       ],

@@ -16,6 +16,11 @@ public interface IWarehouseAdminService
     Task<WarehouseDto?> UpdateAsync(Guid id, SaveWarehouseRequest request, CancellationToken cancellationToken);
     Task<WarehouseDto?> SaveDockAsync(Guid warehouseId, Guid? dockId, SaveDockRequest request, CancellationToken cancellationToken);
     Task<bool> DeleteDockAsync(Guid warehouseId, Guid dockId, CancellationToken cancellationToken);
+
+    // Wave 4 §1: storage locations (zone → position).
+    Task<IReadOnlyList<WarehouseLocationDto>?> ListLocationsAsync(Guid warehouseId, CancellationToken cancellationToken);
+    Task<WarehouseLocationDto?> SaveLocationAsync(Guid warehouseId, Guid? locationId, SaveWarehouseLocationRequest request, CancellationToken cancellationToken);
+    Task<bool> DeleteLocationAsync(Guid warehouseId, Guid locationId, CancellationToken cancellationToken);
 }
 
 /// <summary>Warehouse/dock master data. Addresses stay on the linked Location — never copied.</summary>
@@ -234,4 +239,136 @@ public class WarehouseAdminService : IWarehouseAdminService
             .ToList());
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    // --- Wave 4 §1: storage locations (zone → position) ---------------------------------------
+
+    public async Task<IReadOnlyList<WarehouseLocationDto>?> ListLocationsAsync(
+        Guid warehouseId, CancellationToken cancellationToken)
+    {
+        if (!await TenantScoped().AnyAsync(w => w.Id == warehouseId, cancellationToken))
+        {
+            return null;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var locations = await _dbContext.WarehouseLocations.AsNoTracking()
+            .Where(l => l.TenantId == tenantId && l.WarehouseId == warehouseId)
+            .OrderBy(l => l.SortOrder).ThenBy(l => l.Code)
+            .ToListAsync(cancellationToken);
+        var locationIds = locations.Select(l => l.Id).ToList();
+        var packageCounts = locationIds.Count == 0
+            ? new Dictionary<Guid, int>()
+            : await _dbContext.Packages.AsNoTracking()
+                .Where(p => p.TenantId == tenantId && p.CurrentWarehouseLocationId != null
+                            && locationIds.Contains(p.CurrentWarehouseLocationId.Value))
+                .GroupBy(p => p.CurrentWarehouseLocationId!.Value)
+                .Select(g => new { g.Key, Count = g.Count() })
+                .ToDictionaryAsync(g => g.Key, g => g.Count, cancellationToken);
+
+        return locations
+            .Select(l => new WarehouseLocationDto(
+                l.Id, l.WarehouseId, l.ParentId, l.Code, l.Name, l.Kind, l.IsActive, l.SortOrder,
+                packageCounts.GetValueOrDefault(l.Id)))
+            .ToList();
+    }
+
+    public async Task<WarehouseLocationDto?> SaveLocationAsync(
+        Guid warehouseId, Guid? locationId, SaveWarehouseLocationRequest request, CancellationToken cancellationToken)
+    {
+        if (!await TenantScoped().AnyAsync(w => w.Id == warehouseId, cancellationToken))
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Code) || string.IsNullOrWhiteSpace(request.Name))
+        {
+            throw new DomainValidationException("code", "Code en naam zijn verplicht.");
+        }
+
+        var kind = request.Kind?.Trim() is "Position" ? "Position" : "Zone";
+        var tenantId = _tenantContext.TenantId;
+        var code = request.Code.Trim().ToUpperInvariant();
+
+        if (request.ParentId is { } parentId)
+        {
+            var parent = await _dbContext.WarehouseLocations.AsNoTracking()
+                .FirstOrDefaultAsync(l => l.TenantId == tenantId && l.Id == parentId, cancellationToken);
+            if (parent is null || parent.WarehouseId != warehouseId)
+            {
+                throw new DomainValidationException("parentId", "De bovenliggende zone bestaat niet in dit magazijn.");
+            }
+
+            if (parent.ParentId is not null)
+            {
+                throw new DomainValidationException("parentId",
+                    "Maximaal twee niveaus: een positie kan niet onder een andere positie hangen.");
+            }
+        }
+
+        var duplicate = await _dbContext.WarehouseLocations.AnyAsync(
+            l => l.TenantId == tenantId && l.WarehouseId == warehouseId && l.Code == code && l.Id != locationId,
+            cancellationToken);
+        if (duplicate)
+        {
+            throw new DomainValidationException("code", $"Er bestaat al een locatie met code '{code}' in dit magazijn.");
+        }
+
+        WarehouseLocation location;
+        if (locationId is { } existingId)
+        {
+            location = await _dbContext.WarehouseLocations.FirstOrDefaultAsync(
+                    l => l.TenantId == tenantId && l.WarehouseId == warehouseId && l.Id == existingId, cancellationToken)
+                ?? throw new DomainValidationException("id", "De locatie bestaat niet.");
+        }
+        else
+        {
+            location = new WarehouseLocation { Id = Guid.NewGuid(), TenantId = tenantId, WarehouseId = warehouseId };
+            _dbContext.WarehouseLocations.Add(location);
+        }
+
+        location.ParentId = request.ParentId;
+        location.Code = code;
+        location.Name = request.Name.Trim();
+        location.Kind = request.ParentId is not null ? "Position" : kind;
+        location.IsActive = request.IsActive;
+        location.SortOrder = request.SortOrder;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("WarehouseLocation", location.Id.ToString(),
+            locationId is null ? "Created" : "Updated", null,
+            new { location.WarehouseId, location.Code, location.Name, location.Kind, location.IsActive }, cancellationToken);
+
+        return new WarehouseLocationDto(
+            location.Id, location.WarehouseId, location.ParentId, location.Code, location.Name,
+            location.Kind, location.IsActive, location.SortOrder);
+    }
+
+    public async Task<bool> DeleteLocationAsync(Guid warehouseId, Guid locationId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var location = await _dbContext.WarehouseLocations.FirstOrDefaultAsync(
+            l => l.TenantId == tenantId && l.WarehouseId == warehouseId && l.Id == locationId, cancellationToken);
+        if (location is null)
+        {
+            return false;
+        }
+
+        if (await _dbContext.WarehouseLocations.AnyAsync(
+                l => l.TenantId == tenantId && l.ParentId == locationId, cancellationToken))
+        {
+            throw new DomainValidationException("id", "Deze zone bevat nog posities. Verwijder die eerst.");
+        }
+
+        if (await _dbContext.Packages.AnyAsync(
+                p => p.TenantId == tenantId && p.CurrentWarehouseLocationId == locationId, cancellationToken))
+        {
+            throw new DomainValidationException("id",
+                "Op deze locatie staan nog colli. Verplaats die eerst (scan Verplaatsen).");
+        }
+
+        _dbContext.Remove(location);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("WarehouseLocation", location.Id.ToString(), "Deleted",
+            new { location.WarehouseId, location.Code, location.Name }, null, cancellationToken);
+        return true;
+    }
 }

@@ -74,4 +74,66 @@ public class WarehousesController : ControllerBase
     {
         return await _service.DeleteDockAsync(id, dockId, cancellationToken) ? NoContent() : NotFound();
     }
+
+    // --- Wave 4 §1: storage locations (zone → position). Scanners must be able to list
+    // target locations, hence scanning.execute on the read. ---
+
+    [HttpGet("{id:guid}/locations")]
+    [RequirePermission(PermissionCodes.WarehouseView, PermissionCodes.WarehouseManage, PermissionCodes.ScanningExecute)]
+    public async Task<ActionResult<IReadOnlyList<WarehouseLocationDto>>> ListLocations(Guid id, CancellationToken cancellationToken)
+    {
+        var locations = await _service.ListLocationsAsync(id, cancellationToken);
+        return locations is null ? NotFound() : Ok(locations);
+    }
+
+    [HttpPost("{id:guid}/locations")]
+    [RequirePermission(PermissionCodes.WarehouseManage)]
+    public async Task<ActionResult<WarehouseLocationDto>> CreateLocation(
+        Guid id, SaveWarehouseLocationRequest request, CancellationToken cancellationToken)
+    {
+        var location = await _service.SaveLocationAsync(id, null, request, cancellationToken);
+        return location is null ? NotFound() : Ok(location);
+    }
+
+    [HttpPut("{id:guid}/locations/{locationId:guid}")]
+    [RequirePermission(PermissionCodes.WarehouseManage)]
+    public async Task<ActionResult<WarehouseLocationDto>> UpdateLocation(
+        Guid id, Guid locationId, SaveWarehouseLocationRequest request, CancellationToken cancellationToken)
+    {
+        var location = await _service.SaveLocationAsync(id, locationId, request, cancellationToken);
+        return location is null ? NotFound() : Ok(location);
+    }
+
+    [HttpDelete("{id:guid}/locations/{locationId:guid}")]
+    [RequirePermission(PermissionCodes.WarehouseManage)]
+    public async Task<IActionResult> DeleteLocation(Guid id, Guid locationId, CancellationToken cancellationToken)
+    {
+        return await _service.DeleteLocationAsync(id, locationId, cancellationToken) ? NoContent() : NotFound();
+    }
+
+    // --- Wave 4 §4: trace + overview (read-only) ---
+
+    [HttpGet("/api/warehouse/trace")]
+    [RequirePermission(PermissionCodes.WarehouseView, PermissionCodes.WarehouseManage, PermissionCodes.ScanningView, PermissionCodes.ScanningExecute)]
+    public async Task<ActionResult<WarehouseTraceDto>> Trace(
+        [FromQuery] string barcode, [FromServices] IWarehouseTraceService trace, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(barcode))
+        {
+            return BadRequest();
+        }
+
+        var result = await trace.TraceAsync(barcode, cancellationToken);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpGet("{id:guid}/overview")]
+    [RequirePermission(PermissionCodes.WarehouseView, PermissionCodes.WarehouseManage, PermissionCodes.ScanningView, PermissionCodes.ScanningExecute)]
+    public async Task<ActionResult<WarehouseOverviewDto>> Overview(
+        Guid id, [FromServices] IWarehouseTraceService trace, CancellationToken cancellationToken)
+    {
+        var overview = await trace.GetOverviewAsync(
+            id, DateOnly.FromDateTime(DateTime.UtcNow), cancellationToken);
+        return overview is null ? NotFound() : Ok(overview);
+    }
 }

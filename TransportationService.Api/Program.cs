@@ -360,6 +360,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Operations.Services
 // Warehouse & dock planning
 builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Services.IWarehouseAdminService,
     TransportationService.Api.Modules.Warehousing.Services.WarehouseAdminService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Services.IWarehouseTraceService,
+    TransportationService.Api.Modules.Warehousing.Services.WarehouseTraceService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Warehousing.Services.IDockPlanningService,
     TransportationService.Api.Modules.Warehousing.Services.DockPlanningService>();
 
@@ -426,6 +428,8 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Planning.Services.I
 // Scanning
 builder.Services.AddScoped<TransportationService.Api.Modules.Scanning.Services.IScanService,
     TransportationService.Api.Modules.Scanning.Services.ScanService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Scanning.Services.IWarehouseScanService,
+    TransportationService.Api.Modules.Scanning.Services.WarehouseScanService>();
 
 // Execution exceptions
 builder.Services.AddScoped<TransportationService.Api.Modules.Exceptions.Services.IExecutionExceptionService,

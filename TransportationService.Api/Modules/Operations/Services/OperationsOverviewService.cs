@@ -102,11 +102,11 @@ public class OperationsOverviewService : IOperationsOverviewService
         var lastScans = tripIds.Count == 0
             ? []
             : await _dbContext.ScanEvents.AsNoTracking()
-                .Where(s => s.TenantId == tenantId && tripIds.Contains(s.TripId))
-                .GroupBy(s => s.TripId)
+                .Where(s => s.TenantId == tenantId && s.TripId != null && tripIds.Contains(s.TripId.Value))
+                .GroupBy(s => s.TripId!.Value)
                 .Select(g => g.OrderByDescending(s => s.OccurredAt).First())
                 .ToListAsync(cancellationToken);
-        var lastScanByTrip = lastScans.ToDictionary(s => s.TripId);
+        var lastScanByTrip = lastScans.ToDictionary(s => s.TripId!.Value);
 
         var openExceptions = tripIds.Count == 0
             ? []

@@ -317,7 +317,9 @@ public class ScanService : IScanService
             return ScanOperationResult.NotFound;
         }
 
-        var summary = await BuildSummaryAsync(existing.TripId, stop, existing.ScanType, cancellationToken);
+        // Corrections only exist for trip-scoped scans (the standalone warehouse ledger has no
+        // correction flow), so the TripId is always present here.
+        var summary = await BuildSummaryAsync(existing.TripId!.Value, stop, existing.ScanType, cancellationToken);
 
         PackageScanFeedbackDto? packageFeedback = null;
         string message;

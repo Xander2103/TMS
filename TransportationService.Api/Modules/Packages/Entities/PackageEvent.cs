@@ -33,6 +33,14 @@ public enum PackageEventType
     DepartureOverride,
     CompletionOverride,
     PodFinalized,
+
+    // Wave 4 §3 — standalone warehouse scans (append-only: stored values must never shift).
+    /// <summary>Arrival registration at the warehouse (trip-less Received scan).</summary>
+    Received,
+    /// <summary>Location move inside the warehouse (trip-less Moved scan).</summary>
+    MovedLocation,
+    /// <summary>Staged for outbound (trip-less Staged scan; operational marker, no status change).</summary>
+    Staged,
 }
 
 /// <summary>
@@ -50,6 +58,9 @@ public class PackageEvent : AuditableTenantEntity
     public Guid? TripId { get; set; }
     public Guid? TransportOrderStopId { get; set; }
     public Guid? TransportOrderId { get; set; }
+
+    /// <summary>Wave 4 §2: warehouse location involved in this event (FK-less snapshot id).</summary>
+    public Guid? WarehouseLocationId { get; set; }
 
     public Guid? UserId { get; set; }
     public Guid? DriverId { get; set; }

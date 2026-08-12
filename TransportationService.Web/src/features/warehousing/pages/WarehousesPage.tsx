@@ -8,6 +8,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { getLocationOptions } from '../../locations/api/locationsApi'
 import type { LocationOption } from '../../locations/types'
 import { createDock, createWarehouse, deleteDock, listWarehouses, updateDock, updateWarehouse } from '../api/warehousingApi'
+import { WarehouseLocationsPanel } from '../components/WarehouseLocationsPanel'
 import type { Dock, DockInput, Warehouse, WarehouseInput } from '../types'
 import './warehousing.css'
 
@@ -164,6 +165,7 @@ export function WarehousesPage() {
             ))}
             {warehouse.docks.length === 0 && <p className="wh-muted">Nog geen docks.</p>}
           </div>
+          <WarehouseLocationsPanel warehouseId={warehouse.id} canManage={canManage} />
         </section>
       ))}
 

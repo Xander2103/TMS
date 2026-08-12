@@ -330,3 +330,93 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Wave 4 §1: storage locations panel inside the warehouse card. */
+.wh-locations {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.wh-locations-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.wh-location-zone,
+.wh-location-position {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.wh-location-zone {
+  flex-direction: row;
+}
+
+.wh-location-position {
+  margin-left: 16px;
+  width: 100%;
+}
+
+.wh-location-add {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.wh-location-add select,
+.wh-location-add input {
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+/* Wave 4 §4: trace & scan station. */
+.wh-trace-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.wh-trace-bar input,
+.wh-trace-bar select {
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.wh-trace-bar input {
+  min-width: 220px;
+}
+
+.wh-trace-feedback {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wh-trace-feedback-success { color: #166534; }
+.wh-trace-feedback-warning { color: #92400e; }
+.wh-trace-feedback-error { color: #dc2626; }
+
+.wh-trace-alert {
+  margin: 4px 0;
+  font-size: 14px;
+  color: #92400e;
+  font-weight: 600;
+}

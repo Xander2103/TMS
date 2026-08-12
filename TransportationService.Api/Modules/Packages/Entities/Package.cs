@@ -102,6 +102,12 @@ public class Package : AuditableTenantEntity
     public bool RequiresSignature { get; set; }
 
     public PackageLifecycleStatus CurrentLifecycleStatus { get; set; } = PackageLifecycleStatus.Created;
+
+    /// <summary>
+    /// Wave 4 §2: WHERE the package currently sits (projection — the append-only custody
+    /// events stay the source of truth). FK-less snapshot id; null = unknown/on the road.
+    /// </summary>
+    public Guid? CurrentWarehouseLocationId { get; set; }
     public PackageExceptionState CurrentExceptionStatus { get; set; } = PackageExceptionState.None;
 
     public string? Notes { get; set; }

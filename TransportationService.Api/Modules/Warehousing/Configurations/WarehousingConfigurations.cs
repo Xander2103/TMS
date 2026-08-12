@@ -87,3 +87,20 @@ public class DockAppointmentConfiguration : IEntityTypeConfiguration<DockAppoint
         builder.HasQueryFilter(a => !a.IsDeleted);
     }
 }
+
+public class WarehouseLocationConfiguration : IEntityTypeConfiguration<WarehouseLocation>
+{
+    public void Configure(EntityTypeBuilder<WarehouseLocation> builder)
+    {
+        builder.ToTable("warehouse_locations");
+        builder.HasKey(l => l.Id);
+        builder.Property(l => l.Code).IsRequired().HasMaxLength(50);
+        builder.Property(l => l.Name).IsRequired().HasMaxLength(200);
+        builder.Property(l => l.Kind).IsRequired().HasMaxLength(20);
+        builder.HasOne<Warehouse>().WithMany().HasForeignKey(l => l.WarehouseId).OnDelete(DeleteBehavior.Cascade);
+        // Self-FK Restrict: a zone with positions must be emptied first (enforced in the service too).
+        builder.HasOne<WarehouseLocation>().WithMany().HasForeignKey(l => l.ParentId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(l => new { l.TenantId, l.WarehouseId, l.Code }).IsUnique().HasFilter("\"IsDeleted\" = false");
+        builder.HasQueryFilter(l => !l.IsDeleted);
+    }
+}
