@@ -109,6 +109,60 @@ public class MessagingController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>P9: a dispatcher approves a review-held message; it joins the normal send queue.</summary>
+    [HttpPost("api/messaging/outbox/{id:guid}/release")]
+    [RequirePermission(PermissionCodes.MessagingManage)]
+    public async Task<IActionResult> Release(Guid id, CancellationToken cancellationToken)
+    {
+        var message = await _dbContext.OutboxMessages
+            .FirstOrDefaultAsync(m => m.Id == id && m.TenantId == _tenantContext.TenantId, cancellationToken);
+        if (message is null)
+        {
+            return NotFound();
+        }
+
+        if (message.Status != OutboxStatus.AwaitingReview)
+        {
+            return BadRequest(new { message = "Alleen berichten in controle kunnen worden vrijgegeven." });
+        }
+
+        message.Status = OutboxStatus.Pending;
+        message.NextAttemptAt = null;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OutboxMessage", message.Id.ToString(), "ReviewReleased",
+            null, new { message.Kind, message.RecipientAddress }, cancellationToken);
+        return NoContent();
+    }
+
+    public record RejectOutboxRequest(string? Reason);
+
+    /// <summary>P9: a dispatcher rejects a review-held message; it is suppressed with the reason.</summary>
+    [HttpPost("api/messaging/outbox/{id:guid}/reject")]
+    [RequirePermission(PermissionCodes.MessagingManage)]
+    public async Task<IActionResult> Reject(Guid id, RejectOutboxRequest request, CancellationToken cancellationToken)
+    {
+        var message = await _dbContext.OutboxMessages
+            .FirstOrDefaultAsync(m => m.Id == id && m.TenantId == _tenantContext.TenantId, cancellationToken);
+        if (message is null)
+        {
+            return NotFound();
+        }
+
+        if (message.Status != OutboxStatus.AwaitingReview)
+        {
+            return BadRequest(new { message = "Alleen berichten in controle kunnen worden afgewezen." });
+        }
+
+        message.Status = OutboxStatus.Suppressed;
+        message.FailureReason = string.IsNullOrWhiteSpace(request.Reason)
+            ? "Afgewezen na controle door dispatch."
+            : $"Afgewezen na controle: {request.Reason.Trim()}";
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _auditService.RecordAsync("OutboxMessage", message.Id.ToString(), "ReviewRejected",
+            null, new { message.Kind, message.RecipientAddress, request.Reason }, cancellationToken);
+        return NoContent();
+    }
+
     public record MessagingProfileDto(
         MessageOwnerType OwnerType, Guid OwnerId, bool EmailEnabled, bool SmsEnabled,
         string? EmailAddress, string? PhoneNumber, string? EnabledKindsJson,

@@ -55,7 +55,8 @@ public class FailedDeliveryService : IFailedDeliveryHandler
     public FailedDeliveryService(
         TransportationDbContext dbContext, ITenantContext tenantContext,
         IIncidentService incidentService, IAuditService auditService, TimeProvider timeProvider,
-        ILogger<FailedDeliveryService>? logger = null)
+        ILogger<FailedDeliveryService>? logger = null,
+        Modules.Messaging.Services.INotificationEventService? notificationEvents = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -63,7 +64,10 @@ public class FailedDeliveryService : IFailedDeliveryHandler
         _auditService = auditService;
         _timeProvider = timeProvider;
         _logger = logger;
+        _notificationEvents = notificationEvents;
     }
+
+    private readonly Modules.Messaging.Services.INotificationEventService? _notificationEvents;
 
     public async Task HandleStopFailureAsync(
         Guid tripId, Guid stopId, string? reason, CancellationToken cancellationToken)
@@ -140,6 +144,35 @@ public class FailedDeliveryService : IFailedDeliveryHandler
 
         await _auditService.RecordAsync("Incident", incident.Id.ToString(), "AutoCreatedFromFailedStop",
             null, new { StopId = stopId, order.OrderNumber, Mode = mode, Reason = reason }, cancellationToken);
+
+        // P9: the failed-delivery event — customer mail of this kind is review-held by default.
+        if (_notificationEvents is not null)
+        {
+            try
+            {
+                var customerName = await _dbContext.Customers.AsNoTracking()
+                    .Where(c => c.TenantId == tenantId && c.Id == order.CustomerId)
+                    .Select(c => c.Name)
+                    .FirstOrDefaultAsync(cancellationToken);
+                await _notificationEvents.PublishAsync(
+                    Modules.Messaging.Entities.MessageKinds.OrderFailedDelivery,
+                    new Modules.Messaging.Services.NotificationEventContext(
+                        "TransportOrder", order.Id.ToString(),
+                        new Dictionary<string, string>
+                        {
+                            ["orderNumber"] = order.OrderNumber,
+                            ["customerName"] = customerName ?? "",
+                            ["goodsDescription"] = order.GoodsDescription ?? "",
+                            ["reason"] = reason ?? "onbekend",
+                        })
+                    { CustomerId = order.CustomerId },
+                    cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger?.LogError(ex, "order_failed_delivery event failed for order {OrderId}", order.Id);
+            }
+        }
 
         if (mode == "Automatic")
         {

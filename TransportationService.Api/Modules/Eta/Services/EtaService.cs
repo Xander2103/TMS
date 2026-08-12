@@ -45,6 +45,10 @@ public interface IEtaService
     Task<TripEtaDto?> ClearStopEtaOverrideAsync(Guid tripId, Guid stopId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<StopEtaHistoryDto>?> GetStopEtaHistoryAsync(Guid tripId, Guid stopId, CancellationToken cancellationToken);
+
+    /// <summary>P8: route start — seeds/refreshes the trip's ETAs and queues one
+    /// driver_en_route message per customer order on the trip (idempotent per trip+order).</summary>
+    Task NotifyTripStartedAsync(Guid tripId, CancellationToken cancellationToken);
 }
 
 public class EtaService : IEtaService
@@ -421,6 +425,46 @@ public class EtaService : IEtaService
                 },
                 EntityType, eta.Id.ToString(),
                 $"eta_update:{stop.Id}:{eta.CurrentEta:yyyyMMddHHmm}"), cancellationToken);
+        }
+    }
+
+    public async Task NotifyTripStartedAsync(Guid tripId, CancellationToken cancellationToken)
+    {
+        // Seed the ETAs the moment the wheels start turning — the portal and dispatch see a
+        // live expectation instead of waiting for the first manual ETA view.
+        var eta = await RecalculateTripAsync(tripId, cancellationToken);
+        if (eta is null)
+        {
+            return;
+        }
+
+        var tenantId = _tenantContext.TenantId;
+        var orders = await _dbContext.TripOrders.AsNoTracking()
+            .Where(to => to.TenantId == tenantId && to.TripId == tripId && !to.IsDeleted)
+            .Join(_dbContext.TransportOrders.AsNoTracking().Where(o => o.TenantId == tenantId),
+                to => to.TransportOrderId, o => o.Id, (to, o) => new { o.Id, o.OrderNumber, o.CustomerId })
+            .ToListAsync(cancellationToken);
+        foreach (var order in orders)
+        {
+            var customerName = await _dbContext.Customers.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && c.Id == order.CustomerId)
+                .Select(c => c.Name)
+                .FirstOrDefaultAsync(cancellationToken);
+            var firstEta = eta.Stops
+                .OrderBy(s => s.CurrentEta)
+                .Select(s => (DateTime?)s.CurrentEta)
+                .FirstOrDefault();
+            await _messageOutbox.QueueAsync(new MessageRequest(
+                MessageKinds.DriverEnRoute, MessageOwnerType.Customer, order.CustomerId,
+                new Dictionary<string, string>
+                {
+                    ["orderNumber"] = order.OrderNumber,
+                    ["customerName"] = customerName ?? "",
+                    ["eta"] = firstEta?.ToString("dd-MM-yyyy HH:mm") ?? "-",
+                },
+                "Trip", tripId.ToString(),
+                // Idempotent per trip+order: restarting a trip never re-mails the customer.
+                $"driver_en_route:{tripId}:{order.Id}"), cancellationToken);
         }
     }
 

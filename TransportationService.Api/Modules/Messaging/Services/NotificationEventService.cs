@@ -111,6 +111,9 @@ public class NotificationEventService : INotificationEventService
 
         var inAppEnabled = rule?.InAppEnabled ?? info.DefaultInApp;
         var emailEnabled = rule?.EmailEnabled ?? info.DefaultEmail;
+        // P9: sensitive kinds hold their CUSTOMER mail for dispatcher review (rule overrides
+        // the catalog default); internal staff mail is never held.
+        var requiresReview = rule?.RequiresReview ?? info.DefaultRequiresReview;
         var recipients = ParseRecipients(rule?.RecipientsJson) ?? info.DefaultRecipients;
 
         if (!inAppEnabled && !emailEnabled)
@@ -130,7 +133,8 @@ public class NotificationEventService : INotificationEventService
                         info.MessageKind, target.OwnerType, target.OwnerId, context.Tokens,
                         context.EntityType, context.EntityId, idempotencyKey,
                         OverrideAddress: target.Address, OverrideName: target.Name, OverrideLanguage: language,
-                        CustomerIdForTemplate: target.CustomerIdForTemplate), cancellationToken);
+                        CustomerIdForTemplate: target.CustomerIdForTemplate,
+                        RequiresReview: requiresReview && target.OwnerType == MessageOwnerType.Customer), cancellationToken);
                 }
             }
 

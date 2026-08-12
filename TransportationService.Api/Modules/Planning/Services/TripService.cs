@@ -46,7 +46,8 @@ public class TripService : ITripService
         INotificationService notificationService,
         ITripPlanningSyncService planningSyncService,
         ITripCostingService costingService,
-        ITripPackageService tripPackageService)
+        ITripPackageService tripPackageService,
+        Modules.Eta.Services.IEtaService? etaService = null)
     {
         _dbContext = dbContext;
         _tenantContext = tenantContext;
@@ -56,7 +57,10 @@ public class TripService : ITripService
         _planningSyncService = planningSyncService;
         _costingService = costingService;
         _tripPackageService = tripPackageService;
+        _etaService = etaService;
     }
+
+    private readonly Modules.Eta.Services.IEtaService? _etaService;
 
     /// <summary>
     /// PostgreSQL timestamptz only accepts UTC kinds. API clients may send naive ISO times
@@ -820,6 +824,13 @@ public class TripService : ITripService
                 "Vertrek vrijgegeven",
                 $"Rit {trip.TripNumber} is vertrokken zonder volledige lading (vrijgave met reden).",
                 $"/planning/{trip.Id}", cancellationToken);
+        }
+
+        // P8: the route start seeds the ETAs and tells the customers a driver is en route
+        // (idempotent per trip+order — a restart never re-mails).
+        if (target == TripStatus.InProgress && _etaService is not null)
+        {
+            await _etaService.NotifyTripStartedAsync(trip.Id, cancellationToken);
         }
 
         // Planning a trip tells the assigned driver's user account; a cancellation does too.

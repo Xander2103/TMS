@@ -33,7 +33,9 @@ public class NotificationRulesController : ControllerBase
     public record NotificationRuleDto(
         string EventKey, string Label, string Group, IReadOnlyList<string> AllowedTokens,
         bool Enabled, bool InAppEnabled, bool EmailEnabled, bool AllowCustomerOverride,
-        IReadOnlyList<RecipientSpec> Recipients, bool IsCustomized, bool PeppolPending);
+        IReadOnlyList<RecipientSpec> Recipients, bool IsCustomized, bool PeppolPending,
+        /// <summary>P9: customer mail of this event is held for dispatcher review.</summary>
+        bool RequiresReview = false);
 
     [HttpGet("api/notification-rules")]
     [RequirePermission(PermissionCodes.NotificationRulesView)]
@@ -53,7 +55,8 @@ public class NotificationRulesController : ControllerBase
                     rule?.Enabled ?? true, rule?.InAppEnabled ?? e.DefaultInApp, rule?.EmailEnabled ?? e.DefaultEmail,
                     rule?.AllowCustomerOverride ?? false,
                     ParseRecipients(rule?.RecipientsJson) ?? e.DefaultRecipients,
-                    IsCustomized: rule is not null, e.PeppolPending);
+                    IsCustomized: rule is not null, e.PeppolPending,
+                    RequiresReview: rule?.RequiresReview ?? e.DefaultRequiresReview);
             })
             .ToList();
         return Ok(result);
@@ -61,7 +64,9 @@ public class NotificationRulesController : ControllerBase
 
     public record UpsertNotificationRuleRequest(
         bool Enabled, bool InAppEnabled, bool EmailEnabled, bool AllowCustomerOverride,
-        IReadOnlyList<RecipientSpec> Recipients);
+        IReadOnlyList<RecipientSpec> Recipients,
+        /// <summary>P9: null = keep the catalog default for this event.</summary>
+        bool? RequiresReview = null);
 
     [HttpPut("api/notification-rules/{eventKey}")]
     [RequirePermission(PermissionCodes.NotificationRulesManage)]
@@ -88,6 +93,7 @@ public class NotificationRulesController : ControllerBase
         rule.InAppEnabled = request.InAppEnabled;
         rule.EmailEnabled = request.EmailEnabled;
         rule.AllowCustomerOverride = request.AllowCustomerOverride;
+        rule.RequiresReview = request.RequiresReview;
         rule.RecipientsJson = request.Recipients.Count == 0 ? null : JsonSerializer.Serialize(request.Recipients);
         await _dbContext.SaveChangesAsync(cancellationToken);
 

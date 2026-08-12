@@ -124,6 +124,36 @@ public class MessagingServiceTests
     }
 
     [Fact]
+    public async Task Queue_RequiresReview_HoldsTheMessage_AndTheDispatcherNeverSendsIt()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+
+        var request = new MessageRequest(
+            MessageKinds.OrderDamageRegistered, MessageOwnerType.Customer, h.CustomerId,
+            new Dictionary<string, string> { ["orderNumber"] = "ORD-1", ["customerName"] = "Haven BV" },
+            "Incident", Guid.NewGuid().ToString(), $"review:{Guid.NewGuid()}",
+            RequiresReview: true);
+        var result = await h.Sut.QueueAsync(request, CancellationToken.None);
+
+        Assert.Equal(QueueOutcome.Queued, result.Outcome);
+        var message = h.Db.Context.OutboxMessages.Single();
+        Assert.Equal(OutboxStatus.AwaitingReview, message.Status);
+
+        // The background dispatcher only ever touches Pending rows — held mail cannot leak.
+        await h.Dispatcher.DispatchPendingAsync(10, CancellationToken.None);
+        Assert.Empty(h.Email.Sent);
+        Assert.Equal(OutboxStatus.AwaitingReview, h.Db.Context.OutboxMessages.Single().Status);
+
+        // A dispatcher release (the controller flips the status) sends it on the next run.
+        message = h.Db.Context.OutboxMessages.Single();
+        message.Status = OutboxStatus.Pending;
+        await h.Db.Context.SaveChangesAsync();
+        await h.Dispatcher.DispatchPendingAsync(10, CancellationToken.None);
+        Assert.Single(h.Email.Sent);
+    }
+
+    [Fact]
     public async Task Queue_CustomerEnabledKinds_OnlyGovernTheConfigurableCatalog()
     {
         var h = await SeedAsync();

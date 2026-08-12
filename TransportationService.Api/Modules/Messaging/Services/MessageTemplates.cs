@@ -160,6 +160,17 @@ public static class BuiltInMessageTemplates
         [MessageKinds.InvoiceCreditNote] = new(
             "Note de crédit {{invoiceNumber}} de {{companyName}}",
             "Bonjour {{customerName}},\n\nVeuillez trouver ci-joint la note de crédit {{invoiceNumber}}.\n\nCordialement,\n{{companyName}}"),
+        // P8: the event-catalog order kinds a French-speaking customer actually receives.
+        [MessageKinds.OrderAccepted] = new(
+            "Votre ordre {{orderNumber}} est accepté",
+            "Bonjour {{customerName}},\n\nVotre ordre {{orderNumber}} ({{goodsDescription}}) est accepté et sera planifié.\n\nCordialement,\n{{companyName}}"),
+        [MessageKinds.OrderRejected] = new(
+            "Votre ordre {{orderNumber}} est refusé",
+            "Bonjour {{customerName}},\n\nVotre ordre {{orderNumber}} ({{goodsDescription}}) n'a malheureusement pas pu être accepté. Contactez-nous pour plus d'informations.\n\n{{companyName}}"),
+        [MessageKinds.OrderInfoRequested] = new(
+            "Informations complémentaires demandées pour {{orderNumber}}",
+            "Bonjour {{customerName}},\n\nPour l'ordre {{orderNumber}} ({{goodsDescription}}), nous avons besoin d'informations complémentaires :\n\n"
+            + "\"{{reason}}\"\n\nVeuillez répondre via le portail client.\n\nCordialement,\n{{companyName}}"),
     };
 
     private static readonly IReadOnlyDictionary<string, Template> EmailEn = new Dictionary<string, Template>
@@ -191,6 +202,17 @@ public static class BuiltInMessageTemplates
         [MessageKinds.InvoiceCreditNote] = new(
             "Credit note {{invoiceNumber}} from {{companyName}}",
             "Dear {{customerName}},\n\nPlease find attached credit note {{invoiceNumber}}.\n\nKind regards,\n{{companyName}}"),
+        // P8: the event-catalog order kinds an English-speaking customer actually receives.
+        [MessageKinds.OrderAccepted] = new(
+            "Your order {{orderNumber}} has been accepted",
+            "Dear {{customerName}},\n\nYour order {{orderNumber}} ({{goodsDescription}}) has been accepted and will be planned.\n\nKind regards,\n{{companyName}}"),
+        [MessageKinds.OrderRejected] = new(
+            "Your order {{orderNumber}} was declined",
+            "Dear {{customerName}},\n\nUnfortunately your order {{orderNumber}} ({{goodsDescription}}) could not be accepted. Please contact us for more information.\n\n{{companyName}}"),
+        [MessageKinds.OrderInfoRequested] = new(
+            "Additional information requested for {{orderNumber}}",
+            "Dear {{customerName}},\n\nFor order {{orderNumber}} ({{goodsDescription}}) we need additional information:\n\n"
+            + "\"{{reason}}\"\n\nPlease respond via the customer portal.\n\nKind regards,\n{{companyName}}"),
     };
 
     private static readonly IReadOnlyDictionary<string, Template> SmsFr = new Dictionary<string, Template>

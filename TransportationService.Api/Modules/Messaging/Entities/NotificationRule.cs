@@ -57,6 +57,10 @@ public class NotificationRule : AuditableTenantEntity
     /// <summary>Whether a <see cref="CustomerNotificationOverride"/> may disable this event for
     /// one customer specifically. Ignored when the rule itself is disabled.</summary>
     public bool AllowCustomerOverride { get; set; }
+
+    /// <summary>P9: customer-facing mail of this event is held for dispatcher review before
+    /// sending. Null = the catalog default (sensitive kinds default to review).</summary>
+    public bool? RequiresReview { get; set; }
 }
 
 /// <summary>

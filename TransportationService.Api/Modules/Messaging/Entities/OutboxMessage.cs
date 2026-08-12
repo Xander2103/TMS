@@ -14,6 +14,10 @@ public enum OutboxStatus
     Sent,
     Failed,
     Suppressed,
+
+    /// <summary>P9: held for human review (sensitive kinds); a dispatcher releases or rejects.
+    /// The background dispatcher only ever sends Pending rows, so held mail cannot leak.</summary>
+    AwaitingReview,
 }
 
 public enum MessageOwnerType

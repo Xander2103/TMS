@@ -36,7 +36,10 @@ public sealed record NotificationEventInfo(
     NotificationSeverity DefaultSeverity,
     /// <summary>True while an event is cataloged but its producer is not wired yet; the admin
     /// UI shows it read-only as "Nog niet actief". All Peppol events are live since 2026-07-30.</summary>
-    bool PeppolPending = false);
+    bool PeppolPending = false,
+    /// <summary>P9: customer-facing mail of this kind is HELD for dispatcher review by default
+    /// (sensitive: damage, failed delivery, detected delay). A tenant rule may override.</summary>
+    bool DefaultRequiresReview = false);
 
 public static class NotificationEventCatalog
 {
@@ -89,18 +92,24 @@ public static class NotificationEventCatalog
             new(MessageKinds.OrderDelayDetected, "Vertraging vastgesteld", NotificationEventGroups.Orders,
                 [.. OrderTokens, "reason"], DefaultInApp: false, DefaultEmail: true,
                 [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],
-                MessageKinds.OrderDelayDetected, NotificationSeverity.Warning),
+                MessageKinds.OrderDelayDetected, NotificationSeverity.Warning,
+                DefaultRequiresReview: true),
             new(MessageKinds.OrderFailedDelivery, "Levering mislukt", NotificationEventGroups.Orders,
                 [.. OrderTokens, "reason"], DefaultInApp: true, DefaultEmail: true,
                 [
                     new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null),
                     new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.ExceptionsResolve),
                 ],
-                MessageKinds.OrderFailedDelivery, NotificationSeverity.Warning),
+                MessageKinds.OrderFailedDelivery, NotificationSeverity.Warning,
+                DefaultRequiresReview: true),
             new(MessageKinds.OrderDamageRegistered, "Schade geregistreerd bij opdracht", NotificationEventGroups.Orders,
-                [.. OrderTokens, "reason"], DefaultInApp: true, DefaultEmail: false,
-                [new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.ExceptionsResolve)],
-                MessageKinds.OrderDamageRegistered, NotificationSeverity.Warning),
+                [.. OrderTokens, "reason"], DefaultInApp: true, DefaultEmail: true,
+                [
+                    new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null),
+                    new RecipientSpec(NotificationRecipientType.InternalPermission, PermissionCodes.ExceptionsResolve),
+                ],
+                MessageKinds.OrderDamageRegistered, NotificationSeverity.Warning,
+                DefaultRequiresReview: true),
             new(MessageKinds.OrderPodAvailable, "Afleverbewijs beschikbaar", NotificationEventGroups.Orders,
                 OrderTokens, DefaultInApp: false, DefaultEmail: true,
                 [new RecipientSpec(NotificationRecipientType.CustomerPrimaryContact, null)],

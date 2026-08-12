@@ -62,8 +62,10 @@ public class IncidentService : IIncidentService
         INotificationService notificationService,
         TimeProvider timeProvider,
         Modules.Identity.Services.IPermissionAuthorizationService? permissionService = null,
-        Modules.Identity.Services.ICurrentUserContext? currentUser = null)
+        Modules.Identity.Services.ICurrentUserContext? currentUser = null,
+        Modules.Messaging.Services.INotificationEventService? notificationEvents = null)
     {
+        _notificationEvents = notificationEvents;
         _dbContext = dbContext;
         _tenantContext = tenantContext;
         _auditService = auditService;
@@ -209,8 +211,46 @@ public class IncidentService : IIncidentService
             await ApplyChargePolicyAsync(incident, cancellationToken);
         }
 
+        // P9: registered damage on a linked order raises the sensitive event — its customer
+        // mail is held for dispatcher review by default (catalog DefaultRequiresReview).
+        if (incidentType == IncidentType.Damage && incident.TransportOrderId is { } damagedOrderId
+            && _notificationEvents is not null)
+        {
+            try
+            {
+                var damaged = await _dbContext.TransportOrders.AsNoTracking()
+                    .Where(o => o.TenantId == tenantId && o.Id == damagedOrderId)
+                    .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == tenantId),
+                        o => o.CustomerId, c => c.Id,
+                        (o, c) => new { o.OrderNumber, o.GoodsDescription, CustomerId = c.Id, CustomerName = c.Name })
+                    .FirstOrDefaultAsync(cancellationToken);
+                if (damaged is not null)
+                {
+                    await _notificationEvents.PublishAsync(
+                        Modules.Messaging.Entities.MessageKinds.OrderDamageRegistered,
+                        new Modules.Messaging.Services.NotificationEventContext(
+                            "Incident", incident.Id.ToString(),
+                            new Dictionary<string, string>
+                            {
+                                ["orderNumber"] = damaged.OrderNumber,
+                                ["customerName"] = damaged.CustomerName,
+                                ["goodsDescription"] = damaged.GoodsDescription ?? "",
+                                ["reason"] = incident.Title,
+                            })
+                        { CustomerId = damaged.CustomerId },
+                        cancellationToken);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Never let a notification failure break the committed incident.
+            }
+        }
+
         return (await GetAsync(incident.Id, cancellationToken))!;
     }
+
+    private readonly Modules.Messaging.Services.INotificationEventService? _notificationEvents;
 
     public async Task<IncidentDetailDto?> GetAsync(Guid id, CancellationToken cancellationToken)
     {

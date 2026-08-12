@@ -25,7 +25,10 @@ public record MessageRequest(
     string? OverrideLanguage = null,
     /// <summary>When set, template resolution consults this customer's overrides before the
     /// tenant defaults (see MessageTemplate.CustomerId).</summary>
-    Guid? CustomerIdForTemplate = null);
+    Guid? CustomerIdForTemplate = null,
+    /// <summary>P9: the message is held (AwaitingReview) until a dispatcher releases it —
+    /// used for sensitive kinds (damage, failed delivery, liability).</summary>
+    bool RequiresReview = false);
 
 public enum QueueOutcome
 {
@@ -117,9 +120,11 @@ public class MessageOutboxService : IMessageOutboxService
             Language = language,
             Subject = subject,
             Body = body,
-            Status = suppressReason is null ? OutboxStatus.Pending : OutboxStatus.Suppressed,
+            Status = suppressReason is not null ? OutboxStatus.Suppressed
+                : request.RequiresReview ? OutboxStatus.AwaitingReview
+                : OutboxStatus.Pending,
             FailureReason = suppressReason,
-            NextAttemptAt = suppressReason is null
+            NextAttemptAt = suppressReason is null && !request.RequiresReview
                 ? NextAllowedMoment(profile, _timeProvider.GetUtcNow().UtcDateTime)
                 : null,
             IdempotencyKey = request.IdempotencyKey,
