@@ -223,19 +223,77 @@ Uit `appsettings.Production.json` blijkt de aangenomen topologie:
 - CORS staat nooit op wildcard; buiten Development betekent een lege originlijst
   "fail closed".
 
-De bestaande demo-omgeving wordt bijgewerkt met een serverzijdig script (buiten de repo):
-`ssh deploy@<server>` gevolgd door `sudo /usr/local/bin/deploy-transportationservice.sh`.
+Het deploymentscript staat sinds het migratie-incident van 2026-08 **in de repo**
+(`scripts/deploy-transportationservice.sh`) en wordt op de server geïnstalleerd met:
 
-### 3.4 Releasevolgorde
+```bash
+sudo install -m 0755 scripts/deploy-transportationservice.sh /usr/local/bin/deploy-transportationservice.sh
+```
 
-1. Back-up database (en `App_Data`).
-2. `dotnet ef database update` (of het beoordeelde idempotente script) — migraties zijn
-   additief, de oude applicatieversie blijft er ondertussen gewoon op draaien.
-3. Backend publiceren en herstarten (startup-seeders §2.1 draaien automatisch en zijn
-   idempotent; de eerste start na de redesign-migraties doet de dossier-backfill).
-4. Rol-/permissiesync uitvoeren (zie waarschuwing §2.2).
-5. Frontend bouwen met de juiste `VITE_API_BASE_URL` en `dist/` publiceren.
-6. Verificatiechecklist §6 afwerken.
+Uitvoeren: `ssh deploy@<server>` gevolgd door
+`sudo /usr/local/bin/deploy-transportationservice.sh [git-ref]` (default `nav-redesign`).
+
+### 3.4 Releasevolgorde (afgedwongen door het script)
+
+Het script (`set -Eeuo pipefail`, ERR-trap met stap + exitcode + back-uplocatie,
+getimestampte stappen, exitcodes nooit gemaskeerd door pipes/`tail`) dwingt deze
+volgorde af — de kern is dat **migraties ALTIJD vóór de herstart lopen**:
+
+1. Git-werkboom moet schoon zijn (anders stopt de deploy).
+2. `pg_dump -Fc` back-up naar `/var/backups/transportationservice/` (chmod 600).
+3. Gevraagde branch/commit ophalen (`fetch` + `--ff-only`).
+4. `dotnet restore`.
+5. `dotnet build -c Release` — de ENIGE compilatie; EF hergebruikt ze.
+6. `npm ci`.
+7. `npm run build` (faalt hard als `VITE_API_BASE_URL` ontbreekt in de env).
+8. `nginx -t`.
+9. De omgeving komt uit **hetzelfde** bestand als systemd
+   (`/etc/transportationservice/tms.env`, EnvironmentFile-formaat) en wordt geladen
+   zonder ooit waarden te tonen — EF ziet dus exact de productieconnectionstring.
+10. Connectiviteitscheck (`SELECT 1`).
+11. **Preflight eigenaarschap** (§3.5) + openstaande migraties tonen
+    (`dotnet ef migrations list --no-build --configuration Release`).
+12. `dotnet ef database update --project TransportationService.Api
+    --startup-project TransportationService.Api --no-build --configuration Release`
+    — additieve migraties in EF-volgorde; **nooit** handgeschreven `ALTER TABLE`,
+    **nooit** migraties handmatig als toegepast markeren. Geen openstaande = gewoon door.
+13. Faalt de migratie → het script stopt onmiddellijk vóór elke herstart: de vorige
+    release blijft draaien (symlink onaangeroerd), de foutmelding noemt de stap én de
+    back-uplocatie.
+14. Publiceren naar een NIEUWE release-map + symlink-switch
+    (`/opt/transportationservice/current`), frontend-`dist/` naar de webroot,
+    `systemctl restart transportationservice-api`. De vorige release-map blijft staan
+    voor handmatige terugrol (het script print het terugrolcommando bij falen).
+15. Wachten op opstart (startup-seeders §2.1 draaien automatisch en idempotent).
+16. `systemctl is-active` moet slagen.
+17. Lokale healthcheck: de API heeft bewust geen `/health`; het script accepteert elke
+    HTTP-status < 500 op `/api/auth/me` (401 zonder token = levend proces).
+18. Pas na ál die checks: samenvatting met commit, release-map, back-uppad,
+    migratieresultaat, servicestatus en healthcheckresultaat.
+
+Daarna handmatig: rol-/permissiesync (waarschuwing §2.2) en verificatiechecklist §6.
+Secrets worden nooit geëcho'd of gelogd; het env-bestand wordt nooit ge-`cat` naar de
+uitvoer; er staan geen credentials in het script (alles komt uit het env-bestand).
+
+### 3.5 Incident 2026-08: tabel-eigenaarschap en migratievolgorde
+
+Twee productielessen, allebei structureel afgedekt:
+
+1. **Code vóór migraties.** Een deploy herstartte de API vóór `dotnet ef database
+   update`; de nieuwe code verwachtte kolommen die nog niet bestonden en de service
+   crashte bij opstart. Het script dwingt sindsdien de volgorde back-up → build →
+   migraties → pas dán herstart af, en stopt bij een migratiefout vóór elke herstart.
+2. **Eigenaarschap.** Migraties draaien als databankgebruiker `tms`, maar de public-
+   applicatietabellen bleken eigendom van `postgres` — `ALTER TABLE` door migraties
+   faalt dan. Dit is destijds eenmalig handmatig gecorrigeerd (alle 171 public-tabellen
+   zijn nu van `tms`). Het script controleert dit voortaan als **preflight vóór de
+   migraties**: is ook maar één public-tabel niet van de migratiegebruiker, dan stopt
+   de deploy met de tabellijst en een aanwijzing. Het script wijzigt eigenaarschap
+   bewust **nooit zelf** (en gebruikt géén breed `REASSIGN OWNED`): herstel is een
+   bewuste beheerdersactie, per tabel na review
+   (`ALTER TABLE public."<tabel>" OWNER TO tms;`).
+   **Provisioning/restores** moeten objecten meteen met de juiste eigenaar aanmaken:
+   verbind als `tms`, of gebruik `pg_restore --no-owner --role=tms`.
 
 ---
 
