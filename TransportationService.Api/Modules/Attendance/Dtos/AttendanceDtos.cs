@@ -114,6 +114,75 @@ public sealed record AttendanceHistoryDto(
     int? TotalPlannedMinutes,
     IReadOnlyList<AttendanceDayDto> Days);
 
+// ── HR-liveoverzicht ─────────────────────────────────────────────────────────────
+
+public enum AttendanceOverviewStatus
+{
+    NotClockedIn,
+    Working,
+    OnBreak,
+    ClockedOut,
+    /// <summary>Actieve sessie langer dan de geconfigureerde grens — mogelijk vergeten uit te punten.</summary>
+    ForgottenClockOut,
+    /// <summary>Goedgekeurde afwezigheid (verlof/ziekte); inpunten wordt niet verwacht.</summary>
+    Absent,
+}
+
+public sealed record AttendanceOverviewRowDto(
+    Guid EmployeeId,
+    string Name,
+    string EmployeeNumber,
+    string? DepartmentName,
+    AttendanceOverviewStatus Status,
+    DateTime? Since,
+    int WorkedMinutes,
+    int BreakMinutes,
+    int? PlannedMinutes,
+    TimeOnly? PlannedStart,
+    TimeOnly? PlannedEnd,
+    bool PlannedNotClockedIn,
+    bool HasCorrections,
+    string? AbsenceLabel);
+
+public sealed record AttendanceOverviewSummaryDto(
+    int Working,
+    int OnBreak,
+    int ClockedOut,
+    int NotClockedIn,
+    int PlannedNotClockedIn,
+    int ForgottenClockOut,
+    int Absent);
+
+public sealed record AttendanceOverviewDto(
+    DateOnly Date,
+    AttendanceOverviewSummaryDto Summary,
+    IReadOnlyList<AttendanceOverviewRowDto> Rows);
+
+// ── Rapportering ─────────────────────────────────────────────────────────────────
+
+public sealed record AttendanceReportRowDto(
+    Guid EmployeeId,
+    string EmployeeName,
+    string EmployeeNumber,
+    string? DepartmentName,
+    DateOnly Date,
+    int GrossMinutes,
+    int BreakMinutes,
+    int NetMinutes,
+    int? PlannedMinutes,
+    int? DeviationMinutes,
+    bool MissingClockOut,
+    int CorrectionCount);
+
+public sealed record AttendanceReportDto(
+    DateOnly From,
+    DateOnly To,
+    int TotalGrossMinutes,
+    int TotalBreakMinutes,
+    int TotalNetMinutes,
+    int TotalPlannedMinutes,
+    IReadOnlyList<AttendanceReportRowDto> Rows);
+
 // ── Correcties ───────────────────────────────────────────────────────────────────
 
 public sealed record CorrectSessionRequest(DateTime? ClockInAt, DateTime? ClockOutAt, string Reason, Guid? Version);

@@ -756,6 +756,57 @@ public class DefaultRoleSeederTests
     }
 
     [Fact]
+    public async Task Version30_GrantsAttendance_SelfBroadly_ManagementToHr_KioskBeheerToNobody()
+    {
+        var (db, tenantId) = await SeedTenantWithCatalogAsync();
+        using var _ = db;
+
+        await DefaultRoleSeeder.SyncAsync(db.Context);
+
+        var state = await db.Context.RoleTemplateStates.SingleAsync(s => s.TenantId == tenantId);
+        Assert.Equal(DefaultRoleUpgrades.CurrentVersion, state.AppliedVersion);
+        Assert.Equal(30, DefaultRoleUpgrades.CurrentVersion);
+
+        var roles = await db.Context.Roles.Where(r => r.TenantId == tenantId).ToListAsync();
+        Guid RoleId(string code) => roles.Single(r => r.TemplateCode == code).Id;
+
+        // Elke interne medewerker (incl. chauffeur) mag zelf punchen en eigen uren zien.
+        foreach (var template in new[] { "planner", "dispatcher", "boekhouding", "magazijn", "chauffeur", "hr", "management" })
+        {
+            Assert.Contains(PermissionCodes.AttendanceSelf, await CodesOfAsync(db, RoleId(template)));
+        }
+
+        // HR: overzicht, correcties, rapporten, PIN-beheer en instellingen.
+        var hr = await CodesOfAsync(db, RoleId("hr"));
+        Assert.Contains(PermissionCodes.AttendanceView, hr);
+        Assert.Contains(PermissionCodes.AttendanceCorrect, hr);
+        Assert.Contains(PermissionCodes.AttendanceReport, hr);
+        Assert.Contains(PermissionCodes.AttendanceManageCredentials, hr);
+        Assert.Contains(PermissionCodes.AttendanceManageSettings, hr);
+
+        // Management kijkt en rapporteert, maar corrigeert niet en beheert geen codes.
+        var management = await CodesOfAsync(db, RoleId("management"));
+        Assert.Contains(PermissionCodes.AttendanceView, management);
+        Assert.Contains(PermissionCodes.AttendanceReport, management);
+        Assert.DoesNotContain(PermissionCodes.AttendanceCorrect, management);
+        Assert.DoesNotContain(PermissionCodes.AttendanceManageCredentials, management);
+
+        // Dispatcher BEWUST geen live-overzicht (least privilege); kioskbeheer zit in geen
+        // enkel sjabloon — de administrator (systeemrol, volledige catalogus) kent dat per
+        // persoon toe. Portaalgebruikers punchen nooit.
+        Assert.DoesNotContain(PermissionCodes.AttendanceView, await CodesOfAsync(db, RoleId("dispatcher")));
+        foreach (var role in roles.Where(r => r.TemplateCode is not null && !r.IsSystemRole))
+        {
+            Assert.DoesNotContain(PermissionCodes.AttendanceManageKiosks, await CodesOfAsync(db, role.Id));
+        }
+
+        foreach (var portal in roles.Where(r => r.TemplateCode != null && r.TemplateCode.StartsWith("klantportaal")))
+        {
+            Assert.DoesNotContain(PermissionCodes.AttendanceSelf, await CodesOfAsync(db, portal.Id));
+        }
+    }
+
+    [Fact]
     public async Task Upgrades_AreTenantIsolated()
     {
         var (db, tenantA) = await SeedTenantWithCatalogAsync();

@@ -75,6 +75,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.LegalEntitiesView,
                 PermissionCodes.ContactDepartmentsManage,
                 PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend,
+                PermissionCodes.AttendanceSelf,
             ]),
 
         new("dispatcher", "Dispatcher",
@@ -101,6 +102,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.WarehouseSchedule,
                 PermissionCodes.LegalEntitiesView,
                 PermissionCodes.CustomerMessagesView, PermissionCodes.CustomerMessagesSend,
+                PermissionCodes.AttendanceSelf,
             ]),
 
         new("management", "Management",
@@ -154,6 +156,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PortalAnnouncementsManage,
                 PermissionCodes.PeppolView, PermissionCodes.PeppolConfigure, PermissionCodes.PeppolValidate,
                 PermissionCodes.PeppolSend, PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
+                PermissionCodes.AttendanceSelf, PermissionCodes.AttendanceView, PermissionCodes.AttendanceReport,
             ]),
 
         new("boekhouding", "Boekhouding",
@@ -184,6 +187,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.AccountingView, PermissionCodes.AccountingManage,
                 PermissionCodes.PeppolView, PermissionCodes.PeppolValidate,
                 PermissionCodes.PeppolSend, PermissionCodes.PeppolRetry, PermissionCodes.PeppolViewIncoming,
+                PermissionCodes.AttendanceSelf,
             ]),
 
         new("hr", "HR",
@@ -205,6 +209,9 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.InventoryOverrideNegativeStock,
                 PermissionCodes.LeaveBalancesView, PermissionCodes.LeaveBalancesManage, PermissionCodes.LeaveBalancesAdjust,
                 PermissionCodes.LeaveBalancesViewOwn, PermissionCodes.LeaveTypesManage,
+                PermissionCodes.AttendanceSelf, PermissionCodes.AttendanceView, PermissionCodes.AttendanceCorrect,
+                PermissionCodes.AttendanceReport, PermissionCodes.AttendanceManageCredentials,
+                PermissionCodes.AttendanceManageSettings,
                 PermissionCodes.MessagesSend,
                 PermissionCodes.DepartmentsView, PermissionCodes.JobFunctionsView,
                 PermissionCodes.ContactDepartmentsView,
@@ -220,6 +227,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.PodFinalize,
                 PermissionCodes.AbsencesView, PermissionCodes.AbsencesCreate,
                 PermissionCodes.LeaveBalancesViewOwn,
+                PermissionCodes.AttendanceSelf,
             ]),
 
         // Deliberately NO internal orders.view: portal users reach only the customer-portal
@@ -272,6 +280,7 @@ public static class DefaultRoleDefinitions
                 PermissionCodes.WarehouseConflictOverride,
                 PermissionCodes.IssuedItemsView,
                 PermissionCodes.InventoryView, PermissionCodes.InventoryAdjust,
+                PermissionCodes.AttendanceSelf,
             ]),
     ];
 }

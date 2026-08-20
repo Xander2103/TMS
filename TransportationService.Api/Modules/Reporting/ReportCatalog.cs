@@ -155,6 +155,10 @@ public static class ReportCatalog
         new("driver-availability", "HR", "Chauffeursbeschikbaarheid",
             "Beschikbaarheid, afwezigheden en inzetbaarheid per chauffeur.",
             [PermissionCodes.EmployeePlanningView], ReportKind.ComingSoon),
+        new("attendance", "HR", "Urenregistratie (XLSX)",
+            "Gewerkte tijd per medewerker per dag: bruto, pauze, netto, gepland en afwijking.",
+            [PermissionCodes.AttendanceReport], ReportKind.Export,
+            Endpoint: "/api/reports/attendance", Filters: DateRange, FileType: "xlsx"),
 
         // --- Klanten ---
         new("customer-overview", "Klanten", "Klantenoverzicht",

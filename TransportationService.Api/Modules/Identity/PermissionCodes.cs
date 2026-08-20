@@ -411,6 +411,15 @@ public static class PermissionCodes
     public const string LeaveBalancesViewOwn = "leave_balances.view_own";
     public const string LeaveTypesManage = "leave_types.manage";
 
+    // --- Time & attendance (urenregistratie + prikklokken) ---
+    public const string AttendanceSelf = "attendance.self";
+    public const string AttendanceView = "attendance.view";
+    public const string AttendanceCorrect = "attendance.correct";
+    public const string AttendanceReport = "attendance.report";
+    public const string AttendanceManageKiosks = "attendance.manage_kiosks";
+    public const string AttendanceManageCredentials = "attendance.manage_credentials";
+    public const string AttendanceManageSettings = "attendance.manage_settings";
+
     // --- Notification rules (configurable events, recipients, customer overrides) ---
     public const string NotificationRulesView = "notification_rules.view";
     public const string NotificationRulesManage = "notification_rules.manage";
@@ -674,6 +683,13 @@ public static class PermissionCodes
         (AbsencesDelete, "absences", "delete", "Afwezigheden verwijderen"),
         (AbsencesApprove, "absences", "approve", "Afwezigheden goedkeuren of afwijzen"),
         (AbsencesViewMedical, "absences", "view_medical", "Medische gegevens bij ziekteverzuim bekijken (reden, HR-notitie, attest)"),
+        (AttendanceSelf, "attendance", "self", "Eigen urenregistratie: in-/uitpunten, pauzes en historiek"),
+        (AttendanceView, "attendance", "view", "Aanwezigheid en urenregistratie van medewerkers bekijken"),
+        (AttendanceCorrect, "attendance", "correct", "Urenregistraties corrigeren en manuele sessies aanmaken (met reden)"),
+        (AttendanceReport, "attendance", "report", "Urenregistratie-rapporten bekijken en exporteren"),
+        (AttendanceManageKiosks, "attendance", "manage_kiosks", "Prikklokken (kiosk-devices) beheren en provisionen"),
+        (AttendanceManageCredentials, "attendance", "manage_credentials", "Prikklokcodes (PIN) van medewerkers beheren"),
+        (AttendanceManageSettings, "attendance", "manage_settings", "Urenregistratie-instellingen beheren"),
         (LeaveBalancesView, "leave_balances", "view", "Verlofsaldo van medewerkers bekijken"),
         (LeaveBalancesManage, "leave_balances", "manage", "Jaarrecht en overdracht van verlofsaldo beheren"),
         (LeaveBalancesAdjust, "leave_balances", "adjust", "Verlofsaldo handmatig aanpassen (met reden)"),

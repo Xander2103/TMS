@@ -17,7 +17,7 @@ public static class DefaultRoleUpgrades
         IReadOnlyDictionary<string, IReadOnlyList<string>> GrantsByTemplateCode);
 
     /// <summary>Version 1 = the original role creation; steps start at 2.</summary>
-    public const int CurrentVersion = 29;
+    public const int CurrentVersion = 30;
 
     public static IReadOnlyList<UpgradeStep> Steps { get; } =
     [
@@ -535,6 +535,32 @@ public static class DefaultRoleUpgrades
             new Dictionary<string, IReadOnlyList<string>>
             {
                 ["management"] = [PermissionCodes.SystemInfoView, PermissionCodes.BackupsView],
+            }),
+
+        new(30,
+            "Attendance wave 2026-08-20: urenregistratie + prikklok. attendance.self (eigen "
+            + "punches/historiek) voor alle interne medewerker-sjablonen incl. chauffeur; HR "
+            + "krijgt overzicht, correcties, rapporten, PIN-beheer en instellingen; management "
+            + "kijkt en rapporteert. Dispatcher krijgt BEWUST geen attendance.view (least "
+            + "privilege) en kioskbeheer (manage_kiosks) blijft bij de beheerder per persoon.",
+            new Dictionary<string, IReadOnlyList<string>>
+            {
+                ["planner"] = [PermissionCodes.AttendanceSelf],
+                ["dispatcher"] = [PermissionCodes.AttendanceSelf],
+                ["boekhouding"] = [PermissionCodes.AttendanceSelf],
+                ["magazijn"] = [PermissionCodes.AttendanceSelf],
+                ["chauffeur"] = [PermissionCodes.AttendanceSelf],
+                ["hr"] =
+                [
+                    PermissionCodes.AttendanceSelf, PermissionCodes.AttendanceView,
+                    PermissionCodes.AttendanceCorrect, PermissionCodes.AttendanceReport,
+                    PermissionCodes.AttendanceManageCredentials, PermissionCodes.AttendanceManageSettings,
+                ],
+                ["management"] =
+                [
+                    PermissionCodes.AttendanceSelf, PermissionCodes.AttendanceView,
+                    PermissionCodes.AttendanceReport,
+                ],
             }),
     ];
 }
