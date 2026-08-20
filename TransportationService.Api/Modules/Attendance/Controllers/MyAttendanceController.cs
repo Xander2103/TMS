@@ -84,9 +84,10 @@ public class MyAttendanceController : ControllerBase
             return NoEmployeeLink();
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var effectiveTo = to ?? today;
-        var effectiveFrom = from ?? effectiveTo.AddDays(-13);
+        // Fallback-default: UTC-morgen als bovengrens zodat "vandaag" in élke
+        // tenant-tijdzone binnen het venster valt (de UI stuurt normaal expliciete data).
+        var effectiveTo = to ?? DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var effectiveFrom = from ?? effectiveTo.AddDays(-14);
         if (effectiveFrom > effectiveTo || effectiveTo.DayNumber - effectiveFrom.DayNumber > MaxHistoryDays)
         {
             return BadRequest(new { message = $"De periode is ongeldig of langer dan {MaxHistoryDays} dagen." });

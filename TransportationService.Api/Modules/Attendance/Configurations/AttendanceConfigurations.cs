@@ -17,6 +17,9 @@ public class AttendanceSessionConfiguration : IEntityTypeConfiguration<Attendanc
         builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(s => s.ClockInSource).HasConversion<string>().HasMaxLength(20);
         builder.Property(s => s.ClockOutSource).HasConversion<string>().HasMaxLength(20);
+        // Race-backstop bovenop de expliciete Version-check in de correctieservice:
+        // gelijktijdige uitpunt-/correctiepaden verliezen nooit stil een schrijfactie.
+        builder.Property(s => s.Version).IsConcurrencyToken();
 
         // Harde databankinvariant: maximaal één actieve (niet-uitgepunte) sessie per
         // medewerker — dubbelkliks, dubbele browsers en netwerkretries kunnen nooit een

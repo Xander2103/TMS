@@ -19,14 +19,18 @@ public static class RateLimitingServiceCollectionExtensions
     public const string SessionPolicy = "session";
 
     /// <summary>Throttles the anonymous kiosk (prikklok) punch endpoints: PIN's leven in een
-    /// kleine sleutelruimte, dus naast de credential-lockout mag één adres nooit aan gokrate
-    /// komen. 15/minuut dekt normaal ploegverkeer (identify + punch per medewerker) ruim.</summary>
+    /// kleine sleutelruimte, dus naast de device-/credential-lockout mag één bron nooit aan
+    /// gokrate komen. Partitionering per DEVICE (uit de X-Kiosk-Device-header) zodat een
+    /// ploegwissel aan één prikklok — of meerdere prikklokken achter één NAT — elkaar niet
+    /// uithongeren; requests zonder parseerbaar device-id delen de per-IP-bucket. 60/minuut
+    /// per device dekt piekverkeer (ping + identify + punch per medewerker) ruim, terwijl
+    /// bruteforce primair door de device-lockout met backoff wordt gesmoord.</summary>
     public const string KioskPolicy = "kiosk";
 
     private const int PermitLimit = 10;
     private const int WebhookPermitLimit = 60;
     private const int SessionPermitLimit = 30;
-    private const int KioskPermitLimit = 15;
+    private const int KioskPermitLimit = 60;
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
 
     /// <summary>
@@ -36,6 +40,24 @@ public static class RateLimitingServiceCollectionExtensions
     /// </summary>
     private static string ClientKey(HttpContext context) =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+    /// <summary>
+    /// Kioskpartitie: het device-id vóór de punt in de X-Kiosk-Device-header (alleen het
+    /// publieke id, nooit het secret). Ongeldige/ontbrekende headers vallen terug op de
+    /// per-IP-bucket zodat header-spam geen onbeperkte verse buckets kan claimen — dat pad
+    /// haalt sowieso nooit een geldige identificatie.
+    /// </summary>
+    private static string KioskKey(HttpContext context)
+    {
+        var header = context.Request.Headers["X-Kiosk-Device"].ToString();
+        var separator = header.IndexOf('.');
+        if (separator > 0 && Guid.TryParseExact(header[..separator], "N", out var deviceId))
+        {
+            return $"dev:{deviceId:N}";
+        }
+
+        return $"ip:{ClientKey(context)}";
+    }
 
     public static IServiceCollection AddAuthRateLimiting(this IServiceCollection services)
     {
@@ -96,7 +118,7 @@ public static class RateLimitingServiceCollectionExtensions
 
             options.AddPolicy(KioskPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: ClientKey(httpContext),
+                    partitionKey: KioskKey(httpContext),
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = KioskPermitLimit,

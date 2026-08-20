@@ -56,6 +56,14 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
             return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.NotFound, "Registratie niet gevonden.");
         }
 
+        if (session.Status == AttendanceSessionStatus.Cancelled)
+        {
+            // Eindtoestand: een geannuleerde registratie mag nooit stil weer gaan
+            // meetellen. Herstel loopt via een nieuwe manuele sessie.
+            return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.ValidationFailed,
+                "Een geannuleerde registratie kan niet gecorrigeerd worden. Maak zo nodig een manuele registratie aan.");
+        }
+
         if (request.Version is { } expected && expected != session.Version)
         {
             return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.StaleVersion,
@@ -72,10 +80,10 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
                 "Het uitpuntmoment moet na het inpuntmoment liggen.");
         }
 
-        if (newClockOut is { } futureCo && futureCo > now)
+        if (newClockIn > now || (newClockOut is { } futureCo && futureCo > now))
         {
             return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.ValidationFailed,
-                "Een registratie kan niet in de toekomst eindigen.");
+                "Een registratie kan niet in de toekomst liggen.");
         }
 
         if (await OverlapsOtherSessionAsync(session.EmployeeId, sessionId, newClockIn, newClockOut, cancellationToken))
@@ -94,11 +102,13 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
 
         var reason = request.Reason.Trim();
         var old = new { session.ClockInAt, session.ClockOutAt, session.Status };
+        var correctionsAdded = 0;
 
         if (request.ClockInAt is { } clockIn && clockIn != session.ClockInAt)
         {
             AddCorrection(session, AttendanceCorrectionKind.ClockIn, null, session.ClockInAt, clockIn, reason, now);
             session.ClockInAt = clockIn;
+            correctionsAdded++;
         }
 
         if (request.ClockOutAt is { } clockOut && clockOut != session.ClockOutAt)
@@ -116,10 +126,20 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
             session.ClockOutAt = clockOut;
             session.ClockOutSource ??= AttendanceSource.Manual;
             session.Status = AttendanceSessionStatus.Completed;
+            correctionsAdded++;
+        }
+
+        if (correctionsAdded == 0)
+        {
+            // Niets gewijzigd: geen correctievlag, geen auditruis.
+            return await ResultAsync(session, cancellationToken);
         }
 
         session.HasCorrections = true;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (await SaveCorrectionAsync(cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
 
         await _auditService.RecordAsync("AttendanceSession", session.Id.ToString(), "Corrected",
             old, new { session.ClockInAt, session.ClockOutAt, session.Status, Reason = reason }, cancellationToken);
@@ -139,6 +159,12 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
         if (session is null)
         {
             return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.NotFound, "Registratie niet gevonden.");
+        }
+
+        if (session.Status == AttendanceSessionStatus.Cancelled)
+        {
+            return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.ValidationFailed,
+                "Een geannuleerde registratie kan niet gecorrigeerd worden.");
         }
 
         if (request.Version is { } expected && expected != session.Version)
@@ -171,12 +197,25 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
                 "De pauze moet binnen de sessietijden vallen.");
         }
 
+        // Overlappende pauzes dubbeltellen in de pauzeduur en drukken de netto werktijd:
+        // het gecorrigeerde interval mag geen andere pauze van de sessie raken.
+        var newEndEffective = newEnd ?? sessionEnd;
+        if (breaks.Any(b => b.Id != target.Id
+                            && b.StartedAt < newEndEffective
+                            && (b.EndedAt ?? sessionEnd) > newStart))
+        {
+            return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.ValidationFailed,
+                "De pauze overlapt met een andere pauze van deze sessie.");
+        }
+
         var reason = request.Reason.Trim();
+        var correctionsAdded = 0;
 
         if (request.StartedAt is { } started && started != target.StartedAt)
         {
             AddCorrection(session, AttendanceCorrectionKind.BreakStart, target.Id, target.StartedAt, started, reason, now);
             target.StartedAt = started;
+            correctionsAdded++;
         }
 
         if (request.EndedAt is { } ended && ended != target.EndedAt)
@@ -188,10 +227,20 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
             {
                 session.Status = AttendanceSessionStatus.Working;
             }
+
+            correctionsAdded++;
+        }
+
+        if (correctionsAdded == 0)
+        {
+            return await ResultAsync(session, cancellationToken);
         }
 
         session.HasCorrections = true;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (await SaveCorrectionAsync(cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
 
         await _auditService.RecordAsync("AttendanceSession", session.Id.ToString(), "BreakCorrected",
             new { BreakId = breakId }, new { target.StartedAt, target.EndedAt, Reason = reason }, cancellationToken);
@@ -244,7 +293,10 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
         AddCorrection(session, AttendanceCorrectionKind.SessionCancelled, null, old.ClockInAt, null, reason, now,
             AttendanceEventType.SessionCancelled);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (await SaveCorrectionAsync(cancellationToken) is { } conflict)
+        {
+            return conflict;
+        }
 
         await _auditService.RecordAsync("AttendanceSession", session.Id.ToString(), "Cancelled",
             old, new { session.Status, Reason = reason }, cancellationToken);
@@ -274,12 +326,22 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
             return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.NotFound, "Medewerker niet gevonden.");
         }
 
-        foreach (var b in request.Breaks ?? [])
+        var requestedBreaks = (request.Breaks ?? []).OrderBy(b => b.StartedAt).ToList();
+        foreach (var b in requestedBreaks)
         {
             if (b.EndedAt <= b.StartedAt || b.StartedAt < request.ClockInAt || b.EndedAt > request.ClockOutAt)
             {
                 return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.ValidationFailed,
                     "Elke pauze moet binnen de sessietijden vallen en een geldig begin/einde hebben.");
+            }
+        }
+
+        for (var i = 1; i < requestedBreaks.Count; i++)
+        {
+            if (requestedBreaks[i].StartedAt < requestedBreaks[i - 1].EndedAt)
+            {
+                return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.ValidationFailed,
+                    "Pauzes mogen elkaar niet overlappen.");
             }
         }
 
@@ -304,7 +366,7 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
         };
         _dbContext.AttendanceSessions.Add(session);
 
-        foreach (var b in request.Breaks ?? [])
+        foreach (var b in requestedBreaks)
         {
             _dbContext.AttendanceBreaks.Add(new AttendanceBreak
             {
@@ -351,6 +413,22 @@ public class AttendanceCorrectionService : IAttendanceCorrectionService
                 && s.ClockInAt < effectiveEnd
                 && (s.ClockOutAt == null || s.ClockOutAt > start),
             cancellationToken);
+    }
+
+    /// <summary>SaveChanges met concurrency-token-bewaking: een verloren race wordt een expliciete StaleVersion, nooit een stille overschrijving.</summary>
+    private async Task<AttendanceCorrectionResult?> SaveCorrectionAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            return null;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _dbContext.ChangeTracker.Clear();
+            return AttendanceCorrectionResult.Fail(AttendanceCorrectionOutcome.StaleVersion,
+                "De registratie is intussen gewijzigd. Herlaad en probeer opnieuw.");
+        }
     }
 
     private static AttendanceCorrectionResult? ValidateReason(string? reason) =>

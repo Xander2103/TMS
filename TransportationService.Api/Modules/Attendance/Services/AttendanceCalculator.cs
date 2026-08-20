@@ -118,23 +118,25 @@ public static class AttendanceCalculator
     public static (DateTime StartUtc, DateTime EndUtc) LocalDayWindowUtc(DateOnly day, TimeZoneInfo timeZone) =>
         (LocalDayStartUtc(day, timeZone), LocalDayStartUtc(day.AddDays(1), timeZone));
 
-    private static DateTime LocalDayStartUtc(DateOnly day, TimeZoneInfo timeZone)
+    /// <summary>Lokale wandkloktijd → UTC, DST-veilig (ongeldige tijden schuiven voorbij het gat, dubbele nemen de eerste instantie).</summary>
+    public static DateTime LocalToUtc(DateOnly day, TimeOnly time, TimeZoneInfo timeZone)
     {
-        var localMidnight = day.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
-        if (timeZone.IsInvalidTime(localMidnight))
+        var local = day.ToDateTime(time, DateTimeKind.Unspecified);
+        if (timeZone.IsInvalidTime(local))
         {
-            // Tijdzones die om middernacht verspringen (niet in de EU): schuif voorbij het gat.
-            localMidnight = localMidnight.AddHours(1);
+            local = local.AddHours(1);
         }
-        else if (timeZone.IsAmbiguousTime(localMidnight))
+        else if (timeZone.IsAmbiguousTime(local))
         {
-            // Neem de eerste (zomertijd-)instantie van de dubbele middernacht.
-            var offsets = timeZone.GetAmbiguousTimeOffsets(localMidnight);
-            return DateTime.SpecifyKind(localMidnight - offsets.Max(), DateTimeKind.Utc);
+            var offsets = timeZone.GetAmbiguousTimeOffsets(local);
+            return DateTime.SpecifyKind(local - offsets.Max(), DateTimeKind.Utc);
         }
 
-        return TimeZoneInfo.ConvertTimeToUtc(localMidnight, timeZone);
+        return TimeZoneInfo.ConvertTimeToUtc(local, timeZone);
     }
+
+    private static DateTime LocalDayStartUtc(DateOnly day, TimeZoneInfo timeZone) =>
+        LocalToUtc(day, TimeOnly.MinValue, timeZone);
 
     private static TimeSpan Overlap(DateTime start, DateTime end, DateTime windowStart, DateTime windowEnd)
     {

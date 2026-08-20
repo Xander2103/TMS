@@ -26,6 +26,9 @@ export function WorkStatusCard() {
   const [busy, setBusy] = useState(false)
   const [tick, setTick] = useState(0)
   const mounted = useRef(true)
+  // Monotone teller: een poll die vóór een punch startte mag de verse punch-status
+  // niet meer overschrijven met verouderde data.
+  const statusSeq = useRef(0)
 
   useEffect(() => {
     mounted.current = true
@@ -40,9 +43,10 @@ export function WorkStatusCard() {
   }, [])
 
   useEffect(() => {
+    const seq = statusSeq.current
     getMyAttendanceStatus()
       .then((data) => {
-        if (!mounted.current) return
+        if (!mounted.current || statusSeq.current !== seq) return
         setStatus(data)
         setHidden(false)
       })
@@ -60,6 +64,7 @@ export function WorkStatusCard() {
       try {
         const next = await action()
         if (!mounted.current) return
+        statusSeq.current += 1
         setStatus(next)
         showSuccess(successMessage)
       } catch (err) {
@@ -67,7 +72,10 @@ export function WorkStatusCard() {
         showError(describeApiError(err, 'De actie kon niet worden geregistreerd.').message)
         try {
           const refreshed = await getMyAttendanceStatus()
-          if (mounted.current) setStatus(refreshed)
+          if (mounted.current) {
+            statusSeq.current += 1
+            setStatus(refreshed)
+          }
         } catch {
           /* status blijft staan; volgende poll herstelt */
         }

@@ -196,6 +196,13 @@ public class KioskPunchService : IKioskPunchService
             _ => AttendancePunchResult.Fail(AttendancePunchOutcome.NotClockedIn, "Ongeldige actie."),
         };
 
+        // Het race-pad in AttendanceService wist de ChangeTracker; haal het device dan
+        // opnieuw op zodat LastSeen/LastPunch niet stil verloren gaan.
+        if (_dbContext.Entry(device).State == EntityState.Detached)
+        {
+            device = await _dbContext.KioskDevices.FirstAsync(d => d.Id == device.Id, cancellationToken);
+        }
+
         device.LastSeenAt = now;
         if (result.Outcome == AttendancePunchOutcome.Success)
         {

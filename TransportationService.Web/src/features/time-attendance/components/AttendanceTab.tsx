@@ -116,15 +116,15 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
       const { session } = draft
       let version: string | null = session.version
 
-      const newClockIn = fromLocalInput(draft.clockInAt)
-      const newClockOut = fromLocalInput(draft.clockOutAt)
-      const clockChanged =
-        (newClockIn && newClockIn !== new Date(session.clockInAt).toISOString())
-        || (newClockOut ?? null) !== (session.clockOutAt ? new Date(session.clockOutAt).toISOString() : null)
-      if (clockChanged) {
+      // Vergelijk op invoerniveau (minuutgranulariteit): alleen velden die de gebruiker
+      // écht wijzigde worden verstuurd — anders zou elke submit de seconden wegknippen
+      // en de correctiehistoriek vervuilen.
+      const clockInChanged = draft.clockInAt !== toLocalInput(session.clockInAt)
+      const clockOutChanged = draft.clockOutAt !== toLocalInput(session.clockOutAt)
+      if (clockInChanged || clockOutChanged) {
         const updated = await correctSession(session.id, {
-          clockInAt: newClockIn,
-          clockOutAt: newClockOut,
+          clockInAt: clockInChanged ? fromLocalInput(draft.clockInAt) : null,
+          clockOutAt: clockOutChanged ? fromLocalInput(draft.clockOutAt) : null,
           reason: draft.reason.trim(),
           version,
         })
@@ -134,15 +134,12 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
       for (const breakDraft of draft.breaks) {
         const original = session.breaks.find((b) => b.id === breakDraft.id)
         if (!original) continue
-        const newStart = fromLocalInput(breakDraft.startedAt)
-        const newEnd = fromLocalInput(breakDraft.endedAt)
-        const changed =
-          (newStart && newStart !== new Date(original.startedAt).toISOString())
-          || (newEnd ?? null) !== (original.endedAt ? new Date(original.endedAt).toISOString() : null)
-        if (changed) {
+        const startChanged = breakDraft.startedAt !== toLocalInput(original.startedAt)
+        const endChanged = breakDraft.endedAt !== toLocalInput(original.endedAt)
+        if (startChanged || endChanged) {
           const updated = await correctBreak(session.id, breakDraft.id, {
-            startedAt: newStart,
-            endedAt: newEnd,
+            startedAt: startChanged ? fromLocalInput(breakDraft.startedAt) : null,
+            endedAt: endChanged ? fromLocalInput(breakDraft.endedAt) : null,
             reason: draft.reason.trim(),
             version,
           })

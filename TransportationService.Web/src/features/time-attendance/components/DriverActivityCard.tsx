@@ -25,6 +25,8 @@ export function DriverActivityCard() {
   const [busy, setBusy] = useState(false)
   const [tick, setTick] = useState(0)
   const mounted = useRef(true)
+  // Zelfde stale-poll-bescherming als WorkStatusCard.
+  const statusSeq = useRef(0)
 
   useEffect(() => {
     mounted.current = true
@@ -39,9 +41,10 @@ export function DriverActivityCard() {
   }, [])
 
   useEffect(() => {
+    const seq = statusSeq.current
     getMyDriverDay()
       .then((data) => {
-        if (!mounted.current) return
+        if (!mounted.current || statusSeq.current !== seq) return
         setSummary(data)
         setHidden(false)
       })
@@ -55,7 +58,10 @@ export function DriverActivityCard() {
   const refresh = useCallback(async () => {
     try {
       const data = await getMyDriverDay()
-      if (mounted.current) setSummary(data)
+      if (mounted.current) {
+        statusSeq.current += 1
+        setSummary(data)
+      }
     } catch {
       /* volgende poll herstelt */
     }

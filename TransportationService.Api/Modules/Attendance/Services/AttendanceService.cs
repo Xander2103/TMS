@@ -117,7 +117,18 @@ public class AttendanceService : IAttendanceService
         active.Status = AttendanceSessionStatus.Completed;
         AddEvent(active, AttendanceEventType.ClockOut, now, context);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Gelijktijdige uitpunt (dubbelklik/tweede browser): de eerste won; geen
+            // dubbel ClockOut-event in de timeline.
+            _dbContext.ChangeTracker.Clear();
+            return AttendancePunchResult.Fail(AttendancePunchOutcome.NotClockedIn, "Je bent niet ingepunt.");
+        }
+
         return AttendancePunchResult.Ok(await GetStatusAsync(employeeId, cancellationToken));
     }
 
@@ -193,7 +204,16 @@ public class AttendanceService : IAttendanceService
         active.Status = AttendanceSessionStatus.Working;
         AddEvent(active, AttendanceEventType.BreakEnded, now, context);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            _dbContext.ChangeTracker.Clear();
+            return AttendancePunchResult.Fail(AttendancePunchOutcome.NoActiveBreak, "Er loopt geen pauze.");
+        }
+
         return AttendancePunchResult.Ok(await GetStatusAsync(employeeId, cancellationToken));
     }
 

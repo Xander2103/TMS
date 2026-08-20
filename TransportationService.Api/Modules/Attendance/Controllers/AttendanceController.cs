@@ -44,9 +44,9 @@ public class AttendanceController : ControllerBase
     public async Task<ActionResult<AttendanceHistoryDto>> GetEmployeeHistory(
         Guid employeeId, [FromQuery] DateOnly? from, [FromQuery] DateOnly? to, CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var effectiveTo = to ?? today;
-        var effectiveFrom = from ?? effectiveTo.AddDays(-13);
+        // UTC-morgen als fallback-bovengrens: "vandaag" valt in elke tenant-tijdzone binnen het venster.
+        var effectiveTo = to ?? DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var effectiveFrom = from ?? effectiveTo.AddDays(-14);
         if (effectiveFrom > effectiveTo || effectiveTo.DayNumber - effectiveFrom.DayNumber > MaxRangeDays)
         {
             return BadRequest(new { message = $"De periode is ongeldig of langer dan {MaxRangeDays} dagen." });

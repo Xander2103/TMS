@@ -201,8 +201,7 @@ public class AttendanceOverviewService : IAttendanceOverviewService
                 && status == AttendanceOverviewStatus.NotClockedIn
                 && plannedStart is { } start)
             {
-                var plannedStartUtc = AttendanceCalculator.LocalDayWindowUtc(day, timeZone).StartUtc
-                    .Add(start.ToTimeSpan());
+                var plannedStartUtc = AttendanceCalculator.LocalToUtc(day, start, timeZone);
                 if (now > plannedStartUtc.Add(grace))
                 {
                     plannedNotClockedIn = true;

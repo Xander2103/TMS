@@ -60,6 +60,11 @@ en verlopen tokens eindigen allemaal in "sessie verlopen, voer uw code opnieuw i
 - **Anti-enumeratie**: onbekende code, foute code, ingetrokken credential, inactieve
   medewerker en lockout geven exact dezelfde respons ("Code ongeldig."), en een
   onbekende code kost via een dummy-PBKDF2-verificatie evenveel tijd als een foute.
+- *Bekende, bewust geaccepteerde beperking:* de lockout-tellers zijn read-modify-write
+  (geen atomaire increment); onder extreme parallelle gokdruk kan een verhoging verloren
+  gaan en de effectieve drempel iets oprekken. De per-device/per-IP rate limiter houdt de
+  gokrate hoe dan ook ver onder brute-force-niveau, dus dit is gedocumenteerd i.p.v.
+  gecompliceerd weggewerkt.
 
 ## Tenant-isolatie
 

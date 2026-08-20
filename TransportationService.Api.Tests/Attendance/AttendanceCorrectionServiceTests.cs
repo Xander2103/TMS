@@ -222,6 +222,96 @@ public class AttendanceCorrectionServiceTests
     }
 
     [Fact]
+    public async Task CancelledSession_CannotBeCorrectedBackToLife()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var session = await SeedCompletedSessionAsync(h);
+        var sut = h.Sut();
+        await sut.CancelSessionAsync(session.Id, new CancelSessionRequest("Dubbel.", null), CancellationToken.None);
+
+        var stored = h.Db.Context.AttendanceSessions.Single();
+        var result = await sut.CorrectSessionAsync(session.Id,
+            new CorrectSessionRequest(null, stored.ClockOutAt!.Value.AddMinutes(5), "Poging.", stored.Version),
+            CancellationToken.None);
+
+        Assert.Equal(AttendanceCorrectionOutcome.ValidationFailed, result.Outcome);
+        Assert.Equal(AttendanceSessionStatus.Cancelled, h.Db.Context.AttendanceSessions.Single().Status);
+    }
+
+    [Fact]
+    public async Task CorrectBreak_OverlappingSiblingBreak_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var session = await SeedCompletedSessionAsync(h);
+        var firstBreak = h.Db.Context.AttendanceBreaks.Single();
+        h.Db.Context.AttendanceBreaks.Add(new AttendanceBreak
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, SessionId = session.Id, EmployeeId = h.EmployeeId,
+            StartedAt = firstBreak.EndedAt!.Value.AddMinutes(60),
+            EndedAt = firstBreak.EndedAt!.Value.AddMinutes(90),
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        // Eerste pauze verlengen tot in de tweede ⇒ overlap ⇒ geweigerd.
+        var result = await h.Sut().CorrectBreakAsync(session.Id, firstBreak.Id,
+            new CorrectBreakRequest(null, firstBreak.EndedAt!.Value.AddMinutes(75), "Langer.", null),
+            CancellationToken.None);
+
+        Assert.Equal(AttendanceCorrectionOutcome.ValidationFailed, result.Outcome);
+    }
+
+    [Fact]
+    public async Task ManualSession_WithOverlappingBreaks_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var start = new DateTime(2026, 8, 19, 6, 0, 0, DateTimeKind.Utc);
+
+        var result = await h.Sut().CreateManualSessionAsync(new CreateManualSessionRequest(
+            h.EmployeeId, start, start.AddHours(8),
+            [
+                new ManualBreakRequest(start.AddHours(2), start.AddHours(3)),
+                new ManualBreakRequest(start.AddHours(2.5), start.AddHours(3.5)),
+            ],
+            "Test."), CancellationToken.None);
+
+        Assert.Equal(AttendanceCorrectionOutcome.ValidationFailed, result.Outcome);
+    }
+
+    [Fact]
+    public async Task NoOpCorrection_DoesNotFlagOrAudit()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var session = await SeedCompletedSessionAsync(h);
+
+        var result = await h.Sut().CorrectSessionAsync(session.Id,
+            new CorrectSessionRequest(session.ClockInAt, session.ClockOutAt, "Zelfde tijden.", session.Version),
+            CancellationToken.None);
+
+        Assert.Equal(AttendanceCorrectionOutcome.Success, result.Outcome);
+        Assert.False(h.Db.Context.AttendanceSessions.Single().HasCorrections);
+        Assert.Empty(h.Db.Context.AttendanceCorrections);
+        Assert.DoesNotContain(h.Db.Context.AuditLogs, a => a.Action == "Corrected");
+    }
+
+    [Fact]
+    public async Task FutureClockIn_IsRejected()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var session = await SeedCompletedSessionAsync(h);
+
+        var result = await h.Sut().CorrectSessionAsync(session.Id,
+            new CorrectSessionRequest(h.Clock.GetUtcNow().UtcDateTime.AddHours(2), null, "Fout.", session.Version),
+            CancellationToken.None);
+
+        Assert.Equal(AttendanceCorrectionOutcome.ValidationFailed, result.Outcome);
+    }
+
+    [Fact]
     public async Task CrossTenant_SessionIsInvisible()
     {
         var h = await SeedAsync();

@@ -441,6 +441,42 @@ public class EmployeeService : IEmployeeService
             credential.IsActive = false;
         }
 
+        // Een nog openstaande sessie wordt afgesloten (een inactieve medewerker kan zelf
+        // niet meer uitpunten) — traceerbaar via een ClockOut-event met toelichting.
+        var openSessions = await _dbContext.AttendanceSessions
+            .Where(s => s.TenantId == _tenantContext.TenantId && s.EmployeeId == employee.Id && s.ClockOutAt == null)
+            .ToListAsync(cancellationToken);
+        if (openSessions.Count > 0)
+        {
+            var closeAt = DateTime.UtcNow;
+            var sessionIds = openSessions.Select(s => s.Id).ToList();
+            var openBreaks = await _dbContext.AttendanceBreaks
+                .Where(b => b.TenantId == _tenantContext.TenantId && sessionIds.Contains(b.SessionId) && b.EndedAt == null)
+                .ToListAsync(cancellationToken);
+            foreach (var openBreak in openBreaks)
+            {
+                openBreak.EndedAt = closeAt;
+            }
+
+            foreach (var session in openSessions)
+            {
+                session.ClockOutAt = closeAt;
+                session.ClockOutSource = Modules.Attendance.Entities.AttendanceSource.Api;
+                session.Status = Modules.Attendance.Entities.AttendanceSessionStatus.Completed;
+                _dbContext.AttendanceEvents.Add(new Modules.Attendance.Entities.AttendanceEvent
+                {
+                    Id = Guid.NewGuid(),
+                    TenantId = _tenantContext.TenantId,
+                    SessionId = session.Id,
+                    EmployeeId = employee.Id,
+                    EventType = Modules.Attendance.Entities.AttendanceEventType.ClockOut,
+                    OccurredAt = closeAt,
+                    Source = Modules.Attendance.Entities.AttendanceSource.Api,
+                    Note = "Afgesloten bij deactivering van de medewerker.",
+                });
+            }
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, employee.Id.ToString(), "Deactivated", new { IsActive = true },
