@@ -16,6 +16,7 @@ public interface IAttendanceService
 
     Task<AttendanceStatusDto> GetStatusAsync(Guid employeeId, CancellationToken cancellationToken);
     Task<AttendanceHistoryDto> GetHistoryAsync(Guid employeeId, DateOnly from, DateOnly to, CancellationToken cancellationToken);
+    Task<DriverDaySummaryDto> GetDriverDaySummaryAsync(Guid employeeId, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -392,6 +393,33 @@ public class AttendanceService : IAttendanceService
             days.Sum(d => d.NetMinutes),
             plannedMinutes.Count == 0 ? null : days.Sum(d => d.PlannedMinutes ?? 0),
             days);
+    }
+
+    /// <summary>
+    /// Read-model voor de Driver Activity Card: attendance + planning van vandaag als
+    /// strikt gescheiden bronnen. Tachograafdata bestaat hier bewust alleen als
+    /// "niet gekoppeld"-vlag tot een echte providerintegratie (Modules/DriverActivity)
+    /// bestaat — attendance is nooit een bron voor wettelijke rij-/rusttijden.
+    /// </summary>
+    public async Task<DriverDaySummaryDto> GetDriverDaySummaryAsync(Guid employeeId, CancellationToken cancellationToken)
+    {
+        var status = await GetStatusAsync(employeeId, cancellationToken);
+
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+        var timeZone = await TenantTimeZoneAsync(cancellationToken);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(now, timeZone));
+
+        var planned = await _dbContext.Shifts
+            .AsNoTracking()
+            .Where(s => s.TenantId == _tenantContext.TenantId
+                        && s.EmployeeId == employeeId
+                        && s.Date == today
+                        && s.Type != ShiftType.Standby)
+            .OrderBy(s => s.StartTime)
+            .Select(s => new DriverDayPlanDto(s.StartTime, s.EndTime, s.BreakMinutes, s.RoleLabel))
+            .ToListAsync(cancellationToken);
+
+        return new DriverDaySummaryDto(status, planned, TachographConnected: false);
     }
 
     // ── Intern ───────────────────────────────────────────────────────────────────

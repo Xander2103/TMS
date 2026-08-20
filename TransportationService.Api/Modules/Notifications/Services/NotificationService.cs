@@ -35,6 +35,8 @@ public static class NotificationTypeCatalog
         {
             ["absence_requested"] = (NotificationCategory.Hr, NotificationSeverity.Info),
             ["absence_decided"] = (NotificationCategory.Hr, NotificationSeverity.Info),
+            ["attendance_forgotten_clockout"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
+            ["attendance_auto_closed"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
             ["absence_changes_requested"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
             ["qualification_expiring"] = (NotificationCategory.Hr, NotificationSeverity.Warning),
             ["document_expiring"] = (NotificationCategory.Hr, NotificationSeverity.Warning),

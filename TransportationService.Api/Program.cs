@@ -474,6 +474,32 @@ builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Se
 builder.Services.AddScoped<TransportationService.Api.Modules.EmployeePlanning.Services.ITripPlanningSyncService,
     TransportationService.Api.Modules.EmployeePlanning.Services.TripPlanningSyncService>();
 
+// Time & attendance (urenregistratie + prikklokken)
+builder.Services.AddSingleton<TransportationService.Api.Modules.Attendance.Security.IAttendancePinHasher,
+    TransportationService.Api.Modules.Attendance.Security.AttendancePinHasher>();
+builder.Services.AddSingleton<TransportationService.Api.Modules.Attendance.Services.IKioskInteractionTokenStore,
+    TransportationService.Api.Modules.Attendance.Services.KioskInteractionTokenStore>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.IAttendanceService,
+    TransportationService.Api.Modules.Attendance.Services.AttendanceService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.IAttendanceCorrectionService,
+    TransportationService.Api.Modules.Attendance.Services.AttendanceCorrectionService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.IAttendanceOverviewService,
+    TransportationService.Api.Modules.Attendance.Services.AttendanceOverviewService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.IAttendanceReportService,
+    TransportationService.Api.Modules.Attendance.Services.AttendanceReportService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.IAttendanceExportService,
+    TransportationService.Api.Modules.Attendance.Services.AttendanceExportService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.IAttendanceSettingsService,
+    TransportationService.Api.Modules.Attendance.Services.AttendanceSettingsService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.IAttendanceCredentialService,
+    TransportationService.Api.Modules.Attendance.Services.AttendanceCredentialService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.IKioskDeviceService,
+    TransportationService.Api.Modules.Attendance.Services.KioskDeviceService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.IKioskPunchService,
+    TransportationService.Api.Modules.Attendance.Services.KioskPunchService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Attendance.Services.AttendanceSweepWorker>();
+builder.Services.AddHostedService<TransportationService.Api.Modules.Attendance.Services.AttendanceSweepHostedService>();
+
 // Trip costing: effective-dated rate cards + estimated/actual/final cost engine
 builder.Services.AddScoped<TransportationService.Api.Modules.TripCosting.Services.ICostRateService,
     TransportationService.Api.Modules.TripCosting.Services.CostRateService>();

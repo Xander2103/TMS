@@ -149,6 +149,13 @@ public class Phase1ConfigAndAuthTests
             "AuthController.ForgotPassword",
             "AuthController.ResetPassword",
             "PeppolWebhookController.Receive",
+            // Prikklok: geen gebruikerssessie maar per-request device-auth via de
+            // X-Kiosk-Device-header (256-bit secret, hash-opslag, constant-time check in
+            // KioskPunchService) + rate-limitpolicy "kiosk" + device-lockout. Zonder geldig
+            // device-secret geeft geen van deze endpoints data. Zie docs/attendance/security.md.
+            "KioskPunchController.Ping",
+            "KioskPunchController.Identify",
+            "KioskPunchController.Punch",
         };
 
         var assembly = typeof(TenantContextMiddleware).Assembly;

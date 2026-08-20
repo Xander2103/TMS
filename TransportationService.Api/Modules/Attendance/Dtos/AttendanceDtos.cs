@@ -114,6 +114,43 @@ public sealed record AttendanceHistoryDto(
     int? TotalPlannedMinutes,
     IReadOnlyList<AttendanceDayDto> Days);
 
+// ── Driver Activity Card (read-model over meerdere bronnen) ──────────────────────
+
+public sealed record DriverDayPlanDto(TimeOnly StartTime, TimeOnly EndTime, int BreakMinutes, string? RoleLabel);
+
+/// <summary>
+/// Dagoverzicht voor de chauffeurskaart: attendance (werkelijk geregistreerd) +
+/// planning (verwacht) als gescheiden blokken. TachographConnected is in v1 altijd
+/// false — de UI toont dan expliciet "Tachograafdata niet gekoppeld"; er wordt NOOIT
+/// rijtijd uit attendance afgeleid (spec §30–§33/§83). De latere tachograafintegratie
+/// (Modules/DriverActivity) vult hier een eigen blok in zonder dit model te muteren.
+/// </summary>
+public sealed record DriverDaySummaryDto(
+    AttendanceStatusDto Attendance,
+    IReadOnlyList<DriverDayPlanDto> PlannedToday,
+    bool TachographConnected);
+
+// ── Instellingen ─────────────────────────────────────────────────────────────────
+
+public sealed record AttendanceSettingsDto(
+    bool SelfPunchEnabled,
+    bool KioskEnabled,
+    int PinLength,
+    int ForgottenClockOutAfterHours,
+    bool AutoCloseEnabled,
+    int AutoCloseAfterHours,
+    int PlannedNotClockedInGraceMinutes,
+    bool KioskConfigured);
+
+public sealed record UpdateAttendanceSettingsRequest(
+    bool SelfPunchEnabled,
+    bool KioskEnabled,
+    int PinLength,
+    int ForgottenClockOutAfterHours,
+    bool AutoCloseEnabled,
+    int AutoCloseAfterHours,
+    int PlannedNotClockedInGraceMinutes);
+
 // ── HR-liveoverzicht ─────────────────────────────────────────────────────────────
 
 public enum AttendanceOverviewStatus
