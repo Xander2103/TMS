@@ -24,4 +24,10 @@ public class KioskDevice : AuditableTenantEntity
 
     public DateTime? LastSeenAt { get; set; }
     public DateTime? LastPunchAt { get; set; }
+
+    // Brute-force-bescherming op deviceniveau: bij PIN-only-identificatie is een foute
+    // code niet aan één credential toe te schrijven, dus de gok-teller hoort bij de
+    // prikklok zelf (naast de per-IP rate limiting en de per-credential lockout).
+    public int FailedAttemptCount { get; set; }
+    public DateTime? LockedUntil { get; set; }
 }

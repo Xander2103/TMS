@@ -46,5 +46,16 @@ public static class StartupSecurityValidator
                 "ColumnEncryption:Key is not configured. Special-category identifiers would be stored "
                 + "as plaintext. Provide a 32-byte base64 key from the vault; refusing to start.");
         }
+
+        // Prikklok-PIN-pepper: OPTIONEEL (zonder pepper is de kiosk fail-closed uitgeschakeld),
+        // maar een geconfigureerde-maar-ongeldige waarde is een stille misconfiguratie en dus fataal.
+        var pinPepper = configuration["Attendance:PinPepper"];
+        if (!string.IsNullOrWhiteSpace(pinPepper)
+            && Modules.Attendance.Security.AttendancePinHasher.DecodePepper(pinPepper) is null)
+        {
+            throw new InvalidOperationException(
+                "Attendance:PinPepper is configured but invalid (expected base64, at least 32 bytes). "
+                + "Fix or remove the value; refusing to start with a silently broken kiosk configuration.");
+        }
     }
 }

@@ -592,6 +592,9 @@ namespace TransportationService.Api.Migrations
                     b.Property<Guid?>("DeletedByUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("FailedAttemptCount")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -606,6 +609,9 @@ namespace TransportationService.Api.Migrations
 
                     b.Property<Guid?>("LocationId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Name")
                         .IsRequired()

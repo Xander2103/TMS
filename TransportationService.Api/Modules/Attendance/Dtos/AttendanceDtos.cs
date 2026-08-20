@@ -113,3 +113,87 @@ public sealed record AttendanceHistoryDto(
     int TotalNetMinutes,
     int? TotalPlannedMinutes,
     IReadOnlyList<AttendanceDayDto> Days);
+
+// ── Kiosk (prikklok) ─────────────────────────────────────────────────────────────
+
+public sealed record KioskDeviceDto(
+    Guid Id,
+    string Name,
+    Guid? LocationId,
+    string? LocationName,
+    bool IsActive,
+    DateTime? LastSeenAt,
+    DateTime? LastPunchAt,
+    DateTime CreatedAt);
+
+/// <summary>Provisioningresultaat: de deviceKey wordt hier éénmalig teruggegeven en is daarna onherleidbaar.</summary>
+public sealed record KioskProvisionResult(KioskDeviceDto Device, string DeviceKey);
+
+public sealed record SaveKioskDeviceRequest(string Name, Guid? LocationId, bool IsActive = true);
+
+public enum KioskOutcome
+{
+    Success,
+    InvalidDevice,
+    InvalidCode,
+    KioskDisabled,
+    NotConfigured,
+    TokenExpired,
+    InvalidAction,
+    PunchRejected,
+}
+
+/// <summary>Minimale identificatierespons: voornaam + status + kortlevend interactietoken. Nooit meer persoonsgegevens dan dit.</summary>
+public sealed record KioskIdentifyResult(
+    KioskOutcome Outcome,
+    string? FirstName,
+    AttendanceStatusDto? Status,
+    string? InteractionToken,
+    string? Error);
+
+public sealed record KioskPunchResult(
+    KioskOutcome Outcome,
+    AttendanceStatusDto? Status,
+    DateTime? OccurredAt,
+    string? Error);
+
+public sealed record KioskPingResult(
+    KioskOutcome Outcome,
+    string? DeviceName,
+    string? LocationName,
+    string? Error);
+
+public enum KioskPunchAction
+{
+    ClockIn,
+    ClockOut,
+    StartBreak,
+    EndBreak,
+}
+
+// ── Credentials (PIN-beheer) ─────────────────────────────────────────────────────
+
+public sealed record AttendanceCredentialStatusDto(
+    bool HasCredential,
+    bool IsActive,
+    DateTime? LastUsedAt,
+    DateTime? LockedUntil);
+
+/// <summary>Resultaat van PIN genereren/zetten: GeneratedPin is alleen gevuld bij genereren en wordt nooit opgeslagen of gelogd.</summary>
+public sealed record AttendanceCredentialResult(
+    AttendanceCredentialOutcome Outcome,
+    AttendanceCredentialStatusDto? Status,
+    string? GeneratedPin,
+    string? Error);
+
+public enum AttendanceCredentialOutcome
+{
+    Success,
+    EmployeeNotFound,
+    InvalidPin,
+    PinInUse,
+    NotConfigured,
+    NoCredential,
+}
+
+public sealed record SetAttendancePinRequest(string? Pin);

@@ -18,9 +18,15 @@ public static class RateLimitingServiceCollectionExtensions
     /// <summary>Throttles token refresh/logout (authenticated but unauthenticated-reachable).</summary>
     public const string SessionPolicy = "session";
 
+    /// <summary>Throttles the anonymous kiosk (prikklok) punch endpoints: PIN's leven in een
+    /// kleine sleutelruimte, dus naast de credential-lockout mag één adres nooit aan gokrate
+    /// komen. 15/minuut dekt normaal ploegverkeer (identify + punch per medewerker) ruim.</summary>
+    public const string KioskPolicy = "kiosk";
+
     private const int PermitLimit = 10;
     private const int WebhookPermitLimit = 60;
     private const int SessionPermitLimit = 30;
+    private const int KioskPermitLimit = 15;
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
 
     /// <summary>
@@ -82,6 +88,18 @@ public static class RateLimitingServiceCollectionExtensions
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
                         PermitLimit = SessionPermitLimit,
+                        Window = Window,
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        AutoReplenishment = true,
+                    }));
+
+            options.AddPolicy(KioskPolicy, httpContext =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: ClientKey(httpContext),
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = KioskPermitLimit,
                         Window = Window,
                         QueueLimit = 0,
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,

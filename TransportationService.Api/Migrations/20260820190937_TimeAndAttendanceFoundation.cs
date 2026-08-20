@@ -81,6 +81,8 @@ namespace TransportationService.Api.Migrations
                     SecretHash = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     LastSeenAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     LastPunchAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    FailedAttemptCount = table.Column<int>(type: "integer", nullable: false),
+                    LockedUntil = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     TenantId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),

@@ -431,6 +431,16 @@ public class EmployeeService : IEmployeeService
             employee.EmploymentStatus = EmploymentStatus.Terminated;
         }
 
+        // Urenregistratie: prikklokcode intrekken zodat een vertrokken medewerker niet
+        // meer kan punchen; de attendance-historie zelf blijft onaangeroerd bestaan.
+        var attendanceCredentials = await _dbContext.AttendanceCredentials
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.EmployeeId == employee.Id && c.IsActive)
+            .ToListAsync(cancellationToken);
+        foreach (var credential in attendanceCredentials)
+        {
+            credential.IsActive = false;
+        }
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, employee.Id.ToString(), "Deactivated", new { IsActive = true },
