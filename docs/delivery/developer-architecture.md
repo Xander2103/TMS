@@ -858,6 +858,7 @@ wrapper-dossier guarantee (§1).
 | 12 | `20260812173308_ServiceQuantitySource` | `service_options.QuantitySource` |
 | 13 | `20260812174522_OrderImport` | Tables `order_import_profiles`/`order_import_batches`/`order_import_rows`; `notification_rules.RequiresReview` (nullable) |
 | 14 | `20260812175816_InvoiceSnooze` | `transport_orders.InvoiceSnoozeUntil`/`InvoiceSnoozeReason` |
+| 15 | `20260820*_TimeAndAttendanceFoundation` | Attendance-wave: tables `attendance_sessions`/`attendance_events`/`attendance_breaks`/`attendance_corrections`/`attendance_credentials`/`kiosk_devices`/`attendance_settings` incl. partial-unique invariants (één actieve sessie per medewerker, één open pauze per sessie, tenant-unieke PIN-lookup). Rolversie **v30** (`attendance.*`, zie `docs/attendance/`) |
 
 ## 18. Known limitations / deferred items
 

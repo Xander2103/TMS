@@ -2,7 +2,7 @@
 
 Volledige catalogus: `Modules/Identity/PermissionCodes.cs` (autoritatief, geseed door
 `PermissionCatalogSeeder`). Role-template-defaults: `Data/DefaultRoleDefinitions.cs` +
-versiestappen in `Data/DefaultRoleUpgrades.cs` (huidige versie: **25**). Guards:
+versiestappen in `Data/DefaultRoleUpgrades.cs` (huidige versie: **30**). Guards:
 `Phase8SupplyChainTests` (elke cataloguscode wordt ergens afgedwongen),
 `Phase10SystematicSecurityTests` (elk endpoint bewust geclassificeerd),
 `DefaultRoleSeederTests.Version23_…`/`Version24_…`/`Version25_…` (positieve én negatieve
@@ -37,6 +37,17 @@ low_stock_alerts`, `issued_items.*`, `messages.send`, `notification_rules.view/m
 |---|---|---|---|
 | 24 | `orders.confirm_incomplete_price` | prijs bevestigen met ongeprijsde goederenlijnen (reden verplicht) | management, boekhouding |
 | 25 | `locations.view_sensitive` | toegangscodes en gevoelige locatiegegevens bekijken/bewerken (naast bestaande `locations.view/create/edit/delete`); zonder deze permissie blijft de opgeslagen toegangscode bij een update onaangeroerd en is het veld in de detailrespons null | planner, dispatcher, management |
+| 26 | `activity_types.view` / `manage` | tenant-activiteitstypecatalogus | planner/dispatcher/management (manage: management) |
+| 27 | `dossiers.override_entity` | afwijkende uitgevende entiteit (reden verplicht) | management, boekhouding |
+| 28 | `problems.approve_charge` | doorrekenen van een probleem goedkeuren | management, boekhouding |
+| 29 | `system_info.view` / `backups.view` | systeeminformatie + back-upoverzicht (acties bewust per persoon) | management |
+| 30 | `attendance.self` | eigen urenregistratie: punchen, status, historiek, driver-day | alle interne medewerker-templates incl. chauffeur |
+| 30 | `attendance.view` | aanwezigheid + urenregistratie van medewerkers bekijken | hr, management (dispatcher BEWUST niet) |
+| 30 | `attendance.correct` | correcties/annulering/manuele sessies (reden verplicht, audit) | hr |
+| 30 | `attendance.report` | rapport + XLSX-export | hr, management |
+| 30 | `attendance.manage_credentials` | prikklokcodes (PIN) beheren — nooit uitlezen | hr |
+| 30 | `attendance.manage_settings` | urenregistratie-instellingen | hr |
+| 30 | `attendance.manage_kiosks` | prikklok-devices provisionen/roteren/uitschakelen | geen template — administrator kent per persoon toe |
 
 ## Bewuste beslissingen
 
