@@ -62,6 +62,10 @@ const IntegrationsPage = lazyPage(() => import('../features/integrations/pages/I
 const PortalAbsencesPage = lazyPage(() => import('../features/portal/pages/PortalAbsencesPage'), 'PortalAbsencesPage')
 const PortalQualificationsPage = lazyPage(() => import('../features/portal/pages/PortalQualificationsPage'), 'PortalQualificationsPage')
 const PortalProfilePage = lazyPage(() => import('../features/portal/pages/PortalProfilePage'), 'PortalProfilePage')
+const MyTimePage = lazyPage(() => import('../features/time-attendance/pages/MyTimePage'), 'MyTimePage')
+const AttendanceOverviewPage = lazyPage(() => import('../features/time-attendance/pages/AttendanceOverviewPage'), 'AttendanceOverviewPage')
+const AttendanceSettingsPage = lazyPage(() => import('../features/time-attendance/pages/AttendanceSettingsPage'), 'AttendanceSettingsPage')
+const KioskPage = lazyPage(() => import('../features/time-attendance/pages/KioskPage'), 'KioskPage')
 const InvoicesPage = lazyPage(() => import('../features/invoices/pages/InvoicesPage'), 'InvoicesPage')
 const NewInvoicePage = lazyPage(() => import('../features/invoices/pages/NewInvoicePage'), 'NewInvoicePage')
 const InvoiceControlPage = lazyPage(() => import('../features/invoices/pages/InvoiceControlPage'), 'InvoiceControlPage')
@@ -167,6 +171,9 @@ const router = createBrowserRouter(
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/activeren" element={<ActivatePage />} />
+      {/* Prikklok: fullscreen, geen gebruikerssessie — het device authenticeert met zijn
+          eigen provisioning-sleutel per verzoek en kan nooit naar andere modules navigeren. */}
+      <Route path="/kiosk" element={<KioskPage />} />
       <Route element={<RequireAuth />}>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
@@ -218,6 +225,8 @@ const router = createBrowserRouter(
           <Route path="/peppol" element={<PeppolPage />} />
           <Route path="/integrations" element={<IntegrationsPage />} />
           <Route path="/portal/absences" element={<PortalAbsencesPage />} />
+          <Route path="/portal/time" element={<MyTimePage />} />
+          <Route path="/attendance" element={<AttendanceOverviewPage />} />
           <Route path="/portal/qualifications" element={<PortalQualificationsPage />} />
           <Route path="/portal/profile" element={<PortalProfilePage />} />
           <Route path="/my-trips" element={<MyTripsPage />} />
@@ -292,6 +301,7 @@ const router = createBrowserRouter(
           <Route path="/settings/issued-item-templates/:id" element={<IssuedItemTemplateDetailPage />} />
           <Route path="/inventory" element={<InventoryOverviewPage />} />
           <Route path="/settings/leave" element={<LeaveSettingsPage />} />
+          <Route path="/settings/attendance" element={<AttendanceSettingsPage />} />
           <Route path="/settings/activity-types" element={<ActivityTypesPage />} />
           <Route path="/settings/accounting" element={<AccountingSettingsPage />} />
           <Route path="/settings/notifications" element={<NotificationAdminPage />} />

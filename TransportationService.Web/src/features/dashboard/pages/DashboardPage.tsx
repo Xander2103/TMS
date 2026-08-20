@@ -7,6 +7,7 @@ import { getDossierAttentionCount } from '../../dossiers/api/dossiersApi'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE } from '../../transport-orders/types'
 import { getDashboard } from '../api/dashboardApi'
+import { WorkStatusCard } from '../../time-attendance/components/WorkStatusCard'
 import { DASHBOARD_TILE_GROUPS, type DashboardExtras, type DashboardTile } from '../dashboardConfig'
 import type { Dashboard } from '../types'
 import { formatDateTime } from '../../../utils/dates'
@@ -43,7 +44,7 @@ function KpiGrid({ tiles, onNavigate }: { tiles: DashboardTile[]; onNavigate: (t
  */
 export function DashboardPage() {
   const navigate = useNavigate()
-  const { hasAnyPermission } = useAuth()
+  const { hasAnyPermission, user } = useAuth()
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [attentionCount, setAttentionCount] = useState<number | null>(null)
@@ -111,6 +112,8 @@ export function DashboardPage() {
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Overzicht van vandaag en deze maand." />
+
+      {user?.employeeId && hasAnyPermission(['attendance.self']) && <WorkStatusCard />}
 
       {visibleGroups.map((group) => {
         const tiles = group.tiles(dashboard, extras)

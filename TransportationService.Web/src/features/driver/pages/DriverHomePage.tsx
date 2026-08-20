@@ -6,6 +6,7 @@ import { useOnlineStatus } from '../../../hooks/useOnlineStatus'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { ETA_SOURCE_LABELS } from '../../operations/types'
 import { getMyDashboard } from '../api/driverApi'
+import { DriverActivityCard } from '../../time-attendance/components/DriverActivityCard'
 import type { MyDashboard } from '../types'
 import { formatDate } from '../../../utils/dates'
 
@@ -81,6 +82,8 @@ export function DriverHomePage() {
       {fromCache && (
         <p className="drv-muted" role="status">Offline kopie — wordt ververst zodra er verbinding is.</p>
       )}
+
+      {online && <DriverActivityCard />}
 
       <section className="drv-card">
         <h2>Huidige rit</h2>

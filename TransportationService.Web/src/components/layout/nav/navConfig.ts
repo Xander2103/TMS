@@ -94,6 +94,7 @@ function parametersModule(): NavModule {
         label: 'Personeel',
         items: [
           { label: 'Verlof (types & saldi)', to: '/settings/leave', permissions: ['leave_types.manage'] },
+          { label: 'Urenregistratie', to: '/settings/attendance', permissions: ['attendance.manage_settings', 'attendance.manage_kiosks'] },
           { label: 'HR-herinneringen', to: '/settings/hr-reminders', permissions: ['hr_settings.manage'] },
           { label: 'Bedrijfsmiddelen (sjablonen)', to: '/settings/issued-item-templates', permissions: ['issued_items.manage_templates'] },
           { label: 'Taaksjablonen', to: '/settings/task-templates', permissions: ['tasks.manage_templates', 'tasks.manage_recurring'] },
@@ -128,6 +129,7 @@ export function getNavModules(): NavModule[] {
       requiresEmployee: true,
       items: [
         { label: 'Mijn dashboard', to: '/portal', end: true },
+        { label: 'Mijn uren', to: '/portal/time', permissions: ['attendance.self'] },
         { label: 'Mijn planning', to: '/portal/planning' },
         { label: 'Mijn afwezigheden', to: '/portal/absences' },
         { label: 'Mijn kwalificaties', to: '/portal/qualifications' },
@@ -213,6 +215,7 @@ export function getNavModules(): NavModule[] {
         { label: 'Medewerkers', to: '/employees', permissions: ['employees.view'] },
         { label: 'Taken', to: '/tasks', permissions: ['tasks.view_own', 'tasks.view_team', 'tasks.view_all'] },
         { label: 'Personeelsplanning', to: '/employee-planning', permissions: ['employee_planning.view', 'employee_planning.manage'] },
+        { label: 'Aanwezigheid', to: '/attendance', permissions: ['attendance.view'] },
         { label: 'Afwezigheden', to: '/absences', permissions: ['absences.view'] },
         { label: 'Kwalificaties', to: '/qualifications', permissions: ['employee_documents.view'] },
         // Voorraad van bedrijfsmiddelen hoort bij het personeelsdomein (uitgifte aan medewerkers).

@@ -106,6 +106,38 @@ export function formatExample(format: DateFormatPreference): string {
 }
 
 /**
+ * Time-of-day of a backend timestamp, 24h "HH:mm" (Belgian convention, matches
+ * formatDateTime). The de-facto ISO-substring trick spread across features consolidates
+ * here: one implementation, timezone-correct via parseIsoDate.
+ */
+export function formatTime(value: string | null | undefined): string {
+  const date = parseIsoDate(value)
+  if (!date || Number.isNaN(date.getTime())) return ''
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/**
+ * Duration in minutes → Belgian "u"-notation: 468 → "7u48", 45 → "0u45", 480 → "8u".
+ * The single duration formatter for attendance/planning surfaces (consolidates the
+ * employee-planning `formatMinutes` convention).
+ */
+export function formatDurationMinutes(minutes: number | null | undefined): string {
+  if (minutes == null || Number.isNaN(minutes)) return ''
+  const total = Math.max(0, Math.round(minutes))
+  const hours = Math.floor(total / 60)
+  const rest = total % 60
+  return rest === 0 ? `${hours}u` : `${hours}u${String(rest).padStart(2, '0')}`
+}
+
+/** Signed variant for deviations: +19 → "+0u19", -30 → "-0u30", 0 → "0u". */
+export function formatSignedDurationMinutes(minutes: number | null | undefined): string {
+  if (minutes == null || Number.isNaN(minutes)) return ''
+  if (minutes === 0) return '0u'
+  const sign = minutes > 0 ? '+' : '-'
+  return `${sign}${formatDurationMinutes(Math.abs(minutes))}`
+}
+
+/**
  * Parses USER-TYPED date text according to the ACTIVE preference, strictly and without
  * ambiguity: "03/04/2026" is 3 April under dd/MM/yyyy and 4 March under MM/dd/yyyy —
  * exactly what the tenant configured, never a locale guess. Native `<input type="date">`

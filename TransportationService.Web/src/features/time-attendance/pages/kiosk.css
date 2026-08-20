@@ -1,0 +1,188 @@
+/* Prikklok: fullscreen, touch-first, geen ERP-chrome. */
+
+.kiosk {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 2rem 1.25rem;
+  background: var(--bg);
+  color: var(--text-h);
+  text-align: center;
+  user-select: none;
+}
+
+.kiosk-clock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.kiosk-time {
+  font-size: clamp(3.5rem, 12vw, 6rem);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kiosk-date {
+  font-size: clamp(1.1rem, 3.5vw, 1.6rem);
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.kiosk-device {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.kiosk-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
+  width: 100%;
+  max-width: 420px;
+}
+
+.kiosk-heading {
+  margin: 0;
+  font-size: clamp(1.4rem, 5vw, 2rem);
+}
+
+.kiosk-hint {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.kiosk-dots {
+  min-height: 2.2rem;
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  font-size: 1.4rem;
+}
+
+.kiosk-dots-empty {
+  color: var(--border);
+  letter-spacing: 0.4em;
+}
+
+.kiosk-dot {
+  color: var(--accent);
+}
+
+.kiosk-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(84px, 1fr));
+  gap: 0.8rem;
+  width: 100%;
+}
+
+.kiosk-key {
+  min-height: 76px;
+  font-size: 1.7rem;
+  font-weight: 600;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.kiosk-key:active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.kiosk-key-ok {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.kiosk-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  width: 100%;
+}
+
+.kiosk-action {
+  min-height: 76px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.kiosk-action-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.kiosk-action-out {
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.kiosk-back {
+  margin-top: 0.4rem;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.kiosk-error {
+  margin: 0;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 1rem;
+}
+
+.kiosk-confirm .kiosk-heading {
+  color: var(--success);
+}
+
+.kiosk-setup-input {
+  width: 100%;
+  padding: 0.9rem 1rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .kiosk-confirm {
+    animation: kiosk-pop 220ms ease-out;
+  }
+
+  @keyframes kiosk-pop {
+    from {
+      transform: scale(0.94);
+      opacity: 0;
+    }
+
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+}

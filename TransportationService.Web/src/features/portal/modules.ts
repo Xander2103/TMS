@@ -17,6 +17,7 @@ export const PORTAL_MODULES: PortalModuleDef[] = [
   { to: '/exceptions', icon: '⚠️', label: 'Afwijkingen', description: 'Schade of problemen melden en opvolgen', permissions: ['exceptions.view', 'exceptions.create'] },
   { to: '/warehouse', icon: '🏭', label: 'Magazijn', description: 'Laadlijsten, colli zoeken en ritten vrijgeven', permissions: ['warehouse.view'] },
   { to: '/tasks?mine=1', icon: '✅', label: 'Mijn taken', description: 'Toegewezen taken opvolgen en afwerken', permissions: ['tasks.view_own'] },
+  { to: '/portal/time', icon: '⏱', label: 'Mijn uren', description: 'In-/uitpunten, pauzes en gewerkte tijd', permissions: ['attendance.self'] },
   { to: '/portal/planning', icon: '🗓', label: 'Mijn planning', description: 'Shifts, ritten en afwezigheden', permissions: [] },
   { to: '/portal/absences', icon: '🏖', label: 'Verlof', description: 'Aanvragen en opvolgen', permissions: [] },
   { to: '/portal/qualifications', icon: '🪪', label: 'Kwalificaties', description: 'Documenten en vervaldata', permissions: [] },

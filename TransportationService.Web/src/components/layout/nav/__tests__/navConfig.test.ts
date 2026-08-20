@@ -155,7 +155,8 @@ describe('getNavModules — §14 target tree', () => {
     const parameters = modules.find((m) => m.id === 'parameters')!
     const hrConfig = parameters.subgroups!.find((s) => s.label === 'Personeel')!
     expect(hrConfig.items.map((i) => i.to)).toEqual([
-      '/settings/leave', '/settings/hr-reminders', '/settings/issued-item-templates', '/settings/task-templates',
+      '/settings/leave', '/settings/attendance', '/settings/hr-reminders',
+      '/settings/issued-item-templates', '/settings/task-templates',
     ])
   })
 })

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  formatDate, formatDateLong, formatDateTime, formatExample,
+  formatDate, formatDateLong, formatDateTime, formatDurationMinutes, formatExample,
+  formatSignedDurationMinutes, formatTime,
   parseDisplayDate, parseIsoDate, resetDateFormatPreferenceForTests, setDateFormatPreference,
 } from '../dates'
 
@@ -99,5 +100,32 @@ describe('parseDisplayDate — strict, unambiguous input parsing', () => {
     expect(parseDisplayDate('vandaag')).toBeNull()
     expect(parseDisplayDate('12/08/26')).toBeNull()
     expect(parseDisplayDate(null)).toBeNull()
+  })
+})
+
+describe('formatTime / durations (attendance)', () => {
+  it('renders 24h HH:mm from a UTC timestamp', () => {
+    // Een Date uit lokale componenten IS al het juiste UTC-instant voor die wandkloktijd.
+    const iso = new Date(2026, 7, 20, 7, 54, 0).toISOString()
+    expect(formatTime(iso)).toBe('07:54')
+  })
+
+  it('returns an empty string for invalid input', () => {
+    expect(formatTime(null)).toBe('')
+    expect(formatTime('geen datum')).toBe('')
+  })
+
+  it('formats minutes in Belgian u-notation', () => {
+    expect(formatDurationMinutes(468)).toBe('7u48')
+    expect(formatDurationMinutes(45)).toBe('0u45')
+    expect(formatDurationMinutes(480)).toBe('8u')
+    expect(formatDurationMinutes(0)).toBe('0u')
+    expect(formatDurationMinutes(null)).toBe('')
+  })
+
+  it('formats signed deviations', () => {
+    expect(formatSignedDurationMinutes(19)).toBe('+0u19')
+    expect(formatSignedDurationMinutes(-30)).toBe('-0u30')
+    expect(formatSignedDurationMinutes(0)).toBe('0u')
   })
 })

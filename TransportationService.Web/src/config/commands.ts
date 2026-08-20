@@ -50,6 +50,14 @@ export const APP_COMMANDS: AppCommand[] = [
     route: '/dashboard', permissions: ['dashboard.view'], group: 'Navigeren',
   },
   {
+    id: 'go-my-time', label: 'Mijn uren openen', keywords: 'uren prikklok inpunten uitpunten tijd attendance',
+    route: '/portal/time', permissions: ['attendance.self'], group: 'Navigeren',
+  },
+  {
+    id: 'go-attendance', label: 'Aanwezigheid openen', keywords: 'aanwezigheid urenregistratie prikklok wie is er attendance',
+    route: '/attendance', permissions: ['attendance.view'], group: 'Navigeren',
+  },
+  {
     id: 'go-profitability', label: 'Rendement openen', keywords: 'marge profitability winst',
     route: '/profitability', permissions: ['profitability.view'], group: 'Navigeren',
   },

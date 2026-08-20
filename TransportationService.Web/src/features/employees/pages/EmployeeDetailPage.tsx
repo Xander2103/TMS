@@ -22,6 +22,7 @@ import { DriverProfilePanel } from '../../drivers/components/DriverProfilePanel'
 import { IssuedItemsTab } from '../../issued-items/IssuedItemsTab'
 import { EmployeeTankCardsSection } from '../components/EmployeeTankCardsSection'
 import { LeaveBalanceTab } from '../../leave-balance/components/LeaveBalanceTab'
+import { AttendanceTab } from '../../time-attendance/components/AttendanceTab'
 import { EmployeeTasksTab } from '../../tasks/components/EmployeeTasksTab'
 import { RedistributeTasksDialog } from '../../tasks/components/RedistributeTasksDialog'
 import { getEmployeeOpenTaskSummary } from '../../tasks/api/tasksApi'
@@ -50,7 +51,7 @@ export function fullYearsSince(iso: string | null | undefined): number | null {
   return years
 }
 
-const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlof', 'taken', 'ritten', 'bedrijfsmiddelen', 'historiek'] as const
+const TAB_IDS = ['profiel', 'planning', 'kwalificaties', 'documenten', 'verlof', 'uren', 'taken', 'ritten', 'bedrijfsmiddelen', 'historiek'] as const
 type TabId = (typeof TAB_IDS)[number]
 
 /**
@@ -95,6 +96,7 @@ export function EmployeeDetailPage() {
   const canViewIssuedItems = hasPermission('issued_items.view') || hasPermission('issued_items.manage')
   const canViewLeaveBalance = hasPermission('leave_balances.view')
   const canViewAbsences = hasPermission('absences.view')
+  const canViewAttendance = hasPermission('attendance.view')
   const canViewTasks =
     hasPermission('tasks.view_own') || hasPermission('tasks.view_team') || hasPermission('tasks.view_all')
   const canAssignTasks = hasPermission('tasks.assign')
@@ -331,6 +333,7 @@ export function EmployeeDetailPage() {
           { id: 'kwalificaties', label: 'Kwalificaties' },
           ...(canViewDocuments ? [{ id: 'documenten', label: 'Documenten' }] : []),
           ...(canViewLeaveBalance || canViewAbsences ? [{ id: 'verlof', label: 'Verlof & afwezigheden' }] : []),
+          ...(canViewAttendance ? [{ id: 'uren', label: 'Urenregistratie' }] : []),
           ...(canViewTasks ? [{ id: 'taken', label: 'Taken' }] : []),
           ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: 'Ritten' }] : []),
           ...(canViewIssuedItems ? [{ id: 'bedrijfsmiddelen', label: 'Bedrijfsmiddelen' }] : []),
@@ -482,6 +485,12 @@ export function EmployeeDetailPage() {
           ) : (
             <p className="placeholder-text">Je hebt geen rechten om afwezigheden te bekijken.</p>
           )}
+        </TabPanel>
+      )}
+
+      {tab === 'uren' && canViewAttendance && (
+        <TabPanel tabId="uren">
+          <AttendanceTab employeeId={employee.id} />
         </TabPanel>
       )}
 

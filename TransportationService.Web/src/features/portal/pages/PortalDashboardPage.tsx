@@ -5,6 +5,7 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { useAuth } from '../../auth/authContextValue'
 import { getMyDashboard } from '../api/portalApi'
+import { WorkStatusCard } from '../../time-attendance/components/WorkStatusCard'
 import { PORTAL_MODULES, visibleModules } from '../modules'
 import type { MyDashboard } from '../types'
 import './portal.css'
@@ -82,6 +83,7 @@ export function PortalDashboardPage() {
   return (
     <div>
       <PageHeader title={`Dag ${dashboard.firstName}!`} subtitle="Jouw overzicht voor vandaag." />
+      {hasAnyPermission(['attendance.self']) && <WorkStatusCard />}
       <div className="portal-cards">
         {cards.map((card) => (
           <Link key={`${card.to}-${card.label}`} to={card.to} className={`portal-card ${card.attention ? 'portal-card-attention' : ''}`}>

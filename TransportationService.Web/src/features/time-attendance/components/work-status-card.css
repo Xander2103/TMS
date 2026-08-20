@@ -1,0 +1,106 @@
+.wsc {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.1rem 1.25rem 1.25rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow);
+  max-width: 560px;
+}
+
+.wsc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.wsc-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.wsc-hint {
+  margin: 0.6rem 0 0;
+  font-size: 1.05rem;
+  color: var(--text-h);
+}
+
+.wsc-stats {
+  display: flex;
+  gap: 2rem;
+  margin: 0.9rem 0 0;
+}
+
+.wsc-stat dt {
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+.wsc-stat dd {
+  margin: 0.1rem 0 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.wsc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.wsc-btn {
+  flex: 1 1 10rem;
+  min-height: 3rem;
+  padding: 0.65rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wsc-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.wsc-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.wsc-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.wsc-btn-out {
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.wsc-link {
+  display: inline-block;
+  margin-top: 0.85rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+  .wsc {
+    max-width: none;
+  }
+
+  .wsc-stats {
+    gap: 1.25rem;
+  }
+}

@@ -1,0 +1,95 @@
+.dac-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.dac-head h2 {
+  margin: 0;
+}
+
+.dac-line {
+  margin: 0.4rem 0 0;
+  color: var(--text-h);
+}
+
+.dac-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+}
+
+.dac-btn {
+  flex: 1 1 9rem;
+  min-height: 3.2rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.dac-btn:disabled {
+  opacity: 0.6;
+}
+
+.dac-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.dac-btn-out {
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.dac-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin: 0.9rem 0 0;
+}
+
+.dac-grid dt {
+  font-size: 0.72rem;
+  color: var(--text);
+}
+
+.dac-grid dd {
+  margin: 0.1rem 0 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+}
+
+.dac-planned {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.dac-tacho {
+  margin-top: 0.9rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--border);
+}
+
+.dac-tacho h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text);
+}
+
+.dac-tacho-off {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text);
+}
