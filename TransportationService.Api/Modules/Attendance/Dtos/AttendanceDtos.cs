@@ -114,6 +114,41 @@ public sealed record AttendanceHistoryDto(
     int? TotalPlannedMinutes,
     IReadOnlyList<AttendanceDayDto> Days);
 
+// ── Correcties ───────────────────────────────────────────────────────────────────
+
+public sealed record CorrectSessionRequest(DateTime? ClockInAt, DateTime? ClockOutAt, string Reason, Guid? Version);
+
+public sealed record CorrectBreakRequest(DateTime? StartedAt, DateTime? EndedAt, string Reason, Guid? Version);
+
+public sealed record CancelSessionRequest(string Reason, Guid? Version);
+
+public sealed record ManualBreakRequest(DateTime StartedAt, DateTime EndedAt);
+
+public sealed record CreateManualSessionRequest(
+    Guid EmployeeId,
+    DateTime ClockInAt,
+    DateTime ClockOutAt,
+    IReadOnlyList<ManualBreakRequest>? Breaks,
+    string Reason);
+
+public enum AttendanceCorrectionOutcome
+{
+    Success,
+    NotFound,
+    ValidationFailed,
+    StaleVersion,
+    OverlapsOtherSession,
+}
+
+public sealed record AttendanceCorrectionResult(
+    AttendanceCorrectionOutcome Outcome,
+    AttendanceSessionDto? Session,
+    string? Error)
+{
+    public static AttendanceCorrectionResult Fail(AttendanceCorrectionOutcome outcome, string error) =>
+        new(outcome, null, error);
+}
+
 // ── Kiosk (prikklok) ─────────────────────────────────────────────────────────────
 
 public sealed record KioskDeviceDto(

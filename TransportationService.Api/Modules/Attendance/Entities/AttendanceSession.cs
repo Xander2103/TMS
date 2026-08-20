@@ -69,4 +69,7 @@ public enum AttendanceSource
     Mobile,
     Api,
     Import,
+
+    /// <summary>Handmatig door HR aangemaakt (bv. vergeten registratie), altijd met correctie-audittrail.</summary>
+    Manual,
 }
