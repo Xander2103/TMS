@@ -208,6 +208,22 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Hr.Entities.LeaveBalanceAdjustment> LeaveBalanceAdjustments => Set<TransportationService.Api.Modules.Hr.Entities.LeaveBalanceAdjustment>();
     public DbSet<TransportationService.Api.Modules.Hr.Entities.LeaveEntitlementSettings> LeaveEntitlementSettings => Set<TransportationService.Api.Modules.Hr.Entities.LeaveEntitlementSettings>();
 
+    // Time & attendance (urenregistratie + prikklokken)
+    public DbSet<TransportationService.Api.Modules.Attendance.Entities.AttendanceSession> AttendanceSessions =>
+        Set<TransportationService.Api.Modules.Attendance.Entities.AttendanceSession>();
+    public DbSet<TransportationService.Api.Modules.Attendance.Entities.AttendanceEvent> AttendanceEvents =>
+        Set<TransportationService.Api.Modules.Attendance.Entities.AttendanceEvent>();
+    public DbSet<TransportationService.Api.Modules.Attendance.Entities.AttendanceBreak> AttendanceBreaks =>
+        Set<TransportationService.Api.Modules.Attendance.Entities.AttendanceBreak>();
+    public DbSet<TransportationService.Api.Modules.Attendance.Entities.AttendanceCorrection> AttendanceCorrections =>
+        Set<TransportationService.Api.Modules.Attendance.Entities.AttendanceCorrection>();
+    public DbSet<TransportationService.Api.Modules.Attendance.Entities.AttendanceCredential> AttendanceCredentials =>
+        Set<TransportationService.Api.Modules.Attendance.Entities.AttendanceCredential>();
+    public DbSet<TransportationService.Api.Modules.Attendance.Entities.KioskDevice> KioskDevices =>
+        Set<TransportationService.Api.Modules.Attendance.Entities.KioskDevice>();
+    public DbSet<TransportationService.Api.Modules.Attendance.Entities.AttendanceSettings> AttendanceSettings =>
+        Set<TransportationService.Api.Modules.Attendance.Entities.AttendanceSettings>();
+
     // Customer portal (messages, announcements)
     public DbSet<TransportationService.Api.Modules.CustomerPortal.Entities.CustomerMessage> CustomerMessages =>
         Set<TransportationService.Api.Modules.CustomerPortal.Entities.CustomerMessage>();
