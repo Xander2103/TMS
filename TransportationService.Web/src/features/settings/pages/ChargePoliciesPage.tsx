@@ -5,10 +5,11 @@ import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
 import {
-  CHARGE_POLICY_MODE_LABELS,
+  CHARGE_POLICY_MODE_KEYS,
   listChargePolicies,
   saveChargePolicies,
   type ChargePolicy,
@@ -17,19 +18,19 @@ import {
 } from '../api/chargePoliciesApi'
 import './settings.css'
 
-/** Incidenttypes waarvoor een beleid kan gelden; '' = alle types. */
-const POLICY_INCIDENT_TYPES: { value: string; label: string }[] = [
-  { value: 'Damage', label: 'Schade' },
-  { value: 'Delay', label: 'Vertraging' },
-  { value: 'Theft', label: 'Diefstal' },
-  { value: 'Accident', label: 'Ongeval' },
-  { value: 'WrongDelivery', label: 'Foutieve levering' },
-  { value: 'MissingGoods', label: 'Ontbrekende goederen' },
-  { value: 'CustomerComplaint', label: 'Klantklacht' },
-  { value: 'VehicleBreakdown', label: 'Pech' },
-  { value: 'Administrative', label: 'Administratief' },
-  { value: 'Other', label: 'Overig' },
-]
+/** Incidenttypes waarvoor een beleid kan gelden ('' = alle types); labels via keymap. */
+const POLICY_INCIDENT_TYPES = [
+  'Damage',
+  'Delay',
+  'Theft',
+  'Accident',
+  'WrongDelivery',
+  'MissingGoods',
+  'CustomerComplaint',
+  'VehicleBreakdown',
+  'Administrative',
+  'Other',
+] as const
 
 /** Bewerkbare rij; '' bij klant/incidenttype = "alle" (null in de payload). */
 interface PolicyRow {
@@ -67,6 +68,7 @@ function toRow(policy: ChargePolicy): PolicyRow {
  * volledige set; het meest specifieke beleid wint, zonder beleid geldt "voorstellen".
  */
 export function ChargePoliciesPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('problems.approve_charge')
@@ -87,7 +89,7 @@ export function ChargePoliciesPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Het doorrekenbeleid kon niet worden geladen.')
+        if (mounted) setLoadError(t('settingsPages.chargePolicies.loadFailed'))
       })
     searchCustomers({ page: 1, pageSize: 200 })
       .then((result) => {
@@ -99,11 +101,12 @@ export function ChargePoliciesPage() {
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canView])
 
-  if (!canView) return <p className="placeholder-text">Je hebt geen rechten om het doorrekenbeleid te bekijken.</p>
+  if (!canView) return <p className="placeholder-text">{t('settingsPages.chargePolicies.noPermission')}</p>
   if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (rows === null) return <p className="placeholder-text">Doorrekenbeleid laden…</p>
+  if (rows === null) return <p className="placeholder-text">{t('settingsPages.chargePolicies.loading')}</p>
 
   function patchRow(key: string, patch: Partial<Omit<PolicyRow, 'key'>>) {
     setRows((current) => (current ? current.map((row) => (row.key === key ? { ...row, ...patch } : row)) : current))
@@ -122,11 +125,11 @@ export function ChargePoliciesPage() {
     for (const row of rows) {
       const amount = row.amount === '' ? null : Number(row.amount)
       if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
-        showError('Het standaardbedrag moet een positief getal zijn.')
+        showError(t('settingsPages.chargePolicies.amountPositive'))
         return
       }
       if (row.mode === 'Auto' && (amount === null || amount <= 0)) {
-        showError('Automatisch doorrekenen vereist een positief standaardbedrag.')
+        showError(t('settingsPages.chargePolicies.autoNeedsAmount'))
         return
       }
       inputs.push({
@@ -140,11 +143,11 @@ export function ChargePoliciesPage() {
     setBusy(true)
     try {
       await saveChargePolicies(inputs)
-      showSuccess('Doorrekenbeleid opgeslagen.')
+      showSuccess(t('settingsPages.chargePolicies.saved'))
       const reloaded = await listChargePolicies()
       setRows(reloaded.map(toRow))
     } catch (err) {
-      showError(describeApiError(err, 'Het doorrekenbeleid kon niet worden opgeslagen.').message)
+      showError(describeApiError(err, t('settingsPages.chargePolicies.saveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -152,41 +155,40 @@ export function ChargePoliciesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Doorrekenbeleid' }]} />
+      <Breadcrumbs
+        items={[{ label: t('navigation.menu.settings'), to: '/settings' }, { label: t('navigation.menu.chargePolicies') }]}
+      />
       <PageHeader
-        title="Doorrekenbeleid"
-        subtitle="Of incidentkosten aan de klant worden doorgerekend: nooit, als voorstel of automatisch."
+        title={t('settingsPages.chargePolicies.title')}
+        subtitle={t('settingsPages.chargePolicies.subtitle')}
         action={
           canManage && (
             <span className="settings-actions">
               <Button variant="secondary" onClick={addRow} disabled={busy}>
-                Beleid toevoegen
+                {t('settingsPages.chargePolicies.add')}
               </Button>
               <Button onClick={() => void handleSave()} disabled={busy}>
-                {busy ? 'Opslaan…' : 'Opslaan'}
+                {busy ? t('settingsPages.common.saving') : t('ui.actions.save')}
               </Button>
             </span>
           )
         }
       />
 
-      <p className="customer-form-muted">
-        Doorrekenen kan enkel bij verantwoordelijkheid &lsquo;Klant&rsquo;. Het meest specifieke beleid wint
-        (klant + type &gt; klant &gt; type &gt; algemeen). Zonder beleid geldt: voorstellen ter goedkeuring.
-      </p>
+      <p className="customer-form-muted">{t('settingsPages.chargePolicies.explanation')}</p>
 
       {rows.length === 0 ? (
-        <p className="placeholder-text">Nog geen beleid — doorrekeningen worden ter goedkeuring voorgesteld.</p>
+        <p className="placeholder-text">{t('settingsPages.chargePolicies.empty')}</p>
       ) : (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Klant</th>
-              <th>Incidenttype</th>
-              <th>Modus</th>
-              <th>Standaardbedrag</th>
-              <th>Omschrijving</th>
-              {canManage && <th aria-label="Acties" />}
+              <th>{t('settingsPages.chargePolicies.columnCustomer')}</th>
+              <th>{t('settingsPages.chargePolicies.columnIncidentType')}</th>
+              <th>{t('settingsPages.chargePolicies.columnMode')}</th>
+              <th>{t('settingsPages.chargePolicies.columnAmount')}</th>
+              <th>{t('settingsPages.chargePolicies.columnDescription')}</th>
+              {canManage && <th aria-label={t('settingsPages.common.actions')} />}
             </tr>
           </thead>
           <tbody>
@@ -194,48 +196,50 @@ export function ChargePoliciesPage() {
               <tr key={row.key}>
                 <td>
                   <select
-                    aria-label={`Klant beleid ${index + 1}`}
+                    aria-label={t('settingsPages.chargePolicies.customerAria', { index: index + 1 })}
                     value={row.customerId}
                     onChange={(e) => patchRow(row.key, { customerId: e.target.value })}
                     disabled={!canManage}
                   >
-                    <option value="">Alle klanten</option>
+                    <option value="">{t('settingsPages.chargePolicies.allCustomers')}</option>
                     {customers.map((customer) => (
                       <option key={customer.id} value={customer.id}>
                         {customer.name}
                       </option>
                     ))}
                     {row.customerId && !customers.some((customer) => customer.id === row.customerId) && (
-                      <option value={row.customerId}>{row.customerName ?? 'Onbekende klant'}</option>
+                      <option value={row.customerId}>
+                        {row.customerName ?? t('settingsPages.chargePolicies.unknownCustomer')}
+                      </option>
                     )}
                   </select>
                 </td>
                 <td>
                   <select
-                    aria-label={`Incidenttype beleid ${index + 1}`}
+                    aria-label={t('settingsPages.chargePolicies.incidentTypeAria', { index: index + 1 })}
                     value={row.incidentType}
                     onChange={(e) => patchRow(row.key, { incidentType: e.target.value })}
                     disabled={!canManage}
                   >
-                    <option value="">Alle</option>
+                    <option value="">{t('settingsPages.chargePolicies.allTypes')}</option>
                     {POLICY_INCIDENT_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
+                      <option key={type} value={type}>
+                        {t(`settingsPages.chargePolicies.incidentType.${type}`)}
                       </option>
                     ))}
                   </select>
                 </td>
                 <td>
                   <select
-                    aria-label={`Modus beleid ${index + 1}`}
+                    aria-label={t('settingsPages.chargePolicies.modeAria', { index: index + 1 })}
                     value={row.mode}
                     onChange={(e) => patchRow(row.key, { mode: e.target.value as ChargePolicyMode })}
                     disabled={!canManage}
                   >
-                    {(Object.entries(CHARGE_POLICY_MODE_LABELS) as [ChargePolicyMode, string][]).map(
-                      ([value, label]) => (
+                    {(Object.entries(CHARGE_POLICY_MODE_KEYS) as [ChargePolicyMode, string][]).map(
+                      ([value, labelKey]) => (
                         <option key={value} value={value}>
-                          {label}
+                          {t(labelKey)}
                         </option>
                       ),
                     )}
@@ -247,7 +251,7 @@ export function ChargePoliciesPage() {
                     min={0.01}
                     step="0.01"
                     className="settings-doc-rules-priority"
-                    aria-label={`Standaardbedrag beleid ${index + 1}`}
+                    aria-label={t('settingsPages.chargePolicies.amountAria', { index: index + 1 })}
                     value={row.amount}
                     onChange={(e) => patchRow(row.key, { amount: e.target.value })}
                     disabled={!canManage}
@@ -257,7 +261,7 @@ export function ChargePoliciesPage() {
                   <input
                     type="text"
                     maxLength={500}
-                    aria-label={`Omschrijving beleid ${index + 1}`}
+                    aria-label={t('settingsPages.chargePolicies.descriptionAria', { index: index + 1 })}
                     value={row.description}
                     onChange={(e) => patchRow(row.key, { description: e.target.value })}
                     disabled={!canManage}
@@ -270,7 +274,7 @@ export function ChargePoliciesPage() {
                       className="issued-items-link issued-items-link-danger"
                       onClick={() => setRows((current) => (current ? current.filter((r) => r.key !== row.key) : current))}
                     >
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   </td>
                 )}

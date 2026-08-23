@@ -77,16 +77,17 @@ export type StockMovementType =
   | 'Disposed'
   | 'Transfer'
 
+/** Vertaalsleutels — renderen als t(STOCK_MOVEMENT_LABELS[type]). */
 export const STOCK_MOVEMENT_LABELS: Record<StockMovementType, string> = {
-  InitialStock: 'Beginvoorraad',
-  Purchase: 'Aankoop',
-  Correction: 'Correctie',
-  Issue: 'Uitgifte',
-  Return: 'Retour',
-  Damaged: 'Beschadigd',
-  Lost: 'Verloren',
-  Disposed: 'Afgevoerd',
-  Transfer: 'Overdracht',
+  InitialStock: 'issuedItems.movement.InitialStock',
+  Purchase: 'issuedItems.movement.Purchase',
+  Correction: 'issuedItems.movement.Correction',
+  Issue: 'issuedItems.movement.Issue',
+  Return: 'issuedItems.movement.Return',
+  Damaged: 'issuedItems.movement.Damaged',
+  Lost: 'issuedItems.movement.Lost',
+  Disposed: 'issuedItems.movement.Disposed',
+  Transfer: 'issuedItems.movement.Transfer',
 }
 
 export interface StockMovement {

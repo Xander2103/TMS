@@ -1,0 +1,20 @@
+{
+  "page": {
+    "breadcrumb": "Kwalificaties",
+    "title": "Kwalificaties",
+    "subtitle": "Vervallende en verlopen kwalificaties, licenties en keuringen van alle medewerkers.",
+    "loadFailed": "Kwalificaties konden niet worden geladen.",
+    "expiringTitle": "Vervalt binnenkort",
+    "expiredTitle": "Verlopen",
+    "windowAria": "Periode",
+    "windowDays": "{days} dagen",
+    "colEmployee": "Medewerker",
+    "driverSuffix": "· chauffeur",
+    "colQualification": "Kwalificatie",
+    "colExpiry": "Vervaldatum",
+    "colStatus": "Status",
+    "emptyExpiring": "Geen kwalificaties die binnen {days} dagen vervallen.",
+    "emptyExpired": "Geen verlopen kwalificaties. 🎉",
+    "loading": "Laden…"
+  }
+}

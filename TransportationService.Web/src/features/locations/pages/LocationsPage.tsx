@@ -9,12 +9,14 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useLocale } from '../../../i18n/localeContext'
+import type { TranslateFn } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { searchLocations, searchLocationsGrouped } from '../api/locationsApi'
 import {
-  LOCATION_TYPE_LABELS,
+  LOCATION_TYPE_LABEL_KEYS,
   LOCATION_TYPES,
   type LocationGroup,
   type LocationListItem,
@@ -45,8 +47,12 @@ interface LocationFilters {
   postalCode: string
 }
 
-const STATUS_BADGE = (row: LocationListItem) =>
-  row.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>
+const statusBadge = (t: TranslateFn) => (row: LocationListItem) =>
+  row.isActive ? (
+    <Badge tone="success">{t('ui.statusBadges.active')}</Badge>
+  ) : (
+    <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>
+  )
 
 /**
  * Locations overview: one shared filter bar (zoeken, status, type, klant, land, postcode)
@@ -55,6 +61,7 @@ const STATUS_BADGE = (row: LocationListItem) =>
  */
 export function LocationsPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
 
   const [search, setSearch] = useState('')
@@ -100,12 +107,12 @@ export function LocationsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Locaties' }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.locations') }]} />
       <PageHeader
-        title="Locaties"
+        title={t('navigation.menu.locations')}
         action={
           hasPermission('locations.create') ? (
-            <Button onClick={() => navigate('/locations/new')}>Nieuwe locatie</Button>
+            <Button onClick={() => navigate('/locations/new')}>{t('locations.list.new')}</Button>
           ) : undefined
         }
       />
@@ -113,7 +120,7 @@ export function LocationsPage() {
         <FilterBar
           search={search}
           onSearchChange={setSearch}
-          searchPlaceholder="Zoeken op code, naam of plaats..."
+          searchPlaceholder={t('locations.list.searchPlaceholder')}
           activeFilter={activeFilter}
           onActiveFilterChange={setActiveFilter}
         />
@@ -121,19 +128,19 @@ export function LocationsPage() {
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as LocationType | '')}
           className="locations-type-filter"
-          aria-label="Type"
+          aria-label={t('locations.list.typeLabel')}
         >
-          <option value="">Alle types</option>
-          {LOCATION_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {LOCATION_TYPE_LABELS[t]}
+          <option value="">{t('locations.list.allTypes')}</option>
+          {LOCATION_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {t(LOCATION_TYPE_LABEL_KEYS[type])}
             </option>
           ))}
         </select>
         <div className="locations-customer-filter">
           <SearchableSelect
-            ariaLabel="Klant"
-            placeholder="Alle klanten"
+            ariaLabel={t('locations.list.customerLabel')}
+            placeholder={t('locations.list.allCustomers')}
             value={customerFilter}
             onChange={setCustomerFilter}
             options={customerOptions}
@@ -144,25 +151,25 @@ export function LocationsPage() {
             id="locations-country-filter"
             value={countryFilter}
             onChange={setCountryFilter}
-            placeholder="Land"
+            placeholder={t('locations.list.countryPlaceholder')}
           />
         </div>
         <input
           className="locations-postal-filter"
           value={postalCodeFilter}
           onChange={(e) => setPostalCodeFilter(e.target.value)}
-          placeholder="Postcode"
-          aria-label="Postcode"
+          placeholder={t('locations.list.postalCodeLabel')}
+          aria-label={t('locations.list.postalCodeLabel')}
         />
-        <div className="locations-view-toggle" role="group" aria-label="Weergave">
-          <span className="locations-view-toggle-label">Weergave:</span>
+        <div className="locations-view-toggle" role="group" aria-label={t('locations.list.viewLabel')}>
+          <span className="locations-view-toggle-label">{t('locations.list.viewLabelText')}</span>
           <button
             type="button"
             className="locations-view-toggle-button"
             aria-pressed={viewMode === 'flat'}
             onClick={() => switchView('flat')}
           >
-            Plat
+            {t('locations.list.viewFlat')}
           </button>
           <button
             type="button"
@@ -170,7 +177,7 @@ export function LocationsPage() {
             aria-pressed={viewMode === 'grouped'}
             onClick={() => switchView('grouped')}
           >
-            Per klant
+            {t('locations.list.viewGrouped')}
           </button>
         </div>
       </div>
@@ -183,6 +190,7 @@ export function LocationsPage() {
 /** Flat table with server-side sorting on Code/Naam/Type/Plaats/Klant/Status. */
 function FlatLocationsView({ filters }: { filters: LocationFilters }) {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const [page, setPage] = useState(1)
   const [sort, setSort] = useState<SortState | null>(null)
 
@@ -211,18 +219,18 @@ function FlatLocationsView({ filters }: { filters: LocationFilters }) {
       search: filters.search,
       isActive: filters.isActive,
       page,
-      errorMessage: 'Locaties konden niet worden geladen.',
+      errorMessage: t('locations.list.loadFailed'),
       extra: { type: filters.type, customerId: filters.customerId, country: filters.country, postalCode: filters.postalCode, sort },
     },
   )
 
   const columns: Column<LocationListItem>[] = [
-    { key: 'code', header: 'Code', width: '130px', sortKey: 'code', render: (row) => <code>{row.code}</code> },
-    { key: 'name', header: 'Naam', sortKey: 'name', render: (row) => row.name },
-    { key: 'type', header: 'Type', width: '160px', sortKey: 'type', render: (row) => LOCATION_TYPE_LABELS[row.type] },
-    { key: 'city', header: 'Plaats', sortKey: 'city', render: (row) => row.city ?? '—' },
-    { key: 'customer', header: 'Klant', sortKey: 'customer', render: (row) => row.customerName ?? '—' },
-    { key: 'status', header: 'Status', width: '110px', sortKey: 'status', render: STATUS_BADGE },
+    { key: 'code', header: t('locations.list.columns.code'), width: '130px', sortKey: 'code', render: (row) => <code>{row.code}</code> },
+    { key: 'name', header: t('locations.list.columns.name'), sortKey: 'name', render: (row) => row.name },
+    { key: 'type', header: t('locations.list.columns.type'), width: '160px', sortKey: 'type', render: (row) => t(LOCATION_TYPE_LABEL_KEYS[row.type]) },
+    { key: 'city', header: t('locations.list.columns.city'), sortKey: 'city', render: (row) => row.city ?? '—' },
+    { key: 'customer', header: t('locations.list.columns.customer'), sortKey: 'customer', render: (row) => row.customerName ?? '—' },
+    { key: 'status', header: t('locations.list.columns.status'), width: '110px', sortKey: 'status', render: statusBadge(t) },
   ]
 
   return (
@@ -233,8 +241,8 @@ function FlatLocationsView({ filters }: { filters: LocationFilters }) {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Geen locaties gevonden."
-        loadingMessage="Locaties laden..."
+        emptyMessage={t('locations.list.empty')}
+        loadingMessage={t('locations.list.loading')}
         onRowClick={(row) => navigate(`/locations/${row.id}`)}
         rowClassName={(row) => (row.isActive ? undefined : 'locations-row-inactive')}
         sort={sort}
@@ -248,6 +256,7 @@ function FlatLocationsView({ filters }: { filters: LocationFilters }) {
 /** Per-customer view over GET /api/locations/grouped: collapsible groups, paged per GROUP. */
 function GroupedLocationsView({ filters }: { filters: LocationFilters }) {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const [page, setPage] = useState(1)
   const [innerSort, setInnerSort] = useState<InnerSort>('name')
   // Groups the user explicitly collapsed; everything else renders open.
@@ -277,45 +286,45 @@ function GroupedLocationsView({ filters }: { filters: LocationFilters }) {
       search: filters.search,
       isActive: filters.isActive,
       page,
-      errorMessage: 'Locaties konden niet worden geladen.',
+      errorMessage: t('locations.list.loadFailed'),
       extra: { type: filters.type, customerId: filters.customerId, country: filters.country, postalCode: filters.postalCode, innerSort },
     },
   )
 
   const groupColumns: Column<LocationListItem>[] = useMemo(
     () => [
-      { key: 'code', header: 'Code', width: '130px', render: (row) => <code>{row.code}</code> },
-      { key: 'name', header: 'Naam', render: (row) => row.name },
-      { key: 'type', header: 'Type', width: '160px', render: (row) => LOCATION_TYPE_LABELS[row.type] },
-      { key: 'city', header: 'Plaats', render: (row) => row.city ?? '—' },
-      { key: 'status', header: 'Status', width: '110px', render: STATUS_BADGE },
+      { key: 'code', header: t('locations.list.columns.code'), width: '130px', render: (row) => <code>{row.code}</code> },
+      { key: 'name', header: t('locations.list.columns.name'), render: (row) => row.name },
+      { key: 'type', header: t('locations.list.columns.type'), width: '160px', render: (row) => t(LOCATION_TYPE_LABEL_KEYS[row.type]) },
+      { key: 'city', header: t('locations.list.columns.city'), render: (row) => row.city ?? '—' },
+      { key: 'status', header: t('locations.list.columns.status'), width: '110px', render: statusBadge(t) },
     ],
-    [],
+    [t],
   )
 
-  if (isLoading) return <p className="placeholder-text">Locaties laden...</p>
+  if (isLoading) return <p className="placeholder-text">{t('locations.list.loading')}</p>
   if (error) return <p className="placeholder-text">{error}</p>
 
   return (
     <div className="locations-grouped">
       <div className="locations-grouped-toolbar">
-        <label htmlFor="locations-inner-sort">Sorteer binnen klant</label>
+        <label htmlFor="locations-inner-sort">{t('locations.list.innerSortLabel')}</label>
         <select
           id="locations-inner-sort"
           value={innerSort}
           onChange={(e) => setInnerSort(e.target.value as InnerSort)}
         >
-          <option value="name">Naam</option>
-          <option value="code">Code</option>
-          <option value="city">Plaats</option>
+          <option value="name">{t('locations.list.innerSortName')}</option>
+          <option value="code">{t('locations.list.innerSortCode')}</option>
+          <option value="city">{t('locations.list.innerSortCity')}</option>
         </select>
       </div>
 
-      {items.length === 0 && <p className="placeholder-text">Geen locaties gevonden.</p>}
+      {items.length === 0 && <p className="placeholder-text">{t('locations.list.empty')}</p>}
 
       {items.map((group) => {
         const key = group.customerId ?? 'unlinked'
-        const title = group.customerName ?? 'Ongekoppelde locaties'
+        const title = group.customerName ?? t('locations.list.unlinkedGroup')
         const open = !collapsed[key]
         return (
           <section key={key} className="locations-group">
@@ -338,7 +347,7 @@ function GroupedLocationsView({ filters }: { filters: LocationFilters }) {
                 columns={groupColumns}
                 rows={group.locations}
                 rowKey={(row) => row.id}
-                emptyMessage="Geen locaties in deze groep."
+                emptyMessage={t('locations.list.groupEmpty')}
                 onRowClick={(row) => navigate(`/locations/${row.id}`)}
                 rowClassName={(row) => (row.isActive ? undefined : 'locations-row-inactive')}
               />

@@ -4,14 +4,13 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { listAbsences } from '../api/absencesApi'
 import { ReviewAbsenceDialog } from '../components/ReviewAbsenceDialog'
 import {
-  ABSENCE_STATUS_LABELS,
   ABSENCE_STATUS_TONE,
   ABSENCE_STATUSES,
-  ABSENCE_TYPE_LABELS,
   ABSENCE_TYPES,
   type Absence,
   type AbsenceStatus,
@@ -31,6 +30,7 @@ function plusDaysIso(days: number): string {
 
 /** Planning overview of absences across all employees within a date window. */
 export function AbsencesPage() {
+  const { t } = useLocale()
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const canApprove = hasPermission('absences.approve')
@@ -42,7 +42,8 @@ export function AbsencesPage() {
   const [statusFilter, setStatusFilter] = useState<AbsenceStatus | ''>('')
 
   const [absences, setAbsences] = useState<Absence[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -55,10 +56,10 @@ export function AbsencesPage() {
       .then((data) => {
         if (!mounted) return
         setAbsences(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Afwezigheden konden niet worden geladen.')
+        if (mounted) setLoadErrorKey('absences.page.loadFailed')
       })
     return () => {
       mounted = false
@@ -67,57 +68,61 @@ export function AbsencesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Afwezigheden' }]} />
-      <PageHeader title="Afwezigheden" subtitle="Overzicht voor planning — beheer per medewerker via Personeel." />
+      <Breadcrumbs items={[{ label: t('absences.page.title') }]} />
+      <PageHeader title={t('absences.page.title')} subtitle={t('absences.page.subtitle')} />
 
       <div className="absp-filters">
         <label>
-          Van
+          {t('absences.page.from')}
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </label>
         <label>
-          Tot en met
+          {t('absences.page.to')}
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </label>
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as AbsenceType | '')} aria-label="Typefilter">
-          <option value="">Alle types</option>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as AbsenceType | '')}
+          aria-label={t('absences.page.typeFilter')}
+        >
+          <option value="">{t('absences.page.allTypes')}</option>
           {ABSENCE_TYPES.map((type) => (
             <option key={type} value={type}>
-              {ABSENCE_TYPE_LABELS[type]}
+              {t(`absences.type.${type}`)}
             </option>
           ))}
         </select>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as AbsenceStatus | '')}
-          aria-label="Statusfilter"
+          aria-label={t('absences.page.statusFilter')}
         >
-          <option value="">Alle statussen</option>
+          <option value="">{t('absences.page.allStatuses')}</option>
           {ABSENCE_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {ABSENCE_STATUS_LABELS[status]}
+              {t(`absences.status.${status}`)}
             </option>
           ))}
         </select>
       </div>
 
-      {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && absences === null && <p className="placeholder-text">Afwezigheden laden…</p>}
-      {!loadError && absences !== null && absences.length === 0 && (
-        <p className="placeholder-text">Geen afwezigheden in deze periode.</p>
+      {loadErrorKey && <p className="placeholder-text">{t(loadErrorKey)}</p>}
+      {!loadErrorKey && absences === null && <p className="placeholder-text">{t('absences.page.loading')}</p>}
+      {!loadErrorKey && absences !== null && absences.length === 0 && (
+        <p className="placeholder-text">{t('absences.page.empty')}</p>
       )}
 
-      {!loadError && absences !== null && absences.length > 0 && (
+      {!loadErrorKey && absences !== null && absences.length > 0 && (
         <table className="absp-table">
           <thead>
             <tr>
-              <th>Medewerker</th>
-              <th>Type</th>
-              <th>Van</th>
-              <th>Tot en met</th>
-              <th>Status</th>
-              <th>Reden</th>
-              {canApprove && <th aria-label="Acties" />}
+              <th>{t('absences.page.colEmployee')}</th>
+              <th>{t('absences.tab.colType')}</th>
+              <th>{t('absences.tab.colFrom')}</th>
+              <th>{t('absences.tab.colTo')}</th>
+              <th>{t('absences.tab.colStatus')}</th>
+              <th>{t('absences.tab.colReason')}</th>
+              {canApprove && <th aria-label={t('absences.tab.colActions')} />}
             </tr>
           </thead>
           <tbody>
@@ -126,16 +131,16 @@ export function AbsencesPage() {
                 <td>
                   {absence.employeeName}{' '}
                   <span className="absp-number">({absence.employeeNumber})</span>
-                  {absence.isDriver && <Badge tone="info">Chauffeur</Badge>}
+                  {absence.isDriver && <Badge tone="info">{t('absences.page.driver')}</Badge>}
                 </td>
                 <td>
-                  {ABSENCE_TYPE_LABELS[absence.type]}
+                  {t(`absences.type.${absence.type}`)}
                   {absence.hasAttachment && ' 📎'}
                 </td>
                 <td>{absence.startDate}</td>
                 <td>{absence.endDate}</td>
                 <td>
-                  <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{ABSENCE_STATUS_LABELS[absence.status]}</Badge>
+                  <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{t(`absences.status.${absence.status}`)}</Badge>
                 </td>
                 <td className="absp-reason" title={absence.reason ?? undefined}>
                   {absence.reason ?? '—'}
@@ -149,7 +154,7 @@ export function AbsencesPage() {
                         setReviewTarget(absence)
                       }}
                     >
-                      Beoordelen
+                      {t('absences.page.review')}
                     </Button>
                   </td>
                 )}

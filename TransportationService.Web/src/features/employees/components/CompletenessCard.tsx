@@ -1,3 +1,4 @@
+import { useLocale } from '../../../i18n/localeContext'
 import type { EmployeeCompleteness } from '../types/employee'
 import './CompletenessCard.css'
 
@@ -23,13 +24,14 @@ interface CompletenessCardProps {
  * that owns it. Rendered above the detail-page tabs.
  */
 export function CompletenessCard({ completeness, onNavigate, canNavigate }: CompletenessCardProps) {
+  const { t } = useLocale()
   const { percentage, isComplete, missingItems } = completeness
 
   return (
-    <section className="completeness-card" aria-label="Dossiervolledigheid">
+    <section className="completeness-card" aria-label={t('employees.completeness.ariaLabel')}>
       <div className="completeness-card-header">
         <span className="completeness-card-title">
-          {isComplete ? 'Dossier compleet ✓' : `Dossier ${percentage}% compleet`}
+          {isComplete ? t('employees.completeness.complete') : t('employees.completeness.percent', { percentage })}
         </span>
       </div>
       <div

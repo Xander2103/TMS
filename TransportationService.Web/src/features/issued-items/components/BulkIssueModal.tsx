@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   saveEmployeeIssuedItem,
@@ -60,6 +61,7 @@ export function BulkIssueModal({
   onItemIssued,
   onCompleted,
 }: BulkIssueModalProps) {
+  const { t } = useLocale()
   const [rows, setRows] = useState<Record<string, RowState>>({})
   const [variantsByTemplate, setVariantsByTemplate] = useState<Record<string, IssuedItemVariant[]>>({})
   const [variantsLoading, setVariantsLoading] = useState<Record<string, boolean>>({})
@@ -172,7 +174,7 @@ export function BulkIssueModal({
         return
       }
       setNegativeStock(null)
-      setError(`${negativeStock.templateName}: ${describeApiError(err, 'Het bedrijfsmiddel kon niet worden uitgegeven.').message}`)
+      setError(`${negativeStock.templateName}: ${describeApiError(err, t('issuedItems.bulk.issueFailed')).message}`)
       negativeStockResolverRef.current?.('stopped')
     } finally {
       setConfirmSaving(false)
@@ -191,11 +193,11 @@ export function BulkIssueModal({
 
     for (const { template, row } of selectedRows) {
       if (template.variantsEnabled && !row.variantId) {
-        setError('Kies een variant.')
+        setError(t('issuedItems.bulk.chooseVariant'))
         return
       }
       if (template.requiresSerialNumber && !row.serialNumber.trim()) {
-        setError('Een serienummer is verplicht voor dit middel.')
+        setError(t('issuedItems.tab.serialRequired'))
         return
       }
     }
@@ -227,7 +229,7 @@ export function BulkIssueModal({
           return
         }
 
-        setError(`${template.name}: ${describeApiError(err, 'Het bedrijfsmiddel kon niet worden uitgegeven.').message}`)
+        setError(`${template.name}: ${describeApiError(err, t('issuedItems.bulk.issueFailed')).message}`)
         setBusy(false)
         return
       }
@@ -235,23 +237,25 @@ export function BulkIssueModal({
 
     setBusy(false)
     const message =
-      skipped.length > 0 ? `${issuedCount} uitgegeven, ${skipped.length} overgeslagen` : `${issuedCount} middelen uitgegeven`
+      skipped.length > 0
+        ? t('issuedItems.bulk.completedSkipped', { count: issuedCount, skipped: skipped.length })
+        : t('issuedItems.bulk.completed', { count: issuedCount })
     onCompleted(message)
   }
 
   return (
     <>
       <Modal
-        title="Meerdere middelen uitgeven"
+        title={t('issuedItems.bulk.title')}
         onClose={onClose}
         busy={busy}
         footer={
           <>
             <Button variant="secondary" onClick={onClose} disabled={busy}>
-              Annuleren
+              {t('ui.actions.cancel')}
             </Button>
             <Button onClick={() => void handleSubmit()} disabled={busy || selectedCount === 0}>
-              {busy ? 'Uitgeven…' : `Uitgeven (${selectedCount})`}
+              {busy ? t('issuedItems.bulk.issuing') : t('issuedItems.bulk.issue', { count: selectedCount })}
             </Button>
           </>
         }
@@ -263,7 +267,7 @@ export function BulkIssueModal({
             </div>
           )}
           <div className="bulk-issue-shared-fields">
-            <FormField label="Uitgiftedatum" htmlFor="bulk-issue-date">
+            <FormField label={t('issuedItems.bulk.issuedDate')} htmlFor="bulk-issue-date">
               <input
                 id="bulk-issue-date"
                 type="date"
@@ -272,12 +276,12 @@ export function BulkIssueModal({
                 disabled={busy}
               />
             </FormField>
-            <FormField label="Opmerking" htmlFor="bulk-issue-notes">
+            <FormField label={t('issuedItems.bulk.note')} htmlFor="bulk-issue-notes">
               <textarea id="bulk-issue-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} />
             </FormField>
           </div>
 
-          {templates.length === 0 && <p className="placeholder-text">Geen actieve sjablonen beschikbaar.</p>}
+          {templates.length === 0 && <p className="placeholder-text">{t('issuedItems.bulk.noTemplates')}</p>}
 
           {groups.map(([category, categoryTemplates]) => (
             <fieldset className="bulk-issue-category" key={category}>
@@ -299,23 +303,23 @@ export function BulkIssueModal({
                     {row?.checked && (
                       <div className="bulk-issue-row-fields">
                         {template.variantsEnabled && (
-                          <FormField label="Variant" htmlFor={`bulk-variant-${template.id}`} required>
+                          <FormField label={t('issuedItems.bulk.variant')} htmlFor={`bulk-variant-${template.id}`} required>
                             <select
                               id={`bulk-variant-${template.id}`}
                               value={row.variantId ?? ''}
                               onChange={(e) => updateRow(template.id, { variantId: e.target.value || null })}
                               disabled={busy}
                             >
-                              <option value="">— Kies variant —</option>
+                              <option value="">{t('issuedItems.bulk.chooseVariantOption')}</option>
                               {variants.map((variant) => (
                                 <option key={variant.id} value={variant.id}>
-                                  {variant.label} — voorraad: {variant.currentStock}
+                                  {t('issuedItems.tab.variantOption', { label: variant.label, stock: variant.currentStock })}
                                 </option>
                               ))}
                             </select>
                           </FormField>
                         )}
-                        <FormField label="Aantal" htmlFor={`bulk-qty-${template.id}`}>
+                        <FormField label={t('issuedItems.bulk.quantity')} htmlFor={`bulk-qty-${template.id}`}>
                           <input
                             id={`bulk-qty-${template.id}`}
                             type="number"
@@ -325,7 +329,7 @@ export function BulkIssueModal({
                             disabled={busy}
                           />
                         </FormField>
-                        <FormField label="Serienummer" htmlFor={`bulk-serial-${template.id}`}>
+                        <FormField label={t('issuedItems.bulk.serial')} htmlFor={`bulk-serial-${template.id}`}>
                           <input
                             id={`bulk-serial-${template.id}`}
                             value={row.serialNumber}

@@ -10,6 +10,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { TabPanel, Tabs, type TabItem } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   addAttributeOption,
@@ -74,6 +75,7 @@ const TAB_ALIASES: Record<string, DetailTab> = {
 /** Detail/edit page of one issued-item template: configuration, attributes, variants, stock. */
 export function IssuedItemTemplateDetailPage() {
   const { id = '' } = useParams()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const canManageInventory = hasPermission('inventory.manage') || hasPermission('issued_items.manage_templates')
@@ -84,7 +86,8 @@ export function IssuedItemTemplateDetailPage() {
   const [allDefinitions, setAllDefinitions] = useState<IssuedItemAttributeDefinition[]>([])
   const [movements, setMovements] = useState<StockMovement[] | null>(null)
   const [holders, setHolders] = useState<CurrentHolder[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
   const [templateEditorOpen, setTemplateEditorOpen] = useState(false)
@@ -103,7 +106,7 @@ export function IssuedItemTemplateDetailPage() {
   const [busy, setBusy] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const reload = useCallback(() => setReloadToken((t) => t + 1), [])
+  const reload = useCallback(() => setReloadToken((token) => token + 1), [])
 
   useEffect(() => {
     let mounted = true
@@ -115,10 +118,10 @@ export function IssuedItemTemplateDetailPage() {
         if (!mounted) return
         setDetail(templateDetail)
         setAllDefinitions(definitions)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Het sjabloon kon niet worden geladen.')
+        if (mounted) setLoadErrorKey('issuedItems.detail.loadFailed')
       })
     return () => {
       mounted = false
@@ -162,7 +165,7 @@ export function IssuedItemTemplateDetailPage() {
       reload()
       return true
     } catch (err) {
-      const message = describeApiError(err, 'De bewerking is mislukt.').message
+      const message = describeApiError(err, t('issuedItems.detail.operationFailed')).message
       if (onError) onError(message)
       else showError(message)
       return false
@@ -175,7 +178,7 @@ export function IssuedItemTemplateDetailPage() {
     if (!detail || !definitionId) return
     await run(
       () => setTemplateAttributes(id, [...detail.attributes.map((a) => a.id), definitionId]),
-      'Attribuut gekoppeld.',
+      t('issuedItems.detail.attributeLinked'),
     )
     setAttributePickerValue('')
   }
@@ -184,7 +187,7 @@ export function IssuedItemTemplateDetailPage() {
     if (!detail) return
     await run(
       () => setTemplateAttributes(id, detail.attributes.filter((a) => a.id !== definitionId).map((a) => a.id)),
-      'Attribuut losgekoppeld.',
+      t('issuedItems.detail.attributeUnlinked'),
     )
   }
 
@@ -201,7 +204,7 @@ export function IssuedItemTemplateDetailPage() {
         isActive: true,
       })
       await setTemplateAttributes(id, [...detail.attributes.map((a) => a.id), definition.id])
-    }, 'Attribuut aangemaakt en gekoppeld.')
+    }, t('issuedItems.detail.attributeCreated'))
     setNewAttribute(null)
   }
 
@@ -211,7 +214,7 @@ export function IssuedItemTemplateDetailPage() {
     const definition = detail?.attributes.find((a) => a.id === definitionId)
     await run(
       () => addAttributeOption(definitionId, { value: draft, sortOrder: definition?.options.length ?? 0, isActive: true }),
-      'Waarde toegevoegd.',
+      t('issuedItems.detail.valueAdded'),
     )
     setOptionDrafts((d) => ({ ...d, [definitionId]: '' }))
   }
@@ -260,7 +263,7 @@ export function IssuedItemTemplateDetailPage() {
     }
     const ok = await run(
       () => (variantEditor.variant ? updateVariant(id, variantEditor.variant.id, input) : createVariant(id, input)),
-      variantEditor.variant ? 'Variant bijgewerkt.' : 'Variant toegevoegd.',
+      variantEditor.variant ? t('issuedItems.detail.variantUpdated') : t('issuedItems.detail.variantAdded'),
       setVariantError,
     )
     if (ok) setVariantEditor(null)
@@ -270,7 +273,7 @@ export function IssuedItemTemplateDetailPage() {
     if (!variantDeleteTarget) return
     const target = variantDeleteTarget
     setVariantDeleteTarget(null)
-    await run(() => deleteVariant(id, target.id), 'Variant verwijderd.')
+    await run(() => deleteVariant(id, target.id), t('issuedItems.detail.variantDeleted'))
   }
 
   async function handleStockSubmit(event: FormEvent) {
@@ -278,13 +281,13 @@ export function IssuedItemTemplateDetailPage() {
     if (!stockDialog) return
     const quantity = Number(stockDialog.quantity)
     if (!Number.isFinite(quantity)) {
-      setStockError('Geef een geldig aantal op.')
+      setStockError(t('issuedItems.detail.invalidQty'))
       return
     }
     if (stockDialog.kind === 'receipt') {
       const ok = await run(
         () => receiveStock(id, { variantId: stockDialog.variantId, quantity, notes: stockDialog.notes.trim() || null }),
-        'Voorraad toegevoegd.',
+        t('issuedItems.detail.receiptSaved'),
         setStockError,
       )
       if (ok) setStockDialog(null)
@@ -298,7 +301,7 @@ export function IssuedItemTemplateDetailPage() {
     setBusy(true)
     try {
       await correctStock(id, input)
-      showSuccess('Voorraad gecorrigeerd.')
+      showSuccess(t('issuedItems.detail.correctionSaved'))
       setStockNegative(null)
       setStockDialog(null)
       reload()
@@ -310,7 +313,7 @@ export function IssuedItemTemplateDetailPage() {
         return
       }
       setStockNegative(null)
-      setStockError(describeApiError(err, 'De bewerking is mislukt.').message)
+      setStockError(describeApiError(err, t('issuedItems.detail.operationFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -324,38 +327,38 @@ export function IssuedItemTemplateDetailPage() {
       optionIds: generateDialog[attribute.id] ?? [],
     }))
     if (dimensions.some((d) => d.optionIds.length === 0)) {
-      setGenerateError('Kies per attribuut minstens één waarde.')
+      setGenerateError(t('issuedItems.detail.generateMissing'))
       return
     }
-    const ok = await run(() => generateVariants(id, dimensions), 'Varianten gegenereerd.', setGenerateError)
+    const ok = await run(() => generateVariants(id, dimensions), t('issuedItems.detail.generated'), setGenerateError)
     if (ok) setGenerateDialog(null)
   }
 
-  if (loadError) {
-    return <p className="placeholder-text">{loadError}</p>
+  if (loadErrorKey) {
+    return <p className="placeholder-text">{t(loadErrorKey)}</p>
   }
 
   if (!detail) {
-    return <p className="placeholder-text">Laden…</p>
+    return <p className="placeholder-text">{t('issuedItems.detail.loading')}</p>
   }
 
   const template = detail.template
 
   const tabs: TabItem[] = [
-    { id: 'algemeen', label: 'Algemeen' },
-    ...(template.stockTrackingEnabled && !template.variantsEnabled ? [{ id: 'voorraad', label: 'Voorraad' }] : []),
+    { id: 'algemeen', label: t('issuedItems.detail.tabGeneral') },
+    ...(template.stockTrackingEnabled && !template.variantsEnabled ? [{ id: 'voorraad', label: t('issuedItems.detail.tabStock') }] : []),
     ...(template.stockTrackingEnabled && template.variantsEnabled
-      ? [{ id: 'varianten', label: 'Varianten & voorraad', badge: detail.variants.length || undefined }]
+      ? [{ id: 'varianten', label: t('issuedItems.detail.tabVariants'), badge: detail.variants.length || undefined }]
       : []),
-    { id: 'houders', label: 'Huidige houders', badge: visibleHolders?.length || undefined },
-    ...(template.stockTrackingEnabled ? [{ id: 'bewegingen', label: 'Voorraadhistoriek' }] : []),
+    { id: 'houders', label: t('issuedItems.detail.tabHolders'), badge: visibleHolders?.length || undefined },
+    ...(template.stockTrackingEnabled ? [{ id: 'bewegingen', label: t('issuedItems.detail.tabMovements') }] : []),
   ]
   const rawTab = searchParams.get('tab') ?? 'algemeen'
   const requestedTab = (TAB_ALIASES[rawTab] ?? rawTab) as DetailTab
-  const activeTab: DetailTab = tabs.some((t) => t.id === requestedTab)
+  const activeTab: DetailTab = tabs.some((tab) => tab.id === requestedTab)
     ? requestedTab
     : // Deep links naar ?tab=voorraad (bv. vanuit het voorraadoverzicht) landen bij variantsjablonen op Varianten.
-      requestedTab === 'voorraad' && tabs.some((t) => t.id === 'varianten')
+      requestedTab === 'voorraad' && tabs.some((tab) => tab.id === 'varianten')
       ? 'varianten'
       : 'algemeen'
   const setActiveTab = (tabId: string) => {
@@ -368,8 +371,8 @@ export function IssuedItemTemplateDetailPage() {
     <div>
       <Breadcrumbs
         items={[
-          { label: 'Instellingen', to: '/settings' },
-          { label: 'Bedrijfsmiddelen', to: '/settings/issued-item-templates' },
+          { label: t('issuedItems.detail.breadcrumbSettings'), to: '/settings' },
+          { label: t('issuedItems.detail.breadcrumbTemplates'), to: '/settings/issued-item-templates' },
           { label: template.name },
         ]}
       />
@@ -377,7 +380,7 @@ export function IssuedItemTemplateDetailPage() {
         title={template.name}
         subtitle={template.description ?? template.category}
         action={
-          canManageInventory ? <Button onClick={() => setTemplateEditorOpen(true)}>Sjabloon bewerken</Button> : undefined
+          canManageInventory ? <Button onClick={() => setTemplateEditorOpen(true)}>{t('issuedItems.detail.editTemplate')}</Button> : undefined
         }
       />
 
@@ -386,47 +389,47 @@ export function IssuedItemTemplateDetailPage() {
       {activeTab === 'algemeen' && (
       <TabPanel tabId="algemeen">
       <section className="issued-items-card">
-        <h2>Instellingen</h2>
+        <h2>{t('issuedItems.detail.settingsTitle')}</h2>
         <dl className="issued-items-summary">
           <div>
-            <dt>Categorie</dt>
+            <dt>{t('issuedItems.detail.category')}</dt>
             <dd>{template.category}</dd>
           </div>
           <div>
-            <dt>Voorraadbeheer</dt>
-            <dd>{template.stockTrackingEnabled ? 'Aan' : 'Uit'}</dd>
+            <dt>{t('issuedItems.detail.stockTracking')}</dt>
+            <dd>{template.stockTrackingEnabled ? t('issuedItems.detail.on') : t('issuedItems.detail.off')}</dd>
           </div>
           <div>
-            <dt>Varianten</dt>
-            <dd>{template.variantsEnabled ? 'Aan' : 'Uit'}</dd>
+            <dt>{t('issuedItems.detail.variants')}</dt>
+            <dd>{template.variantsEnabled ? t('issuedItems.detail.on') : t('issuedItems.detail.off')}</dd>
           </div>
           <div>
-            <dt>Serienummer verplicht</dt>
-            <dd>{template.requiresSerialNumber ? 'Ja' : 'Nee'}</dd>
+            <dt>{t('issuedItems.detail.serialRequired')}</dt>
+            <dd>{template.requiresSerialNumber ? t('issuedItems.detail.yes') : t('issuedItems.detail.no')}</dd>
           </div>
           <div>
-            <dt>Retour verplicht</dt>
-            <dd>{template.returnRequired ? 'Ja' : 'Nee'}</dd>
+            <dt>{t('issuedItems.detail.returnRequired')}</dt>
+            <dd>{template.returnRequired ? t('issuedItems.detail.yes') : t('issuedItems.detail.no')}</dd>
           </div>
           {template.stockTrackingEnabled && (
             <>
               <div>
-                <dt>Beschikbaar</dt>
+                <dt>{t('issuedItems.detail.available')}</dt>
                 <dd>
                   {template.totalAvailable}
                   {template.unit ? ` ${template.unit}` : ''}{' '}
-                  {template.lowStock && <Badge tone="warning">Lage voorraad</Badge>}
+                  {template.lowStock && <Badge tone="warning">{t('issuedItems.detail.lowStock')}</Badge>}
                 </dd>
               </div>
               {template.lowStockThreshold !== null && (
                 <div>
-                  <dt>Lage-voorraadgrens</dt>
+                  <dt>{t('issuedItems.detail.lowThreshold')}</dt>
                   <dd>{template.lowStockThreshold}</dd>
                 </div>
               )}
               {template.storageLocation && (
                 <div>
-                  <dt>Opslaglocatie</dt>
+                  <dt>{t('issuedItems.detail.storage')}</dt>
                   <dd>{template.storageLocation}</dd>
                 </div>
               )}
@@ -441,11 +444,11 @@ export function IssuedItemTemplateDetailPage() {
       <TabPanel tabId="varianten">
         <section className="issued-items-card">
           <div className="issued-items-card-header">
-            <h2>Attributen</h2>
+            <h2>{t('issuedItems.detail.attributesTitle')}</h2>
             {canManageInventory && (
               <div className="issued-items-card-actions">
                 <select
-                  aria-label="Attribuut koppelen"
+                  aria-label={t('issuedItems.detail.linkAria')}
                   value={attributePickerValue}
                   disabled={busy || linkableDefinitions.length === 0}
                   onChange={(e) => {
@@ -454,7 +457,7 @@ export function IssuedItemTemplateDetailPage() {
                   }}
                 >
                   <option value="">
-                    {linkableDefinitions.length === 0 ? 'Geen herbruikbare attributen over' : '+ Bestaand attribuut koppelen'}
+                    {linkableDefinitions.length === 0 ? t('issuedItems.detail.noLinkable') : t('issuedItems.detail.linkExisting')}
                   </option>
                   {linkableDefinitions.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -463,26 +466,25 @@ export function IssuedItemTemplateDetailPage() {
                   ))}
                 </select>
                 <Button variant="secondary" onClick={() => setNewAttribute({ name: '', allowCustomValues: false })} disabled={busy}>
-                  Nieuw attribuut
+                  {t('issuedItems.detail.newAttribute')}
                 </Button>
               </div>
             )}
           </div>
           {detail.attributes.length === 0 && (
             <p className="placeholder-text">
-              Geen attributen gekoppeld: varianten krijgen een vrije naam (bv. Small, maat 43). Koppel bv. Maat of
-              Kleur wanneer je combinaties wilt genereren.
+              {t('issuedItems.detail.attributesEmpty')}
             </p>
           )}
           {detail.attributes.map((attribute) => (
             <div key={attribute.id} className="issued-items-attribute">
               <div className="issued-items-attribute-header">
                 <strong>{attribute.name}</strong>
-                {attribute.isShared && <Badge tone="info">Herbruikbaar</Badge>}
-                {attribute.allowCustomValues && <Badge tone="neutral">Vrije waarden</Badge>}
+                {attribute.isShared && <Badge tone="info">{t('issuedItems.detail.reusable')}</Badge>}
+                {attribute.allowCustomValues && <Badge tone="neutral">{t('issuedItems.detail.freeValues')}</Badge>}
                 {canManageInventory && (
                   <button type="button" className="issued-items-link" onClick={() => unlinkAttribute(attribute.id)} disabled={busy}>
-                    Loskoppelen
+                    {t('issuedItems.detail.unlink')}
                   </button>
                 )}
               </div>
@@ -492,18 +494,18 @@ export function IssuedItemTemplateDetailPage() {
                     {option.value}
                   </span>
                 ))}
-                {attribute.options.length === 0 && <span className="customer-form-muted">Nog geen waarden.</span>}
+                {attribute.options.length === 0 && <span className="customer-form-muted">{t('issuedItems.detail.noValues')}</span>}
                 {canManageInventory && (
                   <span className="issued-items-option-add">
                     <input
-                      aria-label={`Nieuwe waarde voor ${attribute.name}`}
-                      placeholder="Nieuwe waarde…"
+                      aria-label={t('issuedItems.detail.newValueAria', { name: attribute.name })}
+                      placeholder={t('issuedItems.detail.newValuePlaceholder')}
                       value={optionDrafts[attribute.id] ?? ''}
                       maxLength={100}
                       onChange={(e) => setOptionDrafts((d) => ({ ...d, [attribute.id]: e.target.value }))}
                     />
                     <Button variant="secondary" onClick={() => handleAddOption(attribute.id)} disabled={busy}>
-                      Toevoegen
+                      {t('issuedItems.detail.addValue')}
                     </Button>
                   </span>
                 )}
@@ -515,8 +517,8 @@ export function IssuedItemTemplateDetailPage() {
         <section className="issued-items-card">
           <div className="issued-items-card-header">
             <h2>
-              Varianten & voorraad{' '}
-              <span className="issued-items-computed-stock">— totale voorraad: {template.totalAvailable} (berekend)</span>
+              {t('issuedItems.detail.variantsTitle')}{' '}
+              <span className="issued-items-computed-stock">{t('issuedItems.detail.variantsComputed', { total: template.totalAvailable })}</span>
             </h2>
             {canManageInventory && (
               <div className="issued-items-card-actions">
@@ -527,27 +529,27 @@ export function IssuedItemTemplateDetailPage() {
                   }}
                   disabled={busy || detail.attributes.length === 0}
                 >
-                  Varianten genereren
+                  {t('issuedItems.detail.generateVariants')}
                 </Button>
                 <Button variant="secondary" onClick={() => openVariantEditor(null)} disabled={busy}>
-                  + Variant toevoegen
+                  {t('issuedItems.detail.addVariant')}
                 </Button>
               </div>
             )}
           </div>
           {detail.variants.length === 0 && (
             <p className="placeholder-text">
-              Nog geen varianten. Kies "Varianten genereren" om alle combinaties (bv. maat × kleur) in één keer aan te maken.
+              {t('issuedItems.detail.variantsEmpty')}
             </p>
           )}
           {detail.variants.length > 0 && (
             <table className="issued-items-table">
               <thead>
                 <tr>
-                  <th>Variant</th>
-                  <th>Voorraad</th>
-                  <th>Status</th>
-                  <th aria-label="Acties" />
+                  <th>{t('issuedItems.detail.colVariant')}</th>
+                  <th>{t('issuedItems.detail.colStock')}</th>
+                  <th>{t('issuedItems.detail.colStatus')}</th>
+                  <th aria-label={t('issuedItems.tab.colActions')} />
                 </tr>
               </thead>
               <tbody>
@@ -558,12 +560,14 @@ export function IssuedItemTemplateDetailPage() {
                       <span className="issued-items-stock-cell">
                         {variant.currentStock}
                         {template.lowStockThreshold !== null && variant.currentStock <= template.lowStockThreshold && (
-                          <Badge tone="warning">Laag</Badge>
+                          <Badge tone="warning">{t('issuedItems.detail.low')}</Badge>
                         )}
                       </span>
                     </td>
                     <td>
-                      <Badge tone={variant.isActive ? 'success' : 'neutral'}>{variant.isActive ? 'Actief' : 'Gearchiveerd'}</Badge>
+                      <Badge tone={variant.isActive ? 'success' : 'neutral'}>
+                        {variant.isActive ? t('issuedItems.detail.statusActive') : t('issuedItems.detail.statusArchived')}
+                      </Badge>
                     </td>
                     <td className="issued-items-row-actions">
                       {canAdjustStock && (
@@ -575,7 +579,7 @@ export function IssuedItemTemplateDetailPage() {
                             setStockDialog({ kind: 'receipt', variantId: variant.id, quantity: '', reason: '', notes: '' })
                           }}
                         >
-                          + Voorraad
+                          {t('issuedItems.detail.receiptAction')}
                         </button>
                       )}
                       {canAdjustStock && (
@@ -593,12 +597,12 @@ export function IssuedItemTemplateDetailPage() {
                             })
                           }}
                         >
-                          Corrigeren
+                          {t('issuedItems.detail.correctAction')}
                         </button>
                       )}
                       {canManageInventory && (
                         <button type="button" className="issued-items-link" onClick={() => openVariantEditor(variant)}>
-                          Bewerken
+                          {t('ui.actions.edit')}
                         </button>
                       )}
                       {canManageInventory && (
@@ -607,7 +611,7 @@ export function IssuedItemTemplateDetailPage() {
                           className="issued-items-link issued-items-link-danger"
                           onClick={() => setVariantDeleteTarget(variant)}
                         >
-                          Verwijderen
+                          {t('ui.actions.delete')}
                         </button>
                       )}
                     </td>
@@ -625,7 +629,7 @@ export function IssuedItemTemplateDetailPage() {
       <TabPanel tabId="voorraad">
         <section className="issued-items-card">
           <div className="issued-items-card-header">
-            <h2>Voorraad</h2>
+            <h2>{t('issuedItems.detail.stockTitle')}</h2>
             {canAdjustStock && (
               <div className="issued-items-card-actions">
                 <Button
@@ -635,7 +639,7 @@ export function IssuedItemTemplateDetailPage() {
                   }}
                   disabled={busy}
                 >
-                  Voorraad toevoegen
+                  {t('issuedItems.detail.addStock')}
                 </Button>
                 <Button
                   variant="secondary"
@@ -645,17 +649,18 @@ export function IssuedItemTemplateDetailPage() {
                   }}
                   disabled={busy}
                 >
-                  Corrigeren
+                  {t('issuedItems.detail.correctAction')}
                 </Button>
               </div>
             )}
           </div>
           <p className="issued-items-stock-figure">
             {template.currentStock}
-            {template.unit ? ` ${template.unit}` : ''} beschikbaar {template.lowStock && <Badge tone="warning">Lage voorraad</Badge>}
+            {template.unit ? ` ${template.unit}` : ''} {t('issuedItems.detail.availableFigure')}{' '}
+            {template.lowStock && <Badge tone="warning">{t('issuedItems.detail.lowStock')}</Badge>}
           </p>
           {template.lowStockThreshold !== null && (
-            <p className="issued-items-computed-stock">Lage-voorraadgrens: {template.lowStockThreshold}</p>
+            <p className="issued-items-computed-stock">{t('issuedItems.detail.lowThresholdFigure', { value: template.lowStockThreshold })}</p>
           )}
         </section>
         <StockThresholdsCard template={template} onSaved={reload} />
@@ -665,27 +670,27 @@ export function IssuedItemTemplateDetailPage() {
       {activeTab === 'bewegingen' && (
       <TabPanel tabId="bewegingen">
         <section className="issued-items-card">
-          <h2>Voorraadhistoriek</h2>
-          {visibleMovements === null && <p className="placeholder-text">Laden…</p>}
-          {visibleMovements !== null && visibleMovements.length === 0 && <p className="placeholder-text">Nog geen voorraadbewegingen.</p>}
+          <h2>{t('issuedItems.detail.movementsTitle')}</h2>
+          {visibleMovements === null && <p className="placeholder-text">{t('issuedItems.detail.loading')}</p>}
+          {visibleMovements !== null && visibleMovements.length === 0 && <p className="placeholder-text">{t('issuedItems.detail.movementsEmpty')}</p>}
           {visibleMovements !== null && visibleMovements.length > 0 && (
             <table className="issued-items-table">
               <thead>
                 <tr>
-                  <th>Datum</th>
-                  <th>Type</th>
-                  <th>Variant</th>
-                  <th>Aantal</th>
-                  <th>Resultaat</th>
-                  <th>Reden / notitie</th>
-                  <th>Medewerker</th>
+                  <th>{t('issuedItems.detail.colDate')}</th>
+                  <th>{t('issuedItems.detail.colType')}</th>
+                  <th>{t('issuedItems.detail.colVariant')}</th>
+                  <th>{t('issuedItems.detail.colQty')}</th>
+                  <th>{t('issuedItems.detail.colResult')}</th>
+                  <th>{t('issuedItems.detail.colReason')}</th>
+                  <th>{t('issuedItems.detail.colEmployee')}</th>
                 </tr>
               </thead>
               <tbody>
                 {visibleMovements.map((movement) => (
                   <tr key={movement.id}>
                     <td>{formatDateTime(movement.timestamp)}</td>
-                    <td>{STOCK_MOVEMENT_LABELS[movement.movementType]}</td>
+                    <td>{t(STOCK_MOVEMENT_LABELS[movement.movementType])}</td>
                     <td>{movement.variantLabel ?? '—'}</td>
                     <td>{movement.quantity > 0 ? `+${movement.quantity}` : movement.quantity}</td>
                     <td>{movement.resultingStock}</td>
@@ -703,22 +708,22 @@ export function IssuedItemTemplateDetailPage() {
       {activeTab === 'houders' && (
       <TabPanel tabId="houders">
       <section className="issued-items-card">
-        <h2>Huidige houders</h2>
+        <h2>{t('issuedItems.detail.holdersTitle')}</h2>
         {!stockTracked && (
-          <p className="placeholder-text">Beschikbaar zodra voorraadbeheer aan staat, of via de medewerkerfiches.</p>
+          <p className="placeholder-text">{t('issuedItems.detail.holdersUnavailable')}</p>
         )}
-        {stockTracked && visibleHolders === null && <p className="placeholder-text">Laden…</p>}
-        {visibleHolders !== null && visibleHolders.length === 0 && <p className="placeholder-text">Niemand heeft dit middel momenteel in gebruik.</p>}
+        {stockTracked && visibleHolders === null && <p className="placeholder-text">{t('issuedItems.detail.loading')}</p>}
+        {visibleHolders !== null && visibleHolders.length === 0 && <p className="placeholder-text">{t('issuedItems.detail.holdersEmpty')}</p>}
         {visibleHolders !== null && visibleHolders.length > 0 && (
           <table className="issued-items-table">
             <thead>
               <tr>
-                <th>Medewerker</th>
-                <th>Nummer</th>
-                <th>Variant</th>
-                <th>Aantal</th>
-                <th>Uitgereikt</th>
-                <th>Serienr.</th>
+                <th>{t('issuedItems.detail.colEmployee')}</th>
+                <th>{t('issuedItems.detail.colNumber')}</th>
+                <th>{t('issuedItems.detail.colVariant')}</th>
+                <th>{t('issuedItems.detail.colQty')}</th>
+                <th>{t('issuedItems.detail.colIssued')}</th>
+                <th>{t('issuedItems.detail.colSerial')}</th>
               </tr>
             </thead>
             <tbody>
@@ -744,7 +749,7 @@ export function IssuedItemTemplateDetailPage() {
           editing={template}
           onClose={() => setTemplateEditorOpen(false)}
           onSaved={() => {
-            showSuccess('Sjabloon bijgewerkt.')
+            showSuccess(t('issuedItems.detail.templateUpdated'))
             setTemplateEditorOpen(false)
             reload()
           }}
@@ -753,22 +758,22 @@ export function IssuedItemTemplateDetailPage() {
 
       {newAttribute && (
         <Modal
-          title="Nieuw attribuut"
+          title={t('issuedItems.detail.newAttributeTitle')}
           onClose={() => setNewAttribute(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setNewAttribute(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="new-attribute-form" disabled={busy}>
-                Aanmaken
+                {t('issuedItems.detail.create')}
               </Button>
             </>
           }
         >
           <form id="new-attribute-form" className="issued-items-form" onSubmit={handleCreateAttribute} noValidate>
-            <FormField label="Naam" htmlFor="attr-name" required hint="bv. Maat, Kleur, Opslag, Model">
+            <FormField label={t('issuedItems.detail.attrName')} htmlFor="attr-name" required hint={t('issuedItems.detail.attrNameHint')}>
               <input
                 id="attr-name"
                 value={newAttribute.name}
@@ -782,10 +787,10 @@ export function IssuedItemTemplateDetailPage() {
                 checked={newAttribute.allowCustomValues}
                 onChange={(e) => setNewAttribute((a) => (a ? { ...a, allowCustomValues: e.target.checked } : a))}
               />
-              <span>Vrije waarden toestaan naast de vaste lijst</span>
+              <span>{t('issuedItems.detail.allowCustom')}</span>
             </label>
             <p className="customer-form-muted">
-              Attributen zijn herbruikbare stamgegevens: eenmaal aangemaakt kan elk sjabloon ze gebruiken.
+              {t('issuedItems.detail.attributesShared')}
             </p>
           </form>
         </Modal>
@@ -793,16 +798,20 @@ export function IssuedItemTemplateDetailPage() {
 
       {variantEditor && (
         <Modal
-          title={variantEditor.variant ? `Variant bewerken — ${variantEditor.variant.label}` : 'Variant toevoegen'}
+          title={
+            variantEditor.variant
+              ? t('issuedItems.detail.variantEditTitle', { label: variantEditor.variant.label })
+              : t('issuedItems.detail.variantAddTitle')
+          }
           onClose={() => setVariantEditor(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setVariantEditor(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="variant-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -814,7 +823,7 @@ export function IssuedItemTemplateDetailPage() {
               </div>
             )}
             {detail.attributes.length === 0 && (
-              <FormField label="Variantnaam / uitvoering" htmlFor="var-label" required hint="Bv. Small, maat 43, zwart.">
+              <FormField label={t('issuedItems.detail.variantNameLabel')} htmlFor="var-label" required hint={t('issuedItems.detail.variantNameHint')}>
                 <input
                   id="var-label"
                   value={variantEditor.label}
@@ -837,7 +846,9 @@ export function IssuedItemTemplateDetailPage() {
                         )
                       }
                     >
-                      <option value="">{attribute.allowCustomValues ? '— Vrije waarde —' : '— Kies waarde —'}</option>
+                      <option value="">
+                        {attribute.allowCustomValues ? t('issuedItems.detail.freeValueOption') : t('issuedItems.detail.chooseValueOption')}
+                      </option>
                       {attribute.options.filter((o) => o.isActive).map((option) => (
                         <option key={option.id} value={option.id}>
                           {option.value}
@@ -846,8 +857,8 @@ export function IssuedItemTemplateDetailPage() {
                     </select>
                     {attribute.allowCustomValues && !draft.optionId && (
                       <input
-                        aria-label={`Vrije waarde voor ${attribute.name}`}
-                        placeholder="Vrije waarde…"
+                        aria-label={t('issuedItems.detail.freeValueAria', { name: attribute.name })}
+                        placeholder={t('issuedItems.detail.freeValuePlaceholder')}
                         value={draft.customValue}
                         maxLength={100}
                         onChange={(e) =>
@@ -862,7 +873,7 @@ export function IssuedItemTemplateDetailPage() {
               )
             })}
             {!variantEditor.variant && (
-              <FormField label="Beginvoorraad" htmlFor="var-initial" hint="Optioneel; kan ook later via een ontvangst.">
+              <FormField label={t('issuedItems.detail.initialStock')} htmlFor="var-initial" hint={t('issuedItems.detail.initialStockHint')}>
                 <input
                   id="var-initial"
                   type="number"
@@ -872,7 +883,7 @@ export function IssuedItemTemplateDetailPage() {
                 />
               </FormField>
             )}
-            <FormField label="Lage-voorraadgrens" htmlFor="var-threshold" hint="Leeg = de grens van het sjabloon geldt.">
+            <FormField label={t('issuedItems.detail.variantThreshold')} htmlFor="var-threshold" hint={t('issuedItems.detail.variantThresholdHint')}>
               <input
                 id="var-threshold"
                 type="number"
@@ -887,7 +898,7 @@ export function IssuedItemTemplateDetailPage() {
                 checked={variantEditor.isActive}
                 onChange={(e) => setVariantEditor((s) => (s ? { ...s, isActive: e.target.checked } : s))}
               />
-              <span>Actief (uitreikbaar)</span>
+              <span>{t('issuedItems.detail.activeIssuable')}</span>
             </label>
           </form>
         </Modal>
@@ -895,16 +906,16 @@ export function IssuedItemTemplateDetailPage() {
 
       {stockDialog && (
         <Modal
-          title={stockDialog.kind === 'receipt' ? 'Voorraad toevoegen' : 'Voorraad corrigeren'}
+          title={stockDialog.kind === 'receipt' ? t('issuedItems.detail.stockDialogReceiptTitle') : t('issuedItems.detail.stockDialogCorrectionTitle')}
           onClose={() => setStockDialog(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setStockDialog(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="stock-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -917,11 +928,13 @@ export function IssuedItemTemplateDetailPage() {
             )}
             {stockDialog.variantId && (
               <p className="customer-form-muted">
-                Variant: {detail.variants.find((v) => v.id === stockDialog.variantId)?.label ?? '—'}
+                {t('issuedItems.detail.stockVariant', {
+                  label: detail.variants.find((v) => v.id === stockDialog.variantId)?.label ?? '—',
+                })}
               </p>
             )}
             <FormField
-              label={stockDialog.kind === 'receipt' ? 'Aantal ontvangen' : 'Nieuwe voorraad'}
+              label={stockDialog.kind === 'receipt' ? t('issuedItems.detail.qtyReceived') : t('issuedItems.detail.newQuantity')}
               htmlFor="stock-qty"
               required
             >
@@ -933,7 +946,7 @@ export function IssuedItemTemplateDetailPage() {
               />
             </FormField>
             {stockDialog.kind === 'correction' && (
-              <FormField label="Reden" htmlFor="stock-reason" required hint="Verplicht bij een correctie.">
+              <FormField label={t('issuedItems.detail.reason')} htmlFor="stock-reason" required hint={t('issuedItems.detail.reasonHint')}>
                 <input
                   id="stock-reason"
                   value={stockDialog.reason}
@@ -943,7 +956,7 @@ export function IssuedItemTemplateDetailPage() {
               </FormField>
             )}
             {stockDialog.kind === 'receipt' && (
-              <FormField label="Notitie" htmlFor="stock-notes">
+              <FormField label={t('issuedItems.detail.note')} htmlFor="stock-notes">
                 <input
                   id="stock-notes"
                   value={stockDialog.notes}
@@ -958,16 +971,16 @@ export function IssuedItemTemplateDetailPage() {
 
       {generateDialog && (
         <Modal
-          title="Varianten genereren"
+          title={t('issuedItems.detail.generateTitle')}
           onClose={() => setGenerateDialog(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setGenerateDialog(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="generate-variants-form" disabled={busy}>
-                Genereren
+                {t('issuedItems.detail.generate')}
               </Button>
             </>
           }
@@ -979,8 +992,7 @@ export function IssuedItemTemplateDetailPage() {
               </div>
             )}
             <p className="customer-form-muted">
-              Kies per attribuut de gewenste waarden; elke combinatie wordt één variant met eigen voorraad. Bestaande
-              combinaties blijven ongewijzigd.
+              {t('issuedItems.detail.generateHint')}
             </p>
             {detail.attributes.map((attribute) => (
               <fieldset key={attribute.id} className="issued-items-generate-dimension">
@@ -1011,7 +1023,7 @@ export function IssuedItemTemplateDetailPage() {
                   )
                 })}
                 {attribute.options.filter((o) => o.isActive).length === 0 && (
-                  <p className="customer-form-muted">Voeg eerst waarden toe bij het attribuut.</p>
+                  <p className="customer-form-muted">{t('issuedItems.detail.generateNoValues')}</p>
                 )}
               </fieldset>
             ))}
@@ -1039,9 +1051,9 @@ export function IssuedItemTemplateDetailPage() {
 
       {variantDeleteTarget && (
         <ConfirmDialog
-          title="Variant verwijderen"
-          message={`Weet je zeker dat je variant "${variantDeleteTarget.label}" wilt verwijderen? Dit kan alleen bij voorraad 0; uitgereikte items behouden hun label.`}
-          confirmLabel="Verwijderen"
+          title={t('issuedItems.detail.variantDeleteTitle')}
+          message={t('issuedItems.detail.variantDeleteMessage', { label: variantDeleteTarget.label })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleVariantDelete}
           onCancel={() => setVariantDeleteTarget(null)}

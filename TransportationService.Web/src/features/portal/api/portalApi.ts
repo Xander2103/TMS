@@ -1,5 +1,7 @@
 import { apiClient, ApiError } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
+import { getActiveLocale } from '../../../i18n/activeLocale'
+import { translate } from '../../../i18n/translations'
 import { getAccessToken } from '../../auth/authStorage'
 import type { Absence, AbsenceInput } from '../../absences/types'
 import type { MyDashboard, MyProfile, MyQualification } from '../types'
@@ -34,7 +36,7 @@ export async function fetchMyQualificationDocumentUrl(id: string): Promise<strin
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
   if (!response.ok) {
-    throw new ApiError('Het document kon niet worden geladen.', response.status)
+    throw new ApiError(translate(getActiveLocale(), 'portalHome.api.documentLoadFailed'), response.status)
   }
   return URL.createObjectURL(await response.blob())
 }
@@ -48,7 +50,7 @@ export async function uploadMyAbsenceAttachment(absenceId: string, file: File): 
     body: form,
   })
   if (!response.ok) {
-    throw new ApiError('De bijlage kon niet worden geüpload.', response.status)
+    throw new ApiError(translate(getActiveLocale(), 'portalHome.api.attachmentUploadFailed'), response.status)
   }
   return (await response.json()) as Absence
 }

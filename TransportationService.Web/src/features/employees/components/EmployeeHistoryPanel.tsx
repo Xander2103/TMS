@@ -3,42 +3,49 @@ import { Badge } from '../../../components/ui/Badge'
 import { Pagination } from '../../../components/ui/Pagination'
 import { getEmployeeHistory, type EmployeeHistoryPage } from '../api/employeeHistoryApi'
 import { formatDateTime } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
 import './EmployeeHistoryPanel.css'
 
 const PAGE_SIZE = 25
 
-/** Chip order: "Alles" (no filter) first, then every dossier section in nav order. */
+/**
+ * Chip order: "all" (no filter) first, then every dossier section in nav order. The values are
+ * the API's stable category CODES — used both as the `category` query parameter and as the
+ * translation key suffix (employees.history.categories.<code>).
+ */
 const CATEGORY_FILTERS = [
-  'Alles',
-  'Profiel',
-  'Kwalificaties',
-  'Documenten',
-  'Notities',
-  'Bedrijfsmiddelen',
-  'Afwezigheden',
-  'Verlofsaldo',
-  'Chauffeursprofiel',
+  'all',
+  'profile',
+  'qualifications',
+  'documents',
+  'notes',
+  'issued_items',
+  'absences',
+  'leave_balance',
+  'driver_profile',
 ] as const
 
-/** Dutch category chip tones — informational only, no strict semantics. */
+/** Category chip tones (keyed by category code) — informational only, no strict semantics. */
 const CATEGORY_TONES: Record<string, 'info' | 'neutral' | 'success' | 'warning'> = {
-  Profiel: 'info',
-  Kwalificaties: 'success',
-  Documenten: 'neutral',
-  Notities: 'info',
-  Afwezigheden: 'warning',
-  Verlofsaldo: 'warning',
-  Bedrijfsmiddelen: 'neutral',
-  Chauffeursprofiel: 'info',
+  profile: 'info',
+  qualifications: 'success',
+  documents: 'neutral',
+  notes: 'info',
+  absences: 'warning',
+  leave_balance: 'warning',
+  issued_items: 'neutral',
+  driver_profile: 'info',
 }
 
 /**
  * Complete readable personnel history (corrections wave §4): one card per audited save, newest
- * first, collapsed by default to a single Dutch summary line — the actor, the dossier section
- * and (on demand) the full Veld/Voor/Na table. Old partial audit entries render through the
- * same endpoint with fewer field rows; unmapped/legacy id fields resolve to names server-side.
+ * first, collapsed by default to a single summary line — the actor, the dossier section
+ * and (on demand) the full field/before/after table. Old partial audit entries render through
+ * the same endpoint with fewer field rows; unmapped/legacy id fields resolve to names
+ * server-side. Category filtering and display key off the API's stable `categoryCode`.
  */
 export function EmployeeHistoryPanel({ employeeId }: { employeeId: string }) {
+  const { t } = useLocale()
   const [data, setData] = useState<EmployeeHistoryPage | null>(null)
   const [page, setPage] = useState(1)
   const [category, setCategory] = useState<string | null>(null)
@@ -51,7 +58,7 @@ export function EmployeeHistoryPanel({ employeeId }: { employeeId: string }) {
         setData(result)
         setError(null)
       })
-      .catch(() => setError('De historiek kon niet worden geladen.'))
+      .catch(() => setError('employees.history.loadFailed'))
   }, [employeeId, page, category])
 
   useEffect(() => {
@@ -59,7 +66,7 @@ export function EmployeeHistoryPanel({ employeeId }: { employeeId: string }) {
   }, [reload])
 
   const selectCategory = (next: string) => {
-    setCategory(next === 'Alles' ? null : next)
+    setCategory(next === 'all' ? null : next)
     setPage(1)
   }
 
@@ -77,24 +84,24 @@ export function EmployeeHistoryPanel({ employeeId }: { employeeId: string }) {
 
   return (
     <div className="employee-history">
-      <div className="employee-history-filters" role="group" aria-label="Filter op categorie">
+      <div className="employee-history-filters" role="group" aria-label={t('employees.history.filterLabel')}>
         {CATEGORY_FILTERS.map((filter) => (
           <button
             key={filter}
             type="button"
-            className={`employee-history-filter-chip${(category ?? 'Alles') === filter ? ' employee-history-filter-chip-active' : ''}`}
-            aria-pressed={(category ?? 'Alles') === filter}
+            className={`employee-history-filter-chip${(category ?? 'all') === filter ? ' employee-history-filter-chip-active' : ''}`}
+            aria-pressed={(category ?? 'all') === filter}
             onClick={() => selectCategory(filter)}
           >
-            {filter}
+            {t(`employees.history.categories.${filter}`)}
           </button>
         ))}
       </div>
 
-      {error && <p className="placeholder-text">{error}</p>}
-      {!error && data === null && <p className="placeholder-text">Historiek laden…</p>}
+      {error && <p className="placeholder-text">{t(error)}</p>}
+      {!error && data === null && <p className="placeholder-text">{t('employees.history.loading')}</p>}
       {!error && data !== null && data.items.length === 0 && (
-        <p className="placeholder-text">Nog geen historiek voor deze medewerker.</p>
+        <p className="placeholder-text">{t('employees.history.empty')}</p>
       )}
       {!error && data !== null && data.items.length > 0 && (
         <>
@@ -106,9 +113,14 @@ export function EmployeeHistoryPanel({ employeeId }: { employeeId: string }) {
                 <header className="employee-history-header">
                   <span className="employee-history-when">{formatDateTime(entry.timestamp)}</span>
                   <span className="employee-history-actor">
-                    {entry.actionLabel} door {entry.userName ?? 'Systeem'}
+                    {t('employees.history.actorLine', {
+                      action: entry.actionLabel,
+                      name: entry.userName ?? t('employees.history.system'),
+                    })}
                   </span>
-                  <Badge tone={CATEGORY_TONES[entry.category] ?? 'neutral'}>{entry.category}</Badge>
+                  <Badge tone={CATEGORY_TONES[entry.categoryCode] ?? 'neutral'}>
+                    {t(`employees.history.categories.${entry.categoryCode}`)}
+                  </Badge>
                 </header>
                 <p className="employee-history-summary">{entry.summary}</p>
                 {canExpand && (
@@ -118,16 +130,16 @@ export function EmployeeHistoryPanel({ employeeId }: { employeeId: string }) {
                     aria-expanded={isExpanded}
                     onClick={() => toggleExpanded(entry.id)}
                   >
-                    {isExpanded ? 'Inklappen' : 'Uitklappen'}
+                    {isExpanded ? t('employees.history.collapse') : t('employees.history.expand')}
                   </button>
                 )}
                 {canExpand && isExpanded && (
                   <table className="employee-history-table">
                     <thead>
                       <tr>
-                        <th>Veld</th>
-                        <th>Voor</th>
-                        <th>Na</th>
+                        <th>{t('employees.history.columnField')}</th>
+                        <th>{t('employees.history.columnBefore')}</th>
+                        <th>{t('employees.history.columnAfter')}</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -6,6 +6,7 @@ import { FormField } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../components/ui/toastContext'
 import { useAuth } from '../auth/authContextValue'
+import { useLocale } from '../../i18n/localeContext'
 import { describeApiError } from '../../api/problemDetails'
 import { formatDate } from '../../utils/dates'
 import {
@@ -62,6 +63,7 @@ function emptyForm(): EmployeeIssuedItemInput {
 
 /** Employee "Bedrijfsmiddelen" checklist: stock-aware issue/return flow, PDF acknowledgement. */
 export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: string; employeeName?: string }) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('issued_items.manage')
@@ -69,7 +71,8 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
 
   const [items, setItems] = useState<EmployeeIssuedItem[] | null>(null)
   const [templates, setTemplates] = useState<IssuedItemTemplate[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutels in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
   const [bulkIssueOpen, setBulkIssueOpen] = useState(false)
@@ -89,10 +92,10 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
       .then((data) => {
         if (!mounted) return
         setItems(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Bedrijfsmiddelen konden niet worden geladen.')
+        if (mounted) setLoadErrorKey('issuedItems.tab.loadFailed')
       })
     return () => {
       mounted = false
@@ -114,7 +117,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
   }, [canManage])
 
   const selectedTemplate = useMemo(
-    () => templates.find((t) => t.id === form.templateId) ?? null,
+    () => templates.find((tpl) => tpl.id === form.templateId) ?? null,
     [templates, form.templateId],
   )
   const selectedVariant = useMemo(
@@ -140,7 +143,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
   }
 
   async function applyTemplate(templateId: string) {
-    const template = templates.find((t) => t.id === templateId)
+    const template = templates.find((tpl) => tpl.id === templateId)
     setVariants([])
     if (!template) {
       setForm((f) => ({ ...f, templateId: null, variantId: null }))
@@ -199,15 +202,15 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
     event.preventDefault()
     setFormError(null)
     if (!form.name?.trim() || !form.category?.trim()) {
-      setFormError('Naam en categorie zijn verplicht.')
+      setFormError(t('issuedItems.tab.nameCategoryRequired'))
       return
     }
     if (!editingId && selectedTemplate?.variantsEnabled && !form.variantId) {
-      setFormError('Kies een variant (maat/uitvoering).')
+      setFormError(t('issuedItems.tab.variantRequired'))
       return
     }
     if (selectedTemplate?.requiresSerialNumber && form.status === 'Issued' && !form.serialNumber?.trim()) {
-      setFormError('Een serienummer is verplicht voor dit middel.')
+      setFormError(t('issuedItems.tab.serialRequired'))
       return
     }
     const payload: EmployeeIssuedItemInput = {
@@ -218,16 +221,16 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
     setSaving(true)
     try {
       await saveEmployeeIssuedItem(employeeId, editingId, payload)
-      showSuccess(editingId ? 'Bedrijfsmiddel bijgewerkt.' : 'Bedrijfsmiddel toegevoegd.')
+      showSuccess(editingId ? t('issuedItems.tab.updated') : t('issuedItems.tab.added'))
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
       const conflict = parseNegativeStockPayload(err)
       if (conflict) {
         setNegativeStock({ payload: conflict, input: payload })
         return
       }
-      setFormError(describeApiError(err, 'Het bedrijfsmiddel kon niet worden opgeslagen.').message)
+      setFormError(describeApiError(err, t('issuedItems.tab.saveFailed')).message)
     } finally {
       setSaving(false)
     }
@@ -245,10 +248,10 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
     setSaving(true)
     try {
       await saveEmployeeIssuedItem(employeeId, editingId, retry)
-      showSuccess(editingId ? 'Bedrijfsmiddel bijgewerkt.' : 'Bedrijfsmiddel toegevoegd.')
+      showSuccess(editingId ? t('issuedItems.tab.updated') : t('issuedItems.tab.added'))
       setNegativeStock(null)
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
       // Nieuwe 409 (bv. versionMismatch): toon de nieuwe cijfers en laat opnieuw bevestigen.
       const conflict = parseNegativeStockPayload(err)
@@ -257,7 +260,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
         return
       }
       setNegativeStock(null)
-      setFormError(describeApiError(err, 'Het bedrijfsmiddel kon niet worden opgeslagen.').message)
+      setFormError(describeApiError(err, t('issuedItems.tab.saveFailed')).message)
     } finally {
       setSaving(false)
     }
@@ -267,11 +270,11 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
     if (!deleteTarget) return
     try {
       await deleteEmployeeIssuedItem(employeeId, deleteTarget.id)
-      showSuccess('Bedrijfsmiddel verwijderd.')
+      showSuccess(t('issuedItems.tab.deleted'))
       setDeleteTarget(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het bedrijfsmiddel kon niet worden verwijderd.')
+      showError(t('issuedItems.tab.deleteFailed'))
       setDeleteTarget(null)
     }
   }
@@ -280,49 +283,49 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
     try {
       await downloadIssuedItemsAcknowledgement(employeeId)
     } catch {
-      showError('Het ontvangstbewijs kon niet worden gedownload.')
+      showError(t('issuedItems.tab.downloadFailed'))
     }
   }
 
   return (
     <section className="issued-items">
       <div className="issued-items-header">
-        <h2>Bedrijfsmiddelen</h2>
+        <h2>{t('issuedItems.tab.title')}</h2>
         <div className="issued-items-actions-top">
           {items !== null && items.length > 0 && (
             <Button variant="secondary" onClick={handleDownload}>
-              Ontvangstbewijs (PDF)
+              {t('issuedItems.tab.receipt')}
             </Button>
           )}
           {canManage && (
             <Button variant="secondary" onClick={() => setBulkIssueOpen(true)}>
-              Meerdere middelen uitgeven
+              {t('issuedItems.tab.bulkIssue')}
             </Button>
           )}
-          {canManage && <Button onClick={openCreate}>Bedrijfsmiddel toevoegen</Button>}
+          {canManage && <Button onClick={openCreate}>{t('issuedItems.tab.add')}</Button>}
         </div>
       </div>
 
-      {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && items === null && <p className="placeholder-text">Laden…</p>}
-      {!loadError && items !== null && items.length === 0 && (
-        <p className="placeholder-text">Nog geen bedrijfsmiddelen geregistreerd.</p>
+      {loadErrorKey && <p className="placeholder-text">{t(loadErrorKey)}</p>}
+      {!loadErrorKey && items === null && <p className="placeholder-text">{t('issuedItems.tab.loading')}</p>}
+      {!loadErrorKey && items !== null && items.length === 0 && (
+        <p className="placeholder-text">{t('issuedItems.tab.empty')}</p>
       )}
 
-      {!loadError && items !== null && items.length > 0 && (
+      {!loadErrorKey && items !== null && items.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Middel</th>
-              <th>Variant</th>
-              <th>Categorie</th>
-              <th>Aantal</th>
-              <th>Serienr.</th>
-              <th>Uitgereikt</th>
-              <th>Teruggebracht</th>
-              <th>Uitgegeven door</th>
-              <th>Status</th>
-              <th aria-label="Acties" />
+              <th>{t('issuedItems.tab.colItem')}</th>
+              <th>{t('issuedItems.tab.colVariant')}</th>
+              <th>{t('issuedItems.tab.colCategory')}</th>
+              <th>{t('issuedItems.tab.colQty')}</th>
+              <th>{t('issuedItems.tab.colSerial')}</th>
+              <th>{t('issuedItems.tab.colIssued')}</th>
+              <th>{t('issuedItems.tab.colReturned')}</th>
+              <th>{t('issuedItems.tab.colIssuedBy')}</th>
+              <th>{t('issuedItems.tab.colStatus')}</th>
+              <th aria-label={t('issuedItems.tab.colActions')} />
             </tr>
           </thead>
           <tbody>
@@ -337,17 +340,17 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                 <td>{formatDate(item.returnedDate) || '—'}</td>
                 <td>{item.issuedByName ?? '—'}</td>
                 <td>
-                  <Badge tone={STATUS_TONE[item.status]}>{ISSUED_ITEM_STATUS_LABELS[item.status]}</Badge>
+                  <Badge tone={STATUS_TONE[item.status]}>{t(ISSUED_ITEM_STATUS_LABELS[item.status])}</Badge>
                 </td>
                 <td className="issued-items-row-actions">
                   {canManage && (
                     <button type="button" className="issued-items-link" onClick={() => openEdit(item)}>
-                      Bewerken
+                      {t('ui.actions.edit')}
                     </button>
                   )}
                   {canManage && (
                     <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(item)}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   )}
                 </td>
@@ -359,16 +362,16 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
 
       {editorOpen && (
         <Modal
-          title={editingId ? 'Bedrijfsmiddel bewerken' : 'Bedrijfsmiddel toevoegen'}
+          title={editingId ? t('issuedItems.tab.editTitle') : t('issuedItems.tab.addTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="issued-item-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('issuedItems.tab.saving') : t('ui.actions.save')}
               </Button>
             </>
           }
@@ -380,24 +383,24 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
               </div>
             )}
             {!editingId && templates.length > 0 && (
-              <FormField label="Uit sjabloon" htmlFor="ii-template" hint="Vult naam, categorie en aantal automatisch in.">
+              <FormField label={t('issuedItems.tab.fromTemplate')} htmlFor="ii-template" hint={t('issuedItems.tab.fromTemplateHint')}>
                 <select id="ii-template" value={form.templateId ?? ''} onChange={(e) => applyTemplate(e.target.value)} disabled={saving}>
-                  <option value="">— Aangepast —</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.category})
+                  <option value="">{t('issuedItems.tab.customOption')}</option>
+                  {templates.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>
+                      {tpl.name} ({tpl.category})
                     </option>
                   ))}
                 </select>
               </FormField>
             )}
             {!editingId && selectedTemplate?.variantsEnabled && (
-              <FormField label="Variant (maat/uitvoering)" htmlFor="ii-variant" required>
+              <FormField label={t('issuedItems.tab.variantLabel')} htmlFor="ii-variant" required>
                 <select id="ii-variant" value={form.variantId ?? ''} onChange={(e) => set('variantId', e.target.value || null)} disabled={saving}>
-                  <option value="">— Kies variant —</option>
+                  <option value="">{t('issuedItems.tab.chooseVariant')}</option>
                   {variants.map((variant) => (
                     <option key={variant.id} value={variant.id}>
-                      {variant.label} — voorraad: {variant.currentStock}
+                      {t('issuedItems.tab.variantOption', { label: variant.label, stock: variant.currentStock })}
                     </option>
                   ))}
                 </select>
@@ -405,59 +408,60 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
             )}
             {editingId && form.variantId && (
               <p className="customer-form-muted">
-                Variant: {items?.find((i) => i.id === editingId)?.variantLabel ?? '—'} (vast na uitgifte)
+                {t('issuedItems.tab.variantFixed', { label: items?.find((i) => i.id === editingId)?.variantLabel ?? '—' })}
               </p>
             )}
             {stockTracked && availableStock !== null && !editingId && (
               <p className={`issued-items-stock-preview${stockShortage ? ' issued-items-stock-preview-warning' : ''}`} role="status">
-                Beschikbare voorraad: {availableStock}
-                {selectedTemplate?.unit ? ` ${selectedTemplate.unit}` : ''}
-                {stockShortage && ' — onvoldoende voor dit aantal.'}
+                {t('issuedItems.tab.availableStock', {
+                  stock: `${availableStock}${selectedTemplate?.unit ? ` ${selectedTemplate.unit}` : ''}`,
+                })}
+                {stockShortage && ` ${t('issuedItems.tab.stockShortage')}`}
               </p>
             )}
             <div className="issued-items-form-row">
-              <FormField label="Middel" htmlFor="ii-name" required>
+              <FormField label={t('issuedItems.tab.itemName')} htmlFor="ii-name" required>
                 <input id="ii-name" value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} disabled={saving} maxLength={150} />
               </FormField>
-              <FormField label="Categorie" htmlFor="ii-cat" required>
+              <FormField label={t('issuedItems.tab.category')} htmlFor="ii-cat" required>
                 <input id="ii-cat" value={form.category ?? ''} onChange={(e) => set('category', e.target.value)} disabled={saving} maxLength={100} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Status" htmlFor="ii-status" required>
+              <FormField label={t('issuedItems.tab.statusLabel')} htmlFor="ii-status" required>
                 <select id="ii-status" value={form.status} onChange={(e) => set('status', e.target.value as IssuedItemStatus)} disabled={saving}>
                   {ISSUED_ITEM_STATUSES.map((s) => (
                     <option key={s} value={s}>
-                      {ISSUED_ITEM_STATUS_LABELS[s]}
+                      {t(ISSUED_ITEM_STATUS_LABELS[s])}
                     </option>
                   ))}
                 </select>
               </FormField>
-              <FormField label="Aantal" htmlFor="ii-qty">
+              <FormField label={t('issuedItems.tab.quantity')} htmlFor="ii-qty">
                 <input id="ii-qty" type="number" min={1} value={form.quantity} onChange={(e) => set('quantity', Number(e.target.value) || 1)} disabled={saving} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Uitreikingsdatum" htmlFor="ii-date">
+              <FormField label={t('issuedItems.tab.issuedDate')} htmlFor="ii-date">
                 <input id="ii-date" type="date" value={form.issuedDate ?? ''} onChange={(e) => set('issuedDate', e.target.value || null)} disabled={saving} />
               </FormField>
-              <FormField label="Serienummer" htmlFor="ii-serial" required={selectedTemplate?.requiresSerialNumber && form.status === 'Issued'}>
+              <FormField label={t('issuedItems.tab.serialNumber')} htmlFor="ii-serial" required={selectedTemplate?.requiresSerialNumber && form.status === 'Issued'}>
                 <input id="ii-serial" value={form.serialNumber ?? ''} onChange={(e) => set('serialNumber', e.target.value || null)} disabled={saving} maxLength={100} />
               </FormField>
             </div>
             {(form.status === 'Returned' || form.status === 'Damaged') && (
               <div className="issued-items-form-row">
-                <FormField label="Datum teruggave" htmlFor="ii-retdate">
+                <FormField label={t('issuedItems.tab.returnedDate')} htmlFor="ii-retdate">
                   <input id="ii-retdate" type="date" value={form.returnedDate ?? ''} onChange={(e) => set('returnedDate', e.target.value || null)} disabled={saving} />
                 </FormField>
-                <FormField label="Staat bij teruggave" htmlFor="ii-retcond">
+                <FormField label={t('issuedItems.tab.returnCondition')} htmlFor="ii-retcond">
                   <input id="ii-retcond" value={form.returnCondition ?? ''} onChange={(e) => set('returnCondition', e.target.value || null)} disabled={saving} maxLength={150} />
                 </FormField>
               </div>
             )}
             {form.status === 'Returned' && (
               <div className="issued-items-form-row">
-                <FormField label="Retourconditie" htmlFor="ii-disposition" hint="Alleen goede staat kan de voorraad aanvullen.">
+                <FormField label={t('issuedItems.tab.dispositionLabel')} htmlFor="ii-disposition" hint={t('issuedItems.tab.dispositionHint')}>
                   <select
                     id="ii-disposition"
                     value={form.returnDisposition ?? 'good'}
@@ -466,7 +470,7 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                   >
                     {(Object.keys(RETURN_DISPOSITION_LABELS) as ReturnDisposition[]).map((disposition) => (
                       <option key={disposition} value={disposition}>
-                        {RETURN_DISPOSITION_LABELS[disposition]}
+                        {t(RETURN_DISPOSITION_LABELS[disposition])}
                       </option>
                     ))}
                   </select>
@@ -479,12 +483,12 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
                       onChange={(e) => set('restoreStock', e.target.checked)}
                       disabled={saving}
                     />
-                    <span>Terug in voorraad opnemen</span>
+                    <span>{t('issuedItems.tab.restoreStock')}</span>
                   </label>
                 )}
               </div>
             )}
-            <FormField label="Notities" htmlFor="ii-notes">
+            <FormField label={t('issuedItems.tab.notes')} htmlFor="ii-notes">
               <textarea id="ii-notes" rows={2} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={saving} />
             </FormField>
           </form>
@@ -493,9 +497,9 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Bedrijfsmiddel verwijderen"
-          message={`Weet je zeker dat je "${deleteTarget.name}" wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('issuedItems.tab.deleteTitle')}
+          message={t('issuedItems.tab.deleteMessage', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
@@ -522,11 +526,11 @@ export function IssuedItemsTab({ employeeId, employeeName }: { employeeId: strin
           templates={templates}
           canOverrideStock={canOverrideStock}
           onClose={() => setBulkIssueOpen(false)}
-          onItemIssued={() => setReloadToken((t) => t + 1)}
+          onItemIssued={() => setReloadToken((token) => token + 1)}
           onCompleted={(message) => {
             showSuccess(message)
             setBulkIssueOpen(false)
-            setReloadToken((t) => t + 1)
+            setReloadToken((token) => token + 1)
           }}
         />
       )}

@@ -3,6 +3,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { useLocale } from '../../../i18n/localeContext'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { useQualificationTypes } from '../hooks/useQualificationTypes'
 import { useQualificationMutations } from '../hooks/useQualificationMutations'
@@ -17,6 +18,7 @@ interface QualificationDialogProps {
 }
 
 export function QualificationDialog({ employeeId, existing, onSaved, onCancel }: QualificationDialogProps) {
+  const { t } = useLocale()
   const { qualificationTypes, isLoading: typesLoading } = useQualificationTypes()
   const { isSubmitting, error, create, update } = useQualificationMutations()
 
@@ -34,15 +36,15 @@ export function QualificationDialog({ employeeId, existing, onSaved, onCancel }:
     event.preventDefault()
 
     if (!existing && !qualificationTypeId) {
-      setValidationError('Kies een kwalificatietype.')
+      setValidationError(t('employees.qualifications.dialogTypeRequired'))
       return
     }
     if (!obtainedDate) {
-      setValidationError('Behaal-/uitgiftedatum is verplicht.')
+      setValidationError(t('employees.qualifications.dialogObtainedRequired'))
       return
     }
     if (selectedType?.requiresExpiryDate && !expiryDate) {
-      setValidationError('Vervaldatum is verplicht voor dit type.')
+      setValidationError(t('employees.qualifications.dialogExpiryRequired'))
       return
     }
     setValidationError(null)
@@ -66,16 +68,24 @@ export function QualificationDialog({ employeeId, existing, onSaved, onCancel }:
 
   return (
     <Modal
-      title={existing ? `${existing.qualificationTypeName} bewerken` : 'Kwalificatie toevoegen'}
+      title={
+        existing
+          ? t('employees.qualifications.dialogEditTitle', { name: existing.qualificationTypeName })
+          : t('employees.qualifications.dialogCreateTitle')
+      }
       onClose={onCancel}
       busy={isSubmitting}
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
-            Annuleren
+            {t('employees.qualifications.dialogCancel')}
           </Button>
           <Button type="submit" form="qualification-form" disabled={isSubmitting}>
-            {isSubmitting ? 'Opslaan…' : existing ? 'Opslaan' : 'Toevoegen'}
+            {isSubmitting
+              ? t('employees.qualifications.dialogSaving')
+              : existing
+                ? t('employees.qualifications.dialogSave')
+                : t('employees.qualifications.dialogAdd')}
           </Button>
         </>
       }
@@ -88,7 +98,7 @@ export function QualificationDialog({ employeeId, existing, onSaved, onCancel }:
         )}
 
         {!existing && (
-          <FormField label="Type" htmlFor="qualificationType" required>
+          <FormField label={t('employees.qualifications.dialogType')} htmlFor="qualificationType" required>
             <SearchableSelect
               id="qualificationType"
               value={qualificationTypeId}
@@ -100,31 +110,33 @@ export function QualificationDialog({ employeeId, existing, onSaved, onCancel }:
                 keywords: type.code,
               }))}
               isLoading={typesLoading}
-              placeholder="Kies een type…"
+              placeholder={t('employees.qualifications.dialogTypePlaceholder')}
             />
           </FormField>
         )}
 
-        <FormField label="Document-/licentienummer" htmlFor="documentNumber">
+        <FormField label={t('employees.qualifications.dialogDocumentNumber')} htmlFor="documentNumber">
           <input id="documentNumber" type="text" value={documentNumber} onChange={(e) => setDocumentNumber(e.target.value)} maxLength={100} />
         </FormField>
 
-        <FormField label="Behaal-/uitgiftedatum" htmlFor="obtainedDate" required>
+        <FormField label={t('employees.qualifications.dialogObtainedDate')} htmlFor="obtainedDate" required>
           <input id="obtainedDate" type="date" value={obtainedDate} onChange={(e) => setObtainedDate(e.target.value)} />
         </FormField>
 
-        <FormField label="Vervaldatum" htmlFor="expiryDate" required={selectedType?.requiresExpiryDate}>
+        <FormField label={t('employees.qualifications.dialogExpiryDate')} htmlFor="expiryDate" required={selectedType?.requiresExpiryDate}>
           <p className="ui-form-field-hint">
-            {selectedType?.requiresExpiryDate ? 'Verplicht voor dit type.' : 'Laat leeg indien deze kwalificatie niet vervalt.'}
+            {selectedType?.requiresExpiryDate
+              ? t('employees.qualifications.dialogExpiryRequiredHint')
+              : t('employees.qualifications.dialogExpiryOptionalHint')}
           </p>
           <input id="expiryDate" type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
         </FormField>
 
-        <FormField label="Uitgifteland" htmlFor="issuingCountry">
-          <CountryCombobox id="issuingCountry" value={issuingCountryCode} onChange={setIssuingCountryCode} placeholder="— Onbekend —" />
+        <FormField label={t('employees.qualifications.dialogIssuingCountry')} htmlFor="issuingCountry">
+          <CountryCombobox id="issuingCountry" value={issuingCountryCode} onChange={setIssuingCountryCode} placeholder={t('employees.qualifications.dialogCountryPlaceholder')} />
         </FormField>
 
-        <FormField label="Notities" htmlFor="qualificationNotes">
+        <FormField label={t('employees.qualifications.dialogNotes')} htmlFor="qualificationNotes">
           <textarea id="qualificationNotes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={2000} />
         </FormField>
       </form>

@@ -1,0 +1,93 @@
+{
+  "title": "Messages",
+  "subtitle": "Messages internes au sein de l'entreprise.",
+  "newMessage": "Nouveau message",
+  "tabs": {
+    "inbox": "Reçus",
+    "sent": "Envoyés"
+  },
+  "list": {
+    "loading": "Chargement des messages...",
+    "emptyInbox": "Aucun message dans votre boîte de réception.",
+    "emptySent": "Aucun message envoyé pour le moment.",
+    "newBadge": "nouveau",
+    "ackPending": "à confirmer",
+    "ackDone": "confirmé",
+    "recipients_one": "{count} destinataire",
+    "recipients_other": "{count} destinataires",
+    "cancelledOn": "Retiré le {dateTime}",
+    "deliveryStatus": "Statut de remise",
+    "withdraw": "Retirer"
+  },
+  "priority": {
+    "Normal": "Normale",
+    "High": "Haute",
+    "Urgent": "Urgente"
+  },
+  "emailStatus": {
+    "Geen": "Aucun",
+    "Pending": "En file d'attente",
+    "Sent": "Envoyé",
+    "Failed": "Échoué",
+    "Suppressed": "Supprimé",
+    "Duplicate": "Doublon"
+  },
+  "detail": {
+    "acknowledge": "Confirmer",
+    "acknowledging": "Confirmation…",
+    "acknowledgedAt": "Confirmé le {dateTime}",
+    "acknowledgementRequired": "Ce message demande une confirmation explicite."
+  },
+  "toasts": {
+    "acknowledged": "Message confirmé.",
+    "acknowledgeFailed": "Le message n'a pas pu être confirmé.",
+    "withdrawn": "Message retiré.",
+    "withdrawFailed": "Le message n'a pas pu être retiré.",
+    "sent": "Message envoyé."
+  },
+  "cancelDialog": {
+    "title": "Retirer le message",
+    "message": "Voulez-vous vraiment retirer « {subject} » ? Les destinataires ne verront plus le message.",
+    "confirm": "Retirer"
+  },
+  "delivery": {
+    "title": "Statut de remise",
+    "loading": "Chargement du statut de remise...",
+    "loadFailed": "Le statut de remise n'a pas pu être chargé.",
+    "sentOn": "envoyé le {dateTime}",
+    "columnName": "Nom",
+    "columnRead": "Lu",
+    "columnAcknowledged": "Confirmé",
+    "columnEmail": "E-mail"
+  },
+  "compose": {
+    "title": "Nouveau message interne",
+    "send": "Envoyer",
+    "sending": "Envoi…",
+    "sendFailed": "Le message n'a pas pu être envoyé.",
+    "recipientsLoadFailed": "Les destinataires n'ont pas pu être chargés.",
+    "targetField": "Public cible",
+    "targetUsers": "Personnes spécifiques",
+    "targetRole": "Tous les titulaires d'un rôle",
+    "targetDepartment": "Un département",
+    "targetAll": "Tous les collaborateurs",
+    "roleField": "Rôle",
+    "roleHint": "Tous les membres actifs du rôle recevront le message.",
+    "chooseRole": "— Choisissez un rôle —",
+    "departmentField": "Département",
+    "departmentHint": "Tous les collaborateurs du département recevront le message.",
+    "chooseDepartment": "— Choisissez un département —",
+    "allNote": "Le message sera remis à tous les collaborateurs actifs.",
+    "toUsersField": "À (personnes)",
+    "subjectField": "Objet",
+    "bodyField": "Message",
+    "priorityField": "Priorité",
+    "optionsField": "Options",
+    "requireAcknowledgement": "Confirmation requise",
+    "alsoEmail": "Envoyer aussi par e-mail",
+    "visibleFromField": "Visible à partir de",
+    "visibleFromHint": "Vide = visible immédiatement",
+    "expiresAtField": "Expire le",
+    "expiresAtHint": "Vide = pas de date de fin"
+  }
+}

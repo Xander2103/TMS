@@ -3,6 +3,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { describeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   NOTE_COLOURS,
   createCalendarNote,
@@ -21,6 +22,7 @@ interface PersonalNoteDialogProps {
 
 /** Create/edit/delete one personal calendar note with a palette-based colour choice. */
 export function PersonalNoteDialog({ note, initialDate, onSaved, onClose }: PersonalNoteDialogProps) {
+  const { t } = useLocale()
   const [title, setTitle] = useState(note?.title ?? '')
   const [description, setDescription] = useState(note?.description ?? '')
   const [date, setDate] = useState(note?.date ?? initialDate)
@@ -34,7 +36,7 @@ export function PersonalNoteDialog({ note, initialDate, onSaved, onClose }: Pers
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!title.trim()) {
-      setError('De titel is verplicht.')
+      setError(t('portalHome.note.titleRequired'))
       return
     }
     setBusy(true)
@@ -55,7 +57,7 @@ export function PersonalNoteDialog({ note, initialDate, onSaved, onClose }: Pers
       }
       onSaved()
     } catch (err) {
-      setError(describeApiError(err, 'De notitie kon niet worden opgeslagen.').message)
+      setError(describeApiError(err, t('portalHome.note.saveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -68,28 +70,28 @@ export function PersonalNoteDialog({ note, initialDate, onSaved, onClose }: Pers
       await deleteCalendarNote(note.id)
       onSaved()
     } catch (err) {
-      setError(describeApiError(err, 'De notitie kon niet worden verwijderd.').message)
+      setError(describeApiError(err, t('portalHome.note.deleteFailed')).message)
       setBusy(false)
     }
   }
 
   return (
     <Modal
-      title={note ? `Notitie bewerken — ${note.title}` : 'Persoonlijke notitie'}
+      title={note ? t('portalHome.note.editTitle', { title: note.title }) : t('portalHome.note.createTitle')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           {note && (
             <Button variant="danger" onClick={() => void handleDelete()} disabled={busy}>
-              Verwijderen
+              {t('ui.actions.delete')}
             </Button>
           )}
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="personal-note-form" disabled={busy}>
-            Opslaan
+            {t('ui.actions.save')}
           </Button>
         </>
       }
@@ -100,33 +102,33 @@ export function PersonalNoteDialog({ note, initialDate, onSaved, onClose }: Pers
             {error}
           </div>
         )}
-        <FormField label="Titel" htmlFor="pn-title" required hint="bv. Tandarts, Auto garage, Privé afspraak">
+        <FormField label={t('portalHome.note.titleField')} htmlFor="pn-title" required hint={t('portalHome.note.titleHint')}>
           <input id="pn-title" value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} maxLength={120} />
         </FormField>
-        <FormField label="Omschrijving" htmlFor="pn-desc">
+        <FormField label={t('portalHome.note.descriptionField')} htmlFor="pn-desc">
           <textarea id="pn-desc" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} disabled={busy} maxLength={1000} />
         </FormField>
         <div className="issued-items-form-row">
-          <FormField label="Datum" htmlFor="pn-date" required>
+          <FormField label={t('portalHome.note.dateField')} htmlFor="pn-date" required>
             <input id="pn-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={busy} />
           </FormField>
           <label className="tof-checkbox">
             <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} disabled={busy} />
-            Hele dag
+            {t('portalHome.note.allDay')}
           </label>
         </div>
         {!allDay && (
           <div className="issued-items-form-row">
-            <FormField label="Van" htmlFor="pn-start">
+            <FormField label={t('portalHome.note.fromField')} htmlFor="pn-start">
               <input id="pn-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={busy} />
             </FormField>
-            <FormField label="Tot" htmlFor="pn-end">
+            <FormField label={t('portalHome.note.toField')} htmlFor="pn-end">
               <input id="pn-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} disabled={busy} />
             </FormField>
           </div>
         )}
         <fieldset className="portal-note-colours">
-          <legend>Kleur</legend>
+          <legend>{t('portalHome.note.colourLegend')}</legend>
           {NOTE_COLOURS.map((option) => (
             <label key={option.value} className="portal-note-colour">
               <input
@@ -138,7 +140,7 @@ export function PersonalNoteDialog({ note, initialDate, onSaved, onClose }: Pers
                 disabled={busy}
               />
               <span className="portal-note-swatch" style={{ background: option.value }} aria-hidden="true" />
-              {option.label}
+              {t(option.label)}
             </label>
           ))}
         </fieldset>

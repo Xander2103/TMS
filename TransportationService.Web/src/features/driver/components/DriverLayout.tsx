@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useActionQueueSync } from '../../../hooks/useActionQueueSync'
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus'
+import { useLocale } from '../../../i18n/localeContext'
 import './driver-layout.css'
 
 /**
@@ -11,34 +12,35 @@ import './driver-layout.css'
 export function DriverLayout() {
   const online = useOnlineStatus()
   const { unsyncedCount } = useActionQueueSync()
+  const { t } = useLocale()
 
   return (
     <div className="drv-shell">
       <header className="drv-topbar">
-        <span className="drv-title">Chauffeur</span>
+        <span className="drv-title">{t('driverApp.layout.title')}</span>
         <span className={`drv-status${online ? '' : ' drv-status-offline'}`}>
-          {online ? 'Online' : 'Offline'}
+          {online ? t('driverApp.layout.online') : t('driverApp.layout.offline')}
           {unsyncedCount > 0 && <span className="drv-sync-badge">{unsyncedCount}</span>}
         </span>
       </header>
       <main className="drv-content">
         <Outlet />
       </main>
-      <nav className="drv-tabs" aria-label="Chauffeursnavigatie">
+      <nav className="drv-tabs" aria-label={t('driverApp.layout.navLabel')}>
         <NavLink to="/driver" end className={({ isActive }) => (isActive ? 'drv-tab-active' : undefined)}>
-          <span aria-hidden="true">🏠</span>Vandaag
+          <span aria-hidden="true">🏠</span>{t('driverApp.layout.tabToday')}
         </NavLink>
         <NavLink to="/my-trips" className={({ isActive }) => (isActive ? 'drv-tab-active' : undefined)}>
-          <span aria-hidden="true">🚚</span>Ritten
+          <span aria-hidden="true">🚚</span>{t('driverApp.layout.tabTrips')}
         </NavLink>
         <NavLink to="/driver/incidents" className={({ isActive }) => (isActive ? 'drv-tab-active' : undefined)}>
-          <span aria-hidden="true">⚠️</span>Incident
+          <span aria-hidden="true">⚠️</span>{t('driverApp.layout.tabIncident')}
         </NavLink>
         <NavLink to="/driver/documents" className={({ isActive }) => (isActive ? 'drv-tab-active' : undefined)}>
-          <span aria-hidden="true">📄</span>Documenten
+          <span aria-hidden="true">📄</span>{t('driverApp.layout.tabDocuments')}
         </NavLink>
         <NavLink to="/inbox" className={({ isActive }) => (isActive ? 'drv-tab-active' : undefined)}>
-          <span aria-hidden="true">✉️</span>Berichten
+          <span aria-hidden="true">✉️</span>{t('driverApp.layout.tabMessages')}
         </NavLink>
       </nav>
     </div>

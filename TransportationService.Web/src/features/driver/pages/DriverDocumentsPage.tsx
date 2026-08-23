@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { apiBaseUrl } from '../../../config/env'
+import { useLocale } from '../../../i18n/localeContext'
 import { getAccessToken } from '../../auth/authStorage'
 import { listMyDocuments } from '../api/driverApi'
 import { DRIVER_DOCUMENT_TYPE_LABELS, type DriverDocument } from '../types'
@@ -8,8 +9,9 @@ import { formatDate } from '../../../utils/dates'
 
 /** Documents of the assets on the driver's active trips — nothing else is ever listed. */
 export function DriverDocumentsPage() {
+  const { t } = useLocale()
   const [documents, setDocuments] = useState<DriverDocument[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -18,7 +20,7 @@ export function DriverDocumentsPage() {
         if (!cancelled) setDocuments(data)
       })
       .catch(() => {
-        if (!cancelled) setError('Documenten laden mislukt.')
+        if (!cancelled) setLoadError(true)
       })
     return () => {
       cancelled = true
@@ -40,37 +42,41 @@ export function DriverDocumentsPage() {
     URL.revokeObjectURL(url)
   }
 
-  if (error) return <p className="drv-muted">{error}</p>
-  if (!documents) return <p className="drv-muted">Laden…</p>
+  if (loadError) return <p className="drv-muted">{t('driverApp.documents.loadFailed')}</p>
+  if (!documents) return <p className="drv-muted">{t('driverApp.documents.loading')}</p>
 
   return (
     <div>
-      <h1 className="drv-page-title">Documenten</h1>
+      <h1 className="drv-page-title">{t('driverApp.documents.title')}</h1>
       {documents.length === 0 && (
-        <p className="drv-muted">Geen documenten voor jouw actieve ritten.</p>
+        <p className="drv-muted">{t('driverApp.documents.empty')}</p>
       )}
       <ul className="drv-list">
         {documents.map((doc) => (
           <li key={doc.id} className="drv-card">
             <div className="drv-fact-row">
-              <strong>{DRIVER_DOCUMENT_TYPE_LABELS[doc.documentType] ?? doc.customTypeName ?? doc.documentType}</strong>
+              <strong>
+                {DRIVER_DOCUMENT_TYPE_LABELS[doc.documentType]
+                  ? t(DRIVER_DOCUMENT_TYPE_LABELS[doc.documentType])
+                  : doc.customTypeName ?? doc.documentType}
+              </strong>
               <span>{doc.assetNumber}</span>
             </div>
             {doc.documentNumber && (
-              <div className="drv-fact-row"><span>Nummer</span><span>{doc.documentNumber}</span></div>
+              <div className="drv-fact-row"><span>{t('driverApp.documents.numberLabel')}</span><span>{doc.documentNumber}</span></div>
             )}
             <div className="drv-badges">
               {doc.expiryDate && (
                 <Badge tone={new Date(doc.expiryDate) < new Date() ? 'danger' : 'neutral'}>
-                  Vervalt {formatDate(doc.expiryDate)}
+                  {t('driverApp.documents.expires', { date: formatDate(doc.expiryDate) })}
                 </Badge>
               )}
               {doc.fileAvailable ? (
                 <button type="button" className="drv-download" onClick={() => void download(doc)}>
-                  Downloaden
+                  {t('driverApp.documents.download')}
                 </button>
               ) : (
-                <Badge tone="neutral">Geen bestand</Badge>
+                <Badge tone="neutral">{t('driverApp.documents.noFile')}</Badge>
               )}
             </div>
           </li>

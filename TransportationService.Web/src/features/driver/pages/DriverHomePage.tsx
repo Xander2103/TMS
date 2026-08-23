@@ -3,14 +3,30 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { useAuth } from '../../auth/authContextValue'
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus'
-import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
-import { ETA_SOURCE_LABELS } from '../../operations/types'
+import { useLocale } from '../../../i18n/localeContext'
+import { TRIP_STATUS_TONE, type TripStatus } from '../../planning/types'
+import type { EtaSource } from '../../operations/types'
 import { getMyDashboard } from '../api/driverApi'
 import { DriverActivityCard } from '../../time-attendance/components/DriverActivityCard'
 import type { MyDashboard } from '../types'
 import { formatDate } from '../../../utils/dates'
 
 const SNAPSHOT_PREFIX = 'ts.driverSnapshot.v1'
+
+/** Translation keys per status/source code; resolved via t() at render time. */
+const TRIP_STATUS_KEYS: Record<TripStatus, string> = {
+  Draft: 'driverApp.tripStatus.Draft',
+  Planned: 'driverApp.tripStatus.Planned',
+  InProgress: 'driverApp.tripStatus.InProgress',
+  Completed: 'driverApp.tripStatus.Completed',
+  Cancelled: 'driverApp.tripStatus.Cancelled',
+}
+
+const ETA_SOURCE_KEYS: Record<EtaSource, string> = {
+  Heuristic: 'driverApp.etaSource.Heuristic',
+  Provider: 'driverApp.etaSource.Provider',
+  DispatcherOverride: 'driverApp.etaSource.DispatcherOverride',
+}
 
 function snapshotKey(userId: string): string {
   return `${SNAPSHOT_PREFIX}.${userId}`
@@ -33,9 +49,10 @@ function readSnapshot(userId: string): MyDashboard | null {
 export function DriverHomePage() {
   const { user } = useAuth()
   const online = useOnlineStatus()
+  const { t } = useLocale()
   const [dashboard, setDashboard] = useState<MyDashboard | null>(null)
   const [fromCache, setFromCache] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -45,7 +62,7 @@ export function DriverHomePage() {
         if (cancelled) return
         setDashboard(data)
         setFromCache(false)
-        setError(null)
+        setLoadError(false)
         try {
           localStorage.setItem(snapshotKey(user.id), JSON.stringify({ data, cachedAt: new Date().toISOString() }))
         } catch {
@@ -59,7 +76,7 @@ export function DriverHomePage() {
           setDashboard(cached)
           setFromCache(true)
         } else {
-          setError('Dashboard laden mislukt en er is geen offline kopie beschikbaar.')
+          setLoadError(true)
         }
       })
     return () => {
@@ -67,12 +84,12 @@ export function DriverHomePage() {
     }
   }, [user, online])
 
-  if (error) {
-    return <p className="drv-muted">{error}</p>
+  if (loadError) {
+    return <p className="drv-muted">{t('driverApp.home.loadFailedNoCache')}</p>
   }
 
   if (!dashboard) {
-    return <p className="drv-muted">Laden…</p>
+    return <p className="drv-muted">{t('driverApp.home.loading')}</p>
   }
 
   const trip = dashboard.currentTrip
@@ -80,74 +97,74 @@ export function DriverHomePage() {
   return (
     <div>
       {fromCache && (
-        <p className="drv-muted" role="status">Offline kopie — wordt ververst zodra er verbinding is.</p>
+        <p className="drv-muted" role="status">{t('driverApp.home.cachedNotice')}</p>
       )}
 
       {online && <DriverActivityCard />}
 
       <section className="drv-card">
-        <h2>Huidige rit</h2>
+        <h2>{t('driverApp.home.currentTrip')}</h2>
         {trip ? (
           <>
             <div className="drv-fact-row">
               <strong>{trip.tripNumber}</strong>
-              <Badge tone={TRIP_STATUS_TONE[trip.status]}>{TRIP_STATUS_LABELS[trip.status]}</Badge>
+              <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_KEYS[trip.status])}</Badge>
             </div>
             <div className="drv-fact-row">
-              <span>Voertuig</span>
+              <span>{t('driverApp.home.vehicle')}</span>
               <span>{trip.vehicleNumber ?? '—'}{trip.trailerNumber ? ` + ${trip.trailerNumber}` : ''}</span>
             </div>
             <div className="drv-fact-row">
-              <span>Voortgang</span>
-              <span>{trip.completedStopCount}/{trip.stopCount} stops</span>
+              <span>{t('driverApp.home.progress')}</span>
+              <span>{t('driverApp.home.progressStops', { completed: trip.completedStopCount, total: trip.stopCount })}</span>
             </div>
             {dashboard.nextStopCity && (
               <div className="drv-fact-row">
-                <span>Volgende stop</span>
+                <span>{t('driverApp.home.nextStop')}</span>
                 <span>{dashboard.nextStopLocationName ?? dashboard.nextStopCity}</span>
               </div>
             )}
             {dashboard.nextStopEta && (
               <div className="drv-fact-row">
-                <span>ETA</span>
+                <span>{t('driverApp.home.eta')}</span>
                 <span>
                   {new Date(dashboard.nextStopEta).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
-                  {dashboard.nextStopEtaSource && ` (${ETA_SOURCE_LABELS[dashboard.nextStopEtaSource]})`}
+                  {dashboard.nextStopEtaSource && ` (${t(ETA_SOURCE_KEYS[dashboard.nextStopEtaSource])})`}
                 </span>
               </div>
             )}
-            <Link className="drv-big-link" to={`/my-trips/${trip.id}`}>Rit openen</Link>
+            <Link className="drv-big-link" to={`/my-trips/${trip.id}`}>{t('driverApp.home.openTrip')}</Link>
           </>
         ) : (
-          <p className="drv-muted">Geen actieve rit. {dashboard.nextTrip
-            ? `Volgende: ${dashboard.nextTrip.tripNumber} op ${formatDate(dashboard.nextTrip.tripDate)}.`
-            : 'Er staat niets gepland.'}</p>
+          <p className="drv-muted">{t('driverApp.home.noActiveTrip')} {dashboard.nextTrip
+            ? t('driverApp.home.nextTripAt', { tripNumber: dashboard.nextTrip.tripNumber, date: formatDate(dashboard.nextTrip.tripDate) })
+            : t('driverApp.home.nothingPlanned')}</p>
         )}
       </section>
 
       <section className="drv-card">
-        <h2>Aandachtspunten</h2>
+        <h2>{t('driverApp.home.attentionTitle')}</h2>
         <div className="drv-fact-row">
-          <span>Openstaande stops</span>
+          <span>{t('driverApp.home.openStops')}</span>
           <strong>{dashboard.openStopCount}</strong>
         </div>
         <div className="drv-fact-row">
-          <span>Onopgeloste afwijkingen</span>
+          <span>{t('driverApp.home.unresolvedExceptions')}</span>
           <strong>{dashboard.unresolvedExceptionCount}</strong>
         </div>
         <div className="drv-fact-row">
-          <span>Actieve incidenten</span>
+          <span>{t('driverApp.home.activeIncidents')}</span>
           <strong>{dashboard.activeIncidentCount}</strong>
         </div>
         <div className="drv-fact-row">
-          <span>Ritten vandaag</span>
+          <span>{t('driverApp.home.tripsToday')}</span>
           <strong>{dashboard.todayTripCount}</strong>
         </div>
       </section>
 
       {dashboard.nextTrip && trip && (
         <section className="drv-card">
-          <h2>Volgende rit</h2>
+          <h2>{t('driverApp.home.nextTrip')}</h2>
           <div className="drv-fact-row">
             <strong>{dashboard.nextTrip.tripNumber}</strong>
             <span>{formatDate(dashboard.nextTrip.tripDate)}</span>

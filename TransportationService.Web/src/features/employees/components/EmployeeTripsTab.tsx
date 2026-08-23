@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
+import { useLocale } from '../../../i18n/localeContext'
 import { listTrips } from '../../planning/api/planningApi'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE, type TripListItem } from '../../planning/types'
 import { toIsoDate } from '../../employee-planning/types'
@@ -12,6 +13,7 @@ import '../../planning/pages/planning.css'
  */
 export function EmployeeTripsTab({ driverId }: { driverId: string }) {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const [trips, setTrips] = useState<TripListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -25,26 +27,26 @@ export function EmployeeTripsTab({ driverId }: { driverId: string }) {
         if (mounted) setTrips(rows)
       })
       .catch(() => {
-        if (mounted) setError('De ritten konden niet worden geladen.')
+        if (mounted) setError('employees.tripsTab.loadFailed')
       })
     return () => {
       mounted = false
     }
   }, [driverId])
 
-  if (error) return <p className="placeholder-text">{error}</p>
-  if (trips === null) return <p className="placeholder-text">Ritten laden…</p>
-  if (trips.length === 0) return <p className="placeholder-text">Geen ritten in de voorbije 90 of komende 30 dagen.</p>
+  if (error) return <p className="placeholder-text">{t(error)}</p>
+  if (trips === null) return <p className="placeholder-text">{t('employees.tripsTab.loading')}</p>
+  if (trips.length === 0) return <p className="placeholder-text">{t('employees.tripsTab.empty')}</p>
 
   return (
     <table className="pl-table">
       <thead>
         <tr>
-          <th>Rit</th>
-          <th>Datum</th>
-          <th>Status</th>
-          <th>Voertuig</th>
-          <th>Opdrachten</th>
+          <th>{t('employees.tripsTab.columnTrip')}</th>
+          <th>{t('employees.tripsTab.columnDate')}</th>
+          <th>{t('employees.tripsTab.columnStatus')}</th>
+          <th>{t('employees.tripsTab.columnVehicle')}</th>
+          <th>{t('employees.tripsTab.columnOrders')}</th>
         </tr>
       </thead>
       <tbody>

@@ -1,0 +1,85 @@
+{
+  "groups": {
+    "organisatie": "Organisation",
+    "categorieen": "Categories",
+    "referentie": "Reference data"
+  },
+  "singular": {
+    "departments": "department",
+    "job-functions": "job function",
+    "vehicle-categories": "vehicle category",
+    "trailer-categories": "trailer category",
+    "driver-categories": "driver category",
+    "customer-categories": "customer category",
+    "issued-item-categories": "company asset category",
+    "task-categories": "task category",
+    "languages": "language",
+    "nationalities": "nationality",
+    "contract-types": "contract type"
+  },
+  "hints": {
+    "languages": "ISO 639-1, e.g. nl"
+  },
+  "list": {
+    "new": "New {singular}",
+    "searchPlaceholder": "Search by code or name...",
+    "loadFailed": "{title} could not be loaded.",
+    "empty": "No {titleLower} yet.",
+    "loading": "Loading {title}...",
+    "columns": {
+      "code": "Code",
+      "name": "Name",
+      "description": "Description",
+      "status": "Status"
+    }
+  },
+  "toasts": {
+    "added": "Item added.",
+    "updated": "Item updated.",
+    "deleted": "Item deleted."
+  },
+  "deleteDialog": {
+    "title": "Delete {singular}",
+    "message": "Are you sure you want to delete '{name}'?"
+  },
+  "errors": {
+    "inUse": "This item is still in use and cannot be deleted.",
+    "deleteFailed": "Delete failed.",
+    "duplicateCode": "An item with code '{code}' already exists.",
+    "saveFailed": "Saving failed. Please try again."
+  },
+  "form": {
+    "editTitle": "Edit {singular}",
+    "newTitle": "New {singular}",
+    "saving": "Saving...",
+    "codeLabel": "Code",
+    "nameLabel": "Name",
+    "descriptionLabel": "Description",
+    "sortLabel": "Order",
+    "sortHint": "Determines the order in selection lists.",
+    "activeLabel": "Active",
+    "codeRequired": "Code is required.",
+    "codeMax": "Code may contain at most 50 characters.",
+    "nameRequired": "Name is required.",
+    "nameMax": "Name may contain at most 150 characters."
+  },
+  "select": {
+    "createOption": "Add new {singular} \"{query}\"",
+    "newTitle": "New {singular}",
+    "nameAndCodeRequired": "Name and code are required.",
+    "duplicate": "There is already a {singular} with code '{code}'.",
+    "createFailed": "Adding failed. Please try again.",
+    "adding": "Adding…",
+    "addAndSelect": "Add and select",
+    "codeHint": "Short unique code for this value."
+  },
+  "lookup": {
+    "optionsLoadFailed": "The list could not be loaded."
+  },
+  "units": {
+    "subtitle": "Global units with code, category, dimensions and physical defaults. Customer-specific preferences and rates live on the customer record."
+  },
+  "services": {
+    "subtitle": "Global services and surcharges with calculation method and default price. Customer-specific overrides are managed on the customer record."
+  }
+}

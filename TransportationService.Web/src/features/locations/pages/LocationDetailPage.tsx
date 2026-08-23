@@ -6,12 +6,13 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
 import { deleteLocation, duplicateLocation, getLocation, setLocationActive, updateLocation } from '../api/locationsApi'
 import { LocationForm } from '../components/LocationForm'
-import { OPENING_DAYS, OPENING_DAY_LABELS } from '../openingHours'
-import { LOCATION_TYPE_LABELS, type LocationDetail, type LocationInput } from '../types'
+import { OPENING_DAYS, OPENING_DAY_LABEL_KEYS } from '../openingHours'
+import { LOCATION_TYPE_LABEL_KEYS, type LocationDetail, type LocationInput } from '../types'
 import './locations.css'
 import './location-form.css'
 
@@ -101,8 +102,6 @@ function DetailRow({ label, children }: { label: string; children: ReactNode }) 
   )
 }
 
-const NO_INFO = <p className="location-card-empty">Geen informatie</p>
-
 /**
  * Location detail as a desktop-friendly card grid (adres / contact / openingsuren /
  * planning / operationeel / instructies / interne info) instead of one long vertical list.
@@ -112,6 +111,7 @@ const NO_INFO = <p className="location-card-empty">Geen informatie</p>
 export function LocationDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
 
@@ -135,7 +135,7 @@ export function LocationDetailPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Locatie kon niet worden geladen.')
+        if (mounted) setLoadError(t('locations.detail.loadFailed'))
       })
     return () => {
       mounted = false
@@ -153,12 +153,12 @@ export function LocationDetailPage() {
       const updated = await updateLocation(id, value)
       setLocation(updated)
       setEditing(false)
-      showSuccess('Locatie bijgewerkt.')
+      showSuccess(t('locations.detail.updated'))
     } catch (err) {
       setSaveError(
         err instanceof ApiError && err.status === 409
-          ? 'Er bestaat al een locatie met deze code.'
-          : 'Wijzigingen konden niet worden opgeslagen.',
+          ? t('locations.detail.duplicateCode')
+          : t('locations.detail.saveFailed'),
       )
     } finally {
       setSaving(false)
@@ -170,13 +170,13 @@ export function LocationDetailPage() {
     setDuplicating(true)
     try {
       const copy = await duplicateLocation(id)
-      showSuccess('Locatie gedupliceerd.')
+      showSuccess(t('locations.detail.duplicated'))
       navigate(`/locations/${copy.id}`)
       // The route param changes, so the effect reloads the copy; reset local view state.
       setLocation(null)
       setEditing(false)
     } catch {
-      showError('Locatie kon niet worden gedupliceerd.')
+      showError(t('locations.detail.duplicateFailed'))
     } finally {
       setDuplicating(false)
     }
@@ -188,9 +188,9 @@ export function LocationDetailPage() {
     try {
       await setLocationActive(id, next)
       setLocation({ ...location, isActive: next })
-      showSuccess(next ? 'Locatie geactiveerd.' : 'Locatie gedeactiveerd.')
+      showSuccess(next ? t('locations.detail.activated') : t('locations.detail.deactivated'))
     } catch {
-      showError('Status kon niet worden gewijzigd.')
+      showError(t('locations.detail.statusChangeFailed'))
     } finally {
       setTogglingActive(false)
       setConfirmDeactivate(false)
@@ -201,16 +201,18 @@ export function LocationDetailPage() {
     if (!id) return
     try {
       await deleteLocation(id)
-      showSuccess('Locatie verwijderd.')
+      showSuccess(t('locations.detail.deleted'))
       navigate('/locations')
     } catch {
-      showError('Locatie kon niet worden verwijderd.')
+      showError(t('locations.detail.deleteFailed'))
       setConfirmDelete(false)
     }
   }
 
-  if (loading) return <p className="placeholder-text">Locatie laden…</p>
-  if (loadError || !location) return <p className="placeholder-text">{loadError ?? 'Niet gevonden.'}</p>
+  if (loading) return <p className="placeholder-text">{t('locations.detail.loading')}</p>
+  if (loadError || !location) return <p className="placeholder-text">{loadError ?? t('locations.detail.notFound')}</p>
+
+  const noInfo = <p className="location-card-empty">{t('locations.detail.noInfo')}</p>
 
   // ---- Card contents ----------------------------------------------------------------------
 
@@ -231,33 +233,37 @@ export function LocationDetailPage() {
 
   // Operationeel: booleans render as a ✓-list of ACTIVE flags only — never ten "Nee" rows.
   const terreinFlags = [
-    location.craneRequired ? 'Kraan vereist' : null,
-    location.forkliftAvailable ? 'Heftruck beschikbaar' : null,
+    location.craneRequired ? t('locations.flags.craneRequired') : null,
+    location.forkliftAvailable ? t('locations.flags.forkliftAvailable') : null,
   ].filter((f): f is string => f !== null)
   const toegangFlags = [
-    location.appointmentRequired ? 'Afspraak verplicht' : null,
-    location.deliveryByAppointmentOnly ? 'Leveren enkel op afspraak' : null,
-    location.alfapassRequired ? 'Alfapass vereist' : null,
+    location.appointmentRequired ? t('locations.flags.appointmentRequired') : null,
+    location.deliveryByAppointmentOnly ? t('locations.flags.deliveryByAppointmentOnly') : null,
+    location.alfapassRequired ? t('locations.flags.alfapassRequired') : null,
   ].filter((f): f is string => f !== null)
 
   const hasTerrein = Boolean(location.gate || location.receptionPoint || location.dock || location.routeDescription) || terreinFlags.length > 0
   const hasToegang = Boolean(location.accessCode || location.accessRestrictions) || toegangFlags.length > 0
   const beperkingRows: { label: string; value: string }[] = [
-    location.heightRestrictionMeters != null ? { label: 'Max. hoogte', value: `${location.heightRestrictionMeters} m` } : null,
-    location.weightRestrictionTons != null ? { label: 'Max. gewicht', value: `${location.weightRestrictionTons} t` } : null,
-    location.adrAllowed != null
-      ? { label: 'ADR', value: location.adrAllowed ? 'Toegelaten' : 'Niet toegelaten' }
+    location.heightRestrictionMeters != null
+      ? { label: t('locations.detail.maxHeight'), value: t('locations.detail.heightValue', { value: location.heightRestrictionMeters }) }
       : null,
-    location.vehicleRestrictions ? { label: 'Voertuigen', value: location.vehicleRestrictions } : null,
-    location.trailerRestrictions ? { label: 'Opleggers', value: location.trailerRestrictions } : null,
+    location.weightRestrictionTons != null
+      ? { label: t('locations.detail.maxWeight'), value: t('locations.detail.weightValue', { value: location.weightRestrictionTons }) }
+      : null,
+    location.adrAllowed != null
+      ? { label: t('locations.detail.adr'), value: location.adrAllowed ? t('locations.detail.adrAllowed') : t('locations.detail.adrNotAllowed') }
+      : null,
+    location.vehicleRestrictions ? { label: t('locations.detail.vehicles'), value: location.vehicleRestrictions } : null,
+    location.trailerRestrictions ? { label: t('locations.detail.trailers'), value: location.trailerRestrictions } : null,
   ].filter((r): r is { label: string; value: string } => r !== null)
   const hasOperational = hasTerrein || hasToegang || beperkingRows.length > 0
 
   const instructionRows: { label: string; value: string }[] = [
-    location.loadingInstructions ? { label: 'Laden', value: location.loadingInstructions } : null,
-    location.unloadingInstructions ? { label: 'Lossen', value: location.unloadingInstructions } : null,
-    location.accessInstructions ? { label: 'Toegang', value: location.accessInstructions } : null,
-    location.driverInstructions ? { label: 'Chauffeur', value: location.driverInstructions } : null,
+    location.loadingInstructions ? { label: t('locations.detail.instructionLoading'), value: location.loadingInstructions } : null,
+    location.unloadingInstructions ? { label: t('locations.detail.instructionUnloading'), value: location.unloadingInstructions } : null,
+    location.accessInstructions ? { label: t('locations.detail.instructionAccess'), value: location.accessInstructions } : null,
+    location.driverInstructions ? { label: t('locations.detail.instructionDriver'), value: location.driverInstructions } : null,
   ].filter((r): r is { label: string; value: string } => r !== null)
 
   const hasInternal = Boolean(location.internalMemo || location.notes)
@@ -274,14 +280,14 @@ export function LocationDetailPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Locaties', to: '/locations' }, { label: location.code }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.locations'), to: '/locations' }, { label: location.code }]} />
       <PageHeader
         title={location.name}
         subtitle={
           <span className="location-detail-subtitle">
             <code>{location.code}</code>
             <span aria-hidden="true"> • </span>
-            <span>{LOCATION_TYPE_LABELS[location.type]}</span>
+            <span>{t(LOCATION_TYPE_LABEL_KEYS[location.type])}</span>
             {location.customerId && location.customerName && (
               <>
                 <span aria-hidden="true"> • </span>
@@ -289,34 +295,38 @@ export function LocationDetailPage() {
               </>
             )}
             <span aria-hidden="true"> </span>
-            {location.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>}
+            {location.isActive ? (
+              <Badge tone="success">{t('ui.statusBadges.active')}</Badge>
+            ) : (
+              <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>
+            )}
           </span>
         }
         action={
           <div className="location-detail-actions">
             {canEdit && !editing && (
               <Button variant="secondary" onClick={() => { setSaveError(null); setEditing(true) }}>
-                Bewerken
+                {t('ui.actions.edit')}
               </Button>
             )}
             {hasPermission('locations.create') && !editing && (
               <Button variant="secondary" onClick={() => void handleDuplicate()} disabled={duplicating}>
-                {duplicating ? 'Bezig…' : 'Dupliceren'}
+                {duplicating ? t('locations.detail.busy') : t('locations.detail.duplicate')}
               </Button>
             )}
             {canEdit && !editing && (
               location.isActive ? (
                 <Button variant="secondary" onClick={() => setConfirmDeactivate(true)} disabled={togglingActive}>
-                  Deactiveren
+                  {t('locations.detail.deactivate')}
                 </Button>
               ) : (
                 <Button variant="secondary" onClick={() => void handleSetActive(true)} disabled={togglingActive}>
-                  Activeren
+                  {t('locations.detail.activate')}
                 </Button>
               )
             )}
             {hasPermission('locations.delete') && !editing && (
-              <Button variant="danger" onClick={() => setConfirmDelete(true)}>Verwijderen</Button>
+              <Button variant="danger" onClick={() => setConfirmDelete(true)}>{t('ui.actions.delete')}</Button>
             )}
           </div>
         }
@@ -324,7 +334,7 @@ export function LocationDetailPage() {
 
       {!editing ? (
         <div className="location-cards">
-          <DetailCard title="Adres">
+          <DetailCard title={t('locations.detail.cards.address')}>
             {hasAddress || hasCoordinates ? (
               <>
                 <p className="location-card-address">
@@ -338,40 +348,40 @@ export function LocationDetailPage() {
                   </p>
                 )}
                 {location.externalReference && (
-                  <p className="location-card-muted">Externe referentie: {location.externalReference}</p>
+                  <p className="location-card-muted">{t('locations.detail.externalReference', { value: location.externalReference })}</p>
                 )}
               </>
             ) : (
-              NO_INFO
+              noInfo
             )}
           </DetailCard>
 
-          <DetailCard title="Contact">
+          <DetailCard title={t('locations.detail.cards.contact')}>
             {hasContact ? (
               <dl>
-                {location.contactName && <DetailRow label="Naam">{location.contactName}</DetailRow>}
+                {location.contactName && <DetailRow label={t('locations.detail.contactName')}>{location.contactName}</DetailRow>}
                 {location.contactPhone && (
-                  <DetailRow label="Telefoon">
+                  <DetailRow label={t('locations.detail.phone')}>
                     <a href={`tel:${location.contactPhone.replace(/\s/g, '')}`}>{location.contactPhone}</a>
                   </DetailRow>
                 )}
                 {location.contactMobile && (
-                  <DetailRow label="Gsm">
+                  <DetailRow label={t('locations.detail.mobile')}>
                     <a href={`tel:${location.contactMobile.replace(/\s/g, '')}`}>{location.contactMobile}</a>
                   </DetailRow>
                 )}
                 {location.contactEmail && (
-                  <DetailRow label="E-mail">
+                  <DetailRow label={t('locations.detail.email')}>
                     <a href={`mailto:${location.contactEmail}`}>{location.contactEmail}</a>
                   </DetailRow>
                 )}
               </dl>
             ) : (
-              NO_INFO
+              noInfo
             )}
           </DetailCard>
 
-          <DetailCard title="Openingsuren">
+          <DetailCard title={t('locations.detail.cards.openingHours')}>
             {hasStructuredHours ? (
               <table className="location-hours-table">
                 <tbody>
@@ -381,10 +391,10 @@ export function LocationDetailPage() {
                       .sort((a, b) => a.fromTime.localeCompare(b.fromTime))
                     return (
                       <tr key={day}>
-                        <th scope="row">{OPENING_DAY_LABELS[day - 1]}</th>
+                        <th scope="row">{t(OPENING_DAY_LABEL_KEYS[day - 1])}</th>
                         <td>
                           {windows.length === 0 ? (
-                            <span className="location-hours-closed">Gesloten</span>
+                            <span className="location-hours-closed">{t('locations.openingHours.closed')}</span>
                           ) : (
                             windows
                               .map((w) => `${w.fromTime}–${w.toTime}${w.note ? ` (${w.note})` : ''}`)
@@ -399,54 +409,58 @@ export function LocationDetailPage() {
             ) : location.openingHours ? (
               <p>{location.openingHours}</p>
             ) : (
-              NO_INFO
+              noInfo
             )}
           </DetailCard>
 
-          <DetailCard title="Planning">
+          <DetailCard title={t('locations.detail.cards.planning')}>
             {hasPlanning ? (
               <dl>
                 {location.defaultLoadingMinutes != null && (
-                  <DetailRow label="Standaard laadtijd">{location.defaultLoadingMinutes} min</DetailRow>
+                  <DetailRow label={t('locations.detail.defaultLoadingTime')}>
+                    {t('locations.detail.minutesValue', { minutes: location.defaultLoadingMinutes })}
+                  </DetailRow>
                 )}
                 {location.defaultUnloadingMinutes != null && (
-                  <DetailRow label="Standaard lostijd">{location.defaultUnloadingMinutes} min</DetailRow>
+                  <DetailRow label={t('locations.detail.defaultUnloadingTime')}>
+                    {t('locations.detail.minutesValue', { minutes: location.defaultUnloadingMinutes })}
+                  </DetailRow>
                 )}
                 {(location.preferredArrivalFrom || location.preferredArrivalTo) && (
-                  <DetailRow label="Voorkeursvenster">
+                  <DetailRow label={t('locations.detail.preferredWindow')}>
                     {location.preferredArrivalFrom ?? '…'}–{location.preferredArrivalTo ?? '…'}
                   </DetailRow>
                 )}
-                {location.earliestArrival && <DetailRow label="Vroegste aankomst">{location.earliestArrival}</DetailRow>}
-                {location.latestArrival && <DetailRow label="Laatste aankomst">{location.latestArrival}</DetailRow>}
+                {location.earliestArrival && <DetailRow label={t('locations.detail.earliestArrival')}>{location.earliestArrival}</DetailRow>}
+                {location.latestArrival && <DetailRow label={t('locations.detail.latestArrival')}>{location.latestArrival}</DetailRow>}
               </dl>
             ) : (
-              NO_INFO
+              noInfo
             )}
           </DetailCard>
 
-          <DetailCard title="Operationeel" className="location-card-wide">
+          <DetailCard title={t('locations.detail.cards.operational')} className="location-card-wide">
             {hasOperational ? (
               <div className="location-operational-groups">
                 {hasTerrein && (
                   <div className="location-operational-group">
-                    <h4>Terrein</h4>
+                    <h4>{t('locations.detail.terrain')}</h4>
                     <dl>
-                      {location.gate && <DetailRow label="Poort">{location.gate}</DetailRow>}
-                      {location.receptionPoint && <DetailRow label="Aanmeldpunt">{location.receptionPoint}</DetailRow>}
-                      {location.dock && <DetailRow label="Kade/dok">{location.dock}</DetailRow>}
-                      {location.routeDescription && <DetailRow label="Route">{location.routeDescription}</DetailRow>}
+                      {location.gate && <DetailRow label={t('locations.detail.gate')}>{location.gate}</DetailRow>}
+                      {location.receptionPoint && <DetailRow label={t('locations.detail.receptionPoint')}>{location.receptionPoint}</DetailRow>}
+                      {location.dock && <DetailRow label={t('locations.detail.dock')}>{location.dock}</DetailRow>}
+                      {location.routeDescription && <DetailRow label={t('locations.detail.route')}>{location.routeDescription}</DetailRow>}
                     </dl>
                     {terreinFlags.length > 0 && flagList(terreinFlags)}
                   </div>
                 )}
                 {hasToegang && (
                   <div className="location-operational-group">
-                    <h4>Toegang</h4>
+                    <h4>{t('locations.detail.access')}</h4>
                     <dl>
-                      {location.accessCode && <DetailRow label="Toegangscode">{location.accessCode}</DetailRow>}
+                      {location.accessCode && <DetailRow label={t('locations.detail.accessCode')}>{location.accessCode}</DetailRow>}
                       {location.accessRestrictions && (
-                        <DetailRow label="Restricties">{location.accessRestrictions}</DetailRow>
+                        <DetailRow label={t('locations.detail.restrictions')}>{location.accessRestrictions}</DetailRow>
                       )}
                     </dl>
                     {toegangFlags.length > 0 && flagList(toegangFlags)}
@@ -454,7 +468,7 @@ export function LocationDetailPage() {
                 )}
                 {beperkingRows.length > 0 && (
                   <div className="location-operational-group">
-                    <h4>Beperkingen</h4>
+                    <h4>{t('locations.detail.limits')}</h4>
                     <dl>
                       {beperkingRows.map((row) => (
                         <DetailRow key={row.label} label={row.label}>
@@ -466,12 +480,12 @@ export function LocationDetailPage() {
                 )}
               </div>
             ) : (
-              <p className="location-card-empty">Geen bijzonderheden</p>
+              <p className="location-card-empty">{t('locations.detail.noParticulars')}</p>
             )}
           </DetailCard>
 
           {instructionRows.length > 0 && (
-            <DetailCard title="Instructies" className="location-card-wide">
+            <DetailCard title={t('locations.detail.cards.instructions')} className="location-card-wide">
               <dl>
                 {instructionRows.map((row) => (
                   <DetailRow key={row.label} label={row.label}>
@@ -483,11 +497,11 @@ export function LocationDetailPage() {
           )}
 
           {hasInternal && (
-            <DetailCard title="Interne informatie" className="location-card-internal location-card-wide">
-              <p className="location-card-internal-label">Alleen interne gebruikers</p>
+            <DetailCard title={t('locations.detail.cards.internal')} className="location-card-internal location-card-wide">
+              <p className="location-card-internal-label">{t('locations.internalOnly')}</p>
               <dl>
-                {location.internalMemo && <DetailRow label="Memo">{location.internalMemo}</DetailRow>}
-                {location.notes && <DetailRow label="Notities">{location.notes}</DetailRow>}
+                {location.internalMemo && <DetailRow label={t('locations.detail.memo')}>{location.internalMemo}</DetailRow>}
+                {location.notes && <DetailRow label={t('locations.detail.notes')}>{location.notes}</DetailRow>}
               </dl>
             </DetailCard>
           )}
@@ -505,9 +519,9 @@ export function LocationDetailPage() {
 
       {confirmDeactivate && (
         <ConfirmDialog
-          title="Locatie deactiveren"
-          message={`'${location.name}' deactiveren? De locatie blijft zichtbaar en behouden voor bestaande opdrachten, maar is niet meer kiesbaar voor nieuwe.`}
-          confirmLabel="Deactiveren"
+          title={t('locations.detail.deactivateTitle')}
+          message={t('locations.detail.deactivateMessage', { name: location.name })}
+          confirmLabel={t('locations.detail.deactivate')}
           busy={togglingActive}
           onConfirm={() => void handleSetActive(false)}
           onCancel={() => setConfirmDeactivate(false)}
@@ -516,9 +530,9 @@ export function LocationDetailPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Locatie verwijderen"
-          message={`Weet je zeker dat je locatie ${location.code} wilt verwijderen? Overweeg deactiveren: dan blijft de historiek behouden.`}
-          confirmLabel="Verwijderen"
+          title={t('locations.detail.deleteTitle')}
+          message={t('locations.detail.deleteMessage', { code: location.code })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}

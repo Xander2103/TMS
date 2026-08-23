@@ -5,12 +5,36 @@
  * elsewhere.
  */
 
+import { getActiveLocale } from '../../i18n/activeLocale'
+
+/** @deprecated Nederlandstalige constante — gebruik getDayNames() (volgt de UI-taal). */
 export const DAY_NAMES = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'] as const
 
+/** @deprecated Nederlandstalige constante — gebruik getMonthNames() (volgt de UI-taal). */
 export const MONTH_NAMES = [
   'januari', 'februari', 'maart', 'april', 'mei', 'juni',
   'juli', 'augustus', 'september', 'oktober', 'november', 'december',
 ] as const
+
+const LOCALE_TAGS = { nl: 'nl-BE', fr: 'fr-BE', en: 'en-GB' } as const
+
+function localeTag(): string {
+  return LOCALE_TAGS[getActiveLocale()]
+}
+
+/** Korte weekdagnamen, maandag-eerst, in de actieve UI-taal (ma/lu/Mon …). */
+export function getDayNames(): string[] {
+  const formatter = new Intl.DateTimeFormat(localeTag(), { weekday: 'short' })
+  // 5 jan 2026 is een maandag.
+  return Array.from({ length: 7 }, (_, index) =>
+    formatter.format(new Date(2026, 0, 5 + index)).replace('.', ''))
+}
+
+/** Maandnamen in de actieve UI-taal. */
+export function getMonthNames(): string[] {
+  const formatter = new Intl.DateTimeFormat(localeTag(), { month: 'long' })
+  return Array.from({ length: 12 }, (_, index) => formatter.format(new Date(2026, index, 1)))
+}
 
 /** Monday of the week containing the given date (ISO week start). */
 export function mondayOf(date: Date): Date {
@@ -59,11 +83,16 @@ export function monthGridRange(anchor: Date): { start: Date; end: Date } {
   return { start, end }
 }
 
-const CELL_LABEL_FORMATTER = new Intl.DateTimeFormat('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })
-
-/** Accessible per-cell label, e.g. "dinsdag 4 augustus, 2 items". Colour is never the only signal. */
+/** Accessible per-cell label, e.g. "dinsdag 4 augustus, 2 items" — volgt de UI-taal. */
 export function cellAriaLabel(date: Date, entryCount: number): string {
-  const base = CELL_LABEL_FORMATTER.format(date)
-  if (entryCount === 0) return `${base}, geen items`
-  return `${base}, ${entryCount} item${entryCount === 1 ? '' : 's'}`
+  const base = new Intl.DateTimeFormat(localeTag(), { weekday: 'long', day: 'numeric', month: 'long' }).format(date)
+  const locale = getActiveLocale()
+  if (entryCount === 0) {
+    const none = locale === 'fr' ? 'aucun élément' : locale === 'en' ? 'no items' : 'geen items'
+    return `${base}, ${none}`
+  }
+  const unit = locale === 'fr'
+    ? entryCount === 1 ? 'élément' : 'éléments'
+    : entryCount === 1 ? 'item' : 'items'
+  return `${base}, ${entryCount} ${unit}`
 }

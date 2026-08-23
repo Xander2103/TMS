@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
 import {
   createEmployeeNote,
@@ -19,9 +20,10 @@ interface UseEmployeeNoteMutationsResult {
   setPinned: (employeeId: string, noteId: string, pinned: boolean) => Promise<EmployeeNote | null>
 }
 
-const GENERIC_ERROR = 'De actie kon niet worden uitgevoerd.'
+const GENERIC_ERROR_KEY = 'employees.errors.actionFailed'
 
 export function useEmployeeNoteMutations(): UseEmployeeNoteMutationsResult {
+  const { t } = useLocale()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
@@ -35,7 +37,7 @@ export function useEmployeeNoteMutations(): UseEmployeeNoteMutationsResult {
       return await action()
     } catch (err) {
       if (isMounted.current) {
-        const described = describeApiError(err, GENERIC_ERROR)
+        const described = describeApiError(err, t(GENERIC_ERROR_KEY))
         setError(described.message)
         setFieldErrors(described.fieldErrors)
       }

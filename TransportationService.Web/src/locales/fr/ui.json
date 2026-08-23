@@ -101,10 +101,15 @@
     "removeFavorite": "Retirer des favoris",
     "addFavorite": "Ajouter aux favoris",
     "groupCreate": "Créer",
-    "groupNavigate": "Naviguer"
+    "groupNavigate": "Naviguer",
+    "noResults": "Aucun résultat pour « {term} »."
   },
   "offline": {
-    "banner": "Hors ligne — les scans, actions d'arrêt et déclarations d'incident sont mis en file d'attente et se synchronisent automatiquement."
+    "banner": "Hors ligne — les scans, actions d'arrêt et déclarations d'incident sont mis en file d'attente et se synchronisent automatiquement.",
+    "pendingSync_one": "1 action en attente de synchronisation…",
+    "pendingSync_other": "{count} actions en attente de synchronisation…",
+    "queued_one": "Hors ligne — 1 action en file d'attente ; elle se synchronisera automatiquement dès le retour de la connexion.",
+    "queued_other": "Hors ligne — {count} actions en file d'attente ; elles se synchroniseront automatiquement dès le retour de la connexion."
   },
   "calendar": {
     "month": "Mois",
@@ -117,6 +122,7 @@
     "next": "suivant ›",
     "view": "Affichage",
     "more": "+{count} de plus",
-    "free": "libre"
+    "free": "libre",
+    "weekOf": "semaine du"
   }
 }

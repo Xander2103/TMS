@@ -5,17 +5,12 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import { formatDate } from '../../../utils/dates'
 import { createTankCard, listEmployeeTankCards, searchTankCards, updateTankCard } from '../../tank-cards/api/tankCardsApi'
-import {
-  maskCardNumber,
-  tankCardToInput,
-  TANK_CARD_STATUS_LABELS,
-  type TankCard,
-  type TankCardStatus,
-} from '../../tank-cards/types'
+import { maskCardNumber, tankCardToInput, type TankCard, type TankCardStatus } from '../../tank-cards/types'
 import './EmployeeTankCardsSection.css'
 
 const STATUS_TONE: Record<TankCardStatus, BadgeTone> = {
@@ -42,11 +37,11 @@ const EMPTY_NEW_CARD: NewCardForm = {
 }
 
 /** "dag €x · week €y · maand €z" with any unset limit omitted; null when none are set. */
-function limitsSummary(card: TankCard): string | null {
+function limitsSummary(card: TankCard, t: TranslateFn): string | null {
   const parts: string[] = []
-  if (card.dailyLimit != null) parts.push(`dag €${card.dailyLimit}`)
-  if (card.weeklyLimit != null) parts.push(`week €${card.weeklyLimit}`)
-  if (card.monthlyLimit != null) parts.push(`maand €${card.monthlyLimit}`)
+  if (card.dailyLimit != null) parts.push(t('employees.tankCards.limitDay', { amount: card.dailyLimit }))
+  if (card.weeklyLimit != null) parts.push(t('employees.tankCards.limitWeek', { amount: card.weeklyLimit }))
+  if (card.monthlyLimit != null) parts.push(t('employees.tankCards.limitMonth', { amount: card.monthlyLimit }))
   return parts.length > 0 ? parts.join(' · ') : null
 }
 
@@ -58,6 +53,7 @@ function limitsSummary(card: TankCard): string | null {
 export function EmployeeTankCardsSection({ employeeId }: { employeeId: string }) {
   const { hasPermission } = useAuth()
   const toast = useToast()
+  const { t } = useLocale()
   const canView = hasPermission('tank_cards.view')
   const canEdit = hasPermission('tank_cards.edit')
   const canCreate = hasPermission('tank_cards.create')
@@ -90,7 +86,7 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Tankkaarten konden niet worden geladen.')
+        if (mounted) setLoadError('employees.tankCards.loadFailed')
       })
     return () => {
       mounted = false
@@ -100,7 +96,7 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
   if (!canView) return null
 
   function reload() {
-    setReloadToken((t) => t + 1)
+    setReloadToken((token) => token + 1)
   }
 
   function openLink() {
@@ -118,22 +114,22 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
     event.preventDefault()
     setLinkError(null)
     if (!selectedCardId) {
-      setLinkError('Kies een tankkaart.')
+      setLinkError(t('employees.tankCards.chooseCardRequired'))
       return
     }
     const card = availableCards.find((c) => c.id === selectedCardId)
     if (!card) {
-      setLinkError('Deze tankkaart is niet meer beschikbaar.')
+      setLinkError(t('employees.tankCards.cardUnavailable'))
       return
     }
     setSaving(true)
     try {
       await updateTankCard(card.id, tankCardToInput(card, { employeeId }))
-      toast.showSuccess('Tankkaart gekoppeld.')
+      toast.showSuccess(t('employees.tankCards.linked'))
       setLinkOpen(false)
       reload()
     } catch (err) {
-      setLinkError(describeApiError(err, 'De tankkaart kon niet worden gekoppeld.').message)
+      setLinkError(describeApiError(err, t('employees.tankCards.linkFailed')).message)
     } finally {
       setSaving(false)
     }
@@ -144,11 +140,11 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
     setSaving(true)
     try {
       await updateTankCard(unlinkTarget.id, tankCardToInput(unlinkTarget, { employeeId: null }))
-      toast.showSuccess('Tankkaart ontkoppeld.')
+      toast.showSuccess(t('employees.tankCards.unlinked'))
       setUnlinkTarget(null)
       reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'De tankkaart kon niet worden ontkoppeld.').message)
+      toast.showError(describeApiError(err, t('employees.tankCards.unlinkFailed')).message)
       setUnlinkTarget(null)
     } finally {
       setSaving(false)
@@ -165,11 +161,11 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
     event.preventDefault()
     setCreateError(null)
     if (!newCard.cardNumber.trim()) {
-      setCreateError('Kaartnummer is verplicht.')
+      setCreateError(t('employees.tankCards.cardNumberRequired'))
       return
     }
     if (!newCard.provider.trim()) {
-      setCreateError('Leverancier is verplicht.')
+      setCreateError(t('employees.tankCards.providerRequired'))
       return
     }
     setSaving(true)
@@ -189,11 +185,11 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
         costCenter: null,
         notes: null,
       })
-      toast.showSuccess('Tankkaart aangemaakt.')
+      toast.showSuccess(t('employees.tankCards.created'))
       setCreateOpen(false)
       reload()
     } catch (err) {
-      setCreateError(describeApiError(err, 'De tankkaart kon niet worden aangemaakt.').message)
+      setCreateError(describeApiError(err, t('employees.tankCards.createFailed')).message)
     } finally {
       setSaving(false)
     }
@@ -202,27 +198,27 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
   return (
     <section className="employee-tank-cards">
       <div className="employee-tank-cards-header">
-        <h2>Tankkaarten</h2>
+        <h2>{t('employees.tankCards.heading')}</h2>
         <div className="employee-tank-cards-actions-top">
           {canEdit && (
             <Button variant="secondary" onClick={openLink}>
-              Bestaande kaart koppelen
+              {t('employees.tankCards.linkExisting')}
             </Button>
           )}
-          {canCreate && <Button onClick={openCreate}>Nieuwe kaart</Button>}
+          {canCreate && <Button onClick={openCreate}>{t('employees.tankCards.newCard')}</Button>}
         </div>
       </div>
 
-      {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && cards === null && <p className="placeholder-text">Laden…</p>}
+      {loadError && <p className="placeholder-text">{t(loadError)}</p>}
+      {!loadError && cards === null && <p className="placeholder-text">{t('employees.tankCards.loading')}</p>}
       {!loadError && cards !== null && cards.length === 0 && (
-        <p className="placeholder-text">Geen tankkaarten gekoppeld.</p>
+        <p className="placeholder-text">{t('employees.tankCards.empty')}</p>
       )}
 
       {!loadError && cards !== null && cards.length > 0 && (
         <ul className="employee-tank-cards-list">
           {cards.map((card) => {
-            const summary = limitsSummary(card)
+            const summary = limitsSummary(card, t)
             return (
               <li key={card.id} className="employee-tank-card">
                 <div className="employee-tank-card-main">
@@ -233,19 +229,19 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
                   <div className="employee-tank-card-meta">
                     {card.provider}
                     {' · '}
-                    Geldig tot {formatDate(card.validUntil) || '—'}
+                    {t('employees.tankCards.validUntil', { date: formatDate(card.validUntil) || '—' })}
                     {summary && <span> · {summary}</span>}
                   </div>
                 </div>
                 <div className="employee-tank-card-side">
-                  <Badge tone={STATUS_TONE[card.status]}>{TANK_CARD_STATUS_LABELS[card.status]}</Badge>
+                  <Badge tone={STATUS_TONE[card.status]}>{t(`tankCards.status.${card.status}`)}</Badge>
                   {canEdit && (
                     <button
                       type="button"
                       className="employee-tank-card-link employee-tank-card-link-danger"
                       onClick={() => setUnlinkTarget(card)}
                     >
-                      Ontkoppelen
+                      {t('employees.tankCards.unlink')}
                     </button>
                   )}
                 </div>
@@ -257,16 +253,16 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
 
       {linkOpen && (
         <Modal
-          title="Bestaande kaart koppelen"
+          title={t('employees.tankCards.linkTitle')}
           onClose={() => setLinkOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setLinkOpen(false)} disabled={saving}>
-                Annuleren
+                {t('employees.tankCards.cancel')}
               </Button>
               <Button type="submit" form="etc-link-form" disabled={saving || availableCards.length === 0}>
-                {saving ? 'Koppelen…' : 'Koppelen'}
+                {saving ? t('employees.tankCards.linking') : t('employees.tankCards.link')}
               </Button>
             </>
           }
@@ -277,7 +273,7 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
                 {linkError}
               </div>
             )}
-            <FormField label="Tankkaart" htmlFor="etc-link-select" required>
+            <FormField label={t('employees.tankCards.cardField')} htmlFor="etc-link-select" required>
               <select
                 id="etc-link-select"
                 value={selectedCardId}
@@ -285,7 +281,11 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
                 disabled={saving || availableLoading}
               >
                 <option value="">
-                  {availableLoading ? 'Laden…' : availableCards.length === 0 ? 'Geen beschikbare kaarten' : '— Kies een tankkaart —'}
+                  {availableLoading
+                    ? t('employees.tankCards.optionLoading')
+                    : availableCards.length === 0
+                      ? t('employees.tankCards.optionNoneAvailable')
+                      : t('employees.tankCards.optionChoose')}
                 </option>
                 {availableCards.map((card) => (
                   <option key={card.id} value={card.id}>
@@ -301,16 +301,16 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
 
       {createOpen && (
         <Modal
-          title="Nieuwe tankkaart"
+          title={t('employees.tankCards.createTitle')}
           onClose={() => setCreateOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setCreateOpen(false)} disabled={saving}>
-                Annuleren
+                {t('employees.tankCards.cancel')}
               </Button>
               <Button type="submit" form="etc-create-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('employees.tankCards.saving') : t('employees.tankCards.save')}
               </Button>
             </>
           }
@@ -321,7 +321,7 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
                 {createError}
               </div>
             )}
-            <FormField label="Kaartnummer" htmlFor="etc-number" required>
+            <FormField label={t('employees.tankCards.cardNumber')} htmlFor="etc-number" required>
               <input
                 id="etc-number"
                 value={newCard.cardNumber}
@@ -330,17 +330,17 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
                 maxLength={50}
               />
             </FormField>
-            <FormField label="Leverancier" htmlFor="etc-provider" required>
+            <FormField label={t('employees.tankCards.provider')} htmlFor="etc-provider" required>
               <input
                 id="etc-provider"
                 value={newCard.provider}
                 onChange={(e) => setNewCard((f) => ({ ...f, provider: e.target.value }))}
                 disabled={saving}
                 maxLength={100}
-                placeholder="bv. DKV, Shell, Total"
+                placeholder={t('employees.tankCards.providerPlaceholder')}
               />
             </FormField>
-            <FormField label="Interne naam" htmlFor="etc-internal-name">
+            <FormField label={t('employees.tankCards.internalName')} htmlFor="etc-internal-name">
               <input
                 id="etc-internal-name"
                 value={newCard.internalName}
@@ -350,7 +350,7 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
               />
             </FormField>
             <div className="employee-tank-cards-form-row">
-              <FormField label="Geldig van" htmlFor="etc-from">
+              <FormField label={t('employees.tankCards.validFrom')} htmlFor="etc-from">
                 <input
                   id="etc-from"
                   type="date"
@@ -359,7 +359,7 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
                   disabled={saving}
                 />
               </FormField>
-              <FormField label="Geldig tot" htmlFor="etc-until">
+              <FormField label={t('employees.tankCards.validUntilField')} htmlFor="etc-until">
                 <input
                   id="etc-until"
                   type="date"
@@ -375,9 +375,12 @@ export function EmployeeTankCardsSection({ employeeId }: { employeeId: string })
 
       {unlinkTarget && (
         <ConfirmDialog
-          title="Tankkaart ontkoppelen"
-          message={`Weet je zeker dat je kaart ${maskCardNumber(unlinkTarget.cardNumber)} (${unlinkTarget.provider}) wilt ontkoppelen van deze medewerker?`}
-          confirmLabel="Ontkoppelen"
+          title={t('employees.tankCards.unlinkTitle')}
+          message={t('employees.tankCards.unlinkMessage', {
+            card: maskCardNumber(unlinkTarget.cardNumber),
+            provider: unlinkTarget.provider,
+          })}
+          confirmLabel={t('employees.tankCards.unlinkConfirm')}
           destructive
           onConfirm={handleUnlink}
           onCancel={() => setUnlinkTarget(null)}

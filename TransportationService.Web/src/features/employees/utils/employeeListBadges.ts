@@ -16,11 +16,12 @@ export function completenessTone(percentage: number): BadgeTone {
 /**
  * Contract-end badge next to the status badge: an upcoming end date (0-30 days out) warns ahead
  * of time, a past end date on a still-active employee flags a dossier that needs closing out.
+ * Returns an i18n key + params; callers render `t(badge.key, badge.params)`.
  */
 export function contractEndBadge(
   row: Pick<EmployeeListItem, 'employmentEndDate' | 'isActive'>,
   today: Date = new Date(),
-): { tone: BadgeTone; label: string } | null {
+): { tone: BadgeTone; key: string; params?: Record<string, number> } | null {
   const end = parseIsoDate(row.employmentEndDate)
   if (!end) return null
 
@@ -29,10 +30,10 @@ export function contractEndBadge(
   const diffDays = Math.round((endDay.getTime() - todayDay.getTime()) / 86_400_000)
 
   if (diffDays >= 0 && diffDays <= 30) {
-    return { tone: 'warning', label: `Uit dienst over ${diffDays} d` }
+    return { tone: 'warning', key: 'employees.list.endsInDays', params: { days: diffDays } }
   }
   if (diffDays < 0 && row.isActive) {
-    return { tone: 'danger', label: 'Einddatum verstreken' }
+    return { tone: 'danger', key: 'employees.list.endDatePassed' }
   }
   return null
 }

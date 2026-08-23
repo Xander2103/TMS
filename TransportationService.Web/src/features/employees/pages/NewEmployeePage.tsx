@@ -8,6 +8,7 @@ import { FormSection } from '../../../components/ui/FormSection'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import type { SectionDef } from '../../../components/ui/SectionedForm'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { EmployeeForm } from '../components/EmployeeForm'
@@ -46,6 +47,7 @@ export function NewEmployeePage() {
 function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }) {
   const navigate = useNavigate()
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const mutations = useEmployeeMutations()
 
@@ -168,28 +170,28 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
     {
       // Same id/label as the edit page so deep links and muscle memory carry over.
       id: 'chauffeursgegevens',
-      label: 'Chauffeursgegevens',
+      label: t('employees.sections.chauffeursgegevens'),
       optional: true,
       render: () =>
         canCreateDriver ? (
           <FormSection
-            title="Chauffeursgegevens"
+            title={t('employees.create.driverTitle')}
             columns={2}
-            description="Een chauffeursprofiel wordt in dezelfde stap aangemaakt — persoonsgegevens worden nooit dubbel ingevoerd."
+            description={t('employees.create.driverDescription')}
           >
             <div className="form-span-all">
               <label className="customer-form-checkbox">
                 <input type="checkbox" checked={isDriver} onChange={(e) => setIsDriver(e.target.checked)} />
-                Deze medewerker is chauffeur
+                {t('employees.create.isDriver')}
               </label>
             </div>
             {isDriver && (
               <>
-                <FormField label="Chauffeurcategorieën" htmlFor="ne-driver-categories" hint="Eén of meer categorieën aanvinken.">
+                <FormField label={t('employees.create.driverCategories')} htmlFor="ne-driver-categories" hint={t('employees.create.driverCategoriesHint')}>
                   <div id="ne-driver-categories" className="ne-driver-categories">
-                    {driverCategories.isLoading && <span className="ne-driver-categories-empty">Categorieën laden…</span>}
+                    {driverCategories.isLoading && <span className="ne-driver-categories-empty">{t('employees.create.driverCategoriesLoading')}</span>}
                     {!driverCategories.isLoading && driverCategories.options.length === 0 && (
-                      <span className="ne-driver-categories-empty">Geen categorieën beschikbaar.</span>
+                      <span className="ne-driver-categories-empty">{t('employees.create.driverCategoriesEmpty')}</span>
                     )}
                     {driverCategories.options.map((category) => (
                       <label key={category.id} className="customer-form-checkbox">
@@ -207,40 +209,40 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
                     ))}
                   </div>
                 </FormField>
-                <FormField label="Chauffeursnotities" htmlFor="ne-driver-notes">
+                <FormField label={t('employees.create.driverNotes')} htmlFor="ne-driver-notes">
                   <textarea id="ne-driver-notes" rows={2} value={driverNotes} onChange={(e) => setDriverNotes(e.target.value)} maxLength={2000} />
                 </FormField>
               </>
             )}
           </FormSection>
         ) : (
-          <p className="placeholder-text">Je hebt geen rechten om hier een chauffeursprofiel aan te maken.</p>
+          <p className="placeholder-text">{t('employees.create.noDriverCreatePermission')}</p>
         ),
     },
     {
       id: 'kwalificaties',
-      label: 'Kwalificaties',
+      label: t('employees.sections.kwalificaties'),
       optional: true,
       render: () =>
         canAddQualifications ? (
           <FormSection
-            title="Kwalificaties (optioneel)"
+            title={t('employees.create.qualificationsTitle')}
             columns={1}
-            description="Rijbewijs, medische schifting, ADR, … — worden samen met de medewerker aangemaakt en zijn later beheerbaar op de detailpagina."
+            description={t('employees.create.qualificationsDescription')}
           >
             <div className="form-span-all">
               {qualificationRows.map((row, index) => (
                 <div key={row.key} className="ne-qualification-row">
-                  <FormField label={`Type ${index + 1}`} htmlFor={`ne-qual-type-${row.key}`}>
+                  <FormField label={t('employees.create.qualificationType', { index: index + 1 })} htmlFor={`ne-qual-type-${row.key}`}>
                     <SearchableSelect
                       id={`ne-qual-type-${row.key}`}
                       value={row.qualificationTypeId}
                       onChange={(v) => setRow(row.key, { qualificationTypeId: v })}
                       options={qualificationTypes.map((type) => ({ value: type.id, label: type.name, keywords: type.code }))}
-                      placeholder="— Selecteer type —"
+                      placeholder={t('employees.create.qualificationTypePlaceholder')}
                     />
                   </FormField>
-                  <FormField label="Documentnummer" htmlFor={`ne-qual-doc-${row.key}`}>
+                  <FormField label={t('employees.create.documentNumber')} htmlFor={`ne-qual-doc-${row.key}`}>
                     <input
                       id={`ne-qual-doc-${row.key}`}
                       value={row.documentNumber}
@@ -248,7 +250,7 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
                       maxLength={100}
                     />
                   </FormField>
-                  <FormField label="Behaald op" htmlFor={`ne-qual-obtained-${row.key}`}>
+                  <FormField label={t('employees.create.obtainedOn')} htmlFor={`ne-qual-obtained-${row.key}`}>
                     <input
                       id={`ne-qual-obtained-${row.key}`}
                       type="date"
@@ -256,7 +258,7 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
                       onChange={(e) => setRow(row.key, { obtainedDate: e.target.value })}
                     />
                   </FormField>
-                  <FormField label="Vervalt op" htmlFor={`ne-qual-expiry-${row.key}`} hint="Leeg = vervalt niet.">
+                  <FormField label={t('employees.create.expiresOn')} htmlFor={`ne-qual-expiry-${row.key}`} hint={t('employees.create.expiresHint')}>
                     <input
                       id={`ne-qual-expiry-${row.key}`}
                       type="date"
@@ -268,49 +270,49 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
                     variant="ghost"
                     onClick={() => setQualificationRows((rows) => rows.filter((r) => r.key !== row.key))}
                   >
-                    Verwijderen
+                    {t('employees.form.remove')}
                   </Button>
                 </div>
               ))}
               <Button variant="secondary" onClick={addQualificationRow}>
-                + Kwalificatie toevoegen
+                {t('employees.create.addQualification')}
               </Button>
             </div>
           </FormSection>
         ) : (
-          <p className="placeholder-text">Je hebt geen rechten om kwalificaties toe te voegen.</p>
+          <p className="placeholder-text">{t('employees.create.noQualificationsPermission')}</p>
         ),
     },
     {
       id: 'documenten',
-      label: 'Documenten',
+      label: t('employees.sections.documenten'),
       optional: true,
       render: () =>
         canCreateDocuments ? (
-          <FormSection title="Documenten" columns={1}>
+          <FormSection title={t('employees.create.documentsTitle')} columns={1}>
             <div className="form-span-all">
               <PreparedDocumentsEditor value={preparedDocs} onChange={setPreparedDocs} />
             </div>
           </FormSection>
         ) : (
-          <p className="placeholder-text">Je hebt geen rechten om documenten toe te voegen.</p>
+          <p className="placeholder-text">{t('employees.create.noDocumentsPermission')}</p>
         ),
     },
     {
       id: 'verlofsaldo',
-      label: 'Verlofsaldo',
+      label: t('employees.sections.verlofsaldo'),
       optional: true,
       render: () => (
-        <p className="placeholder-text">Het verlofsaldo (jaarrecht per saldotype) is beschikbaar na het opslaan van de medewerker.</p>
+        <p className="placeholder-text">{t('employees.create.leaveBalancePlaceholder')}</p>
       ),
     },
     {
       id: 'bedrijfsmiddelen',
-      label: 'Bedrijfsmiddelen',
+      label: t('employees.sections.bedrijfsmiddelen'),
       optional: true,
       render: () =>
         canManageIssuedItems ? (
-          <FormSection title="Bedrijfsmiddelen" columns={1}>
+          <FormSection title={t('employees.create.issuedItemsTitle')} columns={1}>
             <div className="form-span-all">
               <PreparedIssuedItemsEditor
                 value={preparedItems}
@@ -321,7 +323,7 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
             </div>
           </FormSection>
         ) : (
-          <p className="placeholder-text">Je hebt geen rechten om bedrijfsmiddelen toe te wijzen.</p>
+          <p className="placeholder-text">{t('employees.create.noIssuedItemsPermission')}</p>
         ),
     },
   ]
@@ -338,18 +340,20 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
     if (preparedDocs.length === 0 && preparedItems.length === 0) {
       toast.showSuccess(
         emp.driverId
-          ? `Medewerker ${emp.employeeNumber} en chauffeursprofiel aangemaakt.`
-          : `Medewerker ${emp.employeeNumber} aangemaakt.`,
+          ? t('employees.create.createdWithDriver', { number: emp.employeeNumber })
+          : t('employees.create.created', { number: emp.employeeNumber }),
       )
       finish()
       return
     }
-    const results = await runEmployeeCreateFollowUps(emp.id, preparedDocs, preparedItems)
+    const results = await runEmployeeCreateFollowUps(emp.id, preparedDocs, preparedItems, t)
     if (results.every((r) => r.ok)) {
-      toast.showSuccess(`Medewerker ${emp.employeeNumber} aangemaakt; ${results.length} bijlage(n) verwerkt.`)
+      toast.showSuccess(
+        t('employees.create.createdWithAttachments', { number: emp.employeeNumber, count: results.length }),
+      )
       finish()
     } else {
-      toast.showError(`Medewerker aangemaakt, maar enkele bijlagen zijn mislukt.`)
+      toast.showError(t('employees.create.attachmentsPartlyFailed'))
       setCreatedEmployee(emp)
       setFollowUpResults(results)
     }
@@ -361,15 +365,15 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
     try {
       const failedKeys = new Set(followUpResults.filter((r) => !r.ok).map((r) => r.key))
       const retried = [
-        ...(await uploadPreparedDocuments(createdEmployee.id, preparedDocs.filter((d) => failedKeys.has(d.key)))),
-        ...(await createPreparedIssuedItems(createdEmployee.id, preparedItems.filter((i) => failedKeys.has(i.key)))),
+        ...(await uploadPreparedDocuments(createdEmployee.id, preparedDocs.filter((d) => failedKeys.has(d.key)), t)),
+        ...(await createPreparedIssuedItems(createdEmployee.id, preparedItems.filter((i) => failedKeys.has(i.key)), t)),
       ]
       const merged = followUpResults.map(
         (r) => retried.find((n) => n.kind === r.kind && n.key === r.key) ?? r,
       )
       if (merged.every((r) => r.ok)) {
         const emp = createdEmployee
-        toast.showSuccess('Alle bijlagen verwerkt.')
+        toast.showSuccess(t('employees.create.allAttachmentsProcessed'))
         setFollowUpResults(null)
         setCreatedEmployee(null)
         goToEmployee(emp)
@@ -390,8 +394,8 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Personeel', to: '/employees' }, { label: 'Nieuwe medewerker' }]} />
-      <PageHeader title="Nieuwe medewerker" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.modules.personeel'), to: '/employees' }, { label: t('employees.create.breadcrumb') }]} />
+      <PageHeader title={t('employees.create.title')} />
       <EmployeeForm
         mode="create"
         isSubmitting={mutations.isSubmitting || followUpBusy}
@@ -401,7 +405,7 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
         onFunctionsChanged={handleFunctionsChanged}
         onNameChanged={(firstName, lastName) => setNameCandidate({ firstName, lastName })}
         duplicateNameHint={
-          duplicateNameFound ? <span role="status">Er bestaat al een medewerker met deze naam.</span> : undefined
+          duplicateNameFound ? <span role="status">{t('employees.create.duplicateNameHint')}</span> : undefined
         }
         extraSections={extraSections}
         onSubmit={async (values, intent) => {
@@ -416,7 +420,7 @@ function NewEmployeePageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
       />
       {createdEmployee && followUpResults && (
         <CreateFollowUpDialog
-          employeeLabel={`Medewerker ${createdEmployee.employeeNumber}`}
+          employeeLabel={t('employees.create.employeeLabel', { number: createdEmployee.employeeNumber })}
           results={followUpResults}
           busy={followUpBusy}
           onRetry={retryFailedFollowUps}

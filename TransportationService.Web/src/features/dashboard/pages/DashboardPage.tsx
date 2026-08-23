@@ -3,15 +3,36 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { getDossierAttentionCount } from '../../dossiers/api/dossiersApi'
-import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
-import { ORDER_STATUS_LABELS, ORDER_STATUS_TONE } from '../../transport-orders/types'
+import { TRIP_STATUS_TONE, type TripStatus } from '../../planning/types'
+import { ORDER_STATUS_TONE, type TransportOrderStatus } from '../../transport-orders/types'
 import { getDashboard } from '../api/dashboardApi'
 import { WorkStatusCard } from '../../time-attendance/components/WorkStatusCard'
 import { DASHBOARD_TILE_GROUPS, type DashboardExtras, type DashboardTile } from '../dashboardConfig'
 import type { Dashboard } from '../types'
 import { formatDateTime } from '../../../utils/dates'
 import './dashboard.css'
+
+/** Translation keys per status code; resolved via t() at render time. */
+const TRIP_STATUS_KEYS: Record<TripStatus, string> = {
+  Draft: 'appDashboard.tripStatus.Draft',
+  Planned: 'appDashboard.tripStatus.Planned',
+  InProgress: 'appDashboard.tripStatus.InProgress',
+  Completed: 'appDashboard.tripStatus.Completed',
+  Cancelled: 'appDashboard.tripStatus.Cancelled',
+}
+
+const ORDER_STATUS_KEYS: Record<TransportOrderStatus, string> = {
+  Draft: 'appDashboard.orderStatus.Draft',
+  Submitted: 'appDashboard.orderStatus.Submitted',
+  Confirmed: 'appDashboard.orderStatus.Confirmed',
+  Planned: 'appDashboard.orderStatus.Planned',
+  InProgress: 'appDashboard.orderStatus.InProgress',
+  Completed: 'appDashboard.orderStatus.Completed',
+  Invoiced: 'appDashboard.orderStatus.Invoiced',
+  Cancelled: 'appDashboard.orderStatus.Cancelled',
+}
 
 function formatPinnedAt(iso: string): string {
   return formatDateTime(iso)
@@ -45,8 +66,9 @@ function KpiGrid({ tiles, onNavigate }: { tiles: DashboardTile[]; onNavigate: (t
 export function DashboardPage() {
   const navigate = useNavigate()
   const { hasAnyPermission, user } = useAuth()
+  const { t } = useLocale()
   const [dashboard, setDashboard] = useState<Dashboard | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
   const [attentionCount, setAttentionCount] = useState<number | null>(null)
 
   const visibleGroups = useMemo(
@@ -64,10 +86,10 @@ export function DashboardPage() {
       .then((data) => {
         if (!mounted) return
         setDashboard(data)
-        setLoadError(null)
+        setLoadError(false)
       })
       .catch(() => {
-        if (mounted) setLoadError('Het dashboard kon niet worden geladen.')
+        if (mounted) setLoadError(true)
       })
     return () => {
       mounted = false
@@ -90,8 +112,8 @@ export function DashboardPage() {
   if (loadError) {
     return (
       <>
-        <PageHeader title="Dashboard" />
-        <p className="placeholder-text">{loadError}</p>
+        <PageHeader title={t('appDashboard.title')} />
+        <p className="placeholder-text">{t('appDashboard.loadFailed')}</p>
       </>
     )
   }
@@ -99,8 +121,8 @@ export function DashboardPage() {
   if (!dashboard) {
     return (
       <>
-        <PageHeader title="Dashboard" />
-        <p className="placeholder-text">Dashboard laden…</p>
+        <PageHeader title={t('appDashboard.title')} />
+        <p className="placeholder-text">{t('appDashboard.loading')}</p>
       </>
     )
   }
@@ -111,24 +133,24 @@ export function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Overzicht van vandaag en deze maand." />
+      <PageHeader title={t('appDashboard.title')} subtitle={t('appDashboard.subtitle')} />
 
       {user?.employeeId && hasAnyPermission(['attendance.self']) && <WorkStatusCard />}
 
       {visibleGroups.map((group) => {
-        const tiles = group.tiles(dashboard, extras)
+        const tiles = group.tiles(dashboard, extras, t)
         if (tiles.length === 0) return null
         return (
-          <section key={group.id} className="db-kpi-section" aria-label={group.title}>
-            <h2>{group.title}</h2>
+          <section key={group.id} className="db-kpi-section" aria-label={t(group.title)}>
+            <h2>{t(group.title)}</h2>
             <KpiGrid tiles={tiles} onNavigate={navigate} />
           </section>
         )
       })}
 
       {dashboard.pinnedEmployeeNotes.length > 0 && (
-        <section className="db-panel db-panel-alert" aria-label="Aandachtspunten personeel">
-          <h2>Aandachtspunten personeel</h2>
+        <section className="db-panel db-panel-alert" aria-label={t('appDashboard.pinnedNotes.title')}>
+          <h2>{t('appDashboard.pinnedNotes.title')}</h2>
           <ul className="db-list">
             {dashboard.pinnedEmployeeNotes.map((note) => (
               <li key={note.noteId}>
@@ -141,7 +163,7 @@ export function DashboardPage() {
                     <strong>{note.employeeName}</strong> — {note.excerpt}
                   </span>
                   <span className="db-row-meta">
-                    {formatPinnedAt(note.pinnedAt)} · {note.authorName ?? 'Systeem'}
+                    {formatPinnedAt(note.pinnedAt)} · {note.authorName ?? t('appDashboard.pinnedNotes.systemAuthor')}
                   </span>
                 </button>
               </li>
@@ -154,8 +176,8 @@ export function DashboardPage() {
         <div className="db-grid">
           {showTripsPanel && (
             <section className="db-panel">
-              <h2>Ritten vandaag</h2>
-              {dashboard.tripsToday.length === 0 && <p className="placeholder-text">Geen ritten gepland vandaag.</p>}
+              <h2>{t('appDashboard.tripsPanel.title')}</h2>
+              {dashboard.tripsToday.length === 0 && <p className="placeholder-text">{t('appDashboard.tripsPanel.empty')}</p>}
               {dashboard.tripsToday.length > 0 && (
                 <ul className="db-list">
                   {dashboard.tripsToday.map((trip) => (
@@ -163,11 +185,12 @@ export function DashboardPage() {
                       <button type="button" className="db-row" onClick={() => navigate(`/planning/${trip.id}`)}>
                         <code>{trip.tripNumber}</code>
                         <span className="db-row-main">
-                          {trip.driverName ?? 'Geen chauffeur'} · {trip.vehicleNumber ?? 'geen voertuig'} · {trip.orderCount} opdracht(en)
+                          {trip.driverName ?? t('appDashboard.tripsPanel.noDriver')} · {trip.vehicleNumber ?? t('appDashboard.tripsPanel.noVehicle')} ·{' '}
+                          {t('appDashboard.tripsPanel.orders', { count: trip.orderCount })}
                         </span>
                         <span className="db-row-meta">
                           {trip.blockingConflictCount > 0 && <Badge tone="danger">⚠ {trip.blockingConflictCount}</Badge>}
-                          <Badge tone={TRIP_STATUS_TONE[trip.status]}>{TRIP_STATUS_LABELS[trip.status]}</Badge>
+                          <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_KEYS[trip.status])}</Badge>
                         </span>
                       </button>
                     </li>
@@ -179,8 +202,8 @@ export function DashboardPage() {
 
           {showOrdersPanel && (
             <section className="db-panel">
-              <h2>Recente opdrachten</h2>
-              {dashboard.recentOrders.length === 0 && <p className="placeholder-text">Nog geen opdrachten.</p>}
+              <h2>{t('appDashboard.ordersPanel.title')}</h2>
+              {dashboard.recentOrders.length === 0 && <p className="placeholder-text">{t('appDashboard.ordersPanel.empty')}</p>}
               {dashboard.recentOrders.length > 0 && (
                 <ul className="db-list">
                   {dashboard.recentOrders.map((order) => (
@@ -192,7 +215,7 @@ export function DashboardPage() {
                         </span>
                         <span className="db-row-meta">
                           {order.orderDate}
-                          <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
+                          <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_KEYS[order.status])}</Badge>
                         </span>
                       </button>
                     </li>

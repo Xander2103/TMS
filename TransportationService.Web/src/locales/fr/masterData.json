@@ -1,0 +1,85 @@
+{
+  "groups": {
+    "organisatie": "Organisation",
+    "categorieen": "Catégories",
+    "referentie": "Données de référence"
+  },
+  "singular": {
+    "departments": "un département",
+    "job-functions": "une fonction",
+    "vehicle-categories": "une catégorie de véhicule",
+    "trailer-categories": "une catégorie de semi-remorque",
+    "driver-categories": "une catégorie de chauffeur",
+    "customer-categories": "une catégorie de client",
+    "issued-item-categories": "une catégorie de matériel",
+    "task-categories": "une catégorie de tâche",
+    "languages": "une langue",
+    "nationalities": "une nationalité",
+    "contract-types": "un type de contrat"
+  },
+  "hints": {
+    "languages": "ISO 639-1, p. ex. nl"
+  },
+  "list": {
+    "new": "Ajouter {singular}",
+    "searchPlaceholder": "Rechercher par code ou nom...",
+    "loadFailed": "Impossible de charger « {title} ».",
+    "empty": "Pas encore de {titleLower}.",
+    "loading": "Chargement : {title}...",
+    "columns": {
+      "code": "Code",
+      "name": "Nom",
+      "description": "Description",
+      "status": "Statut"
+    }
+  },
+  "toasts": {
+    "added": "Élément ajouté.",
+    "updated": "Élément mis à jour.",
+    "deleted": "Élément supprimé."
+  },
+  "deleteDialog": {
+    "title": "Supprimer {singular}",
+    "message": "Voulez-vous vraiment supprimer « {name} » ?"
+  },
+  "errors": {
+    "inUse": "Cet élément est encore utilisé et ne peut pas être supprimé.",
+    "deleteFailed": "La suppression a échoué.",
+    "duplicateCode": "Un élément avec le code « {code} » existe déjà.",
+    "saveFailed": "L'enregistrement a échoué. Veuillez réessayer."
+  },
+  "form": {
+    "editTitle": "Modifier {singular}",
+    "newTitle": "Ajouter {singular}",
+    "saving": "Enregistrement...",
+    "codeLabel": "Code",
+    "nameLabel": "Nom",
+    "descriptionLabel": "Description",
+    "sortLabel": "Ordre",
+    "sortHint": "Détermine l'ordre dans les listes de choix.",
+    "activeLabel": "Actif",
+    "codeRequired": "Le code est obligatoire.",
+    "codeMax": "Le code ne peut pas dépasser 50 caractères.",
+    "nameRequired": "Le nom est obligatoire.",
+    "nameMax": "Le nom ne peut pas dépasser 150 caractères."
+  },
+  "select": {
+    "createOption": "Ajouter {singular} « {query} »",
+    "newTitle": "Ajouter {singular}",
+    "nameAndCodeRequired": "Le nom et le code sont obligatoires.",
+    "duplicate": "Il existe déjà {singular} avec le code « {code} ».",
+    "createFailed": "L'ajout a échoué. Veuillez réessayer.",
+    "adding": "Ajout…",
+    "addAndSelect": "Ajouter et sélectionner",
+    "codeHint": "Code court et unique pour cette valeur."
+  },
+  "lookup": {
+    "optionsLoadFailed": "Impossible de charger la liste de choix."
+  },
+  "units": {
+    "subtitle": "Unités globales avec code, catégorie, dimensions et valeurs physiques par défaut. Les préférences et tarifs spécifiques au client se trouvent sur la fiche client."
+  },
+  "services": {
+    "subtitle": "Services et suppléments globaux avec mode de calcul et prix par défaut. Les dérogations spécifiques au client se gèrent sur la fiche client."
+  }
+}

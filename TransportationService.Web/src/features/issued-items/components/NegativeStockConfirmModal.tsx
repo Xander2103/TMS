@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { useLocale } from '../../../i18n/localeContext'
 import type { NegativeStockPayload } from '../inventoryApi'
 import './NegativeStockConfirmModal.css'
 
@@ -35,6 +36,7 @@ export function NegativeStockConfirmModal({
   onConfirm,
   onCancel,
 }: NegativeStockConfirmModalProps) {
+  const { t } = useLocale()
   const [reason, setReason] = useState('')
 
   const needsReason = kind === 'issue' && payload.requiresReason
@@ -42,17 +44,17 @@ export function NegativeStockConfirmModal({
 
   return (
     <Modal
-      title="Negatieve voorraad bevestigen"
+      title={t('issuedItems.negative.title')}
       onClose={onCancel}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           {canConfirm && (
             <Button variant="danger" onClick={() => onConfirm(reason.trim())} disabled={confirmDisabled}>
-              Bevestig negatieve voorraad
+              {t('issuedItems.negative.confirm')}
             </Button>
           )}
         </>
@@ -61,18 +63,16 @@ export function NegativeStockConfirmModal({
       <div className="negative-stock-body">
         <p className="negative-stock-warning" role="alert">
           <span aria-hidden="true">⚠</span>{' '}
-          {kind === 'issue'
-            ? 'Deze uitgifte brengt de voorraad onder nul.'
-            : 'Deze correctie brengt de voorraad onder nul.'}
+          {kind === 'issue' ? t('issuedItems.negative.warningIssue') : t('issuedItems.negative.warningCorrection')}
         </p>
         {payload.versionMismatch && (
           <p className="negative-stock-mismatch" role="alert">
-            De voorraad is intussen gewijzigd; controleer de nieuwe stand.
+            {t('issuedItems.negative.mismatch')}
           </p>
         )}
         <dl className="negative-stock-summary">
           <div>
-            <dt>Artikel</dt>
+            <dt>{t('issuedItems.negative.item')}</dt>
             <dd>
               {payload.itemName}
               {payload.variantLabel ? ` — ${payload.variantLabel}` : ''}
@@ -80,44 +80,44 @@ export function NegativeStockConfirmModal({
           </div>
           {employeeName && (
             <div>
-              <dt>Medewerker</dt>
+              <dt>{t('issuedItems.negative.employee')}</dt>
               <dd>{employeeName}</dd>
             </div>
           )}
           {storageLocation && (
             <div>
-              <dt>Locatie</dt>
+              <dt>{t('issuedItems.negative.location')}</dt>
               <dd>{storageLocation}</dd>
             </div>
           )}
           <div>
-            <dt>Huidige voorraad</dt>
+            <dt>{t('issuedItems.negative.currentStock')}</dt>
             <dd>{payload.currentStock}</dd>
           </div>
           <div>
-            <dt>Gevraagde hoeveelheid</dt>
+            <dt>{t('issuedItems.negative.requested')}</dt>
             <dd>{Math.abs(payload.requestedDelta)}</dd>
           </div>
           <div>
-            <dt>Nieuwe voorraad</dt>
+            <dt>{t('issuedItems.negative.newStock')}</dt>
             <dd>
               <span className="negative-stock-projected">
-                <span aria-hidden="true">⚠</span> {payload.projectedStock} — negatieve voorraad
+                <span aria-hidden="true">⚠</span> {t('issuedItems.negative.projected', { stock: payload.projectedStock })}
               </span>
             </dd>
           </div>
         </dl>
         {!canConfirm && (
           <p className="negative-stock-no-permission" role="alert">
-            Je hebt geen rechten om negatieve voorraad te bevestigen. Vraag een beheerder om deze actie te bevestigen.
+            {t('issuedItems.negative.noPermission')}
           </p>
         )}
         {canConfirm && kind === 'issue' && (
           <FormField
-            label="Reden"
+            label={t('issuedItems.negative.reason')}
             htmlFor="negative-stock-reason"
             required={needsReason}
-            hint={needsReason ? 'Een reden is verplicht bij negatieve voorraad.' : undefined}
+            hint={needsReason ? t('issuedItems.negative.reasonHint') : undefined}
           >
             <textarea
               id="negative-stock-reason"

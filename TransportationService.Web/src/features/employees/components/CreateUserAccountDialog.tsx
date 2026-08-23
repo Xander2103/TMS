@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
+import { useLocale } from '../../../i18n/localeContext'
 import { apiClient } from '../../../api/apiClient'
 import { describeApiError } from '../../../api/problemDetails'
 import { getRoles } from '../../roles/api/rolesApi'
@@ -29,6 +30,7 @@ interface CreateUserAccountDialogProps {
  * activation token is shown exactly once — the user picks their own password with it.
  */
 export function CreateUserAccountDialog({ employeeId, firstName, lastName, email, onClose }: CreateUserAccountDialogProps) {
+  const { t } = useLocale()
   const [roles, setRoles] = useState<Role[]>([])
   const [suggested, setSuggested] = useState<SuggestedRole[]>([])
   const [selectedRoleIds, setSelectedRoleIds] = useState<Set<string>>(new Set())
@@ -50,7 +52,7 @@ export function CreateUserAccountDialog({ employeeId, firstName, lastName, email
         setSelectedRoleIds(new Set(suggestions.map((s) => s.roleId)))
       })
       .catch(() => {
-        if (mounted) setError('Rollen konden niet worden geladen.')
+        if (mounted) setError(t('employees.account.rolesLoadFailed'))
       })
     return () => {
       mounted = false
@@ -69,7 +71,7 @@ export function CreateUserAccountDialog({ employeeId, firstName, lastName, email
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!accountEmail.trim() || !accountEmail.includes('@')) {
-      setError('Een geldig e-mailadres is verplicht voor een account.')
+      setError(t('employees.account.emailRequired'))
       return
     }
     setBusy(true)
@@ -89,7 +91,7 @@ export function CreateUserAccountDialog({ employeeId, firstName, lastName, email
       )
       setActivation(started)
     } catch (err) {
-      setError(describeApiError(err, 'Het account kon niet worden aangemaakt.').message)
+      setError(describeApiError(err, t('employees.account.createFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -98,16 +100,12 @@ export function CreateUserAccountDialog({ employeeId, firstName, lastName, email
   if (activation) {
     return (
       <Modal
-        title="Account aangemaakt"
+        title={t('employees.account.createdTitle')}
         onClose={() => onClose(true)}
-        footer={<Button onClick={() => onClose(true)}>Sluiten</Button>}
+        footer={<Button onClick={() => onClose(true)}>{t('employees.account.close')}</Button>}
       >
-        <p>
-          Het account voor <strong>{firstName} {lastName}</strong> is aangemaakt. Bezorg de activatielink hieronder —
-          die wordt maar één keer getoond, is 72 uur geldig en kan maar één keer gebruikt worden. De gebruiker kiest
-          er zelf een wachtwoord mee.
-        </p>
-        <FormField label="Activatielink" htmlFor="ua-token">
+        <p>{t('employees.account.createdBody', { name: `${firstName} ${lastName}` })}</p>
+        <FormField label={t('employees.account.activationLink')} htmlFor="ua-token">
           <input id="ua-token" readOnly value={`${window.location.origin}/reset-password?token=${activation.token}`} onFocus={(e) => e.target.select()} />
         </FormField>
       </Modal>
@@ -116,26 +114,26 @@ export function CreateUserAccountDialog({ employeeId, firstName, lastName, email
 
   return (
     <Modal
-      title={`Account aanmaken voor ${firstName} ${lastName}`}
+      title={t('employees.account.title', { name: `${firstName} ${lastName}` })}
       onClose={() => onClose(false)}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={() => onClose(false)} disabled={busy}>
-            Annuleren
+            {t('employees.account.cancel')}
           </Button>
           <Button type="submit" form="ua-form" disabled={busy}>
-            {busy ? 'Aanmaken…' : 'Account aanmaken'}
+            {busy ? t('employees.account.creating') : t('employees.account.create')}
           </Button>
         </>
       }
     >
       <form id="ua-form" onSubmit={handleSubmit} noValidate>
         <ValidationSummary message={error} />
-        <FormField label="E-mailadres" htmlFor="ua-email" required hint="Hiermee meldt de gebruiker zich aan.">
+        <FormField label={t('employees.account.email')} htmlFor="ua-email" required hint={t('employees.account.emailHint')}>
           <input id="ua-email" type="email" value={accountEmail} onChange={(e) => setAccountEmail(e.target.value)} maxLength={250} disabled={busy} />
         </FormField>
-        <FormField label="Rollen" htmlFor="ua-roles" hint="Voorgestelde rollen komen uit de functie→rol-koppelingen; pas gerust aan.">
+        <FormField label={t('employees.account.roles')} htmlFor="ua-roles" hint={t('employees.account.rolesHint')}>
           <div>
             {roles.map((role) => {
               const suggestion = suggested.find((s) => s.roleId === role.id)
@@ -148,11 +146,11 @@ export function CreateUserAccountDialog({ employeeId, firstName, lastName, email
                     disabled={busy}
                   />
                   {role.name}
-                  {suggestion && <Badge tone="info">voorgesteld via {suggestion.viaFunction}</Badge>}
+                  {suggestion && <Badge tone="info">{t('employees.account.suggestedVia', { function: suggestion.viaFunction })}</Badge>}
                 </label>
               )
             })}
-            {roles.length === 0 && <span>Geen rollen beschikbaar.</span>}
+            {roles.length === 0 && <span>{t('employees.account.noRoles')}</span>}
           </div>
         </FormField>
       </form>

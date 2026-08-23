@@ -3,6 +3,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { ApiError } from '../../../api/apiClient'
+import { useLocale } from '../../../i18n/localeContext'
 import type { LookupApi } from '../api/lookupApi'
 import type { LookupInput, LookupItem } from '../types'
 import type { LookupResourceConfig } from '../lookupRegistry'
@@ -23,6 +24,7 @@ interface FormErrors {
 }
 
 export function LookupFormDialog({ config, api, item, onSaved, onClose }: LookupFormDialogProps) {
+  const { t } = useLocale()
   const isEdit = Boolean(item)
   const [code, setCode] = useState(item?.code ?? '')
   const [name, setName] = useState(item?.name ?? '')
@@ -34,10 +36,10 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
 
   function validate(): FormErrors {
     const next: FormErrors = {}
-    if (!code.trim()) next.code = 'Code is verplicht.'
-    else if (code.trim().length > 50) next.code = 'Code mag maximaal 50 tekens bevatten.'
-    if (!name.trim()) next.name = 'Naam is verplicht.'
-    else if (name.trim().length > 150) next.name = 'Naam mag maximaal 150 tekens bevatten.'
+    if (!code.trim()) next.code = t('masterData.form.codeRequired')
+    else if (code.trim().length > 50) next.code = t('masterData.form.codeMax')
+    if (!name.trim()) next.name = t('masterData.form.nameRequired')
+    else if (name.trim().length > 150) next.name = t('masterData.form.nameMax')
     return next
   }
 
@@ -64,9 +66,9 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
       onSaved(saved, !item)
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        setErrors({ code: `Er bestaat al een item met code '${input.code}'.` })
+        setErrors({ code: t('masterData.errors.duplicateCode', { code: input.code }) })
       } else {
-        setErrors({ form: 'Opslaan is mislukt. Probeer het opnieuw.' })
+        setErrors({ form: t('masterData.errors.saveFailed') })
       }
       setIsSubmitting(false)
     }
@@ -74,16 +76,16 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
 
   return (
     <Modal
-      title={isEdit ? `${config.singular} bewerken` : `Nieuwe ${config.singular}`}
+      title={isEdit ? t('masterData.form.editTitle', { singular: t(config.singular) }) : t('masterData.form.newTitle', { singular: t(config.singular) })}
       onClose={onClose}
       busy={isSubmitting}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="lookup-form" disabled={isSubmitting}>
-            {isSubmitting ? 'Opslaan...' : 'Opslaan'}
+            {isSubmitting ? t('masterData.form.saving') : t('ui.actions.save')}
           </Button>
         </>
       }
@@ -94,7 +96,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
             {errors.form}
           </p>
         )}
-        <FormField label="Code" htmlFor="lookup-code" error={errors.code} hint={config.codeHint} required>
+        <FormField label={t('masterData.form.codeLabel')} htmlFor="lookup-code" error={errors.code} hint={config.codeHint ? t(config.codeHint) : undefined} required>
           <input
             id="lookup-code"
             value={code}
@@ -104,7 +106,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
             autoFocus
           />
         </FormField>
-        <FormField label="Naam" htmlFor="lookup-name" error={errors.name} required>
+        <FormField label={t('masterData.form.nameLabel')} htmlFor="lookup-name" error={errors.name} required>
           <input
             id="lookup-name"
             value={name}
@@ -113,7 +115,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
             maxLength={150}
           />
         </FormField>
-        <FormField label="Omschrijving" htmlFor="lookup-description">
+        <FormField label={t('masterData.form.descriptionLabel')} htmlFor="lookup-description">
           <textarea
             id="lookup-description"
             value={description}
@@ -122,7 +124,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
             maxLength={1000}
           />
         </FormField>
-        <FormField label="Volgorde" htmlFor="lookup-sort" hint="Bepaalt de volgorde in keuzelijsten.">
+        <FormField label={t('masterData.form.sortLabel')} htmlFor="lookup-sort" hint={t('masterData.form.sortHint')}>
           <input
             id="lookup-sort"
             type="number"
@@ -132,7 +134,7 @@ export function LookupFormDialog({ config, api, item, onSaved, onClose }: Lookup
         </FormField>
         <label className="lookup-form-checkbox">
           <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} />
-          Actief
+          {t('masterData.form.activeLabel')}
         </label>
       </form>
     </Modal>

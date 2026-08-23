@@ -15,19 +15,20 @@ export type NotificationCategory =
   | 'Approval'
 export type NotificationSeverity = 'Info' | 'Warning' | 'Critical' | 'Success'
 
+/** Translation keys per category; render sites resolve them via t(). */
 export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> = {
-  General: 'Algemeen',
-  Orders: 'Opdrachten',
-  Planning: 'Planning',
-  Execution: 'Uitvoering',
-  Hr: 'HR',
-  System: 'Systeem',
-  Inventory: 'Voorraad',
-  Task: 'Taken',
-  CustomerPortal: 'Klantportaal',
-  Fleet: 'Wagenpark',
-  Document: 'Documenten',
-  Approval: 'Goedkeuringen',
+  General: 'notificationCenter.categories.General',
+  Orders: 'notificationCenter.categories.Orders',
+  Planning: 'notificationCenter.categories.Planning',
+  Execution: 'notificationCenter.categories.Execution',
+  Hr: 'notificationCenter.categories.Hr',
+  System: 'notificationCenter.categories.System',
+  Inventory: 'notificationCenter.categories.Inventory',
+  Task: 'notificationCenter.categories.Task',
+  CustomerPortal: 'notificationCenter.categories.CustomerPortal',
+  Fleet: 'notificationCenter.categories.Fleet',
+  Document: 'notificationCenter.categories.Document',
+  Approval: 'notificationCenter.categories.Approval',
 }
 
 export const NOTIFICATION_CATEGORIES: NotificationCategory[] = [

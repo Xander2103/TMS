@@ -26,15 +26,16 @@ export interface DriverDocument {
   fileAvailable: boolean
 }
 
+/** Translation keys per document type; render sites resolve them via t(). */
 export const DRIVER_DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  Registration: 'Inschrijving',
-  Insurance: 'Verzekering',
-  TechnicalInspection: 'Technische keuring',
-  Conformity: 'Gelijkvormigheid',
-  CraneInspection: 'Kraankeuring',
-  RefrigerationCertificate: 'Koelcertificaat',
-  AdrCertificate: 'ADR-certificaat',
-  Other: 'Ander document',
+  Registration: 'driverApp.documentType.Registration',
+  Insurance: 'driverApp.documentType.Insurance',
+  TechnicalInspection: 'driverApp.documentType.TechnicalInspection',
+  Conformity: 'driverApp.documentType.Conformity',
+  CraneInspection: 'driverApp.documentType.CraneInspection',
+  RefrigerationCertificate: 'driverApp.documentType.RefrigerationCertificate',
+  AdrCertificate: 'driverApp.documentType.AdrCertificate',
+  Other: 'driverApp.documentType.Other',
 }
 
 export interface DriverIncidentInput {
@@ -49,18 +50,20 @@ export interface DriverIncidentInput {
   clientRequestId?: string
 }
 
+/** `label` values are translation keys; render sites resolve them via t(). */
 export const DRIVER_INCIDENT_TYPES: { value: string; label: string }[] = [
-  { value: 'VehicleBreakdown', label: 'Voertuigpech' },
-  { value: 'Accident', label: 'Ongeval' },
-  { value: 'Damage', label: 'Schade' },
-  { value: 'Delay', label: 'Vertraging' },
-  { value: 'Theft', label: 'Diefstal' },
-  { value: 'Other', label: 'Anders…' },
+  { value: 'VehicleBreakdown', label: 'driverApp.incidentType.VehicleBreakdown' },
+  { value: 'Accident', label: 'driverApp.incidentType.Accident' },
+  { value: 'Damage', label: 'driverApp.incidentType.Damage' },
+  { value: 'Delay', label: 'driverApp.incidentType.Delay' },
+  { value: 'Theft', label: 'driverApp.incidentType.Theft' },
+  { value: 'Other', label: 'driverApp.incidentType.Other' },
 ]
 
+/** `label` values are translation keys; render sites resolve them via t(). */
 export const DRIVER_INCIDENT_SEVERITIES: { value: string; label: string }[] = [
-  { value: 'Low', label: 'Laag' },
-  { value: 'Medium', label: 'Gemiddeld' },
-  { value: 'High', label: 'Hoog' },
-  { value: 'Critical', label: 'Kritiek' },
+  { value: 'Low', label: 'driverApp.incidentSeverity.Low' },
+  { value: 'Medium', label: 'driverApp.incidentSeverity.Medium' },
+  { value: 'High', label: 'driverApp.incidentSeverity.High' },
+  { value: 'Critical', label: 'driverApp.incidentSeverity.Critical' },
 ]

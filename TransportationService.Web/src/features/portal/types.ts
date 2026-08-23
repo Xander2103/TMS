@@ -45,13 +45,14 @@ export interface MyQualification {
   hasDocument: boolean
 }
 
+/** Translation keys per status; render sites resolve them via t(). */
 export const MY_QUALIFICATION_STATUS_LABELS: Record<MyQualificationStatus, string> = {
-  Pending: 'In afwachting',
-  Valid: 'Geldig',
-  ExpiringSoon: 'Vervalt binnenkort',
-  Expired: 'Vervallen',
-  Rejected: 'Afgekeurd',
-  Suspended: 'Geschorst',
+  Pending: 'portalHome.qualificationStatus.Pending',
+  Valid: 'portalHome.qualificationStatus.Valid',
+  ExpiringSoon: 'portalHome.qualificationStatus.ExpiringSoon',
+  Expired: 'portalHome.qualificationStatus.Expired',
+  Rejected: 'portalHome.qualificationStatus.Rejected',
+  Suspended: 'portalHome.qualificationStatus.Suspended',
 }
 
 export const MY_QUALIFICATION_STATUS_TONE: Record<

@@ -6,6 +6,7 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import { formatFileSize } from '../../invoices/utils/fileSize'
@@ -31,6 +32,7 @@ interface EmployeeDocumentsTabProps {
 
 export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) {
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canCreate = hasPermission('employee_documents.create')
   const canEdit = hasPermission('employee_documents.edit')
@@ -66,18 +68,22 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
   async function handleUpload(file: File) {
     setUploading(true)
     try {
-      await uploadEmployeeDocument(employeeId, {
-        file,
-        category: uploadCategory,
-        expiryDate: uploadExpiry || null,
-        notes: uploadNotes.trim() || null,
-      })
-      toast.showSuccess('Document opgeslagen.')
+      await uploadEmployeeDocument(
+        employeeId,
+        {
+          file,
+          category: uploadCategory,
+          expiryDate: uploadExpiry || null,
+          notes: uploadNotes.trim() || null,
+        },
+        t,
+      )
+      toast.showSuccess(t('employees.documents.saved'))
       setUploadExpiry('')
       setUploadNotes('')
       void reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'Uploaden is mislukt.').message)
+      toast.showError(describeApiError(err, t('employees.errors.uploadFailed')).message)
     } finally {
       setUploading(false)
     }
@@ -86,11 +92,11 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
   async function handleReplace(doc: EmployeeDocument, file: File) {
     setBusyId(doc.id)
     try {
-      await replaceEmployeeDocumentFile(employeeId, doc.id, file)
-      toast.showSuccess('Bestand vervangen.')
+      await replaceEmployeeDocumentFile(employeeId, doc.id, file, t)
+      toast.showSuccess(t('employees.documents.fileReplaced'))
       void reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'Vervangen is mislukt.').message)
+      toast.showError(describeApiError(err, t('employees.errors.replaceFailed')).message)
     } finally {
       setBusyId(null)
     }
@@ -100,29 +106,29 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
     setBusyId(doc.id)
     try {
       await setEmployeeDocumentArchived(employeeId, doc.id, !doc.isArchived)
-      toast.showSuccess(doc.isArchived ? 'Document hersteld.' : 'Document gearchiveerd.')
+      toast.showSuccess(doc.isArchived ? t('employees.documents.restored') : t('employees.documents.archived'))
       void reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'Actie is mislukt.').message)
+      toast.showError(describeApiError(err, t('employees.documents.actionFailed')).message)
     } finally {
       setBusyId(null)
     }
   }
 
-  if (isLoading) return <LoadingState message="Documenten laden..." />
+  if (isLoading) return <LoadingState message={t('employees.documents.loading')} />
   if (error) return <ErrorState message={error} />
 
   return (
     <div className="employee-documents-tab">
       {!canViewSensitive && (
         <p className="employee-documents-info" role="note">
-          Gevoelige documenten (identiteitskaart, medisch, contract) zijn verborgen; je hebt hiervoor extra rechten nodig.
+          {t('employees.documents.sensitiveHidden')}
         </p>
       )}
 
       {canCreate && (
         <div className="employee-documents-upload">
-          <FormField label="Categorie" htmlFor="ed-upload-category">
+          <FormField label={t('employees.documents.uploadCategory')} htmlFor="ed-upload-category">
             <select
               id="ed-upload-category"
               value={uploadCategory}
@@ -130,15 +136,15 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
             >
               {EMPLOYEE_DOCUMENT_CATEGORY_ORDER.map((category) => (
                 <option key={category} value={category}>
-                  {EMPLOYEE_DOCUMENT_CATEGORY_LABELS[category]}
+                  {t(EMPLOYEE_DOCUMENT_CATEGORY_LABELS[category])}
                 </option>
               ))}
             </select>
           </FormField>
-          <FormField label="Vervaldatum" htmlFor="ed-upload-expiry" hint="Optioneel.">
+          <FormField label={t('employees.documents.uploadExpiry')} htmlFor="ed-upload-expiry" hint={t('employees.documents.uploadExpiryHint')}>
             <input id="ed-upload-expiry" type="date" value={uploadExpiry} onChange={(e) => setUploadExpiry(e.target.value)} />
           </FormField>
-          <FormField label="Notities" htmlFor="ed-upload-notes">
+          <FormField label={t('employees.documents.uploadNotes')} htmlFor="ed-upload-notes">
             <input id="ed-upload-notes" value={uploadNotes} onChange={(e) => setUploadNotes(e.target.value)} maxLength={500} />
           </FormField>
           <div className="employee-documents-upload-actions">
@@ -166,10 +172,10 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
               }}
             />
             <Button variant="secondary" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-              {uploading ? 'Bezig…' : 'Bestand kiezen'}
+              {uploading ? t('employees.documents.busy') : t('employees.documents.chooseFile')}
             </Button>
             <Button variant="secondary" disabled={uploading} onClick={() => cameraInputRef.current?.click()}>
-              Foto maken
+              {t('employees.documents.takePhoto')}
             </Button>
           </div>
         </div>
@@ -178,16 +184,16 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
       <div className="employee-documents-toolbar">
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
-          Gearchiveerde documenten tonen
+          {t('employees.documents.showArchived')}
         </label>
       </div>
 
       {grouped.length === 0 ? (
-        <p className="placeholder-text">Er zijn nog geen documenten geregistreerd.</p>
+        <p className="placeholder-text">{t('employees.documents.empty')}</p>
       ) : (
         grouped.map(({ category, docs }) => (
           <section key={category} className="employee-documents-group">
-            <h3 className="employee-documents-group-title">{EMPLOYEE_DOCUMENT_CATEGORY_LABELS[category]}</h3>
+            <h3 className="employee-documents-group-title">{t(EMPLOYEE_DOCUMENT_CATEGORY_LABELS[category])}</h3>
             <ul className="employee-documents-list">
               {docs.map((doc) => {
                 const expiry = classifyExpiry(doc.expiryDate)
@@ -197,29 +203,29 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
                       <span className="employee-document-name">{doc.customLabel || doc.fileName}</span>
                       <span className="employee-document-meta">
                         {formatFileSize(doc.sizeBytes)}
-                        {doc.expiryDate && <> · Vervalt {doc.expiryDate}</>}
+                        {doc.expiryDate && <> · {t('employees.documents.expiresOn', { date: doc.expiryDate })}</>}
                       </span>
                     </div>
                     <div className="employee-document-badges">
-                      {doc.isArchived && <Badge tone="neutral">Gearchiveerd</Badge>}
-                      {expiry === 'expired' && <Badge tone="danger">Verlopen</Badge>}
-                      {expiry === 'expiring' && <Badge tone="warning">Verloopt binnenkort</Badge>}
+                      {doc.isArchived && <Badge tone="neutral">{t('employees.documents.archivedBadge')}</Badge>}
+                      {expiry === 'expired' && <Badge tone="danger">{t('employees.documents.expiredBadge')}</Badge>}
+                      {expiry === 'expiring' && <Badge tone="warning">{t('employees.documents.expiringBadge')}</Badge>}
                     </div>
                     <div className="employee-document-actions">
                       <button
                         type="button"
                         className="employee-document-link"
                         onClick={() =>
-                          downloadEmployeeDocument(employeeId, doc.id, doc.fileName).catch(() =>
-                            toast.showError('Download mislukt.'),
+                          downloadEmployeeDocument(employeeId, doc.id, doc.fileName, t).catch(() =>
+                            toast.showError(t('employees.errors.downloadFailed')),
                           )
                         }
                       >
-                        Download
+                        {t('employees.documents.download')}
                       </button>
                       {canEdit && (
                         <label className={busyId === doc.id ? 'employee-document-link is-busy' : 'employee-document-link'}>
-                          {busyId === doc.id ? 'Bezig…' : 'Vervangen'}
+                          {busyId === doc.id ? t('employees.documents.busy') : t('employees.documents.replace')}
                           <input
                             type="file"
                             accept={EMPLOYEE_DOCUMENT_ACCEPT}
@@ -240,7 +246,7 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
                           disabled={busyId !== null}
                           onClick={() => void handleArchive(doc)}
                         >
-                          {doc.isArchived ? 'Herstellen' : 'Archiveren'}
+                          {doc.isArchived ? t('employees.documents.restore') : t('employees.documents.archive')}
                         </button>
                       )}
                       {canDelete && (
@@ -250,7 +256,7 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
                           disabled={busyId !== null}
                           onClick={() => setDeleteTarget(doc)}
                         >
-                          Verwijderen
+                          {t('employees.documents.remove')}
                         </button>
                       )}
                     </div>
@@ -264,20 +270,20 @@ export function EmployeeDocumentsTab({ employeeId }: EmployeeDocumentsTabProps) 
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Document verwijderen"
-          message={`'${deleteTarget.customLabel || deleteTarget.fileName}' definitief verwijderen? Dit kan niet ongedaan worden gemaakt.`}
-          confirmLabel="Verwijderen"
+          title={t('employees.documents.deleteTitle')}
+          message={t('employees.documents.deleteMessage', { name: deleteTarget.customLabel || deleteTarget.fileName })}
+          confirmLabel={t('employees.documents.deleteConfirm')}
           destructive
           busy={busyId === deleteTarget.id}
           onConfirm={async () => {
             setBusyId(deleteTarget.id)
             try {
               await deleteEmployeeDocument(employeeId, deleteTarget.id)
-              toast.showSuccess('Document verwijderd.')
+              toast.showSuccess(t('employees.documents.deleted'))
               setDeleteTarget(null)
               void reload()
             } catch (err) {
-              toast.showError(describeApiError(err, 'Verwijderen is mislukt.').message)
+              toast.showError(describeApiError(err, t('employees.documents.deleteFailed')).message)
             } finally {
               setBusyId(null)
             }

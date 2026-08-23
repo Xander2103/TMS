@@ -1,10 +1,11 @@
 export type EmploymentStatus = 'Active' | 'OnLeave' | 'Suspended' | 'Terminated'
 
+/** i18n-keys (employees.status.*) — render via t(EMPLOYMENT_STATUS_LABELS[status]). */
 export const EMPLOYMENT_STATUS_LABELS: Record<EmploymentStatus, string> = {
-  Active: 'In dienst',
-  OnLeave: 'Met verlof',
-  Suspended: 'Geschorst',
-  Terminated: 'Uit dienst',
+  Active: 'employees.status.Active',
+  OnLeave: 'employees.status.OnLeave',
+  Suspended: 'employees.status.Suspended',
+  Terminated: 'employees.status.Terminated',
 }
 
 export const EMPLOYMENT_STATUS_TONES: Record<EmploymentStatus, 'success' | 'warning' | 'danger' | 'neutral' | 'info'> = {
@@ -23,14 +24,15 @@ export type CivilStatus =
   | 'Single'
   | 'Other'
 
+/** i18n-keys (employees.civilStatus.*) — render via t(CIVIL_STATUS_LABELS[status]). */
 export const CIVIL_STATUS_LABELS: Record<CivilStatus, string> = {
-  Married: 'Gehuwd',
-  Unmarried: 'Ongehuwd',
-  Widowed: 'Weduwe/weduwnaar',
-  Divorced: 'Gescheiden',
-  LegallyCohabiting: 'Wettelijk samenwonend',
-  Single: 'Alleenstaand',
-  Other: 'Andere',
+  Married: 'employees.civilStatus.Married',
+  Unmarried: 'employees.civilStatus.Unmarried',
+  Widowed: 'employees.civilStatus.Widowed',
+  Divorced: 'employees.civilStatus.Divorced',
+  LegallyCohabiting: 'employees.civilStatus.LegallyCohabiting',
+  Single: 'employees.civilStatus.Single',
+  Other: 'employees.civilStatus.Other',
 }
 
 /** Emergency contact as returned in EmployeeDetail (EmployeeEmergencyContactDto). */
@@ -100,11 +102,12 @@ export type EmployeeSortOption =
 
 export type DriverAvailabilityStatus = 'Available' | 'Unavailable' | 'OnLeave' | 'OnTrip'
 
+/** i18n-keys (employees.driverAvailability.*) — render via t(DRIVER_AVAILABILITY_LABELS[s]). */
 export const DRIVER_AVAILABILITY_LABELS: Record<DriverAvailabilityStatus, string> = {
-  Available: 'Beschikbaar',
-  Unavailable: 'Niet beschikbaar',
-  OnLeave: 'Afwezig',
-  OnTrip: 'Onderweg',
+  Available: 'employees.driverAvailability.Available',
+  Unavailable: 'employees.driverAvailability.Unavailable',
+  OnLeave: 'employees.driverAvailability.OnLeave',
+  OnTrip: 'employees.driverAvailability.OnTrip',
 }
 
 export interface EmployeeDetail {

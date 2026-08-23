@@ -4,9 +4,10 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { createLocation } from '../api/locationsApi'
-import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationOption, type LocationType } from '../types'
+import { LOCATION_TYPE_LABEL_KEYS, LOCATION_TYPES, type LocationOption, type LocationType } from '../types'
 
 interface LocationQuickCreateDialogProps {
   customerId: string
@@ -20,6 +21,7 @@ interface LocationQuickCreateDialogProps {
  * same POST /api/locations use case as the full form — no separate simplified entity.
  */
 export function LocationQuickCreateDialog({ customerId, initialName, onClose }: LocationQuickCreateDialogProps) {
+  const { t } = useLocale()
   const [code, setCode] = useState('')
   const [name, setName] = useState(initialName ?? '')
   const [type, setType] = useState<LocationType>('CustomerLocation')
@@ -37,7 +39,7 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
     event.preventDefault()
     // Code is optional since the master-data wave: blank codes are generated server-side.
     const nextClientErrors: { code?: string; name?: string } = {}
-    if (!name.trim()) nextClientErrors.name = 'Naam is verplicht.'
+    if (!name.trim()) nextClientErrors.name = t('locations.form.nameRequired')
     setClientErrors(nextClientErrors)
     if (nextClientErrors.name) return
 
@@ -108,7 +110,7 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
         isDefaultBillingLocation: created.isDefaultBillingLocation,
       })
     } catch (err) {
-      const described = describeApiError(err, 'Locatie kon niet worden aangemaakt.')
+      const described = describeApiError(err, t('locations.new.createFailed'))
       setError(described.message)
       setFieldErrors(described.fieldErrors)
       setSaving(false)
@@ -117,55 +119,59 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
 
   return (
     <Modal
-      title="Nieuwe klantlocatie"
+      title={t('locations.quickCreate.title')}
       onClose={() => onClose(null)}
       busy={saving}
       footer={
         <>
           <Button variant="secondary" onClick={() => onClose(null)} disabled={saving}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="location-quick-create" disabled={saving}>
-            {saving ? 'Aanmaken…' : 'Locatie aanmaken'}
+            {saving ? t('locations.quickCreate.creating') : t('locations.quickCreate.create')}
           </Button>
         </>
       }
     >
       <form id="location-quick-create" onSubmit={handleSubmit} noValidate>
-        <ValidationSummary message={error} fieldErrors={fieldErrors} fieldLabels={{ countryCode: 'Land', code: 'Code' }} />
+        <ValidationSummary
+          message={error}
+          fieldErrors={fieldErrors}
+          fieldLabels={{ countryCode: t('locations.form.fields.country'), code: t('locations.form.fields.code') }}
+        />
         <FormField
-          label="Code"
+          label={t('locations.form.fields.code')}
           htmlFor="qc-code"
-          hint="Leeg laten voor automatische code."
+          hint={t('locations.form.hints.codeAuto')}
           error={clientErrors.code ?? getFieldError(fieldErrors, 'code')}
         >
           <input id="qc-code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={40} disabled={saving} />
         </FormField>
-        <FormField label="Naam" htmlFor="qc-name" required error={clientErrors.name}>
+        <FormField label={t('locations.form.fields.name')} htmlFor="qc-name" required error={clientErrors.name}>
           <input id="qc-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} disabled={saving} />
         </FormField>
-        <FormField label="Type" htmlFor="qc-type">
+        <FormField label={t('locations.form.fields.type')} htmlFor="qc-type">
           <select id="qc-type" value={type} onChange={(e) => setType(e.target.value as LocationType)} disabled={saving}>
-            {LOCATION_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {LOCATION_TYPE_LABELS[t]}
+            {LOCATION_TYPES.map((locationType) => (
+              <option key={locationType} value={locationType}>
+                {t(LOCATION_TYPE_LABEL_KEYS[locationType])}
               </option>
             ))}
           </select>
         </FormField>
-        <FormField label="Straat" htmlFor="qc-street">
+        <FormField label={t('locations.form.fields.street')} htmlFor="qc-street">
           <input id="qc-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} disabled={saving} />
         </FormField>
-        <FormField label="Nummer" htmlFor="qc-house">
+        <FormField label={t('locations.form.fields.houseNumber')} htmlFor="qc-house">
           <input id="qc-house" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} maxLength={20} disabled={saving} />
         </FormField>
-        <FormField label="Postcode" htmlFor="qc-postal">
+        <FormField label={t('locations.form.fields.postalCode')} htmlFor="qc-postal">
           <input id="qc-postal" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} maxLength={20} disabled={saving} />
         </FormField>
-        <FormField label="Plaats" htmlFor="qc-city">
+        <FormField label={t('locations.quickCreate.cityLabel')} htmlFor="qc-city">
           <input id="qc-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} disabled={saving} />
         </FormField>
-        <FormField label="Land" htmlFor="qc-country" error={getFieldError(fieldErrors, 'countryCode')}>
+        <FormField label={t('locations.form.fields.country')} htmlFor="qc-country" error={getFieldError(fieldErrors, 'countryCode')}>
           <CountryCombobox id="qc-country" value={countryCode} onChange={setCountryCode} disabled={saving} />
         </FormField>
       </form>

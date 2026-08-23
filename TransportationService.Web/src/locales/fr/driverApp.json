@@ -1,0 +1,105 @@
+{
+  "layout": {
+    "title": "Chauffeur",
+    "online": "En ligne",
+    "offline": "Hors ligne",
+    "navLabel": "Navigation chauffeur",
+    "tabToday": "Aujourd'hui",
+    "tabTrips": "Tournées",
+    "tabIncident": "Incident",
+    "tabDocuments": "Documents",
+    "tabMessages": "Messages"
+  },
+  "home": {
+    "loadFailedNoCache": "Le chargement du tableau de bord a échoué et aucune copie hors ligne n'est disponible.",
+    "loading": "Chargement…",
+    "cachedNotice": "Copie hors ligne — sera actualisée dès que la connexion sera rétablie.",
+    "currentTrip": "Tournée en cours",
+    "vehicle": "Véhicule",
+    "progress": "Progression",
+    "progressStops": "{completed}/{total} arrêts",
+    "nextStop": "Prochain arrêt",
+    "eta": "ETA",
+    "openTrip": "Ouvrir la tournée",
+    "noActiveTrip": "Aucune tournée active.",
+    "nextTripAt": "Prochaine : {tripNumber} le {date}.",
+    "nothingPlanned": "Rien n'est prévu.",
+    "attentionTitle": "Points d'attention",
+    "openStops": "Arrêts en attente",
+    "unresolvedExceptions": "Écarts non résolus",
+    "activeIncidents": "Incidents actifs",
+    "tripsToday": "Tournées aujourd'hui",
+    "nextTrip": "Prochaine tournée"
+  },
+  "etaSource": {
+    "Heuristic": "estimation",
+    "Provider": "fournisseur d'itinéraires",
+    "DispatcherOverride": "manuel"
+  },
+  "tripStatus": {
+    "Draft": "Brouillon",
+    "Planned": "Prévue",
+    "InProgress": "En route",
+    "Completed": "Terminée",
+    "Cancelled": "Annulée"
+  },
+  "documents": {
+    "title": "Documents",
+    "loading": "Chargement…",
+    "loadFailed": "Le chargement des documents a échoué.",
+    "empty": "Aucun document pour vos tournées actives.",
+    "numberLabel": "Numéro",
+    "expires": "Échéance {date}",
+    "download": "Télécharger",
+    "noFile": "Aucun fichier"
+  },
+  "documentType": {
+    "Registration": "Immatriculation",
+    "Insurance": "Assurance",
+    "TechnicalInspection": "Contrôle technique",
+    "Conformity": "Conformité",
+    "CraneInspection": "Contrôle de la grue",
+    "RefrigerationCertificate": "Certificat frigorifique",
+    "AdrCertificate": "Certificat ADR",
+    "Other": "Autre document"
+  },
+  "incidents": {
+    "title": "Signaler un incident",
+    "titleField": "Titre",
+    "descriptionField": "Que s'est-il passé ?",
+    "typeField": "Type",
+    "customTypeField": "Décrivez le type",
+    "severityField": "Gravité",
+    "tripField": "Tournée (facultatif)",
+    "noTrip": "Aucune tournée",
+    "submit": "Signaler l'incident",
+    "submitting": "Envoi…",
+    "reported": "Incident signalé.",
+    "reportFailed": "Le signalement a échoué.",
+    "myIncidents": "Mes incidents",
+    "empty": "Aucun incident signalé pour le moment."
+  },
+  "incidentType": {
+    "VehicleBreakdown": "Panne de véhicule",
+    "Accident": "Accident",
+    "Damage": "Dommage",
+    "Delay": "Retard",
+    "Theft": "Vol",
+    "Other": "Autre…"
+  },
+  "incidentSeverity": {
+    "Low": "Faible",
+    "Medium": "Moyenne",
+    "High": "Élevée",
+    "Critical": "Critique"
+  },
+  "incidentStatus": {
+    "New": "Nouveau",
+    "InProgress": "En traitement",
+    "Resolved": "Traité",
+    "Cancelled": "Annulé"
+  },
+  "offline": {
+    "queued": "Pas de connexion — l'action est en file d'attente et sera synchronisée automatiquement."
+  }
+}

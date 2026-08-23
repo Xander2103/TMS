@@ -167,14 +167,14 @@ describe('contractEndBadge', () => {
 
   it('warns when the end date is within 30 days (inclusive)', () => {
     expect(contractEndBadge({ employmentEndDate: '2026-08-06', isActive: true }, today))
-      .toEqual({ tone: 'warning', label: 'Uit dienst over 0 d' })
+      .toEqual({ tone: 'warning', key: 'employees.list.endsInDays', params: { days: 0 } })
     expect(contractEndBadge({ employmentEndDate: '2026-09-05', isActive: true }, today))
-      .toEqual({ tone: 'warning', label: 'Uit dienst over 30 d' })
+      .toEqual({ tone: 'warning', key: 'employees.list.endsInDays', params: { days: 30 } })
   })
 
   it('flags an overdue end date on a still-active employee as danger', () => {
     expect(contractEndBadge({ employmentEndDate: '2026-08-01', isActive: true }, today))
-      .toEqual({ tone: 'danger', label: 'Einddatum verstreken' })
+      .toEqual({ tone: 'danger', key: 'employees.list.endDatePassed' })
   })
 
   it('returns null for an overdue end date once the employee is no longer active', () => {

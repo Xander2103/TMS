@@ -2,16 +2,18 @@ import { useState } from 'react'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
+import { useLocale } from '../../../i18n/localeContext'
 import type { AbsenceTypeCode, LeaveBalanceType, LeaveType } from '../types'
 import type { SaveLeaveTypeInput } from '../api/leaveBalanceApi'
 
-const ABSENCE_TYPES: { value: AbsenceTypeCode; label: string }[] = [
-  { value: 'Vacation', label: 'Verlof' },
-  { value: 'PersonalLeave', label: 'Persoonlijk verlof' },
-  { value: 'Sick', label: 'Ziekte' },
-  { value: 'Unpaid', label: 'Onbetaald' },
-  { value: 'Training', label: 'Opleiding' },
-  { value: 'Other', label: 'Andere' },
+/** Vertaalsleutels per afwezigheidssoort; renderen als t(key). */
+const ABSENCE_TYPES: { value: AbsenceTypeCode; labelKey: string }[] = [
+  { value: 'Vacation', labelKey: 'leave.absenceType.Vacation' },
+  { value: 'PersonalLeave', labelKey: 'leave.absenceType.PersonalLeave' },
+  { value: 'Sick', labelKey: 'leave.absenceType.Sick' },
+  { value: 'Unpaid', labelKey: 'leave.absenceType.Unpaid' },
+  { value: 'Training', labelKey: 'leave.absenceType.Training' },
+  { value: 'Other', labelKey: 'leave.absenceType.Other' },
 ]
 
 interface LeaveTypeDialogProps {
@@ -23,6 +25,7 @@ interface LeaveTypeDialogProps {
 }
 
 export function LeaveTypeDialog({ initial, balanceTypes, busy, onSubmit, onClose }: LeaveTypeDialogProps) {
+  const { t } = useLocale()
   const [f, setF] = useState<SaveLeaveTypeInput>({
     code: initial?.code ?? '',
     name: initial?.name ?? '',
@@ -50,55 +53,55 @@ export function LeaveTypeDialog({ initial, balanceTypes, busy, onSubmit, onClose
 
   return (
     <Modal
-      title={initial ? `Verloftype bewerken — ${initial.name}` : 'Nieuw verloftype'}
+      title={initial ? t('leave.leaveTypeDialog.editTitle', { name: initial.name }) : t('leave.leaveTypeDialog.newTitle')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={busy}>Annuleren</Button>
+          <Button variant="secondary" onClick={onClose} disabled={busy}>{t('ui.actions.cancel')}</Button>
           <Button
             onClick={() => onSubmit({ ...f, code: f.code.trim(), name: f.name.trim(), balanceTypeId: f.deductsFromBalance ? f.balanceTypeId : null })}
             disabled={busy}
           >
-            {busy ? 'Opslaan…' : 'Opslaan'}
+            {busy ? t('leave.saving') : t('ui.actions.save')}
           </Button>
         </>
       }
     >
-      <FormField label="Code" htmlFor="lt-code" required>
+      <FormField label={t('leave.leaveTypeDialog.code')} htmlFor="lt-code" required>
         <input id="lt-code" value={f.code} onChange={(e) => set('code', e.target.value)} maxLength={30} disabled={!!initial} />
       </FormField>
-      <FormField label="Naam" htmlFor="lt-name" required>
+      <FormField label={t('leave.leaveTypeDialog.name')} htmlFor="lt-name" required>
         <input id="lt-name" value={f.name} onChange={(e) => set('name', e.target.value)} maxLength={100} />
       </FormField>
-      <FormField label="Afwezigheidssoort (planning/historiek)" htmlFor="lt-absencetype">
+      <FormField label={t('leave.leaveTypeDialog.absenceType')} htmlFor="lt-absencetype">
         <select id="lt-absencetype" value={f.absenceType} onChange={(e) => set('absenceType', e.target.value as AbsenceTypeCode)}>
-          {ABSENCE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          {ABSENCE_TYPES.map((type) => <option key={type.value} value={type.value}>{t(type.labelKey)}</option>)}
         </select>
       </FormField>
-      {check('Boekt saldo af', 'deductsFromBalance')}
+      {check(t('leave.leaveTypeDialog.deducts'), 'deductsFromBalance')}
       {f.deductsFromBalance && (
-        <FormField label="Saldotype" htmlFor="lt-balance" required>
+        <FormField label={t('leave.leaveTypeDialog.balanceType')} htmlFor="lt-balance" required>
           <select id="lt-balance" value={f.balanceTypeId ?? ''} onChange={(e) => set('balanceTypeId', e.target.value || null)}>
-            <option value="">— Kies —</option>
+            <option value="">{t('leave.leaveTypeDialog.choose')}</option>
             {balanceTypes.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         </FormField>
       )}
-      <FormField label="Kleur (planning)" htmlFor="lt-colour">
+      <FormField label={t('leave.leaveTypeDialog.colour')} htmlFor="lt-colour">
         <input id="lt-colour" type="color" value={f.colour ?? '#2563eb'} onChange={(e) => set('colour', e.target.value)} />
       </FormField>
-      <FormField label="Volgorde" htmlFor="lt-sort">
+      <FormField label={t('leave.leaveTypeDialog.order')} htmlFor="lt-sort">
         <input id="lt-sort" type="number" value={f.sortOrder} onChange={(e) => set('sortOrder', Number(e.target.value) || 0)} />
       </FormField>
       <div className="lb-checkbox-grid">
-        {check('Actief', 'isActive')}
-        {check('Betaald', 'isPaid')}
-        {check('Vereist goedkeuring', 'requiresApproval')}
-        {check('Halve dagen toegestaan', 'allowsHalfDays')}
-        {check('Reden verplicht', 'requiresReason')}
-        {check('Bijlage verplicht', 'requiresAttachment')}
-        {check('Zichtbaar in self-service', 'visibleInSelfService')}
+        {check(t('leave.leaveTypeDialog.active'), 'isActive')}
+        {check(t('leave.leaveTypeDialog.paid'), 'isPaid')}
+        {check(t('leave.leaveTypeDialog.requiresApproval'), 'requiresApproval')}
+        {check(t('leave.leaveTypeDialog.allowsHalfDays'), 'allowsHalfDays')}
+        {check(t('leave.leaveTypeDialog.requiresReason'), 'requiresReason')}
+        {check(t('leave.leaveTypeDialog.requiresAttachment'), 'requiresAttachment')}
+        {check(t('leave.leaveTypeDialog.selfService'), 'visibleInSelfService')}
       </div>
     </Modal>
   )

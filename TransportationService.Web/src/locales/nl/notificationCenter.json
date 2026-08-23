@@ -1,0 +1,63 @@
+{
+  "bell": {
+    "ariaLabel": "Meldingen",
+    "loading": "Meldingen laden…",
+    "empty": "Geen meldingen.",
+    "unreadDot": "Ongelezen",
+    "allNotifications": "Alle meldingen"
+  },
+  "page": {
+    "title": "Meldingen",
+    "loading": "Meldingen laden…",
+    "empty": "Geen meldingen.",
+    "categoryAria": "Categorie",
+    "allCategories": "Alle categorieën",
+    "showArchive": "Archief tonen",
+    "hideResolved": "Opgeloste verbergen",
+    "resolved": "Opgelost",
+    "archived": "gearchiveerd",
+    "acknowledgedAt": "Bevestigd op {dateTime}",
+    "acknowledge": "Bevestigen",
+    "acknowledgeAria": "Melding \"{title}\" bevestigen",
+    "archiveAria": "Melding \"{title}\" archiveren",
+    "archiveTitle": "Archiveren",
+    "preferencesSummary": "Voorkeuren per categorie",
+    "preferencesHint": "Uitgeschakelde categorieën bezorgen geen meldingen meer; kritieke systeemmeldingen komen altijd door."
+  },
+  "actions": {
+    "markAllRead": "Alles gelezen"
+  },
+  "errors": {
+    "loadFailed": "Meldingen konden niet worden geladen.",
+    "openFailed": "De melding kon niet worden geopend.",
+    "archiveFailed": "De melding kon niet worden gearchiveerd.",
+    "acknowledgeFailed": "De melding kon niet worden bevestigd.",
+    "markFailed": "Meldingen konden niet worden gemarkeerd.",
+    "preferenceFailed": "De voorkeur kon niet worden opgeslagen."
+  },
+  "toasts": {
+    "preferenceSaved": "Voorkeur opgeslagen."
+  },
+  "categories": {
+    "General": "Algemeen",
+    "Orders": "Opdrachten",
+    "Planning": "Planning",
+    "Execution": "Uitvoering",
+    "Hr": "HR",
+    "System": "Systeem",
+    "Inventory": "Voorraad",
+    "Task": "Taken",
+    "CustomerPortal": "Klantportaal",
+    "Fleet": "Wagenpark",
+    "Document": "Documenten",
+    "Approval": "Goedkeuringen"
+  },
+  "relative": {
+    "justNow": "zojuist",
+    "minutesAgo": "{count} min geleden",
+    "hoursAgo_one": "{count} uur geleden",
+    "hoursAgo_other": "{count} uur geleden",
+    "yesterday": "gisteren",
+    "daysAgo": "{count} dagen geleden"
+  }
+}

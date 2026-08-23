@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { createEmployee, deactivateEmployee, reactivateEmployee, updateEmployee } from '../api/employeesApi'
 import type { CreateEmployeeInput, EmployeeDetail, UpdateEmployeeInput } from '../types/employee'
 
-const SUBMIT_ERROR_MESSAGE = 'De actie kon niet worden uitgevoerd. Probeer het opnieuw.'
+const SUBMIT_ERROR_KEY = 'employees.errors.actionFailedRetry'
 
 interface UseEmployeeMutationsResult {
   isSubmitting: boolean
@@ -18,6 +19,7 @@ interface UseEmployeeMutationsResult {
 }
 
 export function useEmployeeMutations(): UseEmployeeMutationsResult {
+  const { t } = useLocale()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
@@ -43,9 +45,10 @@ export function useEmployeeMutations(): UseEmployeeMutationsResult {
       return result
     } catch (err) {
       if (isMountedRef.current) {
-        // Backend validation messages (400) are user-facing Dutch text; show them directly.
-        const described = describeApiError(err, SUBMIT_ERROR_MESSAGE)
-        setError(err instanceof ApiError && err.status === 400 ? described.message : SUBMIT_ERROR_MESSAGE)
+        // Backend validation messages (400) are user-facing text; show them directly.
+        const fallback = t(SUBMIT_ERROR_KEY)
+        const described = describeApiError(err, fallback)
+        setError(err instanceof ApiError && err.status === 400 ? described.message : fallback)
         setFieldErrors(described.fieldErrors)
         setIsSubmitting(false)
       }

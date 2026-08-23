@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { getMyLeaveBalance } from '../api/leaveBalanceApi'
 import type { EmployeeLeaveBalance } from '../types'
 import { LeaveBalanceTable } from './LeaveBalanceTable'
@@ -13,6 +14,7 @@ const YEARS = [CURRENT_YEAR + 1, CURRENT_YEAR, CURRENT_YEAR - 1]
  * without the view-own permission. Employees can never edit their balance here.
  */
 export function MyLeaveBalanceCard() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canView = hasPermission('leave_balances.view_own')
 
@@ -42,10 +44,10 @@ export function MyLeaveBalanceCard() {
 
   return (
     <section className="leave-balance-card">
-      <h3>Mijn verlofsaldo</h3>
+      <h3>{t('leave.myCard.title')}</h3>
       <div className="lb-toolbar">
         <label>
-          Jaar{' '}
+          {t('leave.myCard.year')}{' '}
           <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
             {YEARS.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -53,7 +55,7 @@ export function MyLeaveBalanceCard() {
           </select>
         </label>
       </div>
-      {loading && <p className="portal-empty">Verlofsaldo laden…</p>}
+      {loading && <p className="portal-empty">{t('leave.myCard.loading')}</p>}
       {!loading && state.data && <LeaveBalanceTable rows={state.data.rows} />}
     </section>
   )

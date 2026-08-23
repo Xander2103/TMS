@@ -1,0 +1,116 @@
+{
+  "state": {
+    "Draft": "Draft",
+    "Planned": "Planned",
+    "Confirmed": "Confirmed",
+    "Standby": "Standby",
+    "Training": "Training",
+    "LeaveRequested": "Leave requested",
+    "LeaveApproved": "Leave approved",
+    "LeaveRejected": "Leave rejected",
+    "Sick": "Sick",
+    "Unavailable": "Unavailable",
+    "Trip": "Trip",
+    "TripCancelled": "Trip cancelled",
+    "Note": "Personal note"
+  },
+  "shiftType": {
+    "Work": "Work",
+    "Standby": "Standby",
+    "Training": "Training"
+  },
+  "shiftStatus": {
+    "Draft": "Draft",
+    "Planned": "Planned",
+    "Confirmed": "Confirmed"
+  },
+  "conflictSeverity": {
+    "Information": "For information",
+    "Warning": "Warning",
+    "Blocking": "Blocking"
+  },
+  "chip": {
+    "trip": "Trip {number}",
+    "conflict": "Conflict ({severity}): {notes}"
+  },
+  "legend": {
+    "title": "Legend",
+    "conflict": "Conflict / attention"
+  },
+  "days": {
+    "mon": "Mon",
+    "tue": "Tue",
+    "wed": "Wed",
+    "thu": "Thu",
+    "fri": "Fri",
+    "sat": "Sat",
+    "sun": "Sun"
+  },
+  "page": {
+    "breadcrumb": "Personnel planning",
+    "title": "Personnel planning",
+    "subtitle": "Shifts, training and absences per employee — separate from trip planning.",
+    "copyWeek": "Copy week",
+    "prevWeek": "Previous week",
+    "nextWeek": "Next week",
+    "weekStart": "Week start",
+    "period": "Period",
+    "weeks_one": "{count} week",
+    "weeks_other": "{count} weeks",
+    "allDepartments": "All departments",
+    "nameFilterPlaceholder": "Filter by name…",
+    "nameFilterAria": "Filter by name",
+    "listView": "List view",
+    "loading": "Loading planning…",
+    "loadFailed": "The personnel planning could not be loaded.",
+    "shiftLoadFailed": "The shift could not be loaded.",
+    "colEmployee": "Employee",
+    "plannedSuffix": "{duration} planned",
+    "addShift": "+ shift",
+    "emptyFiltered": "No employees found for these filters.",
+    "colDate": "Date",
+    "colStatus": "Status",
+    "colTime": "Time",
+    "colLocation": "Location"
+  },
+  "dialog": {
+    "createTitle": "Create shift — {name}",
+    "editTitle": "Edit shift — {name}",
+    "busy": "Working…",
+    "requiredFields": "Date, start and end time are required.",
+    "created": "Shift created.",
+    "updated": "Shift updated.",
+    "saveFailed": "The shift could not be saved.",
+    "statusNow": "Shift is now: {status}.",
+    "statusFailed": "The status could not be changed.",
+    "deleted": "Shift deleted.",
+    "deleteFailed": "The shift could not be deleted.",
+    "toPlanned": "→ Planned",
+    "toConfirmed": "→ Confirm",
+    "toDraft": "→ Draft",
+    "backToPlanned": "→ Back to planned",
+    "date": "Date",
+    "from": "From",
+    "to": "To",
+    "breakMinutes": "Break (minutes)",
+    "type": "Type",
+    "workLocation": "Work location",
+    "role": "Job function/role",
+    "notes": "Notes",
+    "conflictsTitle": "Blocking planning conflicts",
+    "override": "Plan anyway (override conflicts)",
+    "noOverridePermission": "You do not have permission to override these conflicts.",
+    "deleteTitle": "Delete shift",
+    "deleteMessage": "Delete the shift of {name} on {date}? The employee will be notified."
+  },
+  "copy": {
+    "title": "Copy week of {week}",
+    "copy": "Copy",
+    "targetLabel": "Target week (Monday)",
+    "targetHint": "All shifts in the current selection are copied as draft; conflicts are skipped.",
+    "targetRequired": "Choose a target week.",
+    "success_one": "Week copied: {count} shift, {skipped} skipped.",
+    "success_other": "Week copied: {count} shifts, {skipped} skipped.",
+    "failed": "The week could not be copied."
+  }
+}

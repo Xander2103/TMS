@@ -1,4 +1,31 @@
 {
   "portalLoad": "Le portail n'a pas pu être chargé.",
-  "documentDownload": "Le document n'a pas pu être téléchargé."
+  "documentDownload": "Le document n'a pas pu être téléchargé.",
+  "codes": {
+    "common": {
+      "validation_failed": "Les données saisies sont invalides. Vérifiez les champs et réessayez.",
+      "unauthenticated": "Vous n'êtes pas (ou plus) connecté.",
+      "forbidden": "Vous n'avez pas les droits nécessaires.",
+      "not_found": "Introuvable.",
+      "rate_limited": "Trop de tentatives. Réessayez dans quelques minutes.",
+      "unsupported_language": "Choisissez néerlandais, français ou anglais.",
+      "invalid_reference": "Référence invalide."
+    },
+    "attendance": {
+      "already_clocked_in": "Vous avez déjà pointé votre entrée.",
+      "not_clocked_in": "Vous n'avez pas pointé.",
+      "break_already_active": "Une pause est déjà en cours.",
+      "no_active_break": "Aucune pause en cours.",
+      "employee_inactive": "L'enregistrement des heures n'est pas possible pour un collaborateur inactif.",
+      "employee_not_found": "Collaborateur introuvable.",
+      "self_punch_disabled": "Le pointage personnel est désactivé. Utilisez la pointeuse.",
+      "kiosk_disabled": "La pointeuse est désactivée.",
+      "stale_version": "L'enregistrement a été modifié entre-temps. Rechargez et réessayez.",
+      "session_overlap": "Les heures chevauchent un autre enregistrement de ce collaborateur."
+    },
+    "trips": {
+      "reason_required": "Un motif est obligatoire ici.",
+      "packages_unresolved": "Des colis obligatoires restent sans résultat ; scannez-les ou enregistrez-les, ou clôturez avec une dérogation et un motif."
+    }
+  }
 }

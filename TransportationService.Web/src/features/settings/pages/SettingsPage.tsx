@@ -8,6 +8,9 @@ import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
+import { LANGUAGE_NAMES } from '../../../i18n/languageNames'
+import { LOCALES } from '../../../i18n/translations'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { getCompanySettings, updateCompanySettings } from '../api/settingsApi'
 import { DATE_FORMAT_OPTIONS, formatExample, setDateFormatPreference } from '../../../utils/dates'
@@ -31,6 +34,7 @@ type NumericField =
   | 'defaultPageSize'
 
 export function SettingsPage() {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('company_settings.manage')
@@ -49,11 +53,12 @@ export function SettingsPage() {
         setForm(data)
       })
       .catch(() => {
-        if (mounted) setLoadError('Instellingen konden niet worden geladen.')
+        if (mounted) setLoadError(t('settingsPages.company.loadFailed'))
       })
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const dirty = form !== null && loaded !== null && JSON.stringify(form) !== JSON.stringify(loaded)
@@ -70,7 +75,7 @@ export function SettingsPage() {
   }, [dirty])
 
   if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (!form) return <p className="placeholder-text">Instellingen laden…</p>
+  if (!form) return <p className="placeholder-text">{t('settingsPages.company.loading')}</p>
 
   function setField<K extends keyof CompanySettings>(key: K, value: CompanySettings[K]) {
     setForm((current) => (current ? { ...current, [key]: value } : current))
@@ -112,7 +117,7 @@ export function SettingsPage() {
   async function handleSave() {
     if (!form) return
     if (form.defaultCurrency.trim().length !== 3) {
-      showError('Valutacode moet uit 3 letters bestaan (bv. EUR).')
+      showError(t('settingsPages.company.currencyLength'))
       return
     }
     setSaving(true)
@@ -122,28 +127,36 @@ export function SettingsPage() {
       setForm(updated)
       // The central date formatter follows the saved preference immediately.
       setDateFormatPreference(updated.dateFormat)
-      showSuccess('Bedrijfsinstellingen opgeslagen.')
+      showSuccess(t('settingsPages.company.saved'))
     } catch (err) {
       // Preserve the backend's specific validation message (e.g. an unknown country code).
-      showError(describeApiError(err, 'Instellingen konden niet worden opgeslagen.').message)
+      showError(describeApiError(err, t('settingsPages.company.saveFailed')).message)
     } finally {
       setSaving(false)
     }
   }
 
+  // De taalkiezer toont endoniemen (LANGUAGE_NAMES); een onbekende opgeslagen waarde blijft
+  // zichtbaar als ruwe technische waarde zodat er niets stilzwijgend verspringt (§91).
+  const knownLanguage = (LOCALES as readonly string[]).includes(form.defaultLanguage)
+
   return (
     <div>
       <UnsavedChangesGuard when={dirty && !saving} />
-      <Breadcrumbs items={[{ label: 'Instellingen' }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.settings') }]} />
       <PageHeader
-        title="Bedrijfsinstellingen"
-        subtitle={canManage ? undefined : 'Je hebt alleen leesrechten voor deze instellingen.'}
+        title={t('settingsPages.company.title')}
+        subtitle={canManage ? undefined : t('settingsPages.company.readOnlySubtitle')}
         action={
           canManage ? (
             <div className="settings-actions">
-              {dirty && <Button variant="secondary" onClick={() => setForm(loaded)} disabled={saving}>Herstellen</Button>}
+              {dirty && (
+                <Button variant="secondary" onClick={() => setForm(loaded)} disabled={saving}>
+                  {t('settingsPages.company.restore')}
+                </Button>
+              )}
               <Button onClick={handleSave} disabled={!dirty || saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('settingsPages.common.saving') : t('ui.actions.save')}
               </Button>
             </div>
           ) : undefined
@@ -152,29 +165,29 @@ export function SettingsPage() {
 
       {dirty && (
         <div className="settings-dirty" role="status">
-          Je hebt niet-opgeslagen wijzigingen.
+          {t('settingsPages.company.dirty')}
         </div>
       )}
 
       <div className="settings-sections">
         <section className="settings-card">
-          <h2>Bedrijfsprofiel</h2>
+          <h2>{t('settingsPages.company.sections.profile')}</h2>
           <div className="settings-grid">
-            {text('companyLegalName', 'Juridische naam')}
-            {text('tradingName', 'Handelsnaam')}
-            {text('companyNumber', 'Ondernemingsnummer')}
-            {text('vatNumber', 'BTW-nummer')}
+            {text('companyLegalName', t('settingsPages.company.fields.legalName'))}
+            {text('tradingName', t('settingsPages.company.fields.tradingName'))}
+            {text('companyNumber', t('settingsPages.company.fields.companyNumber'))}
+            {text('vatNumber', t('settingsPages.company.fields.vatNumber'))}
           </div>
         </section>
 
         <section className="settings-card">
-          <h2>Maatschappelijke zetel</h2>
+          <h2>{t('settingsPages.company.sections.registeredOffice')}</h2>
           <div className="settings-grid">
-            {text('street', 'Straat')}
-            {text('houseNumber', 'Nummer')}
-            {text('postalCode', 'Postcode')}
-            {text('city', 'Plaats')}
-            <FormField label="Land" htmlFor="s-country">
+            {text('street', t('settingsPages.company.fields.street'))}
+            {text('houseNumber', t('settingsPages.company.fields.houseNumber'))}
+            {text('postalCode', t('settingsPages.company.fields.postalCode'))}
+            {text('city', t('settingsPages.company.fields.city'))}
+            <FormField label={t('settingsPages.company.fields.country')} htmlFor="s-country">
               <CountryCombobox
                 id="s-country"
                 value={form.countryCode}
@@ -186,13 +199,13 @@ export function SettingsPage() {
         </section>
 
         <section className="settings-card">
-          <h2>Operationeel adres</h2>
+          <h2>{t('settingsPages.company.sections.operationalAddress')}</h2>
           <div className="settings-grid">
-            {text('operationalStreet', 'Straat')}
-            {text('operationalHouseNumber', 'Nummer')}
-            {text('operationalPostalCode', 'Postcode')}
-            {text('operationalCity', 'Plaats')}
-            <FormField label="Land" htmlFor="s-op-country">
+            {text('operationalStreet', t('settingsPages.company.fields.street'))}
+            {text('operationalHouseNumber', t('settingsPages.company.fields.houseNumber'))}
+            {text('operationalPostalCode', t('settingsPages.company.fields.postalCode'))}
+            {text('operationalCity', t('settingsPages.company.fields.city'))}
+            <FormField label={t('settingsPages.company.fields.country')} htmlFor="s-op-country">
               <CountryCombobox
                 id="s-op-country"
                 value={form.operationalCountryCode}
@@ -204,22 +217,44 @@ export function SettingsPage() {
         </section>
 
         <section className="settings-card">
-          <h2>Contact</h2>
+          <h2>{t('settingsPages.company.sections.contact')}</h2>
           <div className="settings-grid">
-            {text('email', 'E-mail')}
-            {text('phoneNumber', 'Telefoon')}
-            {text('website', 'Website')}
+            {text('email', t('settingsPages.company.fields.email'))}
+            {text('phoneNumber', t('settingsPages.company.fields.phone'))}
+            {text('website', t('settingsPages.company.fields.website'))}
+          </div>
+        </section>
+
+        {/* §90: de regionale sectie is gesplitst in twee duidelijk gelabelde blokken —
+            "Taal" (standaardtaal van het bedrijf) en "Regionale weergave" (datum/tijdzone/
+            decimaalteken). Zelfde backendvelden, alleen betere groepering. */}
+        <section className="settings-card">
+          <h2>{t('settingsPages.company.language.section')}</h2>
+          <p className="settings-hint">{t('settingsPages.company.language.hint')}</p>
+          <div className="settings-grid">
+            <FormField label={t('settingsPages.company.fields.defaultLanguage')} htmlFor="f-defaultLanguage" required>
+              <select
+                id="f-defaultLanguage"
+                value={form.defaultLanguage}
+                disabled={!canManage || saving}
+                onChange={(e) => setField('defaultLanguage', e.target.value)}
+              >
+                {LOCALES.map((locale) => (
+                  <option key={locale} value={locale}>
+                    {LANGUAGE_NAMES[locale]}
+                  </option>
+                ))}
+                {!knownLanguage && <option value={form.defaultLanguage}>{form.defaultLanguage}</option>}
+              </select>
+            </FormField>
           </div>
         </section>
 
         <section className="settings-card">
-          <h2>Regionale instellingen</h2>
-          <p className="settings-hint">
-            Bepaalt hoe datums en getallen overal in de applicatie worden weergegeven.
-            Opslag in de databank blijft altijd genormaliseerd — dit is enkel weergave.
-          </p>
+          <h2>{t('settingsPages.company.regional.section')}</h2>
+          <p className="settings-hint">{t('settingsPages.company.regional.hint')}</p>
           <div className="settings-grid">
-            <FormField label="Datumnotatie" htmlFor="f-dateFormat" required>
+            <FormField label={t('settingsPages.company.fields.dateFormat')} htmlFor="f-dateFormat" required>
               <select
                 id="f-dateFormat"
                 value={form.dateFormat}
@@ -228,65 +263,71 @@ export function SettingsPage() {
               >
                 {DATE_FORMAT_OPTIONS.map((option) => (
                   <option key={option} value={option}>
-                    {option.toUpperCase()} — bv. {formatExample(option)}
+                    {t('settingsPages.company.fields.dateFormatOption', {
+                      format: option.toUpperCase(),
+                      example: formatExample(option),
+                    })}
                   </option>
                 ))}
               </select>
             </FormField>
-            {text('defaultLanguage', 'Standaardtaal', { required: true, maxLength: 10 })}
-            {text('timezone', 'Tijdzone', { required: true })}
-            {text('decimalSeparator', 'Decimaalteken', { required: true, maxLength: 1 })}
+            {text('timezone', t('settingsPages.company.fields.timezone'), { required: true })}
+            {text('decimalSeparator', t('settingsPages.company.fields.decimalSeparator'), { required: true, maxLength: 1 })}
           </div>
         </section>
 
         <section className="settings-card">
-          <h2>Eenheden &amp; valuta</h2>
+          <h2>{t('settingsPages.company.sections.unitsCurrency')}</h2>
           <div className="settings-grid">
-            {text('defaultCurrency', 'Valuta (ISO)', { required: true, maxLength: 3 })}
-            {text('defaultWeightUnit', 'Gewichtseenheid', { required: true })}
-            {text('defaultDistanceUnit', 'Afstandseenheid', { required: true })}
+            {text('defaultCurrency', t('settingsPages.company.fields.currency'), { required: true, maxLength: 3 })}
+            {text('defaultWeightUnit', t('settingsPages.company.fields.weightUnit'), { required: true })}
+            {text('defaultDistanceUnit', t('settingsPages.company.fields.distanceUnit'), { required: true })}
           </div>
         </section>
 
         <section className="settings-card">
-          <h2>Facturatie</h2>
+          <h2>{t('settingsPages.company.sections.invoicing')}</h2>
           <div className="settings-grid">
-            {text('iban', 'IBAN')}
-            {text('invoiceEmail', 'Facturatie-e-mail')}
-            {num('paymentTermDays', 'Betaaltermijn (dagen)', { min: 0, max: 365 })}
-            {num('defaultVatRatePercent', 'Standaard BTW (%)', { min: 0, max: 100, step: 0.01 })}
+            {text('iban', t('settingsPages.company.fields.iban'))}
+            {text('invoiceEmail', t('settingsPages.company.fields.invoiceEmail'))}
+            {num('paymentTermDays', t('settingsPages.company.fields.paymentTermDays'), { min: 0, max: 365 })}
+            {num('defaultVatRatePercent', t('settingsPages.company.fields.defaultVatRate'), { min: 0, max: 100, step: 0.01 })}
           </div>
         </section>
 
         <section className="settings-card">
-          <h2>Transportstandaarden</h2>
+          <h2>{t('settingsPages.company.sections.transportDefaults')}</h2>
           <div className="settings-grid">
-            {num('defaultLoadingMinutes', 'Laadtijd (min)', { min: 0, max: 1440 })}
-            {num('defaultUnloadingMinutes', 'Lostijd (min)', { min: 0, max: 1440 })}
-            {num('qualificationExpiryWarningDays', 'Waarschuwing kwalificatie (dagen)', { min: 0, max: 365 })}
-            {num('defaultPageSize', 'Standaard paginagrootte', { min: 5, max: 200 })}
+            {num('defaultLoadingMinutes', t('settingsPages.company.fields.loadingMinutes'), { min: 0, max: 1440 })}
+            {num('defaultUnloadingMinutes', t('settingsPages.company.fields.unloadingMinutes'), { min: 0, max: 1440 })}
+            {num('qualificationExpiryWarningDays', t('settingsPages.company.fields.qualificationWarningDays'), { min: 0, max: 365 })}
+            {num('defaultPageSize', t('settingsPages.company.fields.defaultPageSize'), { min: 5, max: 200 })}
           </div>
         </section>
 
         <section className="settings-card">
-          <h2>Planningsconflicten</h2>
+          <h2>{t('settingsPages.company.sections.planningConflicts')}</h2>
           <div className="settings-grid">
-            <FormField label="Opleiding vs. rit" htmlFor="set-training-severity" hint="Hoe zwaar telt een opleiding die met een rit botst?">
+            <FormField
+              label={t('settingsPages.company.conflicts.trainingVsTrip')}
+              htmlFor="set-training-severity"
+              hint={t('settingsPages.company.conflicts.trainingHint')}
+            >
               <select
                 id="set-training-severity"
                 value={form.trainingConflictSeverity}
                 onChange={(e) => setField('trainingConflictSeverity', e.target.value)}
                 disabled={!canManage || saving}
               >
-                <option value="Information">Ter info</option>
-                <option value="Warning">Waarschuwing</option>
-                <option value="Blocking">Blokkerend</option>
+                <option value="Information">{t('settingsPages.company.severity.information')}</option>
+                <option value="Warning">{t('settingsPages.company.severity.warning')}</option>
+                <option value="Blocking">{t('settingsPages.company.severity.blocking')}</option>
               </select>
             </FormField>
             <FormField
-              label="Capaciteit overschreden"
+              label={t('settingsPages.company.conflicts.capacityExceeded')}
               htmlFor="set-capacity-severity"
-              hint="Wat gebeurt er als de lading het laadvermogen of volume van voertuig/oplegger overschrijdt?"
+              hint={t('settingsPages.company.conflicts.capacityHint')}
             >
               <select
                 id="set-capacity-severity"
@@ -294,26 +335,30 @@ export function SettingsPage() {
                 onChange={(e) => setField('capacityConflictSeverity', e.target.value)}
                 disabled={!canManage || saving}
               >
-                <option value="Warning">Waarschuwing</option>
-                <option value="Blocking">Blokkerend</option>
+                <option value="Warning">{t('settingsPages.company.severity.warning')}</option>
+                <option value="Blocking">{t('settingsPages.company.severity.blocking')}</option>
               </select>
             </FormField>
-            <FormField label="Shift vs. rit" htmlFor="set-shift-severity" hint="Hoe zwaar telt een gewone shift die met een rit overlapt?">
+            <FormField
+              label={t('settingsPages.company.conflicts.shiftVsTrip')}
+              htmlFor="set-shift-severity"
+              hint={t('settingsPages.company.conflicts.shiftHint')}
+            >
               <select
                 id="set-shift-severity"
                 value={form.shiftOverlapConflictSeverity}
                 onChange={(e) => setField('shiftOverlapConflictSeverity', e.target.value)}
                 disabled={!canManage || saving}
               >
-                <option value="Information">Ter info</option>
-                <option value="Warning">Waarschuwing</option>
-                <option value="Blocking">Blokkerend</option>
+                <option value="Information">{t('settingsPages.company.severity.information')}</option>
+                <option value="Warning">{t('settingsPages.company.severity.warning')}</option>
+                <option value="Blocking">{t('settingsPages.company.severity.blocking')}</option>
               </select>
             </FormField>
             <FormField
-              label="Herlevering bij mislukte stop"
+              label={t('settingsPages.company.conflicts.redelivery')}
               htmlFor="set-redelivery-mode"
-              hint="Wat gebeurt er nadat een stop als mislukt is gemeld?"
+              hint={t('settingsPages.company.conflicts.redeliveryHint')}
             >
               <select
                 id="set-redelivery-mode"
@@ -321,15 +366,15 @@ export function SettingsPage() {
                 onChange={(e) => setField('redeliveryMode', e.target.value)}
                 disabled={!canManage || saving}
               >
-                <option value="Manual">Handmatig (enkel incident)</option>
-                <option value="Propose">Voorstellen aan dispatch</option>
-                <option value="Automatic">Automatisch aanmaken (volgende werkdag)</option>
+                <option value="Manual">{t('settingsPages.company.redeliveryModes.manual')}</option>
+                <option value="Propose">{t('settingsPages.company.redeliveryModes.propose')}</option>
+                <option value="Automatic">{t('settingsPages.company.redeliveryModes.automatic')}</option>
               </select>
             </FormField>
             <FormField
-              label="Klantmelding bij ETA-verschuiving (minuten)"
+              label={t('settingsPages.company.conflicts.etaNotify')}
               htmlFor="set-eta-shift-notify"
-              hint="Leeg = geen drempelmeldingen."
+              hint={t('settingsPages.company.conflicts.etaNotifyHint')}
             >
               <input
                 id="set-eta-shift-notify"
@@ -345,45 +390,43 @@ export function SettingsPage() {
         </section>
 
         <section className="settings-card">
-          <h2>Nummering</h2>
+          <h2>{t('settingsPages.company.sections.numbering')}</h2>
           <div className="settings-grid settings-grid-numbering">
-            {text('employeeNumberPrefix', 'Personeel prefix', { maxLength: 20 })}
-            {num('employeeNumberNextValue', 'Personeel volgnr', { min: 1 })}
-            {text('customerNumberPrefix', 'Klant prefix', { maxLength: 20 })}
-            {num('customerNumberNextValue', 'Klant volgnr', { min: 1 })}
-            {text('driverNumberPrefix', 'Chauffeur prefix', { maxLength: 20 })}
-            {num('driverNumberNextValue', 'Chauffeur volgnr', { min: 1 })}
-            {text('orderNumberPrefix', 'Order prefix', { maxLength: 20 })}
-            {num('orderNumberNextValue', 'Order volgnr', { min: 1 })}
-            {text('tripNumberPrefix', 'Rit prefix', { maxLength: 20 })}
-            {num('tripNumberNextValue', 'Rit volgnr', { min: 1 })}
-            {text('invoiceNumberPrefix', 'Factuur prefix', { maxLength: 20 })}
-            {num('invoiceNumberNextValue', 'Factuur volgnr', { min: 1 })}
-            {text('vehicleNumberPrefix', 'Voertuig prefix', { maxLength: 20 })}
-            {num('vehicleNumberNextValue', 'Voertuig volgnr', { min: 1 })}
-            {text('trailerNumberPrefix', 'Oplegger prefix', { maxLength: 20 })}
-            {num('trailerNumberNextValue', 'Oplegger volgnr', { min: 1 })}
+            {text('employeeNumberPrefix', t('settingsPages.company.numbering.employeePrefix'), { maxLength: 20 })}
+            {num('employeeNumberNextValue', t('settingsPages.company.numbering.employeeNext'), { min: 1 })}
+            {text('customerNumberPrefix', t('settingsPages.company.numbering.customerPrefix'), { maxLength: 20 })}
+            {num('customerNumberNextValue', t('settingsPages.company.numbering.customerNext'), { min: 1 })}
+            {text('driverNumberPrefix', t('settingsPages.company.numbering.driverPrefix'), { maxLength: 20 })}
+            {num('driverNumberNextValue', t('settingsPages.company.numbering.driverNext'), { min: 1 })}
+            {text('orderNumberPrefix', t('settingsPages.company.numbering.orderPrefix'), { maxLength: 20 })}
+            {num('orderNumberNextValue', t('settingsPages.company.numbering.orderNext'), { min: 1 })}
+            {text('tripNumberPrefix', t('settingsPages.company.numbering.tripPrefix'), { maxLength: 20 })}
+            {num('tripNumberNextValue', t('settingsPages.company.numbering.tripNext'), { min: 1 })}
+            {text('invoiceNumberPrefix', t('settingsPages.company.numbering.invoicePrefix'), { maxLength: 20 })}
+            {num('invoiceNumberNextValue', t('settingsPages.company.numbering.invoiceNext'), { min: 1 })}
+            {text('vehicleNumberPrefix', t('settingsPages.company.numbering.vehiclePrefix'), { maxLength: 20 })}
+            {num('vehicleNumberNextValue', t('settingsPages.company.numbering.vehicleNext'), { min: 1 })}
+            {text('trailerNumberPrefix', t('settingsPages.company.numbering.trailerPrefix'), { maxLength: 20 })}
+            {num('trailerNumberNextValue', t('settingsPages.company.numbering.trailerNext'), { min: 1 })}
           </div>
         </section>
 
         <section className="settings-card">
-          <h2>Branding</h2>
+          <h2>{t('settingsPages.company.sections.branding')}</h2>
           <div className="settings-grid">
-            {text('logoReference', 'Logo-referentie', { maxLength: 300 })}
+            {text('logoReference', t('settingsPages.company.fields.logoReference'), { maxLength: 300 })}
           </div>
-          <p className="settings-hint">
-            Verwijzing naar een logobestand. Uploaden van bestanden komt in een latere fase.
-          </p>
+          <p className="settings-hint">{t('settingsPages.company.brandingHint')}</p>
         </section>
       </div>
 
       {canManage && (
         <FormActions dirty={dirty}>
           <Button variant="secondary" onClick={() => setForm(loaded)} disabled={!dirty || saving}>
-            Herstellen
+            {t('settingsPages.company.restore')}
           </Button>
           <Button onClick={handleSave} disabled={!dirty || saving}>
-            {saving ? 'Opslaan…' : 'Opslaan'}
+            {saving ? t('settingsPages.common.saving') : t('ui.actions.save')}
           </Button>
         </FormActions>
       )}

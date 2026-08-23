@@ -1,3 +1,4 @@
+import { useLocale } from '../../../i18n/localeContext'
 import type { LeaveBalanceRow } from '../types'
 
 interface LeaveBalanceTableProps {
@@ -12,19 +13,20 @@ function fmt(days: number): string {
 
 /** Read-only figures per balance type; shared by the HR tab and the self-service card. */
 export function LeaveBalanceTable({ rows, renderActions }: LeaveBalanceTableProps) {
+  const { t } = useLocale()
   return (
     <div className="lb-table-wrap">
       <table className="lb-table">
         <thead>
           <tr>
-            <th>Saldotype</th>
-            <th>Toegekend</th>
-            <th>Overdracht</th>
-            <th>Aanpassingen</th>
-            <th>Goedgekeurd opgenomen</th>
-            <th>In aanvraag</th>
-            <th>Resterend</th>
-            {renderActions && <th aria-label="Acties" />}
+            <th>{t('leave.table.balanceType')}</th>
+            <th>{t('leave.table.granted')}</th>
+            <th>{t('leave.table.carryOver')}</th>
+            <th>{t('leave.table.adjustments')}</th>
+            <th>{t('leave.table.approvedUsed')}</th>
+            <th>{t('leave.table.pending')}</th>
+            <th>{t('leave.table.remaining')}</th>
+            {renderActions && <th aria-label={t('leave.table.actions')} />}
           </tr>
         </thead>
         <tbody>
@@ -38,7 +40,10 @@ export function LeaveBalanceTable({ rows, renderActions }: LeaveBalanceTableProp
               <td>
                 {fmt(row.pendingReservedDays)}
                 {row.pendingReservedDays > 0 && (
-                  <span className="lb-reserved-note"> {row.pendingReserves ? '(gereserveerd)' : '(niet gereserveerd)'}</span>
+                  <span className="lb-reserved-note">
+                    {' '}
+                    {row.pendingReserves ? t('leave.table.reserved') : t('leave.table.notReserved')}
+                  </span>
                 )}
               </td>
               <td className={row.remainingDays < 0 ? 'lb-remaining lb-negative' : 'lb-remaining'}>{fmt(row.remainingDays)}</td>
@@ -47,7 +52,7 @@ export function LeaveBalanceTable({ rows, renderActions }: LeaveBalanceTableProp
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={renderActions ? 8 : 7} className="placeholder-text">Geen saldotypes geconfigureerd.</td>
+              <td colSpan={renderActions ? 8 : 7} className="placeholder-text">{t('leave.table.empty')}</td>
             </tr>
           )}
         </tbody>

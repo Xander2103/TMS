@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { getEmployee } from '../api/employeesApi'
 import type { EmployeeDetail } from '../types/employee'
 
@@ -9,9 +10,10 @@ interface UseEmployeeResult {
   reload: () => void
 }
 
-const LOAD_ERROR_MESSAGE = 'Medewerker kon niet worden geladen.'
+const LOAD_ERROR_KEY = 'employees.errors.loadEmployee'
 
 export function useEmployee(id: string): UseEmployeeResult {
+  const { t } = useLocale()
   const [employee, setEmployee] = useState<EmployeeDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +31,7 @@ export function useEmployee(id: string): UseEmployeeResult {
       })
       .catch(() => {
         if (!isMounted) return
-        setError(LOAD_ERROR_MESSAGE)
+        setError(t(LOAD_ERROR_KEY))
         setIsLoading(false)
       })
 

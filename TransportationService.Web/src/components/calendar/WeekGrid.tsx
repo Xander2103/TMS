@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useLocale } from '../../i18n/localeContext'
-import { DAY_NAMES, addDays, cellAriaLabel, dayIndexMonday, mondayOf, toIsoDate } from './dateUtils'
+import { addDays, cellAriaLabel, dayIndexMonday, getDayNames, mondayOf, toIsoDate } from './dateUtils'
 import type { CalendarCellContext } from './MonthGrid'
 import './calendar.css'
 
@@ -45,7 +45,7 @@ export function WeekGrid<T>({
         const iso = toIsoDate(date)
         const entries = entriesByDate.get(iso) ?? []
         const isToday = iso === todayIso
-        const label = `${DAY_NAMES[dayIndexMonday(date)]} ${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`
+        const label = `${getDayNames()[dayIndexMonday(date)]} ${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`
         const ariaLabel = cellAriaLabel(date, entries.length)
         return (
           <div key={iso} className={`cal-week-day${isToday ? ' cal-today' : ''}`}>

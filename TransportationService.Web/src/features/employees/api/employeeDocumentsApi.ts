@@ -1,6 +1,11 @@
 import { ApiError, apiClient } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
+import { translate } from '../../../i18n/translations'
+import type { TranslateFn } from '../../../i18n/localeContext'
 import { getAccessToken } from '../../auth/authStorage'
+
+/** Fallback translator (Dutch) for callers that don't pass their own `t`. */
+const defaultT: TranslateFn = (key, params) => translate('nl', key, params)
 
 export type EmployeeDocumentCategory =
   | 'IdentityCardFront'
@@ -14,17 +19,18 @@ export type EmployeeDocumentCategory =
   | 'AdditionalDocument'
   | 'Other'
 
+/** i18n-keys (employees.documents.categories.*) — render via t(EMPLOYEE_DOCUMENT_CATEGORY_LABELS[c]). */
 export const EMPLOYEE_DOCUMENT_CATEGORY_LABELS: Record<EmployeeDocumentCategory, string> = {
-  IdentityCardFront: 'Identiteitskaart (voorzijde)',
-  IdentityCardBack: 'Identiteitskaart (achterzijde)',
-  DrivingLicenceFront: 'Rijbewijs (voorzijde)',
-  DrivingLicenceBack: 'Rijbewijs (achterzijde)',
-  EmploymentDocument: 'Tewerkstellingsdocument',
-  MedicalDocument: 'Medisch document',
-  Certificate: 'Attest',
-  Contract: 'Contract',
-  AdditionalDocument: 'Bijkomend document',
-  Other: 'Overige',
+  IdentityCardFront: 'employees.documents.categories.IdentityCardFront',
+  IdentityCardBack: 'employees.documents.categories.IdentityCardBack',
+  DrivingLicenceFront: 'employees.documents.categories.DrivingLicenceFront',
+  DrivingLicenceBack: 'employees.documents.categories.DrivingLicenceBack',
+  EmploymentDocument: 'employees.documents.categories.EmploymentDocument',
+  MedicalDocument: 'employees.documents.categories.MedicalDocument',
+  Certificate: 'employees.documents.categories.Certificate',
+  Contract: 'employees.documents.categories.Contract',
+  AdditionalDocument: 'employees.documents.categories.AdditionalDocument',
+  Other: 'employees.documents.categories.Other',
 }
 
 /** Order used for grouping the document grid. */
@@ -122,6 +128,7 @@ async function readError(response: Response, fallback: string): Promise<never> {
 export async function uploadEmployeeDocument(
   employeeId: string,
   input: UploadEmployeeDocumentInput,
+  t: TranslateFn = defaultT,
 ): Promise<EmployeeDocument> {
   const body = new FormData()
   body.append('file', input.file)
@@ -134,7 +141,7 @@ export async function uploadEmployeeDocument(
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
     body,
   })
-  if (!response.ok) return readError(response, 'Uploaden is mislukt.')
+  if (!response.ok) return readError(response, t('employees.errors.uploadFailed'))
   return (await response.json()) as EmployeeDocument
 }
 
@@ -142,6 +149,7 @@ export async function replaceEmployeeDocumentFile(
   employeeId: string,
   documentId: string,
   file: File,
+  t: TranslateFn = defaultT,
 ): Promise<EmployeeDocument> {
   const body = new FormData()
   body.append('file', file)
@@ -150,7 +158,7 @@ export async function replaceEmployeeDocumentFile(
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
     body,
   })
-  if (!response.ok) return readError(response, 'Vervangen is mislukt.')
+  if (!response.ok) return readError(response, t('employees.errors.replaceFailed'))
   return (await response.json()) as EmployeeDocument
 }
 
@@ -158,12 +166,13 @@ export async function downloadEmployeeDocument(
   employeeId: string,
   documentId: string,
   fileName: string,
+  t: TranslateFn = defaultT,
 ): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/api/employees/${employeeId}/documents/${documentId}/content`, {
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
   if (!response.ok) {
-    throw new ApiError('Document kon niet worden gedownload.', response.status)
+    throw new ApiError(t('employees.errors.downloadDocumentFailed'), response.status)
   }
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)

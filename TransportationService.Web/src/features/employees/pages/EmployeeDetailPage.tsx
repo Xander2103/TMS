@@ -12,6 +12,7 @@ import { StatusBadges } from '../../../components/ui/StatusBadges'
 import type { SectionDef } from '../../../components/ui/SectionedForm'
 import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { AbsencesTab } from '../../absences/components/AbsencesTab'
 import { CompletenessCard } from '../components/CompletenessCard'
@@ -70,6 +71,7 @@ export function EmployeeDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const { employee, isLoading, error, reload } = useEmployee(id)
@@ -121,8 +123,8 @@ export function EmployeeDetailPage() {
     }
   }, [canEdit, requestedSection])
 
-  if (isLoading) return <LoadingState message="Medewerker laden..." />
-  if (error || !employee) return <ErrorState message={error ?? 'Medewerker niet gevonden.'} />
+  if (isLoading) return <LoadingState message={t('employees.detail.loading')} />
+  if (error || !employee) return <ErrorState message={error ?? t('employees.errors.employeeNotFound')} />
 
   function setTab(next: string) {
     setSearchParams(next === 'profiel' ? {} : { tab: next }, { replace: true })
@@ -161,9 +163,9 @@ export function EmployeeDetailPage() {
   async function copyEmployeeNumber() {
     try {
       await navigator.clipboard.writeText(employee!.employeeNumber)
-      toast.showSuccess('Personeelsnummer gekopieerd')
+      toast.showSuccess(t('employees.detail.numberCopied'))
     } catch {
-      toast.showError('Kopiëren is mislukt.')
+      toast.showError(t('employees.detail.copyFailed'))
     }
   }
 
@@ -173,7 +175,7 @@ export function EmployeeDetailPage() {
   const editExtraSections: SectionDef[] = [
     {
       id: 'chauffeursgegevens',
-      label: 'Chauffeursgegevens',
+      label: t('employees.sections.chauffeursgegevens'),
       optional: true,
       panel: true,
       render: () =>
@@ -181,46 +183,46 @@ export function EmployeeDetailPage() {
           <DriverProfilePanel driverId={employee.driverId} onChanged={reload} onDeleted={reload} />
         ) : hasPermission('drivers.create') && employee.isActive ? (
           <p className="placeholder-text">
-            <Link to={`/drivers/new?employeeId=${employee.id}`}>Chauffeursprofiel aanmaken →</Link>
+            <Link to={`/drivers/new?employeeId=${employee.id}`}>{t('employees.detail.createDriverProfile')}</Link>
           </p>
         ) : (
-          <p className="placeholder-text">Deze medewerker heeft geen chauffeursprofiel.</p>
+          <p className="placeholder-text">{t('employees.detail.noDriverProfile')}</p>
         ),
     },
     {
       id: 'kwalificaties',
-      label: 'Kwalificaties',
+      label: t('employees.sections.kwalificaties'),
       optional: true,
       panel: true,
       render: () => <QualificationsTab employeeId={employee.id} />,
     },
     {
       id: 'documenten',
-      label: 'Documenten',
+      label: t('employees.sections.documenten'),
       optional: true,
       panel: true,
       render: () =>
         canViewDocuments ? (
           <EmployeeDocumentsTab employeeId={employee.id} />
         ) : (
-          <p className="placeholder-text">Je hebt geen rechten om documenten te bekijken.</p>
+          <p className="placeholder-text">{t('employees.detail.noDocumentsPermission')}</p>
         ),
     },
     {
       id: 'verlofsaldo',
-      label: 'Verlofsaldo',
+      label: t('employees.sections.verlofsaldo'),
       optional: true,
       panel: true,
       render: () =>
         canViewLeaveBalance ? (
           <LeaveBalanceTab employeeId={employee.id} />
         ) : (
-          <p className="placeholder-text">Je hebt geen rechten om het verlofsaldo te bekijken.</p>
+          <p className="placeholder-text">{t('employees.detail.noLeaveBalancePermission')}</p>
         ),
     },
     {
       id: 'bedrijfsmiddelen',
-      label: 'Bedrijfsmiddelen',
+      label: t('employees.sections.bedrijfsmiddelen'),
       optional: true,
       panel: true,
       render: () =>
@@ -230,14 +232,14 @@ export function EmployeeDetailPage() {
             <EmployeeTankCardsSection employeeId={employee.id} />
           </>
         ) : (
-          <p className="placeholder-text">Je hebt geen rechten om bedrijfsmiddelen te bekijken.</p>
+          <p className="placeholder-text">{t('employees.detail.noIssuedItemsPermission')}</p>
         ),
     },
   ]
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Personeel', to: '/employees' }, { label: `${employee.firstName} ${employee.lastName}` }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.modules.personeel'), to: '/employees' }, { label: `${employee.firstName} ${employee.lastName}` }]} />
       <PageHeader
         title={`${employee.firstName} ${employee.lastName}`}
         subtitle={
@@ -246,7 +248,7 @@ export function EmployeeDetailPage() {
               type="button"
               className="employee-number-copy"
               onClick={copyEmployeeNumber}
-              title="Klik om personeelsnummer te kopiëren"
+              title={t('employees.detail.copyNumberTitle')}
             >
               {employee.employeeNumber}
             </button>
@@ -254,10 +256,12 @@ export function EmployeeDetailPage() {
             {employee.employmentStartDate && (
               <>
                 {' '}
-                · In dienst sinds {formatDate(employee.employmentStartDate)}
+                · {t('employees.detail.inServiceSince', { date: formatDate(employee.employmentStartDate) })}
                 {(() => {
                   const years = fullYearsSince(employee.employmentStartDate)
-                  return years !== null && years >= 1 ? ` · ${years} jaar` : ''
+                  return years !== null && years >= 1
+                    ? ` · ${t('employees.detail.yearsOfService', { count: years })}`
+                    : ''
                 })()}
               </>
             )}
@@ -276,7 +280,7 @@ export function EmployeeDetailPage() {
           <>
             {hasPermission('users.create') && (
               <Button variant="secondary" onClick={() => setShowAccountDialog(true)} disabled={mutations.isSubmitting}>
-                Account aanmaken
+                {t('employees.detail.createAccount')}
               </Button>
             )}
             {canDeactivate && (
@@ -285,7 +289,7 @@ export function EmployeeDetailPage() {
                 onClick={() => setConfirmLifecycle(employee.isActive ? 'deactivate' : 'reactivate')}
                 disabled={mutations.isSubmitting}
               >
-                {employee.isActive ? 'Medewerker inactief zetten' : 'Heractiveren'}
+                {employee.isActive ? t('employees.detail.deactivate') : t('employees.detail.reactivate')}
               </Button>
             )}
           </>
@@ -304,23 +308,23 @@ export function EmployeeDetailPage() {
         <StatusBadges
           active={employee.isActive}
           operational={{
-            label: EMPLOYMENT_STATUS_LABELS[employee.employmentStatus],
+            label: t(EMPLOYMENT_STATUS_LABELS[employee.employmentStatus]),
             tone: EMPLOYMENT_STATUS_TONES[employee.employmentStatus],
           }}
         />
         {(() => {
           const endBadge = contractEndBadge(employee)
-          return endBadge && <Badge tone={endBadge.tone}>{endBadge.label}</Badge>
+          return endBadge && <Badge tone={endBadge.tone}>{t(endBadge.key, endBadge.params)}</Badge>
         })()}
         {employee.driverId ? (
           <button type="button" className="employee-driver-link employee-driver-link-button" onClick={goToDriverSection}>
-            Chauffeursgegevens bekijken →
+            {t('employees.detail.viewDriverData')}
           </button>
         ) : (
           hasPermission('drivers.create') &&
           employee.isActive && (
             <Link to={`/drivers/new?employeeId=${employee.id}`} className="employee-driver-link">
-              Chauffeursprofiel aanmaken →
+              {t('employees.detail.createDriverProfile')}
             </Link>
           )
         )}
@@ -328,16 +332,16 @@ export function EmployeeDetailPage() {
 
       <Tabs
         tabs={[
-          { id: 'profiel', label: 'Overzicht' },
-          ...(canViewPlanning ? [{ id: 'planning', label: 'Planning' }] : []),
-          { id: 'kwalificaties', label: 'Kwalificaties' },
-          ...(canViewDocuments ? [{ id: 'documenten', label: 'Documenten' }] : []),
-          ...(canViewLeaveBalance || canViewAbsences ? [{ id: 'verlof', label: 'Verlof & afwezigheden' }] : []),
-          ...(canViewAttendance ? [{ id: 'uren', label: 'Urenregistratie' }] : []),
-          ...(canViewTasks ? [{ id: 'taken', label: 'Taken' }] : []),
-          ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: 'Ritten' }] : []),
-          ...(canViewIssuedItems ? [{ id: 'bedrijfsmiddelen', label: 'Bedrijfsmiddelen' }] : []),
-          { id: 'historiek', label: 'Historiek' },
+          { id: 'profiel', label: t('employees.detail.tabOverview') },
+          ...(canViewPlanning ? [{ id: 'planning', label: t('employees.detail.tabPlanning') }] : []),
+          { id: 'kwalificaties', label: t('employees.detail.tabQualifications') },
+          ...(canViewDocuments ? [{ id: 'documenten', label: t('employees.detail.tabDocuments') }] : []),
+          ...(canViewLeaveBalance || canViewAbsences ? [{ id: 'verlof', label: t('employees.detail.tabLeave') }] : []),
+          ...(canViewAttendance ? [{ id: 'uren', label: t('employees.detail.tabAttendance') }] : []),
+          ...(canViewTasks ? [{ id: 'taken', label: t('employees.detail.tabTasks') }] : []),
+          ...(employee.driverId && canViewTrips ? [{ id: 'ritten', label: t('employees.detail.tabTrips') }] : []),
+          ...(canViewIssuedItems ? [{ id: 'bedrijfsmiddelen', label: t('employees.detail.tabIssuedItems') }] : []),
+          { id: 'historiek', label: t('employees.detail.tabHistory') },
         ]}
         activeId={tab}
         onChange={setTab}
@@ -347,7 +351,7 @@ export function EmployeeDetailPage() {
         <TabPanel tabId="profiel">
           {!canEdit && hasPermission('employee_notes.view') && (
             <section className="employee-notes-card">
-              <h3>Notities</h3>
+              <h3>{t('employees.detail.notesHeading')}</h3>
               <EmployeeNotesPanel employeeId={employee.id} />
             </section>
           )}
@@ -366,7 +370,7 @@ export function EmployeeDetailPage() {
               onSubmit={async (values) => {
                 const updated = await mutations.update(employee.id, values)
                 if (updated) {
-                  toast.showSuccess('Medewerker bijgewerkt.')
+                  toast.showSuccess(t('employees.detail.updated'))
                   // Driver functions removed while a driver profile exists → offer (never force)
                   // deactivating that profile. Historical driver data is always preserved.
                   const removedDriverFunctions =
@@ -382,51 +386,51 @@ export function EmployeeDetailPage() {
             />
           ) : (
             <div className="employee-readonly-profile">
-              <p className="placeholder-text">Je hebt alleen leesrechten voor dit profiel.</p>
+              <p className="placeholder-text">{t('employees.detail.readOnlyProfile')}</p>
               <dl className="employee-readonly-grid">
                 <div>
-                  <dt>Geboortedatum</dt>
+                  <dt>{t('employees.detail.dateOfBirth')}</dt>
                   <dd>
                     {employee.dateOfBirth
                       ? `${formatDate(employee.dateOfBirth)}${(() => {
                           const age = fullYearsSince(employee.dateOfBirth)
-                          return age !== null ? ` (${age} j.)` : ''
+                          return age !== null ? ` ${t('employees.detail.ageSuffix', { age })}` : ''
                         })()}`
                       : '—'}
                   </dd>
                 </div>
                 <div>
-                  <dt>E-mail</dt>
+                  <dt>{t('employees.detail.email')}</dt>
                   <dd>{employee.email ? <a href={`mailto:${employee.email}`}>{employee.email}</a> : '—'}</dd>
                 </div>
                 <div>
-                  <dt>Telefoon</dt>
+                  <dt>{t('employees.detail.phone')}</dt>
                   <dd>{employee.phoneNumber ? <a href={`tel:${employee.phoneNumber}`}>{employee.phoneNumber}</a> : '—'}</dd>
                 </div>
                 <div>
-                  <dt>GSM</dt>
+                  <dt>{t('employees.detail.mobile')}</dt>
                   <dd>{employee.mobilePhone ? <a href={`tel:${employee.mobilePhone}`}>{employee.mobilePhone}</a> : '—'}</dd>
                 </div>
                 <div>
-                  <dt>Burgerlijke staat</dt>
-                  <dd>{employee.civilStatus ? CIVIL_STATUS_LABELS[employee.civilStatus] : '—'}</dd>
+                  <dt>{t('employees.detail.civilStatus')}</dt>
+                  <dd>{employee.civilStatus ? t(CIVIL_STATUS_LABELS[employee.civilStatus]) : '—'}</dd>
                 </div>
                 <div>
-                  <dt>Aantal kinderen ten laste</dt>
+                  <dt>{t('employees.detail.dependentChildren')}</dt>
                   <dd>{employee.dependentChildren ?? '—'}</dd>
                 </div>
                 <div>
-                  <dt>DIMONA-nummer</dt>
+                  <dt>{t('employees.detail.dimonaNumber')}</dt>
                   <dd>{employee.dimonaNumber ?? '—'}</dd>
                 </div>
                 <div>
-                  <dt>Einddatum tewerkstelling</dt>
+                  <dt>{t('employees.detail.employmentEndDate')}</dt>
                   <dd>{formatDate(employee.employmentEndDate) || '—'}</dd>
                 </div>
               </dl>
-              <h3 className="employee-readonly-subtitle">Noodcontacten</h3>
+              <h3 className="employee-readonly-subtitle">{t('employees.detail.emergencyContactsHeading')}</h3>
               {employee.emergencyContacts.length === 0 ? (
-                <p className="placeholder-text">Geen noodcontacten geregistreerd.</p>
+                <p className="placeholder-text">{t('employees.detail.noEmergencyContacts')}</p>
               ) : (
                 <ul className="employee-readonly-contacts">
                   {[...employee.emergencyContacts]
@@ -447,7 +451,7 @@ export function EmployeeDetailPage() {
           {!canEdit && employee.driverId && (
             <section className="employee-readonly-driver">
               <h3 id="chauffeursgegevens" className="employee-readonly-subtitle">
-                Chauffeursgegevens
+                {t('employees.detail.driverDataHeading')}
               </h3>
               <DriverProfilePanel driverId={employee.driverId} onChanged={reload} onDeleted={reload} />
             </section>
@@ -478,12 +482,12 @@ export function EmployeeDetailPage() {
           {canViewLeaveBalance ? (
             <LeaveBalanceTab employeeId={employee.id} />
           ) : (
-            <p className="placeholder-text">Je hebt geen rechten om het verlofsaldo te bekijken.</p>
+            <p className="placeholder-text">{t('employees.detail.noLeaveBalancePermission')}</p>
           )}
           {canViewAbsences ? (
             <AbsencesTab employeeId={employee.id} highlightAbsenceId={searchParams.get('absenceId')} />
           ) : (
-            <p className="placeholder-text">Je hebt geen rechten om afwezigheden te bekijken.</p>
+            <p className="placeholder-text">{t('employees.detail.noAbsencesPermission')}</p>
           )}
         </TabPanel>
       )}
@@ -521,10 +525,10 @@ export function EmployeeDetailPage() {
 
       {offerDriverDeactivation && employee.driverId && (
         <ConfirmDialog
-          title="Chauffeursprofiel deactiveren?"
-          message="De chauffeursfuncties zijn verwijderd. Wil je het gekoppelde chauffeursprofiel deactiveren? De historiek en kwalificaties blijven bewaard."
-          confirmLabel="Profiel deactiveren"
-          cancelLabel="Profiel actief laten"
+          title={t('employees.detail.deactivateDriverTitle')}
+          message={t('employees.detail.deactivateDriverMessage')}
+          confirmLabel={t('employees.detail.deactivateDriverConfirm')}
+          cancelLabel={t('employees.detail.deactivateDriverCancel')}
           busy={driverBusy}
           onConfirm={async () => {
             setDriverBusy(true)
@@ -540,9 +544,9 @@ export function EmployeeDetailPage() {
                 fixedTrailerId: driver.fixedTrailerId,
                 notes: driver.notes,
               })
-              toast.showSuccess('Chauffeursprofiel gedeactiveerd.')
+              toast.showSuccess(t('employees.detail.driverDeactivated'))
             } catch {
-              toast.showError('Chauffeursprofiel kon niet worden gedeactiveerd.')
+              toast.showError(t('employees.detail.driverDeactivateFailed'))
             } finally {
               setDriverBusy(false)
               setOfferDriverDeactivation(false)
@@ -554,15 +558,15 @@ export function EmployeeDetailPage() {
 
       {confirmLifecycle === 'deactivate' && (
         <ConfirmDialog
-          title="Medewerker inactief zetten"
-          message={`Weet je zeker dat je ${employee.firstName} ${employee.lastName} inactief wilt zetten? De medewerker blijft zichtbaar in het archief en kan later geheractiveerd worden.`}
-          confirmLabel="Inactief zetten"
+          title={t('employees.detail.deactivateTitle')}
+          message={t('employees.detail.deactivateMessage', { name: `${employee.firstName} ${employee.lastName}` })}
+          confirmLabel={t('employees.detail.deactivateConfirm')}
           destructive
           busy={mutations.isSubmitting}
           onConfirm={async () => {
             const ok = await mutations.deactivate(employee.id)
             if (ok) {
-              toast.showSuccess('Medewerker inactief gezet.')
+              toast.showSuccess(t('employees.detail.deactivated'))
               setConfirmLifecycle(null)
               reload()
               // Offer (never force) redistributing any open tasks left behind — only meaningful
@@ -593,14 +597,14 @@ export function EmployeeDetailPage() {
 
       {confirmLifecycle === 'reactivate' && (
         <ConfirmDialog
-          title="Medewerker heractiveren"
-          message={`${employee.firstName} ${employee.lastName} opnieuw activeren?`}
-          confirmLabel="Heractiveren"
+          title={t('employees.detail.reactivateTitle')}
+          message={t('employees.detail.reactivateMessage', { name: `${employee.firstName} ${employee.lastName}` })}
+          confirmLabel={t('employees.detail.reactivate')}
           busy={mutations.isSubmitting}
           onConfirm={async () => {
             const ok = await mutations.reactivate(employee.id)
             if (ok) {
-              toast.showSuccess('Medewerker geheractiveerd.')
+              toast.showSuccess(t('employees.detail.reactivated'))
               setConfirmLifecycle(null)
               reload()
             }
@@ -617,7 +621,7 @@ export function EmployeeDetailPage() {
           email={employee.email}
           onClose={(created) => {
             setShowAccountDialog(false)
-            if (created) toast.showSuccess('Gebruikersaccount aangemaakt.')
+            if (created) toast.showSuccess(t('employees.detail.accountCreated'))
           }}
         />
       )}

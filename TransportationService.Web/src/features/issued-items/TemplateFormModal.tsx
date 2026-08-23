@@ -5,6 +5,7 @@ import { FormField } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { describeApiError } from '../../api/problemDetails'
 import { useAuth } from '../auth/authContextValue'
+import { useLocale } from '../../i18n/localeContext'
 import { LookupSelect } from '../master-data/components/LookupSelect'
 import {
   createIssuedItemTemplate,
@@ -88,6 +89,7 @@ interface TemplateFormModalProps {
  * stock tracking (mirrors the backend rule).
  */
 export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormModalProps) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [form, setForm] = useState<IssuedItemTemplateInput>(editing ? templateToForm(editing) : emptyTemplateForm())
   const [formError, setFormError] = useState<string | null>(null)
@@ -124,11 +126,11 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
     event.preventDefault()
     setFormError(null)
     if (!form.name.trim() || (!form.categoryId && !form.category.trim())) {
-      setFormError('Naam en categorie zijn verplicht.')
+      setFormError(t('issuedItems.form.nameCategoryRequired'))
       return
     }
     if (stockChanged && editing && !form.stockCorrectionReason?.trim()) {
-      setFormError('Geef een reden op voor de voorraadcorrectie.')
+      setFormError(t('issuedItems.form.correctionReasonRequired'))
       return
     }
     setSaving(true)
@@ -151,7 +153,7 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
       }
       onSaved(saved)
     } catch (err) {
-      setFormError(describeApiError(err, 'Het sjabloon kon niet worden opgeslagen.').message)
+      setFormError(describeApiError(err, t('issuedItems.form.saveFailed')).message)
     } finally {
       setSaving(false)
     }
@@ -160,7 +162,7 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
   function addPendingVariant() {
     const label = pendingDraft.label.trim()
     if (!label) {
-      setFormError('Geef een variantnaam of uitvoering op (bv. Small, maat 43).')
+      setFormError(t('issuedItems.form.variantNameRequired'))
       return
     }
 
@@ -171,16 +173,16 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
 
   return (
     <Modal
-      title={editing ? 'Sjabloon bewerken' : 'Sjabloon toevoegen'}
+      title={editing ? t('issuedItems.form.editTitle') : t('issuedItems.form.addTitle')}
       onClose={onClose}
       busy={saving}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={saving}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="template-form" disabled={saving}>
-            {saving ? 'Opslaan…' : 'Opslaan'}
+            {saving ? t('issuedItems.form.saving') : t('ui.actions.save')}
           </Button>
         </>
       }
@@ -192,10 +194,10 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
           </div>
         )}
         <div className="issued-items-form-row">
-          <FormField label="Naam" htmlFor="tpl-name" required>
+          <FormField label={t('issuedItems.form.name')} htmlFor="tpl-name" required>
             <input id="tpl-name" value={form.name} onChange={(e) => set('name', e.target.value)} disabled={saving} maxLength={150} />
           </FormField>
-          <FormField label="Categorie" htmlFor="tpl-cat" required>
+          <FormField label={t('issuedItems.form.category')} htmlFor="tpl-cat" required>
             <LookupSelect
               id="tpl-cat"
               basePath="/api/issued-item-categories"
@@ -204,23 +206,23 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
               singular="categorie"
               value={form.categoryId}
               onChange={(value) => set('categoryId', value)}
-              placeholder={form.categoryId ? undefined : form.category || 'Kies een categorie'}
+              placeholder={form.categoryId ? undefined : form.category || t('issuedItems.form.categoryPlaceholder')}
               disabled={saving}
             />
             {canManageCategories && (
               <Link className="issued-items-manage-link" to="/master-data/issued-item-categories">
-                + Categorieën beheren
+                {t('issuedItems.form.manageCategories')}
               </Link>
             )}
           </FormField>
         </div>
-        <FormField label="Omschrijving" htmlFor="tpl-desc">
+        <FormField label={t('issuedItems.form.description')} htmlFor="tpl-desc">
           <input id="tpl-desc" value={form.description ?? ''} onChange={(e) => set('description', e.target.value || null)} disabled={saving} maxLength={500} />
         </FormField>
         <FormField
-          label="Toepasselijke functiecodes"
+          label={t('issuedItems.form.jobFunctions')}
           htmlFor="tpl-functions"
-          hint="Komma-gescheiden functiecodes; leeg = voor iedereen."
+          hint={t('issuedItems.form.jobFunctionsHint')}
         >
           <input
             id="tpl-functions"
@@ -231,32 +233,32 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
           />
         </FormField>
         <div className="issued-items-form-row">
-          <FormField label="Standaardaantal" htmlFor="tpl-qty">
+          <FormField label={t('issuedItems.form.defaultQty')} htmlFor="tpl-qty">
             <input id="tpl-qty" type="number" min={1} value={form.defaultQuantity} onChange={(e) => set('defaultQuantity', Number(e.target.value) || 1)} disabled={saving} />
           </FormField>
           <FormField
-            label="Volgorde in lijst"
+            label={t('issuedItems.form.sortOrder')}
             htmlFor="tpl-sort"
-            hint="Bepaalt de volgorde in het overzicht en in keuzelijsten; lager komt eerst."
+            hint={t('issuedItems.form.sortOrderHint')}
           >
             <input id="tpl-sort" type="number" value={form.sortOrder} onChange={(e) => set('sortOrder', Number(e.target.value) || 0)} disabled={saving} />
           </FormField>
         </div>
         <label className="issued-items-checkbox">
           <input type="checkbox" checked={form.requiresSerialNumber} onChange={(e) => set('requiresSerialNumber', e.target.checked)} disabled={saving} />
-          <span>Serienummer vereist</span>
+          <span>{t('issuedItems.form.requiresSerial')}</span>
         </label>
         <label className="issued-items-checkbox">
           <input type="checkbox" checked={form.requiresReceivedDate} onChange={(e) => set('requiresReceivedDate', e.target.checked)} disabled={saving} />
-          <span>Uitreikingsdatum vereist</span>
+          <span>{t('issuedItems.form.requiresReceivedDate')}</span>
         </label>
         <label className="issued-items-checkbox">
           <input type="checkbox" checked={form.returnRequired} onChange={(e) => set('returnRequired', e.target.checked)} disabled={saving} />
-          <span>Moet worden teruggebracht</span>
+          <span>{t('issuedItems.form.returnRequired')}</span>
         </label>
         <label className="issued-items-checkbox">
           <input type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} disabled={saving} />
-          <span>Actief</span>
+          <span>{t('issuedItems.form.active')}</span>
         </label>
 
         <label className="issued-items-checkbox issued-items-checkbox-strong">
@@ -269,20 +271,20 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
             }}
             disabled={saving}
           />
-          <span>Voorraadbeheer</span>
+          <span>{t('issuedItems.form.stockTracking')}</span>
         </label>
         {form.stockTrackingEnabled && (
           <div className="issued-items-stock-config">
             <label className="issued-items-checkbox">
               <input type="checkbox" checked={form.variantsEnabled} onChange={(e) => set('variantsEnabled', e.target.checked)} disabled={saving} />
-              <span>Varianten gebruiken (maat/uitvoering) — voorraad per variant</span>
+              <span>{t('issuedItems.form.variantsEnabled')}</span>
             </label>
             {form.variantsEnabled && editing?.variantsEnabled && (
               <TemplateVariantsEditor templateId={editing.id} unit={form.unit} />
             )}
             {form.variantsEnabled && editing && !editing.variantsEnabled && (
               <p className="customer-form-muted">
-                Varianten worden actief na het opslaan; daarna beheer je ze hier of op de detailpagina.
+                {t('issuedItems.form.variantsAfterSave')}
               </p>
             )}
             {form.variantsEnabled && !editing && (
@@ -291,10 +293,10 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
                   <table className="issued-items-table">
                     <thead>
                       <tr>
-                        <th>Variantnaam / uitvoering</th>
-                        <th>Voorraad</th>
-                        <th>Lage-voorraadgrens</th>
-                        <th aria-label="Acties" />
+                        <th>{t('issuedItems.form.colVariantName')}</th>
+                        <th>{t('issuedItems.form.colStock')}</th>
+                        <th>{t('issuedItems.form.colThreshold')}</th>
+                        <th aria-label={t('issuedItems.tab.colActions')} />
                       </tr>
                     </thead>
                     <tbody>
@@ -309,7 +311,7 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
                               className="issued-items-link issued-items-link-danger"
                               onClick={() => setPendingVariants((rows) => rows.filter((_, i) => i !== index))}
                             >
-                              Verwijderen
+                              {t('ui.actions.delete')}
                             </button>
                           </td>
                         </tr>
@@ -318,10 +320,12 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
                   </table>
                 )}
                 <p className="issued-items-computed-stock">
-                  Totale voorraad: {pendingVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)} (berekende som van de varianten)
+                  {t('issuedItems.form.totalPending', {
+                    total: pendingVariants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0),
+                  })}
                 </p>
                 <div className="issued-items-form-row">
-                  <FormField label="Variantnaam / uitvoering" htmlFor="tpl-variant-label" hint="Bv. Small, maat 43, zwart.">
+                  <FormField label={t('issuedItems.form.variantName')} htmlFor="tpl-variant-label" hint={t('issuedItems.form.variantNameHint')}>
                     <input
                       id="tpl-variant-label"
                       value={pendingDraft.label}
@@ -330,7 +334,7 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
                       onChange={(e) => setPendingDraft((d) => ({ ...d, label: e.target.value }))}
                     />
                   </FormField>
-                  <FormField label="Voorraad" htmlFor="tpl-variant-stock">
+                  <FormField label={t('issuedItems.form.stock')} htmlFor="tpl-variant-stock">
                     <input
                       id="tpl-variant-stock"
                       type="number"
@@ -340,7 +344,7 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
                       onChange={(e) => setPendingDraft((d) => ({ ...d, stock: e.target.value }))}
                     />
                   </FormField>
-                  <FormField label="Lage-voorraadgrens" htmlFor="tpl-variant-threshold" hint="Leeg = sjabloongrens.">
+                  <FormField label={t('issuedItems.form.threshold')} htmlFor="tpl-variant-threshold" hint={t('issuedItems.form.thresholdHint')}>
                     <input
                       id="tpl-variant-threshold"
                       type="number"
@@ -351,20 +355,20 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
                     />
                   </FormField>
                   <Button variant="secondary" onClick={addPendingVariant} disabled={saving}>
-                    + Variant toevoegen
+                    {t('issuedItems.form.addVariant')}
                   </Button>
                 </div>
               </div>
             )}
             <label className="issued-items-checkbox">
               <input type="checkbox" checked={form.allowNegativeStock} onChange={(e) => set('allowNegativeStock', e.target.checked)} disabled={saving} />
-              <span>Negatieve voorraad toestaan</span>
+              <span>{t('issuedItems.form.allowNegative')}</span>
             </label>
             {!form.variantsEnabled && (
               <FormField
-                label="Voorraad"
+                label={t('issuedItems.form.stock')}
                 htmlFor="tpl-stock"
-                hint="Wat er nu fysiek aanwezig is. Wijzigingen worden als voorraadbeweging geregistreerd."
+                hint={t('issuedItems.form.stockHint')}
               >
                 <input
                   id="tpl-stock"
@@ -376,7 +380,7 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
               </FormField>
             )}
             {stockChanged && (
-              <FormField label="Reden voor correctie" htmlFor="tpl-stock-reason" required hint="Verplicht bij het aanpassen van bestaande voorraad.">
+              <FormField label={t('issuedItems.form.correctionReason')} htmlFor="tpl-stock-reason" required hint={t('issuedItems.form.correctionReasonHint')}>
                 <input
                   id="tpl-stock-reason"
                   value={form.stockCorrectionReason ?? ''}
@@ -388,9 +392,9 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
             )}
             <div className="issued-items-form-row">
               <FormField
-                label="Lage-voorraadgrens"
+                label={t('issuedItems.form.lowThreshold')}
                 htmlFor="tpl-low"
-                hint="Het systeem waarschuwt wanneer de voorraad deze grens bereikt of eronder zakt."
+                hint={t('issuedItems.form.lowThresholdHint')}
               >
                 <input
                   id="tpl-low"
@@ -403,12 +407,12 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Eenheid" htmlFor="tpl-unit" hint="Voorraadeenheid uit de stamgegevens.">
+              <FormField label={t('issuedItems.form.unit')} htmlFor="tpl-unit" hint={t('issuedItems.form.unitHint')}>
                 {/* Managed dropdown (spec: no free text); a legacy free-text value stays selectable. */}
                 <select id="tpl-unit" value={form.unit ?? ''} onChange={(e) => set('unit', e.target.value || null)} disabled={saving}>
-                  <option value="">— Eenheid —</option>
+                  <option value="">{t('issuedItems.form.unitPlaceholder')}</option>
                   {form.unit && !unitOptions.some((u) => u.name === form.unit) && (
-                    <option value={form.unit}>Bestaande waarde: {form.unit}</option>
+                    <option value={form.unit}>{t('issuedItems.form.legacyUnit', { value: form.unit })}</option>
                   )}
                   {unitOptions.map((unit) => (
                     <option key={unit.id} value={unit.name}>
@@ -419,17 +423,17 @@ export function TemplateFormModal({ editing, onSaved, onClose }: TemplateFormMod
                 </select>
                 {canManageUnits && (
                   <Link className="issued-items-manage-link" to="/master-data/eenheden">
-                    + Eenheden beheren
+                    {t('issuedItems.form.manageUnits')}
                   </Link>
                 )}
               </FormField>
-              <FormField label="Opslaglocatie" htmlFor="tpl-storage">
+              <FormField label={t('issuedItems.form.storage')} htmlFor="tpl-storage">
                 <input id="tpl-storage" value={form.storageLocation ?? ''} onChange={(e) => set('storageLocation', e.target.value || null)} disabled={saving} maxLength={150} />
               </FormField>
             </div>
           </div>
         )}
-        <FormField label="Notities" htmlFor="tpl-notes">
+        <FormField label={t('issuedItems.form.notes')} htmlFor="tpl-notes">
           <textarea id="tpl-notes" rows={2} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={saving} maxLength={1000} />
         </FormField>
       </form>

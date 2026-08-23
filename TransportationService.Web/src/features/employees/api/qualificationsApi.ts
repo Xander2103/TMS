@@ -1,6 +1,11 @@
 import { ApiError, apiClient } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
+import { translate } from '../../../i18n/translations'
+import type { TranslateFn } from '../../../i18n/localeContext'
 import { getAccessToken } from '../../auth/authStorage'
+
+/** Fallback translator (Dutch) for callers that don't pass their own `t`. */
+const defaultT: TranslateFn = (key, params) => translate('nl', key, params)
 import type {
   CreateEmployeeQualificationInput,
   EmployeeQualification,
@@ -66,6 +71,7 @@ export async function uploadQualificationDocument(
   employeeId: string,
   id: string,
   file: File,
+  t: TranslateFn = defaultT,
 ): Promise<EmployeeQualification> {
   const body = new FormData()
   body.append('file', file)
@@ -75,7 +81,7 @@ export async function uploadQualificationDocument(
     body,
   })
   if (!response.ok) {
-    let message = 'Uploaden is mislukt.'
+    let message = t('employees.errors.uploadFailed')
     try {
       const data = (await response.json()) as { detail?: string; message?: string }
       message = data.detail ?? data.message ?? message
@@ -87,12 +93,16 @@ export async function uploadQualificationDocument(
   return (await response.json()) as EmployeeQualification
 }
 
-export async function downloadQualificationDocument(employeeId: string, id: string): Promise<void> {
+export async function downloadQualificationDocument(
+  employeeId: string,
+  id: string,
+  t: TranslateFn = defaultT,
+): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/api/employees/${employeeId}/qualifications/${id}/document`, {
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
   if (!response.ok) {
-    throw new ApiError('Document kon niet worden gedownload.', response.status)
+    throw new ApiError(t('employees.errors.downloadDocumentFailed'), response.status)
   }
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const fileNameMatch = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)

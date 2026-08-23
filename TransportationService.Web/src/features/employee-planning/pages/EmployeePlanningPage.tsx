@@ -9,7 +9,9 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { ApiError } from '../../../api/apiClient'
+import { formatDurationMinutes } from '../../../utils/dates'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { ScheduleChip, ScheduleLegend } from '../components/ScheduleChip'
 import {
@@ -24,7 +26,6 @@ import {
 import {
   SHIFT_STATUS_LABELS,
   SHIFT_TYPE_LABELS,
-  formatMinutes,
   mondayOf,
   toIsoDate,
   type ScheduleEntry,
@@ -35,7 +36,16 @@ import {
 } from '../types'
 import '../components/employee-planning.css'
 
-const DAY_LABELS = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo']
+/** Vertaalsleutels per weekdag (maandag eerst). */
+const DAY_KEYS = [
+  'employeePlanning.days.mon',
+  'employeePlanning.days.tue',
+  'employeePlanning.days.wed',
+  'employeePlanning.days.thu',
+  'employeePlanning.days.fri',
+  'employeePlanning.days.sat',
+  'employeePlanning.days.sun',
+]
 
 interface DialogState {
   mode: 'create' | 'edit'
@@ -47,6 +57,7 @@ interface DialogState {
 
 /** Personnel planning grid: employees × days, chips per state, shift dialog, copy week. */
 export function EmployeePlanningPage() {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const navigate = useNavigate()
@@ -99,7 +110,7 @@ export function EmployeePlanningPage() {
       .catch(() => {
         if (!mounted) return
         setGridState((current) => ({ ...current, loadedKey: requestKey }))
-        showError('De personeelsplanning kon niet worden geladen.')
+        showError(t('employeePlanning.page.loadFailed'))
       })
     return () => {
       mounted = false
@@ -145,7 +156,7 @@ export function EmployeePlanningPage() {
       setConflictInfo(null)
       setOverrideConflicts(false)
     } catch {
-      showError('De shift kon niet worden geladen.')
+      showError(t('employeePlanning.page.shiftLoadFailed'))
     }
   }
 
@@ -172,7 +183,7 @@ export function EmployeePlanningPage() {
     event.preventDefault()
     if (!dialog) return
     if (!dialogDate || !startTime || !endTime) {
-      showError('Datum, begin- en einduur zijn verplicht.')
+      showError(t('employeePlanning.dialog.requiredFields'))
       return
     }
     setBusy(true)
@@ -190,10 +201,10 @@ export function EmployeePlanningPage() {
       }
       if (dialog.mode === 'create') {
         await createShift({ employeeId: dialog.employeeId, ...payload })
-        showSuccess('Shift aangemaakt.')
+        showSuccess(t('employeePlanning.dialog.created'))
       } else {
         await updateShift(dialog.shift!.id, payload)
-        showSuccess('Shift bijgewerkt.')
+        showSuccess(t('employeePlanning.dialog.updated'))
       }
       setDialog(null)
       setReloadToken((token) => token + 1)
@@ -203,7 +214,7 @@ export function EmployeePlanningPage() {
         // Blocking schedule conflicts: show them in the dialog; overriding stays an explicit choice.
         setConflictInfo(body.conflicts.filter((c): c is string => typeof c === 'string'))
       } else {
-        showError(err instanceof ApiError ? err.message : 'De shift kon niet worden opgeslagen.')
+        showError(err instanceof ApiError ? err.message : t('employeePlanning.dialog.saveFailed'))
       }
     } finally {
       setBusy(false)
@@ -216,10 +227,10 @@ export function EmployeePlanningPage() {
     try {
       const updated = await changeShiftStatus(dialog.shift.id, status)
       setDialog({ ...dialog, shift: updated })
-      showSuccess(`Shift is nu: ${SHIFT_STATUS_LABELS[status]}.`)
+      showSuccess(t('employeePlanning.dialog.statusNow', { status: t(SHIFT_STATUS_LABELS[status]) }))
       setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De status kon niet worden gewijzigd.')
+      showError(err instanceof ApiError ? err.message : t('employeePlanning.dialog.statusFailed'))
     } finally {
       setBusy(false)
     }
@@ -230,12 +241,12 @@ export function EmployeePlanningPage() {
     setBusy(true)
     try {
       await deleteShift(dialog.shift.id)
-      showSuccess('Shift verwijderd.')
+      showSuccess(t('employeePlanning.dialog.deleted'))
       setConfirmDeleteShift(false)
       setDialog(null)
       setReloadToken((token) => token + 1)
     } catch {
-      showError('De shift kon niet worden verwijderd.')
+      showError(t('employeePlanning.dialog.deleteFailed'))
     } finally {
       setBusy(false)
     }
@@ -244,17 +255,17 @@ export function EmployeePlanningPage() {
   async function handleCopyWeek(event: FormEvent) {
     event.preventDefault()
     if (!copyTarget) {
-      showError('Kies een doelweek.')
+      showError(t('employeePlanning.copy.targetRequired'))
       return
     }
     setBusy(true)
     try {
       const result = await copyWeek(weekStart, copyTarget, undefined, departmentId ?? undefined)
-      showSuccess(`Week gekopieerd: ${result.copiedCount} shift(s), ${result.skippedCount} overgeslagen.`)
+      showSuccess(t('employeePlanning.copy.success', { count: result.copiedCount, skipped: result.skippedCount }))
       setCopyOpen(false)
       setWeekStart(copyTarget)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De week kon niet worden gekopieerd.')
+      showError(err instanceof ApiError ? err.message : t('employeePlanning.copy.failed'))
     } finally {
       setBusy(false)
     }
@@ -271,10 +282,10 @@ export function EmployeePlanningPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Personeelsplanning' }]} />
+      <Breadcrumbs items={[{ label: t('employeePlanning.page.breadcrumb') }]} />
       <PageHeader
-        title="Personeelsplanning"
-        subtitle="Shifts, opleiding en afwezigheden per medewerker — los van de ritplanning."
+        title={t('employeePlanning.page.title')}
+        subtitle={t('employeePlanning.page.subtitle')}
         action={
           canManage ? (
             <Button
@@ -286,7 +297,7 @@ export function EmployeePlanningPage() {
                 setCopyOpen(true)
               }}
             >
-              Week kopiëren
+              {t('employeePlanning.page.copyWeek')}
             </Button>
           ) : undefined
         }
@@ -294,25 +305,25 @@ export function EmployeePlanningPage() {
 
       <div className="ep-toolbar">
         <span className="ep-week-nav">
-          <button type="button" onClick={() => shiftWeek(-1)} aria-label="Vorige week">
+          <button type="button" onClick={() => shiftWeek(-1)} aria-label={t('employeePlanning.page.prevWeek')}>
             ‹
           </button>
           <input
             type="date"
             value={weekStart}
             onChange={(e) => e.target.value && setWeekStart(toIsoDate(mondayOf(new Date(`${e.target.value}T00:00:00`))))}
-            aria-label="Weekstart"
+            aria-label={t('employeePlanning.page.weekStart')}
           />
-          <button type="button" onClick={() => shiftWeek(1)} aria-label="Volgende week">
+          <button type="button" onClick={() => shiftWeek(1)} aria-label={t('employeePlanning.page.nextWeek')}>
             ›
           </button>
         </span>
         <label>
-          Periode{' '}
+          {t('employeePlanning.page.period')}{' '}
           <select value={weeksCount} onChange={(e) => setWeeksCount(Number(e.target.value))}>
-            <option value={1}>1 week</option>
-            <option value={2}>2 weken</option>
-            <option value={4}>4 weken</option>
+            <option value={1}>{t('employeePlanning.page.weeks', { count: 1 })}</option>
+            <option value={2}>{t('employeePlanning.page.weeks', { count: 2 })}</option>
+            <option value={4}>{t('employeePlanning.page.weeks', { count: 4 })}</option>
           </select>
         </label>
         <span style={{ minWidth: 220 }}>
@@ -322,35 +333,35 @@ export function EmployeePlanningPage() {
             singular="afdeling"
             value={departmentId}
             onChange={setDepartmentId}
-            placeholder="Alle afdelingen"
+            placeholder={t('employeePlanning.page.allDepartments')}
           />
         </span>
         <input
           value={nameFilter}
           onChange={(e) => setNameFilter(e.target.value)}
-          placeholder="Filter op naam…"
-          aria-label="Filter op naam"
+          placeholder={t('employeePlanning.page.nameFilterPlaceholder')}
+          aria-label={t('employeePlanning.page.nameFilterAria')}
         />
         <label>
-          <input type="checkbox" checked={listView} onChange={(e) => setListView(e.target.checked)} /> Lijstweergave
+          <input type="checkbox" checked={listView} onChange={(e) => setListView(e.target.checked)} /> {t('employeePlanning.page.listView')}
         </label>
       </div>
 
       <ScheduleLegend />
 
-      {loading && <p className="portal-empty">Planning laden…</p>}
+      {loading && <p className="portal-empty">{t('employeePlanning.page.loading')}</p>}
 
       {!listView && (
         <div className="ep-grid-wrap">
           <table className="ep-grid">
             <thead>
               <tr>
-                <th className="ep-employee-cell">Medewerker</th>
+                <th className="ep-employee-cell">{t('employeePlanning.page.colEmployee')}</th>
                 {days.map((date) => {
                   const dayIndex = (new Date(`${date}T00:00:00`).getDay() + 6) % 7
                   return (
                     <th key={date} className={`${dayIndex >= 5 ? 'ep-weekend' : ''} ${date === today ? 'ep-today' : ''}`}>
-                      {DAY_LABELS[dayIndex]} {date.slice(8, 10)}/{date.slice(5, 7)}
+                      {t(DAY_KEYS[dayIndex])} {date.slice(8, 10)}/{date.slice(5, 7)}
                     </th>
                   )
                 })}
@@ -370,7 +381,8 @@ export function EmployeePlanningPage() {
                       )}
                     </div>
                     <div className="ep-employee-meta">
-                      {row.departmentName ?? '—'} · {formatMinutes(row.plannedMinutes)} gepland
+                      {row.departmentName ?? '—'} ·{' '}
+                      {t('employeePlanning.page.plannedSuffix', { duration: formatDurationMinutes(row.plannedMinutes) })}
                     </div>
                   </td>
                   {row.days.map((day) => {
@@ -391,7 +403,7 @@ export function EmployeePlanningPage() {
                               className="ep-add-shift"
                               onClick={() => openCreate(row.employeeId, row.employeeName, day.date)}
                             >
-                              + shift
+                              {t('employeePlanning.page.addShift')}
                             </button>
                           )}
                         </div>
@@ -402,7 +414,7 @@ export function EmployeePlanningPage() {
               ))}
               {rows.length === 0 && !loading && (
                 <tr>
-                  <td colSpan={days.length + 1}>Geen medewerkers gevonden voor deze filters.</td>
+                  <td colSpan={days.length + 1}>{t('employeePlanning.page.emptyFiltered')}</td>
                 </tr>
               )}
             </tbody>
@@ -414,11 +426,11 @@ export function EmployeePlanningPage() {
         <table className="to-stops-table">
           <thead>
             <tr>
-              <th>Medewerker</th>
-              <th>Datum</th>
-              <th>Status</th>
-              <th>Tijd</th>
-              <th>Locatie</th>
+              <th>{t('employeePlanning.page.colEmployee')}</th>
+              <th>{t('employeePlanning.page.colDate')}</th>
+              <th>{t('employeePlanning.page.colStatus')}</th>
+              <th>{t('employeePlanning.page.colTime')}</th>
+              <th>{t('employeePlanning.page.colLocation')}</th>
             </tr>
           </thead>
           <tbody>
@@ -457,19 +469,19 @@ export function EmployeePlanningPage() {
         <Modal
           title={
             dialog.mode === 'create'
-              ? `Shift aanmaken — ${dialog.employeeName}`
-              : `Shift bewerken — ${dialog.employeeName}`
+              ? t('employeePlanning.dialog.createTitle', { name: dialog.employeeName })
+              : t('employeePlanning.dialog.editTitle', { name: dialog.employeeName })
           }
           onClose={() => setDialog(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDialog(null)} disabled={busy}>
-                {canManage ? 'Annuleren' : 'Sluiten'}
+                {canManage ? t('ui.actions.cancel') : t('ui.actions.close')}
               </Button>
               {canManage && (
                 <Button type="submit" form="ep-shift-form" disabled={busy}>
-                  {busy ? 'Bezig…' : 'Opslaan'}
+                  {busy ? t('employeePlanning.dialog.busy') : t('ui.actions.save')}
                 </Button>
               )}
             </>
@@ -479,74 +491,74 @@ export function EmployeePlanningPage() {
             {dialog.mode === 'edit' && dialog.shift && (
               <div className="ep-form-actions-extra">
                 <Badge tone={dialog.shift.status === 'Confirmed' ? 'success' : dialog.shift.status === 'Planned' ? 'info' : 'neutral'}>
-                  {SHIFT_STATUS_LABELS[dialog.shift.status]}
+                  {t(SHIFT_STATUS_LABELS[dialog.shift.status])}
                 </Badge>
                 {canManage && dialog.shift.status === 'Draft' && (
                   <Button variant="secondary" onClick={() => void handleStatus('Planned')} disabled={busy}>
-                    → Gepland
+                    {t('employeePlanning.dialog.toPlanned')}
                   </Button>
                 )}
                 {canManage && dialog.shift.status === 'Planned' && (
                   <>
                     <Button variant="secondary" onClick={() => void handleStatus('Confirmed')} disabled={busy}>
-                      → Bevestigen
+                      {t('employeePlanning.dialog.toConfirmed')}
                     </Button>
                     <Button variant="ghost" onClick={() => void handleStatus('Draft')} disabled={busy}>
-                      → Concept
+                      {t('employeePlanning.dialog.toDraft')}
                     </Button>
                   </>
                 )}
                 {canManage && dialog.shift.status === 'Confirmed' && (
                   <Button variant="ghost" onClick={() => void handleStatus('Planned')} disabled={busy}>
-                    → Terug naar gepland
+                    {t('employeePlanning.dialog.backToPlanned')}
                   </Button>
                 )}
                 {canManage && (
                   <Button variant="danger" onClick={() => setConfirmDeleteShift(true)} disabled={busy}>
-                    Verwijderen
+                    {t('ui.actions.delete')}
                   </Button>
                 )}
               </div>
             )}
-            <FormField label="Datum" htmlFor="ep-date" required>
+            <FormField label={t('employeePlanning.dialog.date')} htmlFor="ep-date" required>
               <input id="ep-date" type="date" value={dialogDate} onChange={(e) => setDialogDate(e.target.value)} disabled={busy || !canManage} />
             </FormField>
             <div className="ep-form-row">
-              <FormField label="Van" htmlFor="ep-start" required>
+              <FormField label={t('employeePlanning.dialog.from')} htmlFor="ep-start" required>
                 <input id="ep-start" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} disabled={busy || !canManage} />
               </FormField>
-              <FormField label="Tot" htmlFor="ep-end" required>
+              <FormField label={t('employeePlanning.dialog.to')} htmlFor="ep-end" required>
                 <input id="ep-end" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} disabled={busy || !canManage} />
               </FormField>
             </div>
             <div className="ep-form-row">
-              <FormField label="Pauze (minuten)" htmlFor="ep-break">
+              <FormField label={t('employeePlanning.dialog.breakMinutes')} htmlFor="ep-break">
                 <input id="ep-break" type="number" min={0} value={breakMinutes} onChange={(e) => setBreakMinutes(e.target.value)} disabled={busy || !canManage} />
               </FormField>
-              <FormField label="Type" htmlFor="ep-type">
+              <FormField label={t('employeePlanning.dialog.type')} htmlFor="ep-type">
                 <select id="ep-type" value={shiftType} onChange={(e) => setShiftType(e.target.value as ShiftType)} disabled={busy || !canManage}>
-                  {(Object.keys(SHIFT_TYPE_LABELS) as ShiftType[]).map((t) => (
-                    <option key={t} value={t}>
-                      {SHIFT_TYPE_LABELS[t]}
+                  {(Object.keys(SHIFT_TYPE_LABELS) as ShiftType[]).map((type) => (
+                    <option key={type} value={type}>
+                      {t(SHIFT_TYPE_LABELS[type])}
                     </option>
                   ))}
                 </select>
               </FormField>
             </div>
             <div className="ep-form-row">
-              <FormField label="Werklocatie" htmlFor="ep-location">
+              <FormField label={t('employeePlanning.dialog.workLocation')} htmlFor="ep-location">
                 <input id="ep-location" value={workLocation} onChange={(e) => setWorkLocation(e.target.value)} disabled={busy || !canManage} maxLength={200} />
               </FormField>
-              <FormField label="Functie/rol" htmlFor="ep-role">
+              <FormField label={t('employeePlanning.dialog.role')} htmlFor="ep-role">
                 <input id="ep-role" value={roleLabel} onChange={(e) => setRoleLabel(e.target.value)} disabled={busy || !canManage} maxLength={100} />
               </FormField>
             </div>
-            <FormField label="Notities" htmlFor="ep-notes">
+            <FormField label={t('employeePlanning.dialog.notes')} htmlFor="ep-notes">
               <textarea id="ep-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy || !canManage} maxLength={1000} />
             </FormField>
             {conflictInfo && (
               <div className="ep-conflict-panel" role="alert">
-                <strong>Blokkerende planningsconflicten</strong>
+                <strong>{t('employeePlanning.dialog.conflictsTitle')}</strong>
                 <ul>
                   {conflictInfo.map((conflict, index) => (
                     <li key={index}>{conflict}</li>
@@ -560,10 +572,10 @@ export function EmployeePlanningPage() {
                       onChange={(e) => setOverrideConflicts(e.target.checked)}
                       disabled={busy}
                     />
-                    Toch plannen (conflicten overschrijven)
+                    {t('employeePlanning.dialog.override')}
                   </label>
                 ) : (
-                  <p>Je hebt geen recht om deze conflicten te overschrijven.</p>
+                  <p>{t('employeePlanning.dialog.noOverridePermission')}</p>
                 )}
               </div>
             )}
@@ -573,9 +585,9 @@ export function EmployeePlanningPage() {
 
       {confirmDeleteShift && dialog?.shift && (
         <ConfirmDialog
-          title="Shift verwijderen"
-          message={`Shift van ${dialog.employeeName} op ${dialog.shift.date} verwijderen? De medewerker wordt verwittigd.`}
-          confirmLabel="Verwijderen"
+          title={t('employeePlanning.dialog.deleteTitle')}
+          message={t('employeePlanning.dialog.deleteMessage', { name: dialog.employeeName, date: dialog.shift.date })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={busy}
           onConfirm={() => void handleDelete()}
@@ -585,26 +597,26 @@ export function EmployeePlanningPage() {
 
       {copyOpen && (
         <Modal
-          title={`Week van ${weekStart} kopiëren`}
+          title={t('employeePlanning.copy.title', { week: weekStart })}
           onClose={() => setCopyOpen(false)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setCopyOpen(false)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="ep-copy-form" disabled={busy}>
-                {busy ? 'Bezig…' : 'Kopiëren'}
+                {busy ? t('employeePlanning.dialog.busy') : t('employeePlanning.copy.copy')}
               </Button>
             </>
           }
         >
           <form id="ep-copy-form" className="ep-form" onSubmit={handleCopyWeek} noValidate>
             <FormField
-              label="Doelweek (maandag)"
+              label={t('employeePlanning.copy.targetLabel')}
               htmlFor="ep-copy-target"
               required
-              hint="Alle shifts van de huidige selectie worden als concept gekopieerd; conflicten worden overgeslagen."
+              hint={t('employeePlanning.copy.targetHint')}
             >
               <input
                 id="ep-copy-target"

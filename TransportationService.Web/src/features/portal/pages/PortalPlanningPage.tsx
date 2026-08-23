@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { apiClient } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
+import { useLocale } from '../../../i18n/localeContext'
 import { getAccessToken } from '../../auth/authStorage'
 import { useAuth } from '../../auth/authContextValue'
 import { MonthGrid } from '../../../components/calendar/MonthGrid'
@@ -33,11 +34,12 @@ export function PortalPlanningPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
 
   const [view, setView] = useState<CalendarViewMode>('week')
   const [anchor, setAnchor] = useState(() => toIsoDate(mondayOf(new Date())))
   const [loadedDays, setLoadedDays] = useState<{ key: string; days: ScheduleDay[] } | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const [noteDialog, setNoteDialog] = useState<{ note: PersonalCalendarNote | null; date: string } | null>(null)
 
@@ -69,7 +71,7 @@ export function PortalPlanningPage() {
         if (mounted) setLoadedDays({ key: `${from}|${to}|${reloadToken}`, days: data })
       })
       .catch(() => {
-        if (mounted) setLoadError('Je planning kon niet worden geladen.')
+        if (mounted) setLoadError(true)
       })
     return () => {
       mounted = false
@@ -120,24 +122,24 @@ export function PortalPlanningPage() {
       link.click()
       URL.revokeObjectURL(url)
     } catch {
-      toast.showError('De agenda-export kon niet worden gedownload.')
+      toast.showError(t('portalHome.planning.icsFailed'))
     }
   }
 
-  if (loadError) return <ErrorState message={loadError} />
+  if (loadError) return <ErrorState message={t('portalHome.planning.loadFailed')} />
 
   const today = toIsoDate(new Date())
 
   return (
     <div>
       <PageHeader
-        title="Mijn planning"
-        subtitle="Je shifts, ritten, opleidingen en afwezigheden."
+        title={t('portalHome.planning.title')}
+        subtitle={t('portalHome.planning.subtitle')}
         action={
           <div className="portal-planning-actions">
-            <Button onClick={() => setNoteDialog({ note: null, date: today })}>+ Notitie</Button>
+            <Button onClick={() => setNoteDialog({ note: null, date: today })}>{t('portalHome.planning.addNote')}</Button>
             <Button variant="secondary" onClick={() => void downloadIcs()}>
-              Agenda-export (.ics)
+              {t('portalHome.planning.icsExport')}
             </Button>
           </div>
         }
@@ -150,7 +152,7 @@ export function PortalPlanningPage() {
         onNavigate={(next) => setAnchor(toIsoDate(next))}
       />
 
-      {!days && <LoadingState message="Planning laden..." />}
+      {!days && <LoadingState message={t('portalHome.planning.loading')} />}
 
       {days && view === 'week' && (
         <WeekGrid
@@ -177,10 +179,10 @@ export function PortalPlanningPage() {
               <li key={day.date} className={`cal-list-day ${day.date === today ? 'cal-today' : ''}`}>
                 <div className="cal-list-date">
                   {DAY_NAMES[dayIndex]} {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
-                  {day.date === today && ' · vandaag'}
+                  {day.date === today && ` · ${t('portalHome.planning.today')}`}
                 </div>
                 <div className="cal-list-entries">
-                  {day.entries.length === 0 && <span className="cal-list-free">vrij</span>}
+                  {day.entries.length === 0 && <span className="cal-list-free">{t('ui.calendar.free')}</span>}
                   {day.entries.map((entry, index) => (
                     <ScheduleChip key={index} entry={entry} onClick={chipAction(entry, day.date)} />
                   ))}

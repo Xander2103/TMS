@@ -13,8 +13,10 @@ import { MESSAGES, translate } from '../translations'
  */
 
 function resolveNl(key: string): boolean {
-  // translate echo't de key zelf wanneer die ontbreekt.
-  return translate('nl', key) !== key
+  // translate echo't de key zelf wanneer die ontbreekt. Pluralsleutels bestaan alleen
+  // als `<key>_one`/`<key>_other` — de kale key telt dan ook als aanwezig.
+  if (translate('nl', key) !== key) return true
+  return translate('nl', `${key}_other`) !== `${key}_other`
 }
 
 // Vite's raw glob i.p.v. node:fs — de app-tsconfig heeft bewust geen node-types,

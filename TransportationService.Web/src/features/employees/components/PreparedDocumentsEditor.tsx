@@ -1,6 +1,7 @@
 import { useRef } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   EMPLOYEE_DOCUMENT_ACCEPT,
   EMPLOYEE_DOCUMENT_CATEGORY_LABELS,
@@ -23,6 +24,7 @@ function newKey(): string {
  * uploaded here — the files are uploaded after the employee is created (see preparedFollowUp).
  */
 export function PreparedDocumentsEditor({ value, onChange }: PreparedDocumentsEditorProps) {
+  const { t } = useLocale()
   const addRef = useRef<HTMLInputElement>(null)
   const replaceRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
@@ -50,18 +52,18 @@ export function PreparedDocumentsEditor({ value, onChange }: PreparedDocumentsEd
   return (
     <div className="prepared-editor">
       <p className="ui-form-section-description">
-        Selecteer documenten; ze worden geüpload zodra de medewerker is aangemaakt.
+        {t('employees.create.preparedDocsIntro')}
       </p>
 
-      {value.length === 0 && <p className="placeholder-text">Nog geen documenten geselecteerd.</p>}
+      {value.length === 0 && <p className="placeholder-text">{t('employees.create.preparedDocsEmpty')}</p>}
 
       {value.map((doc) => (
         <div key={doc.key} className="prepared-editor-row">
           <div className="prepared-editor-file">
             <strong>{doc.file.name}</strong>
-            <span className="customer-form-muted"> ({Math.max(1, Math.round(doc.file.size / 1024))} kB)</span>
+            <span className="customer-form-muted"> ({t('employees.create.preparedDocsSizeKb', { size: Math.max(1, Math.round(doc.file.size / 1024)) })})</span>
           </div>
-          <FormField label="Categorie" htmlFor={`pd-cat-${doc.key}`}>
+          <FormField label={t('employees.create.preparedDocsCategory')} htmlFor={`pd-cat-${doc.key}`}>
             <select
               id={`pd-cat-${doc.key}`}
               value={doc.category}
@@ -69,12 +71,12 @@ export function PreparedDocumentsEditor({ value, onChange }: PreparedDocumentsEd
             >
               {EMPLOYEE_DOCUMENT_CATEGORY_ORDER.map((cat) => (
                 <option key={cat} value={cat}>
-                  {EMPLOYEE_DOCUMENT_CATEGORY_LABELS[cat]}
+                  {t(EMPLOYEE_DOCUMENT_CATEGORY_LABELS[cat])}
                 </option>
               ))}
             </select>
           </FormField>
-          <FormField label="Label" htmlFor={`pd-label-${doc.key}`} hint="Optioneel; standaard de categorie.">
+          <FormField label={t('employees.create.preparedDocsLabel')} htmlFor={`pd-label-${doc.key}`} hint={t('employees.create.preparedDocsLabelHint')}>
             <input
               id={`pd-label-${doc.key}`}
               value={doc.customLabel}
@@ -82,7 +84,7 @@ export function PreparedDocumentsEditor({ value, onChange }: PreparedDocumentsEd
               maxLength={150}
             />
           </FormField>
-          <FormField label="Vervaldatum" htmlFor={`pd-exp-${doc.key}`} hint="Leeg = vervalt niet.">
+          <FormField label={t('employees.create.preparedDocsExpiry')} htmlFor={`pd-exp-${doc.key}`} hint={t('employees.create.preparedDocsExpiryHint')}>
             <input
               id={`pd-exp-${doc.key}`}
               type="date"
@@ -90,7 +92,7 @@ export function PreparedDocumentsEditor({ value, onChange }: PreparedDocumentsEd
               onChange={(e) => patch(doc.key, { expiryDate: e.target.value })}
             />
           </FormField>
-          <FormField label="Notities" htmlFor={`pd-notes-${doc.key}`}>
+          <FormField label={t('employees.create.preparedDocsNotes')} htmlFor={`pd-notes-${doc.key}`}>
             <input
               id={`pd-notes-${doc.key}`}
               value={doc.notes}
@@ -111,10 +113,10 @@ export function PreparedDocumentsEditor({ value, onChange }: PreparedDocumentsEd
               }}
             />
             <Button variant="ghost" onClick={() => replaceRefs.current[doc.key]?.click()}>
-              Vervangen
+              {t('employees.create.preparedDocsReplace')}
             </Button>
-            <Button variant="ghost" onClick={() => remove(doc.key)} aria-label={`Document ${doc.file.name} verwijderen`}>
-              Verwijderen
+            <Button variant="ghost" onClick={() => remove(doc.key)} aria-label={t('employees.create.preparedDocsRemove', { name: doc.file.name })}>
+              {t('employees.form.remove')}
             </Button>
           </div>
         </div>
@@ -132,7 +134,7 @@ export function PreparedDocumentsEditor({ value, onChange }: PreparedDocumentsEd
         }}
       />
       <Button variant="secondary" onClick={() => addRef.current?.click()}>
-        + Document toevoegen
+        {t('employees.create.preparedDocsAdd')}
       </Button>
     </div>
   )

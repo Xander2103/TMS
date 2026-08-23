@@ -13,6 +13,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { formatDateTime } from '../../../utils/dates'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import {
   createBackup,
   deleteBackup,
@@ -32,18 +33,19 @@ import './settings.css'
 const TAB_IDS = ['systeem', 'backups'] as const
 type TabId = (typeof TAB_IDS)[number]
 
-const SOURCE_LABELS: Record<BackupSource, string> = {
-  Manual: 'Manueel',
-  Automatic: 'Automatisch',
-  PreRestore: 'Vóór terugzetten',
-  PreDeployment: 'Pre-deployment',
+/** Vertaalsleutels per bron/status (labelmap → keymap); onbekende waarden tonen de ruwe code. */
+const SOURCE_KEYS: Record<BackupSource, string> = {
+  Manual: 'settingsPages.backups.source.Manual',
+  Automatic: 'settingsPages.backups.source.Automatic',
+  PreRestore: 'settingsPages.backups.source.PreRestore',
+  PreDeployment: 'settingsPages.backups.source.PreDeployment',
 }
 
-const STATUS_LABELS: Record<BackupStatus, string> = {
-  Completed: 'Voltooid',
-  Failed: 'Mislukt',
-  Restoring: 'Bezig met terugzetten',
-  Restored: 'Teruggezet',
+const STATUS_KEYS: Record<BackupStatus, string> = {
+  Completed: 'settingsPages.backups.status.Completed',
+  Failed: 'settingsPages.backups.status.Failed',
+  Restoring: 'settingsPages.backups.status.Restoring',
+  Restored: 'settingsPages.backups.status.Restored',
 }
 
 const STATUS_TONES: Record<BackupStatus, BadgeTone> = {
@@ -66,8 +68,9 @@ function healthTone(status: string): BadgeTone {
   return status === 'Healthy' ? 'success' : 'danger'
 }
 
-function healthLabel(status: string): string {
-  return status === 'Healthy' ? 'In orde' : status
+/** 'Healthy' krijgt een vertaald label; elke andere waarde blijft ruwe technische status (§92). */
+function healthLabel(t: TranslateFn, status: string): string {
+  return status === 'Healthy' ? t('settingsPages.system.healthy') : status
 }
 
 /** Eén rij van de definitielijst; waarden zijn nooit alleen kleur (badges dragen tekst). */
@@ -81,6 +84,7 @@ function InfoRow({ term, children }: { term: string; children: ReactNode }) {
 }
 
 function SystemInfoTab() {
+  const { t } = useLocale()
   const [info, setInfo] = useState<SystemInfo | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -91,26 +95,27 @@ function SystemInfoTab() {
         if (mounted) setInfo(data)
       })
       .catch(() => {
-        if (mounted) setLoadError('De systeeminformatie kon niet worden geladen.')
+        if (mounted) setLoadError(t('settingsPages.system.loadFailed'))
       })
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (!info) return <p className="placeholder-text">Systeeminformatie laden…</p>
+  if (!info) return <p className="placeholder-text">{t('settingsPages.system.loading')}</p>
 
   const frontendBuild = import.meta.env.VITE_BUILD_COMMIT
 
   return (
     <div className="settings-sections">
       <section className="settings-card">
-        <h2>Applicatie</h2>
+        <h2>{t('settingsPages.system.application')}</h2>
         <dl className="sysinfo-list">
-          <InfoRow term="Omgeving">{info.environment}</InfoRow>
-          <InfoRow term="Versie">{info.version}</InfoRow>
-          <InfoRow term="Build (API)">
+          <InfoRow term={t('settingsPages.system.environment')}>{info.environment}</InfoRow>
+          <InfoRow term={t('settingsPages.system.version')}>{info.version}</InfoRow>
+          <InfoRow term={t('settingsPages.system.buildApi')}>
             {info.buildCommit ? (
               <span className="sysinfo-mono sysinfo-truncate" title={info.buildCommit}>
                 {info.buildCommit}
@@ -119,17 +124,17 @@ function SystemInfoTab() {
               '—'
             )}
           </InfoRow>
-          <InfoRow term="Build (frontend)">
+          <InfoRow term={t('settingsPages.system.buildFrontend')}>
             {frontendBuild ? (
               <span className="sysinfo-mono sysinfo-truncate" title={frontendBuild}>
                 {frontendBuild}
               </span>
             ) : (
-              'lokale build'
+              t('settingsPages.system.localBuild')
             )}
           </InfoRow>
-          <InfoRow term="Laatst bijgewerkt">{formatDateTime(info.lastDeployedAtUtc) || '—'}</InfoRow>
-          <InfoRow term="Deployment-ref">
+          <InfoRow term={t('settingsPages.system.lastUpdated')}>{formatDateTime(info.lastDeployedAtUtc) || '—'}</InfoRow>
+          <InfoRow term={t('settingsPages.system.deploymentRef')}>
             {info.deploymentRef ? (
               <span className="sysinfo-mono sysinfo-truncate" title={info.deploymentRef}>
                 {info.deploymentRef}
@@ -142,18 +147,18 @@ function SystemInfoTab() {
       </section>
 
       <section className="settings-card">
-        <h2>Status</h2>
+        <h2>{t('settingsPages.system.statusTitle')}</h2>
         <dl className="sysinfo-list">
-          <InfoRow term="API">
-            <Badge tone={healthTone(info.apiStatus)}>{healthLabel(info.apiStatus)}</Badge>
+          <InfoRow term={t('settingsPages.system.api')}>
+            <Badge tone={healthTone(info.apiStatus)}>{healthLabel(t, info.apiStatus)}</Badge>
           </InfoRow>
-          <InfoRow term="Database">
-            <Badge tone={healthTone(info.databaseStatus)}>{healthLabel(info.databaseStatus)}</Badge>
+          <InfoRow term={t('settingsPages.system.database')}>
+            <Badge tone={healthTone(info.databaseStatus)}>{healthLabel(t, info.databaseStatus)}</Badge>
             {info.databaseLatencyMs !== null && (
               <span className="sysinfo-latency">{info.databaseLatencyMs} ms</span>
             )}
           </InfoRow>
-          <InfoRow term="Databaseschema">
+          <InfoRow term={t('settingsPages.system.databaseSchema')}>
             {info.schemaVersion ? (
               <span className="sysinfo-mono sysinfo-truncate" title={info.schemaVersion}>
                 {info.schemaVersion}
@@ -162,11 +167,11 @@ function SystemInfoTab() {
               '—'
             )}
           </InfoRow>
-          <InfoRow term="Openstaande migraties">
+          <InfoRow term={t('settingsPages.system.pendingMigrations')}>
             {info.pendingMigrations > 0 ? (
-              <Badge tone="warning">{info.pendingMigrations} openstaand</Badge>
+              <Badge tone="warning">{t('settingsPages.system.pendingCount', { count: info.pendingMigrations })}</Badge>
             ) : (
-              <Badge tone="neutral">Geen</Badge>
+              <Badge tone="neutral">{t('settingsPages.system.noPending')}</Badge>
             )}
           </InfoRow>
         </dl>
@@ -185,25 +190,26 @@ function CreateBackupModal({
   onConfirm: (note: string | null) => void
   onCancel: () => void
 }) {
+  const { t } = useLocale()
   const [note, setNote] = useState('')
   return (
     <Modal
-      title="Nieuwe back-up maken"
+      title={t('settingsPages.backups.createTitle')}
       onClose={onCancel}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button onClick={() => onConfirm(note.trim() === '' ? null : note.trim())} disabled={busy}>
-            {busy ? 'Back-up maken…' : 'Back-up maken'}
+            {busy ? t('settingsPages.backups.createBusy') : t('settingsPages.backups.createConfirm')}
           </Button>
         </>
       }
     >
-      <p>Er wordt onmiddellijk een volledige back-up van de databank gemaakt.</p>
-      <FormField label="Notitie (optioneel)" htmlFor="backup-note" hint="Bijvoorbeeld de reden van deze back-up.">
+      <p>{t('settingsPages.backups.createIntro')}</p>
+      <FormField label={t('settingsPages.backups.noteLabel')} htmlFor="backup-note" hint={t('settingsPages.backups.noteHint')}>
         <input
           id="backup-note"
           type="text"
@@ -236,27 +242,26 @@ function RestoreBackupModal({
   onConfirm: (confirmation: string) => void
   onClose: () => void
 }) {
+  const { t } = useLocale()
   const [confirmation, setConfirmation] = useState('')
   const matches = confirmation === backup.fileName
 
   if (result) {
     return (
       <Modal
-        title="Back-up teruggezet"
+        title={t('settingsPages.backups.restoredTitle')}
         onClose={onClose}
-        footer={<Button onClick={onClose}>Sluiten</Button>}
+        footer={<Button onClick={onClose}>{t('ui.actions.close')}</Button>}
       >
-        <p>
-          De databank is teruggezet vanaf <span className="sysinfo-mono">{backup.fileName}</span>.
-        </p>
+        <p>{t('settingsPages.backups.restoredFrom', { fileName: backup.fileName })}</p>
         <dl className="sysinfo-list">
-          <InfoRow term="Veiligheidsback-up">
+          <InfoRow term={t('settingsPages.backups.safetyBackup')}>
             <span className="sysinfo-mono sysinfo-truncate" title={result.safetyBackupFileName}>
               {result.safetyBackupFileName}
             </span>
           </InfoRow>
-          <InfoRow term="Databasestatus">
-            <Badge tone={healthTone(result.databaseStatus)}>{healthLabel(result.databaseStatus)}</Badge>
+          <InfoRow term={t('settingsPages.backups.databaseStatus')}>
+            <Badge tone={healthTone(result.databaseStatus)}>{healthLabel(t, result.databaseStatus)}</Badge>
           </InfoRow>
         </dl>
         <div className="sysbackups-restore-success" role="status">
@@ -268,29 +273,29 @@ function RestoreBackupModal({
 
   return (
     <Modal
-      title="Back-up terugzetten"
+      title={t('settingsPages.backups.restoreTitle')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button variant="danger" onClick={() => onConfirm(confirmation)} disabled={!matches || busy}>
-            {busy ? 'Terugzetten…' : 'Terugzetten'}
+            {busy ? t('settingsPages.backups.restoreBusy') : t('settingsPages.backups.restoreAction')}
           </Button>
         </>
       }
     >
       <dl className="sysinfo-list">
-        <InfoRow term="Bestandsnaam">
+        <InfoRow term={t('settingsPages.backups.fileName')}>
           <span className="sysinfo-mono sysinfo-truncate" title={backup.fileName}>
             {backup.fileName}
           </span>
         </InfoRow>
-        <InfoRow term="Datum/tijd">{formatDateTime(backup.createdAtUtc)}</InfoRow>
-        <InfoRow term="Grootte">{formatBackupSize(backup.sizeBytes)}</InfoRow>
-        <InfoRow term="Schema">
+        <InfoRow term={t('settingsPages.backups.columnDateTime')}>{formatDateTime(backup.createdAtUtc)}</InfoRow>
+        <InfoRow term={t('settingsPages.backups.columnSize')}>{formatBackupSize(backup.sizeBytes)}</InfoRow>
+        <InfoRow term={t('settingsPages.backups.columnSchema')}>
           {backup.schemaVersion ? (
             <span className="sysinfo-mono sysinfo-truncate" title={backup.schemaVersion}>
               {backup.schemaVersion}
@@ -301,10 +306,9 @@ function RestoreBackupModal({
         </InfoRow>
       </dl>
       <div className="sysbackups-restore-warning" role="alert">
-        Deze actie VERVANGT de huidige databank met de inhoud van deze back-up. Er wordt eerst automatisch een
-        veiligheidsback-up gemaakt.
+        {t('settingsPages.backups.restoreWarning')}
       </div>
-      <FormField label="Typ de exacte bestandsnaam om te bevestigen" htmlFor="restore-confirmation">
+      <FormField label={t('settingsPages.backups.confirmationLabel')} htmlFor="restore-confirmation">
         <input
           id="restore-confirmation"
           type="text"
@@ -322,6 +326,7 @@ function RestoreBackupModal({
 }
 
 function BackupsTab() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canCreate = hasPermission('backups.create')
@@ -344,7 +349,7 @@ function BackupsTab() {
       setData(await listBackups())
       setLoadError(null)
     } catch {
-      setLoadError('De back-ups konden niet worden geladen.')
+      setLoadError(t('settingsPages.backups.loadFailed'))
     }
   }
 
@@ -357,22 +362,23 @@ function BackupsTab() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('De back-ups konden niet worden geladen.')
+        if (mounted) setLoadError(t('settingsPages.backups.loadFailed'))
       })
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleCreate(note: string | null) {
     setCreating(true)
     try {
       await createBackup(note)
-      showSuccess('De back-up is gemaakt.')
+      showSuccess(t('settingsPages.backups.created'))
       setCreateOpen(false)
       await load()
     } catch (err) {
-      showError(describeApiError(err, 'De back-up kon niet worden gemaakt.').message)
+      showError(describeApiError(err, t('settingsPages.backups.createFailed')).message)
     } finally {
       setCreating(false)
     }
@@ -382,7 +388,7 @@ function BackupsTab() {
     try {
       await downloadBackup(backup.id, backup.fileName)
     } catch {
-      showError('De back-up kon niet worden gedownload.')
+      showError(t('settingsPages.backups.downloadFailed'))
     }
   }
 
@@ -391,11 +397,11 @@ function BackupsTab() {
     setDeleting(true)
     try {
       await deleteBackup(deleteTarget.id)
-      showSuccess('De back-up is verwijderd.')
+      showSuccess(t('settingsPages.backups.deleted'))
       setDeleteTarget(null)
       await load()
     } catch (err) {
-      showError(describeApiError(err, 'De back-up kon niet worden verwijderd.').message)
+      showError(describeApiError(err, t('settingsPages.backups.deleteFailed')).message)
     } finally {
       setDeleting(false)
     }
@@ -409,21 +415,25 @@ function BackupsTab() {
       setRestoreResult(result)
       await load()
     } catch (err) {
-      showError(describeApiError(err, 'De back-up kon niet worden teruggezet.').message)
+      showError(describeApiError(err, t('settingsPages.backups.restoreFailed')).message)
     } finally {
       setRestoring(false)
     }
   }
 
-  const readOnlyTitle = 'Deze back-up is aangemaakt door het deploy-script en kan hier niet worden beheerd.'
+  const readOnlyTitle = t('settingsPages.backups.readOnlyTitle')
 
   const columns: Column<BackupDto>[] = [
-    { key: 'createdAt', header: 'Datum/tijd', render: (b) => formatDateTime(b.createdAtUtc) },
-    { key: 'source', header: 'Type', render: (b) => SOURCE_LABELS[b.source] ?? b.source },
-    { key: 'size', header: 'Grootte', align: 'right', render: (b) => formatBackupSize(b.sizeBytes) },
+    { key: 'createdAt', header: t('settingsPages.backups.columnDateTime'), render: (b) => formatDateTime(b.createdAtUtc) },
+    {
+      key: 'source',
+      header: t('settingsPages.backups.columnType'),
+      render: (b) => (SOURCE_KEYS[b.source] ? t(SOURCE_KEYS[b.source]) : b.source),
+    },
+    { key: 'size', header: t('settingsPages.backups.columnSize'), align: 'right', render: (b) => formatBackupSize(b.sizeBytes) },
     {
       key: 'schema',
-      header: 'Schema',
+      header: t('settingsPages.backups.columnSchema'),
       render: (b) =>
         b.schemaVersion ? (
           <span className="sysinfo-mono sysbackups-schema" title={b.schemaVersion}>
@@ -435,23 +445,23 @@ function BackupsTab() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('settingsPages.backups.columnStatus'),
       render: (b) => (
         <Badge
           tone={STATUS_TONES[b.status] ?? 'neutral'}
-          title={b.restoredAtUtc ? `Teruggezet op ${formatDateTime(b.restoredAtUtc)}` : undefined}
+          title={b.restoredAtUtc ? t('settingsPages.backups.restoredAtTitle', { dateTime: formatDateTime(b.restoredAtUtc) }) : undefined}
         >
-          {STATUS_LABELS[b.status] ?? b.status}
+          {STATUS_KEYS[b.status] ? t(STATUS_KEYS[b.status]) : b.status}
         </Badge>
       ),
     },
-    { key: 'note', header: 'Reden/notitie', render: (b) => b.note ?? '' },
+    { key: 'note', header: t('settingsPages.backups.columnNote'), render: (b) => b.note ?? '' },
   ]
 
   if (canDownload || canDelete || canRestore) {
     columns.push({
       key: 'actions',
-      header: 'Acties',
+      header: t('settingsPages.common.actions'),
       align: 'right',
       render: (b) => (
         <span className="sysbackups-row-actions">
@@ -463,7 +473,7 @@ function BackupsTab() {
               title={b.readOnly ? readOnlyTitle : undefined}
               onClick={() => void handleDownload(b)}
             >
-              Downloaden
+              {t('settingsPages.backups.download')}
             </button>
           )}
           {canRestore && (
@@ -477,7 +487,7 @@ function BackupsTab() {
                 setRestoreTarget(b)
               }}
             >
-              Terugzetten
+              {t('settingsPages.backups.restoreAction')}
             </button>
           )}
           {canDelete && (
@@ -489,12 +499,12 @@ function BackupsTab() {
                 b.readOnly
                   ? readOnlyTitle
                   : b.protected
-                    ? 'Deze back-up is beveiligd en kan niet worden verwijderd.'
+                    ? t('settingsPages.backups.protectedTitle')
                     : undefined
               }
               onClick={() => setDeleteTarget(b)}
             >
-              Verwijderen
+              {t('ui.actions.delete')}
             </button>
           )}
         </span>
@@ -503,29 +513,35 @@ function BackupsTab() {
   }
 
   if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (!data) return <p className="placeholder-text">Back-ups laden…</p>
-
-  const storageOk = data.storageStatus === 'Beschikbaar'
+  if (!data) return <p className="placeholder-text">{t('settingsPages.backups.loading')}</p>
 
   return (
     <div>
       <div className="sysbackups-banner">
-        Automatische back-ups: {data.automaticRetentionDays} dagen · Veiligheidsback-ups (pre-restore):{' '}
-        {data.preRestoreRetentionDays} dagen · Handmatige back-ups worden nooit automatisch verwijderd.
+        {t('settingsPages.backups.retentionBanner', {
+          automaticDays: data.automaticRetentionDays,
+          preRestoreDays: data.preRestoreRetentionDays,
+        })}
       </div>
       {!data.automaticEnabled && (
-        <p className="sysbackups-note">Automatische back-ups zijn momenteel uitgeschakeld.</p>
+        <p className="sysbackups-note">{t('settingsPages.backups.automaticDisabled')}</p>
       )}
-      {!storageOk && (
+      {/* Storage-healthcheck brancht op het stabiele boolveld; het label komt uit de
+          vertaalbundel en nooit uit de (Nederlandstalige) servertekst. */}
+      {data.storageAvailable ? (
+        <p className="sysbackups-note">
+          {t('settingsPages.backups.storageStatusLine', { status: t('settingsPages.system.storageAvailable') })}
+        </p>
+      ) : (
         <div className="sysbackups-storage-warning" role="alert">
-          Opslagstatus: {data.storageStatus}. Controleer de back-upopslag op de server.
+          {t('settingsPages.backups.storageWarning', { status: t('settingsPages.system.storageUnavailable') })}
         </div>
       )}
 
       {canCreate && (
         <div className="sysbackups-toolbar">
           <Button onClick={() => setCreateOpen(true)} disabled={creating}>
-            {creating ? 'Back-up maken…' : 'Nieuwe back-up maken'}
+            {creating ? t('settingsPages.backups.createBusy') : t('settingsPages.backups.create')}
           </Button>
         </div>
       )}
@@ -534,7 +550,7 @@ function BackupsTab() {
         columns={columns}
         rows={data.backups}
         rowKey={(b) => `${b.id}-${b.fileName}`}
-        emptyMessage="Er zijn nog geen back-ups."
+        emptyMessage={t('settingsPages.backups.empty')}
       />
 
       {createOpen && (
@@ -547,9 +563,9 @@ function BackupsTab() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Back-up verwijderen"
-          message={`Weet je zeker dat je de back-up "${deleteTarget.fileName}" definitief wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('settingsPages.backups.deleteTitle')}
+          message={t('settingsPages.backups.deleteMessage', { fileName: deleteTarget.fileName })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={deleting}
           onConfirm={() => void handleDelete()}
@@ -578,6 +594,7 @@ function BackupsTab() {
  * het back-upbeheer (maken, downloaden, verwijderen, terugzetten met getypte bevestiging).
  */
 export function SystemInfoPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -586,15 +603,15 @@ export function SystemInfoPage() {
 
   const tabs: TabItem[] = useMemo(() => {
     const list: TabItem[] = []
-    if (canViewSystem) list.push({ id: 'systeem', label: 'Systeeminformatie' })
-    if (canViewBackups) list.push({ id: 'backups', label: 'Back-ups' })
+    if (canViewSystem) list.push({ id: 'systeem', label: t('settingsPages.system.tabSystem') })
+    if (canViewBackups) list.push({ id: 'backups', label: t('settingsPages.system.tabBackups') })
     return list
-  }, [canViewSystem, canViewBackups])
+  }, [canViewSystem, canViewBackups, t])
 
   const requestedTab = searchParams.get('tab')
   const fallbackTab = (tabs[0]?.id ?? 'systeem') as TabId
   const tab: TabId =
-    TAB_IDS.includes(requestedTab as TabId) && tabs.some((t) => t.id === requestedTab)
+    TAB_IDS.includes(requestedTab as TabId) && tabs.some((item) => item.id === requestedTab)
       ? (requestedTab as TabId)
       : fallbackTab
 
@@ -603,16 +620,15 @@ export function SystemInfoPage() {
   }
 
   if (tabs.length === 0) {
-    return <p className="placeholder-text">Je hebt geen rechten om de systeeminformatie te bekijken.</p>
+    return <p className="placeholder-text">{t('settingsPages.system.noPermission')}</p>
   }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Systeeminformatie' }]} />
-      <PageHeader
-        title="Systeeminformatie"
-        subtitle="Versie- en omgevingsgegevens van de applicatie en het beheer van databankback-ups."
+      <Breadcrumbs
+        items={[{ label: t('navigation.menu.settings'), to: '/settings' }, { label: t('navigation.menu.systemInfo') }]}
       />
+      <PageHeader title={t('settingsPages.system.title')} subtitle={t('settingsPages.system.subtitle')} />
 
       <Tabs tabs={tabs} activeId={tab} onChange={setTab} />
 

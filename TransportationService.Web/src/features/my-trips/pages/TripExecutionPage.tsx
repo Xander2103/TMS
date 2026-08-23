@@ -141,8 +141,9 @@ export function TripExecutionPage() {
       setReasonTarget(null)
       setReason('')
     } catch (err) {
-      if (err instanceof ApiError && err.status === 400 && err.message.toLowerCase().includes('reden')) {
-        // The server demands a reason (e.g. late arrival detected server-side): ask for it.
+      if (err instanceof ApiError && err.code === 'trips.reason_required') {
+        // Stabiele foutcode (i18n-wave): de server eist een reden (bv. late aankomst) —
+        // nooit meer op de Nederlandse fouttekst sniffen.
         setReasonTarget({ stop, toStatus, lateReason: true })
         showError(err.message)
       } else {
@@ -207,7 +208,8 @@ export function TripExecutionPage() {
       setPackageOverrideReason('')
     } catch (err) {
       // The package gate keeps the dialog open: override holders get a reason field.
-      if (err instanceof ApiError && err.status === 400 && (err.message.includes('colli zonder uitkomst') || err.message.includes('vrijgave'))) {
+      // Stabiele foutcode i.p.v. tekst-sniffing (i18n-wave).
+      if (err instanceof ApiError && err.code === 'trips.packages_unresolved') {
         setPackageGateMessage(err.message)
       }
       showError(err instanceof ApiError ? err.message : 'De stop kon niet worden afgerond.')

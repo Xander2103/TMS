@@ -1,5 +1,6 @@
 import { Button } from '../../../components/ui/Button'
-import { OPENING_DAYS, OPENING_DAY_LABELS, computeOpeningIntervalErrors, openingIntervalsValid } from '../openingHours'
+import { useLocale } from '../../../i18n/localeContext'
+import { OPENING_DAYS, OPENING_DAY_LABEL_KEYS, computeOpeningIntervalErrors, openingIntervalsValid } from '../openingHours'
 import type { LocationOpeningInterval } from '../types'
 import './opening-hours-editor.css'
 
@@ -16,6 +17,7 @@ interface OpeningHoursEditorProps {
  * to the parent so the surrounding form can block submit on invalid hours.
  */
 export function OpeningHoursEditor({ value, onChange, disabled }: OpeningHoursEditorProps) {
+  const { t } = useLocale()
   const errors = computeOpeningIntervalErrors(value)
 
   function emit(next: LocationOpeningInterval[]) {
@@ -45,27 +47,27 @@ export function OpeningHoursEditor({ value, onChange, disabled }: OpeningHoursEd
     <div className="ohe">
       <div className="ohe-toolbar">
         <Button type="button" variant="secondary" onClick={copyMondayToWeekdays} disabled={disabled}>
-          Kopieer maandag naar weekdagen
+          {t('locations.openingHours.copyMonday')}
         </Button>
         <Button type="button" variant="secondary" onClick={() => emit([])} disabled={disabled}>
-          Wis alles
+          {t('locations.openingHours.clearAll')}
         </Button>
       </div>
       <div className="ohe-grid">
         {OPENING_DAYS.map((day) => {
-          const label = OPENING_DAY_LABELS[day - 1]
+          const label = t(OPENING_DAY_LABEL_KEYS[day - 1])
           const dayIntervals = value.map((interval, index) => ({ interval, index })).filter((x) => x.interval.dayOfWeek === day)
           return (
             <div key={day} className="ohe-day-row">
               <span className="ohe-day-label">{label}</span>
               <div className="ohe-day-body">
-                {dayIntervals.length === 0 && <span className="ohe-closed">Gesloten</span>}
+                {dayIntervals.length === 0 && <span className="ohe-closed">{t('locations.openingHours.closed')}</span>}
                 {dayIntervals.map(({ interval, index }) => (
                   <div key={index} className="ohe-interval">
                     <div className="ohe-interval-fields">
                       <input
                         type="time"
-                        aria-label={`Van (${label})`}
+                        aria-label={t('locations.openingHours.fromAria', { day: label })}
                         value={interval.fromTime}
                         onChange={(e) => updateInterval(index, { fromTime: e.target.value })}
                         disabled={disabled}
@@ -73,7 +75,7 @@ export function OpeningHoursEditor({ value, onChange, disabled }: OpeningHoursEd
                       <span aria-hidden="true">–</span>
                       <input
                         type="time"
-                        aria-label={`Tot (${label})`}
+                        aria-label={t('locations.openingHours.toAria', { day: label })}
                         value={interval.toTime}
                         onChange={(e) => updateInterval(index, { toTime: e.target.value })}
                         disabled={disabled}
@@ -81,8 +83,8 @@ export function OpeningHoursEditor({ value, onChange, disabled }: OpeningHoursEd
                       <input
                         type="text"
                         className="ohe-note"
-                        aria-label={`Notitie (${label})`}
-                        placeholder="Notitie (optioneel)"
+                        aria-label={t('locations.openingHours.noteAria', { day: label })}
+                        placeholder={t('locations.openingHours.notePlaceholder')}
                         maxLength={200}
                         value={interval.note ?? ''}
                         onChange={(e) => updateInterval(index, { note: e.target.value || null })}
@@ -91,7 +93,7 @@ export function OpeningHoursEditor({ value, onChange, disabled }: OpeningHoursEd
                       <button
                         type="button"
                         className="ohe-remove"
-                        aria-label={`Tijdvak verwijderen (${label})`}
+                        aria-label={t('locations.openingHours.removeAria', { day: label })}
                         onClick={() => removeInterval(index)}
                         disabled={disabled}
                       >
@@ -100,7 +102,7 @@ export function OpeningHoursEditor({ value, onChange, disabled }: OpeningHoursEd
                     </div>
                     {errors[index] && (
                       <p className="ohe-error" role="alert">
-                        {errors[index]}
+                        {t(errors[index])}
                       </p>
                     )}
                   </div>
@@ -108,11 +110,11 @@ export function OpeningHoursEditor({ value, onChange, disabled }: OpeningHoursEd
                 <button
                   type="button"
                   className="ohe-add"
-                  aria-label={`Tijdvak toevoegen (${label})`}
+                  aria-label={t('locations.openingHours.addAria', { day: label })}
                   onClick={() => addInterval(day)}
                   disabled={disabled}
                 >
-                  + Tijdvak
+                  {t('locations.openingHours.add')}
                 </button>
               </div>
             </div>

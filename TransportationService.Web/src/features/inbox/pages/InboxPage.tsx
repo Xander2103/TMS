@@ -13,6 +13,7 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { getRoles } from '../../roles/api/rolesApi'
 import type { Role } from '../../roles/types/role'
 import type { LookupOption } from '../../master-data/types'
@@ -35,15 +36,20 @@ import {
 import { formatDateTime } from '../../../utils/dates'
 import './inbox.css'
 
-const PRIORITY_LABELS: Record<MessagePriority, string> = { Normal: 'Normaal', High: 'Hoog', Urgent: 'Dringend' }
+/** Translation keys per code; render sites resolve them via t(). */
+const PRIORITY_KEYS: Record<MessagePriority, string> = {
+  Normal: 'inboxPage.priority.Normal',
+  High: 'inboxPage.priority.High',
+  Urgent: 'inboxPage.priority.Urgent',
+}
 
-const EMAIL_STATUS_LABELS: Record<EmailDeliveryStatus, string> = {
-  Geen: 'Geen',
-  Pending: 'In wachtrij',
-  Sent: 'Verzonden',
-  Failed: 'Mislukt',
-  Suppressed: 'Onderdrukt',
-  Duplicate: 'Duplicaat',
+const EMAIL_STATUS_KEYS: Record<EmailDeliveryStatus, string> = {
+  Geen: 'inboxPage.emailStatus.Geen',
+  Pending: 'inboxPage.emailStatus.Pending',
+  Sent: 'inboxPage.emailStatus.Sent',
+  Failed: 'inboxPage.emailStatus.Failed',
+  Suppressed: 'inboxPage.emailStatus.Suppressed',
+  Duplicate: 'inboxPage.emailStatus.Duplicate',
 }
 
 function formatTimestamp(value: string): string {
@@ -55,9 +61,9 @@ function fromDateTimeLocal(value: string): string | null {
 }
 
 /** Hoog/Dringend get a visible pill; Normal renders nothing to keep the list quiet. */
-function PriorityBadge({ priority }: { priority: MessagePriority }) {
-  if (priority === 'High') return <Badge tone="warning">{PRIORITY_LABELS.High}</Badge>
-  if (priority === 'Urgent') return <Badge tone="danger">{PRIORITY_LABELS.Urgent}</Badge>
+function PriorityBadge({ priority, t }: { priority: MessagePriority; t: TranslateFn }) {
+  if (priority === 'High') return <Badge tone="warning">{t(PRIORITY_KEYS.High)}</Badge>
+  if (priority === 'Urgent') return <Badge tone="danger">{t(PRIORITY_KEYS.Urgent)}</Badge>
   return null
 }
 
@@ -65,6 +71,7 @@ function PriorityBadge({ priority }: { priority: MessagePriority }) {
 export function InboxPage() {
   const toast = useToast()
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const canSend = hasPermission('messages.send')
 
   const [tab, setTab] = useState('inbox')
@@ -101,10 +108,10 @@ export function InboxPage() {
       await acknowledgeMessage(message.id)
       const acknowledgedAt = new Date().toISOString()
       setOpenMessage((current) => (current && current.id === message.id ? { ...current, acknowledgedAt } : current))
-      toast.showSuccess('Bericht bevestigd.')
+      toast.showSuccess(t('inboxPage.toasts.acknowledged'))
       reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'Het bericht kon niet worden bevestigd.').message)
+      toast.showError(describeApiError(err, t('inboxPage.toasts.acknowledgeFailed')).message)
     } finally {
       setAckBusy(false)
     }
@@ -115,11 +122,11 @@ export function InboxPage() {
     setCancelBusy(true)
     try {
       await cancelInternalMessage(cancelTarget.id)
-      toast.showSuccess('Bericht ingetrokken.')
+      toast.showSuccess(t('inboxPage.toasts.withdrawn'))
       setCancelTarget(null)
       reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'Het bericht kon niet worden ingetrokken.').message)
+      toast.showError(describeApiError(err, t('inboxPage.toasts.withdrawFailed')).message)
     } finally {
       setCancelBusy(false)
     }
@@ -129,16 +136,16 @@ export function InboxPage() {
   function renderAckBadge(message: InboxMessage) {
     if (!message.requiresAcknowledgement) return null
     return message.acknowledgedAt === null ? (
-      <Badge tone="warning">te bevestigen</Badge>
+      <Badge tone="warning">{t('inboxPage.list.ackPending')}</Badge>
     ) : (
-      <Badge tone="success">bevestigd</Badge>
+      <Badge tone="success">{t('inboxPage.list.ackDone')}</Badge>
     )
   }
 
   function renderList(messages: InboxMessage[] | null, kind: 'inbox' | 'sent') {
-    if (messages === null) return <LoadingState message="Berichten laden..." />
+    if (messages === null) return <LoadingState message={t('inboxPage.list.loading')} />
     if (messages.length === 0) {
-      return <EmptyState message={kind === 'inbox' ? 'Geen berichten in je inbox.' : 'Nog geen verzonden berichten.'} />
+      return <EmptyState message={kind === 'inbox' ? t('inboxPage.list.emptyInbox') : t('inboxPage.list.emptySent')} />
     }
 
     return (
@@ -151,24 +158,24 @@ export function InboxPage() {
               onClick={() => openAndMarkRead(message)}
             >
               <span className="inbox-subject">
-                {kind === 'inbox' && message.readAt === null && <Badge tone="info">nieuw</Badge>}{' '}
-                <PriorityBadge priority={message.priority} /> {kind === 'inbox' && renderAckBadge(message)}{' '}
+                {kind === 'inbox' && message.readAt === null && <Badge tone="info">{t('inboxPage.list.newBadge')}</Badge>}{' '}
+                <PriorityBadge priority={message.priority} t={t} /> {kind === 'inbox' && renderAckBadge(message)}{' '}
                 {message.subject}
               </span>
               <span className="inbox-meta">
-                {kind === 'inbox' ? message.senderName : `${message.recipientCount} ontvanger(s)`} ·{' '}
+                {kind === 'inbox' ? message.senderName : t('inboxPage.list.recipients', { count: message.recipientCount })} ·{' '}
                 {formatTimestamp(message.sentAt)}
-                {kind === 'sent' && message.cancelledAt && ` · Ingetrokken op ${formatTimestamp(message.cancelledAt)}`}
+                {kind === 'sent' && message.cancelledAt && ` · ${t('inboxPage.list.cancelledOn', { dateTime: formatTimestamp(message.cancelledAt) })}`}
               </span>
             </button>
             {kind === 'sent' && (
               <span className="inbox-actions">
                 <Button variant="secondary" onClick={() => setStatusMessage(message)}>
-                  Bezorgstatus
+                  {t('inboxPage.list.deliveryStatus')}
                 </Button>
                 {message.cancelledAt === null && (
                   <Button variant="secondary" onClick={() => setCancelTarget(message)}>
-                    Intrekken
+                    {t('inboxPage.list.withdraw')}
                   </Button>
                 )}
               </span>
@@ -181,19 +188,19 @@ export function InboxPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Berichten' }]} />
+      <Breadcrumbs items={[{ label: t('inboxPage.title') }]} />
       <PageHeader
-        title="Berichten"
-        subtitle="Interne berichten binnen het bedrijf."
-        action={canSend && <Button onClick={() => setComposeOpen(true)}>Nieuw bericht</Button>}
+        title={t('inboxPage.title')}
+        subtitle={t('inboxPage.subtitle')}
+        action={canSend && <Button onClick={() => setComposeOpen(true)}>{t('inboxPage.newMessage')}</Button>}
       />
 
       {canSend ? (
         <>
           <Tabs
             tabs={[
-              { id: 'inbox', label: 'Ontvangen', badge: inbox?.filter((m) => m.readAt === null).length || undefined },
-              { id: 'sent', label: 'Verzonden' },
+              { id: 'inbox', label: t('inboxPage.tabs.inbox'), badge: inbox?.filter((m) => m.readAt === null).length || undefined },
+              { id: 'sent', label: t('inboxPage.tabs.sent') },
             ]}
             activeId={tab}
             onChange={setTab}
@@ -214,24 +221,24 @@ export function InboxPage() {
             <>
               {openMessage.requiresAcknowledgement && openMessage.acknowledgedAt === null && (
                 <Button onClick={() => void handleAcknowledge(openMessage)} disabled={ackBusy}>
-                  {ackBusy ? 'Bevestigen…' : 'Bevestigen'}
+                  {ackBusy ? t('inboxPage.detail.acknowledging') : t('inboxPage.detail.acknowledge')}
                 </Button>
               )}
               <Button variant="secondary" onClick={() => setOpenMessage(null)} disabled={ackBusy}>
-                Sluiten
+                {t('ui.actions.close')}
               </Button>
             </>
           }
         >
           <p className="inbox-meta">
-            {openMessage.senderName} · {formatTimestamp(openMessage.sentAt)} <PriorityBadge priority={openMessage.priority} />
+            {openMessage.senderName} · {formatTimestamp(openMessage.sentAt)} <PriorityBadge priority={openMessage.priority} t={t} />
           </p>
           <p className="inbox-body">{openMessage.body}</p>
           {openMessage.requiresAcknowledgement &&
             (openMessage.acknowledgedAt !== null ? (
-              <p className="inbox-ack-note">Bevestigd op {formatTimestamp(openMessage.acknowledgedAt)}</p>
+              <p className="inbox-ack-note">{t('inboxPage.detail.acknowledgedAt', { dateTime: formatTimestamp(openMessage.acknowledgedAt) })}</p>
             ) : (
-              <p className="inbox-ack-note">Dit bericht vraagt om een expliciete bevestiging.</p>
+              <p className="inbox-ack-note">{t('inboxPage.detail.acknowledgementRequired')}</p>
             ))}
         </Modal>
       )}
@@ -240,9 +247,9 @@ export function InboxPage() {
 
       {cancelTarget && (
         <ConfirmDialog
-          title="Bericht intrekken"
-          message={`Weet u zeker dat u "${cancelTarget.subject}" wilt intrekken? Ontvangers zien het bericht daarna niet meer.`}
-          confirmLabel="Intrekken"
+          title={t('inboxPage.cancelDialog.title')}
+          message={t('inboxPage.cancelDialog.message', { subject: cancelTarget.subject })}
+          confirmLabel={t('inboxPage.cancelDialog.confirm')}
           destructive
           busy={cancelBusy}
           onConfirm={() => void handleCancel()}
@@ -256,7 +263,7 @@ export function InboxPage() {
           onClose={(sentOk) => {
             setComposeOpen(false)
             if (sentOk) {
-              toast.showSuccess('Bericht verzonden.')
+              toast.showSuccess(t('inboxPage.toasts.sent'))
               reload()
             }
           }}
@@ -268,32 +275,33 @@ export function InboxPage() {
 
 /** Per-recipient read/acknowledge/e-mail state of a sent message. */
 function DeliveryStatusDialog({ message, onClose }: { message: InboxMessage; onClose: () => void }) {
+  const { t } = useLocale()
   const [status, setStatus] = useState<MessageDeliveryStatus | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     getMessageDeliveryStatus(message.id)
       .then(setStatus)
-      .catch(() => setError('De bezorgstatus kon niet worden geladen.'))
+      .catch(() => setLoadError(true))
   }, [message.id])
 
   return (
-    <Modal title="Bezorgstatus" onClose={onClose} footer={<Button onClick={onClose}>Sluiten</Button>}>
-      {error && <p className="placeholder-text" role="alert">{error}</p>}
-      {!error && status === null && <LoadingState message="Bezorgstatus laden..." />}
+    <Modal title={t('inboxPage.delivery.title')} onClose={onClose} footer={<Button onClick={onClose}>{t('ui.actions.close')}</Button>}>
+      {loadError && <p className="placeholder-text" role="alert">{t('inboxPage.delivery.loadFailed')}</p>}
+      {!loadError && status === null && <LoadingState message={t('inboxPage.delivery.loading')} />}
       {status && (
         <>
           <p className="inbox-meta">
-            {status.subject} · verzonden {formatTimestamp(status.sentAt)}
-            {status.cancelledAt && ` · Ingetrokken op ${formatTimestamp(status.cancelledAt)}`}
+            {status.subject} · {t('inboxPage.delivery.sentOn', { dateTime: formatTimestamp(status.sentAt) })}
+            {status.cancelledAt && ` · ${t('inboxPage.list.cancelledOn', { dateTime: formatTimestamp(status.cancelledAt) })}`}
           </p>
           <table className="inbox-status-table">
             <thead>
               <tr>
-                <th>Naam</th>
-                <th>Gelezen</th>
-                {status.requiresAcknowledgement && <th>Bevestigd</th>}
-                <th>E-mail</th>
+                <th>{t('inboxPage.delivery.columnName')}</th>
+                <th>{t('inboxPage.delivery.columnRead')}</th>
+                {status.requiresAcknowledgement && <th>{t('inboxPage.delivery.columnAcknowledged')}</th>}
+                <th>{t('inboxPage.delivery.columnEmail')}</th>
               </tr>
             </thead>
             <tbody>
@@ -305,7 +313,7 @@ function DeliveryStatusDialog({ message, onClose }: { message: InboxMessage; onC
                     <td>{recipient.acknowledgedAt ? formatTimestamp(recipient.acknowledgedAt) : '—'}</td>
                   )}
                   <td>
-                    {EMAIL_STATUS_LABELS[recipient.emailStatus] ?? recipient.emailStatus}
+                    {EMAIL_STATUS_KEYS[recipient.emailStatus] ? t(EMAIL_STATUS_KEYS[recipient.emailStatus]) : recipient.emailStatus}
                     {recipient.emailFailureReason && (
                       <span className="inbox-email-failure"> — {recipient.emailFailureReason}</span>
                     )}
@@ -322,14 +330,16 @@ function DeliveryStatusDialog({ message, onClose }: { message: InboxMessage; onC
 
 type ComposeTarget = 'users' | 'role' | 'department' | 'all'
 
-const TARGET_LABELS: Record<ComposeTarget, string> = {
-  users: 'Specifieke personen',
-  role: 'Iedereen met een rol',
-  department: 'Een afdeling',
-  all: 'Alle medewerkers',
+/** Translation keys per compose target; resolved via t() at render time. */
+const TARGET_KEYS: Record<ComposeTarget, string> = {
+  users: 'inboxPage.compose.targetUsers',
+  role: 'inboxPage.compose.targetRole',
+  department: 'inboxPage.compose.targetDepartment',
+  all: 'inboxPage.compose.targetAll',
 }
 
 function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent: boolean) => void }) {
+  const { t } = useLocale()
   const [recipients, setRecipients] = useState<MessageRecipientOption[]>([])
   const [roles, setRoles] = useState<Role[]>([])
   const [departments, setDepartments] = useState<LookupOption[]>([])
@@ -351,7 +361,7 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
   useEffect(() => {
     listMessageRecipients()
       .then(setRecipients)
-      .catch(() => setError('Ontvangers konden niet worden geladen.'))
+      .catch(() => setError(t('inboxPage.compose.recipientsLoadFailed')))
     if (canBulk) {
       getRoles()
         .then((data) => setRoles(data.filter((role) => role.isActive)))
@@ -360,6 +370,8 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
         .then(setDepartments)
         .catch(() => {})
     }
+    // t is stable enough for this one-shot fetch; the error text renders in the active language.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canBulk])
 
   async function handleSubmit(event: FormEvent) {
@@ -383,7 +395,7 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
       })
       onClose(true)
     } catch (err) {
-      const described = describeApiError(err, 'Het bericht kon niet worden verzonden.')
+      const described = describeApiError(err, t('inboxPage.compose.sendFailed'))
       setError(described.message)
       setFieldErrors(described.fieldErrors)
       setSaving(false)
@@ -392,34 +404,38 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
 
   return (
     <Modal
-      title="Nieuw intern bericht"
+      title={t('inboxPage.compose.title')}
       onClose={() => onClose(false)}
       busy={saving}
       footer={
         <>
           <Button variant="secondary" onClick={() => onClose(false)} disabled={saving}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="compose-form" disabled={saving}>
-            {saving ? 'Verzenden…' : 'Verzenden'}
+            {saving ? t('inboxPage.compose.sending') : t('inboxPage.compose.send')}
           </Button>
         </>
       }
     >
       <form id="compose-form" onSubmit={handleSubmit} noValidate>
-        <ValidationSummary message={error} fieldErrors={fieldErrors} fieldLabels={{ subject: 'Onderwerp', body: 'Bericht' }} />
+        <ValidationSummary
+          message={error}
+          fieldErrors={fieldErrors}
+          fieldLabels={{ subject: t('inboxPage.compose.subjectField'), body: t('inboxPage.compose.bodyField') }}
+        />
 
         {canBulk && (
-          <FormField label="Doelgroep" htmlFor="cm-target">
+          <FormField label={t('inboxPage.compose.targetField')} htmlFor="cm-target">
             <select
               id="cm-target"
               value={target}
               onChange={(e) => setTarget(e.target.value as ComposeTarget)}
               disabled={saving}
             >
-              {(Object.keys(TARGET_LABELS) as ComposeTarget[]).map((value) => (
+              {(Object.keys(TARGET_KEYS) as ComposeTarget[]).map((value) => (
                 <option key={value} value={value}>
-                  {TARGET_LABELS[value]}
+                  {t(TARGET_KEYS[value])}
                 </option>
               ))}
             </select>
@@ -427,9 +443,9 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
         )}
 
         {canBulk && target === 'role' && (
-          <FormField label="Rol" htmlFor="cm-role" hint="Alle actieve leden van de rol ontvangen het bericht.">
+          <FormField label={t('inboxPage.compose.roleField')} htmlFor="cm-role" hint={t('inboxPage.compose.roleHint')}>
             <select id="cm-role" value={roleId} onChange={(e) => setRoleId(e.target.value)} disabled={saving}>
-              <option value="">— Kies een rol —</option>
+              <option value="">{t('inboxPage.compose.chooseRole')}</option>
               {roles.map((role) => (
                 <option key={role.id} value={role.id}>
                   {role.name}
@@ -440,14 +456,14 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
         )}
 
         {canBulk && target === 'department' && (
-          <FormField label="Afdeling" htmlFor="cm-department" hint="Alle medewerkers van de afdeling ontvangen het bericht.">
+          <FormField label={t('inboxPage.compose.departmentField')} htmlFor="cm-department" hint={t('inboxPage.compose.departmentHint')}>
             <select
               id="cm-department"
               value={departmentId}
               onChange={(e) => setDepartmentId(e.target.value)}
               disabled={saving}
             >
-              <option value="">— Kies een afdeling —</option>
+              <option value="">{t('inboxPage.compose.chooseDepartment')}</option>
               {departments.map((department) => (
                 <option key={department.id} value={department.id}>
                   {department.name}
@@ -458,11 +474,11 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
         )}
 
         {canBulk && target === 'all' && (
-          <p className="inbox-target-note">Het bericht wordt aan alle actieve medewerkers bezorgd.</p>
+          <p className="inbox-target-note">{t('inboxPage.compose.allNote')}</p>
         )}
 
         {target === 'users' && (
-          <FormField label="Aan (personen)" htmlFor="cm-users">
+          <FormField label={t('inboxPage.compose.toUsersField')} htmlFor="cm-users">
             <div className="inbox-recipients">
               {recipients.map((recipient) => (
                 <label key={recipient.userId} className="customer-form-checkbox">
@@ -486,27 +502,27 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
           </FormField>
         )}
 
-        <FormField label="Onderwerp" htmlFor="cm-subject" required error={getFieldError(fieldErrors, 'subject')}>
+        <FormField label={t('inboxPage.compose.subjectField')} htmlFor="cm-subject" required error={getFieldError(fieldErrors, 'subject')}>
           <input id="cm-subject" value={subject} onChange={(e) => setSubject(e.target.value)} maxLength={200} disabled={saving} />
         </FormField>
-        <FormField label="Bericht" htmlFor="cm-body" required error={getFieldError(fieldErrors, 'body')}>
+        <FormField label={t('inboxPage.compose.bodyField')} htmlFor="cm-body" required error={getFieldError(fieldErrors, 'body')}>
           <textarea id="cm-body" rows={5} value={body} onChange={(e) => setBody(e.target.value)} maxLength={8000} disabled={saving} />
         </FormField>
 
-        <FormField label="Prioriteit" htmlFor="cm-priority">
+        <FormField label={t('inboxPage.compose.priorityField')} htmlFor="cm-priority">
           <select
             id="cm-priority"
             value={priority}
             onChange={(e) => setPriority(e.target.value as MessagePriority)}
             disabled={saving}
           >
-            <option value="Normal">{PRIORITY_LABELS.Normal}</option>
-            <option value="High">{PRIORITY_LABELS.High}</option>
-            <option value="Urgent">{PRIORITY_LABELS.Urgent}</option>
+            <option value="Normal">{t(PRIORITY_KEYS.Normal)}</option>
+            <option value="High">{t(PRIORITY_KEYS.High)}</option>
+            <option value="Urgent">{t(PRIORITY_KEYS.Urgent)}</option>
           </select>
         </FormField>
 
-        <FormField label="Opties" htmlFor="cm-ack">
+        <FormField label={t('inboxPage.compose.optionsField')} htmlFor="cm-ack">
           <label className="customer-form-checkbox">
             <input
               id="cm-ack"
@@ -515,7 +531,7 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
               onChange={(e) => setRequiresAcknowledgement(e.target.checked)}
               disabled={saving}
             />
-            Bevestiging vereist
+            {t('inboxPage.compose.requireAcknowledgement')}
           </label>
           <label className="customer-form-checkbox">
             <input
@@ -525,11 +541,11 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
               onChange={(e) => setSendEmail(e.target.checked)}
               disabled={saving}
             />
-            Ook per e-mail versturen
+            {t('inboxPage.compose.alsoEmail')}
           </label>
         </FormField>
 
-        <FormField label="Zichtbaar vanaf" htmlFor="cm-visible-from" hint="Leeg = direct zichtbaar">
+        <FormField label={t('inboxPage.compose.visibleFromField')} htmlFor="cm-visible-from" hint={t('inboxPage.compose.visibleFromHint')}>
           <input
             id="cm-visible-from"
             type="datetime-local"
@@ -538,7 +554,7 @@ function ComposeDialog({ canBulk, onClose }: { canBulk: boolean; onClose: (sent:
             disabled={saving}
           />
         </FormField>
-        <FormField label="Verloopt op" htmlFor="cm-expires-at" hint="Leeg = geen einddatum">
+        <FormField label={t('inboxPage.compose.expiresAtField')} htmlFor="cm-expires-at" hint={t('inboxPage.compose.expiresAtHint')}>
           <input
             id="cm-expires-at"
             type="datetime-local"

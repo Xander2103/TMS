@@ -1,0 +1,116 @@
+{
+  "state": {
+    "Draft": "Concept",
+    "Planned": "Gepland",
+    "Confirmed": "Bevestigd",
+    "Standby": "Stand-by",
+    "Training": "Opleiding",
+    "LeaveRequested": "Verlof aangevraagd",
+    "LeaveApproved": "Verlof goedgekeurd",
+    "LeaveRejected": "Verlof afgewezen",
+    "Sick": "Ziek",
+    "Unavailable": "Onbeschikbaar",
+    "Trip": "Rit",
+    "TripCancelled": "Rit geannuleerd",
+    "Note": "Persoonlijke notitie"
+  },
+  "shiftType": {
+    "Work": "Werk",
+    "Standby": "Stand-by",
+    "Training": "Opleiding"
+  },
+  "shiftStatus": {
+    "Draft": "Concept",
+    "Planned": "Gepland",
+    "Confirmed": "Bevestigd"
+  },
+  "conflictSeverity": {
+    "Information": "Ter info",
+    "Warning": "Waarschuwing",
+    "Blocking": "Blokkerend"
+  },
+  "chip": {
+    "trip": "Rit {number}",
+    "conflict": "Conflict ({severity}): {notes}"
+  },
+  "legend": {
+    "title": "Legenda",
+    "conflict": "Conflict / aandacht"
+  },
+  "days": {
+    "mon": "ma",
+    "tue": "di",
+    "wed": "wo",
+    "thu": "do",
+    "fri": "vr",
+    "sat": "za",
+    "sun": "zo"
+  },
+  "page": {
+    "breadcrumb": "Personeelsplanning",
+    "title": "Personeelsplanning",
+    "subtitle": "Shifts, opleiding en afwezigheden per medewerker — los van de ritplanning.",
+    "copyWeek": "Week kopiëren",
+    "prevWeek": "Vorige week",
+    "nextWeek": "Volgende week",
+    "weekStart": "Weekstart",
+    "period": "Periode",
+    "weeks_one": "{count} week",
+    "weeks_other": "{count} weken",
+    "allDepartments": "Alle afdelingen",
+    "nameFilterPlaceholder": "Filter op naam…",
+    "nameFilterAria": "Filter op naam",
+    "listView": "Lijstweergave",
+    "loading": "Planning laden…",
+    "loadFailed": "De personeelsplanning kon niet worden geladen.",
+    "shiftLoadFailed": "De shift kon niet worden geladen.",
+    "colEmployee": "Medewerker",
+    "plannedSuffix": "{duration} gepland",
+    "addShift": "+ shift",
+    "emptyFiltered": "Geen medewerkers gevonden voor deze filters.",
+    "colDate": "Datum",
+    "colStatus": "Status",
+    "colTime": "Tijd",
+    "colLocation": "Locatie"
+  },
+  "dialog": {
+    "createTitle": "Shift aanmaken — {name}",
+    "editTitle": "Shift bewerken — {name}",
+    "busy": "Bezig…",
+    "requiredFields": "Datum, begin- en einduur zijn verplicht.",
+    "created": "Shift aangemaakt.",
+    "updated": "Shift bijgewerkt.",
+    "saveFailed": "De shift kon niet worden opgeslagen.",
+    "statusNow": "Shift is nu: {status}.",
+    "statusFailed": "De status kon niet worden gewijzigd.",
+    "deleted": "Shift verwijderd.",
+    "deleteFailed": "De shift kon niet worden verwijderd.",
+    "toPlanned": "→ Gepland",
+    "toConfirmed": "→ Bevestigen",
+    "toDraft": "→ Concept",
+    "backToPlanned": "→ Terug naar gepland",
+    "date": "Datum",
+    "from": "Van",
+    "to": "Tot",
+    "breakMinutes": "Pauze (minuten)",
+    "type": "Type",
+    "workLocation": "Werklocatie",
+    "role": "Functie/rol",
+    "notes": "Notities",
+    "conflictsTitle": "Blokkerende planningsconflicten",
+    "override": "Toch plannen (conflicten overschrijven)",
+    "noOverridePermission": "Je hebt geen recht om deze conflicten te overschrijven.",
+    "deleteTitle": "Shift verwijderen",
+    "deleteMessage": "Shift van {name} op {date} verwijderen? De medewerker wordt verwittigd."
+  },
+  "copy": {
+    "title": "Week van {week} kopiëren",
+    "copy": "Kopiëren",
+    "targetLabel": "Doelweek (maandag)",
+    "targetHint": "Alle shifts van de huidige selectie worden als concept gekopieerd; conflicten worden overgeslagen.",
+    "targetRequired": "Kies een doelweek.",
+    "success_one": "Week gekopieerd: {count} shift, {skipped} overgeslagen.",
+    "success_other": "Week gekopieerd: {count} shifts, {skipped} overgeslagen.",
+    "failed": "De week kon niet worden gekopieerd."
+  }
+}

@@ -101,10 +101,15 @@
     "removeFavorite": "Favoriet verwijderen",
     "addFavorite": "Aan favorieten toevoegen",
     "groupCreate": "Aanmaken",
-    "groupNavigate": "Navigeren"
+    "groupNavigate": "Navigeren",
+    "noResults": "Geen resultaten voor \"{term}\"."
   },
   "offline": {
-    "banner": "Offline — scans, stopacties en incidentmeldingen komen in de wachtrij en synchroniseren automatisch."
+    "banner": "Offline — scans, stopacties en incidentmeldingen komen in de wachtrij en synchroniseren automatisch.",
+    "pendingSync_one": "1 actie wacht op synchronisatie…",
+    "pendingSync_other": "{count} acties wachten op synchronisatie…",
+    "queued_one": "Offline — 1 actie in de wachtrij; ze synchroniseert automatisch zodra de verbinding terugkeert.",
+    "queued_other": "Offline — {count} acties in de wachtrij; ze synchroniseren automatisch zodra de verbinding terugkeert."
   },
   "calendar": {
     "month": "Maand",
@@ -117,6 +122,7 @@
     "next": "volgende ›",
     "view": "Weergave",
     "more": "+{count} meer",
-    "free": "vrij"
+    "free": "vrij",
+    "weekOf": "week van"
   }
 }

@@ -21,11 +21,12 @@ export function formatNrn(input: string): string {
   return `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4, 6)}-${digits.slice(6, 9)}.${digits.slice(9)}`
 }
 
-/** Dutch validation message for the (raw) input, or null when acceptable/empty. */
+/** i18n message KEY (employees.validation.*) for the (raw) input, or null when acceptable/empty.
+ * Callers translate via t() before display. */
 export function validateNrn(input: string): string | null {
   const digits = normalizeNrn(input)
   if (digits === null) return null
-  if (digits.length !== 11) return 'Rijksregisternummer moet uit 11 cijfers bestaan.'
+  if (digits.length !== 11) return 'employees.validation.nrnLength'
 
   // Belgian checksum: 97 - (first 9 digits % 97); born in/after 2000 prefixes a 2.
   const body = Number(digits.slice(0, 9))
@@ -33,7 +34,7 @@ export function validateNrn(input: string): string | null {
   const validPre2000 = check === 97 - (body % 97)
   const validPost2000 = check === 97 - ((2000000000 + body) % 97)
   if (!validPre2000 && !validPost2000) {
-    return 'Rijksregisternummer heeft een ongeldig controlegetal.'
+    return 'employees.validation.nrnChecksum'
   }
   return null
 }
@@ -51,7 +52,8 @@ export function formatIban(input: string): string {
   return normalized.replace(/(.{4})/g, '$1 ').trim()
 }
 
-/** Dutch validation message using the official mod-97 algorithm, or null when acceptable/empty. */
+/** i18n message KEY (employees.validation.*) using the official mod-97 algorithm, or null when
+ * acceptable/empty. Callers translate via t() before display. */
 export function validateIban(input: string): string | null {
   const normalized = normalizeIban(input)
   if (normalized === null) return null
@@ -61,7 +63,7 @@ export function validateIban(input: string): string | null {
     normalized.length > 34 ||
     !/^[A-Z]{2}\d{2}[A-Z0-9]+$/.test(normalized)
   ) {
-    return 'IBAN heeft een ongeldig formaat.'
+    return 'employees.validation.ibanFormat'
   }
 
   // Move the first 4 chars to the end, letters → numbers, incremental mod 97.
@@ -72,7 +74,7 @@ export function validateIban(input: string): string | null {
     remainder = value < 10 ? (remainder * 10 + value) % 97 : (remainder * 100 + value) % 97
   }
   if (remainder !== 1) {
-    return 'IBAN heeft een ongeldig controlegetal.'
+    return 'employees.validation.ibanChecksum'
   }
   return null
 }

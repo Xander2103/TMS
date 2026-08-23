@@ -1,10 +1,11 @@
 export type LeaveAdjustmentKind = 'Grant' | 'Seniority' | 'Correction' | 'Override'
 
+/** Vertaalsleutels — renderen als t(LEAVE_ADJUSTMENT_KIND_LABELS[kind]). */
 export const LEAVE_ADJUSTMENT_KIND_LABELS: Record<LeaveAdjustmentKind, string> = {
-  Grant: 'Toekenning',
-  Seniority: 'Anciënniteit',
-  Correction: 'Correctie',
-  Override: 'Override',
+  Grant: 'leave.kind.Grant',
+  Seniority: 'leave.kind.Seniority',
+  Correction: 'leave.kind.Correction',
+  Override: 'leave.kind.Override',
 }
 
 export type AbsenceTypeCode = 'Vacation' | 'Sick' | 'Training' | 'PersonalLeave' | 'Unpaid' | 'Other'

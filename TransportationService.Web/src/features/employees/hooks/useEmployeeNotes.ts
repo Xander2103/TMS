@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { listEmployeeNotes, type EmployeeNote } from '../api/employeeNotesApi'
 
 interface UseEmployeeNotesResult {
@@ -8,9 +9,10 @@ interface UseEmployeeNotesResult {
   reload: () => void
 }
 
-const LOAD_ERROR_MESSAGE = 'Notities konden niet worden geladen.'
+const LOAD_ERROR_KEY = 'employees.errors.loadNotes'
 
 export function useEmployeeNotes(employeeId: string): UseEmployeeNotesResult {
+  const { t } = useLocale()
   const [notes, setNotes] = useState<EmployeeNote[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -28,7 +30,7 @@ export function useEmployeeNotes(employeeId: string): UseEmployeeNotesResult {
       })
       .catch(() => {
         if (!isMounted) return
-        setError(LOAD_ERROR_MESSAGE)
+        setError(t(LOAD_ERROR_KEY))
         setIsLoading(false)
       })
 

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   addLeaveAdjustment,
@@ -27,6 +28,7 @@ type Dialog = { kind: 'entitlement' | 'adjust'; row: LeaveBalanceRow } | null
 
 /** HR/Management view of an employee's leave balance: year selector, per-balance figures, and management actions. */
 export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('leave_balances.manage')
@@ -53,7 +55,7 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
       .catch((err) => {
         if (!mounted) return
         setState((current) => ({ ...current, loadedKey: requestKey }))
-        showError(describeApiError(err, 'Het verlofsaldo kon niet worden geladen.').message)
+        showError(describeApiError(err, t('leave.tab.loadFailed')).message)
       })
     return () => {
       mounted = false
@@ -66,11 +68,11 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
     setBusy(true)
     try {
       await setLeaveEntitlement(employeeId, year, { balanceTypeId: dialog.row.balanceTypeId, baseEntitlementDays: base, carryOverDays: carry, reason })
-      showSuccess('Jaarrecht bijgewerkt.')
+      showSuccess(t('leave.tab.entitlementSaved'))
       setDialog(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'Het jaarrecht kon niet worden opgeslagen.').message)
+      showError(describeApiError(err, t('leave.tab.entitlementFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -81,12 +83,12 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
     setBusy(true)
     try {
       await addLeaveAdjustment(employeeId, year, { balanceTypeId: dialog.row.balanceTypeId, days, reason, kind })
-      showSuccess('Saldo aangepast.')
+      showSuccess(t('leave.tab.adjustmentSaved'))
       setDialog(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
       if (history?.balanceTypeId === dialog.row.balanceTypeId) await openHistory(dialog.row)
     } catch (err) {
-      showError(describeApiError(err, 'De aanpassing kon niet worden opgeslagen.').message)
+      showError(describeApiError(err, t('leave.tab.adjustmentFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -97,7 +99,7 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
       const items = await getLeaveAdjustments(employeeId, year, row.balanceTypeId)
       setHistory({ balanceTypeId: row.balanceTypeId, name: row.balanceTypeName, items })
     } catch (err) {
-      showError(describeApiError(err, 'De historiek kon niet worden geladen.').message)
+      showError(describeApiError(err, t('leave.tab.historyFailed')).message)
     }
   }
 
@@ -105,7 +107,7 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
     <div className="leave-balance-tab">
       <div className="lb-toolbar">
         <label>
-          Jaar{' '}
+          {t('leave.tab.year')}{' '}
           <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
             {YEARS.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -114,7 +116,7 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
         </label>
       </div>
 
-      {loading && <p className="portal-empty">Verlofsaldo laden…</p>}
+      {loading && <p className="portal-empty">{t('leave.tab.loading')}</p>}
 
       {!loading && balance && (
         <LeaveBalanceTable
@@ -124,12 +126,12 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
               ? (row) => (
                   <div className="lb-row-actions">
                     {canManage && (
-                      <Button variant="secondary" onClick={() => setDialog({ kind: 'entitlement', row })}>Jaarrecht instellen</Button>
+                      <Button variant="secondary" onClick={() => setDialog({ kind: 'entitlement', row })}>{t('leave.tab.setEntitlement')}</Button>
                     )}
                     {canAdjust && (
-                      <Button variant="secondary" onClick={() => setDialog({ kind: 'adjust', row })}>Saldo aanpassen</Button>
+                      <Button variant="secondary" onClick={() => setDialog({ kind: 'adjust', row })}>{t('leave.tab.adjust')}</Button>
                     )}
-                    <Button variant="ghost" onClick={() => openHistory(row)}>Historiek</Button>
+                    <Button variant="ghost" onClick={() => openHistory(row)}>{t('leave.tab.history')}</Button>
                   </div>
                 )
               : undefined
@@ -139,20 +141,20 @@ export function LeaveBalanceTab({ employeeId }: LeaveBalanceTabProps) {
 
       {history && (
         <div className="lb-history">
-          <h4>Aanpassingshistoriek — {history.name}</h4>
+          <h4>{t('leave.tab.historyTitle', { name: history.name })}</h4>
           {history.items.length === 0 ? (
-            <p className="placeholder-text">Geen handmatige aanpassingen.</p>
+            <p className="placeholder-text">{t('leave.tab.historyEmpty')}</p>
           ) : (
             <ul>
               {history.items.map((a) => (
                 <li key={a.id}>
-                  <strong>{a.days > 0 ? `+${a.days}` : a.days}</strong> · {LEAVE_ADJUSTMENT_KIND_LABELS[a.kind]} ·{' '}
+                  <strong>{a.days > 0 ? `+${a.days}` : a.days}</strong> · {t(LEAVE_ADJUSTMENT_KIND_LABELS[a.kind])} ·{' '}
                   {formatDate(a.createdAt)} — {a.reason}
                 </li>
               ))}
             </ul>
           )}
-          <Button variant="ghost" onClick={() => setHistory(null)}>Sluiten</Button>
+          <Button variant="ghost" onClick={() => setHistory(null)}>{t('ui.actions.close')}</Button>
         </div>
       )}
 

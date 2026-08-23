@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   deleteLeaveBalanceType,
@@ -25,6 +26,7 @@ import { LeaveTypeDialog } from '../components/LeaveTypeDialog'
 import '../components/leave-balance.css'
 
 export function LeaveSettingsPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('leave_types.manage')
@@ -47,7 +49,7 @@ export function LeaveSettingsPage() {
         setBalanceTypes(bt)
         setLeaveTypes(lt)
       })
-      .catch((err) => showError(describeApiError(err, 'De verlofinstellingen konden niet worden geladen.').message))
+      .catch((err) => showError(describeApiError(err, t('leave.settings.loadFailed')).message))
     return () => {
       mounted = false
     }
@@ -59,9 +61,9 @@ export function LeaveSettingsPage() {
     setBusy(true)
     try {
       await updateLeaveSettings(settings)
-      showSuccess('Instellingen opgeslagen.')
+      showSuccess(t('leave.settings.settingsSaved'))
     } catch (err) {
-      showError(describeApiError(err, 'Opslaan is mislukt.').message)
+      showError(describeApiError(err, t('leave.settings.saveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -71,11 +73,11 @@ export function LeaveSettingsPage() {
     setBusy(true)
     try {
       await saveLeaveBalanceType(balanceDialog?.initial?.id ?? null, input)
-      showSuccess('Saldotype opgeslagen.')
+      showSuccess(t('leave.settings.balanceTypeSaved'))
       setBalanceDialog(null)
       setReload((n) => n + 1)
     } catch (err) {
-      showError(describeApiError(err, 'Opslaan is mislukt.').message)
+      showError(describeApiError(err, t('leave.settings.saveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -85,11 +87,11 @@ export function LeaveSettingsPage() {
     setBusy(true)
     try {
       await saveLeaveType(leaveDialog?.initial?.id ?? null, input)
-      showSuccess('Verloftype opgeslagen.')
+      showSuccess(t('leave.settings.leaveTypeSaved'))
       setLeaveDialog(null)
       setReload((n) => n + 1)
     } catch (err) {
-      showError(describeApiError(err, 'Opslaan is mislukt.').message)
+      showError(describeApiError(err, t('leave.settings.saveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -101,58 +103,59 @@ export function LeaveSettingsPage() {
     setDeleteTarget(null)
     try {
       await (target.kind === 'balance' ? deleteLeaveBalanceType(target.id) : deleteLeaveType(target.id))
-      showSuccess(`Categorie '${target.name}' verwijderd.`)
+      showSuccess(t('leave.settings.deleted', { name: target.name }))
       setReload((n) => n + 1)
     } catch (err) {
       // A used category is refused server-side with the exact deactivate-instead message.
-      showError(describeApiError(err, 'De categorie kon niet worden verwijderd.').message)
+      showError(describeApiError(err, t('leave.settings.deleteFailed')).message)
     }
   }
 
   const balanceName = (id: string | null) => balanceTypes.find((b) => b.id === id)?.name ?? '—'
+  const yesNo = (value: boolean) => (value ? t('leave.settings.yes') : t('leave.settings.no'))
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Verlof' }]} />
-      <PageHeader title="Verlof — types & saldi" subtitle="Configureer verloftypes, saldotypes en de standaardregels." />
+      <Breadcrumbs items={[{ label: t('leave.settings.breadcrumbSettings'), to: '/settings' }, { label: t('leave.settings.breadcrumb') }]} />
+      <PageHeader title={t('leave.settings.title')} subtitle={t('leave.settings.subtitle')} />
 
       {settings && (
         <section className="leave-balance-card">
-          <h3>Algemene regels</h3>
-          <FormField label="Standaard jaarrecht (wettelijk verlof, dagen)" htmlFor="ls-default">
+          <h3>{t('leave.settings.generalRules')}</h3>
+          <FormField label={t('leave.settings.defaultEntitlement')} htmlFor="ls-default">
             <input id="ls-default" type="number" step="0.5" value={settings.defaultAnnualEntitlementDays}
               onChange={(e) => setSettings({ ...settings, defaultAnnualEntitlementDays: Number(e.target.value) || 0 })} disabled={!canManage} />
           </FormField>
-          <FormField label="Max. overdracht (dagen, leeg = geen limiet)" htmlFor="ls-maxcarry">
+          <FormField label={t('leave.settings.maxCarry')} htmlFor="ls-maxcarry">
             <input id="ls-maxcarry" type="number" step="0.5" value={settings.maxCarryOverDays ?? ''}
               onChange={(e) => setSettings({ ...settings, maxCarryOverDays: e.target.value === '' ? null : Number(e.target.value) })} disabled={!canManage} />
           </FormField>
           <div className="lb-checkbox-grid">
             <label className="customer-form-checkbox">
               <input type="checkbox" checked={settings.pendingReservesBalance} disabled={!canManage}
-                onChange={(e) => setSettings({ ...settings, pendingReservesBalance: e.target.checked })} /> Aanvragen reserveren saldo
+                onChange={(e) => setSettings({ ...settings, pendingReservesBalance: e.target.checked })} /> {t('leave.settings.pendingReserves')}
             </label>
             <label className="customer-form-checkbox">
               <input type="checkbox" checked={settings.allowNegativeBalance} disabled={!canManage}
-                onChange={(e) => setSettings({ ...settings, allowNegativeBalance: e.target.checked })} /> Negatief saldo toestaan
+                onChange={(e) => setSettings({ ...settings, allowNegativeBalance: e.target.checked })} /> {t('leave.settings.allowNegative')}
             </label>
             <label className="customer-form-checkbox">
               <input type="checkbox" checked={settings.carryOverEnabled} disabled={!canManage}
-                onChange={(e) => setSettings({ ...settings, carryOverEnabled: e.target.checked })} /> Overdracht inschakelen
+                onChange={(e) => setSettings({ ...settings, carryOverEnabled: e.target.checked })} /> {t('leave.settings.carryOverEnabled')}
             </label>
           </div>
-          {canManage && <Button onClick={saveSettings} disabled={busy}>Instellingen opslaan</Button>}
+          {canManage && <Button onClick={saveSettings} disabled={busy}>{t('leave.settings.saveSettings')}</Button>}
         </section>
       )}
 
       <section className="leave-balance-card">
         <div className="lb-section-head">
-          <h3>Saldotypes</h3>
-          {canManage && <Button variant="secondary" onClick={() => setBalanceDialog({ initial: null })}>+ Saldotype</Button>}
+          <h3>{t('leave.settings.balanceTypes')}</h3>
+          {canManage && <Button variant="secondary" onClick={() => setBalanceDialog({ initial: null })}>{t('leave.settings.addBalanceType')}</Button>}
         </div>
         <LeaveTable
-          headers={['Code', 'Naam', 'Actief', 'Volgorde']}
-          rows={balanceTypes.map((b) => [b.code, b.name, b.isActive ? 'Ja' : 'Nee', String(b.sortOrder)])}
+          headers={[t('leave.settings.colCode'), t('leave.settings.colName'), t('leave.settings.colActive'), t('leave.settings.colOrder')]}
+          rows={balanceTypes.map((b) => [b.code, b.name, yesNo(b.isActive), String(b.sortOrder)])}
           onEdit={canManage ? (i) => setBalanceDialog({ initial: balanceTypes[i] }) : undefined}
           onDelete={canManage ? (i) => setDeleteTarget({ kind: 'balance', id: balanceTypes[i].id, name: balanceTypes[i].name }) : undefined}
         />
@@ -160,12 +163,26 @@ export function LeaveSettingsPage() {
 
       <section className="leave-balance-card">
         <div className="lb-section-head">
-          <h3>Verloftypes</h3>
-          {canManage && <Button variant="secondary" onClick={() => setLeaveDialog({ initial: null })}>+ Verloftype</Button>}
+          <h3>{t('leave.settings.leaveTypes')}</h3>
+          {canManage && <Button variant="secondary" onClick={() => setLeaveDialog({ initial: null })}>{t('leave.settings.addLeaveType')}</Button>}
         </div>
         <LeaveTable
-          headers={['Code', 'Naam', 'Boekt af', 'Saldotype', 'Self-service', 'Actief']}
-          rows={leaveTypes.map((t) => [t.code, t.name, t.deductsFromBalance ? 'Ja' : 'Nee', t.deductsFromBalance ? balanceName(t.balanceTypeId) : '—', t.visibleInSelfService ? 'Ja' : 'Nee', t.isActive ? 'Ja' : 'Nee'])}
+          headers={[
+            t('leave.settings.colCode'),
+            t('leave.settings.colName'),
+            t('leave.settings.colDeducts'),
+            t('leave.settings.colBalanceType'),
+            t('leave.settings.colSelfService'),
+            t('leave.settings.colActive'),
+          ]}
+          rows={leaveTypes.map((lt) => [
+            lt.code,
+            lt.name,
+            yesNo(lt.deductsFromBalance),
+            lt.deductsFromBalance ? balanceName(lt.balanceTypeId) : '—',
+            yesNo(lt.visibleInSelfService),
+            yesNo(lt.isActive),
+          ])}
           onEdit={canManage ? (i) => setLeaveDialog({ initial: leaveTypes[i] }) : undefined}
           onDelete={canManage ? (i) => setDeleteTarget({ kind: 'leave', id: leaveTypes[i].id, name: leaveTypes[i].name }) : undefined}
         />
@@ -179,9 +196,9 @@ export function LeaveSettingsPage() {
       )}
       {deleteTarget && (
         <ConfirmDialog
-          title="Categorie verwijderen"
-          message={`Weet je zeker dat je '${deleteTarget.name}' wilt verwijderen? Een categorie die al gebruikt is, kan alleen gedeactiveerd worden.`}
-          confirmLabel="Verwijderen"
+          title={t('leave.settings.deleteTitle')}
+          message={t('leave.settings.deleteMessage', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={() => void handleDelete()}
           onCancel={() => setDeleteTarget(null)}
@@ -202,6 +219,7 @@ function LeaveTable({
   onEdit?: (index: number) => void
   onDelete?: (index: number) => void
 }) {
+  const { t } = useLocale()
   const hasActions = onEdit !== undefined || onDelete !== undefined
   return (
     <div className="lb-table-wrap">
@@ -209,7 +227,7 @@ function LeaveTable({
         <thead>
           <tr>
             {headers.map((h) => <th key={h}>{h}</th>)}
-            {hasActions && <th aria-label="Acties" />}
+            {hasActions && <th aria-label={t('leave.table.actions')} />}
           </tr>
         </thead>
         <tbody>
@@ -218,8 +236,8 @@ function LeaveTable({
               {row.map((cell, j) => <td key={j}>{cell}</td>)}
               {hasActions && (
                 <td className="lb-actions-cell">
-                  {onEdit && <Button variant="ghost" onClick={() => onEdit(i)}>Bewerken</Button>}
-                  {onDelete && <Button variant="ghost" onClick={() => onDelete(i)}>Verwijderen</Button>}
+                  {onEdit && <Button variant="ghost" onClick={() => onEdit(i)}>{t('ui.actions.edit')}</Button>}
+                  {onDelete && <Button variant="ghost" onClick={() => onDelete(i)}>{t('ui.actions.delete')}</Button>}
                 </td>
               )}
             </tr>

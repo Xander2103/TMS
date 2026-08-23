@@ -5,12 +5,13 @@ import type { InventoryStatus } from './inventoryStatus'
 
 export type IssuedItemStatus = 'NotIssued' | 'Issued' | 'Returned' | 'Missing' | 'Damaged'
 
+/** Vertaalsleutels — renderen als t(ISSUED_ITEM_STATUS_LABELS[status]). */
 export const ISSUED_ITEM_STATUS_LABELS: Record<IssuedItemStatus, string> = {
-  NotIssued: 'Niet uitgereikt',
-  Issued: 'Uitgereikt',
-  Returned: 'Teruggebracht',
-  Missing: 'Ontbreekt',
-  Damaged: 'Beschadigd',
+  NotIssued: 'issuedItems.status.NotIssued',
+  Issued: 'issuedItems.status.Issued',
+  Returned: 'issuedItems.status.Returned',
+  Missing: 'issuedItems.status.Missing',
+  Damaged: 'issuedItems.status.Damaged',
 }
 
 export const ISSUED_ITEM_STATUSES: IssuedItemStatus[] = ['NotIssued', 'Issued', 'Returned', 'Missing', 'Damaged']
@@ -18,11 +19,12 @@ export const ISSUED_ITEM_STATUSES: IssuedItemStatus[] = ['NotIssued', 'Issued', 
 /** Structured return outcome; only "good" may restore usable stock. */
 export type ReturnDisposition = 'good' | 'damaged' | 'lost' | 'disposed'
 
+/** Vertaalsleutels — renderen als t(RETURN_DISPOSITION_LABELS[disposition]). */
 export const RETURN_DISPOSITION_LABELS: Record<ReturnDisposition, string> = {
-  good: 'Goede staat',
-  damaged: 'Beschadigd',
-  lost: 'Verloren',
-  disposed: 'Afgevoerd',
+  good: 'issuedItems.disposition.good',
+  damaged: 'issuedItems.disposition.damaged',
+  lost: 'issuedItems.disposition.lost',
+  disposed: 'issuedItems.disposition.disposed',
 }
 
 export interface IssuedItemTemplate {

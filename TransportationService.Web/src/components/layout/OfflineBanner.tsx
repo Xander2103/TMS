@@ -21,9 +21,9 @@ export function OfflineBanner({ unsyncedCount = 0 }: OfflineBannerProps) {
     <div className="offline-banner" role="status" aria-live="polite">
       <span aria-hidden="true">⚠</span>{' '}
       {online
-        ? `${unsyncedCount} actie(s) wachten op synchronisatie…`
+        ? t('ui.offline.pendingSync', { count: unsyncedCount })
         : unsyncedCount > 0
-          ? `Offline — ${unsyncedCount} actie(s) in de wachtrij; ze synchroniseren automatisch zodra de verbinding terugkeert.`
+          ? t('ui.offline.queued', { count: unsyncedCount })
           : t('ui.offline.banner')}
     </div>
   )

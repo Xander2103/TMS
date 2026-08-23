@@ -1,4 +1,5 @@
 import { euro } from '../invoices/types'
+import type { TranslateFn } from '../../i18n/localeContext'
 import type { Dashboard } from './types'
 
 /** One clickable dashboard tile (the former "Kpi" shape, unchanged rendering). */
@@ -25,53 +26,54 @@ export interface DashboardExtras {
  */
 export interface DashboardTileGroup {
   id: string
-  /** Group header shown above the tiles. */
+  /** Translation key for the group header shown above the tiles (resolved via t()). */
   title: string
   /** Any-of permissions deciding whether the group renders; empty = everyone. */
   audience: string[]
-  /** Builds the group's tiles from the shared dashboard payload + lazy extras. */
-  tiles: (data: Dashboard, extras: DashboardExtras) => DashboardTile[]
+  /** Builds the group's tiles from the shared dashboard payload + lazy extras; labels/hints
+   * are produced already translated via the passed translate function. */
+  tiles: (data: Dashboard, extras: DashboardExtras, t: TranslateFn) => DashboardTile[]
 }
 
 export const DASHBOARD_TILE_GROUPS: DashboardTileGroup[] = [
   {
     id: 'planning',
-    title: 'Planning & uitvoering',
+    title: 'appDashboard.groups.planning',
     audience: ['planning.view'],
-    tiles: (data, extras) => [
+    tiles: (data, extras, t) => [
       {
-        label: 'Open opdrachten',
+        label: t('appDashboard.tiles.openOrders'),
         value: String(data.ordersOpenCount),
-        hint: `${data.ordersInExecutionCount} in uitvoering`,
+        hint: t('appDashboard.tiles.openOrdersHint', { count: data.ordersInExecutionCount }),
         to: '/transport-orders',
       },
       {
-        label: 'Ritten vandaag',
+        label: t('appDashboard.tiles.tripsToday'),
         value: String(data.tripsTodayTotal),
-        hint: `${data.tripsTodayInProgress} onderweg`,
+        hint: t('appDashboard.tiles.tripsTodayHint', { count: data.tripsTodayInProgress }),
         to: '/planning',
         alert: data.tripsTodayWithConflicts > 0,
       },
       ...(extras.dossierAttentionCount != null
         ? [{
-            label: 'Dossiers met aandacht',
+            label: t('appDashboard.tiles.dossiersAttention'),
             value: String(extras.dossierAttentionCount),
-            hint: 'open dossiers met aandachtspunten',
+            hint: t('appDashboard.tiles.dossiersAttentionHint'),
             to: '/dossiers',
             alert: extras.dossierAttentionCount > 0,
           }]
         : []),
       {
-        label: 'Open incidenten',
+        label: t('appDashboard.tiles.openIncidents'),
         value: String(data.openIncidentCount),
-        hint: 'nieuw of in behandeling',
+        hint: t('appDashboard.tiles.openIncidentsHint'),
         to: '/incidents',
         alert: data.openIncidentCount > 0,
       },
       {
-        label: 'Mislukte scans',
+        label: t('appDashboard.tiles.failedScans'),
         value: String(data.failedScanCount),
-        hint: 'laatste 7 dagen',
+        hint: t('appDashboard.tiles.failedScansHint'),
         to: '/exceptions',
         alert: data.failedScanCount > 0,
       },
@@ -79,28 +81,28 @@ export const DASHBOARD_TILE_GROUPS: DashboardTileGroup[] = [
   },
   {
     id: 'voorraad',
-    title: 'Voorraad',
+    title: 'appDashboard.groups.inventory',
     audience: ['inventory.view', 'inventory.manage'],
-    tiles: (data) =>
+    tiles: (data, _extras, t) =>
       data.inventory
         ? [
-            { label: 'Lage voorraad', value: String(data.inventory.lowStock), to: '/inventory?status=LowStock' },
+            { label: t('appDashboard.tiles.lowStock'), value: String(data.inventory.lowStock), to: '/inventory?status=LowStock' },
             {
-              label: 'Kritieke voorraad',
+              label: t('appDashboard.tiles.criticalStock'),
               value: String(data.inventory.criticalStock),
               to: '/inventory?status=CriticalStock',
               alert: data.inventory.criticalStock > 0,
             },
-            { label: 'Niet op voorraad', value: String(data.inventory.outOfStock), to: '/inventory?status=OutOfStock' },
+            { label: t('appDashboard.tiles.outOfStock'), value: String(data.inventory.outOfStock), to: '/inventory?status=OutOfStock' },
             {
-              label: 'Negatieve voorraad',
+              label: t('appDashboard.tiles.negativeStock'),
               value: String(data.inventory.negativeStock),
               to: '/inventory?status=NegativeStock',
               alert: data.inventory.negativeStock > 0,
             },
-            { label: 'Open bestelvoorstellen', value: String(data.inventory.openReorderProposals), to: '/inventory' },
+            { label: t('appDashboard.tiles.openReorderProposals'), value: String(data.inventory.openReorderProposals), to: '/inventory' },
             {
-              label: 'Achterstallige retouren',
+              label: t('appDashboard.tiles.overdueReturns'),
               value: String(data.inventory.overdueReturns),
               to: '/inventory',
               alert: data.inventory.overdueReturns > 0,
@@ -110,32 +112,32 @@ export const DASHBOARD_TILE_GROUPS: DashboardTileGroup[] = [
   },
   {
     id: 'taken',
-    title: 'Taken',
+    title: 'appDashboard.groups.tasks',
     audience: ['tasks.view_own', 'tasks.view_team', 'tasks.view_all'],
-    tiles: (data) => {
+    tiles: (data, _extras, t) => {
       const tasks = data.tasks
       if (!tasks) return []
       return [
-        { label: 'Mijn open taken', value: String(tasks.myOpen), to: '/tasks?mine=1' },
-        { label: 'Vandaag te doen', value: String(tasks.myDueToday), to: '/tasks?mine=1' },
+        { label: t('appDashboard.tiles.myOpenTasks'), value: String(tasks.myOpen), to: '/tasks?mine=1' },
+        { label: t('appDashboard.tiles.dueToday'), value: String(tasks.myDueToday), to: '/tasks?mine=1' },
         {
-          label: 'Achterstallig',
+          label: t('appDashboard.tiles.overdue'),
           value: String(tasks.myOverdue),
           to: '/tasks?mine=1&overdue=1',
           alert: tasks.myOverdue > 0,
         },
-        { label: 'Te bevestigen berichten', value: String(tasks.myToAcknowledge), to: '/inbox' },
+        { label: t('appDashboard.tiles.toAcknowledge'), value: String(tasks.myToAcknowledge), to: '/inbox' },
         ...(tasks.teamOpen != null
           ? [
-              { label: 'Open teamtaken', value: String(tasks.teamOpen), to: '/tasks' },
+              { label: t('appDashboard.tiles.teamOpen'), value: String(tasks.teamOpen), to: '/tasks' },
               {
-                label: 'Team achterstallig',
+                label: t('appDashboard.tiles.teamOverdue'),
                 value: String(tasks.teamOverdue ?? 0),
                 to: '/tasks?overdue=1',
                 alert: (tasks.teamOverdue ?? 0) > 0,
               },
-              { label: 'Geblokkeerd', value: String(tasks.teamBlocked ?? 0), to: '/tasks?status=Blocked' },
-              { label: 'Wacht op controle', value: String(tasks.teamWaitingReview ?? 0), to: '/tasks?review=1' },
+              { label: t('appDashboard.tiles.blocked'), value: String(tasks.teamBlocked ?? 0), to: '/tasks?status=Blocked' },
+              { label: t('appDashboard.tiles.waitingReview'), value: String(tasks.teamWaitingReview ?? 0), to: '/tasks?review=1' },
             ]
           : []),
       ]
@@ -143,26 +145,29 @@ export const DASHBOARD_TILE_GROUPS: DashboardTileGroup[] = [
   },
   {
     id: 'facturatie',
-    title: 'Facturatie & administratie',
+    title: 'appDashboard.groups.billing',
     audience: ['invoices.view'],
-    tiles: (data) => [
+    tiles: (data, _extras, t) => [
       {
-        label: 'Omzet deze maand',
+        label: t('appDashboard.tiles.revenueMonth'),
         value: euro(data.revenueInvoicedThisMonth),
-        hint: `${data.ordersCompletedThisMonth} opdrachten afgerond`,
+        hint: t('appDashboard.tiles.revenueMonthHint', { count: data.ordersCompletedThisMonth }),
         to: '/invoices',
       },
       {
-        label: 'Openstaand',
+        label: t('appDashboard.tiles.outstanding'),
         value: euro(data.outstandingAmount),
-        hint: data.overdueInvoiceCount > 0 ? `${data.overdueInvoiceCount} vervallen` : 'Geen vervallen facturen',
+        hint:
+          data.overdueInvoiceCount > 0
+            ? t('appDashboard.tiles.outstandingOverdueHint', { count: data.overdueInvoiceCount })
+            : t('appDashboard.tiles.outstandingNoneHint'),
         to: '/invoices',
         alert: data.overdueInvoiceCount > 0,
       },
       {
-        label: 'POD ontbreekt',
+        label: t('appDashboard.tiles.missingPod'),
         value: String(data.missingPodCount),
-        hint: 'afgeronde opdrachten zonder afleverbewijs',
+        hint: t('appDashboard.tiles.missingPodHint'),
         to: '/transport-orders',
         alert: data.missingPodCount > 0,
       },
@@ -170,20 +175,20 @@ export const DASHBOARD_TILE_GROUPS: DashboardTileGroup[] = [
   },
   {
     id: 'vloot',
-    title: 'Vloot',
+    title: 'appDashboard.groups.fleet',
     audience: ['vehicles.view'],
-    tiles: (data) => [
+    tiles: (data, _extras, t) => [
       {
-        label: 'Voertuigen inzetbaar',
+        label: t('appDashboard.tiles.vehiclesAvailable'),
         value: String(data.vehiclesAvailable),
-        hint: `${data.maintenanceDueCount + data.inspectionsDueCount} onderhoud/keuring gepland`,
+        hint: t('appDashboard.tiles.vehiclesAvailableHint', { count: data.maintenanceDueCount + data.inspectionsDueCount }),
         to: '/fleet',
         alert: data.documentsExpiringCount + data.openDamageCount > 0,
       },
       {
-        label: 'Onderhoud te laat',
+        label: t('appDashboard.tiles.overdueMaintenance'),
         value: String(data.overdueMaintenanceCount),
-        hint: 'geplande onderhoudsbeurten over datum',
+        hint: t('appDashboard.tiles.overdueMaintenanceHint'),
         to: '/fleet',
         alert: data.overdueMaintenanceCount > 0,
       },
@@ -194,21 +199,21 @@ export const DASHBOARD_TILE_GROUPS: DashboardTileGroup[] = [
     // gedeelde CommonView-set, waardoor élke dispatcher de HR-groep zou zien — precies
     // de tegelmuur die §16 afschaft).
     id: 'personeel',
-    title: 'Personeel',
+    title: 'appDashboard.groups.hr',
     audience: ['employees.create', 'employees.edit', 'absences.approve', 'hr_settings.manage'],
-    tiles: (data) => [
+    tiles: (data, _extras, t) => [
       {
-        label: 'Chauffeurs afwezig vandaag',
+        label: t('appDashboard.tiles.driversAbsentToday'),
         value: String(data.driversAbsentToday),
         to: '/absences',
       },
       {
-        label: 'Kwalificaties',
+        label: t('appDashboard.tiles.qualifications'),
         value: String(data.qualificationsExpiring30d),
         hint:
           data.qualificationsExpired > 0
-            ? `vervallen binnen 30 dagen · ${data.qualificationsExpired} verlopen`
-            : 'vervallen binnen 30 dagen',
+            ? t('appDashboard.tiles.qualificationsHintExpired', { count: data.qualificationsExpired })
+            : t('appDashboard.tiles.qualificationsHint'),
         to: '/qualifications',
         alert: data.qualificationsExpiring30d + data.qualificationsExpired > 0,
       },
@@ -216,22 +221,22 @@ export const DASHBOARD_TILE_GROUPS: DashboardTileGroup[] = [
   },
   {
     id: 'management',
-    title: 'Management',
+    title: 'appDashboard.groups.management',
     audience: ['kpi.view'],
-    tiles: () => [
-      { label: "KPI's", value: '→', hint: 'Naar het KPI-dashboard', to: '/kpi' },
-      { label: 'Rendement', value: '→', hint: 'Marges en rendement per rit', to: '/profitability' },
+    tiles: (_data, _extras, t) => [
+      { label: t('appDashboard.tiles.kpis'), value: '→', hint: t('appDashboard.tiles.kpisHint'), to: '/kpi' },
+      { label: t('appDashboard.tiles.profitability'), value: '→', hint: t('appDashboard.tiles.profitabilityHint'), to: '/profitability' },
     ],
   },
   {
     id: 'communicatie',
-    title: 'Communicatie',
+    title: 'appDashboard.groups.communication',
     audience: [],
-    tiles: (data) => [
+    tiles: (data, _extras, t) => [
       {
-        label: 'Nieuwe berichten',
+        label: t('appDashboard.tiles.newMessages'),
         value: String(data.unreadInternalMessages),
-        hint: 'ongelezen interne berichten',
+        hint: t('appDashboard.tiles.newMessagesHint'),
         to: '/inbox',
       },
     ],

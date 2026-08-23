@@ -7,6 +7,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { getHrReminderSettings, updateHrReminderSettings, type HrReminderSettings } from '../api/hrReminderSettingsApi'
 import './hr-reminder-settings-page.css'
@@ -20,6 +21,7 @@ import './hr-reminder-settings-page.css'
 export function HrReminderSettingsPage() {
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
+  const { t } = useLocale()
   const canManage = hasPermission('hr_settings.manage')
 
   const [loaded, setLoaded] = useState<HrReminderSettings | null>(null)
@@ -37,7 +39,7 @@ export function HrReminderSettingsPage() {
         setForm(data)
       })
       .catch(() => {
-        if (mounted) setLoadError('De HR-herinneringsinstellingen konden niet worden geladen.')
+        if (mounted) setLoadError('employees.hrReminders.loadFailed')
       })
     return () => {
       mounted = false
@@ -58,9 +60,9 @@ export function HrReminderSettingsPage() {
       const updated = await updateHrReminderSettings(form)
       setLoaded(updated)
       setForm(updated)
-      showSuccess('HR-herinneringsinstellingen opgeslagen.')
+      showSuccess(t('employees.hrReminders.saved'))
     } catch (err) {
-      const { message, fieldErrors: errors } = describeApiError(err, 'De instellingen konden niet worden opgeslagen.')
+      const { message, fieldErrors: errors } = describeApiError(err, t('employees.hrReminders.saveFailed'))
       setFieldErrors(errors)
       showError(message)
     } finally {
@@ -68,8 +70,8 @@ export function HrReminderSettingsPage() {
     }
   }
 
-  if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (!form) return <p className="placeholder-text">Instellingen laden…</p>
+  if (loadError) return <p className="placeholder-text">{t(loadError)}</p>
+  if (!form) return <p className="placeholder-text">{t('employees.hrReminders.loading')}</p>
 
   const disabled = !canManage || saving
   const dossierDisabled = disabled || !form.dossierRemindersEnabled
@@ -77,19 +79,15 @@ export function HrReminderSettingsPage() {
   return (
     <div>
       <UnsavedChangesGuard when={dirty && !saving} />
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'HR-herinneringen' }]} />
+      <Breadcrumbs items={[{ label: t('employees.hrReminders.breadcrumbSettings'), to: '/settings' }, { label: t('employees.hrReminders.title') }]} />
       <PageHeader
-        title="HR-herinneringen"
-        subtitle={
-          canManage
-            ? 'Verjaardagen, dienstjubilea, einde dienstverband en opvolging van onvolledige dossiers.'
-            : 'Je hebt alleen leesrechten voor deze instellingen.'
-        }
+        title={t('employees.hrReminders.title')}
+        subtitle={canManage ? t('employees.hrReminders.subtitleManage') : t('employees.hrReminders.subtitleReadOnly')}
       />
 
       <div className="hr-reminder-settings-sections">
         <section className="hr-reminder-settings-card">
-          <h2>Verjaardagen</h2>
+          <h2>{t('employees.hrReminders.birthdaysHeading')}</h2>
           <label className="hr-reminder-settings-checkbox">
             <input
               type="checkbox"
@@ -97,10 +95,10 @@ export function HrReminderSettingsPage() {
               disabled={disabled}
               onChange={(e) => setField('birthdayEnabled', e.target.checked)}
             />
-            Verjaardagsherinnering actief
+            {t('employees.hrReminders.birthdayEnabled')}
           </label>
           <div className="hr-reminder-settings-grid">
-            <FormField label="Dagen op voorhand" htmlFor="hr-birthday-days" hint="0 = op de dag zelf.">
+            <FormField label={t('employees.hrReminders.daysBefore')} htmlFor="hr-birthday-days" hint={t('employees.hrReminders.daysBeforeHint')}>
               <input
                 id="hr-birthday-days"
                 type="number"
@@ -111,7 +109,7 @@ export function HrReminderSettingsPage() {
                 onChange={(e) => setField('birthdayDaysBefore', Number(e.target.value) || 0)}
               />
             </FormField>
-            <FormField label="Rolcodes ontvangers (CSV)" htmlFor="hr-birthday-roles">
+            <FormField label={t('employees.hrReminders.birthdayRoles')} htmlFor="hr-birthday-roles">
               <input
                 id="hr-birthday-roles"
                 type="text"
@@ -128,12 +126,12 @@ export function HrReminderSettingsPage() {
               disabled={disabled}
               onChange={(e) => setField('birthdayEmailEnabled', e.target.checked)}
             />
-            Automatische e-mail naar de medewerker
+            {t('employees.hrReminders.birthdayEmail')}
           </label>
         </section>
 
         <section className="hr-reminder-settings-card">
-          <h2>Dienstjubilea</h2>
+          <h2>{t('employees.hrReminders.seniorityHeading')}</h2>
           <label className="hr-reminder-settings-checkbox">
             <input
               type="checkbox"
@@ -141,10 +139,10 @@ export function HrReminderSettingsPage() {
               disabled={disabled}
               onChange={(e) => setField('seniorityEnabled', e.target.checked)}
             />
-            Jubileumherinnering actief
+            {t('employees.hrReminders.seniorityEnabled')}
           </label>
           <div className="hr-reminder-settings-grid">
-            <FormField label="Mijlpaaljaren (CSV)" htmlFor="hr-seniority-years">
+            <FormField label={t('employees.hrReminders.milestoneYears')} htmlFor="hr-seniority-years">
               <input
                 id="hr-seniority-years"
                 type="text"
@@ -153,7 +151,7 @@ export function HrReminderSettingsPage() {
                 onChange={(e) => setField('seniorityMilestoneYears', e.target.value)}
               />
             </FormField>
-            <FormField label="Waarschuwing (dagen op voorhand)" htmlFor="hr-seniority-warning">
+            <FormField label={t('employees.hrReminders.seniorityWarningDays')} htmlFor="hr-seniority-warning">
               <input
                 id="hr-seniority-warning"
                 type="number"
@@ -172,12 +170,12 @@ export function HrReminderSettingsPage() {
               disabled={disabled}
               onChange={(e) => setField('seniorityEmployeeEmailEnabled', e.target.checked)}
             />
-            Automatische e-mail naar de medewerker op de mijlpaaldatum
+            {t('employees.hrReminders.seniorityEmail')}
           </label>
         </section>
 
         <section className="hr-reminder-settings-card">
-          <h2>Einde dienstverband</h2>
+          <h2>{t('employees.hrReminders.employmentEndHeading')}</h2>
           <label className="hr-reminder-settings-checkbox">
             <input
               type="checkbox"
@@ -185,10 +183,10 @@ export function HrReminderSettingsPage() {
               disabled={disabled}
               onChange={(e) => setField('employmentEndEnabled', e.target.checked)}
             />
-            Herinnering einde dienstverband actief
+            {t('employees.hrReminders.employmentEndEnabled')}
           </label>
           <div className="hr-reminder-settings-grid">
-            <FormField label="Dagen op voorhand" htmlFor="hr-employment-end-days">
+            <FormField label={t('employees.hrReminders.daysBefore')} htmlFor="hr-employment-end-days">
               <input
                 id="hr-employment-end-days"
                 type="number"
@@ -203,7 +201,7 @@ export function HrReminderSettingsPage() {
         </section>
 
         <section className="hr-reminder-settings-card">
-          <h2>Opvolging onvolledige dossiers</h2>
+          <h2>{t('employees.hrReminders.dossierHeading')}</h2>
           <label className="hr-reminder-settings-checkbox">
             <input
               type="checkbox"
@@ -211,13 +209,13 @@ export function HrReminderSettingsPage() {
               disabled={disabled}
               onChange={(e) => setField('dossierRemindersEnabled', e.target.checked)}
             />
-            Opvolging onvolledige dossiers actief
+            {t('employees.hrReminders.dossierEnabled')}
           </label>
           <div className="hr-reminder-settings-grid">
             <FormField
-              label="Eerste melding na (dagen)"
+              label={t('employees.hrReminders.dossierReminderDays')}
               htmlFor="hr-dossier-reminder-days"
-              hint="HR-rol wordt verwittigd zodra een dossier dit aantal dagen onvolledig is."
+              hint={t('employees.hrReminders.dossierReminderDaysHint')}
               error={getFieldError(fieldErrors, 'dossierReminderDays')}
             >
               <input
@@ -231,9 +229,9 @@ export function HrReminderSettingsPage() {
               />
             </FormField>
             <FormField
-              label="Escalatie na (dagen)"
+              label={t('employees.hrReminders.dossierEscalationDays')}
               htmlFor="hr-dossier-escalation-days"
-              hint="HR + management worden verwittigd (kritiek) na dit aantal dagen."
+              hint={t('employees.hrReminders.dossierEscalationDaysHint')}
               error={getFieldError(fieldErrors, 'dossierEscalationDays')}
             >
               <input
@@ -253,10 +251,10 @@ export function HrReminderSettingsPage() {
       {canManage && (
         <FormActions dirty={dirty}>
           <Button variant="secondary" onClick={() => setForm(loaded)} disabled={!dirty || saving}>
-            Herstellen
+            {t('employees.hrReminders.reset')}
           </Button>
           <Button onClick={() => void handleSave()} disabled={!dirty || saving}>
-            {saving ? 'Opslaan…' : 'Opslaan'}
+            {saving ? t('employees.hrReminders.saving') : t('employees.hrReminders.save')}
           </Button>
         </FormActions>
       )}

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useLocale } from '../../i18n/localeContext'
-import { MONTH_NAMES, addDays, mondayOf, startOfMonth } from './dateUtils'
+import { addDays, getMonthNames, mondayOf, startOfMonth } from './dateUtils'
 import './calendar.css'
 
 export type CalendarViewMode = 'month' | 'week' | 'list'
@@ -23,17 +23,24 @@ export interface CalendarToolbarProps {
 }
 
 function formatListLabel(start: Date, end: Date): string {
+  const monthNames = getMonthNames()
   const sameYear = start.getFullYear() === end.getFullYear()
-  const startLabel = `${start.getDate()} ${MONTH_NAMES[start.getMonth()]}`
-  const endLabel = `${end.getDate()} ${MONTH_NAMES[end.getMonth()]} ${end.getFullYear()}`
+  const startLabel = `${start.getDate()} ${monthNames[start.getMonth()]}`
+  const endLabel = `${end.getDate()} ${monthNames[end.getMonth()]} ${end.getFullYear()}`
   return sameYear ? `${startLabel} – ${endLabel}` : `${startLabel} ${start.getFullYear()} – ${endLabel}`
 }
 
-function periodLabelFor(view: CalendarViewMode, anchor: Date, listStepDays: number): string {
-  if (view === 'month') return `${MONTH_NAMES[anchor.getMonth()]} ${anchor.getFullYear()}`
+function periodLabelFor(
+  view: CalendarViewMode,
+  anchor: Date,
+  listStepDays: number,
+  weekOfLabel: string,
+): string {
+  const monthNames = getMonthNames()
+  if (view === 'month') return `${monthNames[anchor.getMonth()]} ${anchor.getFullYear()}`
   if (view === 'week') {
     const monday = mondayOf(anchor)
-    return `week van ${monday.getDate()} ${MONTH_NAMES[monday.getMonth()]} ${monday.getFullYear()}`
+    return `${weekOfLabel} ${monday.getDate()} ${monthNames[monday.getMonth()]} ${monday.getFullYear()}`
   }
   const start = mondayOf(anchor)
   return formatListLabel(start, addDays(start, listStepDays - 1))
@@ -92,7 +99,7 @@ export function CalendarToolbar({
           {t('ui.calendar.next')}
         </button>
       </div>
-      <span className="cal-toolbar-label">{periodLabelFor(view, anchor, listStepDays)}</span>
+      <span className="cal-toolbar-label">{periodLabelFor(view, anchor, listStepDays, t('ui.calendar.weekOf'))}</span>
       <span className="cal-view-switch" role="group" aria-label={t('ui.calendar.view')}>
         {resolvedViews.map((mode) => (
           <button

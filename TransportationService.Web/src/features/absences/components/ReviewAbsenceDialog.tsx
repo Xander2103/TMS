@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   decideAbsence,
   getAbsenceReviewContext,
@@ -15,10 +16,7 @@ import {
   startAbsenceReview,
 } from '../api/absencesApi'
 import {
-  ABSENCE_STATUS_LABELS,
   ABSENCE_STATUS_TONE,
-  ABSENCE_TYPE_LABELS,
-  PART_DAY_LABELS,
   type Absence,
   type AbsenceReviewContext,
 } from '../types'
@@ -36,6 +34,7 @@ interface ReviewAbsenceDialogProps {
  * changes) plus the HR-only internal note.
  */
 export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsenceDialogProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
 
   const [context, setContext] = useState<AbsenceReviewContext | null>(null)
@@ -68,7 +67,7 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
       showSuccess(message)
       onChanged(updated)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De actie kon niet worden uitgevoerd.')
+      showError(err instanceof ApiError ? err.message : t('absences.review.actionFailed'))
     } finally {
       setBusy(false)
     }
@@ -82,57 +81,70 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
       if (!response.ok) throw new Error()
       window.open(URL.createObjectURL(await response.blob()), '_blank', 'noopener')
     } catch {
-      showError('De bijlage kon niet worden geopend.')
+      showError(t('absences.review.attachmentFailed'))
     }
   }
 
   return (
     <Modal
-      title={`Aanvraag beoordelen — ${absence.employeeName}`}
+      title={t('absences.review.title', { name: absence.employeeName })}
       onClose={onClose}
       busy={busy}
     >
       <div className="rev-dialog">
         <p className="rev-summary">
-          <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{ABSENCE_STATUS_LABELS[absence.status]}</Badge>{' '}
-          <strong>{ABSENCE_TYPE_LABELS[absence.type]}</strong> van {absence.startDate} t/m {absence.endDate}
-          {absence.partDay !== 'FullDay' && ` (${PART_DAY_LABELS[absence.partDay]})`}
+          <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{t(`absences.status.${absence.status}`)}</Badge>{' '}
+          <strong>{t(`absences.type.${absence.type}`)}</strong>{' '}
+          {t('absences.review.period', { from: absence.startDate, to: absence.endDate })}
+          {absence.partDay !== 'FullDay' && ` (${t(`absences.partDay.${absence.partDay}`)})`}
           {absence.reason && ` — "${absence.reason}"`}
         </p>
         {absence.hasAttachment && (
           <button type="button" className="rev-attachment" onClick={() => void openAttachment()}>
-            📎 {absence.attachmentFileName ?? 'Bijlage'} bekijken
+            📎{' '}
+            {t('absences.review.attachmentView', {
+              name: absence.attachmentFileName ?? t('absences.review.attachmentFallback'),
+            })}
           </button>
         )}
 
         {context && (
           <div className="rev-context">
-            <h3>Context</h3>
+            <h3>{t('absences.review.contextTitle')}</h3>
             <ul>
               <li>
                 {context.overlappingShifts.length === 0
-                  ? '✓ Geen shifts in deze periode.'
-                  : `⚠ ${context.overlappingShifts.length} shift(s): ${context.overlappingShifts
-                      .map((s) => `${s.date} ${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`)
-                      .join(', ')}`}
+                  ? t('absences.review.noShifts')
+                  : t('absences.review.shifts', {
+                      count: context.overlappingShifts.length,
+                      list: context.overlappingShifts
+                        .map((s) => `${s.date} ${s.startTime.slice(0, 5)}–${s.endTime.slice(0, 5)}`)
+                        .join(', '),
+                    })}
               </li>
               <li>
                 {context.overlappingTrips.length === 0
-                  ? '✓ Geen geplande ritten in deze periode.'
-                  : `⚠ ${context.overlappingTrips.length} rit(ten): ${context.overlappingTrips
-                      .map((t) => `${t.tripNumber} (${t.tripDate})`)
-                      .join(', ')}`}
+                  ? t('absences.review.noTrips')
+                  : t('absences.review.trips', {
+                      count: context.overlappingTrips.length,
+                      list: context.overlappingTrips.map((trip) => `${trip.tripNumber} (${trip.tripDate})`).join(', '),
+                    })}
               </li>
               <li>
                 {context.overlappingColleagues.length === 0
-                  ? '✓ Geen collega’s van dezelfde afdeling afwezig.'
-                  : `⚠ Tegelijk afwezig: ${context.overlappingColleagues
-                      .map((c) => `${c.employeeName} (${c.startDate}–${c.endDate}, ${ABSENCE_STATUS_LABELS[c.status]})`)
-                      .join(', ')}`}
+                  ? t('absences.review.noColleagues')
+                  : t('absences.review.colleagues', {
+                      list: context.overlappingColleagues
+                        .map(
+                          (c) =>
+                            `${c.employeeName} (${c.startDate}–${c.endDate}, ${t(`absences.status.${c.status}`)})`,
+                        )
+                        .join(', '),
+                    })}
               </li>
               <li>
-                Opgenomen verlof dit jaar: {context.usedVacationDaysThisYear} dag(en)
-                <span className="rev-balance-note"> · saldo-administratie volgt later</span>
+                {t('absences.review.usedVacation', { count: context.usedVacationDaysThisYear })}
+                <span className="rev-balance-note"> {t('absences.review.balanceNote')}</span>
               </li>
             </ul>
           </div>
@@ -140,14 +152,14 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
 
         {pending && (
           <>
-            <FormField label="Notitie voor de medewerker" htmlFor="rev-note" hint="Verplicht bij afwijzen of wijzigingen vragen.">
+            <FormField label={t('absences.review.noteForEmployee')} htmlFor="rev-note" hint={t('absences.review.noteHint')}>
               <textarea id="rev-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} disabled={busy} maxLength={1000} />
             </FormField>
             <div className="rev-proposal">
-              <FormField label="Voorstel van" htmlFor="rev-prop-start" hint="Optioneel alternatief">
+              <FormField label={t('absences.review.proposedFrom')} htmlFor="rev-prop-start" hint={t('absences.review.proposedFromHint')}>
                 <input id="rev-prop-start" type="date" value={proposedStart} onChange={(e) => setProposedStart(e.target.value)} disabled={busy} />
               </FormField>
-              <FormField label="Voorstel tot" htmlFor="rev-prop-end">
+              <FormField label={t('absences.review.proposedTo')} htmlFor="rev-prop-end">
                 <input id="rev-prop-end" type="date" value={proposedEnd} onChange={(e) => setProposedEnd(e.target.value)} disabled={busy} />
               </FormField>
             </div>
@@ -155,62 +167,66 @@ export function ReviewAbsenceDialog({ absence, onClose, onChanged }: ReviewAbsen
               {absence.status === 'Requested' && (
                 <Button
                   variant="secondary"
-                  onClick={() => void run(() => startAbsenceReview(absence.id), 'Aanvraag in behandeling genomen.')}
+                  onClick={() => void run(() => startAbsenceReview(absence.id), t('absences.review.startReviewSuccess'))}
                   disabled={busy}
                 >
-                  In behandeling
+                  {t('absences.review.startReview')}
                 </Button>
               )}
               <Button
-                onClick={() => void run(() => decideAbsence(absence.id, true, note.trim() || null), 'Aanvraag goedgekeurd.')}
+                onClick={() =>
+                  void run(() => decideAbsence(absence.id, true, note.trim() || null), t('absences.review.approveSuccess'))
+                }
                 disabled={busy}
               >
-                ✓ Goedkeuren
+                {t('absences.review.approve')}
               </Button>
               <Button
                 variant="danger"
                 onClick={() => {
                   if (!note.trim()) {
-                    showError('Een notitie voor de medewerker is verplicht bij afwijzen.')
+                    showError(t('absences.review.rejectNoteRequired'))
                     return
                   }
-                  void run(() => decideAbsence(absence.id, false, note.trim()), 'Aanvraag afgewezen.')
+                  void run(() => decideAbsence(absence.id, false, note.trim()), t('absences.review.rejectSuccess'))
                 }}
                 disabled={busy}
               >
-                ✕ Afwijzen
+                {t('absences.review.reject')}
               </Button>
               <Button
                 variant="secondary"
                 onClick={() => {
                   if (!note.trim()) {
-                    showError('Een notitie voor de medewerker is verplicht bij wijzigingen vragen.')
+                    showError(t('absences.review.requestChangesNoteRequired'))
                     return
                   }
                   void run(
                     () =>
                       requestAbsenceChanges(absence.id, note.trim(), proposedStart || null, proposedEnd || null),
-                    'Wijziging gevraagd — de medewerker is verwittigd.',
+                    t('absences.review.requestChangesSuccess'),
                   )
                 }}
                 disabled={busy}
               >
-                ⇄ Wijziging vragen
+                {t('absences.review.requestChanges')}
               </Button>
             </div>
           </>
         )}
 
-        <FormField label="Interne HR-notitie" htmlFor="rev-internal" hint="Niet zichtbaar voor de medewerker.">
+        <FormField label={t('absences.review.internalNote')} htmlFor="rev-internal" hint={t('absences.review.internalNoteHint')}>
           <textarea id="rev-internal" rows={2} value={internalNote} onChange={(e) => setInternalNote(e.target.value)} disabled={busy} maxLength={2000} />
         </FormField>
         <div className="rev-internal-actions">
           <Button
             variant="secondary"
-            onClick={() => void run(() => setAbsenceInternalNote(absence.id, internalNote.trim() || null), 'Interne notitie opgeslagen.')}
+            onClick={() =>
+              void run(() => setAbsenceInternalNote(absence.id, internalNote.trim() || null), t('absences.review.internalNoteSaved'))
+            }
             disabled={busy}
           >
-            Interne notitie opslaan
+            {t('absences.review.saveInternalNote')}
           </Button>
         </div>
       </div>

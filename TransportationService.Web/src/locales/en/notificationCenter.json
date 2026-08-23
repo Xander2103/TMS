@@ -1,0 +1,63 @@
+{
+  "bell": {
+    "ariaLabel": "Notifications",
+    "loading": "Loading notifications…",
+    "empty": "No notifications.",
+    "unreadDot": "Unread",
+    "allNotifications": "All notifications"
+  },
+  "page": {
+    "title": "Notifications",
+    "loading": "Loading notifications…",
+    "empty": "No notifications.",
+    "categoryAria": "Category",
+    "allCategories": "All categories",
+    "showArchive": "Show archive",
+    "hideResolved": "Hide resolved",
+    "resolved": "Resolved",
+    "archived": "archived",
+    "acknowledgedAt": "Acknowledged on {dateTime}",
+    "acknowledge": "Acknowledge",
+    "acknowledgeAria": "Acknowledge notification \"{title}\"",
+    "archiveAria": "Archive notification \"{title}\"",
+    "archiveTitle": "Archive",
+    "preferencesSummary": "Preferences per category",
+    "preferencesHint": "Disabled categories no longer deliver notifications; critical system notifications always come through."
+  },
+  "actions": {
+    "markAllRead": "Mark all read"
+  },
+  "errors": {
+    "loadFailed": "Notifications could not be loaded.",
+    "openFailed": "The notification could not be opened.",
+    "archiveFailed": "The notification could not be archived.",
+    "acknowledgeFailed": "The notification could not be acknowledged.",
+    "markFailed": "Notifications could not be marked.",
+    "preferenceFailed": "The preference could not be saved."
+  },
+  "toasts": {
+    "preferenceSaved": "Preference saved."
+  },
+  "categories": {
+    "General": "General",
+    "Orders": "Orders",
+    "Planning": "Planning",
+    "Execution": "Execution",
+    "Hr": "HR",
+    "System": "System",
+    "Inventory": "Inventory",
+    "Task": "Tasks",
+    "CustomerPortal": "Customer portal",
+    "Fleet": "Fleet",
+    "Document": "Documents",
+    "Approval": "Approvals"
+  },
+  "relative": {
+    "justNow": "just now",
+    "minutesAgo": "{count} min ago",
+    "hoursAgo_one": "{count} hour ago",
+    "hoursAgo_other": "{count} hours ago",
+    "yesterday": "yesterday",
+    "daysAgo": "{count} days ago"
+  }
+}

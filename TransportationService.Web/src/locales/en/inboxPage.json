@@ -1,0 +1,93 @@
+{
+  "title": "Messages",
+  "subtitle": "Internal messages within the company.",
+  "newMessage": "New message",
+  "tabs": {
+    "inbox": "Received",
+    "sent": "Sent"
+  },
+  "list": {
+    "loading": "Loading messages...",
+    "emptyInbox": "No messages in your inbox.",
+    "emptySent": "No sent messages yet.",
+    "newBadge": "new",
+    "ackPending": "to acknowledge",
+    "ackDone": "acknowledged",
+    "recipients_one": "{count} recipient",
+    "recipients_other": "{count} recipients",
+    "cancelledOn": "Withdrawn on {dateTime}",
+    "deliveryStatus": "Delivery status",
+    "withdraw": "Withdraw"
+  },
+  "priority": {
+    "Normal": "Normal",
+    "High": "High",
+    "Urgent": "Urgent"
+  },
+  "emailStatus": {
+    "Geen": "None",
+    "Pending": "Queued",
+    "Sent": "Sent",
+    "Failed": "Failed",
+    "Suppressed": "Suppressed",
+    "Duplicate": "Duplicate"
+  },
+  "detail": {
+    "acknowledge": "Acknowledge",
+    "acknowledging": "Acknowledging…",
+    "acknowledgedAt": "Acknowledged on {dateTime}",
+    "acknowledgementRequired": "This message requires an explicit acknowledgement."
+  },
+  "toasts": {
+    "acknowledged": "Message acknowledged.",
+    "acknowledgeFailed": "The message could not be acknowledged.",
+    "withdrawn": "Message withdrawn.",
+    "withdrawFailed": "The message could not be withdrawn.",
+    "sent": "Message sent."
+  },
+  "cancelDialog": {
+    "title": "Withdraw message",
+    "message": "Are you sure you want to withdraw \"{subject}\"? Recipients will no longer see the message.",
+    "confirm": "Withdraw"
+  },
+  "delivery": {
+    "title": "Delivery status",
+    "loading": "Loading delivery status...",
+    "loadFailed": "The delivery status could not be loaded.",
+    "sentOn": "sent {dateTime}",
+    "columnName": "Name",
+    "columnRead": "Read",
+    "columnAcknowledged": "Acknowledged",
+    "columnEmail": "Email"
+  },
+  "compose": {
+    "title": "New internal message",
+    "send": "Send",
+    "sending": "Sending…",
+    "sendFailed": "The message could not be sent.",
+    "recipientsLoadFailed": "Recipients could not be loaded.",
+    "targetField": "Audience",
+    "targetUsers": "Specific people",
+    "targetRole": "Everyone with a role",
+    "targetDepartment": "A department",
+    "targetAll": "All employees",
+    "roleField": "Role",
+    "roleHint": "All active members of the role receive the message.",
+    "chooseRole": "— Choose a role —",
+    "departmentField": "Department",
+    "departmentHint": "All employees of the department receive the message.",
+    "chooseDepartment": "— Choose a department —",
+    "allNote": "The message is delivered to all active employees.",
+    "toUsersField": "To (people)",
+    "subjectField": "Subject",
+    "bodyField": "Message",
+    "priorityField": "Priority",
+    "optionsField": "Options",
+    "requireAcknowledgement": "Acknowledgement required",
+    "alsoEmail": "Also send by email",
+    "visibleFromField": "Visible from",
+    "visibleFromHint": "Empty = visible immediately",
+    "expiresAtField": "Expires on",
+    "expiresAtHint": "Empty = no end date"
+  }
+}

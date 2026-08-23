@@ -13,6 +13,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { EmployeeSelect } from '../../tasks/components/EmployeePicker'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
 import type { VehicleOption } from '../../vehicles/types'
@@ -25,7 +26,6 @@ import {
 } from '../api/tankCardsApi'
 import {
   maskCardNumber,
-  TANK_CARD_STATUS_LABELS,
   TANK_CARD_STATUSES,
   type TankCard,
   type TankCardInput,
@@ -82,6 +82,7 @@ function parseOptionalNumber(value: string): number | null {
 }
 
 export function TankCardsPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
 
@@ -91,7 +92,7 @@ export function TankCardsPage() {
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<TankCard>(
     (args) => searchTankCards({ ...args, status: statusFilter || undefined }),
-    { search, page, errorMessage: 'Tankkaarten konden niet worden geladen.' },
+    { search, page, errorMessage: t('tankCards.page.loadFailed') },
   )
 
   // The status filter isn't part of usePagedQuery's own dependency key, so trigger a reload
@@ -118,7 +119,8 @@ export function TankCardsPage() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<TankCard | null>(null)
   const [form, setForm] = useState<CardForm>(EMPTY_FORM)
-  const [formError, setFormError] = useState<string | null>(null)
+  // Vertaalsleutels in state; vertaling gebeurt pas bij render.
+  const [formErrorKey, setFormErrorKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const [blockTarget, setBlockTarget] = useState<TankCard | null>(null)
@@ -132,7 +134,7 @@ export function TankCardsPage() {
   function openCreate() {
     setEditing(null)
     setForm(EMPTY_FORM)
-    setFormError(null)
+    setFormErrorKey(null)
     setEditorOpen(true)
   }
 
@@ -153,19 +155,19 @@ export function TankCardsPage() {
       costCenter: card.costCenter ?? '',
       notes: card.notes ?? '',
     })
-    setFormError(null)
+    setFormErrorKey(null)
     setEditorOpen(true)
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    setFormError(null)
+    setFormErrorKey(null)
     if (!form.cardNumber.trim()) {
-      setFormError('Kaartnummer is verplicht.')
+      setFormErrorKey('tankCards.form.numberRequired')
       return
     }
     if (!form.provider.trim()) {
-      setFormError('Leverancier is verplicht.')
+      setFormErrorKey('tankCards.form.providerRequired')
       return
     }
     const input: TankCardInput = {
@@ -187,18 +189,16 @@ export function TankCardsPage() {
     try {
       if (editing) {
         await updateTankCard(editing.id, input)
-        showSuccess('Tankkaart bijgewerkt.')
+        showSuccess(t('tankCards.form.updated'))
       } else {
         await createTankCard(input)
-        showSuccess('Tankkaart aangemaakt.')
+        showSuccess(t('tankCards.form.created'))
       }
       setEditorOpen(false)
       reload()
     } catch (err) {
-      setFormError(
-        err instanceof ApiError && err.status === 409
-          ? 'Er bestaat al een tankkaart met dit kaartnummer.'
-          : 'De tankkaart kon niet worden opgeslagen.',
+      setFormErrorKey(
+        err instanceof ApiError && err.status === 409 ? 'tankCards.form.duplicate' : 'tankCards.form.saveFailed',
       )
     } finally {
       setSaving(false)
@@ -212,12 +212,12 @@ export function TankCardsPage() {
     try {
       const willBlock = !blockTarget.isBlocked
       await setTankCardBlocked(blockTarget.id, willBlock, willBlock ? blockReason.trim() || null : null)
-      showSuccess(willBlock ? 'Tankkaart geblokkeerd.' : 'Tankkaart gedeblokkeerd.')
+      showSuccess(willBlock ? t('tankCards.block.blocked') : t('tankCards.block.unblocked'))
       setBlockTarget(null)
       setBlockReason('')
       reload()
     } catch {
-      showError('De blokkering kon niet worden aangepast.')
+      showError(t('tankCards.block.failed'))
     } finally {
       setSaving(false)
     }
@@ -227,11 +227,11 @@ export function TankCardsPage() {
     if (!deleteTarget) return
     try {
       await deleteTankCard(deleteTarget.id)
-      showSuccess('Tankkaart verwijderd.')
+      showSuccess(t('tankCards.delete.deleted'))
       setDeleteTarget(null)
       reload()
     } catch {
-      showError('De tankkaart kon niet worden verwijderd.')
+      showError(t('tankCards.delete.failed'))
       setDeleteTarget(null)
     }
   }
@@ -241,22 +241,22 @@ export function TankCardsPage() {
   const canDelete = hasPermission('tank_cards.delete')
 
   const columns: Column<TankCard>[] = [
-    { key: 'number', header: 'Kaartnummer', width: '150px', render: (row) => <code>{maskCardNumber(row.cardNumber)}</code> },
-    { key: 'internalName', header: 'Interne naam', width: '140px', render: (row) => row.internalName ?? '—' },
-    { key: 'provider', header: 'Leverancier', width: '130px', render: (row) => row.provider },
+    { key: 'number', header: t('tankCards.page.colNumber'), width: '150px', render: (row) => <code>{maskCardNumber(row.cardNumber)}</code> },
+    { key: 'internalName', header: t('tankCards.page.colInternalName'), width: '140px', render: (row) => row.internalName ?? '—' },
+    { key: 'provider', header: t('tankCards.page.colProvider'), width: '130px', render: (row) => row.provider },
     {
       key: 'vehicle',
-      header: 'Voertuig',
+      header: t('tankCards.page.colVehicle'),
       render: (row) =>
         row.vehicleInternalNumber ? `${row.vehicleInternalNumber} (${row.vehicleLicensePlate})` : '—',
     },
-    { key: 'employee', header: 'Medewerker', render: (row) => row.employeeName ?? row.driverName ?? '—' },
-    { key: 'validUntil', header: 'Geldig tot', width: '120px', render: (row) => formatDate(row.validUntil) || '—' },
+    { key: 'employee', header: t('tankCards.page.colEmployee'), render: (row) => row.employeeName ?? row.driverName ?? '—' },
+    { key: 'validUntil', header: t('tankCards.page.colValidUntil'), width: '120px', render: (row) => formatDate(row.validUntil) || '—' },
     {
       key: 'status',
-      header: 'Status',
+      header: t('tankCards.page.colStatus'),
       width: '160px',
-      render: (row) => <Badge tone={STATUS_TONE[row.status]}>{TANK_CARD_STATUS_LABELS[row.status]}</Badge>,
+      render: (row) => <Badge tone={STATUS_TONE[row.status]}>{t(`tankCards.status.${row.status}`)}</Badge>,
     },
     {
       key: 'actions',
@@ -266,7 +266,7 @@ export function TankCardsPage() {
         <span className="tc-actions">
           {canEdit && (
             <button type="button" className="tc-link" onClick={() => openEdit(row)}>
-              Bewerken
+              {t('ui.actions.edit')}
             </button>
           )}
           {canBlock && (
@@ -278,12 +278,12 @@ export function TankCardsPage() {
                 setBlockReason('')
               }}
             >
-              {row.isBlocked ? 'Deblokkeren' : 'Blokkeren'}
+              {row.isBlocked ? t('tankCards.page.unblock') : t('tankCards.page.block')}
             </button>
           )}
           {canDelete && (
             <button type="button" className="tc-link tc-link-danger" onClick={() => setDeleteTarget(row)}>
-              Verwijderen
+              {t('ui.actions.delete')}
             </button>
           )}
         </span>
@@ -293,11 +293,11 @@ export function TankCardsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Tankkaarten' }]} />
+      <Breadcrumbs items={[{ label: t('tankCards.page.breadcrumb') }]} />
       <PageHeader
-        title="Tankkaarten"
+        title={t('tankCards.page.title')}
         action={
-          hasPermission('tank_cards.create') ? <Button onClick={openCreate}>Nieuwe tankkaart</Button> : undefined
+          hasPermission('tank_cards.create') ? <Button onClick={openCreate}>{t('tankCards.page.new')}</Button> : undefined
         }
       />
       <div className="tc-filters">
@@ -307,7 +307,7 @@ export function TankCardsPage() {
             setSearch(value)
             setPage(1)
           }}
-          searchPlaceholder="Zoeken op kaartnummer, leverancier, voertuig of medewerker..."
+          searchPlaceholder={t('tankCards.page.searchPlaceholder')}
         />
         <select
           value={statusFilter}
@@ -316,12 +316,12 @@ export function TankCardsPage() {
             setPage(1)
           }}
           className="tc-status-filter"
-          aria-label="Statusfilter"
+          aria-label={t('tankCards.page.statusFilter')}
         >
-          <option value="">Alle statussen</option>
+          <option value="">{t('tankCards.page.allStatuses')}</option>
           {TANK_CARD_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {TANK_CARD_STATUS_LABELS[status]}
+              {t(`tankCards.status.${status}`)}
             </option>
           ))}
         </select>
@@ -332,35 +332,35 @@ export function TankCardsPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Nog geen tankkaarten."
-        loadingMessage="Tankkaarten laden..."
+        emptyMessage={t('tankCards.page.empty')}
+        loadingMessage={t('tankCards.page.loading')}
       />
       <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />
 
       {editorOpen && (
         <Modal
-          title={editing ? 'Tankkaart bewerken' : 'Nieuwe tankkaart'}
+          title={editing ? t('tankCards.form.editTitle') : t('tankCards.form.newTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="tc-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('tankCards.form.saving') : t('ui.actions.save')}
               </Button>
             </>
           }
         >
           <form id="tc-form" className="tc-form" onSubmit={handleSubmit} noValidate>
-            {formError && (
+            {formErrorKey && (
               <div className="tc-form-error" role="alert">
-                {formError}
+                {t(formErrorKey)}
               </div>
             )}
             <div className="tc-form-row">
-              <FormField label="Kaartnummer" htmlFor="tc-number" required>
+              <FormField label={t('tankCards.form.cardNumber')} htmlFor="tc-number" required>
                 <input
                   id="tc-number"
                   value={form.cardNumber}
@@ -369,19 +369,19 @@ export function TankCardsPage() {
                   maxLength={50}
                 />
               </FormField>
-              <FormField label="Leverancier" htmlFor="tc-provider" required>
+              <FormField label={t('tankCards.form.provider')} htmlFor="tc-provider" required>
                 <input
                   id="tc-provider"
                   value={form.provider}
                   onChange={(e) => set('provider', e.target.value)}
                   disabled={saving}
                   maxLength={100}
-                  placeholder="bv. DKV, Shell, Total"
+                  placeholder={t('tankCards.form.providerPlaceholder')}
                 />
               </FormField>
             </div>
             <div className="tc-form-row">
-              <FormField label="Interne naam" htmlFor="tc-internal-name">
+              <FormField label={t('tankCards.form.internalName')} htmlFor="tc-internal-name">
                 <input
                   id="tc-internal-name"
                   value={form.internalName}
@@ -390,25 +390,25 @@ export function TankCardsPage() {
                   maxLength={200}
                 />
               </FormField>
-              <FormField label="Medewerker" htmlFor="tc-employee">
+              <FormField label={t('tankCards.form.employee')} htmlFor="tc-employee">
                 <EmployeeSelect
                   id="tc-employee"
                   value={form.employeeId || null}
                   onChange={(value) => set('employeeId', value ?? '')}
                   disabled={saving}
-                  ariaLabel="Medewerker"
+                  ariaLabel={t('tankCards.form.employee')}
                 />
               </FormField>
             </div>
             <div className="tc-form-row">
-              <FormField label="Voertuig" htmlFor="tc-vehicle">
+              <FormField label={t('tankCards.form.vehicle')} htmlFor="tc-vehicle">
                 <select
                   id="tc-vehicle"
                   value={form.vehicleId}
                   onChange={(e) => set('vehicleId', e.target.value)}
                   disabled={saving}
                 >
-                  <option value="">Geen</option>
+                  <option value="">{t('tankCards.form.noVehicle')}</option>
                   {vehicles.map((vehicle) => (
                     <option key={vehicle.id} value={vehicle.id}>
                       {vehicle.internalNumber} ({vehicle.licensePlate})
@@ -416,19 +416,19 @@ export function TankCardsPage() {
                   ))}
                 </select>
               </FormField>
-              <FormField label="Brandstoftype" htmlFor="tc-fuel-type">
+              <FormField label={t('tankCards.form.fuelType')} htmlFor="tc-fuel-type">
                 <input
                   id="tc-fuel-type"
                   value={form.fuelType}
                   onChange={(e) => set('fuelType', e.target.value)}
                   disabled={saving}
                   maxLength={50}
-                  placeholder="bv. Diesel, AdBlue"
+                  placeholder={t('tankCards.form.fuelTypePlaceholder')}
                 />
               </FormField>
             </div>
             <div className="tc-form-row">
-              <FormField label="Limiet per dag (€)" htmlFor="tc-daily-limit">
+              <FormField label={t('tankCards.form.dailyLimit')} htmlFor="tc-daily-limit">
                 <input
                   id="tc-daily-limit"
                   type="number"
@@ -439,7 +439,7 @@ export function TankCardsPage() {
                   disabled={saving}
                 />
               </FormField>
-              <FormField label="Limiet per week (€)" htmlFor="tc-weekly-limit">
+              <FormField label={t('tankCards.form.weeklyLimit')} htmlFor="tc-weekly-limit">
                 <input
                   id="tc-weekly-limit"
                   type="number"
@@ -452,7 +452,7 @@ export function TankCardsPage() {
               </FormField>
             </div>
             <div className="tc-form-row">
-              <FormField label="Limiet per maand (€)" htmlFor="tc-monthly-limit">
+              <FormField label={t('tankCards.form.monthlyLimit')} htmlFor="tc-monthly-limit">
                 <input
                   id="tc-monthly-limit"
                   type="number"
@@ -463,7 +463,7 @@ export function TankCardsPage() {
                   disabled={saving}
                 />
               </FormField>
-              <FormField label="Kostenplaats" htmlFor="tc-cost-center">
+              <FormField label={t('tankCards.form.costCenter')} htmlFor="tc-cost-center">
                 <input
                   id="tc-cost-center"
                   value={form.costCenter}
@@ -474,7 +474,7 @@ export function TankCardsPage() {
               </FormField>
             </div>
             <div className="tc-form-row">
-              <FormField label="Geldig van" htmlFor="tc-from">
+              <FormField label={t('tankCards.form.validFrom')} htmlFor="tc-from">
                 <input
                   id="tc-from"
                   type="date"
@@ -483,7 +483,7 @@ export function TankCardsPage() {
                   disabled={saving}
                 />
               </FormField>
-              <FormField label="Geldig tot" htmlFor="tc-until">
+              <FormField label={t('tankCards.form.validUntil')} htmlFor="tc-until">
                 <input
                   id="tc-until"
                   type="date"
@@ -493,7 +493,7 @@ export function TankCardsPage() {
                 />
               </FormField>
             </div>
-            <FormField label="Notities" htmlFor="tc-notes">
+            <FormField label={t('tankCards.form.notes')} htmlFor="tc-notes">
               <textarea
                 id="tc-notes"
                 rows={2}
@@ -508,16 +508,16 @@ export function TankCardsPage() {
 
       {blockTarget && (
         <Modal
-          title={blockTarget.isBlocked ? 'Tankkaart deblokkeren' : 'Tankkaart blokkeren'}
+          title={blockTarget.isBlocked ? t('tankCards.block.unblockTitle') : t('tankCards.block.blockTitle')}
           onClose={() => setBlockTarget(null)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setBlockTarget(null)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="tc-block-form" disabled={saving}>
-                {saving ? 'Bezig…' : blockTarget.isBlocked ? 'Deblokkeren' : 'Blokkeren'}
+                {saving ? t('tankCards.block.busy') : blockTarget.isBlocked ? t('tankCards.block.unblock') : t('tankCards.block.block')}
               </Button>
             </>
           }
@@ -525,18 +525,18 @@ export function TankCardsPage() {
           <form id="tc-block-form" className="tc-form" onSubmit={handleBlockConfirm} noValidate>
             <p className="tc-block-text">
               {blockTarget.isBlocked
-                ? `Kaart ${maskCardNumber(blockTarget.cardNumber)} opnieuw activeren?`
-                : `Kaart ${maskCardNumber(blockTarget.cardNumber)} blokkeren? Registreer dit ook bij de provider — dit systeem blokkeert de kaart niet extern.`}
+                ? t('tankCards.block.unblockText', { number: maskCardNumber(blockTarget.cardNumber) })
+                : t('tankCards.block.blockText', { number: maskCardNumber(blockTarget.cardNumber) })}
             </p>
             {!blockTarget.isBlocked && (
-              <FormField label="Reden" htmlFor="tc-block-reason">
+              <FormField label={t('tankCards.block.reason')} htmlFor="tc-block-reason">
                 <input
                   id="tc-block-reason"
                   value={blockReason}
                   onChange={(e) => setBlockReason(e.target.value)}
                   disabled={saving}
                   maxLength={500}
-                  placeholder="bv. kaart verloren of gestolen"
+                  placeholder={t('tankCards.block.reasonPlaceholder')}
                 />
               </FormField>
             )}
@@ -546,9 +546,9 @@ export function TankCardsPage() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Tankkaart verwijderen"
-          message={`Weet je zeker dat je kaart ${maskCardNumber(deleteTarget.cardNumber)} (${deleteTarget.provider}) wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('tankCards.delete.title')}
+          message={t('tankCards.delete.message', { number: maskCardNumber(deleteTarget.cardNumber), provider: deleteTarget.provider })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

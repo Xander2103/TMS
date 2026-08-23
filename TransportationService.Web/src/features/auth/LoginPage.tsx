@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { Button } from '../../components/ui/Button'
 import { FormField } from '../../components/ui/FormField'
-import { LocaleProvider } from '../../i18n/LocaleProvider'
 import { useLocale } from '../../i18n/localeContext'
 import { useAuth } from './authContextValue'
 import { LoginError } from './authApi'
@@ -13,17 +12,12 @@ interface LocationState {
 }
 
 /**
- * Public entry point, also used by customer-portal users. Before signing in there is no saved
- * language preference, so a standalone LocaleProvider starts from the browser language
- * (nl/fr/en prefixes, otherwise Dutch); persisting is impossible while anonymous. The internal app
- * behind this page stays Dutch.
+ * Public entry point, also used by customer-portal users. Taal komt uit de app-brede
+ * root-LocaleProvider (i18n-wave): vóór het aanmelden geldt ts.locale-cache →
+ * browsertaal → nl; persist is anoniem onmogelijk.
  */
 export function LoginPage() {
-  return (
-    <LocaleProvider>
-      <LoginPageContent />
-    </LocaleProvider>
-  )
+  return <LoginPageContent />
 }
 
 function LoginPageContent() {

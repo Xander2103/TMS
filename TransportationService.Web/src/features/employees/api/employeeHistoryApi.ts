@@ -12,7 +12,10 @@ export interface EmployeeHistoryEntry {
   userName: string | null
   action: string
   actionLabel: string
+  /** LEGACY Dutch category label; display logic keys off `categoryCode` (i18n wave). */
   category: string
+  /** Stable category code (profile|qualifications|documents|notes|issued_items|absences|leave_balance|driver_profile). */
+  categoryCode: string
   changes: EmployeeHistoryChange[]
   summary: string
 }

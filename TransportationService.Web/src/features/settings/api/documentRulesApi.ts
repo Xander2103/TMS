@@ -3,10 +3,11 @@ import { apiClient } from '../../../api/apiClient'
 /** Welk transportdocument een regel afdwingt. */
 export type DocumentRuleKind = 'DeliveryNote' | 'Cmr' | 'None'
 
-export const DOCUMENT_RULE_KIND_LABELS: Record<DocumentRuleKind, string> = {
-  DeliveryNote: 'Leveringsbon',
-  Cmr: 'CMR',
-  None: 'Geen document',
+/** Vertaalsleutels per documentsoort; labels resolven via t() (i18n-wave: labelmap → keymap). */
+export const DOCUMENT_RULE_KIND_KEYS: Record<DocumentRuleKind, string> = {
+  DeliveryNote: 'settingsPages.documentRules.kind.DeliveryNote',
+  Cmr: 'settingsPages.documentRules.kind.Cmr',
+  None: 'settingsPages.documentRules.kind.None',
 }
 
 /** Eén tenant-documentregel; null bij een match-veld = "maakt niet uit". */

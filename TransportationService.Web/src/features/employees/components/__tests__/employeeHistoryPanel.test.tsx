@@ -36,6 +36,7 @@ describe('EmployeeHistoryPanel', () => {
           action: 'Updated',
           actionLabel: 'Gewijzigd',
           category: 'Profiel',
+          categoryCode: 'profile',
           summary: 'Telefoonnummer: 0470 12 34 56 → 0485 98 76 54',
           changes: [
             { field: 'Telefoonnummer', before: '0470 12 34 56', after: '0485 98 76 54' },
@@ -49,6 +50,7 @@ describe('EmployeeHistoryPanel', () => {
           action: 'Created',
           actionLabel: 'Aangemaakt',
           category: 'Kwalificaties',
+          categoryCode: 'qualifications',
           summary: 'Aangemaakt',
           changes: [],
         },
@@ -87,6 +89,7 @@ describe('EmployeeHistoryPanel', () => {
           action: 'Updated',
           actionLabel: 'Gewijzigd',
           category: 'Profiel',
+          categoryCode: 'profile',
           summary: 'Telefoonnummer: 0470 12 34 56 → 0485 98 76 54',
           changes: [{ field: 'Telefoonnummer', before: '0470 12 34 56', after: '0485 98 76 54' }],
         },
@@ -112,7 +115,7 @@ describe('EmployeeHistoryPanel', () => {
     expect(screen.getByRole('button', { name: 'Uitklappen' })).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('passes the selected category chip to the API and resets to page 1', async () => {
+  it('passes the selected category CODE to the API and resets to page 1', async () => {
     const user = userEvent.setup()
     render(<EmployeeHistoryPanel employeeId="emp-1" />)
     await screen.findByText('Nog geen historiek voor deze medewerker.')
@@ -120,7 +123,7 @@ describe('EmployeeHistoryPanel', () => {
 
     await user.click(screen.getByRole('button', { name: 'Kwalificaties' }))
 
-    expect(getEmployeeHistory).toHaveBeenCalledWith('emp-1', 1, 25, 'Kwalificaties')
+    expect(getEmployeeHistory).toHaveBeenCalledWith('emp-1', 1, 25, 'qualifications')
     expect(screen.getByRole('button', { name: 'Kwalificaties' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Alles' })).toHaveAttribute('aria-pressed', 'false')
 
@@ -138,6 +141,7 @@ describe('EmployeeHistoryPanel', () => {
           action: 'Created',
           actionLabel: 'Aangemaakt',
           category: 'Kwalificaties',
+          categoryCode: 'qualifications',
           summary: '4 velden gewijzigd (Kwalificatietype, Behaald op, Vervaldatum)',
           changes: [{ field: 'Kwalificatietype', before: null, after: 'ADR-attest' }],
         },

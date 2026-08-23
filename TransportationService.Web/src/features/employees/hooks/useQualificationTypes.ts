@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { getQualificationTypes } from '../api/qualificationsApi'
 import type { QualificationType } from '../types/qualification'
 
@@ -8,9 +9,10 @@ interface UseQualificationTypesResult {
   error: string | null
 }
 
-const LOAD_ERROR_MESSAGE = 'Kwalificatietypes konden niet worden geladen.'
+const LOAD_ERROR_KEY = 'employees.errors.loadQualificationTypes'
 
 export function useQualificationTypes(): UseQualificationTypesResult {
+  const { t } = useLocale()
   const [qualificationTypes, setQualificationTypes] = useState<QualificationType[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -26,7 +28,7 @@ export function useQualificationTypes(): UseQualificationTypesResult {
       })
       .catch(() => {
         if (!isMounted) return
-        setError(LOAD_ERROR_MESSAGE)
+        setError(t(LOAD_ERROR_KEY))
         setIsLoading(false)
       })
 

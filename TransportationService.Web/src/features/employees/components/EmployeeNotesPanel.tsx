@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { useEmployeeNotes } from '../hooks/useEmployeeNotes'
 import { useEmployeeNoteMutations } from '../hooks/useEmployeeNoteMutations'
@@ -25,6 +26,7 @@ interface EmployeeNotesPanelProps {
 export function EmployeeNotesPanel({ employeeId }: EmployeeNotesPanelProps) {
   const { hasPermission } = useAuth()
   const toast = useToast()
+  const { t } = useLocale()
   const { notes, isLoading, error, reload } = useEmployeeNotes(employeeId)
   const mutations = useEmployeeNoteMutations()
 
@@ -41,7 +43,7 @@ export function EmployeeNotesPanel({ employeeId }: EmployeeNotesPanelProps) {
     return null
   }
 
-  if (isLoading) return <LoadingState message="Notities laden..." />
+  if (isLoading) return <LoadingState message={t('employees.notes.loading')} />
   if (error) return <p className="placeholder-text">{error}</p>
 
   const sorted = [...notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -52,7 +54,7 @@ export function EmployeeNotesPanel({ employeeId }: EmployeeNotesPanelProps) {
     const created = await mutations.create(employeeId, text)
     if (created) {
       setNewText('')
-      toast.showSuccess('Notitie toegevoegd.')
+      toast.showSuccess(t('employees.notes.added'))
       reload()
     }
   }
@@ -68,7 +70,7 @@ export function EmployeeNotesPanel({ employeeId }: EmployeeNotesPanelProps) {
     const updated = await mutations.update(employeeId, note.id, text)
     if (updated) {
       setEditingId(null)
-      toast.showSuccess('Notitie bijgewerkt.')
+      toast.showSuccess(t('employees.notes.updated'))
       reload()
     }
   }
@@ -76,14 +78,14 @@ export function EmployeeNotesPanel({ employeeId }: EmployeeNotesPanelProps) {
   async function togglePin(note: EmployeeNote) {
     const updated = await mutations.setPinned(employeeId, note.id, !note.isPinnedToDashboard)
     if (updated) {
-      toast.showSuccess(updated.isPinnedToDashboard ? 'Toegevoegd aan startscherm.' : 'Verwijderd van startscherm.')
+      toast.showSuccess(updated.isPinnedToDashboard ? t('employees.notes.pinnedToast') : t('employees.notes.unpinnedToast'))
       reload()
     }
   }
 
   return (
     <div className="employee-notes-panel">
-      {sorted.length === 0 && <p className="placeholder-text">Nog geen notities voor deze medewerker.</p>}
+      {sorted.length === 0 && <p className="placeholder-text">{t('employees.notes.empty')}</p>}
 
       {sorted.length > 0 && (
         <ul className="employee-notes-list">
@@ -96,14 +98,14 @@ export function EmployeeNotesPanel({ employeeId }: EmployeeNotesPanelProps) {
                     onChange={(e) => setEditingText(e.target.value)}
                     rows={3}
                     maxLength={MAX_NOTE_LENGTH}
-                    aria-label="Notitietekst bewerken"
+                    aria-label={t('employees.notes.editAria')}
                   />
                   <div className="employee-note-actions">
                     <Button variant="secondary" onClick={() => setEditingId(null)} disabled={mutations.isSubmitting}>
-                      Annuleren
+                      {t('employees.notes.cancel')}
                     </Button>
                     <Button onClick={() => saveEdit(note)} disabled={mutations.isSubmitting}>
-                      Opslaan
+                      {t('employees.notes.save')}
                     </Button>
                   </div>
                 </div>
@@ -114,22 +116,22 @@ export function EmployeeNotesPanel({ employeeId }: EmployeeNotesPanelProps) {
                     <span className="employee-note-when">
                       {formatDateTime(note.createdAt)}
                     </span>
-                    {note.isPinnedToDashboard && <Badge tone="warning">Op startscherm</Badge>}
+                    {note.isPinnedToDashboard && <Badge tone="warning">{t('employees.notes.pinnedBadge')}</Badge>}
                   </div>
                   <div className="employee-note-actions">
                     {canManage && (
                       <Button variant="ghost" onClick={() => startEdit(note)} disabled={mutations.isSubmitting}>
-                        Bewerken
+                        {t('employees.notes.edit')}
                       </Button>
                     )}
                     {canPin && (
                       <Button variant="ghost" onClick={() => togglePin(note)} disabled={mutations.isSubmitting}>
-                        {note.isPinnedToDashboard ? 'Verwijderen van startscherm' : 'Toevoegen aan melding startscherm'}
+                        {note.isPinnedToDashboard ? t('employees.notes.unpin') : t('employees.notes.pin')}
                       </Button>
                     )}
                     {canManage && (
                       <Button variant="ghost" onClick={() => setDeleteTarget(note)} disabled={mutations.isSubmitting}>
-                        Verwijderen
+                        {t('employees.notes.remove')}
                       </Button>
                     )}
                   </div>
@@ -147,26 +149,26 @@ export function EmployeeNotesPanel({ employeeId }: EmployeeNotesPanelProps) {
             onChange={(e) => setNewText(e.target.value)}
             rows={3}
             maxLength={MAX_NOTE_LENGTH}
-            placeholder="Nieuwe notitie…"
-            aria-label="Nieuwe notitie"
+            placeholder={t('employees.notes.newPlaceholder')}
+            aria-label={t('employees.notes.newAria')}
           />
           <Button onClick={handleAdd} disabled={mutations.isSubmitting || !newText.trim()}>
-            Opslaan
+            {t('employees.notes.save')}
           </Button>
         </div>
       )}
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Notitie verwijderen"
-          message="Deze notitie verwijderen? Dit is terug te vinden in de historiek."
-          confirmLabel="Verwijderen"
+          title={t('employees.notes.deleteTitle')}
+          message={t('employees.notes.deleteMessage')}
+          confirmLabel={t('employees.notes.remove')}
           destructive
           busy={mutations.isSubmitting}
           onConfirm={async () => {
             const ok = await mutations.remove(employeeId, deleteTarget.id)
             if (ok) {
-              toast.showSuccess('Notitie verwijderd.')
+              toast.showSuccess(t('employees.notes.deleted'))
               setDeleteTarget(null)
               reload()
             }

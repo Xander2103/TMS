@@ -4,8 +4,12 @@ import { actionQueue, type QueuedAction, type QueuedActionKind } from './actionQ
 /**
  * Thrown after an action was safely queued because the device is offline. The message is
  * user-facing: existing error handlers surface it without knowing about the queue.
+ * `translationKey` lets locale-aware consumers render the message via t(); the Dutch
+ * message stays as fallback for render sites that only know Error.message.
  */
 export class OfflineQueuedError extends Error {
+  readonly translationKey = 'driverApp.offline.queued'
+
   constructor() {
     super('Geen verbinding — de actie staat in de wachtrij en wordt automatisch gesynchroniseerd.')
     this.name = 'OfflineQueuedError'

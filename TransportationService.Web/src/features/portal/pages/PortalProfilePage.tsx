@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
+import { useLocale } from '../../../i18n/localeContext'
 import { changeMyPassword, getMyProfile } from '../api/portalApi'
 import { MyLeaveBalanceCard } from '../../leave-balance/components/MyLeaveBalanceCard'
 import type { MyProfile } from '../types'
@@ -15,9 +16,10 @@ import './portal.css'
 /** Own profile (read-only; HR beheert wijzigingen) plus self-service password change. */
 export function PortalProfilePage() {
   const { showSuccess, showError } = useToast()
+  const { t } = useLocale()
 
   const [profile, setProfile] = useState<MyProfile | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -30,10 +32,10 @@ export function PortalProfilePage() {
       .then((data) => {
         if (!mounted) return
         setProfile(data)
-        setLoadError(null)
+        setLoadError(false)
       })
       .catch(() => {
-        if (mounted) setLoadError('Je profiel kon niet worden geladen.')
+        if (mounted) setLoadError(true)
       })
     return () => {
       mounted = false
@@ -43,94 +45,94 @@ export function PortalProfilePage() {
   async function handlePasswordChange(event: FormEvent) {
     event.preventDefault()
     if (newPassword.length < 8) {
-      showError('Het nieuwe wachtwoord moet minstens 8 tekens lang zijn.')
+      showError(t('portalHome.profile.passwordTooShort'))
       return
     }
     if (newPassword !== confirmPassword) {
-      showError('De bevestiging komt niet overeen met het nieuwe wachtwoord.')
+      showError(t('portalHome.profile.passwordMismatch'))
       return
     }
     setBusy(true)
     try {
       await changeMyPassword(currentPassword, newPassword)
-      showSuccess('Je wachtwoord is gewijzigd.')
+      showSuccess(t('portalHome.profile.passwordChanged'))
       setCurrentPassword('')
       setNewPassword('')
       setConfirmPassword('')
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'Het wachtwoord kon niet worden gewijzigd.')
+      showError(err instanceof ApiError ? err.message : t('portalHome.profile.passwordChangeFailed'))
     } finally {
       setBusy(false)
     }
   }
 
-  if (loadError) return <ErrorState message={loadError} />
-  if (!profile) return <LoadingState message="Profiel laden..." />
+  if (loadError) return <ErrorState message={t('portalHome.profile.loadFailed')} />
+  if (!profile) return <LoadingState message={t('portalHome.profile.loading')} />
 
   return (
     <div>
       <PageHeader
         title={`${profile.firstName} ${profile.lastName}`}
         subtitle={`${profile.employeeNumber}${profile.departmentName ? ` · ${profile.departmentName}` : ''}`}
-        action={profile.isDriver ? <Badge tone="info">Chauffeur {profile.driverNumber}</Badge> : undefined}
+        action={profile.isDriver ? <Badge tone="info">{t('portalHome.profile.driverBadge', { number: profile.driverNumber ?? '' })}</Badge> : undefined}
       />
 
       <MyLeaveBalanceCard />
 
       <section className="to-section">
-        <h2>Contact & adres</h2>
+        <h2>{t('portalHome.profile.contactSection')}</h2>
         <dl className="to-facts">
           <div>
-            <dt>E-mail</dt>
+            <dt>{t('portalHome.profile.email')}</dt>
             <dd>{profile.email}</dd>
           </div>
           <div>
-            <dt>Telefoon</dt>
+            <dt>{t('portalHome.profile.phone')}</dt>
             <dd>
               {profile.phoneNumber}
               {profile.mobilePhone && ` · ${profile.mobilePhone}`}
             </dd>
           </div>
           <div>
-            <dt>Adres</dt>
+            <dt>{t('portalHome.profile.address')}</dt>
             <dd>
               {profile.street} {profile.houseNumber}, {profile.postalCode} {profile.city}
             </dd>
           </div>
           <div>
-            <dt>Noodcontact</dt>
+            <dt>{t('portalHome.profile.emergencyContact')}</dt>
             <dd>
               {profile.emergencyContactName ?? '—'}
               {profile.emergencyContactPhone && ` · ${profile.emergencyContactPhone}`}
             </dd>
           </div>
           <div>
-            <dt>In dienst sinds</dt>
+            <dt>{t('portalHome.profile.employedSince')}</dt>
             <dd>{profile.employmentStartDate}</dd>
           </div>
           <div>
-            <dt>Functies</dt>
+            <dt>{t('portalHome.profile.jobFunctions')}</dt>
             <dd>{profile.jobFunctions.length > 0 ? profile.jobFunctions.join(', ') : '—'}</dd>
           </div>
         </dl>
-        <p className="portal-profile-note">Klopt er iets niet? Meld het aan HR — profielwijzigingen lopen via hen.</p>
+        <p className="portal-profile-note">{t('portalHome.profile.note')}</p>
       </section>
 
       <section className="to-section">
-        <h2>Wachtwoord wijzigen</h2>
+        <h2>{t('portalHome.profile.passwordSection')}</h2>
         <form className="portal-form portal-password-form" onSubmit={handlePasswordChange} noValidate>
-          <FormField label="Huidig wachtwoord" htmlFor="pw-current" required>
+          <FormField label={t('portalHome.profile.currentPassword')} htmlFor="pw-current" required>
             <input id="pw-current" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} disabled={busy} autoComplete="current-password" />
           </FormField>
-          <FormField label="Nieuw wachtwoord" htmlFor="pw-new" required hint="Minstens 8 tekens.">
+          <FormField label={t('portalHome.profile.newPassword')} htmlFor="pw-new" required hint={t('portalHome.profile.newPasswordHint')}>
             <input id="pw-new" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} disabled={busy} autoComplete="new-password" />
           </FormField>
-          <FormField label="Bevestig nieuw wachtwoord" htmlFor="pw-confirm" required>
+          <FormField label={t('portalHome.profile.confirmPassword')} htmlFor="pw-confirm" required>
             <input id="pw-confirm" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} disabled={busy} autoComplete="new-password" />
           </FormField>
           <div>
             <Button type="submit" disabled={busy}>
-              {busy ? 'Bezig…' : 'Wachtwoord wijzigen'}
+              {busy ? t('portalHome.profile.submitting') : t('portalHome.profile.submit')}
             </Button>
           </div>
         </form>

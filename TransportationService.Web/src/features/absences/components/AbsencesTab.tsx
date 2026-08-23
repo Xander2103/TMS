@@ -6,6 +6,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import {
   cancelAbsence,
@@ -18,9 +19,7 @@ import {
 import { getLeaveTypes } from '../../leave-balance/api/leaveBalanceApi'
 import type { LeaveType } from '../../leave-balance/types'
 import {
-  ABSENCE_STATUS_LABELS,
   ABSENCE_STATUS_TONE,
-  ABSENCE_TYPE_LABELS,
   type Absence,
   type AbsenceInput,
   type AbsenceType,
@@ -52,18 +51,20 @@ interface AbsencesTabProps {
 
 /** Absences for one employee: request, edit while requested, approve/reject, cancel, delete. */
 export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
 
   const [absences, setAbsences] = useState<Absence[] | null>(null)
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutels in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<Absence | null>(null)
   const [form, setForm] = useState<AbsenceForm>(EMPTY_FORM)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [formErrorKey, setFormErrorKey] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   const [decideTarget, setDecideTarget] = useState<{ absence: Absence; approve: boolean } | null>(null)
@@ -77,10 +78,10 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
       .then((data) => {
         if (!mounted) return
         setAbsences(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Afwezigheden konden niet worden geladen.')
+        if (mounted) setLoadErrorKey('absences.tab.loadFailed')
       })
     return () => {
       mounted = false
@@ -108,7 +109,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
   function openCreate() {
     setEditing(null)
     setForm({ ...EMPTY_FORM, leaveTypeId: leaveTypes[0]?.id ?? '' })
-    setFormError(null)
+    setFormErrorKey(null)
     setEditorOpen(true)
   }
 
@@ -121,19 +122,19 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
       endDate: absence.endDate,
       reason: absence.reason ?? '',
     })
-    setFormError(null)
+    setFormErrorKey(null)
     setEditorOpen(true)
   }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    setFormError(null)
+    setFormErrorKey(null)
     if (!form.startDate || !form.endDate) {
-      setFormError('Begin- en einddatum zijn verplicht.')
+      setFormErrorKey('absences.tab.datesRequired')
       return
     }
     if (form.endDate < form.startDate) {
-      setFormError('De einddatum moet op of na de begindatum liggen.')
+      setFormErrorKey('absences.tab.endBeforeStart')
       return
     }
     const selectedLeaveType = leaveTypes.find((t) => t.id === form.leaveTypeId)
@@ -149,18 +150,16 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
     try {
       if (editing) {
         await updateAbsence(editing.id, input)
-        showSuccess('Afwezigheid bijgewerkt.')
+        showSuccess(t('absences.tab.updated'))
       } else {
         await createAbsence(employeeId, input)
-        showSuccess('Afwezigheid aangevraagd.')
+        showSuccess(t('absences.tab.created'))
       }
       setEditorOpen(false)
       setReloadToken((t) => t + 1)
     } catch (err) {
-      setFormError(
-        err instanceof ApiError && err.status === 409
-          ? 'De periode overlapt met een bestaande afwezigheid.'
-          : 'De afwezigheid kon niet worden opgeslagen.',
+      setFormErrorKey(
+        err instanceof ApiError && err.status === 409 ? 'absences.tab.overlap' : 'absences.tab.saveFailed',
       )
     } finally {
       setSaving(false)
@@ -173,12 +172,12 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
     setSaving(true)
     try {
       await decideAbsence(decideTarget.absence.id, decideTarget.approve, decisionNote.trim() || null)
-      showSuccess(decideTarget.approve ? 'Afwezigheid goedgekeurd.' : 'Afwezigheid afgewezen.')
+      showSuccess(decideTarget.approve ? t('absences.tab.approved') : t('absences.tab.rejected'))
       setDecideTarget(null)
       setDecisionNote('')
       setReloadToken((t) => t + 1)
     } catch {
-      showError('De beslissing kon niet worden opgeslagen.')
+      showError(t('absences.tab.decideFailed'))
     } finally {
       setSaving(false)
     }
@@ -188,11 +187,11 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
     if (!cancelTarget) return
     try {
       await cancelAbsence(cancelTarget.id)
-      showSuccess('Afwezigheid geannuleerd.')
+      showSuccess(t('absences.tab.cancelled'))
       setCancelTarget(null)
       setReloadToken((t) => t + 1)
     } catch {
-      showError('De afwezigheid kon niet worden geannuleerd.')
+      showError(t('absences.tab.cancelFailed'))
       setCancelTarget(null)
     }
   }
@@ -201,11 +200,11 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
     if (!deleteTarget) return
     try {
       await deleteAbsence(deleteTarget.id)
-      showSuccess('Afwezigheid verwijderd.')
+      showSuccess(t('absences.tab.deleted'))
       setDeleteTarget(null)
       setReloadToken((t) => t + 1)
     } catch {
-      showError('De afwezigheid kon niet worden verwijderd.')
+      showError(t('absences.tab.deleteFailed'))
       setDeleteTarget(null)
     }
   }
@@ -216,30 +215,30 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
   return (
     <section className="abs">
       <div className="abs-header">
-        <h2>Afwezigheden</h2>
+        <h2>{t('absences.tab.title')}</h2>
         {hasPermission('absences.create') && (
           <Button variant="secondary" onClick={openCreate}>
-            Afwezigheid aanvragen
+            {t('absences.tab.request')}
           </Button>
         )}
       </div>
 
-      {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && absences === null && <p className="placeholder-text">Afwezigheden laden…</p>}
-      {!loadError && absences !== null && absences.length === 0 && (
-        <p className="placeholder-text">Geen afwezigheden geregistreerd.</p>
+      {loadErrorKey && <p className="placeholder-text">{t(loadErrorKey)}</p>}
+      {!loadErrorKey && absences === null && <p className="placeholder-text">{t('absences.tab.loading')}</p>}
+      {!loadErrorKey && absences !== null && absences.length === 0 && (
+        <p className="placeholder-text">{t('absences.tab.empty')}</p>
       )}
 
-      {!loadError && absences !== null && absences.length > 0 && (
+      {!loadErrorKey && absences !== null && absences.length > 0 && (
         <table className="abs-table">
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Van</th>
-              <th>Tot en met</th>
-              <th>Status</th>
-              <th>Reden</th>
-              <th aria-label="Acties" />
+              <th>{t('absences.tab.colType')}</th>
+              <th>{t('absences.tab.colFrom')}</th>
+              <th>{t('absences.tab.colTo')}</th>
+              <th>{t('absences.tab.colStatus')}</th>
+              <th>{t('absences.tab.colReason')}</th>
+              <th aria-label={t('absences.tab.colActions')} />
             </tr>
           </thead>
           <tbody>
@@ -254,12 +253,12 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
                     : undefined
                 }
               >
-                <td>{ABSENCE_TYPE_LABELS[absence.type]}</td>
+                <td>{t(`absences.type.${absence.type}`)}</td>
                 <td>{absence.startDate}</td>
                 <td>{absence.endDate}</td>
                 <td>
                   <span title={absence.decisionNote ?? undefined}>
-                    <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{ABSENCE_STATUS_LABELS[absence.status]}</Badge>
+                    <Badge tone={ABSENCE_STATUS_TONE[absence.status]}>{t(`absences.status.${absence.status}`)}</Badge>
                   </span>
                 </td>
                 <td className="abs-reason" title={absence.reason ?? undefined}>
@@ -276,7 +275,7 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
                           setDecisionNote('')
                         }}
                       >
-                        Goedkeuren
+                        {t('absences.tab.approve')}
                       </button>
                       <button
                         type="button"
@@ -286,23 +285,23 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
                           setDecisionNote('')
                         }}
                       >
-                        Afwijzen
+                        {t('absences.tab.reject')}
                       </button>
                     </>
                   )}
                   {canEdit && absence.status === 'Requested' && (
                     <button type="button" className="abs-link" onClick={() => openEdit(absence)}>
-                      Bewerken
+                      {t('ui.actions.edit')}
                     </button>
                   )}
                   {canEdit && (absence.status === 'Requested' || absence.status === 'Approved') && (
                     <button type="button" className="abs-link" onClick={() => setCancelTarget(absence)}>
-                      Annuleren
+                      {t('ui.actions.cancel')}
                     </button>
                   )}
                   {hasPermission('absences.delete') && (
                     <button type="button" className="abs-link abs-link-danger" onClick={() => setDeleteTarget(absence)}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   )}
                 </td>
@@ -314,30 +313,30 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
 
       {editorOpen && (
         <Modal
-          title={editing ? 'Afwezigheid bewerken' : 'Afwezigheid aanvragen'}
+          title={editing ? t('absences.tab.editTitle') : t('absences.tab.createTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="abs-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('absences.tab.saving') : t('ui.actions.save')}
               </Button>
             </>
           }
         >
           <form id="abs-form" className="abs-form" onSubmit={handleSubmit} noValidate>
-            {formError && (
+            {formErrorKey && (
               <div className="abs-form-error" role="alert">
-                {formError}
+                {t(formErrorKey)}
               </div>
             )}
-            <FormField label="Categorie" htmlFor="ab-type" required>
+            <FormField label={t('absences.tab.category')} htmlFor="ab-type" required>
               <select id="ab-type" value={form.leaveTypeId} onChange={(e) => set('leaveTypeId', e.target.value)} disabled={saving}>
                 {editing && !editing.leaveTypeId && (
-                  <option value="">{ABSENCE_TYPE_LABELS[editing.type]} (oude registratie)</option>
+                  <option value="">{t('absences.tab.legacyOption', { type: t(`absences.type.${editing.type}`) })}</option>
                 )}
                 {leaveTypes.map((leaveType) => (
                   <option key={leaveType.id} value={leaveType.id}>
@@ -347,14 +346,14 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
               </select>
             </FormField>
             <div className="abs-form-row">
-              <FormField label="Van" htmlFor="ab-start" required>
+              <FormField label={t('absences.tab.colFrom')} htmlFor="ab-start" required>
                 <input id="ab-start" type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} disabled={saving} />
               </FormField>
-              <FormField label="Tot en met" htmlFor="ab-end" required>
+              <FormField label={t('absences.tab.colTo')} htmlFor="ab-end" required>
                 <input id="ab-end" type="date" value={form.endDate} onChange={(e) => set('endDate', e.target.value)} disabled={saving} />
               </FormField>
             </div>
-            <FormField label="Reden" htmlFor="ab-reason">
+            <FormField label={t('absences.tab.reason')} htmlFor="ab-reason">
               <textarea id="ab-reason" rows={2} value={form.reason} onChange={(e) => set('reason', e.target.value)} disabled={saving} maxLength={1000} />
             </FormField>
           </form>
@@ -363,26 +362,29 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
 
       {decideTarget && (
         <Modal
-          title={decideTarget.approve ? 'Afwezigheid goedkeuren' : 'Afwezigheid afwijzen'}
+          title={decideTarget.approve ? t('absences.tab.decideApproveTitle') : t('absences.tab.decideRejectTitle')}
           onClose={() => setDecideTarget(null)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDecideTarget(null)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="abs-decide-form" disabled={saving}>
-                {saving ? 'Bezig…' : decideTarget.approve ? 'Goedkeuren' : 'Afwijzen'}
+                {saving ? t('absences.tab.busy') : decideTarget.approve ? t('absences.tab.approve') : t('absences.tab.reject')}
               </Button>
             </>
           }
         >
           <form id="abs-decide-form" className="abs-form" onSubmit={handleDecide} noValidate>
             <p className="abs-decide-text">
-              {ABSENCE_TYPE_LABELS[decideTarget.absence.type]} van {decideTarget.absence.startDate} tot en met{' '}
-              {decideTarget.absence.endDate}.
+              {t('absences.tab.decideSummary', {
+                type: t(`absences.type.${decideTarget.absence.type}`),
+                from: decideTarget.absence.startDate,
+                to: decideTarget.absence.endDate,
+              })}
             </p>
-            <FormField label="Opmerking" htmlFor="ab-note">
+            <FormField label={t('absences.tab.note')} htmlFor="ab-note">
               <input id="ab-note" value={decisionNote} onChange={(e) => setDecisionNote(e.target.value)} disabled={saving} maxLength={1000} />
             </FormField>
           </form>
@@ -391,9 +393,13 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
 
       {cancelTarget && (
         <ConfirmDialog
-          title="Afwezigheid annuleren"
-          message={`${ABSENCE_TYPE_LABELS[cancelTarget.type]} van ${cancelTarget.startDate} tot en met ${cancelTarget.endDate} annuleren?`}
-          confirmLabel="Annuleren"
+          title={t('absences.tab.cancelTitle')}
+          message={t('absences.tab.cancelMessage', {
+            type: t(`absences.type.${cancelTarget.type}`),
+            from: cancelTarget.startDate,
+            to: cancelTarget.endDate,
+          })}
+          confirmLabel={t('absences.tab.cancelConfirm')}
           destructive
           onConfirm={handleCancel}
           onCancel={() => setCancelTarget(null)}
@@ -402,9 +408,13 @@ export function AbsencesTab({ employeeId, highlightAbsenceId }: AbsencesTabProps
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Afwezigheid verwijderen"
-          message={`${ABSENCE_TYPE_LABELS[deleteTarget.type]} van ${deleteTarget.startDate} tot en met ${deleteTarget.endDate} verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('absences.tab.deleteTitle')}
+          message={t('absences.tab.deleteMessage', {
+            type: t(`absences.type.${deleteTarget.type}`),
+            from: deleteTarget.startDate,
+            to: deleteTarget.endDate,
+          })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

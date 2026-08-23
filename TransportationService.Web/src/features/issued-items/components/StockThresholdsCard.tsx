@@ -3,6 +3,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import type { IssuedItemTemplate } from '../issuedItemsApi'
 import { updateStockThresholds, type StockThresholdsInput } from '../inventoryApi'
@@ -39,6 +40,7 @@ function parseLevel(value: string): { value: number | null; valid: boolean } {
  * Alleen zichtbaar met `inventory.manage_thresholds` of `issued_items.manage_templates`.
  */
 export function StockThresholdsCard({ template, onSaved }: { template: IssuedItemTemplate; onSaved: () => void }) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess } = useToast()
   const canEdit = hasPermission('inventory.manage_thresholds') || hasPermission('issued_items.manage_templates')
@@ -70,7 +72,7 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
     const targetStockLevel = parseLevel(form.targetStockLevel)
     const reorderQuantity = parseLevel(form.reorderQuantity)
     if (![lowStockThreshold, minimumStock, targetStockLevel, reorderQuantity].every((p) => p.valid)) {
-      setError('Alle drempels moeten lege of niet-negatieve getallen zijn.')
+      setError(t('issuedItems.thresholds.invalidLevels'))
       return
     }
     if (
@@ -78,7 +80,7 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
       lowStockThreshold.value != null &&
       minimumStock.value > lowStockThreshold.value
     ) {
-      setError('Het minimumniveau mag niet hoger zijn dan de waarschuwingsgrens.')
+      setError(t('issuedItems.thresholds.minAboveWarning'))
       return
     }
 
@@ -93,10 +95,10 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
     setSaving(true)
     try {
       await updateStockThresholds(template.id, input)
-      showSuccess('Voorraadregels opgeslagen.')
+      showSuccess(t('issuedItems.thresholds.saved'))
       onSaved()
     } catch (err) {
-      setError(describeApiError(err, 'De voorraadregels konden niet worden opgeslagen.').message)
+      setError(describeApiError(err, t('issuedItems.thresholds.saveFailed')).message)
     } finally {
       setSaving(false)
     }
@@ -104,7 +106,7 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
 
   return (
     <section className="issued-items-card">
-      <h2>Voorraadregels</h2>
+      <h2>{t('issuedItems.thresholds.title')}</h2>
       <form className="issued-items-form" onSubmit={handleSubmit} noValidate>
         {error && (
           <div className="issued-items-form-error" role="alert">
@@ -112,7 +114,7 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
           </div>
         )}
         <div className="issued-items-form-row">
-          <FormField label="Waarschuwingsgrens" htmlFor="thr-warning" hint="Onder deze stand krijgt het artikel status Lage voorraad.">
+          <FormField label={t('issuedItems.thresholds.warning')} htmlFor="thr-warning" hint={t('issuedItems.thresholds.warningHint')}>
             <input
               id="thr-warning"
               type="number"
@@ -122,7 +124,7 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
               disabled={saving}
             />
           </FormField>
-          <FormField label="Minimumniveau" htmlFor="thr-minimum" hint="Onder deze stand wordt de voorraad kritiek.">
+          <FormField label={t('issuedItems.thresholds.minimum')} htmlFor="thr-minimum" hint={t('issuedItems.thresholds.minimumHint')}>
             <input
               id="thr-minimum"
               type="number"
@@ -134,7 +136,7 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
           </FormField>
         </div>
         <div className="issued-items-form-row">
-          <FormField label="Doelvoorraad" htmlFor="thr-target">
+          <FormField label={t('issuedItems.thresholds.target')} htmlFor="thr-target">
             <input
               id="thr-target"
               type="number"
@@ -144,7 +146,7 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
               disabled={saving}
             />
           </FormField>
-          <FormField label="Bestelhoeveelheid" htmlFor="thr-reorder">
+          <FormField label={t('issuedItems.thresholds.reorder')} htmlFor="thr-reorder">
             <input
               id="thr-reorder"
               type="number"
@@ -162,7 +164,7 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
             onChange={(e) => set('allowNegativeStock', e.target.checked)}
             disabled={saving}
           />
-          <span>Negatieve voorraad toestaan</span>
+          <span>{t('issuedItems.thresholds.allowNegative')}</span>
         </label>
         <label className="issued-items-checkbox">
           <input
@@ -171,11 +173,11 @@ export function StockThresholdsCard({ template, onSaved }: { template: IssuedIte
             onChange={(e) => set('negativeStockRequiresReason', e.target.checked)}
             disabled={saving || !form.allowNegativeStock}
           />
-          <span>Reden verplicht bij negatieve voorraad</span>
+          <span>{t('issuedItems.thresholds.requireReason')}</span>
         </label>
         <div>
           <Button type="submit" disabled={saving}>
-            {saving ? 'Opslaan…' : 'Voorraadregels opslaan'}
+            {saving ? t('issuedItems.thresholds.saving') : t('issuedItems.thresholds.save')}
           </Button>
         </div>
       </form>

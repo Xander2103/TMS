@@ -1,0 +1,116 @@
+{
+  "state": {
+    "Draft": "Brouillon",
+    "Planned": "Prévu",
+    "Confirmed": "Confirmé",
+    "Standby": "Stand-by",
+    "Training": "Formation",
+    "LeaveRequested": "Congé demandé",
+    "LeaveApproved": "Congé approuvé",
+    "LeaveRejected": "Congé refusé",
+    "Sick": "Malade",
+    "Unavailable": "Indisponible",
+    "Trip": "Tournée",
+    "TripCancelled": "Tournée annulée",
+    "Note": "Note personnelle"
+  },
+  "shiftType": {
+    "Work": "Travail",
+    "Standby": "Stand-by",
+    "Training": "Formation"
+  },
+  "shiftStatus": {
+    "Draft": "Brouillon",
+    "Planned": "Prévu",
+    "Confirmed": "Confirmé"
+  },
+  "conflictSeverity": {
+    "Information": "Pour info",
+    "Warning": "Avertissement",
+    "Blocking": "Bloquant"
+  },
+  "chip": {
+    "trip": "Tournée {number}",
+    "conflict": "Conflit ({severity}) : {notes}"
+  },
+  "legend": {
+    "title": "Légende",
+    "conflict": "Conflit / attention"
+  },
+  "days": {
+    "mon": "lun",
+    "tue": "mar",
+    "wed": "mer",
+    "thu": "jeu",
+    "fri": "ven",
+    "sat": "sam",
+    "sun": "dim"
+  },
+  "page": {
+    "breadcrumb": "Planification du personnel",
+    "title": "Planification du personnel",
+    "subtitle": "Postes, formations et absences par collaborateur — indépendamment de la planification des tournées.",
+    "copyWeek": "Copier la semaine",
+    "prevWeek": "Semaine précédente",
+    "nextWeek": "Semaine suivante",
+    "weekStart": "Début de semaine",
+    "period": "Période",
+    "weeks_one": "{count} semaine",
+    "weeks_other": "{count} semaines",
+    "allDepartments": "Tous les départements",
+    "nameFilterPlaceholder": "Filtrer par nom…",
+    "nameFilterAria": "Filtrer par nom",
+    "listView": "Vue liste",
+    "loading": "Chargement de la planification…",
+    "loadFailed": "La planification du personnel n'a pas pu être chargée.",
+    "shiftLoadFailed": "Le poste n'a pas pu être chargé.",
+    "colEmployee": "Collaborateur",
+    "plannedSuffix": "{duration} prévues",
+    "addShift": "+ poste",
+    "emptyFiltered": "Aucun collaborateur trouvé pour ces filtres.",
+    "colDate": "Date",
+    "colStatus": "Statut",
+    "colTime": "Heure",
+    "colLocation": "Site"
+  },
+  "dialog": {
+    "createTitle": "Créer un poste — {name}",
+    "editTitle": "Modifier le poste — {name}",
+    "busy": "En cours…",
+    "requiredFields": "La date, l'heure de début et l'heure de fin sont obligatoires.",
+    "created": "Poste créé.",
+    "updated": "Poste mis à jour.",
+    "saveFailed": "Le poste n'a pas pu être enregistré.",
+    "statusNow": "Le poste est maintenant : {status}.",
+    "statusFailed": "Le statut n'a pas pu être modifié.",
+    "deleted": "Poste supprimé.",
+    "deleteFailed": "Le poste n'a pas pu être supprimé.",
+    "toPlanned": "→ Prévu",
+    "toConfirmed": "→ Confirmer",
+    "toDraft": "→ Brouillon",
+    "backToPlanned": "→ Retour à prévu",
+    "date": "Date",
+    "from": "De",
+    "to": "À",
+    "breakMinutes": "Pause (minutes)",
+    "type": "Type",
+    "workLocation": "Lieu de travail",
+    "role": "Fonction/rôle",
+    "notes": "Notes",
+    "conflictsTitle": "Conflits de planification bloquants",
+    "override": "Planifier quand même (outrepasser les conflits)",
+    "noOverridePermission": "Vous n'avez pas le droit d'outrepasser ces conflits.",
+    "deleteTitle": "Supprimer le poste",
+    "deleteMessage": "Supprimer le poste de {name} le {date} ? Le collaborateur sera averti."
+  },
+  "copy": {
+    "title": "Copier la semaine du {week}",
+    "copy": "Copier",
+    "targetLabel": "Semaine cible (lundi)",
+    "targetHint": "Tous les postes de la sélection actuelle sont copiés comme brouillon ; les conflits sont ignorés.",
+    "targetRequired": "Choisissez une semaine cible.",
+    "success_one": "Semaine copiée : {count} poste, {skipped} ignorés.",
+    "success_other": "Semaine copiée : {count} postes, {skipped} ignorés.",
+    "failed": "La semaine n'a pas pu être copiée."
+  }
+}

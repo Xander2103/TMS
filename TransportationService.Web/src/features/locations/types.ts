@@ -16,6 +16,31 @@ export type LocationType =
   | 'TemporaryLocation'
   | 'Other'
 
+/** Vertaalsleutels — renderen als t(LOCATION_TYPE_LABEL_KEYS[type]). */
+export const LOCATION_TYPE_LABEL_KEYS: Record<LocationType, string> = {
+  CompanySite: 'locations.type.CompanySite',
+  Depot: 'locations.type.Depot',
+  Warehouse: 'locations.type.Warehouse',
+  CustomerLocation: 'locations.type.CustomerLocation',
+  Terminal: 'locations.type.Terminal',
+  LoadingLocation: 'locations.type.LoadingLocation',
+  UnloadingLocation: 'locations.type.UnloadingLocation',
+  ParkingLocation: 'locations.type.ParkingLocation',
+  Office: 'locations.type.Office',
+  RegisteredOffice: 'locations.type.RegisteredOffice',
+  AdministrativeAddress: 'locations.type.AdministrativeAddress',
+  BillingAddress: 'locations.type.BillingAddress',
+  ReturnsAddress: 'locations.type.ReturnsAddress',
+  ConstructionSite: 'locations.type.ConstructionSite',
+  TemporaryLocation: 'locations.type.TemporaryLocation',
+  Other: 'locations.type.Other',
+}
+
+/**
+ * LEGACY Dutch display labels — only for feature dirs that are not yet localised
+ * (customers: PreparedLocationsEditor, CustomerLocationsPanel). New/localised code uses
+ * t(LOCATION_TYPE_LABEL_KEYS[type]); delete this map once those consumers are converted.
+ */
 export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
   CompanySite: 'Bedrijfssite',
   Depot: 'Depot',
@@ -35,7 +60,7 @@ export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
   Other: 'Overig',
 }
 
-export const LOCATION_TYPES = Object.keys(LOCATION_TYPE_LABELS) as LocationType[]
+export const LOCATION_TYPES = Object.keys(LOCATION_TYPE_LABEL_KEYS) as LocationType[]
 
 /**
  * One structured opening window. Times travel as "HH:mm" strings — exactly what the weekly

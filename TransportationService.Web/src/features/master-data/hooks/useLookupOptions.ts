@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { getActiveLocale } from '../../../i18n/activeLocale'
+import { translate } from '../../../i18n/translations'
 import { createLookupApi } from '../api/lookupApi'
 import type { LookupOption } from '../types'
 
@@ -32,7 +34,9 @@ export function useLookupOptions(basePath: string, opts?: { enabled?: boolean })
       })
       .catch(() => {
         if (!isMounted) return
-        setState({ options: [], error: 'Keuzelijst kon niet worden geladen.', loadedKey: basePath })
+        // Ready-to-display text (module-level translate, mirroring utils/dates.ts): callers
+        // render this string as-is, so it must not be a raw key.
+        setState({ options: [], error: translate(getActiveLocale(), 'masterData.lookup.optionsLoadFailed'), loadedKey: basePath })
       })
     return () => {
       isMounted = false

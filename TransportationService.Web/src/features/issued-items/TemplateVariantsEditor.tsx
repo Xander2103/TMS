@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { FormField } from '../../components/ui/FormField'
 import { describeApiError } from '../../api/problemDetails'
+import { useLocale } from '../../i18n/localeContext'
 import {
   createVariant,
   correctStock,
@@ -30,6 +31,7 @@ const emptyDraft: NewVariantDraft = { label: '', stock: '', threshold: '' }
  * is only the computed sum.
  */
 export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEditorProps) {
+  const { t } = useLocale()
   const [variants, setVariants] = useState<IssuedItemVariant[] | null>(null)
   const [hasAttributes, setHasAttributes] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,15 +46,18 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
         setHasAttributes(detail.attributes.length > 0)
         setStockEdits({})
       })
-      .catch(() => setError('De varianten konden niet worden geladen.'))
+      .catch(() => setError('issuedItems.variantsEditor.loadFailed'))
   }, [templateId])
 
   useEffect(() => {
     reload()
   }, [reload])
 
-  if (error) return <p className="placeholder-text">{error}</p>
-  if (variants === null) return <p className="placeholder-text">Varianten laden…</p>
+  // `error` bevat ofwel een vertaalsleutel (load) ofwel een reeds vertaalde/serverfout.
+  const errorText = error ? (error.startsWith('issuedItems.') ? t(error) : error) : null
+
+  if (error) return <p className="placeholder-text">{errorText}</p>
+  if (variants === null) return <p className="placeholder-text">{t('issuedItems.variantsEditor.loading')}</p>
 
   const total = variants.filter((v) => v.isActive).reduce((sum, v) => sum + v.currentStock, 0)
 
@@ -72,7 +77,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
   function addVariant() {
     const label = draft.label.trim()
     if (!label) {
-      setError('Geef een variantnaam of uitvoering op (bv. Small, maat 43).')
+      setError(t('issuedItems.form.variantNameRequired'))
       return
     }
 
@@ -86,7 +91,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
           label,
           lowStockThreshold: draft.threshold.trim() === '' ? null : Math.max(0, Number(draft.threshold) || 0),
         }).then(() => setDraft(emptyDraft)),
-      'De variant kon niet worden toegevoegd.',
+      t('issuedItems.variantsEditor.addFailed'),
     )
   }
 
@@ -105,7 +110,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
           label: patch.label ?? variant.label,
           lowStockThreshold: patch.threshold === undefined ? variant.lowStockThreshold : patch.threshold,
         }),
-      'De variant kon niet worden opgeslagen.',
+      t('issuedItems.variantsEditor.saveFailed'),
     )
   }
 
@@ -117,9 +122,10 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
         correctStock(templateId, {
           variantId: variant.id,
           newQuantity: Math.trunc(Number(raw) || 0),
+          // Vaste (Nederlandse) grootboekreden — dit is opgeslagen data, geen UI-tekst.
           reason: 'Voorraadaanpassing via sjabloonformulier',
         }),
-      'De voorraad kon niet worden aangepast.',
+      t('issuedItems.variantsEditor.correctFailed'),
     )
   }
 
@@ -127,7 +133,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
     <div className="issued-items-stock-config">
       {error && (
         <div className="issued-items-form-error" role="alert">
-          {error}
+          {errorText}
         </div>
       )}
 
@@ -135,11 +141,11 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Variantnaam / uitvoering</th>
-              <th>Voorraad</th>
-              <th>Lage-voorraadgrens</th>
-              <th>Status</th>
-              <th aria-label="Acties" />
+              <th>{t('issuedItems.variantsEditor.colName')}</th>
+              <th>{t('issuedItems.variantsEditor.colStock')}</th>
+              <th>{t('issuedItems.variantsEditor.colThreshold')}</th>
+              <th>{t('issuedItems.variantsEditor.colStatus')}</th>
+              <th aria-label={t('issuedItems.tab.colActions')} />
             </tr>
           </thead>
           <tbody>
@@ -148,7 +154,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
                 <td>
                   {variant.values.length === 0 ? (
                     <input
-                      aria-label={`Naam van variant ${variant.label}`}
+                      aria-label={t('issuedItems.variantsEditor.nameAria', { label: variant.label })}
                       defaultValue={variant.label}
                       maxLength={150}
                       disabled={busy}
@@ -164,7 +170,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
                 <td>
                   {/* Adjustments go through the ledger as auditable corrections. */}
                   <input
-                    aria-label={`Voorraad van ${variant.label}`}
+                    aria-label={t('issuedItems.variantsEditor.stockAria', { label: variant.label })}
                     type="number"
                     defaultValue={variant.currentStock}
                     disabled={busy}
@@ -174,11 +180,11 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
                 </td>
                 <td>
                   <input
-                    aria-label={`Lage-voorraadgrens van ${variant.label}`}
+                    aria-label={t('issuedItems.variantsEditor.thresholdAria', { label: variant.label })}
                     type="number"
                     min={0}
                     defaultValue={variant.lowStockThreshold ?? ''}
-                    placeholder="sjabloongrens"
+                    placeholder={t('issuedItems.variantsEditor.thresholdPlaceholder')}
                     disabled={busy}
                     onBlur={(e) => {
                       const threshold = e.target.value.trim() === '' ? null : Math.max(0, Number(e.target.value) || 0)
@@ -186,7 +192,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
                     }}
                   />
                 </td>
-                <td>{variant.isActive ? 'Actief' : 'Gearchiveerd'}</td>
+                <td>{variant.isActive ? t('issuedItems.variantsEditor.statusActive') : t('issuedItems.variantsEditor.statusArchived')}</td>
                 <td className="issued-items-row-actions">
                   <button
                     type="button"
@@ -194,7 +200,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
                     disabled={busy}
                     onClick={() => saveVariant(variant, { isActive: !variant.isActive })}
                   >
-                    {variant.isActive ? 'Archiveren' : 'Activeren'}
+                    {variant.isActive ? t('issuedItems.variantsEditor.archive') : t('issuedItems.variantsEditor.activate')}
                   </button>
                 </td>
               </tr>
@@ -204,17 +210,16 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
       )}
 
       <p className="issued-items-computed-stock">
-        Totale voorraad: {total}
-        {unit ? ` ${unit}` : ''} (berekende som van de actieve varianten — niet rechtstreeks aanpasbaar)
+        {t('issuedItems.variantsEditor.total', { total: `${total}${unit ? ` ${unit}` : ''}` })}
       </p>
 
       {hasAttributes ? (
         <p className="customer-form-muted">
-          Dit sjabloon gebruikt attributen (maat/kleur): nieuwe combinaties maak je aan op de detailpagina.
+          {t('issuedItems.variantsEditor.hasAttributes')}
         </p>
       ) : (
         <div className="issued-items-form-row">
-          <FormField label="Variantnaam / uitvoering" htmlFor="tpl-new-variant-label" hint="Bv. Small, maat 43, zwart.">
+          <FormField label={t('issuedItems.form.variantName')} htmlFor="tpl-new-variant-label" hint={t('issuedItems.form.variantNameHint')}>
             <input
               id="tpl-new-variant-label"
               value={draft.label}
@@ -223,7 +228,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
               onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
             />
           </FormField>
-          <FormField label="Voorraad" htmlFor="tpl-new-variant-stock">
+          <FormField label={t('issuedItems.form.stock')} htmlFor="tpl-new-variant-stock">
             <input
               id="tpl-new-variant-stock"
               type="number"
@@ -233,7 +238,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
               onChange={(e) => setDraft((d) => ({ ...d, stock: e.target.value }))}
             />
           </FormField>
-          <FormField label="Lage-voorraadgrens" htmlFor="tpl-new-variant-threshold" hint="Leeg = sjabloongrens.">
+          <FormField label={t('issuedItems.form.threshold')} htmlFor="tpl-new-variant-threshold" hint={t('issuedItems.form.thresholdHint')}>
             <input
               id="tpl-new-variant-threshold"
               type="number"
@@ -244,7 +249,7 @@ export function TemplateVariantsEditor({ templateId, unit }: TemplateVariantsEdi
             />
           </FormField>
           <Button variant="secondary" onClick={addVariant} disabled={busy}>
-            + Variant toevoegen
+            {t('issuedItems.form.addVariant')}
           </Button>
         </div>
       )}

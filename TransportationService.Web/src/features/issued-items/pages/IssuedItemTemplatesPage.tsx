@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   deleteIssuedItemTemplate,
   listIssuedItemTemplates,
@@ -19,10 +20,12 @@ type StockFilter = 'all' | 'managed' | 'unmanaged' | 'low'
 
 /** Settings page to manage issued-item ("Bedrijfsmiddelen") templates and their stock state. */
 export function IssuedItemTemplatesPage() {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const navigate = useNavigate()
   const [templates, setTemplates] = useState<IssuedItemTemplate[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
   const [categoryFilter, setCategoryFilter] = useState('')
@@ -39,10 +42,10 @@ export function IssuedItemTemplatesPage() {
       .then((data) => {
         if (!mounted) return
         setTemplates(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Sjablonen konden niet worden geladen.')
+        if (mounted) setLoadErrorKey('issuedItems.templates.loadFailed')
       })
     return () => {
       mounted = false
@@ -50,19 +53,19 @@ export function IssuedItemTemplatesPage() {
   }, [reloadToken])
 
   const categories = useMemo(
-    () => [...new Set((templates ?? []).map((t) => t.category))].sort((a, b) => a.localeCompare(b)),
+    () => [...new Set((templates ?? []).map((tpl) => tpl.category))].sort((a, b) => a.localeCompare(b)),
     [templates],
   )
 
   const visible = useMemo(
     () =>
-      (templates ?? []).filter((t) => {
-        if (categoryFilter && t.category !== categoryFilter) return false
-        if (activeFilter === 'active' && !t.isActive) return false
-        if (activeFilter === 'inactive' && t.isActive) return false
-        if (stockFilter === 'managed' && !t.stockTrackingEnabled) return false
-        if (stockFilter === 'unmanaged' && t.stockTrackingEnabled) return false
-        if (stockFilter === 'low' && !(t.stockTrackingEnabled && t.lowStock)) return false
+      (templates ?? []).filter((tpl) => {
+        if (categoryFilter && tpl.category !== categoryFilter) return false
+        if (activeFilter === 'active' && !tpl.isActive) return false
+        if (activeFilter === 'inactive' && tpl.isActive) return false
+        if (stockFilter === 'managed' && !tpl.stockTrackingEnabled) return false
+        if (stockFilter === 'unmanaged' && tpl.stockTrackingEnabled) return false
+        if (stockFilter === 'low' && !(tpl.stockTrackingEnabled && tpl.lowStock)) return false
         return true
       }),
     [templates, categoryFilter, activeFilter, stockFilter],
@@ -72,21 +75,23 @@ export function IssuedItemTemplatesPage() {
     if (!deleteTarget) return
     try {
       await deleteIssuedItemTemplate(deleteTarget.id)
-      showSuccess('Sjabloon verwijderd.')
+      showSuccess(t('issuedItems.templates.deleted'))
       setDeleteTarget(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het sjabloon kon niet worden verwijderd.')
+      showError(t('issuedItems.templates.deleteFailed'))
       setDeleteTarget(null)
     }
   }
 
+  const yesNo = (value: boolean) => (value ? t('issuedItems.templates.yes') : t('issuedItems.templates.no'))
+
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Bedrijfsmiddelen' }]} />
+      <Breadcrumbs items={[{ label: t('issuedItems.templates.breadcrumbSettings'), to: '/settings' }, { label: t('issuedItems.templates.breadcrumb') }]} />
       <PageHeader
-        title="Bedrijfsmiddelen — sjablonen"
-        subtitle="Standaardlijst die per medewerker als checklist wordt aangeboden; met optioneel voorraadbeheer."
+        title={t('issuedItems.templates.title')}
+        subtitle={t('issuedItems.templates.subtitle')}
         action={
           <Button
             onClick={() => {
@@ -94,15 +99,15 @@ export function IssuedItemTemplatesPage() {
               setEditorOpen(true)
             }}
           >
-            Sjabloon toevoegen
+            {t('issuedItems.templates.add')}
           </Button>
         }
       />
 
       <div className="issued-items-filters">
-        <FormField label="Categorie" htmlFor="tpl-filter-cat">
+        <FormField label={t('issuedItems.templates.filterCategory')} htmlFor="tpl-filter-cat">
           <select id="tpl-filter-cat" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-            <option value="">Alle categorieën</option>
+            <option value="">{t('issuedItems.templates.allCategories')}</option>
             {categories.map((category) => (
               <option key={category} value={category}>
                 {category}
@@ -110,86 +115,88 @@ export function IssuedItemTemplatesPage() {
             ))}
           </select>
         </FormField>
-        <FormField label="Status" htmlFor="tpl-filter-active">
+        <FormField label={t('issuedItems.templates.filterStatus')} htmlFor="tpl-filter-active">
           <select id="tpl-filter-active" value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}>
-            <option value="active">Actief</option>
-            <option value="inactive">Inactief</option>
-            <option value="all">Alles</option>
+            <option value="active">{t('issuedItems.templates.optActive')}</option>
+            <option value="inactive">{t('issuedItems.templates.optInactive')}</option>
+            <option value="all">{t('issuedItems.templates.optAll')}</option>
           </select>
         </FormField>
-        <FormField label="Voorraad" htmlFor="tpl-filter-stock">
+        <FormField label={t('issuedItems.templates.filterStock')} htmlFor="tpl-filter-stock">
           <select id="tpl-filter-stock" value={stockFilter} onChange={(e) => setStockFilter(e.target.value as StockFilter)}>
-            <option value="all">Alles</option>
-            <option value="managed">Met voorraadbeheer</option>
-            <option value="unmanaged">Zonder voorraadbeheer</option>
-            <option value="low">Lage voorraad</option>
+            <option value="all">{t('issuedItems.templates.optStockAll')}</option>
+            <option value="managed">{t('issuedItems.templates.optManaged')}</option>
+            <option value="unmanaged">{t('issuedItems.templates.optUnmanaged')}</option>
+            <option value="low">{t('issuedItems.templates.optLow')}</option>
           </select>
         </FormField>
       </div>
 
-      {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && templates === null && <p className="placeholder-text">Laden…</p>}
-      {!loadError && templates !== null && visible.length === 0 && (
+      {loadErrorKey && <p className="placeholder-text">{t(loadErrorKey)}</p>}
+      {!loadErrorKey && templates === null && <p className="placeholder-text">{t('issuedItems.templates.loading')}</p>}
+      {!loadErrorKey && templates !== null && visible.length === 0 && (
         <p className="placeholder-text">
-          {templates.length === 0 ? 'Nog geen sjablonen. Voeg er een toe om te beginnen.' : 'Geen sjablonen voor deze filters.'}
+          {templates.length === 0 ? t('issuedItems.templates.emptyNone') : t('issuedItems.templates.emptyFiltered')}
         </p>
       )}
 
-      {!loadError && templates !== null && visible.length > 0 && (
+      {!loadErrorKey && templates !== null && visible.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Naam</th>
-              <th>Categorie</th>
-              <th>Voorraadbeheer</th>
-              <th>Varianten</th>
-              <th>Beschikbaar</th>
-              <th>Serienr.</th>
-              <th>Retour</th>
-              <th>Status</th>
-              <th aria-label="Acties" />
+              <th>{t('issuedItems.templates.colName')}</th>
+              <th>{t('issuedItems.templates.colCategory')}</th>
+              <th>{t('issuedItems.templates.colStockTracking')}</th>
+              <th>{t('issuedItems.templates.colVariants')}</th>
+              <th>{t('issuedItems.templates.colAvailable')}</th>
+              <th>{t('issuedItems.templates.colSerial')}</th>
+              <th>{t('issuedItems.templates.colReturn')}</th>
+              <th>{t('issuedItems.templates.colStatus')}</th>
+              <th aria-label={t('issuedItems.tab.colActions')} />
             </tr>
           </thead>
           <tbody>
-            {visible.map((t) => (
-              <tr key={t.id}>
+            {visible.map((tpl) => (
+              <tr key={tpl.id}>
                 <td>
-                  <Link className="issued-items-link" to={`/settings/issued-item-templates/${t.id}`}>
-                    {t.name}
+                  <Link className="issued-items-link" to={`/settings/issued-item-templates/${tpl.id}`}>
+                    {tpl.name}
                   </Link>
                 </td>
-                <td>{t.category}</td>
-                <td>{t.stockTrackingEnabled ? 'Ja' : 'Nee'}</td>
-                <td>{t.variantsEnabled ? t.variantCount : '—'}</td>
+                <td>{tpl.category}</td>
+                <td>{yesNo(tpl.stockTrackingEnabled)}</td>
+                <td>{tpl.variantsEnabled ? tpl.variantCount : '—'}</td>
                 <td>
-                  {t.stockTrackingEnabled ? (
+                  {tpl.stockTrackingEnabled ? (
                     <span className="issued-items-stock-cell">
-                      {t.totalAvailable}
-                      {t.unit ? ` ${t.unit}` : ''}
-                      {t.lowStock && <Badge tone="warning">Lage voorraad</Badge>}
+                      {tpl.totalAvailable}
+                      {tpl.unit ? ` ${tpl.unit}` : ''}
+                      {tpl.lowStock && <Badge tone="warning">{t('issuedItems.templates.lowStock')}</Badge>}
                     </span>
                   ) : (
                     '—'
                   )}
                 </td>
-                <td>{t.requiresSerialNumber ? 'Ja' : 'Nee'}</td>
-                <td>{t.returnRequired ? 'Ja' : 'Nee'}</td>
+                <td>{yesNo(tpl.requiresSerialNumber)}</td>
+                <td>{yesNo(tpl.returnRequired)}</td>
                 <td>
-                  <Badge tone={t.isActive ? 'success' : 'neutral'}>{t.isActive ? 'Actief' : 'Inactief'}</Badge>
+                  <Badge tone={tpl.isActive ? 'success' : 'neutral'}>
+                    {tpl.isActive ? t('issuedItems.templates.active') : t('issuedItems.templates.inactive')}
+                  </Badge>
                 </td>
                 <td className="issued-items-row-actions">
                   <button
                     type="button"
                     className="issued-items-link"
                     onClick={() => {
-                      setEditing(t)
+                      setEditing(tpl)
                       setEditorOpen(true)
                     }}
                   >
-                    Bewerken
+                    {t('ui.actions.edit')}
                   </button>
-                  <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(t)}>
-                    Verwijderen
+                  <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(tpl)}>
+                    {t('ui.actions.delete')}
                   </button>
                 </td>
               </tr>
@@ -203,23 +210,23 @@ export function IssuedItemTemplatesPage() {
           editing={editing}
           onClose={() => setEditorOpen(false)}
           onSaved={(saved) => {
-            showSuccess(editing ? 'Sjabloon bijgewerkt.' : 'Sjabloon toegevoegd.')
+            showSuccess(editing ? t('issuedItems.templates.updated') : t('issuedItems.templates.added'))
             setEditorOpen(false)
             // A brand-new variant template needs its variants configured — take the user there.
             if (!editing && saved.variantsEnabled) {
               navigate(`/settings/issued-item-templates/${saved.id}?tab=varianten`)
               return
             }
-            setReloadToken((t) => t + 1)
+            setReloadToken((token) => token + 1)
           }}
         />
       )}
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Sjabloon verwijderen"
-          message={`Weet je zeker dat je "${deleteTarget.name}" wilt verwijderen? Reeds uitgereikte middelen blijven behouden.`}
-          confirmLabel="Verwijderen"
+          title={t('issuedItems.templates.deleteTitle')}
+          message={t('issuedItems.templates.deleteMessage', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

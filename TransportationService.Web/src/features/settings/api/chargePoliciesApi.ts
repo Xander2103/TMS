@@ -3,10 +3,11 @@ import { apiClient } from '../../../api/apiClient'
 /** Hoe een klantdoorrekening bij incidenten wordt afgehandeld. */
 export type ChargePolicyMode = 'Never' | 'Propose' | 'Auto'
 
-export const CHARGE_POLICY_MODE_LABELS: Record<ChargePolicyMode, string> = {
-  Never: 'Nooit doorrekenen',
-  Propose: 'Voorstellen ter goedkeuring',
-  Auto: 'Automatisch doorrekenen',
+/** Vertaalsleutels per modus; labels resolven via t() (i18n-wave: labelmap → keymap). */
+export const CHARGE_POLICY_MODE_KEYS: Record<ChargePolicyMode, string> = {
+  Never: 'settingsPages.chargePolicies.mode.Never',
+  Propose: 'settingsPages.chargePolicies.mode.Propose',
+  Auto: 'settingsPages.chargePolicies.mode.Auto',
 }
 
 /** Eén doorrekenbeleid; null bij customerId/incidentType = "geldt voor alle". */

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useLocale } from '../../i18n/localeContext'
-import { DAY_NAMES, addDays, cellAriaLabel, monthGridRange, toIsoDate } from './dateUtils'
+import { addDays, cellAriaLabel, getDayNames, monthGridRange, toIsoDate } from './dateUtils'
 import './calendar.css'
 
 export interface CalendarCellContext {
@@ -54,7 +54,7 @@ export function MonthGrid<T>({
   return (
     <div className="cal-month">
       <div className="cal-month-headerrow">
-        {DAY_NAMES.map((name) => (
+        {getDayNames().map((name) => (
           <div key={name} className="cal-month-header">
             {name}
           </div>

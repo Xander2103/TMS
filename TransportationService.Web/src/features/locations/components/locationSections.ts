@@ -7,18 +7,19 @@ import type { LocationInput } from '../types'
  */
 export interface LocationSectionMeta {
   id: string
+  /** Vertaalsleutel (locations.sections.*) — de form vertaalt bij het bouwen van de rail. */
   label: string
   optional?: boolean
 }
 
 export const LOCATION_SECTIONS: LocationSectionMeta[] = [
-  { id: 'algemeen', label: 'Algemeen' },
-  { id: 'adres', label: 'Adres' },
-  { id: 'contact', label: 'Contact', optional: true },
-  { id: 'openingstijden', label: 'Openingstijden', optional: true },
-  { id: 'operationeel', label: 'Operationeel', optional: true },
-  { id: 'instructies', label: 'Instructies', optional: true },
-  { id: 'planning', label: 'Planning', optional: true },
+  { id: 'algemeen', label: 'locations.sections.algemeen' },
+  { id: 'adres', label: 'locations.sections.adres' },
+  { id: 'contact', label: 'locations.sections.contact', optional: true },
+  { id: 'openingstijden', label: 'locations.sections.openingstijden', optional: true },
+  { id: 'operationeel', label: 'locations.sections.operationeel', optional: true },
+  { id: 'instructies', label: 'locations.sections.instructies', optional: true },
+  { id: 'planning', label: 'locations.sections.planning', optional: true },
 ]
 
 /** Which validated field keys belong to which section (badge + first-error routing). */

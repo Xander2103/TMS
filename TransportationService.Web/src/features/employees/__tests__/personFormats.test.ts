@@ -16,10 +16,10 @@ describe('national register number', () => {
     expect(formatNrn('9005011')).toBe('9005011')
   })
 
-  it('validates length and checksum with specific messages', () => {
+  it('validates length and checksum with specific message keys', () => {
     expect(validateNrn('90.05.01-123.26')).toBeNull()
-    expect(validateNrn('123')).toBe('Rijksregisternummer moet uit 11 cijfers bestaan.')
-    expect(validateNrn('90050112399')).toBe('Rijksregisternummer heeft een ongeldig controlegetal.')
+    expect(validateNrn('123')).toBe('employees.validation.nrnLength')
+    expect(validateNrn('90050112399')).toBe('employees.validation.nrnChecksum')
     expect(validateNrn('')).toBeNull()
   })
 
@@ -38,11 +38,11 @@ describe('IBAN', () => {
     expect(normalizeIban('')).toBeNull()
   })
 
-  it('validates via mod-97 with specific messages', () => {
+  it('validates via mod-97 with specific message keys', () => {
     expect(validateIban('BE68 5390 0754 7034')).toBeNull()
     expect(validateIban('NL91 ABNA 0417 1643 00')).toBeNull()
-    expect(validateIban('BE68 5390 0754 7035')).toBe('IBAN heeft een ongeldig controlegetal.')
-    expect(validateIban('B168')).toBe('IBAN heeft een ongeldig formaat.')
+    expect(validateIban('BE68 5390 0754 7035')).toBe('employees.validation.ibanChecksum')
+    expect(validateIban('B168')).toBe('employees.validation.ibanFormat')
     expect(validateIban('')).toBeNull()
   })
 

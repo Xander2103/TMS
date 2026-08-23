@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { ApiError } from '../../../api/apiClient'
 import {
   createEmployeeQualification,
@@ -8,7 +9,7 @@ import {
 } from '../api/qualificationsApi'
 import type { CreateEmployeeQualificationInput, EmployeeQualification, UpdateEmployeeQualificationInput } from '../types/qualification'
 
-const SUBMIT_ERROR_MESSAGE = 'De actie kon niet worden uitgevoerd. Probeer het opnieuw.'
+const SUBMIT_ERROR_KEY = 'employees.errors.actionFailedRetry'
 
 interface UseQualificationMutationsResult {
   isSubmitting: boolean
@@ -20,6 +21,7 @@ interface UseQualificationMutationsResult {
 }
 
 export function useQualificationMutations(): UseQualificationMutationsResult {
+  const { t } = useLocale()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isMountedRef = useRef(true)
@@ -43,7 +45,7 @@ export function useQualificationMutations(): UseQualificationMutationsResult {
       return result
     } catch (err) {
       if (isMountedRef.current) {
-        setError(err instanceof ApiError && err.status === 400 ? err.message : SUBMIT_ERROR_MESSAGE)
+        setError(err instanceof ApiError && err.status === 400 ? err.message : t(SUBMIT_ERROR_KEY))
         setIsSubmitting(false)
       }
       return null

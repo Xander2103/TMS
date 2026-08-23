@@ -73,6 +73,7 @@ function backupList(overrides: Partial<BackupListResult> = {}): BackupListResult
     preRestoreRetentionDays: 7,
     automaticEnabled: true,
     storageStatus: 'Beschikbaar',
+    storageAvailable: true,
     ...overrides,
   }
 }

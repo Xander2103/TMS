@@ -1,4 +1,31 @@
 {
   "portalLoad": "Het portaal kon niet worden geladen.",
-  "documentDownload": "Het document kon niet worden gedownload."
+  "documentDownload": "Het document kon niet worden gedownload.",
+  "codes": {
+    "common": {
+      "validation_failed": "De invoer is ongeldig. Controleer de velden en probeer opnieuw.",
+      "unauthenticated": "Je bent niet (meer) aangemeld.",
+      "forbidden": "Je hebt hier geen rechten voor.",
+      "not_found": "Niet gevonden.",
+      "rate_limited": "Te veel pogingen. Probeer het over enkele minuten opnieuw.",
+      "unsupported_language": "Kies Nederlands, Frans of Engels.",
+      "invalid_reference": "Ongeldige verwijzing."
+    },
+    "attendance": {
+      "already_clocked_in": "Je bent al ingepunt.",
+      "not_clocked_in": "Je bent niet ingepunt.",
+      "break_already_active": "Er loopt al een pauze.",
+      "no_active_break": "Er loopt geen pauze.",
+      "employee_inactive": "Urenregistratie is niet mogelijk voor een inactieve medewerker.",
+      "employee_not_found": "Medewerker niet gevonden.",
+      "self_punch_disabled": "Zelf in-/uitpunten is uitgeschakeld. Gebruik de prikklok.",
+      "kiosk_disabled": "De prikklok is uitgeschakeld.",
+      "stale_version": "De registratie is intussen gewijzigd. Herlaad en probeer opnieuw.",
+      "session_overlap": "De tijden overlappen met een andere registratie van deze medewerker."
+    },
+    "trips": {
+      "reason_required": "Een reden is hier verplicht.",
+      "packages_unresolved": "Er zijn nog verplichte colli zonder uitkomst; scan of registreer ze, of rond af met een vrijgave en reden."
+    }
+  }
 }

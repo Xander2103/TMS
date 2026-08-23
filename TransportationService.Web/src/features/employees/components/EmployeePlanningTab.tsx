@@ -6,10 +6,11 @@ import { WeekGrid } from '../../../components/calendar/WeekGrid'
 import { CalendarToolbar, type CalendarViewMode } from '../../../components/calendar/CalendarToolbar'
 import { DAY_NAMES, addDays, dayIndexMonday, monthGridRange, startOfMonth, toIsoDate } from '../../../components/calendar/dateUtils'
 import '../../../components/calendar/calendar.css'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ScheduleChip, ScheduleLegend } from '../../employee-planning/components/ScheduleChip'
 import { getSchedule } from '../../employee-planning/api/employeePlanningApi'
-import { SCHEDULE_STATE_LABELS, chipDescription, mondayOf, type ScheduleDay, type ScheduleEntry } from '../../employee-planning/types'
+import { SCHEDULE_STATE_KEYS, describeChip, mondayOf, type ScheduleDay, type ScheduleEntry } from '../../employee-planning/types'
 
 const VIEW_STORAGE_KEY = 'ts.employeePlanning.view'
 const VALID_VIEWS: CalendarViewMode[] = ['month', 'week', 'list']
@@ -47,6 +48,7 @@ function isAllDay(entry: ScheduleEntry): boolean {
  */
 export function EmployeePlanningTab({ employeeId }: { employeeId: string }) {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canViewTrips = hasPermission('planning.view')
   const canApprove = hasPermission('absences.approve')
@@ -91,7 +93,7 @@ export function EmployeePlanningTab({ employeeId }: { employeeId: string }) {
         setError(null)
       })
       .catch(() => {
-        if (mounted) setError('De planning kon niet worden geladen.')
+        if (mounted) setError('employees.planningTab.loadFailed')
       })
     return () => {
       mounted = false
@@ -102,7 +104,7 @@ export function EmployeePlanningTab({ employeeId }: { employeeId: string }) {
   const days = state.loadedKey === requestKey ? state.days : null
   const entriesByDate = useMemo(() => new Map((days ?? []).map((day) => [day.date, day.entries])), [days])
 
-  if (error) return <p className="placeholder-text">{error}</p>
+  if (error) return <p className="placeholder-text">{t(error)}</p>
 
   const withEntries = (days ?? []).filter((day) => day.entries.length > 0)
 
@@ -117,7 +119,7 @@ export function EmployeePlanningTab({ employeeId }: { employeeId: string }) {
         actions={<ScheduleLegend />}
       />
 
-      {days === null && <p className="placeholder-text">Planning laden…</p>}
+      {days === null && <p className="placeholder-text">{t('employees.planningTab.loading')}</p>}
 
       {days !== null && view === 'month' && (
         <MonthGrid
@@ -146,7 +148,7 @@ export function EmployeePlanningTab({ employeeId }: { employeeId: string }) {
       )}
 
       {days !== null && view === 'list' && withEntries.length === 0 && (
-        <p className="placeholder-text">Geen planning in deze periode.</p>
+        <p className="placeholder-text">{t('employees.planningTab.empty')}</p>
       )}
       {days !== null && view === 'list' && withEntries.length > 0 && (
         <ul className="cal-list">
@@ -216,69 +218,72 @@ function EntryDetailModal({
   onNavigateToAbsence,
   onClose,
 }: EntryDetailModalProps) {
+  const { t } = useLocale()
   const timeRange = formatTimeRange(entry)
   const isPendingApproval = entry.sourceType === 'Absence' && entry.state === 'LeaveRequested'
 
   return (
-    <Modal title={entry.sourceType === 'Trip' ? `Rit ${entry.label}` : SCHEDULE_STATE_LABELS[entry.state]} onClose={onClose}>
+    <Modal
+      title={entry.sourceType === 'Trip' ? t('employees.planningTab.tripTitle', { label: entry.label }) : t(SCHEDULE_STATE_KEYS[entry.state])}
+      onClose={onClose}
+    >
       <dl className="ep-entry-detail">
-        <dt>Datum</dt>
+        <dt>{t('employees.planningTab.date')}</dt>
         <dd>{date}</dd>
-        <dt>Status</dt>
-        <dd>{SCHEDULE_STATE_LABELS[entry.state]}</dd>
+        <dt>{t('employees.planningTab.status')}</dt>
+        <dd>{t(SCHEDULE_STATE_KEYS[entry.state])}</dd>
         {timeRange && (
           <>
-            <dt>Tijdstip</dt>
+            <dt>{t('employees.planningTab.time')}</dt>
             <dd>{timeRange}</dd>
           </>
         )}
         {!timeRange && (
           <>
-            <dt>Tijdstip</dt>
-            <dd>Hele dag</dd>
+            <dt>{t('employees.planningTab.time')}</dt>
+            <dd>{t('employees.planningTab.allDay')}</dd>
           </>
         )}
         {entry.statusLabel && (
           <>
-            <dt>Toelichting</dt>
+            <dt>{t('employees.planningTab.explanation')}</dt>
             <dd>{entry.statusLabel}</dd>
           </>
         )}
         {entry.workLocation && (
           <>
-            <dt>Locatie</dt>
+            <dt>{t('employees.planningTab.location')}</dt>
             <dd>{entry.workLocation}</dd>
           </>
         )}
         {entry.vehicleSummary && (
           <>
-            <dt>Voertuig</dt>
+            <dt>{t('employees.planningTab.vehicle')}</dt>
             <dd>{entry.vehicleSummary}</dd>
           </>
         )}
         {entry.conflictSeverity && (
           <>
-            <dt>Conflict</dt>
-            <dd>{chipDescription(entry)}</dd>
+            <dt>{t('employees.planningTab.conflict')}</dt>
+            <dd>{describeChip(entry, t)}</dd>
           </>
         )}
       </dl>
 
       {entry.sourceType === 'Trip' && entry.tripId && canViewTrips && (
         <button type="button" className="ep-entry-link" onClick={() => onNavigateToTrip(entry.tripId!)}>
-          Bekijk rit →
+          {t('employees.planningTab.viewTrip')}
         </button>
       )}
 
       {entry.sourceType === 'Absence' && entry.absenceId && (
         <>
           <button type="button" className="ep-entry-link" onClick={() => onNavigateToAbsence(entry.absenceId!)}>
-            Naar verlof &amp; afwezigheden →
+            {t('employees.planningTab.toLeave')}
           </button>
           {isPendingApproval && canApprove && (
             <p className="ep-entry-approve-hint">
-              Deze verlofaanvraag staat nog open ter goedkeuring. Open het verlofoverzicht hierboven om ze te
-              beoordelen.
+              {t('employees.planningTab.approveHint')}
             </p>
           )}
         </>

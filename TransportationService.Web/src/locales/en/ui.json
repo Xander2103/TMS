@@ -101,10 +101,15 @@
     "removeFavorite": "Remove favourite",
     "addFavorite": "Add to favourites",
     "groupCreate": "Create",
-    "groupNavigate": "Navigate"
+    "groupNavigate": "Navigate",
+    "noResults": "No results for \"{term}\"."
   },
   "offline": {
-    "banner": "Offline — scans, stop actions and incident reports are queued and synchronise automatically."
+    "banner": "Offline — scans, stop actions and incident reports are queued and synchronise automatically.",
+    "pendingSync_one": "1 action waiting to synchronise…",
+    "pendingSync_other": "{count} actions waiting to synchronise…",
+    "queued_one": "Offline — 1 action queued; it synchronises automatically once the connection returns.",
+    "queued_other": "Offline — {count} actions queued; they synchronise automatically once the connection returns."
   },
   "calendar": {
     "month": "Month",
@@ -117,6 +122,7 @@
     "next": "next ›",
     "view": "View",
     "more": "+{count} more",
-    "free": "free"
+    "free": "free",
+    "weekOf": "week of"
   }
 }

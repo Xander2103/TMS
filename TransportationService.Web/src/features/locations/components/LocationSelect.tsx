@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { getLocationOptions } from '../api/locationsApi'
 import type { LocationOption, LocationType } from '../types'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
@@ -30,23 +31,23 @@ type LocationOptionWithAddress = LocationOption & {
   postalCode?: string | null
 }
 
-function optionLabel(option: LocationOptionWithAddress): string {
+function optionLabel(t: TranslateFn, option: LocationOptionWithAddress): string {
   const base = `${option.name} (${option.code})`
   const addressLine = [option.address, [option.postalCode, option.city].filter(Boolean).join(' ')]
     .filter(Boolean)
     .join(', ')
   const withAddress = addressLine ? `${base} — ${addressLine}` : base
   const markers = [
-    option.isDefaultLoadingLocation ? 'standaard laden' : null,
-    option.isDefaultUnloadingLocation ? 'standaard lossen' : null,
+    option.isDefaultLoadingLocation ? t('locations.select.defaultLoading') : null,
+    option.isDefaultUnloadingLocation ? t('locations.select.defaultUnloading') : null,
   ].filter(Boolean)
   return markers.length > 0 ? `${withAddress} — ${markers.join(' + ')}` : withAddress
 }
 
-function toSelectOption(option: LocationOptionWithAddress): SearchableSelectOption {
+function toSelectOption(t: TranslateFn, option: LocationOptionWithAddress): SearchableSelectOption {
   return {
     value: option.id,
-    label: optionLabel(option),
+    label: optionLabel(t, option),
     keywords: [option.code, option.city ?? '', option.postalCode ?? '', option.address ?? ''].join(' '),
   }
 }
@@ -67,6 +68,7 @@ export function LocationSelect({
   placeholder,
   onCreateNew,
 }: LocationSelectProps) {
+  const { t } = useLocale()
   const [options, setOptions] = useState<LocationOption[]>([])
   // Loading state is derived from a request key so no setState runs synchronously in the effect.
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
@@ -91,21 +93,21 @@ export function LocationSelect({
       id={id}
       value={value === '' ? null : value}
       onChange={(v) => onChange(v ?? '')}
-      options={options.map(toSelectOption)}
-      placeholder={placeholder ?? '— Selecteer een locatie —'}
+      options={options.map((option) => toSelectOption(t, option))}
+      placeholder={placeholder ?? t('locations.select.placeholder')}
       disabled={disabled}
       isLoading={isLoading}
       clearable={allowEmpty}
-      emptyMessage="Geen locaties gevonden"
+      emptyMessage={t('locations.select.empty')}
       onCreate={
         onCreateNew
           ? {
-              label: (query) => (query ? `Nieuwe locatie “${query}” aanmaken…` : 'Nieuwe locatie aanmaken…'),
+              label: (query) => (query ? t('locations.select.createWithName', { query }) : t('locations.select.create')),
               create: async (query) => {
                 const created = await onCreateNew(query)
                 if (!created) return null
                 setOptions((current) => [...current, created])
-                return toSelectOption(created)
+                return toSelectOption(t, created)
               },
             }
           : undefined

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { ApiError } from '../../../api/apiClient'
 import { createLocation } from '../api/locationsApi'
 import { LocationForm } from '../components/LocationForm'
@@ -11,6 +12,7 @@ import './location-form.css'
 
 export function NewLocationPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const [searchParams] = useSearchParams()
   const { showSuccess } = useToast()
   // Arriving from a customer's Locations tab prefills the link and returns there afterwards.
@@ -26,13 +28,13 @@ export function NewLocationPage() {
     setSubmitting(true)
     try {
       const location = await createLocation(value)
-      showSuccess(`Locatie ${location.code} aangemaakt.`)
+      showSuccess(t('locations.new.created', { code: location.code }))
       navigate(prefilledCustomerId ? `/customers/${prefilledCustomerId}` : `/locations/${location.id}`)
     } catch (err) {
       const message =
         err instanceof ApiError && err.status === 409
-          ? 'Er bestaat al een locatie met deze code.'
-          : 'Locatie kon niet worden aangemaakt.'
+          ? t('locations.detail.duplicateCode')
+          : t('locations.new.createFailed')
       setError(message)
       setSubmitting(false)
     }
@@ -40,8 +42,8 @@ export function NewLocationPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Locaties', to: '/locations' }, { label: 'Nieuw' }]} />
-      <PageHeader title="Nieuwe locatie" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.locations'), to: '/locations' }, { label: t('locations.new.breadcrumb') }]} />
+      <PageHeader title={t('locations.new.title')} />
       <LocationForm
         mode="create"
         initial={initial}

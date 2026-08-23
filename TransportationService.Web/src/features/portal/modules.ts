@@ -1,7 +1,9 @@
 export interface PortalModuleDef {
   to: string
   icon: string
+  /** Translation key (portalHome.modules.*.label); render sites resolve it via t(). */
   label: string
+  /** Translation key (portalHome.modules.*.description); render sites resolve it via t(). */
   description: string
   /** Any-of permission gate; empty = every signed-in employee. */
   permissions: string[]
@@ -12,17 +14,17 @@ export interface PortalModuleDef {
  * modules its permissions allow — driver, warehouse and office profiles all land here.
  */
 export const PORTAL_MODULES: PortalModuleDef[] = [
-  { to: '/my-trips', icon: '🚚', label: 'Mijn ritten', description: 'Stops, scannen, POD en foto’s', permissions: ['driver_workflow.view'] },
-  { to: '/my-trips', icon: '📦', label: 'Scannen & laden', description: 'Laadlijsten en pakketten scannen', permissions: ['scanning.execute'] },
-  { to: '/exceptions', icon: '⚠️', label: 'Afwijkingen', description: 'Schade of problemen melden en opvolgen', permissions: ['exceptions.view', 'exceptions.create'] },
-  { to: '/warehouse', icon: '🏭', label: 'Magazijn', description: 'Laadlijsten, colli zoeken en ritten vrijgeven', permissions: ['warehouse.view'] },
-  { to: '/tasks?mine=1', icon: '✅', label: 'Mijn taken', description: 'Toegewezen taken opvolgen en afwerken', permissions: ['tasks.view_own'] },
-  { to: '/portal/time', icon: '⏱', label: 'Mijn uren', description: 'In-/uitpunten, pauzes en gewerkte tijd', permissions: ['attendance.self'] },
-  { to: '/portal/planning', icon: '🗓', label: 'Mijn planning', description: 'Shifts, ritten en afwezigheden', permissions: [] },
-  { to: '/portal/absences', icon: '🏖', label: 'Verlof', description: 'Aanvragen en opvolgen', permissions: [] },
-  { to: '/portal/qualifications', icon: '🪪', label: 'Kwalificaties', description: 'Documenten en vervaldata', permissions: [] },
-  { to: '/notifications', icon: '🔔', label: 'Meldingen', description: 'Persoonlijke berichten', permissions: [] },
-  { to: '/portal/profile', icon: '👤', label: 'Mijn profiel', description: 'Gegevens en wachtwoord', permissions: [] },
+  { to: '/my-trips', icon: '🚚', label: 'portalHome.modules.myTrips.label', description: 'portalHome.modules.myTrips.description', permissions: ['driver_workflow.view'] },
+  { to: '/my-trips', icon: '📦', label: 'portalHome.modules.scanning.label', description: 'portalHome.modules.scanning.description', permissions: ['scanning.execute'] },
+  { to: '/exceptions', icon: '⚠️', label: 'portalHome.modules.exceptions.label', description: 'portalHome.modules.exceptions.description', permissions: ['exceptions.view', 'exceptions.create'] },
+  { to: '/warehouse', icon: '🏭', label: 'portalHome.modules.warehouse.label', description: 'portalHome.modules.warehouse.description', permissions: ['warehouse.view'] },
+  { to: '/tasks?mine=1', icon: '✅', label: 'portalHome.modules.myTasks.label', description: 'portalHome.modules.myTasks.description', permissions: ['tasks.view_own'] },
+  { to: '/portal/time', icon: '⏱', label: 'portalHome.modules.myTime.label', description: 'portalHome.modules.myTime.description', permissions: ['attendance.self'] },
+  { to: '/portal/planning', icon: '🗓', label: 'portalHome.modules.myPlanning.label', description: 'portalHome.modules.myPlanning.description', permissions: [] },
+  { to: '/portal/absences', icon: '🏖', label: 'portalHome.modules.leave.label', description: 'portalHome.modules.leave.description', permissions: [] },
+  { to: '/portal/qualifications', icon: '🪪', label: 'portalHome.modules.qualifications.label', description: 'portalHome.modules.qualifications.description', permissions: [] },
+  { to: '/notifications', icon: '🔔', label: 'portalHome.modules.notifications.label', description: 'portalHome.modules.notifications.description', permissions: [] },
+  { to: '/portal/profile', icon: '👤', label: 'portalHome.modules.myProfile.label', description: 'portalHome.modules.myProfile.description', permissions: [] },
 ]
 
 export function visibleModules(

@@ -5,6 +5,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
+import { useLocale } from '../../../i18n/localeContext'
 import { getInventoryOverview, type InventoryOverviewRow } from '../inventoryApi'
 import {
   INVENTORY_STATUSES,
@@ -30,9 +31,11 @@ function formatLevel(value: number | null): string {
 /** Voorraadoverzicht over alle sjablonen/varianten met statusfilters en drempelkolommen.
  * `?status=` (bijv. vanaf de dashboardtegels) activeert het statusfilter vooraf. */
 export function InventoryOverviewPage() {
+  const { t } = useLocale()
   const [searchParams] = useSearchParams()
   const [rows, setRows] = useState<InventoryOverviewRow[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<InventoryStatus | ''>(() => {
     const requested = searchParams.get('status')
     return INVENTORY_STATUSES.includes(requested as InventoryStatus) ? (requested as InventoryStatus) : ''
@@ -45,10 +48,10 @@ export function InventoryOverviewPage() {
       .then((data) => {
         if (!mounted) return
         setRows(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Het voorraadoverzicht kon niet worden geladen.')
+        if (mounted) setLoadErrorKey('issuedItems.overview.loadFailed')
       })
     return () => {
       mounted = false
@@ -78,7 +81,7 @@ export function InventoryOverviewPage() {
   const columns: Column<InventoryOverviewRow>[] = [
     {
       key: 'artikel',
-      header: 'Artikel',
+      header: t('issuedItems.overview.colItem'),
       render: (row) => (
         <span>
           {row.name}
@@ -86,33 +89,33 @@ export function InventoryOverviewPage() {
         </span>
       ),
     },
-    { key: 'categorie', header: 'Categorie', render: (row) => row.category },
-    { key: 'locatie', header: 'Locatie', render: (row) => row.storageLocation ?? '—' },
+    { key: 'categorie', header: t('issuedItems.overview.colCategory'), render: (row) => row.category },
+    { key: 'locatie', header: t('issuedItems.overview.colLocation'), render: (row) => row.storageLocation ?? '—' },
     {
       key: 'voorraad',
-      header: 'Huidige voorraad',
+      header: t('issuedItems.overview.colStock'),
       align: 'right',
       render: (row) => `${row.currentStock}${row.unit ? ` ${row.unit}` : ''}`,
     },
-    { key: 'waarschuwing', header: 'Waarschuwing', align: 'right', render: (row) => formatLevel(row.warningLevel) },
-    { key: 'minimum', header: 'Minimum', align: 'right', render: (row) => formatLevel(row.minimumLevel) },
-    { key: 'doel', header: 'Doel', align: 'right', render: (row) => formatLevel(row.targetLevel) },
+    { key: 'waarschuwing', header: t('issuedItems.overview.colWarning'), align: 'right', render: (row) => formatLevel(row.warningLevel) },
+    { key: 'minimum', header: t('issuedItems.overview.colMinimum'), align: 'right', render: (row) => formatLevel(row.minimumLevel) },
+    { key: 'doel', header: t('issuedItems.overview.colTarget'), align: 'right', render: (row) => formatLevel(row.targetLevel) },
     {
       key: 'status',
-      header: 'Status',
-      render: (row) => <Badge tone={INVENTORY_STATUS_TONES[row.status]}>{INVENTORY_STATUS_LABELS[row.status]}</Badge>,
+      header: t('issuedItems.overview.colStatus'),
+      render: (row) => <Badge tone={INVENTORY_STATUS_TONES[row.status]}>{t(INVENTORY_STATUS_LABELS[row.status])}</Badge>,
     },
     {
       key: 'mutatie',
-      header: 'Laatste mutatie',
+      header: t('issuedItems.overview.colLastMovement'),
       render: (row) => (row.lastMovementAt ? formatDate(row.lastMovementAt) : '—'),
     },
     {
       key: 'acties',
-      header: <span aria-label="Acties" />,
+      header: <span aria-label={t('issuedItems.tab.colActions')} />,
       render: (row) => (
         <Link className="issued-items-link" to={`/settings/issued-item-templates/${row.templateId}?tab=voorraad`}>
-          Detail
+          {t('issuedItems.overview.detail')}
         </Link>
       ),
     },
@@ -121,8 +124,8 @@ export function InventoryOverviewPage() {
   return (
     <div>
       <PageHeader
-        title="Voorraad"
-        subtitle="Actuele voorraadstanden en drempels van alle bedrijfsmiddelen."
+        title={t('issuedItems.overview.title')}
+        subtitle={t('issuedItems.overview.subtitle')}
       />
 
       <div className="inventory-overview-tiles">
@@ -137,24 +140,24 @@ export function InventoryOverviewPage() {
               onClick={() => setStatusFilter(active ? '' : status)}
             >
               <Icon size={18} aria-hidden="true" />
-              <span className="inventory-overview-tile-label">{INVENTORY_STATUS_LABELS[status]}</span>
+              <span className="inventory-overview-tile-label">{t(INVENTORY_STATUS_LABELS[status])}</span>
               <span className="inventory-overview-tile-count">{counts.get(status) ?? 0}</span>
             </button>
           )
         })}
       </div>
 
-      <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Zoeken op artikel…">
+      <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder={t('issuedItems.overview.searchPlaceholder')}>
         <select
           className="ui-filter-select"
-          aria-label="Statusfilter"
+          aria-label={t('issuedItems.overview.statusFilter')}
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as InventoryStatus | '')}
         >
-          <option value="">Alle statussen</option>
+          <option value="">{t('issuedItems.overview.allStatuses')}</option>
           {INVENTORY_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {INVENTORY_STATUS_LABELS[status]}
+              {t(INVENTORY_STATUS_LABELS[status])}
             </option>
           ))}
         </select>
@@ -164,12 +167,10 @@ export function InventoryOverviewPage() {
         columns={columns}
         rows={visible}
         rowKey={(row) => `${row.templateId}:${row.variantId ?? ''}`}
-        isLoading={rows === null && !loadError}
-        error={loadError}
+        isLoading={rows === null && !loadErrorKey}
+        error={loadErrorKey ? t(loadErrorKey) : null}
         emptyMessage={
-          (rows ?? []).length === 0
-            ? 'Nog geen artikelen met voorraadbeheer.'
-            : 'Geen artikelen voor deze filters.'
+          (rows ?? []).length === 0 ? t('issuedItems.overview.emptyNone') : t('issuedItems.overview.emptyFiltered')
         }
       />
     </div>

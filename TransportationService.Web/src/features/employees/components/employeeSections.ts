@@ -4,25 +4,28 @@
  * section tab and the first-error routing after a failed submit. Shared by create and edit
  * so the two modes always present the same section configuration (extra panel sections are
  * injected by the consuming page between the core sections and Notities).
+ *
+ * `labelKey` is an i18n key (employees.sections.*); consumers translate it via t() when
+ * building the SectionDefs for SectionedForm.
  */
 export interface EmployeeSectionMeta {
   id: string
-  label: string
+  labelKey: string
   optional?: boolean
 }
 
 /** Core scalar-field sections rendered before any injected extras. */
 export const EMPLOYEE_CORE_SECTIONS: EmployeeSectionMeta[] = [
-  { id: 'algemeen', label: 'Algemeen' },
-  { id: 'dienstverband', label: 'Dienstverband' },
-  { id: 'hr', label: 'Identiteit & bank', optional: true },
-  { id: 'noodcontacten', label: 'Noodcontacten', optional: true },
+  { id: 'algemeen', labelKey: 'employees.sections.algemeen' },
+  { id: 'dienstverband', labelKey: 'employees.sections.dienstverband' },
+  { id: 'hr', labelKey: 'employees.sections.hr', optional: true },
+  { id: 'noodcontacten', labelKey: 'employees.sections.noodcontacten', optional: true },
 ]
 
 /** Notities always closes the list, after the injected extras. */
 export const EMPLOYEE_NOTITIES_SECTION: EmployeeSectionMeta = {
   id: 'notities',
-  label: 'Notities',
+  labelKey: 'employees.sections.notities',
   optional: true,
 }
 

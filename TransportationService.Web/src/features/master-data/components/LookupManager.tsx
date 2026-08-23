@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { createLookupApi } from '../api/lookupApi'
 import { LookupFormDialog } from './LookupFormDialog'
@@ -23,8 +24,13 @@ type DialogState = { mode: 'create' } | { mode: 'edit'; item: LookupItem } | nul
 export function LookupManager({ config }: { config: LookupResourceConfig }) {
   const api = useMemo(() => createLookupApi(config.basePath), [config.basePath])
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canManage = hasPermission(config.managePermission)
+
+  // config.title/singular are translation keys (see lookupRegistry) — resolve once per render.
+  const title = t(config.title)
+  const singular = t(config.singular)
 
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
@@ -35,7 +41,7 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<LookupItem>(
     (args) => api.search(args),
-    { search, isActive: activeFilter, page, errorMessage: `${config.title} konden niet worden geladen.` },
+    { search, isActive: activeFilter, page, errorMessage: t('masterData.list.loadFailed', { title }) },
   )
 
   // Reset to page 1 whenever a filter changes.
@@ -51,7 +57,7 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
   function handleSaved(_item: LookupItem, wasCreate: boolean) {
     setDialog(null)
     reload()
-    toast.showSuccess(wasCreate ? `${config.singular} toegevoegd.` : `${config.singular} bijgewerkt.`)
+    toast.showSuccess(wasCreate ? t('masterData.toasts.added') : t('masterData.toasts.updated'))
   }
 
   async function confirmDelete() {
@@ -59,7 +65,7 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
     setIsDeleting(true)
     try {
       await api.remove(deleteTarget.id)
-      toast.showSuccess(`${config.singular} verwijderd.`)
+      toast.showSuccess(t('masterData.toasts.deleted'))
       setDeleteTarget(null)
       // Step back a page if we just removed the last row on it.
       if (items.length === 1 && page > 1) setPage(page - 1)
@@ -67,8 +73,8 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
     } catch (error) {
       const message =
         error instanceof ApiError && error.status === 409
-          ? 'Dit item wordt nog gebruikt en kan niet worden verwijderd.'
-          : 'Verwijderen is mislukt.'
+          ? t('masterData.errors.inUse')
+          : t('masterData.errors.deleteFailed')
       toast.showError(message)
     } finally {
       setIsDeleting(false)
@@ -76,19 +82,23 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
   }
 
   const columns: Column<LookupItem>[] = [
-    { key: 'code', header: 'Code', render: (row) => <code>{row.code}</code>, width: '140px' },
-    { key: 'name', header: 'Naam', render: (row) => row.name },
+    { key: 'code', header: t('masterData.list.columns.code'), render: (row) => <code>{row.code}</code>, width: '140px' },
+    { key: 'name', header: t('masterData.list.columns.name'), render: (row) => row.name },
     {
       key: 'description',
-      header: 'Omschrijving',
+      header: t('masterData.list.columns.description'),
       render: (row) => row.description ?? <span className="lookup-muted">—</span>,
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('masterData.list.columns.status'),
       width: '120px',
       render: (row) =>
-        row.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>,
+        row.isActive ? (
+          <Badge tone="success">{t('ui.statusBadges.active')}</Badge>
+        ) : (
+          <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>
+        ),
     },
     ...(canManage
       ? [
@@ -100,10 +110,10 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
             render: (row) => (
               <div className="lookup-row-actions" onClick={(event) => event.stopPropagation()}>
                 <Button variant="ghost" onClick={() => setDialog({ mode: 'edit', item: row })}>
-                  Bewerken
+                  {t('ui.actions.edit')}
                 </Button>
                 <Button variant="ghost" onClick={() => setDeleteTarget(row)}>
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </Button>
               </div>
             ),
@@ -116,20 +126,20 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
     <div>
       <Breadcrumbs
         items={[
-          { label: 'Stamgegevens' },
-          { label: LOOKUP_GROUP_LABELS[config.group] },
-          { label: config.title },
+          { label: t('navigation.menu.groups.masterData') },
+          { label: t(LOOKUP_GROUP_LABELS[config.group]) },
+          { label: title },
         ]}
       />
       <PageHeader
-        title={config.title}
-        action={canManage && <Button onClick={() => setDialog({ mode: 'create' })}>Nieuwe {config.singular}</Button>}
+        title={title}
+        action={canManage && <Button onClick={() => setDialog({ mode: 'create' })}>{t('masterData.list.new', { singular })}</Button>}
       />
 
       <FilterBar
         search={search}
         onSearchChange={handleSearchChange}
-        searchPlaceholder={`Zoeken op code of naam...`}
+        searchPlaceholder={t('masterData.list.searchPlaceholder')}
         activeFilter={activeFilter}
         onActiveFilterChange={handleActiveFilterChange}
       />
@@ -140,8 +150,8 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage={`Nog geen ${config.title.toLowerCase()}.`}
-        loadingMessage={`${config.title} laden...`}
+        emptyMessage={t('masterData.list.empty', { titleLower: title.toLowerCase() })}
+        loadingMessage={t('masterData.list.loading', { title })}
         onRowClick={(row) => setDialog({ mode: 'edit', item: row })}
       />
 
@@ -159,9 +169,9 @@ export function LookupManager({ config }: { config: LookupResourceConfig }) {
 
       {deleteTarget && (
         <ConfirmDialog
-          title={`${config.singular} verwijderen`}
-          message={`Weet u zeker dat u '${deleteTarget.name}' wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('masterData.deleteDialog.title', { singular })}
+          message={t('masterData.deleteDialog.message', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={isDeleting}
           onConfirm={confirmDelete}

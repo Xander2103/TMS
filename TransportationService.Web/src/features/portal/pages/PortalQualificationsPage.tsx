@@ -4,6 +4,7 @@ import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { fetchMyQualificationDocumentUrl, listMyQualifications } from '../api/portalApi'
 import {
   MY_QUALIFICATION_STATUS_LABELS,
@@ -15,8 +16,9 @@ import './portal.css'
 /** Own qualifications and their documents: licences, Code 95, ADR… with expiry status. */
 export function PortalQualificationsPage() {
   const { showError } = useToast()
+  const { t } = useLocale()
   const [qualifications, setQualifications] = useState<MyQualification[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -24,10 +26,10 @@ export function PortalQualificationsPage() {
       .then((data) => {
         if (!mounted) return
         setQualifications(data)
-        setLoadError(null)
+        setLoadError(false)
       })
       .catch(() => {
-        if (mounted) setLoadError('Je kwalificaties konden niet worden geladen.')
+        if (mounted) setLoadError(true)
       })
     return () => {
       mounted = false
@@ -39,18 +41,18 @@ export function PortalQualificationsPage() {
       const url = await fetchMyQualificationDocumentUrl(id)
       window.open(url, '_blank', 'noopener')
     } catch {
-      showError('Het document kon niet worden geopend.')
+      showError(t('portalHome.qualifications.openFailed'))
     }
   }
 
-  if (loadError) return <ErrorState message={loadError} />
-  if (!qualifications) return <LoadingState message="Kwalificaties laden..." />
+  if (loadError) return <ErrorState message={t('portalHome.qualifications.loadFailed')} />
+  if (!qualifications) return <LoadingState message={t('portalHome.qualifications.loading')} />
 
   return (
     <div>
-      <PageHeader title="Mijn kwalificaties" subtitle="Je rijbewijzen, attesten en hun vervaldata." />
+      <PageHeader title={t('portalHome.qualifications.title')} subtitle={t('portalHome.qualifications.subtitle')} />
 
-      {qualifications.length === 0 && <p className="portal-empty">Nog geen kwalificaties geregistreerd.</p>}
+      {qualifications.length === 0 && <p className="portal-empty">{t('portalHome.qualifications.empty')}</p>}
 
       <ul className="portal-qualifications">
         {qualifications.map((qualification) => (
@@ -58,17 +60,17 @@ export function PortalQualificationsPage() {
             <div className="portal-absence-head">
               <strong>{qualification.qualificationTypeName}</strong>
               <Badge tone={MY_QUALIFICATION_STATUS_TONE[qualification.effectiveStatus]}>
-                {MY_QUALIFICATION_STATUS_LABELS[qualification.effectiveStatus]}
+                {t(MY_QUALIFICATION_STATUS_LABELS[qualification.effectiveStatus])}
               </Badge>
             </div>
             <div className="portal-absence-dates">
-              Behaald: {qualification.obtainedDate}
-              {qualification.expiryDate && ` · vervalt: ${qualification.expiryDate}`}
-              {qualification.documentNumber && ` · nr. ${qualification.documentNumber}`}
+              {t('portalHome.qualifications.obtained', { date: qualification.obtainedDate })}
+              {qualification.expiryDate && ` · ${t('portalHome.qualifications.expires', { date: qualification.expiryDate })}`}
+              {qualification.documentNumber && ` · ${t('portalHome.qualifications.documentNumber', { number: qualification.documentNumber })}`}
             </div>
             {qualification.hasDocument && (
               <button type="button" className="portal-doc-link" onClick={() => void openDocument(qualification.id)}>
-                📄 Document bekijken
+                📄 {t('portalHome.qualifications.viewDocument')}
               </button>
             )}
           </li>

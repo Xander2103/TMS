@@ -9,6 +9,7 @@ import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useSectionNavigation, firstSectionWithError } from '../../../components/ui/useSectionNavigation'
 import type { FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { searchCustomers, getCustomer } from '../../customers/api/customersApi'
 import type { CustomerContact, CustomerListItem } from '../../customers/types'
@@ -21,7 +22,7 @@ import {
   LOCATION_SECTION_FIELD_KEYS,
   computeLocationSectionStatus,
 } from './locationSections'
-import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationInput, type LocationType } from '../types'
+import { LOCATION_TYPE_LABEL_KEYS, LOCATION_TYPES, type LocationInput, type LocationType } from '../types'
 import '../pages/location-form.css'
 
 interface LocationFormProps {
@@ -39,14 +40,14 @@ function contactDisplayName(contact: CustomerContact): string {
   return contact.displayName || [contact.firstName, contact.lastName].filter(Boolean).join(' ')
 }
 
-/** User-facing labels for the validation summary. */
-const FIELD_LABELS: Record<string, string> = {
-  name: 'Naam',
-  code: 'Code',
-  contactEmail: 'E-mail contactpersoon',
-  latitude: 'Breedtegraad',
-  longitude: 'Lengtegraad',
-  openingIntervals: 'Openingsuren',
+/** Vertaalsleutels voor de validation summary — renderen als t(FIELD_LABEL_KEYS[key]). */
+const FIELD_LABEL_KEYS: Record<string, string> = {
+  name: 'locations.form.fields.name',
+  code: 'locations.form.fields.code',
+  contactEmail: 'locations.form.fields.contactEmail',
+  latitude: 'locations.form.fields.latitude',
+  longitude: 'locations.form.fields.longitude',
+  openingIntervals: 'locations.form.fields.openingIntervals',
 }
 
 /**
@@ -59,6 +60,7 @@ const FIELD_LABELS: Record<string, string> = {
  * locations.view_sensitive: the backend preserves the stored code when the field is omitted.
  */
 export function LocationForm({ mode, initial, submitting, error, onSubmit, onCancel, submitLabel }: LocationFormProps) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canViewSensitive = hasPermission('locations.view_sensitive')
 
@@ -114,10 +116,10 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
     // Keep an already-linked customer selectable/visible even when it is not in the first page.
     if (customerId && !options.some((o) => o.value === customerId)) {
       const known = contactsFor?.customerId === customerId ? contactsFor.customerName : ''
-      options.push({ value: customerId, label: known || 'Gekoppelde klant' })
+      options.push({ value: customerId, label: known || t('locations.form.linkedCustomer') })
     }
     return options
-  }, [customers, customerId, contactsFor])
+  }, [customers, customerId, contactsFor, t])
 
   function set<K extends keyof LocationInput>(key: K, value: LocationInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -183,21 +185,21 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
 
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {}
-    if (!form.name.trim()) errors.name = 'Naam is verplicht.'
+    if (!form.name.trim()) errors.name = t('locations.form.nameRequired')
     if (mode === 'edit' && !form.code.trim()) {
       // On update the backend requires the (already assigned) code; only create may leave it blank.
-      errors.code = 'Code is verplicht.'
+      errors.code = t('locations.form.codeRequired')
     }
     if (form.contactEmail && !form.contactEmail.includes('@')) {
-      errors.contactEmail = 'Geef een geldig e-mailadres op.'
+      errors.contactEmail = t('locations.form.emailInvalid')
     }
     if (form.latitude != null && (form.latitude < -90 || form.latitude > 90)) {
-      errors.latitude = 'Breedtegraad moet tussen -90 en 90 liggen.'
+      errors.latitude = t('locations.form.latitudeRange')
     }
     if (form.longitude != null && (form.longitude < -180 || form.longitude > 180)) {
-      errors.longitude = 'Lengtegraad moet tussen -180 en 180 liggen.'
+      errors.longitude = t('locations.form.longitudeRange')
     }
-    if (!openingValid) errors.openingIntervals = 'Corrigeer eerst de openingsuren.'
+    if (!openingValid) errors.openingIntervals = t('locations.form.openingInvalid')
     setFieldErrors(errors)
     return errors
   }
@@ -238,8 +240,8 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   // ---- Section bodies ---------------------------------------------------------------------
 
   const renderAlgemeen = () => (
-    <FormSection title="Algemeen" columns={2}>
-      <FormField label="Naam" htmlFor="loc-name" required error={fieldErrors.name}>
+    <FormSection title={t('locations.form.sectionTitles.general')} columns={2}>
+      <FormField label={t('locations.form.fields.name')} htmlFor="loc-name" required error={fieldErrors.name}>
         <input
           id="loc-name"
           value={form.name}
@@ -250,9 +252,9 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
         />
       </FormField>
       <FormField
-        label="Code"
+        label={t('locations.form.fields.code')}
         htmlFor="loc-code"
-        hint={mode === 'create' ? 'Leeg laten voor automatische code.' : undefined}
+        hint={mode === 'create' ? t('locations.form.hints.codeAuto') : undefined}
         required={mode === 'edit'}
         error={fieldErrors.code}
       >
@@ -265,16 +267,16 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
           aria-invalid={fieldErrors.code ? 'true' : undefined}
         />
       </FormField>
-      <FormField label="Type" htmlFor="loc-type">
+      <FormField label={t('locations.form.fields.type')} htmlFor="loc-type">
         <select id="loc-type" value={form.type} onChange={(e) => set('type', e.target.value as LocationType)} disabled={submitting}>
-          {LOCATION_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {LOCATION_TYPE_LABELS[t]}
+          {LOCATION_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {t(LOCATION_TYPE_LABEL_KEYS[type])}
             </option>
           ))}
         </select>
       </FormField>
-      <FormField label="Externe referentie" htmlFor="loc-ext-ref" hint="Referentie van de klant of partner voor deze locatie.">
+      <FormField label={t('locations.form.fields.externalReference')} htmlFor="loc-ext-ref" hint={t('locations.form.hints.externalReference')}>
         <input
           id="loc-ext-ref"
           value={form.externalReference ?? ''}
@@ -283,22 +285,22 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
           maxLength={100}
         />
       </FormField>
-      <FormField label="Klant" htmlFor="loc-customer" hint="Typ om te zoeken; leeg = geen klant gekoppeld.">
+      <FormField label={t('locations.form.fields.customer')} htmlFor="loc-customer" hint={t('locations.form.hints.customerSearch')}>
         <SearchableSelect
           id="loc-customer"
           value={form.customerId}
           onChange={selectCustomer}
           options={customerOptions}
-          placeholder="Geen klant gekoppeld"
+          placeholder={t('locations.form.noCustomer')}
           disabled={submitting}
-          ariaLabel="Klant"
+          ariaLabel={t('locations.form.fields.customer')}
         />
       </FormField>
       {mode === 'edit' && (
         <div className="location-form-checkboxes">
           <label className="location-checkbox">
             <input type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} disabled={submitting} />
-            <span>Actief</span>
+            <span>{t('locations.form.fields.active')}</span>
           </label>
         </div>
       )}
@@ -306,26 +308,26 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   )
 
   const renderAdres = () => (
-    <FormSection title="Adres" columns={2}>
-      <FormField label="Straat" htmlFor="loc-street">
+    <FormSection title={t('locations.form.sectionTitles.address')} columns={2}>
+      <FormField label={t('locations.form.fields.street')} htmlFor="loc-street">
         <input id="loc-street" value={form.street ?? ''} onChange={(e) => set('street', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Nummer" htmlFor="loc-house">
+      <FormField label={t('locations.form.fields.houseNumber')} htmlFor="loc-house">
         <input id="loc-house" value={form.houseNumber ?? ''} onChange={(e) => set('houseNumber', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Postcode" htmlFor="loc-postal">
+      <FormField label={t('locations.form.fields.postalCode')} htmlFor="loc-postal">
         <input id="loc-postal" value={form.postalCode ?? ''} onChange={(e) => set('postalCode', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Gemeente" htmlFor="loc-city">
+      <FormField label={t('locations.form.fields.city')} htmlFor="loc-city">
         <input id="loc-city" value={form.city ?? ''} onChange={(e) => set('city', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Land" htmlFor="loc-country">
+      <FormField label={t('locations.form.fields.country')} htmlFor="loc-country">
         <CountryCombobox id="loc-country" value={form.countryCode} onChange={(code) => { set('countryCode', code); touch() }} disabled={submitting} />
       </FormField>
       <details className="location-form-advanced form-span-all">
-        <summary>Geavanceerd — coördinaten</summary>
+        <summary>{t('locations.form.advancedCoordinates')}</summary>
         <div className="location-form-advanced-grid">
-          <FormField label="Breedtegraad" htmlFor="loc-lat" error={fieldErrors.latitude}>
+          <FormField label={t('locations.form.fields.latitude')} htmlFor="loc-lat" error={fieldErrors.latitude}>
             <input
               id="loc-lat"
               type="number"
@@ -336,7 +338,7 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
               aria-invalid={fieldErrors.latitude ? 'true' : undefined}
             />
           </FormField>
-          <FormField label="Lengtegraad" htmlFor="loc-lng" error={fieldErrors.longitude}>
+          <FormField label={t('locations.form.fields.longitude')} htmlFor="loc-lng" error={fieldErrors.longitude}>
             <input
               id="loc-lng"
               type="number"
@@ -353,16 +355,16 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   )
 
   const renderContact = () => (
-    <FormSection title="Contactpersoon ter plaatse" columns={2}>
+    <FormSection title={t('locations.form.sectionTitles.contactOnSite')} columns={2}>
       {form.customerId && (
         <FormField
-          label="Contactpersoon van klant"
+          label={t('locations.form.fields.customerContact')}
           htmlFor="loc-customer-contact"
-          hint="Kies om onderstaande velden in te vullen; ze blijven aanpasbaar."
+          hint={t('locations.form.hints.customerContact')}
           className="form-span-all"
         >
           <select id="loc-customer-contact" value={form.customerContactId ?? ''} onChange={(e) => selectCustomerContact(e.target.value)} disabled={submitting}>
-            <option value="">— Geen koppeling —</option>
+            <option value="">{t('locations.form.noContactLink')}</option>
             {contacts.map((c) => (
               <option key={c.id} value={c.id}>
                 {contactDisplayName(c)}
@@ -371,16 +373,16 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
           </select>
         </FormField>
       )}
-      <FormField label="Naam contactpersoon" htmlFor="loc-contact-name">
+      <FormField label={t('locations.form.fields.contactName')} htmlFor="loc-contact-name">
         <input id="loc-contact-name" value={form.contactName ?? ''} onChange={(e) => set('contactName', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Telefoon" htmlFor="loc-contact-phone">
+      <FormField label={t('locations.form.fields.phone')} htmlFor="loc-contact-phone">
         <input id="loc-contact-phone" value={form.contactPhone ?? ''} onChange={(e) => set('contactPhone', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Gsm" htmlFor="loc-contact-mobile">
+      <FormField label={t('locations.form.fields.mobile')} htmlFor="loc-contact-mobile">
         <input id="loc-contact-mobile" value={form.contactMobile ?? ''} onChange={(e) => set('contactMobile', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="E-mail" htmlFor="loc-contact-email" error={fieldErrors.contactEmail}>
+      <FormField label={t('locations.form.fields.email')} htmlFor="loc-contact-email" error={fieldErrors.contactEmail}>
         <input
           id="loc-contact-email"
           value={form.contactEmail ?? ''}
@@ -393,7 +395,7 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   )
 
   const renderOpeningstijden = () => (
-    <FormSection title="Openingstijden" columns={1}>
+    <FormSection title={t('locations.form.sectionTitles.openingTimes')} columns={1}>
       <div className="form-span-all" id="loc-hours-editor" tabIndex={-1}>
         <OpeningHoursEditor
           value={form.openingIntervals}
@@ -410,13 +412,13 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
           </p>
         )}
       </div>
-      <FormField label="Openingsuren (vrije tekst, fallback)" htmlFor="loc-hours" hint="Wordt getoond wanneer er geen tijdvakken zijn ingesteld.">
+      <FormField label={t('locations.form.fields.openingHoursText')} htmlFor="loc-hours" hint={t('locations.form.hints.openingFallback')}>
         <input
           id="loc-hours"
           value={form.openingHours ?? ''}
           onChange={(e) => set('openingHours', e.target.value || null)}
           disabled={submitting}
-          placeholder="Bv. ma-vr 08:00-18:00"
+          placeholder={t('locations.form.openingPlaceholder')}
           maxLength={500}
         />
       </FormField>
@@ -425,58 +427,58 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
 
   const renderOperationeel = () => (
     <>
-      <FormSection title="Terrein" columns={2}>
-        <FormField label="Poort" htmlFor="loc-gate">
+      <FormSection title={t('locations.form.sectionTitles.terrain')} columns={2}>
+        <FormField label={t('locations.form.fields.gate')} htmlFor="loc-gate">
           <input id="loc-gate" value={form.gate ?? ''} onChange={(e) => set('gate', e.target.value || null)} disabled={submitting} maxLength={50} />
         </FormField>
-        <FormField label="Aanmeldpunt" htmlFor="loc-reception">
+        <FormField label={t('locations.form.fields.receptionPoint')} htmlFor="loc-reception">
           <input id="loc-reception" value={form.receptionPoint ?? ''} onChange={(e) => set('receptionPoint', e.target.value || null)} disabled={submitting} maxLength={200} />
         </FormField>
-        <FormField label="Kade/dok" htmlFor="loc-dock">
+        <FormField label={t('locations.form.fields.dock')} htmlFor="loc-dock">
           <input id="loc-dock" value={form.dock ?? ''} onChange={(e) => set('dock', e.target.value || null)} disabled={submitting} maxLength={50} />
         </FormField>
-        <FormField label="Routebeschrijving" htmlFor="loc-route" className="form-span-all">
+        <FormField label={t('locations.form.fields.routeDescription')} htmlFor="loc-route" className="form-span-all">
           <textarea id="loc-route" rows={2} value={form.routeDescription ?? ''} onChange={(e) => set('routeDescription', e.target.value || null)} disabled={submitting} />
         </FormField>
         <div className="location-form-checkboxes form-span-all">
           <label className="location-checkbox">
             <input type="checkbox" checked={form.craneRequired} onChange={(e) => set('craneRequired', e.target.checked)} disabled={submitting} />
-            <span>Kraan vereist</span>
+            <span>{t('locations.flags.craneRequired')}</span>
           </label>
           <label className="location-checkbox">
             <input type="checkbox" checked={form.forkliftAvailable} onChange={(e) => set('forkliftAvailable', e.target.checked)} disabled={submitting} />
-            <span>Heftruck beschikbaar</span>
+            <span>{t('locations.flags.forkliftAvailable')}</span>
           </label>
         </div>
       </FormSection>
 
-      <FormSection title="Toegang" columns={2}>
+      <FormSection title={t('locations.form.sectionTitles.access')} columns={2}>
         {canViewSensitive && (
-          <FormField label="Toegangscode" htmlFor="loc-access-code" hint="Vertrouwelijk — alleen zichtbaar met de juiste rechten.">
+          <FormField label={t('locations.form.fields.accessCode')} htmlFor="loc-access-code" hint={t('locations.form.hints.accessCode')}>
             <input id="loc-access-code" value={form.accessCode ?? ''} onChange={(e) => set('accessCode', e.target.value || null)} disabled={submitting} maxLength={100} />
           </FormField>
         )}
-        <FormField label="Toegangsrestricties" htmlFor="loc-access-restr">
+        <FormField label={t('locations.form.fields.accessRestrictions')} htmlFor="loc-access-restr">
           <input id="loc-access-restr" value={form.accessRestrictions ?? ''} onChange={(e) => set('accessRestrictions', e.target.value || null)} disabled={submitting} />
         </FormField>
         <div className="location-form-checkboxes form-span-all">
           <label className="location-checkbox">
             <input type="checkbox" checked={form.appointmentRequired} onChange={(e) => set('appointmentRequired', e.target.checked)} disabled={submitting} />
-            <span>Afspraak verplicht</span>
+            <span>{t('locations.flags.appointmentRequired')}</span>
           </label>
           <label className="location-checkbox">
             <input type="checkbox" checked={form.deliveryByAppointmentOnly} onChange={(e) => set('deliveryByAppointmentOnly', e.target.checked)} disabled={submitting} />
-            <span>Leveren enkel op afspraak</span>
+            <span>{t('locations.flags.deliveryByAppointmentOnly')}</span>
           </label>
           <label className="location-checkbox">
             <input type="checkbox" checked={form.alfapassRequired} onChange={(e) => set('alfapassRequired', e.target.checked)} disabled={submitting} />
-            <span>Alfapass vereist</span>
+            <span>{t('locations.flags.alfapassRequired')}</span>
           </label>
         </div>
       </FormSection>
 
-      <FormSection title="Beperkingen" columns={2}>
-        <FormField label="Hoogtebeperking (m)" htmlFor="loc-height">
+      <FormSection title={t('locations.form.sectionTitles.limits')} columns={2}>
+        <FormField label={t('locations.form.fields.heightRestriction')} htmlFor="loc-height">
           <input
             id="loc-height"
             type="number"
@@ -487,7 +489,7 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
             disabled={submitting}
           />
         </FormField>
-        <FormField label="Gewichtsbeperking (t)" htmlFor="loc-weight">
+        <FormField label={t('locations.form.fields.weightRestriction')} htmlFor="loc-weight">
           <input
             id="loc-weight"
             type="number"
@@ -498,22 +500,22 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
             disabled={submitting}
           />
         </FormField>
-        <FormField label="ADR toegelaten" htmlFor="loc-adr" hint="Onbekend = niet ingevuld.">
+        <FormField label={t('locations.form.fields.adrAllowed')} htmlFor="loc-adr" hint={t('locations.form.hints.adrUnknown')}>
           <select
             id="loc-adr"
             value={form.adrAllowed === null ? '' : String(form.adrAllowed)}
             onChange={(e) => set('adrAllowed', e.target.value === '' ? null : e.target.value === 'true')}
             disabled={submitting}
           >
-            <option value="">Onbekend</option>
-            <option value="true">Ja</option>
-            <option value="false">Nee</option>
+            <option value="">{t('locations.form.adrUnknownOption')}</option>
+            <option value="true">{t('locations.form.yes')}</option>
+            <option value="false">{t('locations.form.no')}</option>
           </select>
         </FormField>
-        <FormField label="Voertuigbeperkingen" htmlFor="loc-vehicle-restr">
+        <FormField label={t('locations.form.fields.vehicleRestrictions')} htmlFor="loc-vehicle-restr">
           <input id="loc-vehicle-restr" value={form.vehicleRestrictions ?? ''} onChange={(e) => set('vehicleRestrictions', e.target.value || null)} disabled={submitting} />
         </FormField>
-        <FormField label="Opleggerrestricties" htmlFor="loc-trailer-restr">
+        <FormField label={t('locations.form.fields.trailerRestrictions')} htmlFor="loc-trailer-restr">
           <input id="loc-trailer-restr" value={form.trailerRestrictions ?? ''} onChange={(e) => set('trailerRestrictions', e.target.value || null)} disabled={submitting} />
         </FormField>
       </FormSection>
@@ -521,25 +523,25 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   )
 
   const renderInstructies = () => (
-    <FormSection title="Instructies" columns={1}>
-      <FormField label="Laadinstructies" htmlFor="loc-loading" className="form-span-all">
+    <FormSection title={t('locations.form.sectionTitles.instructions')} columns={1}>
+      <FormField label={t('locations.form.fields.loadingInstructions')} htmlFor="loc-loading" className="form-span-all">
         <textarea id="loc-loading" rows={2} value={form.loadingInstructions ?? ''} onChange={(e) => set('loadingInstructions', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Losinstructies" htmlFor="loc-unloading" className="form-span-all">
+      <FormField label={t('locations.form.fields.unloadingInstructions')} htmlFor="loc-unloading" className="form-span-all">
         <textarea id="loc-unloading" rows={2} value={form.unloadingInstructions ?? ''} onChange={(e) => set('unloadingInstructions', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Toegangsinstructies" htmlFor="loc-access" className="form-span-all">
+      <FormField label={t('locations.form.fields.accessInstructions')} htmlFor="loc-access" className="form-span-all">
         <textarea id="loc-access" rows={2} value={form.accessInstructions ?? ''} onChange={(e) => set('accessInstructions', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Chauffeursinstructies" htmlFor="loc-driver" className="form-span-all">
+      <FormField label={t('locations.form.fields.driverInstructions')} htmlFor="loc-driver" className="form-span-all">
         <textarea id="loc-driver" rows={2} value={form.driverInstructions ?? ''} onChange={(e) => set('driverInstructions', e.target.value || null)} disabled={submitting} />
       </FormField>
       <div className="location-form-internal form-span-all">
-        <p className="location-form-internal-label">Alleen interne gebruikers</p>
-        <FormField label="Interne memo" htmlFor="loc-memo" hint="Nooit zichtbaar voor chauffeurs of klanten.">
+        <p className="location-form-internal-label">{t('locations.internalOnly')}</p>
+        <FormField label={t('locations.form.fields.internalMemo')} htmlFor="loc-memo" hint={t('locations.form.hints.internalMemo')}>
           <textarea id="loc-memo" rows={2} value={form.internalMemo ?? ''} onChange={(e) => set('internalMemo', e.target.value || null)} disabled={submitting} />
         </FormField>
-        <FormField label="Notities" htmlFor="loc-notes">
+        <FormField label={t('locations.form.fields.notes')} htmlFor="loc-notes">
           <textarea id="loc-notes" rows={3} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={submitting} />
         </FormField>
       </div>
@@ -547,8 +549,8 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   )
 
   const renderPlanning = () => (
-    <FormSection title="Planningsstandaarden" columns={2}>
-      <FormField label="Standaard laadtijd (min)" htmlFor="loc-load-min">
+    <FormSection title={t('locations.form.sectionTitles.planningDefaults')} columns={2}>
+      <FormField label={t('locations.form.fields.defaultLoadingMinutes')} htmlFor="loc-load-min">
         <input
           id="loc-load-min"
           type="number"
@@ -560,7 +562,7 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
           disabled={submitting}
         />
       </FormField>
-      <FormField label="Standaard lostijd (min)" htmlFor="loc-unload-min">
+      <FormField label={t('locations.form.fields.defaultUnloadingMinutes')} htmlFor="loc-unload-min">
         <input
           id="loc-unload-min"
           type="number"
@@ -572,16 +574,16 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
           disabled={submitting}
         />
       </FormField>
-      <FormField label="Voorkeursvenster van" htmlFor="loc-pref-from">
+      <FormField label={t('locations.form.fields.preferredFrom')} htmlFor="loc-pref-from">
         <input id="loc-pref-from" type="time" value={form.preferredArrivalFrom ?? ''} onChange={(e) => set('preferredArrivalFrom', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Voorkeursvenster tot" htmlFor="loc-pref-to">
+      <FormField label={t('locations.form.fields.preferredTo')} htmlFor="loc-pref-to">
         <input id="loc-pref-to" type="time" value={form.preferredArrivalTo ?? ''} onChange={(e) => set('preferredArrivalTo', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Vroegste aankomst" htmlFor="loc-earliest">
+      <FormField label={t('locations.form.fields.earliestArrival')} htmlFor="loc-earliest">
         <input id="loc-earliest" type="time" value={form.earliestArrival ?? ''} onChange={(e) => set('earliestArrival', e.target.value || null)} disabled={submitting} />
       </FormField>
-      <FormField label="Laatste aankomst" htmlFor="loc-latest">
+      <FormField label={t('locations.form.fields.latestArrival')} htmlFor="loc-latest">
         <input id="loc-latest" type="time" value={form.latestArrival ?? ''} onChange={(e) => set('latestArrival', e.target.value || null)} disabled={submitting} />
       </FormField>
     </FormSection>
@@ -599,6 +601,7 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
 
   const sections: SectionDef[] = LOCATION_SECTIONS.map((meta) => ({
     ...meta,
+    label: t(meta.label),
     hasError: sectionHasError(meta.id),
     complete: status[meta.id]?.complete,
     filled: status[meta.id]?.filled,
@@ -608,10 +611,10 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   const actionBar = (position: 'top' | 'bottom') => (
     <FormActions dirty={dirty} position={position}>
       <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
-        Annuleren
+        {t('ui.actions.cancel')}
       </Button>
       <Button type="submit" disabled={submitting}>
-        {submitting ? 'Bezig…' : submitLabel ?? (mode === 'create' ? 'Locatie aanmaken' : 'Opslaan')}
+        {submitting ? t('locations.form.busy') : submitLabel ?? (mode === 'create' ? t('locations.form.createSubmit') : t('ui.actions.save'))}
       </Button>
     </FormActions>
   )
@@ -619,7 +622,12 @@ export function LocationForm({ mode, initial, submitting, error, onSubmit, onCan
   return (
     <form ref={formRef} className="location-form" onSubmit={handleSubmit} onChange={touch} noValidate>
       <UnsavedChangesGuard when={dirty && !submitting} />
-      <ValidationSummary message={error} fieldErrors={summaryErrors} fieldLabels={FIELD_LABELS} onSelect={jumpToField} />
+      <ValidationSummary
+        message={error}
+        fieldErrors={summaryErrors}
+        fieldLabels={Object.fromEntries(Object.entries(FIELD_LABEL_KEYS).map(([key, labelKey]) => [key, t(labelKey)]))}
+        onSelect={jumpToField}
+      />
 
       {actionBar('top')}
 

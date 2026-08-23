@@ -254,7 +254,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
           {term.length < 2 && <p className="cmdk-hint">{t('ui.palette.typeMore')}</p>}
           {term.length >= 2 && !hits && <p className="cmdk-hint">{t('ui.palette.searching')}</p>}
-          {hits && hits.length === 0 && <p className="cmdk-hint">Geen resultaten voor "{term}".</p>}
+          {hits && hits.length === 0 && <p className="cmdk-hint">{t('ui.palette.noResults', { term })}</p>}
           {[...groupedHits.entries()].map(([category, categoryRows]) => (
             <div key={category}>
               <div className="cmdk-category">{category}</div>

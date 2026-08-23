@@ -1,0 +1,63 @@
+{
+  "bell": {
+    "ariaLabel": "Notifications",
+    "loading": "Chargement des notifications…",
+    "empty": "Aucune notification.",
+    "unreadDot": "Non lue",
+    "allNotifications": "Toutes les notifications"
+  },
+  "page": {
+    "title": "Notifications",
+    "loading": "Chargement des notifications…",
+    "empty": "Aucune notification.",
+    "categoryAria": "Catégorie",
+    "allCategories": "Toutes les catégories",
+    "showArchive": "Afficher les archives",
+    "hideResolved": "Masquer les résolues",
+    "resolved": "Résolue",
+    "archived": "archivée",
+    "acknowledgedAt": "Confirmée le {dateTime}",
+    "acknowledge": "Confirmer",
+    "acknowledgeAria": "Confirmer la notification « {title} »",
+    "archiveAria": "Archiver la notification « {title} »",
+    "archiveTitle": "Archiver",
+    "preferencesSummary": "Préférences par catégorie",
+    "preferencesHint": "Les catégories désactivées ne délivrent plus de notifications ; les notifications système critiques passent toujours."
+  },
+  "actions": {
+    "markAllRead": "Tout marquer comme lu"
+  },
+  "errors": {
+    "loadFailed": "Les notifications n'ont pas pu être chargées.",
+    "openFailed": "La notification n'a pas pu être ouverte.",
+    "archiveFailed": "La notification n'a pas pu être archivée.",
+    "acknowledgeFailed": "La notification n'a pas pu être confirmée.",
+    "markFailed": "Les notifications n'ont pas pu être marquées.",
+    "preferenceFailed": "La préférence n'a pas pu être enregistrée."
+  },
+  "toasts": {
+    "preferenceSaved": "Préférence enregistrée."
+  },
+  "categories": {
+    "General": "Général",
+    "Orders": "Commandes",
+    "Planning": "Planification",
+    "Execution": "Exécution",
+    "Hr": "RH",
+    "System": "Système",
+    "Inventory": "Stock",
+    "Task": "Tâches",
+    "CustomerPortal": "Portail client",
+    "Fleet": "Flotte",
+    "Document": "Documents",
+    "Approval": "Approbations"
+  },
+  "relative": {
+    "justNow": "à l'instant",
+    "minutesAgo": "il y a {count} min",
+    "hoursAgo_one": "il y a {count} heure",
+    "hoursAgo_other": "il y a {count} heures",
+    "yesterday": "hier",
+    "daysAgo": "il y a {count} jours"
+  }
+}

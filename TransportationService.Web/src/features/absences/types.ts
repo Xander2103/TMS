@@ -2,23 +2,25 @@ export type AbsenceType = 'Vacation' | 'Sick' | 'Training' | 'PersonalLeave' | '
 export type AbsenceStatus = 'Requested' | 'UnderReview' | 'Approved' | 'Rejected' | 'Cancelled'
 export type AbsencePartDay = 'FullDay' | 'Morning' | 'Afternoon'
 
+/** Vertaalsleutels — renderen als t(ABSENCE_TYPE_LABELS[type]). */
 export const ABSENCE_TYPE_LABELS: Record<AbsenceType, string> = {
-  Vacation: 'Verlof',
-  Sick: 'Ziekte',
-  Training: 'Opleiding',
-  PersonalLeave: 'Persoonlijk verlof',
-  Unpaid: 'Onbetaald verlof',
-  Other: 'Overig',
+  Vacation: 'absences.type.Vacation',
+  Sick: 'absences.type.Sick',
+  Training: 'absences.type.Training',
+  PersonalLeave: 'absences.type.PersonalLeave',
+  Unpaid: 'absences.type.Unpaid',
+  Other: 'absences.type.Other',
 }
 
 export const ABSENCE_TYPES: AbsenceType[] = ['Vacation', 'Sick', 'Training', 'PersonalLeave', 'Unpaid', 'Other']
 
+/** Vertaalsleutels — renderen als t(ABSENCE_STATUS_LABELS[status]). */
 export const ABSENCE_STATUS_LABELS: Record<AbsenceStatus, string> = {
-  Requested: 'Aangevraagd',
-  UnderReview: 'In behandeling',
-  Approved: 'Goedgekeurd',
-  Rejected: 'Afgewezen',
-  Cancelled: 'Ingetrokken',
+  Requested: 'absences.status.Requested',
+  UnderReview: 'absences.status.UnderReview',
+  Approved: 'absences.status.Approved',
+  Rejected: 'absences.status.Rejected',
+  Cancelled: 'absences.status.Cancelled',
 }
 
 export const ABSENCE_STATUSES: AbsenceStatus[] = ['Requested', 'UnderReview', 'Approved', 'Rejected', 'Cancelled']
@@ -32,10 +34,11 @@ export const ABSENCE_STATUS_TONE: Record<AbsenceStatus, 'neutral' | 'success' | 
   Cancelled: 'neutral',
 }
 
+/** Vertaalsleutels — renderen als t(PART_DAY_LABELS[partDay]). */
 export const PART_DAY_LABELS: Record<AbsencePartDay, string> = {
-  FullDay: 'Hele dag',
-  Morning: 'Voormiddag',
-  Afternoon: 'Namiddag',
+  FullDay: 'absences.partDay.FullDay',
+  Morning: 'absences.partDay.Morning',
+  Afternoon: 'absences.partDay.Afternoon',
 }
 
 export interface Absence {

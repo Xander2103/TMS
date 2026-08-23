@@ -10,6 +10,7 @@ import { useSectionNavigation, firstSectionWithError } from '../../../components
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
@@ -71,35 +72,35 @@ interface EmployeeFormProps {
   duplicateNameHint?: ReactNode
 }
 
-/** User-facing labels for backend field paths, for the validation summary. */
-const FIELD_LABELS: Record<string, string> = {
-  firstName: 'Voornaam',
-  lastName: 'Achternaam',
-  email: 'E-mailadres',
-  phoneNumber: 'Telefoon',
-  mobilePhone: 'GSM',
-  dateOfBirth: 'Geboortedatum',
-  placeOfBirth: 'Geboorteplaats',
-  street: 'Straat',
-  houseNumber: 'Huisnummer',
-  postalCode: 'Postcode',
-  city: 'Gemeente',
-  countryCode: 'Land',
-  employmentStartDate: 'Startdatum',
-  employmentEndDate: 'Einddatum',
-  employmentStatus: 'Status dienstverband',
-  departmentId: 'Afdeling',
-  contractTypeId: 'Contracttype',
-  jobFunctionIds: 'Functies',
-  civilStatus: 'Burgerlijke staat',
-  dimonaNumber: 'Dimonanummer',
-  dependentChildren: 'Kinderen ten laste',
-  identityCardNumber: 'Identiteitskaartnummer',
-  emergencyContacts: 'Noodcontacten',
-  nationalRegisterNumber: 'Rijksregisternummer',
-  iban: 'IBAN',
-  bic: 'BIC',
-  qualifications: 'Kwalificaties',
+/** i18n keys (employees.fields.*) for backend field paths, for the validation summary. */
+const FIELD_LABEL_KEYS: Record<string, string> = {
+  firstName: 'employees.fields.firstName',
+  lastName: 'employees.fields.lastName',
+  email: 'employees.fields.email',
+  phoneNumber: 'employees.fields.phoneNumber',
+  mobilePhone: 'employees.fields.mobilePhone',
+  dateOfBirth: 'employees.fields.dateOfBirth',
+  placeOfBirth: 'employees.fields.placeOfBirth',
+  street: 'employees.fields.street',
+  houseNumber: 'employees.fields.houseNumber',
+  postalCode: 'employees.fields.postalCode',
+  city: 'employees.fields.city',
+  countryCode: 'employees.fields.countryCode',
+  employmentStartDate: 'employees.fields.employmentStartDate',
+  employmentEndDate: 'employees.fields.employmentEndDate',
+  employmentStatus: 'employees.fields.employmentStatus',
+  departmentId: 'employees.fields.departmentId',
+  contractTypeId: 'employees.fields.contractTypeId',
+  jobFunctionIds: 'employees.fields.jobFunctionIds',
+  civilStatus: 'employees.fields.civilStatus',
+  dimonaNumber: 'employees.fields.dimonaNumber',
+  dependentChildren: 'employees.fields.dependentChildren',
+  identityCardNumber: 'employees.fields.identityCardNumber',
+  emergencyContacts: 'employees.fields.emergencyContacts',
+  nationalRegisterNumber: 'employees.fields.nationalRegisterNumber',
+  iban: 'employees.fields.iban',
+  bic: 'employees.fields.bic',
+  qualifications: 'employees.fields.qualifications',
 }
 
 function nullable(value: string): string | null {
@@ -121,6 +122,7 @@ export function EmployeeForm({
   onNameChanged,
   duplicateNameHint,
 }: EmployeeFormProps) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canSeeConfidential = hasPermission('employees.view_confidential')
 
@@ -168,6 +170,12 @@ export function EmployeeForm({
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [dirty, setDirty] = useState(false)
+
+  // Translated field-name map for the validation summary (backend field path → label).
+  const fieldLabels = useMemo(
+    () => Object.fromEntries(Object.entries(FIELD_LABEL_KEYS).map(([field, key]) => [field, t(key)])),
+    [t],
+  )
 
   // Create page's duplicate-name check lives outside this component (it's create-only and
   // needs its own debounce/API state); this just relays every name change up to it.
@@ -221,7 +229,7 @@ export function EmployeeForm({
   const missingEndDateBlocking = contractTypeRequiresEndDate && contractTypeChanged
   const missingEndDateHint =
     contractTypeRequiresEndDate && !contractTypeChanged && !employmentEndDate
-      ? 'Einddatum ontbreekt voor dit contracttype.'
+      ? t('employees.validation.endDateMissingHint')
       : undefined
 
   function applyEndDatePreset(months: number) {
@@ -233,19 +241,19 @@ export function EmployeeForm({
     // Alleen voor- en achternaam blokkeren (spec §13); al de rest wordt enkel op formaat
     // gecontroleerd wanneer er effectief een waarde is ingevuld.
     const errors: Record<string, string> = {}
-    if (!firstName.trim()) errors.firstName = 'Voornaam is verplicht.'
-    if (!lastName.trim()) errors.lastName = 'Achternaam is verplicht.'
-    if (email.trim() && !email.includes('@')) errors.email = 'Geef een geldig e-mailadres op.'
+    if (!firstName.trim()) errors.firstName = t('employees.validation.firstNameRequired')
+    if (!lastName.trim()) errors.lastName = t('employees.validation.lastNameRequired')
+    if (email.trim() && !email.includes('@')) errors.email = t('employees.validation.invalidEmail')
     if (missingEndDateBlocking && !employmentEndDate) {
-      errors.employmentEndDate = 'Einddatum is verplicht voor dit contracttype.'
+      errors.employmentEndDate = t('employees.validation.endDateRequired')
     } else if (employmentStartDate && employmentEndDate && employmentEndDate < employmentStartDate) {
-      errors.employmentEndDate = 'De einddatum moet na de startdatum liggen.'
+      errors.employmentEndDate = t('employees.validation.endDateBeforeStart')
     }
     if (canSeeConfidential) {
       const nrnError = validateNrn(nationalRegisterNumber)
-      if (nrnError) errors.nationalRegisterNumber = nrnError
+      if (nrnError) errors.nationalRegisterNumber = t(nrnError)
       const ibanError = validateIban(iban)
-      if (ibanError) errors.iban = ibanError
+      if (ibanError) errors.iban = t(ibanError)
     }
     setFieldErrors(errors)
     return errors
@@ -262,26 +270,27 @@ export function EmployeeForm({
 
   const algemeenSection: SectionDef = {
     ...EMPLOYEE_CORE_SECTIONS[0],
+    label: t(EMPLOYEE_CORE_SECTIONS[0].labelKey),
     hasError: sectionHasError('algemeen'),
     render: () => (
       <>
-        <FormSection title="Persoonlijk" columns={3}>
-          <FormField label="Voornaam" htmlFor="e-firstname" error={fieldErrors.firstName} required>
+        <FormSection title={t('employees.form.personalTitle')} columns={3}>
+          <FormField label={t('employees.form.firstName')} htmlFor="e-firstname" error={fieldErrors.firstName} required>
             <input id="e-firstname" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.firstName ? 'true' : undefined} />
           </FormField>
-          <FormField label="Achternaam" htmlFor="e-lastname" error={fieldErrors.lastName} required>
+          <FormField label={t('employees.form.lastName')} htmlFor="e-lastname" error={fieldErrors.lastName} required>
             <input id="e-lastname" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={100} aria-invalid={fieldErrors.lastName ? 'true' : undefined} />
           </FormField>
           {duplicateNameHint && (
             <div className="form-span-all employee-form-duplicate-hint">{duplicateNameHint}</div>
           )}
-          <FormField label="Geboortedatum" htmlFor="e-dob" error={fieldErrors.dateOfBirth}>
+          <FormField label={t('employees.form.dateOfBirth')} htmlFor="e-dob" error={fieldErrors.dateOfBirth}>
             <input id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} aria-invalid={fieldErrors.dateOfBirth ? 'true' : undefined} />
           </FormField>
-          <FormField label="Geboorteplaats" htmlFor="e-pob">
+          <FormField label={t('employees.form.placeOfBirth')} htmlFor="e-pob">
             <input id="e-pob" value={placeOfBirth} onChange={(e) => setPlaceOfBirth(e.target.value)} maxLength={100} />
           </FormField>
-          <FormField label="Nationaliteit" htmlFor="e-nationality">
+          <FormField label={t('employees.form.nationality')} htmlFor="e-nationality">
             <SearchableSelect
               id="e-nationality"
               value={nationalityCode}
@@ -291,12 +300,12 @@ export function EmployeeForm({
               }}
               options={nationalities.options.map((o) => ({ value: o.code, label: o.name, keywords: o.code }))}
               isLoading={nationalities.isLoading}
-              placeholder="— Selecteer —"
+              placeholder={t('ui.select.placeholder')}
             />
           </FormField>
-          <FormField label="Voorkeurstaal" htmlFor="e-language">
+          <FormField label={t('employees.form.preferredLanguage')} htmlFor="e-language">
             <select id="e-language" value={preferredLanguageCode} onChange={(e) => setPreferredLanguageCode(e.target.value)}>
-              <option value="">— Geen —</option>
+              <option value="">{t('employees.form.noneOption')}</option>
               {languages.options.map((o) => (
                 <option key={o.id} value={o.code}>
                   {o.name}
@@ -304,7 +313,7 @@ export function EmployeeForm({
               ))}
             </select>
           </FormField>
-          <FormField label="Burgerlijke staat" htmlFor="e-civil-status">
+          <FormField label={t('employees.form.civilStatus')} htmlFor="e-civil-status">
             <select
               id="e-civil-status"
               value={civilStatus}
@@ -313,15 +322,15 @@ export function EmployeeForm({
                 touch()
               }}
             >
-              <option value="">— Onbekend —</option>
-              {Object.entries(CIVIL_STATUS_LABELS).map(([value, label]) => (
+              <option value="">{t('employees.form.unknownOption')}</option>
+              {Object.entries(CIVIL_STATUS_LABELS).map(([value, labelKey]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(labelKey)}
                 </option>
               ))}
             </select>
           </FormField>
-          <FormField label="Aantal kinderen ten laste" htmlFor="e-dependent-children">
+          <FormField label={t('employees.form.dependentChildren')} htmlFor="e-dependent-children">
             <input
               id="e-dependent-children"
               type="number"
@@ -333,29 +342,29 @@ export function EmployeeForm({
           </FormField>
         </FormSection>
 
-        <FormSection title="Contact & adres" columns={3}>
-          <FormField label="E-mail" htmlFor="e-email" error={fieldErrors.email}>
+        <FormSection title={t('employees.form.contactAddressTitle')} columns={3}>
+          <FormField label={t('employees.form.email')} htmlFor="e-email" error={fieldErrors.email}>
             <input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} aria-invalid={fieldErrors.email ? 'true' : undefined} />
           </FormField>
-          <FormField label="Telefoon" htmlFor="e-phone" error={fieldErrors.phoneNumber}>
+          <FormField label={t('employees.form.phone')} htmlFor="e-phone" error={fieldErrors.phoneNumber}>
             <input id="e-phone" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} maxLength={30} aria-invalid={fieldErrors.phoneNumber ? 'true' : undefined} />
           </FormField>
-          <FormField label="GSM" htmlFor="e-mobile">
+          <FormField label={t('employees.form.mobile')} htmlFor="e-mobile">
             <input id="e-mobile" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} maxLength={30} />
           </FormField>
-          <FormField label="Straat" htmlFor="e-street" error={fieldErrors.street}>
+          <FormField label={t('employees.form.street')} htmlFor="e-street" error={fieldErrors.street}>
             <input id="e-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} aria-invalid={fieldErrors.street ? 'true' : undefined} />
           </FormField>
-          <FormField label="Nummer" htmlFor="e-houseno" error={fieldErrors.houseNumber}>
+          <FormField label={t('employees.form.houseNumber')} htmlFor="e-houseno" error={fieldErrors.houseNumber}>
             <input id="e-houseno" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} maxLength={20} aria-invalid={fieldErrors.houseNumber ? 'true' : undefined} />
           </FormField>
-          <FormField label="Postcode" htmlFor="e-postal" error={fieldErrors.postalCode}>
+          <FormField label={t('employees.form.postalCode')} htmlFor="e-postal" error={fieldErrors.postalCode}>
             <input id="e-postal" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} maxLength={20} aria-invalid={fieldErrors.postalCode ? 'true' : undefined} />
           </FormField>
-          <FormField label="Plaats" htmlFor="e-city" error={fieldErrors.city}>
+          <FormField label={t('employees.form.city')} htmlFor="e-city" error={fieldErrors.city}>
             <input id="e-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} aria-invalid={fieldErrors.city ? 'true' : undefined} />
           </FormField>
-          <FormField label="Land" htmlFor="e-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
+          <FormField label={t('employees.form.country')} htmlFor="e-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
             <CountryCombobox
               id="e-country"
               value={countryCode}
@@ -372,20 +381,21 @@ export function EmployeeForm({
 
   const dienstverbandSection: SectionDef = {
     ...EMPLOYEE_CORE_SECTIONS[1],
+    label: t(EMPLOYEE_CORE_SECTIONS[1].labelKey),
     hasError: sectionHasError('dienstverband'),
     render: () => (
       <FormSection
-        title="Dienstverband"
+        title={t('employees.form.employmentTitle')}
         columns={3}
-        description="Functies zijn HR-informatie en geven géén toegangsrechten in de applicatie; rechten beheer je via Gebruikers en Rollen."
+        description={t('employees.form.employmentDescription')}
       >
-        <FormField label="Startdatum" htmlFor="e-start" error={fieldErrors.employmentStartDate}>
+        <FormField label={t('employees.form.startDate')} htmlFor="e-start" error={fieldErrors.employmentStartDate}>
           <input id="e-start" type="date" value={employmentStartDate} onChange={(e) => setEmploymentStartDate(e.target.value)} aria-invalid={fieldErrors.employmentStartDate ? 'true' : undefined} />
         </FormField>
         <FormField
-          label="Einddatum tewerkstelling"
+          label={t('employees.form.endDate')}
           htmlFor="e-end"
-          hint={missingEndDateHint ?? (contractTypeRequiresEndDate ? undefined : 'Leeg = onbepaalde duur.')}
+          hint={missingEndDateHint ?? (contractTypeRequiresEndDate ? undefined : t('employees.form.endDateOpenEndedHint'))}
           required={missingEndDateBlocking}
           error={fieldErrors.employmentEndDate ?? getFieldError(serverFieldErrors, 'employmentEndDate')}
         >
@@ -406,48 +416,48 @@ export function EmployeeForm({
             </div>
           </div>
         </FormField>
-        <FormField label="Dienstverbandstatus" htmlFor="e-status">
+        <FormField label={t('employees.form.employmentStatus')} htmlFor="e-status">
           <select id="e-status" value={employmentStatus} onChange={(e) => setEmploymentStatus(e.target.value as EmploymentStatus)}>
-            {Object.entries(EMPLOYMENT_STATUS_LABELS).map(([value, label]) => (
+            {Object.entries(EMPLOYMENT_STATUS_LABELS).map(([value, labelKey]) => (
               <option key={value} value={value}>
-                {label}
+                {t(labelKey)}
               </option>
             ))}
           </select>
         </FormField>
-        <FormField label="Afdeling" htmlFor="e-department">
+        <FormField label={t('employees.form.department')} htmlFor="e-department">
           <LookupSelect
             id="e-department"
             basePath="/api/departments"
             managePermission="departments.manage"
-            singular="afdeling"
+            singular={t('employees.form.departmentSingular')}
             value={departmentId}
             onChange={(v) => {
               setDepartmentId(v)
               touch()
             }}
-            placeholder="— Geen afdeling —"
+            placeholder={t('employees.form.noDepartmentOption')}
           />
         </FormField>
-        <FormField label="Contracttype" htmlFor="e-contract">
+        <FormField label={t('employees.form.contractType')} htmlFor="e-contract">
           <LookupSelect
             id="e-contract"
             basePath="/api/contract-types"
             managePermission="reference_data.manage"
-            singular="contracttype"
+            singular={t('employees.form.contractTypeSingular')}
             value={contractTypeId}
             onChange={(v) => {
               setContractTypeId(v)
               touch()
             }}
-            placeholder="— Geen —"
+            placeholder={t('employees.form.noneOption')}
           />
         </FormField>
-        <FormField label="DIMONA-nummer" htmlFor="e-dimona">
+        <FormField label={t('employees.form.dimonaNumber')} htmlFor="e-dimona">
           <input id="e-dimona" value={dimonaNumber} onChange={(e) => setDimonaNumber(e.target.value)} maxLength={50} />
         </FormField>
         <div className="employee-form-functions form-span-all">
-          <FormField label="Functies" htmlFor="e-function-add" hint="Meerdere functies mogelijk; typ om te zoeken.">
+          <FormField label={t('employees.form.functions')} htmlFor="e-function-add" hint={t('employees.form.functionsHint')}>
             <div className="employee-form-function-chips">
               {selectedFunctions.map((f) => (
                 <Badge key={f.id} tone="info">
@@ -455,14 +465,14 @@ export function EmployeeForm({
                   <button
                     type="button"
                     className="employee-form-chip-remove"
-                    aria-label={`Functie ${f.name} verwijderen`}
+                    aria-label={t('employees.form.removeFunction', { name: f.name })}
                     onClick={() => updateFunctions(jobFunctionIds.filter((id) => id !== f.id))}
                   >
                     ×
                   </button>
                 </Badge>
               ))}
-              {selectedFunctions.length === 0 && <span className="employee-form-no-functions">Nog geen functies gekozen.</span>}
+              {selectedFunctions.length === 0 && <span className="employee-form-no-functions">{t('employees.form.noFunctionsChosen')}</span>}
             </div>
             <SearchableSelect
               id="e-function-add"
@@ -472,7 +482,7 @@ export function EmployeeForm({
               }}
               options={functionOptions}
               isLoading={jobFunctions.isLoading}
-              placeholder="Functie toevoegen…"
+              placeholder={t('employees.form.addFunctionPlaceholder')}
               clearable={false}
             />
           </FormField>
@@ -486,16 +496,17 @@ export function EmployeeForm({
   // is confidential, so the section is entirely permission-gated with a friendly placeholder.
   const hrSection: SectionDef = {
     ...EMPLOYEE_CORE_SECTIONS[2],
+    label: t(EMPLOYEE_CORE_SECTIONS[2].labelKey),
     hasError: sectionHasError('hr'),
     render: () =>
       canSeeConfidential ? (
         <FormSection
-          title="Identiteit & bank"
+          title={t('employees.form.identityBankTitle')}
           columns={3}
-          description="Vertrouwelijke gegevens — alleen zichtbaar voor gebruikers met de juiste rechten."
+          description={t('employees.form.identityBankDescription')}
         >
           <FormField
-            label="Identiteitskaartnummer"
+            label={t('employees.form.identityCardNumber')}
             htmlFor="e-identity-card"
           >
             <input
@@ -506,9 +517,9 @@ export function EmployeeForm({
             />
           </FormField>
           <FormField
-            label="Rijksregisternummer"
+            label={t('employees.form.nationalRegisterNumber')}
             htmlFor="e-nrn"
-            hint="Met of zonder leestekens, bv. 90.05.01-123.26."
+            hint={t('employees.form.nrnHint')}
             error={fieldErrors.nationalRegisterNumber ?? getFieldError(serverFieldErrors, 'nationalRegisterNumber')}
           >
             <input
@@ -517,21 +528,21 @@ export function EmployeeForm({
               onChange={(e) => setNationalRegisterNumber(e.target.value)}
               onBlur={() => {
                 const message = validateNrn(nationalRegisterNumber)
-                setFieldErrors((current) => ({ ...current, nationalRegisterNumber: message ?? undefined }) as Record<string, string>)
+                setFieldErrors((current) => ({ ...current, nationalRegisterNumber: message ? t(message) : undefined }) as Record<string, string>)
                 if (!message) setNationalRegisterNumber((value) => formatNrn(value))
               }}
               aria-invalid={fieldErrors.nationalRegisterNumber ? 'true' : undefined}
               maxLength={15}
             />
           </FormField>
-          <FormField label="IBAN" htmlFor="e-iban" error={fieldErrors.iban ?? getFieldError(serverFieldErrors, 'iban')}>
+          <FormField label={t('employees.form.iban')} htmlFor="e-iban" error={fieldErrors.iban ?? getFieldError(serverFieldErrors, 'iban')}>
             <input
               id="e-iban"
               value={iban}
               onChange={(e) => setIban(e.target.value)}
               onBlur={() => {
                 const message = validateIban(iban)
-                setFieldErrors((current) => ({ ...current, iban: message ?? undefined }) as Record<string, string>)
+                setFieldErrors((current) => ({ ...current, iban: message ? t(message) : undefined }) as Record<string, string>)
                 if (!message) setIban((value) => formatIban(value))
               }}
               aria-invalid={fieldErrors.iban ? 'true' : undefined}
@@ -539,28 +550,29 @@ export function EmployeeForm({
               placeholder="BE68 5390 0754 7034"
             />
           </FormField>
-          <FormField label="BIC" htmlFor="e-bic" error={getFieldError(serverFieldErrors, 'bic')}>
+          <FormField label={t('employees.form.bic')} htmlFor="e-bic" error={getFieldError(serverFieldErrors, 'bic')}>
             <input id="e-bic" value={bic} onChange={(e) => setBic(e.target.value)} maxLength={11} placeholder="KREDBEBB" />
           </FormField>
         </FormSection>
       ) : (
-        <p className="placeholder-text">Je hebt geen rechten om deze gegevens te bekijken.</p>
+        <p className="placeholder-text">{t('employees.form.noConfidentialPermission')}</p>
       ),
   }
 
   const noodcontactenSection: SectionDef = {
     ...EMPLOYEE_CORE_SECTIONS[3],
+    label: t(EMPLOYEE_CORE_SECTIONS[3].labelKey),
     hasError: sectionHasError('noodcontacten'),
     render: () => (
       <FormSection
-        title="Noodcontacten"
+        title={t('employees.form.emergencyTitle')}
         columns={1}
-        description="Eén of meer contactpersonen voor noodgevallen. De laagste prioriteit wordt als eerste gecontacteerd."
+        description={t('employees.form.emergencyDescription')}
       >
         <div className="form-span-all">
           {emergencyRows.map((row, index) => (
             <div key={row.key} className="employee-emergency-row">
-              <FormField label={`Naam ${index + 1}`} htmlFor={`e-ec-name-${row.key}`}>
+              <FormField label={t('employees.form.emergencyName', { index: index + 1 })} htmlFor={`e-ec-name-${row.key}`}>
                 <input
                   id={`e-ec-name-${row.key}`}
                   value={row.name}
@@ -568,7 +580,7 @@ export function EmployeeForm({
                   maxLength={150}
                 />
               </FormField>
-              <FormField label="Relatie" htmlFor={`e-ec-rel-${row.key}`}>
+              <FormField label={t('employees.form.emergencyRelationship')} htmlFor={`e-ec-rel-${row.key}`}>
                 <input
                   id={`e-ec-rel-${row.key}`}
                   value={row.relationship}
@@ -576,7 +588,7 @@ export function EmployeeForm({
                   maxLength={100}
                 />
               </FormField>
-              <FormField label="Telefoon" htmlFor={`e-ec-phone-${row.key}`}>
+              <FormField label={t('employees.form.emergencyPhone')} htmlFor={`e-ec-phone-${row.key}`}>
                 <input
                   id={`e-ec-phone-${row.key}`}
                   value={row.phone}
@@ -584,7 +596,7 @@ export function EmployeeForm({
                   maxLength={30}
                 />
               </FormField>
-              <FormField label="GSM" htmlFor={`e-ec-mobile-${row.key}`}>
+              <FormField label={t('employees.form.emergencyMobile')} htmlFor={`e-ec-mobile-${row.key}`}>
                 <input
                   id={`e-ec-mobile-${row.key}`}
                   value={row.mobilePhone}
@@ -592,7 +604,7 @@ export function EmployeeForm({
                   maxLength={30}
                 />
               </FormField>
-              <FormField label="Prioriteit" htmlFor={`e-ec-prio-${row.key}`}>
+              <FormField label={t('employees.form.emergencyPriority')} htmlFor={`e-ec-prio-${row.key}`}>
                 <input
                   id={`e-ec-prio-${row.key}`}
                   type="number"
@@ -608,12 +620,12 @@ export function EmployeeForm({
                     setEmergencyRows((rows) => removeEmergencyContactRow(rows, row.key))
                     touch()
                   }}
-                  aria-label={`Noodcontact ${index + 1} verwijderen`}
+                  aria-label={t('employees.form.emergencyRemove', { index: index + 1 })}
                 >
-                  Verwijderen
+                  {t('employees.form.remove')}
                 </Button>
               </div>
-              <FormField label="Notities" htmlFor={`e-ec-notes-${row.key}`} className="employee-emergency-notes">
+              <FormField label={t('employees.form.emergencyNotes')} htmlFor={`e-ec-notes-${row.key}`} className="employee-emergency-notes">
                 <input
                   id={`e-ec-notes-${row.key}`}
                   value={row.notes}
@@ -630,7 +642,7 @@ export function EmployeeForm({
               touch()
             }}
           >
-            + Noodcontact toevoegen
+            {t('employees.form.addEmergencyContact')}
           </Button>
         </div>
       </FormSection>
@@ -641,12 +653,13 @@ export function EmployeeForm({
   // own endpoint directly, replacing the legacy single-textarea-over-Employee.Notes section.
   const notitiesSection: SectionDef = {
     ...EMPLOYEE_NOTITIES_SECTION,
+    label: t(EMPLOYEE_NOTITIES_SECTION.labelKey),
     panel: true,
     render: () =>
       mode === 'edit' && initial ? (
         <EmployeeNotesPanel employeeId={initial.id} />
       ) : (
-        <p className="placeholder-text">Notities kun je toevoegen nadat je de medewerker hebt opgeslagen.</p>
+        <p className="placeholder-text">{t('employees.form.notesAfterSave')}</p>
       ),
   }
 
@@ -722,7 +735,7 @@ export function EmployeeForm({
   const actionBar = (position: 'top' | 'bottom') => (
     <FormActions dirty={dirty} position={position}>
       <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
-        Annuleren
+        {t('employees.form.cancel')}
       </Button>
       {mode === 'create' && (
         <Button
@@ -733,7 +746,7 @@ export function EmployeeForm({
             submitIntentRef.current = 'saveAndNew'
           }}
         >
-          Opslaan en nieuwe werknemer
+          {t('employees.form.saveAndNew')}
         </Button>
       )}
       <Button
@@ -743,7 +756,7 @@ export function EmployeeForm({
           submitIntentRef.current = 'save'
         }}
       >
-        {isSubmitting ? 'Opslaan…' : 'Opslaan'}
+        {isSubmitting ? t('employees.form.saving') : t('employees.form.save')}
       </Button>
     </FormActions>
   )
@@ -751,7 +764,7 @@ export function EmployeeForm({
   return (
     <form onSubmit={handleSubmit} className="employee-form" onChange={touch} noValidate>
       <UnsavedChangesGuard when={dirty && !isSubmitting} />
-      <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={FIELD_LABELS} />
+      <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={fieldLabels} />
 
       {/* SectionedForm renders `actions` only at the bottom; mirror its panel check here so the
           top bar also disappears on self-saving panel sections. */}

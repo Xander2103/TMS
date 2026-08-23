@@ -1,12 +1,5 @@
 export type TankCardStatus = 'Active' | 'ExpiringSoon' | 'Expired' | 'Blocked'
 
-export const TANK_CARD_STATUS_LABELS: Record<TankCardStatus, string> = {
-  Active: 'Actief',
-  ExpiringSoon: 'Verloopt binnenkort',
-  Expired: 'Verlopen',
-  Blocked: 'Geblokkeerd',
-}
-
 export const TANK_CARD_STATUSES: TankCardStatus[] = ['Active', 'ExpiringSoon', 'Expired', 'Blocked']
 
 export interface TankCard {

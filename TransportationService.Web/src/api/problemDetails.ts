@@ -53,14 +53,40 @@ export function getFieldError(errors: FieldErrors | undefined, ...paths: string[
 /**
  * Turns any thrown value into a user-facing message + field errors, without depending
  * on the ApiError class (duck-typed to avoid an import cycle with apiClient).
+ * `code` is de stabiele machineleesbare foutcode wanneer de server die meestuurde.
  */
-export function describeApiError(error: unknown, fallback: string): { message: string; fieldErrors: FieldErrors } {
+export function describeApiError(
+  error: unknown,
+  fallback: string,
+): { message: string; fieldErrors: FieldErrors; code?: string } {
   if (error instanceof Error) {
     const fieldErrors =
       'fieldErrors' in error && typeof error.fieldErrors === 'object' && error.fieldErrors !== null
         ? (error.fieldErrors as FieldErrors)
         : {}
-    return { message: error.message || fallback, fieldErrors }
+    const code = 'code' in error && typeof error.code === 'string' ? error.code : undefined
+    return { message: error.message || fallback, fieldErrors, code }
   }
   return { message: fallback, fieldErrors: {} }
+}
+
+/**
+ * i18n-foutresolutie (§24/§78): vertaal op de STABIELE code wanneer daar een vertaling
+ * voor bestaat (`errors.codes.<code>`), anders de servermessage (vandaag Nederlands),
+ * anders de vertaalde fallback. Logica hoort op `code`, nooit op de tekst.
+ */
+export function localizeApiError(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  error: unknown,
+  fallback: string,
+): string {
+  const { message, code } = describeApiError(error, fallback)
+  if (code) {
+    const key = `errors.codes.${code}`
+    const translated = t(key)
+    if (translated !== key) {
+      return translated
+    }
+  }
+  return message
 }

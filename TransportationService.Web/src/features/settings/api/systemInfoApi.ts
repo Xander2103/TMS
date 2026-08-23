@@ -40,7 +40,10 @@ export interface BackupListResult {
   automaticRetentionDays: number
   preRestoreRetentionDays: number
   automaticEnabled: boolean
+  /** LEGACY Nederlandse weergavetekst van de server; UI-logica hoort op storageAvailable. */
   storageStatus: string
+  /** Stabiele storage-healthcheck (i18n-wave): het label komt uit de vertaalbundel. */
+  storageAvailable: boolean
 }
 
 /** Resultaat van POST .../restore: de vooraf gemaakte veiligheidsback-up + advies. */

@@ -20,6 +20,7 @@ import {
   type NotificationCategory,
   type NotificationPreference,
 } from '../api/notificationsApi'
+import { useLocale } from '../../../i18n/localeContext'
 import { formatDateTime } from '../../../utils/dates'
 import './notifications.css'
 
@@ -30,8 +31,9 @@ function formatMoment(value: string): string {
 export function NotificationsPage() {
   const navigate = useNavigate()
   const { showError, showSuccess } = useToast()
+  const { t } = useLocale()
   const [notifications, setNotifications] = useState<Notification[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState(false)
   const [reloadToken, setReloadToken] = useState(0)
   const [categoryFilter, setCategoryFilter] = useState<NotificationCategory | ''>('')
   const [includeArchived, setIncludeArchived] = useState(false)
@@ -49,10 +51,10 @@ export function NotificationsPage() {
       .then((data) => {
         if (!mounted) return
         setNotifications(data)
-        setLoadError(null)
+        setLoadError(false)
       })
       .catch(() => {
-        if (mounted) setLoadError('Meldingen konden niet worden geladen.')
+        if (mounted) setLoadError(true)
       })
     return () => {
       mounted = false
@@ -80,37 +82,37 @@ export function NotificationsPage() {
         // Producer dedupe markers ride as a #fragment; strip before navigating.
         navigate(notification.linkPath.split('#')[0])
       } else {
-        setReloadToken((t) => t + 1)
+        setReloadToken((token) => token + 1)
       }
     } catch {
-      showError('De melding kon niet worden geopend.')
+      showError(t('notificationCenter.errors.openFailed'))
     }
   }
 
   async function archive(notification: Notification) {
     try {
       await archiveNotification(notification.id)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('De melding kon niet worden gearchiveerd.')
+      showError(t('notificationCenter.errors.archiveFailed'))
     }
   }
 
   async function acknowledge(notification: Notification) {
     try {
       await acknowledgeNotification(notification.id)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('De melding kon niet worden bevestigd.')
+      showError(t('notificationCenter.errors.acknowledgeFailed'))
     }
   }
 
   async function markAll() {
     try {
       await markAllNotificationsRead()
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Meldingen konden niet worden gemarkeerd.')
+      showError(t('notificationCenter.errors.markFailed'))
     }
   }
 
@@ -120,9 +122,9 @@ export function NotificationsPage() {
       setPreferences((current) =>
         current?.map((p) => (p.category === preference.category ? { ...p, enabled: !p.enabled } : p)) ?? null,
       )
-      showSuccess('Voorkeur opgeslagen.')
+      showSuccess(t('notificationCenter.toasts.preferenceSaved'))
     } catch {
-      showError('De voorkeur kon niet worden opgeslagen.')
+      showError(t('notificationCenter.errors.preferenceFailed'))
     }
   }
 
@@ -131,13 +133,13 @@ export function NotificationsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Meldingen' }]} />
+      <Breadcrumbs items={[{ label: t('notificationCenter.page.title') }]} />
       <PageHeader
-        title="Meldingen"
+        title={t('notificationCenter.page.title')}
         action={
           hasUnread ? (
             <Button variant="secondary" onClick={() => void markAll()}>
-              Alles gelezen
+              {t('notificationCenter.actions.markAllRead')}
             </Button>
           ) : undefined
         }
@@ -147,29 +149,29 @@ export function NotificationsPage() {
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value as NotificationCategory | '')}
-          aria-label="Categorie"
+          aria-label={t('notificationCenter.page.categoryAria')}
         >
-          <option value="">Alle categorieën</option>
+          <option value="">{t('notificationCenter.page.allCategories')}</option>
           {NOTIFICATION_CATEGORIES.map((category) => (
             <option key={category} value={category}>
-              {NOTIFICATION_CATEGORY_LABELS[category]}
+              {t(NOTIFICATION_CATEGORY_LABELS[category])}
             </option>
           ))}
         </select>
         <label>
           <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />{' '}
-          Archief tonen
+          {t('notificationCenter.page.showArchive')}
         </label>
         <label>
           <input type="checkbox" checked={hideResolved} onChange={(e) => setHideResolved(e.target.checked)} />{' '}
-          Opgeloste verbergen
+          {t('notificationCenter.page.hideResolved')}
         </label>
       </div>
 
-      {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && notifications === null && <p className="placeholder-text">Meldingen laden…</p>}
+      {loadError && <p className="placeholder-text">{t('notificationCenter.errors.loadFailed')}</p>}
+      {!loadError && notifications === null && <p className="placeholder-text">{t('notificationCenter.page.loading')}</p>}
       {!loadError && notifications !== null && visibleNotifications.length === 0 && (
-        <p className="placeholder-text">Geen meldingen.</p>
+        <p className="placeholder-text">{t('notificationCenter.page.empty')}</p>
       )}
 
       {!loadError && notifications !== null && visibleNotifications.length > 0 && (
@@ -188,20 +190,20 @@ export function NotificationsPage() {
                 onClick={() => void open(notification)}
               >
                 <span className="ntf-title">
-                  {!notification.isRead && <span className="ntf-dot" aria-label="Ongelezen" />}
+                  {!notification.isRead && <span className="ntf-dot" aria-label={t('notificationCenter.bell.unreadDot')} />}
                   <span className={`ntf-severity ntf-severity-${notification.severity.toLowerCase()}`} aria-hidden="true">
                     {NOTIFICATION_SEVERITY_ICONS[notification.severity]}
                   </span>
                   {notification.title}
                   <Badge tone={notification.severity === 'Critical' ? 'danger' : 'neutral'}>
-                    {NOTIFICATION_CATEGORY_LABELS[notification.category]}
+                    {t(NOTIFICATION_CATEGORY_LABELS[notification.category])}
                   </Badge>
-                  {notification.resolvedAt !== null && <Badge tone="success">Opgelost</Badge>}
-                  {notification.isArchived && <Badge tone="neutral">gearchiveerd</Badge>}
+                  {notification.resolvedAt !== null && <Badge tone="success">{t('notificationCenter.page.resolved')}</Badge>}
+                  {notification.isArchived && <Badge tone="neutral">{t('notificationCenter.page.archived')}</Badge>}
                 </span>
                 <span className="ntf-message">{notification.message}</span>
                 {notification.requiresAcknowledgement && notification.acknowledgedAt !== null && (
-                  <span className="ntf-ack-info">Bevestigd op {formatMoment(notification.acknowledgedAt)}</span>
+                  <span className="ntf-ack-info">{t('notificationCenter.page.acknowledgedAt', { dateTime: formatMoment(notification.acknowledgedAt) })}</span>
                 )}
                 <span className="ntf-time">{formatMoment(notification.createdAt)}</span>
               </button>
@@ -210,9 +212,9 @@ export function NotificationsPage() {
                   type="button"
                   className="ntf-ack"
                   onClick={() => void acknowledge(notification)}
-                  aria-label={`Melding "${notification.title}" bevestigen`}
+                  aria-label={t('notificationCenter.page.acknowledgeAria', { title: notification.title })}
                 >
-                  Bevestigen
+                  {t('notificationCenter.page.acknowledge')}
                 </button>
               )}
               {!notification.isArchived && (
@@ -220,8 +222,8 @@ export function NotificationsPage() {
                   type="button"
                   className="ntf-archive"
                   onClick={() => void archive(notification)}
-                  aria-label={`Melding "${notification.title}" archiveren`}
-                  title="Archiveren"
+                  aria-label={t('notificationCenter.page.archiveAria', { title: notification.title })}
+                  title={t('notificationCenter.page.archiveTitle')}
                 >
                   🗄
                 </button>
@@ -233,9 +235,9 @@ export function NotificationsPage() {
 
       {preferences && (
         <details className="ntf-preferences">
-          <summary>Voorkeuren per categorie</summary>
+          <summary>{t('notificationCenter.page.preferencesSummary')}</summary>
           <p className="ntf-preferences-hint">
-            Uitgeschakelde categorieën bezorgen geen meldingen meer; kritieke systeemmeldingen komen altijd door.
+            {t('notificationCenter.page.preferencesHint')}
           </p>
           <ul>
             {preferences.map((preference) => (
@@ -246,7 +248,7 @@ export function NotificationsPage() {
                     checked={preference.enabled}
                     onChange={() => void togglePreference(preference)}
                   />{' '}
-                  {NOTIFICATION_CATEGORY_LABELS[preference.category]}
+                  {t(NOTIFICATION_CATEGORY_LABELS[preference.category])}
                 </label>
               </li>
             ))}

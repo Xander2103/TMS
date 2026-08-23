@@ -4,6 +4,11 @@ import {
 } from '../api/employeeDocumentsApi'
 import { saveEmployeeIssuedItem } from '../../issued-items/issuedItemsApi'
 import { ApiError } from '../../../api/apiClient'
+import { translate } from '../../../i18n/translations'
+import type { TranslateFn } from '../../../i18n/localeContext'
+
+/** Fallback translator (Dutch) for callers that don't pass their own `t`. */
+const defaultT: TranslateFn = (key, params) => translate('nl', key, params)
 
 /**
  * Documents and company assets a user prepared while CREATING an employee, held in
@@ -61,6 +66,7 @@ function describe(err: unknown, fallback: string): string {
 export async function uploadPreparedDocuments(
   employeeId: string,
   docs: PreparedEmployeeDocument[],
+  t: TranslateFn = defaultT,
 ): Promise<FollowUpResult[]> {
   const results: FollowUpResult[] = []
   for (const doc of docs) {
@@ -79,7 +85,7 @@ export async function uploadPreparedDocuments(
         kind: 'document',
         label: doc.file.name,
         ok: false,
-        error: describe(err, 'Uploaden is mislukt.'),
+        error: describe(err, t('employees.errors.uploadFailed')),
       })
     }
   }
@@ -94,6 +100,7 @@ export async function uploadPreparedDocuments(
 export async function createPreparedIssuedItems(
   employeeId: string,
   items: PreparedIssuedItem[],
+  t: TranslateFn = defaultT,
 ): Promise<FollowUpResult[]> {
   const results: FollowUpResult[] = []
   for (const item of items) {
@@ -111,14 +118,14 @@ export async function createPreparedIssuedItems(
         returnCondition: null,
         variantId: item.variantId,
       })
-      results.push({ key: item.key, kind: 'issued-item', label: item.name || 'Bedrijfsmiddel', ok: true })
+      results.push({ key: item.key, kind: 'issued-item', label: item.name || t('employees.create.issuedItemFallback'), ok: true })
     } catch (err) {
       results.push({
         key: item.key,
         kind: 'issued-item',
-        label: item.name || 'Bedrijfsmiddel',
+        label: item.name || t('employees.create.issuedItemFallback'),
         ok: false,
-        error: describe(err, 'Aanmaken is mislukt.'),
+        error: describe(err, t('employees.errors.createFailed')),
       })
     }
   }
@@ -133,8 +140,9 @@ export async function runEmployeeCreateFollowUps(
   employeeId: string,
   docs: PreparedEmployeeDocument[],
   items: PreparedIssuedItem[],
+  t: TranslateFn = defaultT,
 ): Promise<FollowUpResult[]> {
-  const docResults = await uploadPreparedDocuments(employeeId, docs)
-  const itemResults = await createPreparedIssuedItems(employeeId, items)
+  const docResults = await uploadPreparedDocuments(employeeId, docs, t)
+  const itemResults = await createPreparedIssuedItems(employeeId, items, t)
   return [...docResults, ...itemResults]
 }

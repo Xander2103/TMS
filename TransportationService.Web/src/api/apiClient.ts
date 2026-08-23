@@ -9,6 +9,12 @@ export class ApiError extends Error {
   readonly body?: unknown
   /** Per-field validation messages (normalised paths), from the ProblemDetails "errors" dictionary. */
   readonly fieldErrors: FieldErrors
+  /**
+   * Stabiele machineleesbare foutcode (i18n-wave): `code`-veld in anonieme bodies of
+   * ProblemDetails-extensions. Frontendlogica en vertaling branchen HIEROP — nooit op
+   * de (Nederlandse) message-tekst.
+   */
+  readonly code?: string
 
   constructor(message: string, status?: number, body?: unknown) {
     super(message)
@@ -16,6 +22,10 @@ export class ApiError extends Error {
     this.status = status
     this.body = body
     this.fieldErrors = extractFieldErrors(body)
+    this.code =
+      typeof body === 'object' && body !== null && 'code' in body && typeof (body as { code: unknown }).code === 'string'
+        ? (body as { code: string }).code
+        : undefined
   }
 }
 

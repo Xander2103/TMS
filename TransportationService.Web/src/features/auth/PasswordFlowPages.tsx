@@ -6,23 +6,16 @@ import { ValidationSummary } from '../../components/ui/ValidationSummary'
 import { useToast } from '../../components/ui/toastContext'
 import { apiClient } from '../../api/apiClient'
 import { describeApiError } from '../../api/problemDetails'
-import { LocaleProvider } from '../../i18n/LocaleProvider'
 import { useLocale } from '../../i18n/localeContext'
 import { useAuth } from './authContextValue'
 import './LoginPage.css'
 
-// These flow pages are public (or pre-preference) and are also used by customer-portal users,
-// so each exported page mounts its own standalone LocaleProvider: language = browser language
-// (nl*/fr*/en*, otherwise Dutch). Persisting a preference is impossible here — the visitor is
-// anonymous. The internal app behind these pages stays Dutch.
+// Deze publieke flowpagina's erven de app-brede root-LocaleProvider (i18n-wave):
+// ts.locale-cache -> browsertaal -> nl; persist is anoniem onmogelijk.
 
 /** Anonymous: request a reset link. The response NEVER reveals whether the account exists. */
 export function ForgotPasswordPage() {
-  return (
-    <LocaleProvider>
-      <ForgotPasswordContent />
-    </LocaleProvider>
-  )
+  return <ForgotPasswordContent />
 }
 
 function ForgotPasswordContent() {
@@ -70,11 +63,7 @@ function ForgotPasswordContent() {
 
 /** Anonymous: complete a reset/activation with the single-use token from the link. */
 export function ResetPasswordPage() {
-  return (
-    <LocaleProvider>
-      <ResetPasswordContent />
-    </LocaleProvider>
-  )
+  return <ResetPasswordContent />
 }
 
 function ResetPasswordContent() {
@@ -136,11 +125,7 @@ function ResetPasswordContent() {
  * PasswordReset kind, so no separate activation endpoint exists (see AuthController.ResetPassword).
  */
 export function ActivatePage() {
-  return (
-    <LocaleProvider>
-      <ActivateContent />
-    </LocaleProvider>
-  )
+  return <ActivateContent />
 }
 
 function ActivateContent() {
@@ -213,11 +198,7 @@ function ActivateContent() {
 
 /** Forced first-login change: reachable only via the RequireAuth redirect while the flag is set. */
 export function ChangePasswordPage() {
-  return (
-    <LocaleProvider>
-      <ChangePasswordContent />
-    </LocaleProvider>
-  )
+  return <ChangePasswordContent />
 }
 
 function ChangePasswordContent() {

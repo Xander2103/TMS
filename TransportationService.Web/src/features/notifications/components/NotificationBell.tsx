@@ -9,6 +9,7 @@ import {
   type Notification,
 } from '../api/notificationsApi'
 import { useUnreadNotifications } from '../notificationsContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { formatRelativeTime } from '../relativeTime'
 import './NotificationBell.css'
 
@@ -20,6 +21,7 @@ const DROPDOWN_TAKE = 8
  */
 export function NotificationBell() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { unreadCount, refresh } = useUnreadNotifications()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<Notification[] | null>(null)
@@ -108,7 +110,7 @@ export function NotificationBell() {
         type="button"
         ref={buttonRef}
         className="ntf-bell-button"
-        aria-label="Meldingen"
+        aria-label={t('notificationCenter.bell.ariaLabel')}
         aria-expanded={open}
         aria-haspopup="true"
         onClick={toggleOpen}
@@ -119,9 +121,9 @@ export function NotificationBell() {
 
       {open && (
         <div className="ntf-bell-dropdown">
-          {loadError && <p className="ntf-bell-empty">Meldingen konden niet worden geladen.</p>}
-          {!loadError && items === null && <p className="ntf-bell-empty">Meldingen laden…</p>}
-          {!loadError && items !== null && items.length === 0 && <p className="ntf-bell-empty">Geen meldingen.</p>}
+          {loadError && <p className="ntf-bell-empty">{t('notificationCenter.errors.loadFailed')}</p>}
+          {!loadError && items === null && <p className="ntf-bell-empty">{t('notificationCenter.bell.loading')}</p>}
+          {!loadError && items !== null && items.length === 0 && <p className="ntf-bell-empty">{t('notificationCenter.bell.empty')}</p>}
           {!loadError && items !== null && items.length > 0 && (
             <ul className="ntf-bell-list">
               {items.map((notification) => (
@@ -135,7 +137,7 @@ export function NotificationBell() {
                     </span>
                     <span className="ntf-bell-item-body">
                       <span className="ntf-bell-item-title">
-                        {!notification.isRead && <span className="ntf-dot" aria-label="Ongelezen" />}
+                        {!notification.isRead && <span className="ntf-dot" aria-label={t('notificationCenter.bell.unreadDot')} />}
                         {notification.title}
                       </span>
                       <span className="ntf-bell-item-time">{formatRelativeTime(notification.createdAt)}</span>
@@ -147,10 +149,10 @@ export function NotificationBell() {
           )}
           <div className="ntf-bell-footer">
             <Link to="/notifications" onClick={() => setOpen(false)}>
-              Alle meldingen
+              {t('notificationCenter.bell.allNotifications')}
             </Link>
             <button type="button" className="ntf-bell-mark-all" onClick={() => void markAll()}>
-              Alles gelezen
+              {t('notificationCenter.actions.markAllRead')}
             </button>
           </div>
         </div>

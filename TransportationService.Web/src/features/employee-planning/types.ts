@@ -1,3 +1,5 @@
+import { translate } from '../../i18n/translations'
+
 export type ShiftType = 'Work' | 'Standby' | 'Training'
 export type ShiftStatus = 'Draft' | 'Planned' | 'Confirmed'
 
@@ -32,6 +34,27 @@ export const SCHEDULE_STATES: ScheduleEntryState[] = [
   'Note',
 ]
 
+/** Vertaalsleutels — renderen als t(SCHEDULE_STATE_KEYS[state]). */
+export const SCHEDULE_STATE_KEYS: Record<ScheduleEntryState, string> = {
+  Draft: 'employeePlanning.state.Draft',
+  Planned: 'employeePlanning.state.Planned',
+  Confirmed: 'employeePlanning.state.Confirmed',
+  Standby: 'employeePlanning.state.Standby',
+  Training: 'employeePlanning.state.Training',
+  LeaveRequested: 'employeePlanning.state.LeaveRequested',
+  LeaveApproved: 'employeePlanning.state.LeaveApproved',
+  LeaveRejected: 'employeePlanning.state.LeaveRejected',
+  Sick: 'employeePlanning.state.Sick',
+  Unavailable: 'employeePlanning.state.Unavailable',
+  Trip: 'employeePlanning.state.Trip',
+  TripCancelled: 'employeePlanning.state.TripCancelled',
+  Note: 'employeePlanning.state.Note',
+}
+
+/**
+ * @deprecated Nederlandse literals zonder productie-consumers; blijft enkel als contract voor
+ * de scheduleMeta-test. Schermen gebruiken SCHEDULE_STATE_KEYS + t().
+ */
 export const SCHEDULE_STATE_LABELS: Record<ScheduleEntryState, string> = {
   Draft: 'Concept',
   Planned: 'Gepland',
@@ -69,25 +92,28 @@ export const SCHEDULE_STATE_ICONS: Record<ScheduleEntryState, string> = {
   Note: '📝',
 }
 
+/** Vertaalsleutels — renderen als t(SHIFT_TYPE_LABELS[type]). */
 export const SHIFT_TYPE_LABELS: Record<ShiftType, string> = {
-  Work: 'Werk',
-  Standby: 'Stand-by',
-  Training: 'Opleiding',
+  Work: 'employeePlanning.shiftType.Work',
+  Standby: 'employeePlanning.shiftType.Standby',
+  Training: 'employeePlanning.shiftType.Training',
 }
 
+/** Vertaalsleutels — renderen als t(SHIFT_STATUS_LABELS[status]). */
 export const SHIFT_STATUS_LABELS: Record<ShiftStatus, string> = {
-  Draft: 'Concept',
-  Planned: 'Gepland',
-  Confirmed: 'Bevestigd',
+  Draft: 'employeePlanning.shiftStatus.Draft',
+  Planned: 'employeePlanning.shiftStatus.Planned',
+  Confirmed: 'employeePlanning.shiftStatus.Confirmed',
 }
 
 export type ScheduleSourceType = 'Shift' | 'Absence' | 'Trip' | 'Note'
 export type ConflictSeverity = 'Information' | 'Warning' | 'Blocking'
 
-export const CONFLICT_SEVERITY_LABELS: Record<ConflictSeverity, string> = {
-  Information: 'Ter info',
-  Warning: 'Waarschuwing',
-  Blocking: 'Blokkerend',
+/** Vertaalsleutels — renderen als t(CONFLICT_SEVERITY_KEYS[severity]). */
+export const CONFLICT_SEVERITY_KEYS: Record<ConflictSeverity, string> = {
+  Information: 'employeePlanning.conflictSeverity.Information',
+  Warning: 'employeePlanning.conflictSeverity.Warning',
+  Blocking: 'employeePlanning.conflictSeverity.Blocking',
 }
 
 export interface ScheduleEntry {
@@ -165,13 +191,21 @@ function timeRangeOf(entry: ScheduleEntry): string | null {
   return `${entry.startTime.slice(0, 5)}–${entry.endTime.slice(0, 5)}`
 }
 
-/** Full accessible description: type, status, times, linked context, conflicts — for title and aria-label. */
-export function chipDescription(entry: ScheduleEntry): string {
+type TranslateLike = (key: string, params?: Record<string, string | number>) => string
+
+/**
+ * Full accessible description: type, status, times, linked context, conflicts — for title and
+ * aria-label. Taalneutraal: geef de actieve `t` uit useLocale() mee.
+ */
+export function describeChip(entry: ScheduleEntry, t: TranslateLike): string {
   const conflict = entry.conflictSeverity
-    ? `Conflict (${CONFLICT_SEVERITY_LABELS[entry.conflictSeverity]}): ${(entry.conflictNotes ?? []).join('; ')}`
+    ? t('employeePlanning.chip.conflict', {
+        severity: t(CONFLICT_SEVERITY_KEYS[entry.conflictSeverity]),
+        notes: (entry.conflictNotes ?? []).join('; '),
+      })
     : null
   return [
-    entry.sourceType === 'Trip' ? `Rit ${entry.label}` : SCHEDULE_STATE_LABELS[entry.state],
+    entry.sourceType === 'Trip' ? t('employeePlanning.chip.trip', { number: entry.label }) : t(SCHEDULE_STATE_KEYS[entry.state]),
     entry.statusLabel,
     timeRangeOf(entry),
     entry.workLocation,
@@ -180,6 +214,14 @@ export function chipDescription(entry: ScheduleEntry): string {
   ]
     .filter((part): part is string => Boolean(part))
     .join(' · ')
+}
+
+/**
+ * @deprecated Nederlandstalige variant zonder productie-consumers; blijft enkel als contract
+ * voor de byte-identiteitstest (scheduleMeta). Geconverteerde code gebruikt describeChip(entry, t).
+ */
+export function chipDescription(entry: ScheduleEntry): string {
+  return describeChip(entry, (key, params) => translate('nl', key, params))
 }
 
 export function formatMinutes(minutes: number): string {
