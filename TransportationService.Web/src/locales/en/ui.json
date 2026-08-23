@@ -1,0 +1,122 @@
+{
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "back": "Back",
+    "busy": "Working...",
+    "add": "Add",
+    "edit": "Edit",
+    "delete": "Delete",
+    "search": "Search"
+  },
+  "table": {
+    "empty": "No data found.",
+    "loading": "Loading..."
+  },
+  "filter": {
+    "searchPlaceholder": "Search...",
+    "searchLabel": "Search",
+    "statusLabel": "Status filter",
+    "allStatuses": "All statuses",
+    "active": "Active",
+    "inactive": "Inactive"
+  },
+  "pagination": {
+    "label": "Pagination",
+    "range": "{start}–{end} of {total}",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page} / {totalPages}"
+  },
+  "select": {
+    "placeholder": "— Select —",
+    "noResults": "No results",
+    "loading": "Loading…",
+    "clear": "Clear selection",
+    "adding": "Adding…"
+  },
+  "sections": {
+    "navLabel": "Form sections",
+    "sectionLabel": "Section",
+    "hasErrors": "contains errors",
+    "hasData": "contains data",
+    "emptyOptional": "empty (optional)",
+    "empty": "empty"
+  },
+  "statusBadges": {
+    "active": "Active",
+    "inactive": "Inactive",
+    "blocked": "Blocked"
+  },
+  "toast": {
+    "region": "Notifications",
+    "close": "Dismiss notification"
+  },
+  "unsaved": {
+    "title": "Unsaved changes",
+    "message": "You have changes that have not been saved yet. Are you sure you want to leave this page?",
+    "leave": "Leave page",
+    "stay": "Keep editing"
+  },
+  "validation": {
+    "saveFailed": "Saving failed"
+  },
+  "modal": {
+    "close": "Close"
+  },
+  "nav": {
+    "mainNavigation": "Main navigation",
+    "noMenuItems": "No menu items for “{query}”.",
+    "filterMenu": "Filter menu",
+    "breadcrumbs": "Breadcrumbs",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "pageLoading": "Loading page...",
+    "shortcuts": "Keyboard shortcuts",
+    "notFoundTitle": "Page not found",
+    "notFoundMessage": "The requested page does not exist."
+  },
+  "shortcutList": {
+    "globalSearch": "Global search / commands",
+    "focusSearch": "Focus search",
+    "showHelp": "Show this help",
+    "planningBoard": "Planning board",
+    "operations": "Operations centre",
+    "dossiers": "Files",
+    "incidents": "Incidents",
+    "profitability": "Profitability",
+    "warehouses": "Warehouses"
+  },
+  "palette": {
+    "globalSearch": "Global search",
+    "placeholder": "Search or type a command… (Esc to close)",
+    "searchTerm": "Search term",
+    "commands": "Commands",
+    "favorites": "Favourites",
+    "recent": "Recently visited",
+    "typeMore": "Type at least 2 characters to search.",
+    "searching": "Searching...",
+    "removeFavorite": "Remove favourite",
+    "addFavorite": "Add to favourites",
+    "groupCreate": "Create",
+    "groupNavigate": "Navigate"
+  },
+  "offline": {
+    "banner": "Offline — scans, stop actions and incident reports are queued and synchronise automatically."
+  },
+  "calendar": {
+    "month": "Month",
+    "week": "Week",
+    "list": "List",
+    "today": "Today",
+    "previousPeriod": "Previous period",
+    "nextPeriod": "Next period",
+    "previous": "‹ previous",
+    "next": "next ›",
+    "view": "View",
+    "more": "+{count} more",
+    "free": "free"
+  }
+}

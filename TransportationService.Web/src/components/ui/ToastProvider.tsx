@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ToastContext, type ToastContextValue, type ToastTone } from './toastContext'
+import { useLocale } from '../../i18n/localeContext'
 import './ToastProvider.css'
 
 interface Toast {
@@ -12,6 +13,7 @@ const AUTO_DISMISS_MS = 4000
 
 /** App-wide toast host. Wrap the application once; consume via {@link useToast}. */
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useLocale()
   const [toasts, setToasts] = useState<Toast[]>([])
   const nextId = useRef(1)
 
@@ -40,11 +42,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="ui-toast-region" role="region" aria-live="polite" aria-label="Meldingen">
+      <div className="ui-toast-region" role="region" aria-live="polite" aria-label={t('ui.toast.region')}>
         {toasts.map((toast) => (
           <div key={toast.id} className={`ui-toast ui-toast-${toast.tone}`} role="status">
             <span>{toast.message}</span>
-            <button type="button" onClick={() => dismiss(toast.id)} aria-label="Melding sluiten">
+            <button type="button" onClick={() => dismiss(toast.id)} aria-label={t('ui.toast.close')}>
               ×
             </button>
           </div>

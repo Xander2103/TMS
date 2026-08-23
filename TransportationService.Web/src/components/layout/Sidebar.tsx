@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '../../features/auth/authContextValue'
+import { useLocale } from '../../i18n/localeContext'
+import { AppLanguageSwitcher } from './AppLanguageSwitcher'
 import { LegalEntitySwitcher } from '../../features/legal-entities/components/LegalEntitySwitcher'
 import { useUnreadNotifications } from '../../features/notifications/notificationsContextValue'
 import { getNavModules } from './nav/navConfig'
@@ -18,6 +20,7 @@ function initials(firstName: string, lastName: string): string {
 
 export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNavigate?: () => void }) {
   const { user, logout, hasAnyPermission } = useAuth()
+  const { t } = useLocale()
   const location = useLocation()
   // Polling van de ongelezen-teller is gecentraliseerd in de NotificationsProvider (AppLayout).
   const { unreadCount } = useUnreadNotifications()
@@ -32,9 +35,9 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
   const visibleModules = useMemo<VisibleModule[]>(
     () =>
       modules
-        .map((m) => filterModule(m, { hasAnyPermission, hasEmployee: !!user?.employeeId, query }))
+        .map((m) => filterModule(m, { hasAnyPermission, hasEmployee: !!user?.employeeId, query, translate: t }))
         .filter((vm): vm is VisibleModule => vm !== null),
-    [modules, hasAnyPermission, user?.employeeId, query],
+    [modules, hasAnyPermission, user?.employeeId, query, t],
   )
 
   const filtering = query.trim().length > 0
@@ -44,7 +47,7 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
       <h1 className="app-title">Transportation Service</h1>
       <LegalEntitySwitcher />
       <NavFilter value={query} onChange={setQuery} />
-      <nav aria-label="Hoofdnavigatie">
+      <nav aria-label={t('ui.nav.mainNavigation')}>
         <ul className="nav-modules">
           {visibleModules.map((vm) => (
             <NavModule
@@ -59,9 +62,11 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
           ))}
         </ul>
         {filtering && visibleModules.length === 0 && (
-          <p className="nav-empty">Geen menu-items voor “{query.trim()}”.</p>
+          <p className="nav-empty">{t('ui.nav.noMenuItems', { query: query.trim() })}</p>
         )}
       </nav>
+
+      <AppLanguageSwitcher />
 
       {user && (
         <div className="sidebar-user">
@@ -80,8 +85,8 @@ export function Sidebar({ open = false, onNavigate }: { open?: boolean; onNaviga
             type="button"
             className="sidebar-logout"
             onClick={() => void logout()}
-            aria-label="Uitloggen"
-            title="Uitloggen"
+            aria-label={t('navigation.logout')}
+            title={t('navigation.logout')}
           >
             ⎋
           </button>

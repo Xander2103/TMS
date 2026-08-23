@@ -72,9 +72,10 @@ describe('LanguageSwitcher / LocaleProvider', () => {
     expect(screen.getByRole('link', { name: 'Commandes' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Français' })).toHaveAttribute('aria-pressed', 'true')
 
-    // ...and the preference is persisted on the portal user.
+    // ...and the preference is persisted on the user via the canonical language
+    // endpoint (i18n-wave: intern + portaal delen PUT /api/me/language).
     await waitFor(() =>
-      expect(putJson).toHaveBeenCalledWith('/api/customer-portal/profile/language', { language: 'fr' }),
+      expect(putJson).toHaveBeenCalledWith('/api/me/language', { language: 'fr' }),
     )
   })
 

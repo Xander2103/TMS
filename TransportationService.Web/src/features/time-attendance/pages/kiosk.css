@@ -1,6 +1,7 @@
 /* Prikklok: fullscreen, touch-first, geen ERP-chrome. */
 
 .kiosk {
+  position: relative;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -12,6 +13,33 @@
   color: var(--text-h);
   text-align: center;
   user-select: none;
+}
+
+.kiosk-langbar {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.kiosk-lang {
+  min-width: 3.2rem;
+  min-height: 2.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.kiosk-lang-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 .kiosk-clock {

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getNavModules, type NavItem } from '../navConfig'
 import { filterModule, type VisibleModule } from '../navState'
+import { translate } from '../../../../i18n/translations'
+
+/** Nav labels zijn vertaalsleutels; de tests asserteren de nl-weergave. */
+const nl = (key: string) => translate('nl', key)
 
 /**
  * Fixture: permission codes of the seeded "dispatcher" role template, copied from
@@ -85,13 +89,13 @@ describe('getNavModules — §14 target tree', () => {
     const vandaag = modules.find((m) => m.id === 'vandaag')!
     expect(vandaag.items!.map((i) => i.to)).toEqual(['/dashboard', '/inbox', '/notifications'])
     expect(vandaag.items!.find((i) => i.to === '/notifications')?.badge).toBe('notifications')
-    const problemen = vandaag.subgroups!.find((s) => s.label === 'Problemen')!
+    const problemen = vandaag.subgroups!.find((s) => nl(s.label) === 'Problemen')!
     expect(problemen.items.map((i) => i.to)).toEqual(['/incidents', '/exceptions'])
   })
 
   it('puts Dossiers first and demotes the order list to "Opdrachten (klassiek)"', () => {
     const dossiers = modules.find((m) => m.id === 'dossiers')!
-    expect(dossiers.items!.map((i) => [i.to, i.label])).toEqual([
+    expect(dossiers.items!.map((i) => [i.to, nl(i.label)])).toEqual([
       ['/dossiers', 'Dossiers'],
       ['/transport-orders', 'Opdrachten (klassiek)'],
       ['/order-imports', 'Excel-import'],
@@ -100,7 +104,7 @@ describe('getNavModules — §14 target tree', () => {
 
   it('renames the planning surfaces: Planbord primary, Ritlijst and Live opvolging secondary', () => {
     const planning = modules.find((m) => m.id === 'planning')!
-    const byRoute = new Map(planning.items!.map((i) => [i.to, i.label]))
+    const byRoute = new Map(planning.items!.map((i) => [i.to, nl(i.label)]))
     expect(planning.items![0].to).toBe('/planning-center')
     expect(byRoute.get('/planning-center')).toBe('Planbord')
     expect(byRoute.get('/planning')).toBe('Ritlijst')
@@ -109,7 +113,7 @@ describe('getNavModules — §14 target tree', () => {
 
   it('renames the warehouse entries and keeps Dockplanning under Magazijn', () => {
     const magazijn = modules.find((m) => m.id === 'magazijn')!
-    const byRoute = new Map(magazijn.items!.map((i) => [i.to, i.label]))
+    const byRoute = new Map(magazijn.items!.map((i) => [i.to, nl(i.label)]))
     expect(byRoute.get('/warehouse')).toBe('Laden & scannen')
     expect(byRoute.get('/warehouses')).toBe('Magazijnen (beheer)')
     expect(byRoute.get('/dock-planning')).toBe('Dockplanning')
@@ -118,7 +122,7 @@ describe('getNavModules — §14 target tree', () => {
   it('moves Locaties and Facturatie (Facturen + Facturatiecontrole + Peppol) under Klanten', () => {
     const klanten = modules.find((m) => m.id === 'klanten')!
     expect(klanten.items!.map((i) => i.to)).toEqual(['/customers', '/locations'])
-    const facturatie = klanten.subgroups!.find((s) => s.label === 'Facturatie')!
+    const facturatie = klanten.subgroups!.find((s) => nl(s.label) === 'Facturatie')!
     expect(facturatie.items.map((i) => i.to)).toEqual(['/invoices', '/invoice-control', '/peppol'])
   })
 
@@ -135,12 +139,12 @@ describe('getNavModules — §14 target tree', () => {
   it('collects every configuration entry under Parameters with the five subgroups', () => {
     const parameters = modules.find((m) => m.id === 'parameters')!
     expect(parameters.items!.map((i) => i.to)).toEqual(['/settings'])
-    expect(parameters.subgroups!.map((s) => s.label)).toEqual([
+    expect(parameters.subgroups!.map((s) => nl(s.label))).toEqual([
       'Prijzen', 'Koppelingen & meldingen', 'Beheer', 'Personeel', 'Stamgegevens',
     ])
-    const prijzen = parameters.subgroups!.find((s) => s.label === 'Prijzen')!
+    const prijzen = parameters.subgroups!.find((s) => nl(s.label) === 'Prijzen')!
     expect(prijzen.items.map((i) => i.to)).toEqual(['/pricing/tables', '/settings/pricing', '/cost-rates'])
-    const stamgegevens = parameters.subgroups!.find((s) => s.label === 'Stamgegevens')!
+    const stamgegevens = parameters.subgroups!.find((s) => nl(s.label) === 'Stamgegevens')!
     const stamRoutes = stamgegevens.items.map((i) => i.to)
     expect(stamRoutes).toContain('/settings/activity-types')
     expect(stamRoutes).toContain('/master-data/eenheden')
@@ -153,7 +157,7 @@ describe('getNavModules — §14 target tree', () => {
     const personeel = modules.find((m) => m.id === 'personeel')!
     expect(personeel.items!.map((i) => i.to)).not.toContain('/settings/hr-reminders')
     const parameters = modules.find((m) => m.id === 'parameters')!
-    const hrConfig = parameters.subgroups!.find((s) => s.label === 'Personeel')!
+    const hrConfig = parameters.subgroups!.find((s) => nl(s.label) === 'Personeel')!
     expect(hrConfig.items.map((i) => i.to)).toEqual([
       '/settings/leave', '/settings/attendance', '/settings/hr-reminders',
       '/settings/issued-item-templates', '/settings/task-templates',
@@ -174,7 +178,7 @@ describe('getNavModules — role-scoped sidebars (§14)', () => {
     expect(coreLeaves.length).toBeLessThanOrEqual(20)
 
     const dossiersModule = visible.find((vm) => vm.module.id === 'dossiers')!
-    const labels = leavesOf(dossiersModule).map((i) => i.label)
+    const labels = leavesOf(dossiersModule).map((i) => nl(i.label))
     expect(labels.indexOf('Dossiers')).toBeGreaterThanOrEqual(0)
     expect(labels.indexOf('Dossiers')).toBeLessThan(labels.indexOf('Opdrachten (klassiek)'))
 
@@ -197,11 +201,11 @@ describe('getNavModules — role-scoped sidebars (§14)', () => {
     // open before the redesign (Bedrijfsmiddelcategorieën via issued_items.view —
     // permission arrays are deliberately untouched). No settings/pricing/admin leak.
     const parameters = visible.find((vm) => vm.module.id === 'parameters')
-    const parameterLeaves = parameters ? leavesOf(parameters).map((i) => i.label) : []
+    const parameterLeaves = parameters ? leavesOf(parameters).map((i) => nl(i.label)) : []
     expect(parameterLeaves).toEqual(['Bedrijfsmiddelcategorieën'])
 
     const magazijn = visible.find((vm) => vm.module.id === 'magazijn')!
-    expect(leavesOf(magazijn).map((i) => i.label)).toEqual([
+    expect(leavesOf(magazijn).map((i) => nl(i.label))).toEqual([
       'Laden & scannen', 'Trace & voorraad', 'Magazijnen (beheer)', 'Dockplanning',
     ])
   })

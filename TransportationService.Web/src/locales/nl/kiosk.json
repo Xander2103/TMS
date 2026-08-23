@@ -1,0 +1,53 @@
+{
+  "setup": {
+    "title": "Prikklok instellen",
+    "hint": "Plak de provisioning-sleutel uit Instellingen → Urenregistratie.",
+    "keyPlaceholder": "Provisioning-sleutel",
+    "keyLabel": "Provisioning-sleutel",
+    "register": "Registreren",
+    "invalidKey": "Sleutel niet herkend. Controleer de provisioning-sleutel.",
+    "deviceRemoved": "Deze prikklok is niet (meer) geregistreerd. Voer een nieuwe sleutel in.",
+    "offline": "Geen verbinding met de server. Probeer opnieuw."
+  },
+  "pin": {
+    "prompt": "Voer uw code in",
+    "digitsEntered": "{count} cijfers ingevoerd",
+    "erase": "Wissen",
+    "confirm": "Bevestigen"
+  },
+  "welcome": {
+    "title": "Welkom, {name}",
+    "workingSince": "Aan het werk sinds {time} · vandaag {duration}",
+    "breakSince": "Pauze sinds {time}",
+    "notClockedIn": "U bent nog niet ingepunt.",
+    "alreadyClockedOut": "U bent al uitgepunt vandaag.",
+    "cancel": "Annuleren"
+  },
+  "actions": {
+    "clockIn": "Inpunten",
+    "clockOut": "Uitpunten",
+    "startBreak": "Pauze starten",
+    "endBreak": "Pauze beëindigen"
+  },
+  "confirm": {
+    "clockedIn": "Ingepunt om {time}",
+    "clockedInDetail": "Fijne werkdag!",
+    "clockedOut": "Uitgepunt om {time}",
+    "clockedOutDetail": "Tot de volgende keer!",
+    "breakStarted": "Pauze gestart om {time}",
+    "breakStartedDetail": "Smakelijk!",
+    "breakEnded": "Pauze beëindigd om {time}",
+    "breakEndedDetail": "Werk ze!"
+  },
+  "errors": {
+    "invalidCode": "Code ongeldig.",
+    "sessionExpired": "De sessie is verlopen. Voer uw code opnieuw in.",
+    "kioskDisabled": "De prikklok is uitgeschakeld.",
+    "notConfigured": "De prikklok is niet geconfigureerd op de server.",
+    "unavailable": "De prikklok is niet beschikbaar.",
+    "offlineIdentify": "Geen verbinding met de server. Inpunten kan momenteel niet veilig geregistreerd worden. Probeer opnieuw.",
+    "offlinePunch": "Geen verbinding met de server. De actie is NIET geregistreerd. Probeer opnieuw.",
+    "generic": "Er ging iets mis. Probeer opnieuw.",
+    "punchRejected": "De actie kon niet worden geregistreerd."
+  }
+}

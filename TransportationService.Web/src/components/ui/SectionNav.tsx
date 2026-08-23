@@ -1,4 +1,10 @@
 import { useRef } from 'react'
+import { useLocale } from '../../i18n/localeContext'
+
+/** Sentence-cases a status string for use as a tooltip ("bevat gegevens" → "Bevat gegevens"). */
+function sentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
 
 export interface SectionNavItem {
   id: string
@@ -25,6 +31,7 @@ interface SectionNavProps {
 
 /** Desktop ARIA tablist for {@link SectionedForm}: scrollable, roving-tabindex, arrow-key nav. */
 export function SectionNav({ items, activeId, onActiveChange, orientation = 'horizontal' }: SectionNavProps) {
+  const { t } = useLocale()
   const refs = useRef<Record<string, HTMLButtonElement | null>>({})
   const vertical = orientation === 'vertical'
 
@@ -47,7 +54,7 @@ export function SectionNav({ items, activeId, onActiveChange, orientation = 'hor
     <div
       className="ui-section-nav"
       role="tablist"
-      aria-label="Formuliersecties"
+      aria-label={t('ui.sections.navLabel')}
       aria-orientation={vertical ? 'vertical' : undefined}
     >
       {items.map((item, index) => {
@@ -70,15 +77,23 @@ export function SectionNav({ items, activeId, onActiveChange, orientation = 'hor
             onKeyDown={(e) => onKeyDown(e, index)}
           >
             <span className="ui-section-tab-label">{item.label}</span>
-            {item.hasError && <span className="ui-section-tab-error" aria-label="bevat fouten">!</span>}
+            {item.hasError && <span className="ui-section-tab-error" aria-label={t('ui.sections.hasErrors')}>!</span>}
             {!item.hasError && item.complete && (
               <span className="ui-section-tab-complete" aria-hidden="true">✓</span>
             )}
             {!item.hasError && !item.complete && item.filled === true && (
-              <span className="ui-section-tab-filled" aria-label="bevat gegevens" title="Bevat gegevens">●</span>
+              <span
+                className="ui-section-tab-filled"
+                aria-label={t('ui.sections.hasData')}
+                title={sentenceCase(t('ui.sections.hasData'))}
+              >●</span>
             )}
             {!item.hasError && !item.complete && item.filled === false && item.optional && (
-              <span className="ui-section-tab-empty" aria-label="leeg (optioneel)" title="Leeg (optioneel)">○</span>
+              <span
+                className="ui-section-tab-empty"
+                aria-label={t('ui.sections.emptyOptional')}
+                title={sentenceCase(t('ui.sections.emptyOptional'))}
+              >○</span>
             )}
           </button>
         )

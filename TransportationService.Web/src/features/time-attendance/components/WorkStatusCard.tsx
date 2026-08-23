@@ -5,6 +5,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { ApiError } from '../../../api/apiClient'
 import { formatDurationMinutes, formatTime } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   clockIn, clockOut, endBreak, getMyAttendanceStatus, startBreak,
 } from '../api/timeAttendanceApi'
@@ -20,6 +21,7 @@ const POLL_INTERVAL_MS = 60_000
  * zichzelf wanneer er geen personeelsdossier aan het account hangt (404).
  */
 export function WorkStatusCard() {
+  const { t } = useLocale()
   const { showError, showSuccess } = useToast()
   const [status, setStatus] = useState<AttendanceStatus | null>(null)
   const [hidden, setHidden] = useState(false)
@@ -69,7 +71,7 @@ export function WorkStatusCard() {
         showSuccess(successMessage)
       } catch (err) {
         // Een 409 (bv. dubbelklik of tweede browser) bevat de echte reden; daarna status verversen.
-        showError(describeApiError(err, 'De actie kon niet worden geregistreerd.').message)
+        showError(describeApiError(err, t('attendance.card.actionFailed')).message)
         try {
           const refreshed = await getMyAttendanceStatus()
           if (mounted.current) {
@@ -83,45 +85,45 @@ export function WorkStatusCard() {
         if (mounted.current) setBusy(false)
       }
     },
-    [showError, showSuccess],
+    [showError, showSuccess, t],
   )
 
   if (hidden || !status) return null
 
   return (
-    <section className="wsc" aria-label="Werkstatus">
+    <section className="wsc" aria-label={t('attendance.card.title')}>
       <div className="wsc-head">
-        <h2 className="wsc-title">Werkstatus</h2>
+        <h2 className="wsc-title">{t('attendance.card.title')}</h2>
         <Badge tone={ATTENDANCE_LIVE_STATUS_TONE[status.status]}>
-          {ATTENDANCE_LIVE_STATUS_LABELS[status.status]}
+          {t(ATTENDANCE_LIVE_STATUS_LABELS[status.status])}
         </Badge>
       </div>
 
       <div className="wsc-body">
         {status.status === 'NotClockedIn' && (
-          <p className="wsc-hint">Je bent nog niet ingepunt.</p>
+          <p className="wsc-hint">{t('attendance.card.notClockedIn')}</p>
         )}
         {status.status === 'ClockedOut' && status.lastClockOutAt && (
-          <p className="wsc-hint">Uitgepunt om {formatTime(status.lastClockOutAt)}. Fijne avond!</p>
+          <p className="wsc-hint">{t('attendance.card.clockedOutAt', { time: formatTime(status.lastClockOutAt) })}</p>
         )}
         {status.status === 'Working' && status.clockInAt && (
           <p className="wsc-hint">
-            Ingepunt om <strong>{formatTime(status.clockInAt)}</strong>
+            {t('attendance.card.clockedInAt', { time: formatTime(status.clockInAt) })}
           </p>
         )}
         {status.status === 'OnBreak' && status.breakStartedAt && (
           <p className="wsc-hint">
-            Pauze sinds <strong>{formatTime(status.breakStartedAt)}</strong>
+            {t('attendance.card.breakSince', { time: formatTime(status.breakStartedAt) })}
           </p>
         )}
 
         <dl className="wsc-stats">
           <div className="wsc-stat">
-            <dt>Vandaag gewerkt</dt>
+            <dt>{t('attendance.card.workedToday')}</dt>
             <dd>{formatDurationMinutes(status.workedMinutesToday)}</dd>
           </div>
           <div className="wsc-stat">
-            <dt>Pauze</dt>
+            <dt>{t('attendance.card.break')}</dt>
             <dd>{formatDurationMinutes(status.breakMinutesToday)}</dd>
           </div>
         </dl>
@@ -133,9 +135,9 @@ export function WorkStatusCard() {
             type="button"
             className="wsc-btn wsc-btn-primary"
             disabled={busy}
-            onClick={() => runAction(clockIn, 'Ingepunt. Fijne werkdag!')}
+            onClick={() => runAction(clockIn, t('attendance.card.toastClockedIn'))}
           >
-            Inpunten
+            {t('attendance.actions.clockIn')}
           </button>
         )}
         {status.canStartBreak && (
@@ -143,9 +145,9 @@ export function WorkStatusCard() {
             type="button"
             className="wsc-btn"
             disabled={busy}
-            onClick={() => runAction(startBreak, 'Pauze gestart.')}
+            onClick={() => runAction(startBreak, t('attendance.card.toastBreakStarted'))}
           >
-            Pauze starten
+            {t('attendance.actions.startBreak')}
           </button>
         )}
         {status.canEndBreak && (
@@ -153,9 +155,9 @@ export function WorkStatusCard() {
             type="button"
             className="wsc-btn wsc-btn-primary"
             disabled={busy}
-            onClick={() => runAction(endBreak, 'Pauze beëindigd.')}
+            onClick={() => runAction(endBreak, t('attendance.card.toastBreakEnded'))}
           >
-            Pauze beëindigen
+            {t('attendance.actions.endBreak')}
           </button>
         )}
         {status.canClockOut && (
@@ -163,15 +165,15 @@ export function WorkStatusCard() {
             type="button"
             className="wsc-btn wsc-btn-out"
             disabled={busy}
-            onClick={() => runAction(clockOut, 'Uitgepunt. Tot morgen!')}
+            onClick={() => runAction(clockOut, t('attendance.card.toastClockedOut'))}
           >
-            Uitpunten
+            {t('attendance.actions.clockOut')}
           </button>
         )}
       </div>
 
       <Link to="/portal/time" className="wsc-link">
-        Mijn uren bekijken →
+        {t('attendance.card.myHoursLink')}
       </Link>
     </section>
   )

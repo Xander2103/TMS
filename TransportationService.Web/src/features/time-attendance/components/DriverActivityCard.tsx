@@ -4,6 +4,7 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { ApiError } from '../../../api/apiClient'
 import { formatDurationMinutes, formatTime } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
 import { clockIn, clockOut, endBreak, getMyDriverDay, startBreak } from '../api/timeAttendanceApi'
 import { ATTENDANCE_LIVE_STATUS_LABELS, ATTENDANCE_LIVE_STATUS_TONE } from '../types'
 import type { DriverDaySummary } from '../types'
@@ -19,6 +20,7 @@ const POLL_INTERVAL_MS = 60_000
  * vult dit blok met echte tachograafdata.
  */
 export function DriverActivityCard() {
+  const { t } = useLocale()
   const { showError, showSuccess } = useToast()
   const [summary, setSummary] = useState<DriverDaySummary | null>(null)
   const [hidden, setHidden] = useState(false)
@@ -74,13 +76,13 @@ export function DriverActivityCard() {
         await action()
         showSuccess(successMessage)
       } catch (err) {
-        showError(describeApiError(err, 'De actie kon niet worden geregistreerd.').message)
+        showError(describeApiError(err, t('attendance.card.actionFailed')).message)
       } finally {
         await refresh()
         if (mounted.current) setBusy(false)
       }
     },
-    [refresh, showError, showSuccess],
+    [refresh, showError, showSuccess, t],
   )
 
   if (hidden || !summary) return null
@@ -88,76 +90,76 @@ export function DriverActivityCard() {
   const { attendance } = summary
 
   return (
-    <section className="dac drv-card" aria-label="Werkdag">
+    <section className="dac drv-card" aria-label={t('attendance.driver.title')}>
       <div className="dac-head">
-        <h2>Werkdag</h2>
+        <h2>{t('attendance.driver.title')}</h2>
         <Badge tone={ATTENDANCE_LIVE_STATUS_TONE[attendance.status]}>
-          {ATTENDANCE_LIVE_STATUS_LABELS[attendance.status]}
+          {t(ATTENDANCE_LIVE_STATUS_LABELS[attendance.status])}
         </Badge>
       </div>
 
       {attendance.clockInAt && (
-        <p className="dac-line">Gestart om <strong>{formatTime(attendance.clockInAt)}</strong></p>
+        <p className="dac-line">{t('attendance.driver.startedAt', { time: formatTime(attendance.clockInAt) })}</p>
       )}
       {attendance.status === 'OnBreak' && attendance.breakStartedAt && (
-        <p className="dac-line">Pauze sinds <strong>{formatTime(attendance.breakStartedAt)}</strong></p>
+        <p className="dac-line">{t('attendance.driver.breakSince', { time: formatTime(attendance.breakStartedAt) })}</p>
       )}
 
       <div className="dac-actions">
         {attendance.canClockIn && (
-          <button type="button" className="dac-btn dac-btn-primary" disabled={busy} onClick={() => runAction(clockIn, 'Ingepunt. Goede rit!')}>
-            Inpunten
+          <button type="button" className="dac-btn dac-btn-primary" disabled={busy} onClick={() => runAction(clockIn, t('attendance.driver.toastClockedIn'))}>
+            {t('attendance.actions.clockIn')}
           </button>
         )}
         {attendance.canStartBreak && (
-          <button type="button" className="dac-btn" disabled={busy} onClick={() => runAction(startBreak, 'Pauze gestart.')}>
-            Pauze starten
+          <button type="button" className="dac-btn" disabled={busy} onClick={() => runAction(startBreak, t('attendance.card.toastBreakStarted'))}>
+            {t('attendance.actions.startBreak')}
           </button>
         )}
         {attendance.canEndBreak && (
-          <button type="button" className="dac-btn dac-btn-primary" disabled={busy} onClick={() => runAction(endBreak, 'Pauze beëindigd.')}>
-            Pauze beëindigen
+          <button type="button" className="dac-btn dac-btn-primary" disabled={busy} onClick={() => runAction(endBreak, t('attendance.card.toastBreakEnded'))}>
+            {t('attendance.actions.endBreak')}
           </button>
         )}
         {attendance.canClockOut && (
-          <button type="button" className="dac-btn dac-btn-out" disabled={busy} onClick={() => runAction(clockOut, 'Uitgepunt.')}>
-            Uitpunten
+          <button type="button" className="dac-btn dac-btn-out" disabled={busy} onClick={() => runAction(clockOut, t('attendance.driver.toastClockedOut'))}>
+            {t('attendance.actions.clockOut')}
           </button>
         )}
       </div>
 
       <dl className="dac-grid">
         <div>
-          <dt>Diensttijd (attendance)</dt>
+          <dt>{t('attendance.driver.dutyTime')}</dt>
           <dd>{formatDurationMinutes(attendance.workedMinutesToday + attendance.breakMinutesToday)}</dd>
         </div>
         <div>
-          <dt>Werk</dt>
+          <dt>{t('attendance.driver.work')}</dt>
           <dd>{formatDurationMinutes(attendance.workedMinutesToday)}</dd>
         </div>
         <div>
-          <dt>Pauze</dt>
+          <dt>{t('attendance.driver.break')}</dt>
           <dd>{formatDurationMinutes(attendance.breakMinutesToday)}</dd>
         </div>
       </dl>
 
       {summary.plannedToday.length > 0 && (
         <p className="dac-line dac-planned">
-          Gepland vandaag:{' '}
-          {summary.plannedToday
-            .map((plan) => `${plan.startTime.slice(0, 5)}–${plan.endTime.slice(0, 5)}`)
-            .join(', ')}
+          {t('attendance.driver.plannedToday', {
+            slots: summary.plannedToday
+              .map((plan) => `${plan.startTime.slice(0, 5)}–${plan.endTime.slice(0, 5)}`)
+              .join(', '),
+          })}
         </p>
       )}
 
       <div className="dac-tacho">
-        <h3>Tachograaf</h3>
+        <h3>{t('attendance.driver.tachograph')}</h3>
         {summary.tachographConnected ? (
-          <p className="dac-line">Rijtijden via tachograaf.</p>
+          <p className="dac-line">{t('attendance.driver.tachographConnected')}</p>
         ) : (
           <p className="dac-tacho-off">
-            Tachograafdata niet gekoppeld — rijtijden, beschikbaarheid en rust verschijnen hier zodra
-            een tachograafbron is aangesloten. Attendance is géén bron voor wettelijke rijtijden.
+            {t('attendance.driver.tachographNotConnected')}
           </p>
         )}
       </div>

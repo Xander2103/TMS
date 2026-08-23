@@ -12,6 +12,8 @@ export interface CurrentUser {
   mustChangePassword: boolean
   /** Set for customer-portal users only; drives post-login routing into /klantportaal. */
   customerId: string | null
+  /** UI-taalvoorkeur (nl/fr/en); null = nog niet gekozen → tenant-default → browser → nl. */
+  preferredLanguage: 'nl' | 'fr' | 'en' | null
 }
 
 export interface AuthTokens {

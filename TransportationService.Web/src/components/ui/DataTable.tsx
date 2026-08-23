@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { LoadingState } from '../feedback/LoadingState'
 import { ErrorState } from '../feedback/ErrorState'
 import { EmptyState } from './EmptyState'
+import { useLocale } from '../../i18n/localeContext'
 import './DataTable.css'
 
 export interface Column<TRow> {
@@ -54,16 +55,17 @@ export function DataTable<TRow>({
   rowKey,
   isLoading = false,
   error = null,
-  emptyMessage = 'Geen gegevens gevonden.',
-  loadingMessage = 'Laden...',
+  emptyMessage,
+  loadingMessage,
   onRowClick,
   rowClassName,
   sort,
   onSortChange,
 }: DataTableProps<TRow>) {
-  if (isLoading) return <LoadingState message={loadingMessage} />
+  const { t } = useLocale()
+  if (isLoading) return <LoadingState message={loadingMessage ?? t('ui.table.loading')} />
   if (error) return <ErrorState message={error} />
-  if (rows.length === 0) return <EmptyState message={emptyMessage} />
+  if (rows.length === 0) return <EmptyState message={emptyMessage ?? t('ui.table.empty')} />
 
   function handleSortClick(sortKey: string) {
     if (!onSortChange) return

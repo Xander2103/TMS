@@ -8,6 +8,8 @@ import {
   RouterProvider,
 } from 'react-router-dom'
 import { AuthProvider } from '../features/auth/AuthContext'
+import { useAuth } from '../features/auth/authContextValue'
+import { LocaleProvider } from '../i18n/LocaleProvider'
 import { LoginPage } from '../features/auth/LoginPage'
 import { RequireAuth } from '../features/auth/RequireAuth'
 import { AppLayout } from '../components/layout/AppLayout'
@@ -151,14 +153,25 @@ const IncidentDetailPage = lazyPage(() => import('../features/incidents/pages/In
 const TasksPage = lazyPage(() => import('../features/tasks/pages/TasksPage'), 'TasksPage')
 const TaskTemplatesPage = lazyPage(() => import('../features/tasks/pages/TaskTemplatesPage'), 'TaskTemplatesPage')
 
+/**
+ * App-brede taalcontext (i18n-wave): de bewaarde gebruikersvoorkeur komt uit /api/auth/me
+ * zodra de sessie geladen is; tot dan dekt de ts.locale-cache de refresh zonder flash.
+ */
+function RootLocaleProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  return <LocaleProvider preferredLanguage={user?.preferredLanguage ?? null}>{children}</LocaleProvider>
+}
+
 /** Root layout route: providers that need to live inside the router render an Outlet. */
 function RootProviders() {
   return (
     <AuthProvider>
-      {/* Boundary for lazily loaded routes outside the app shell (login/password flows). */}
-      <Suspense fallback={<LoadingState message="Laden..." />}>
-        <Outlet />
-      </Suspense>
+      <RootLocaleProvider>
+        {/* Boundary for lazily loaded routes outside the app shell (login/password flows). */}
+        <Suspense fallback={<LoadingState message="Laden..." />}>
+          <Outlet />
+        </Suspense>
+      </RootLocaleProvider>
     </AuthProvider>
   )
 }

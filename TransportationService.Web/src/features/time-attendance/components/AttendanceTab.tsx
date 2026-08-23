@@ -10,6 +10,7 @@ import { useAuth } from '../../auth/authContextValue'
 import {
   formatDate, formatDateLong, formatDateTime, formatDurationMinutes, formatSignedDurationMinutes,
 } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   cancelSession, correctBreak, correctSession, createManualSession, disableAttendanceCredential,
   getAttendanceCredentialStatus, getEmployeeAttendance, setAttendancePin,
@@ -53,6 +54,7 @@ interface CorrectionDraft {
  * intrekken — nooit uitlezen).
  */
 export function AttendanceTab({ employeeId }: { employeeId: string }) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canCorrect = hasPermission('attendance.correct')
@@ -80,7 +82,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
         if (mounted) setHistory(data)
       })
       .catch(() => {
-        if (mounted) setError('De urenregistratie kon niet worden geladen.')
+        if (mounted) setError('attendance.tab.loadFailed')
       })
     return () => {
       mounted = false
@@ -107,7 +109,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
   const submitCorrection = async () => {
     if (!draft) return
     if (!draft.reason.trim()) {
-      showError('Een reden is verplicht bij elke correctie.')
+      showError(t('attendance.tab.reasonRequired'))
       return
     }
 
@@ -147,11 +149,11 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
         }
       }
 
-      showSuccess('Correctie geregistreerd.')
+      showSuccess(t('attendance.tab.correctionSaved'))
       setDraft(null)
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De correctie kon niet worden geregistreerd.').message)
+      showError(describeApiError(err, t('attendance.tab.correctionFailed')).message)
     } finally {
       setDraftBusy(false)
     }
@@ -160,18 +162,18 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
   const submitCancel = async () => {
     if (!cancelTarget) return
     if (!cancelReason.trim()) {
-      showError('Een reden is verplicht bij annuleren.')
+      showError(t('attendance.tab.cancelReasonRequired'))
       return
     }
 
     try {
       await cancelSession(cancelTarget.id, cancelReason.trim(), cancelTarget.version)
-      showSuccess('Registratie geannuleerd.')
+      showSuccess(t('attendance.tab.cancelSaved'))
       setCancelTarget(null)
       setCancelReason('')
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'Annuleren mislukt.').message)
+      showError(describeApiError(err, t('attendance.tab.cancelFailed')).message)
     }
   }
 
@@ -179,7 +181,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
     const clockInAt = fromLocalInput(manual.clockInAt)
     const clockOutAt = fromLocalInput(manual.clockOutAt)
     if (!clockInAt || !clockOutAt || !manual.reason.trim()) {
-      showError('In- en uitpunttijd en een reden zijn verplicht.')
+      showError(t('attendance.tab.manualRequired'))
       return
     }
 
@@ -193,12 +195,12 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
         breaks: breakStart && breakEnd ? [{ startedAt: breakStart, endedAt: breakEnd }] : null,
         reason: manual.reason.trim(),
       })
-      showSuccess('Manuele registratie aangemaakt.')
+      showSuccess(t('attendance.tab.manualSaved'))
       setManualOpen(false)
       setManual({ clockInAt: '', clockOutAt: '', breakStart: '', breakEnd: '', reason: '' })
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De registratie kon niet worden aangemaakt.').message)
+      showError(describeApiError(err, t('attendance.tab.manualFailed')).message)
     }
   }
 
@@ -207,7 +209,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
       {canManagePin && <PinManagement employeeId={employeeId} />}
 
       <div className="ta-tab-toolbar">
-        <div className="ta-period" role="group" aria-label="Periode">
+        <div className="ta-period" role="group" aria-label={t('attendance.myTime.periodLabel')}>
           {[14, 31, 92].map((days) => (
             <button
               key={days}
@@ -215,49 +217,49 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
               className={days === rangeDays ? 'ta-period-btn ta-period-btn-active' : 'ta-period-btn'}
               onClick={() => setRangeDays(days)}
             >
-              {days === 14 ? '2 weken' : days === 31 ? 'Maand' : '3 maanden'}
+              {days === 14 ? t('attendance.tab.range2Weeks') : days === 31 ? t('attendance.tab.rangeMonth') : t('attendance.tab.range3Months')}
             </button>
           ))}
         </div>
         {canCorrect && (
           <Button variant="ghost" onClick={() => setManualOpen(true)}>
-            + Manuele registratie
+            {t('attendance.tab.manualEntry')}
           </Button>
         )}
       </div>
 
-      {error && <p className="placeholder-text">{error}</p>}
-      {!error && !history && <p className="placeholder-text">Laden...</p>}
+      {error && <p className="placeholder-text">{t(error)}</p>}
+      {!error && !history && <p className="placeholder-text">{t('attendance.tab.loading')}</p>}
 
       {history && (
         <>
           <dl className="ta-totals">
             <div className="ta-total">
-              <dt>Netto gewerkt</dt>
+              <dt>{t('attendance.myTime.netWorked')}</dt>
               <dd>{formatDurationMinutes(history.totalNetMinutes)}</dd>
             </div>
             <div className="ta-total">
-              <dt>Pauze</dt>
+              <dt>{t('attendance.myTime.break')}</dt>
               <dd>{formatDurationMinutes(history.totalBreakMinutes)}</dd>
             </div>
             {history.totalPlannedMinutes != null && (
               <div className="ta-total">
-                <dt>Afwijking t.o.v. planning</dt>
+                <dt>{t('attendance.tab.deviationVsPlanning')}</dt>
                 <dd>{formatSignedDurationMinutes(history.totalNetMinutes - history.totalPlannedMinutes)}</dd>
               </div>
             )}
           </dl>
 
-          {history.days.length === 0 && <p className="placeholder-text">Geen registraties in deze periode.</p>}
+          {history.days.length === 0 && <p className="placeholder-text">{t('attendance.myTime.emptyPeriod')}</p>}
 
           {[...history.days].reverse().map((day) => (
             <section key={day.date} className="ta-day">
               <header className="ta-day-head">
                 <h2>{formatDateLong(day.date)}</h2>
                 <div className="ta-day-figures">
-                  <span>Netto <strong>{formatDurationMinutes(day.netMinutes)}</strong></span>
+                  <span>{t('attendance.myTime.net')} <strong>{formatDurationMinutes(day.netMinutes)}</strong></span>
                   {day.plannedMinutes != null && (
-                    <span>Gepland <strong>{formatDurationMinutes(day.plannedMinutes)}</strong></span>
+                    <span>{t('attendance.myTime.planned')} <strong>{formatDurationMinutes(day.plannedMinutes)}</strong></span>
                   )}
                 </div>
               </header>
@@ -267,10 +269,10 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
                   {canCorrect && session.status !== 'Cancelled' && (
                     <div className="ta-session-actions">
                       <Button variant="ghost" onClick={() => openCorrection(session)}>
-                        Corrigeren
+                        {t('attendance.tab.correct')}
                       </Button>
                       <Button variant="ghost" onClick={() => setCancelTarget(session)}>
-                        Annuleren
+                        {t('attendance.tab.cancel')}
                       </Button>
                     </div>
                   )}
@@ -283,21 +285,21 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
 
       {draft && (
         <Modal
-          title={`Registratie corrigeren (${formatDate(draft.session.clockInAt)})`}
+          title={t('attendance.tab.correctionTitle', { date: formatDate(draft.session.clockInAt) })}
           onClose={() => setDraft(null)}
           busy={draftBusy}
           footer={
             <>
               <Button variant="ghost" onClick={() => setDraft(null)} disabled={draftBusy}>
-                Annuleren
+                {t('attendance.tab.cancel')}
               </Button>
               <Button onClick={submitCorrection} disabled={draftBusy}>
-                Correctie opslaan
+                {t('attendance.tab.saveCorrection')}
               </Button>
             </>
           }
         >
-          <FormField label="Ingepunt" htmlFor="corr-in">
+          <FormField label={t('attendance.tab.clockedInField')} htmlFor="corr-in">
             <input
               id="corr-in"
               type="datetime-local"
@@ -305,7 +307,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
               onChange={(event) => setDraft({ ...draft, clockInAt: event.target.value })}
             />
           </FormField>
-          <FormField label="Uitgepunt" htmlFor="corr-out" hint="Leeg laten kan niet; kies het werkelijke uitpuntmoment.">
+          <FormField label={t('attendance.tab.clockedOutField')} htmlFor="corr-out" hint={t('attendance.tab.clockedOutHint')}>
             <input
               id="corr-out"
               type="datetime-local"
@@ -315,7 +317,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
           </FormField>
           {draft.breaks.map((breakDraft, index) => (
             <div key={breakDraft.id} className="ta-break-row">
-              <FormField label={`Pauze ${index + 1} — start`} htmlFor={`corr-bs-${breakDraft.id}`}>
+              <FormField label={t('attendance.tab.breakStartField', { index: index + 1 })} htmlFor={`corr-bs-${breakDraft.id}`}>
                 <input
                   id={`corr-bs-${breakDraft.id}`}
                   type="datetime-local"
@@ -327,7 +329,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
                     })}
                 />
               </FormField>
-              <FormField label={`Pauze ${index + 1} — einde`} htmlFor={`corr-be-${breakDraft.id}`}>
+              <FormField label={t('attendance.tab.breakEndField', { index: index + 1 })} htmlFor={`corr-be-${breakDraft.id}`}>
                 <input
                   id={`corr-be-${breakDraft.id}`}
                   type="datetime-local"
@@ -341,13 +343,13 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
               </FormField>
             </div>
           ))}
-          <FormField label="Reden (verplicht)" htmlFor="corr-reason" required>
+          <FormField label={t('attendance.tab.reasonField')} htmlFor="corr-reason" required>
             <textarea
               id="corr-reason"
               rows={2}
               value={draft.reason}
               onChange={(event) => setDraft({ ...draft, reason: event.target.value })}
-              placeholder="bv. medewerker vergat uit te punten"
+              placeholder={t('attendance.tab.reasonPlaceholderCorrection')}
             />
           </FormField>
         </Modal>
@@ -355,22 +357,21 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
 
       {cancelTarget && (
         <Modal
-          title="Registratie annuleren"
+          title={t('attendance.tab.cancelTitle')}
           onClose={() => setCancelTarget(null)}
           footer={
             <>
               <Button variant="ghost" onClick={() => setCancelTarget(null)}>
-                Sluiten
+                {t('attendance.tab.closeAction')}
               </Button>
-              <Button onClick={submitCancel}>Registratie annuleren</Button>
+              <Button onClick={submitCancel}>{t('attendance.tab.cancelConfirm')}</Button>
             </>
           }
         >
           <p>
-            De registratie van {formatDateTime(cancelTarget.clockInAt)} wordt geannuleerd. Ze blijft
-            traceerbaar in de historiek maar telt niet meer mee in totalen of rapporten.
+            {t('attendance.tab.cancelExplanation', { dateTime: formatDateTime(cancelTarget.clockInAt) })}
           </p>
-          <FormField label="Reden (verplicht)" htmlFor="cancel-reason" required>
+          <FormField label={t('attendance.tab.reasonField')} htmlFor="cancel-reason" required>
             <textarea
               id="cancel-reason"
               rows={2}
@@ -383,18 +384,18 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
 
       {manualOpen && (
         <Modal
-          title="Manuele registratie"
+          title={t('attendance.tab.manualTitle')}
           onClose={() => setManualOpen(false)}
           footer={
             <>
               <Button variant="ghost" onClick={() => setManualOpen(false)}>
-                Annuleren
+                {t('attendance.tab.cancel')}
               </Button>
-              <Button onClick={submitManual}>Registratie aanmaken</Button>
+              <Button onClick={submitManual}>{t('attendance.tab.manualCreate')}</Button>
             </>
           }
         >
-          <FormField label="Ingepunt" htmlFor="man-in" required>
+          <FormField label={t('attendance.tab.clockedInField')} htmlFor="man-in" required>
             <input
               id="man-in"
               type="datetime-local"
@@ -402,7 +403,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
               onChange={(event) => setManual({ ...manual, clockInAt: event.target.value })}
             />
           </FormField>
-          <FormField label="Uitgepunt" htmlFor="man-out" required>
+          <FormField label={t('attendance.tab.clockedOutField')} htmlFor="man-out" required>
             <input
               id="man-out"
               type="datetime-local"
@@ -411,7 +412,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
             />
           </FormField>
           <div className="ta-break-row">
-            <FormField label="Pauze — start (optioneel)" htmlFor="man-bs">
+            <FormField label={t('attendance.tab.manualBreakStart')} htmlFor="man-bs">
               <input
                 id="man-bs"
                 type="datetime-local"
@@ -419,7 +420,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
                 onChange={(event) => setManual({ ...manual, breakStart: event.target.value })}
               />
             </FormField>
-            <FormField label="Pauze — einde" htmlFor="man-be">
+            <FormField label={t('attendance.tab.manualBreakEnd')} htmlFor="man-be">
               <input
                 id="man-be"
                 type="datetime-local"
@@ -428,13 +429,13 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
               />
             </FormField>
           </div>
-          <FormField label="Reden (verplicht)" htmlFor="man-reason" required>
+          <FormField label={t('attendance.tab.reasonField')} htmlFor="man-reason" required>
             <textarea
               id="man-reason"
               rows={2}
               value={manual.reason}
               onChange={(event) => setManual({ ...manual, reason: event.target.value })}
-              placeholder="bv. prikklok was defect"
+              placeholder={t('attendance.tab.reasonPlaceholderManual')}
             />
           </FormField>
         </Modal>
@@ -445,6 +446,7 @@ export function AttendanceTab({ employeeId }: { employeeId: string }) {
 
 /** Prikklokcode-blok: status + genereren/zetten/intrekken; de code is nooit opvraagbaar. */
 function PinManagement({ employeeId }: { employeeId: string }) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [status, setStatus] = useState<AttendanceCredentialStatus | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
@@ -470,80 +472,79 @@ function PinManagement({ employeeId }: { employeeId: string }) {
     try {
       const result = await setAttendancePin(employeeId, pin)
       if (result.outcome !== 'Success') {
-        showError(result.error ?? 'De code kon niet worden ingesteld.')
+        showError(result.error ?? t('attendance.pin.setFailed'))
         return
       }
 
       if (result.generatedPin) {
         setGeneratedPin(result.generatedPin)
       } else {
-        showSuccess('Prikklokcode ingesteld.')
+        showSuccess(t('attendance.pin.setSaved'))
       }
 
       setCustomPin('')
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De code kon niet worden ingesteld.').message)
+      showError(describeApiError(err, t('attendance.pin.setFailed')).message)
     }
   }
 
   const disable = async () => {
     try {
       await disableAttendanceCredential(employeeId)
-      showSuccess('Prikklokcode ingetrokken.')
+      showSuccess(t('attendance.pin.revokeSaved'))
       setConfirmDisable(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'Intrekken mislukt.').message)
+      showError(describeApiError(err, t('attendance.pin.revokeFailed')).message)
     }
   }
 
   return (
-    <section className="ta-pin" aria-label="Prikklokcode">
+    <section className="ta-pin" aria-label={t('attendance.pin.title')}>
       <div className="ta-pin-status">
-        <h3>Prikklokcode</h3>
-        {!status?.hasCredential && <Badge tone="neutral">Geen code</Badge>}
-        {status?.hasCredential && status.isActive && <Badge tone="success">Actief</Badge>}
-        {status?.hasCredential && !status.isActive && <Badge tone="danger">Ingetrokken</Badge>}
+        <h3>{t('attendance.pin.title')}</h3>
+        {!status?.hasCredential && <Badge tone="neutral">{t('attendance.pin.noCode')}</Badge>}
+        {status?.hasCredential && status.isActive && <Badge tone="success">{t('attendance.pin.active')}</Badge>}
+        {status?.hasCredential && !status.isActive && <Badge tone="danger">{t('attendance.pin.revoked')}</Badge>}
         {status?.lockedUntil && new Date(status.lockedUntil) > new Date() && (
-          <Badge tone="warning">Geblokkeerd tot {formatDateTime(status.lockedUntil)}</Badge>
+          <Badge tone="warning">{t('attendance.pin.lockedUntil', { time: formatDateTime(status.lockedUntil) })}</Badge>
         )}
         {status?.lastUsedAt && (
-          <span className="ta-pin-last">Laatst gebruikt: {formatDateTime(status.lastUsedAt)}</span>
+          <span className="ta-pin-last">{t('attendance.pin.lastUsed', { time: formatDateTime(status.lastUsedAt) })}</span>
         )}
       </div>
       <div className="ta-pin-actions">
         <Button variant="ghost" onClick={() => applyPin(null)}>
-          {status?.hasCredential ? 'Nieuwe code genereren' : 'Code genereren'}
+          {status?.hasCredential ? t('attendance.pin.generateNew') : t('attendance.pin.generate')}
         </Button>
         <input
           type="text"
           inputMode="numeric"
           value={customPin}
           onChange={(event) => setCustomPin(event.target.value.replace(/\D/g, ''))}
-          placeholder="Eigen code"
-          aria-label="Eigen code"
+          placeholder={t('attendance.pin.ownCode')}
+          aria-label={t('attendance.pin.ownCode')}
           className="ta-pin-input"
         />
         <Button variant="ghost" onClick={() => applyPin(customPin)} disabled={customPin.length === 0}>
-          Code instellen
+          {t('attendance.pin.setCode')}
         </Button>
         {status?.hasCredential && status.isActive && (
           <Button variant="ghost" onClick={() => setConfirmDisable(true)}>
-            Intrekken
+            {t('attendance.pin.revoke')}
           </Button>
         )}
       </div>
 
       {generatedPin && (
         <Modal
-          title="Nieuwe prikklokcode"
+          title={t('attendance.pin.generatedTitle')}
           onClose={() => setGeneratedPin(null)}
-          footer={<Button onClick={() => setGeneratedPin(null)}>Ik heb de code genoteerd</Button>}
+          footer={<Button onClick={() => setGeneratedPin(null)}>{t('attendance.pin.generatedConfirm')}</Button>}
         >
           <p>
-            Geef deze code éénmalig door aan de medewerker. Ze wordt <strong>niet</strong> opgeslagen
-            in leesbare vorm en kan later alleen opnieuw gegenereerd worden.
+            {t('attendance.pin.generatedExplanation')}
           </p>
           <p className="ta-pin-generated">{generatedPin}</p>
         </Modal>
@@ -551,9 +552,9 @@ function PinManagement({ employeeId }: { employeeId: string }) {
 
       {confirmDisable && (
         <ConfirmDialog
-          title="Prikklokcode intrekken"
-          message="De medewerker kan daarna niet meer punchen aan de prikklok tot er een nieuwe code wordt ingesteld."
-          confirmLabel="Intrekken"
+          title={t('attendance.pin.revokeTitle')}
+          message={t('attendance.pin.revokeExplanation')}
+          confirmLabel={t('attendance.pin.revokeConfirm')}
           destructive
           onConfirm={disable}
           onCancel={() => setConfirmDisable(false)}

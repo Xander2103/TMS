@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { FieldErrors } from '../../api/problemDetails'
+import { useLocale } from '../../i18n/localeContext'
 import './ValidationSummary.css'
 
 interface ValidationSummaryProps {
@@ -28,9 +29,10 @@ export function ValidationSummary({
   message,
   fieldErrors,
   fieldLabels,
-  title = 'Opslaan is niet gelukt',
+  title,
   onSelect,
 }: ValidationSummaryProps) {
+  const { t } = useLocale()
   const entries = Object.entries(fieldErrors ?? {}).flatMap(([path, messages]) =>
     messages.map((text) => ({ path, label: fieldLabels?.[path], text })),
   )
@@ -51,7 +53,7 @@ export function ValidationSummary({
 
   return (
     <div className="ui-validation-summary" role="alert" ref={ref}>
-      <p className="ui-validation-summary-title">{title}</p>
+      <p className="ui-validation-summary-title">{title ?? t('ui.validation.saveFailed')}</p>
       {showMessage && <p className="ui-validation-summary-message">{message}</p>}
       {entries.length > 0 && (
         <ul className="ui-validation-summary-list">

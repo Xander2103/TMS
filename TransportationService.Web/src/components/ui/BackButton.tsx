@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useLocale } from '../../i18n/localeContext'
 import './BackButton.css'
 
 interface BackButtonProps {
@@ -8,10 +9,11 @@ interface BackButtonProps {
 }
 
 /** Clearly visible back action for detail/edit pages, so users never depend on browser back. */
-export function BackButton({ to, label = 'Terug' }: BackButtonProps) {
+export function BackButton({ to, label }: BackButtonProps) {
+  const { t } = useLocale()
   return (
     <Link to={to} className="ui-back-button">
-      <span aria-hidden="true">←</span> {label}
+      <span aria-hidden="true">←</span> {label ?? t('ui.actions.back')}
     </Link>
   )
 }

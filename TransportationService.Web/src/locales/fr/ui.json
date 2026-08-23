@@ -1,0 +1,122 @@
+{
+  "actions": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "close": "Fermer",
+    "back": "Retour",
+    "busy": "En cours...",
+    "add": "Ajouter",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "search": "Rechercher"
+  },
+  "table": {
+    "empty": "Aucune donnée trouvée.",
+    "loading": "Chargement..."
+  },
+  "filter": {
+    "searchPlaceholder": "Rechercher...",
+    "searchLabel": "Rechercher",
+    "statusLabel": "Filtre de statut",
+    "allStatuses": "Tous les statuts",
+    "active": "Actif",
+    "inactive": "Inactif"
+  },
+  "pagination": {
+    "label": "Pagination",
+    "range": "{start}–{end} sur {total}",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "page": "Page {page} / {totalPages}"
+  },
+  "select": {
+    "placeholder": "— Sélectionner —",
+    "noResults": "Aucun résultat",
+    "loading": "Chargement…",
+    "clear": "Effacer la sélection",
+    "adding": "Ajout en cours…"
+  },
+  "sections": {
+    "navLabel": "Sections du formulaire",
+    "sectionLabel": "Section",
+    "hasErrors": "contient des erreurs",
+    "hasData": "contient des données",
+    "emptyOptional": "vide (facultatif)",
+    "empty": "vide"
+  },
+  "statusBadges": {
+    "active": "Actif",
+    "inactive": "Inactif",
+    "blocked": "Bloqué"
+  },
+  "toast": {
+    "region": "Notifications",
+    "close": "Fermer la notification"
+  },
+  "unsaved": {
+    "title": "Modifications non enregistrées",
+    "message": "Vous avez des modifications non enregistrées. Voulez-vous vraiment quitter cette page ?",
+    "leave": "Quitter la page",
+    "stay": "Continuer la modification"
+  },
+  "validation": {
+    "saveFailed": "L'enregistrement a échoué"
+  },
+  "modal": {
+    "close": "Fermer"
+  },
+  "nav": {
+    "mainNavigation": "Navigation principale",
+    "noMenuItems": "Aucun élément de menu pour « {query} ».",
+    "filterMenu": "Filtrer le menu",
+    "breadcrumbs": "Fil d'Ariane",
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu",
+    "pageLoading": "Chargement de la page...",
+    "shortcuts": "Raccourcis clavier",
+    "notFoundTitle": "Page introuvable",
+    "notFoundMessage": "La page demandée n'existe pas."
+  },
+  "shortcutList": {
+    "globalSearch": "Recherche globale / commandes",
+    "focusSearch": "Activer la recherche",
+    "showHelp": "Afficher cette aide",
+    "planningBoard": "Tableau de planification",
+    "operations": "Centre opérationnel",
+    "dossiers": "Dossiers",
+    "incidents": "Incidents",
+    "profitability": "Rentabilité",
+    "warehouses": "Entrepôts"
+  },
+  "palette": {
+    "globalSearch": "Recherche globale",
+    "placeholder": "Recherchez ou tapez une commande… (Échap pour fermer)",
+    "searchTerm": "Terme de recherche",
+    "commands": "Commandes",
+    "favorites": "Favoris",
+    "recent": "Consultés récemment",
+    "typeMore": "Tapez au moins 2 caractères pour rechercher.",
+    "searching": "Recherche...",
+    "removeFavorite": "Retirer des favoris",
+    "addFavorite": "Ajouter aux favoris",
+    "groupCreate": "Créer",
+    "groupNavigate": "Naviguer"
+  },
+  "offline": {
+    "banner": "Hors ligne — les scans, actions d'arrêt et déclarations d'incident sont mis en file d'attente et se synchronisent automatiquement."
+  },
+  "calendar": {
+    "month": "Mois",
+    "week": "Semaine",
+    "list": "Liste",
+    "today": "Aujourd'hui",
+    "previousPeriod": "Période précédente",
+    "nextPeriod": "Période suivante",
+    "previous": "‹ précédent",
+    "next": "suivant ›",
+    "view": "Affichage",
+    "more": "+{count} de plus",
+    "free": "libre"
+  }
+}

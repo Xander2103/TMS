@@ -1,3 +1,4 @@
+import { useLocale } from '../../i18n/localeContext'
 import type { SectionNavItem } from './SectionNav'
 
 interface SectionSelectProps {
@@ -8,11 +9,12 @@ interface SectionSelectProps {
 
 /** Mobile section switcher for {@link SectionedForm}: a native `<select>` mirroring the tablist. */
 export function SectionSelect({ items, activeId, onActiveChange }: SectionSelectProps) {
+  const { t } = useLocale()
   return (
     <label className="ui-section-select">
-      <span className="ui-section-select-label">Sectie</span>
+      <span className="ui-section-select-label">{t('ui.sections.sectionLabel')}</span>
       <select
-        aria-label="Sectie"
+        aria-label={t('ui.sections.sectionLabel')}
         value={activeId}
         onChange={(e) => onActiveChange(e.target.value)}
       >

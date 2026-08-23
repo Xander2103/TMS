@@ -1,4 +1,5 @@
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { useLocale } from '../../i18n/localeContext'
 import './OfflineBanner.css'
 
 interface OfflineBannerProps {
@@ -12,6 +13,7 @@ interface OfflineBannerProps {
  * queued work remains, so unsynced actions are never invisible.
  */
 export function OfflineBanner({ unsyncedCount = 0 }: OfflineBannerProps) {
+  const { t } = useLocale()
   const online = useOnlineStatus()
   if (online && unsyncedCount === 0) return null
 
@@ -22,7 +24,7 @@ export function OfflineBanner({ unsyncedCount = 0 }: OfflineBannerProps) {
         ? `${unsyncedCount} actie(s) wachten op synchronisatie…`
         : unsyncedCount > 0
           ? `Offline — ${unsyncedCount} actie(s) in de wachtrij; ze synchroniseren automatisch zodra de verbinding terugkeert.`
-          : 'Offline — scans, stopacties en incidentmeldingen komen in de wachtrij en synchroniseren automatisch.'}
+          : t('ui.offline.banner')}
     </div>
   )
 }

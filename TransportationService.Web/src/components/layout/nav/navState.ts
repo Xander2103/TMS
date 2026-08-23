@@ -45,32 +45,42 @@ function keepItem(
   item: NavItem,
   hasAnyPermission: (codes: string[]) => boolean,
   q: string,
+  translate: (key: string) => string,
 ): NavItem | null {
   if (item.permissions && !hasAnyPermission(item.permissions)) return null
   const children = (item.children ?? [])
-    .map((c) => keepItem(c, hasAnyPermission, q))
+    .map((c) => keepItem(c, hasAnyPermission, q, translate))
     .filter((c): c is NavItem => c !== null)
-  const selfMatches = q.length === 0 || item.label.toLowerCase().includes(q)
+  // Labels zijn vertaalsleutels: het menufilter matcht op de GETOONDE tekst in de
+  // actieve taal (i18n-wave §47) — een Franse gebruiker zoekt op "Clients".
+  const selfMatches = q.length === 0 || translate(item.label).toLowerCase().includes(q)
   if (!selfMatches && children.length === 0) return null
   return item.children ? { ...item, children } : item
 }
 
 export function filterModule(
   module: NavModule,
-  opts: { hasAnyPermission: (codes: string[]) => boolean; hasEmployee: boolean; query: string },
+  opts: {
+    hasAnyPermission: (codes: string[]) => boolean
+    hasEmployee: boolean
+    query: string
+    /** Vertaalfunctie voor label-sleutels; default identiteit (sleutel zelf) voor tests. */
+    translate?: (key: string) => string
+  },
 ): VisibleModule | null {
   if (module.requiresEmployee && !opts.hasEmployee) return null
   const q = normalise(opts.query)
+  const translate = opts.translate ?? ((key: string) => key)
 
   const items = (module.items ?? [])
-    .map((i) => keepItem(i, opts.hasAnyPermission, q))
+    .map((i) => keepItem(i, opts.hasAnyPermission, q, translate))
     .filter((i): i is NavItem => i !== null)
 
   const subgroups = (module.subgroups ?? [])
     .map((sg) => ({
       label: sg.label,
       items: sg.items
-        .map((i) => keepItem(i, opts.hasAnyPermission, q))
+        .map((i) => keepItem(i, opts.hasAnyPermission, q, translate))
         .filter((i): i is NavItem => i !== null),
     }))
     .filter((sg) => sg.items.length > 0)

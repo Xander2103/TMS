@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useLocale } from '../../i18n/localeContext'
 import { DAY_NAMES, addDays, cellAriaLabel, dayIndexMonday, mondayOf, toIsoDate } from './dateUtils'
 import type { CalendarCellContext } from './MonthGrid'
 import './calendar.css'
@@ -30,9 +31,10 @@ export function WeekGrid<T>({
   entriesByDate,
   renderEntry,
   onSelectDate,
-  emptyLabel = 'vrij',
+  emptyLabel,
   today = new Date(),
 }: WeekGridProps<T>) {
+  const { t } = useLocale()
   const monday = mondayOf(anchor)
   const todayIso = toIsoDate(today)
   const days = Array.from({ length: 7 }, (_, index) => addDays(monday, index))
@@ -57,7 +59,7 @@ export function WeekGrid<T>({
               </div>
             )}
             <div className="cal-week-entries">
-              {entries.length === 0 && <span className="cal-week-free">{emptyLabel}</span>}
+              {entries.length === 0 && <span className="cal-week-free">{emptyLabel ?? t('ui.calendar.free')}</span>}
               {entries.map((entry, index) => (
                 <span className="cal-week-entry" key={index}>
                   {renderEntry(entry, { date: iso })}

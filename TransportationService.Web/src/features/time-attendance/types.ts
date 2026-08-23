@@ -18,11 +18,12 @@ export interface AttendanceStatus {
   canEndBreak: boolean
 }
 
+/** Vertaalsleutels — renderen als t(ATTENDANCE_LIVE_STATUS_LABELS[status]). */
 export const ATTENDANCE_LIVE_STATUS_LABELS: Record<AttendanceLiveStatus, string> = {
-  NotClockedIn: 'Niet ingepunt',
-  Working: 'Aan het werk',
-  OnBreak: 'Pauze',
-  ClockedOut: 'Uitgepunt',
+  NotClockedIn: 'attendance.status.NotClockedIn',
+  Working: 'attendance.status.Working',
+  OnBreak: 'attendance.status.OnBreak',
+  ClockedOut: 'attendance.status.ClockedOut',
 }
 
 export const ATTENDANCE_LIVE_STATUS_TONE: Record<AttendanceLiveStatus, BadgeTone> = {
@@ -38,13 +39,14 @@ export type AttendanceSessionStatus = 'Working' | 'OnBreak' | 'Completed' | 'Aut
 
 export type AttendanceSource = 'Web' | 'Kiosk' | 'Mobile' | 'Api' | 'Import' | 'Manual'
 
+/** Vertaalsleutels — renderen als t(ATTENDANCE_SOURCE_LABELS[source]). */
 export const ATTENDANCE_SOURCE_LABELS: Record<AttendanceSource, string> = {
-  Web: 'Dashboard',
-  Kiosk: 'Prikklok',
-  Mobile: 'Mobiel',
-  Api: 'Systeem',
-  Import: 'Import',
-  Manual: 'Manueel (HR)',
+  Web: 'attendance.source.Web',
+  Kiosk: 'attendance.source.Kiosk',
+  Mobile: 'attendance.source.Mobile',
+  Api: 'attendance.source.Api',
+  Import: 'attendance.source.Import',
+  Manual: 'attendance.source.Manual',
 }
 
 export type AttendanceCorrectionKind =
@@ -111,13 +113,14 @@ export interface AttendanceHistory {
 export type AttendanceOverviewStatus =
   | 'NotClockedIn' | 'Working' | 'OnBreak' | 'ClockedOut' | 'ForgottenClockOut' | 'Absent'
 
+/** Vertaalsleutels — renderen als t(ATTENDANCE_OVERVIEW_STATUS_LABELS[status]). */
 export const ATTENDANCE_OVERVIEW_STATUS_LABELS: Record<AttendanceOverviewStatus, string> = {
-  NotClockedIn: 'Niet ingepunt',
-  Working: 'Aan het werk',
-  OnBreak: 'Pauze',
-  ClockedOut: 'Uitgepunt',
-  ForgottenClockOut: 'Vergeten uit te punten?',
-  Absent: 'Afwezig',
+  NotClockedIn: 'attendance.overviewStatus.NotClockedIn',
+  Working: 'attendance.overviewStatus.Working',
+  OnBreak: 'attendance.overviewStatus.OnBreak',
+  ClockedOut: 'attendance.overviewStatus.ClockedOut',
+  ForgottenClockOut: 'attendance.overviewStatus.ForgottenClockOut',
+  Absent: 'attendance.overviewStatus.Absent',
 }
 
 export const ATTENDANCE_OVERVIEW_STATUS_TONE: Record<AttendanceOverviewStatus, BadgeTone> = {
@@ -231,6 +234,7 @@ export interface KioskDevice {
   lastSeenAt: string | null
   lastPunchAt: string | null
   createdAt: string
+  defaultLanguage: 'nl' | 'fr' | 'en'
 }
 
 export interface KioskProvisionResult {
@@ -266,6 +270,8 @@ export interface KioskPing {
   deviceName: string | null
   locationName: string | null
   error: string | null
+  /** Standaardtaal van het device — het beginscherm rendert hierin. */
+  defaultLanguage: 'nl' | 'fr' | 'en'
 }
 
 export interface KioskIdentifyResult {
@@ -274,6 +280,8 @@ export interface KioskIdentifyResult {
   status: AttendanceStatus | null
   interactionToken: string | null
   error: string | null
+  /** Persoonlijke taal van de medewerker — alleen aanwezig ná geldige identificatie. */
+  preferredLanguage: 'nl' | 'fr' | 'en' | null
 }
 
 export interface KioskPunchResult {

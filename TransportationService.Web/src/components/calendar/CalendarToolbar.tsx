@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useLocale } from '../../i18n/localeContext'
 import { MONTH_NAMES, addDays, mondayOf, startOfMonth } from './dateUtils'
 import './calendar.css'
 
@@ -8,12 +9,6 @@ export interface CalendarToolbarView {
   id: CalendarViewMode
   label: string
 }
-
-const DEFAULT_VIEWS: CalendarToolbarView[] = [
-  { id: 'month', label: 'Maand' },
-  { id: 'week', label: 'Week' },
-  { id: 'list', label: 'Lijst' },
-]
 
 export interface CalendarToolbarProps {
   anchor: Date
@@ -64,10 +59,16 @@ export function CalendarToolbar({
   view,
   onViewChange,
   onNavigate,
-  views = DEFAULT_VIEWS,
+  views,
   listStepDays = 14,
   actions,
 }: CalendarToolbarProps) {
+  const { t } = useLocale()
+  const resolvedViews: CalendarToolbarView[] = views ?? [
+    { id: 'month', label: t('ui.calendar.month') },
+    { id: 'week', label: t('ui.calendar.week') },
+    { id: 'list', label: t('ui.calendar.list') },
+  ]
   return (
     <div className="cal-toolbar">
       <div className="cal-toolbar-nav-group">
@@ -75,25 +76,25 @@ export function CalendarToolbar({
           type="button"
           className="cal-toolbar-nav"
           onClick={() => onNavigate(nextAnchor(view, anchor, -1, listStepDays))}
-          aria-label="Vorige periode"
+          aria-label={t('ui.calendar.previousPeriod')}
         >
-          ‹ vorige
+          {t('ui.calendar.previous')}
         </button>
         <button type="button" className="cal-toolbar-today" onClick={() => onNavigate(todayAnchor(view))}>
-          Vandaag
+          {t('ui.calendar.today')}
         </button>
         <button
           type="button"
           className="cal-toolbar-nav"
           onClick={() => onNavigate(nextAnchor(view, anchor, 1, listStepDays))}
-          aria-label="Volgende periode"
+          aria-label={t('ui.calendar.nextPeriod')}
         >
-          volgende ›
+          {t('ui.calendar.next')}
         </button>
       </div>
       <span className="cal-toolbar-label">{periodLabelFor(view, anchor, listStepDays)}</span>
-      <span className="cal-view-switch" role="group" aria-label="Weergave">
-        {views.map((mode) => (
+      <span className="cal-view-switch" role="group" aria-label={t('ui.calendar.view')}>
+        {resolvedViews.map((mode) => (
           <button
             key={mode.id}
             type="button"

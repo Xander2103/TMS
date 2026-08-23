@@ -130,6 +130,7 @@ export interface SaveKioskDeviceRequest {
   name: string
   locationId: string | null
   isActive: boolean
+  defaultLanguage: 'nl' | 'fr' | 'en'
 }
 
 export function createKioskDevice(request: SaveKioskDeviceRequest): Promise<KioskProvisionResult> {

@@ -10,6 +10,8 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
 import { formatDateTime } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
+import { LANGUAGE_NAMES } from '../../../i18n/languageNames'
 import { getLocationOptions } from '../../locations/api/locationsApi'
 import type { LocationOption } from '../../locations/types'
 import {
@@ -25,6 +27,7 @@ import './time-attendance.css'
  * onherleidbaar — dat is bewust.
  */
 export function AttendanceSettingsPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManageSettings = hasPermission('attendance.manage_settings')
@@ -37,7 +40,9 @@ export function AttendanceSettingsPage() {
   const [savingSettings, setSavingSettings] = useState(false)
 
   const [createOpen, setCreateOpen] = useState(false)
-  const [newDevice, setNewDevice] = useState({ name: '', locationId: '' })
+  const [newDevice, setNewDevice] = useState<{ name: string; locationId: string; defaultLanguage: 'nl' | 'fr' | 'en' }>({
+    name: '', locationId: '', defaultLanguage: 'nl',
+  })
   const [provisionedKey, setProvisionedKey] = useState<string | null>(null)
 
   useEffect(() => {
@@ -47,7 +52,7 @@ export function AttendanceSettingsPage() {
         .then((data) => {
           if (mounted) setSettings(data)
         })
-        .catch((err) => showError(describeApiError(err, 'De instellingen konden niet worden geladen.').message))
+        .catch((err) => showError(describeApiError(err, t('attendance.settings.loadFailed')).message))
     }
 
     if (canManageKiosks) {
@@ -55,7 +60,7 @@ export function AttendanceSettingsPage() {
         .then((data) => {
           if (mounted) setDevices(data)
         })
-        .catch((err) => showError(describeApiError(err, 'De prikklokken konden niet worden geladen.').message))
+        .catch((err) => showError(describeApiError(err, t('attendance.devices.loadFailed')).message))
       getLocationOptions()
         .then((data) => {
           if (mounted) setLocations(data)
@@ -78,9 +83,9 @@ export function AttendanceSettingsPage() {
       const { kioskConfigured: _ignored, ...payload } = settings
       const updated = await updateAttendanceSettings(payload)
       setSettings(updated)
-      showSuccess('Instellingen opgeslagen.')
+      showSuccess(t('attendance.settings.saved'))
     } catch (err) {
-      showError(describeApiError(err, 'Opslaan mislukt.').message)
+      showError(describeApiError(err, t('attendance.settings.saveFailed')).message)
     } finally {
       setSavingSettings(false)
     }
@@ -88,7 +93,7 @@ export function AttendanceSettingsPage() {
 
   const createDevice = async () => {
     if (!newDevice.name.trim()) {
-      showError('Een naam is verplicht.')
+      showError(t('attendance.devices.nameRequired'))
       return
     }
 
@@ -97,13 +102,14 @@ export function AttendanceSettingsPage() {
         name: newDevice.name.trim(),
         locationId: newDevice.locationId || null,
         isActive: true,
+        defaultLanguage: newDevice.defaultLanguage,
       })
       setCreateOpen(false)
-      setNewDevice({ name: '', locationId: '' })
+      setNewDevice({ name: '', locationId: '', defaultLanguage: 'nl' })
       setProvisionedKey(result.deviceKey)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De prikklok kon niet worden aangemaakt.').message)
+      showError(describeApiError(err, t('attendance.devices.createFailed')).message)
     }
   }
 
@@ -113,11 +119,12 @@ export function AttendanceSettingsPage() {
         name: device.name,
         locationId: device.locationId,
         isActive: !device.isActive,
+        defaultLanguage: device.defaultLanguage,
       })
-      showSuccess(device.isActive ? 'Prikklok uitgeschakeld.' : 'Prikklok ingeschakeld.')
-      setReloadToken((t) => t + 1)
+      showSuccess(device.isActive ? t('attendance.devices.toggleDisabled') : t('attendance.devices.toggleEnabled'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De wijziging is niet gelukt.').message)
+      showError(describeApiError(err, t('attendance.devices.toggleFailed')).message)
     }
   }
 
@@ -125,30 +132,38 @@ export function AttendanceSettingsPage() {
     try {
       const result = await rotateKioskSecret(device.id)
       setProvisionedKey(result.deviceKey)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De sleutel kon niet vernieuwd worden.').message)
+      showError(describeApiError(err, t('attendance.devices.rotateFailed')).message)
     }
   }
 
   const deviceColumns: Column<KioskDevice>[] = [
-    { key: 'name', header: 'Naam', render: (row) => row.name },
-    { key: 'location', header: 'Locatie', width: '180px', render: (row) => row.locationName ?? '—' },
+    { key: 'name', header: t('attendance.devices.columnName'), render: (row) => row.name },
+    { key: 'location', header: t('attendance.devices.columnLocation'), width: '180px', render: (row) => row.locationName ?? '—' },
+    {
+      key: 'language',
+      header: t('attendance.devices.columnLanguage'),
+      width: '120px',
+      render: (row) => LANGUAGE_NAMES[row.defaultLanguage],
+    },
     {
       key: 'status',
-      header: 'Status',
+      header: t('attendance.devices.columnStatus'),
       width: '110px',
-      render: (row) => (row.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="danger">Uit</Badge>),
+      render: (row) => (row.isActive
+        ? <Badge tone="success">{t('attendance.devices.active')}</Badge>
+        : <Badge tone="danger">{t('attendance.devices.inactive')}</Badge>),
     },
     {
       key: 'lastSeen',
-      header: 'Laatste activiteit',
+      header: t('attendance.devices.columnLastSeen'),
       width: '170px',
       render: (row) => (row.lastSeenAt ? formatDateTime(row.lastSeenAt) : '—'),
     },
     {
       key: 'lastPunch',
-      header: 'Laatste punch',
+      header: t('attendance.devices.columnLastPunch'),
       width: '170px',
       render: (row) => (row.lastPunchAt ? formatDateTime(row.lastPunchAt) : '—'),
     },
@@ -159,10 +174,10 @@ export function AttendanceSettingsPage() {
       render: (row) => (
         <span className="ta-device-actions">
           <Button variant="ghost" onClick={() => rotateDevice(row)}>
-            Sleutel vernieuwen
+            {t('attendance.devices.rotate')}
           </Button>
           <Button variant="ghost" onClick={() => toggleDevice(row)}>
-            {row.isActive ? 'Uitschakelen' : 'Inschakelen'}
+            {row.isActive ? t('attendance.devices.disable') : t('attendance.devices.enable')}
           </Button>
         </span>
       ),
@@ -171,19 +186,18 @@ export function AttendanceSettingsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Urenregistratie' }]} />
-      <PageHeader title="Urenregistratie" subtitle="Punchregels, waarschuwingen en prikklokken." />
+      <Breadcrumbs items={[{ label: t('navigation.menu.settings'), to: '/settings' }, { label: t('attendance.settings.title') }]} />
+      <PageHeader title={t('attendance.settings.title')} subtitle={t('attendance.settings.subtitle')} />
 
       {canManageSettings && settings && (
-        <section aria-label="Instellingen" className="ta-settings">
+        <section aria-label={t('attendance.settings.sectionLabel')} className="ta-settings">
           {!settings.kioskConfigured && (
             <p className="ta-settings-warning">
-              De prikklok is nog niet geconfigureerd op de server (Attendance:PinPepper ontbreekt).
-              PIN-codes en kiosk-punches zijn tot dan uitgeschakeld.
+              {t('attendance.settings.pepperMissing')}
             </p>
           )}
           <div className="ta-settings-grid">
-            <FormField label="Zelf in-/uitpunten via dashboard" htmlFor="set-self">
+            <FormField label={t('attendance.settings.selfPunch')} htmlFor="set-self">
               <input
                 id="set-self"
                 type="checkbox"
@@ -191,7 +205,7 @@ export function AttendanceSettingsPage() {
                 onChange={(event) => setSettings({ ...settings, selfPunchEnabled: event.target.checked })}
               />
             </FormField>
-            <FormField label="Prikklok (kiosk) actief" htmlFor="set-kiosk">
+            <FormField label={t('attendance.settings.kioskActive')} htmlFor="set-kiosk">
               <input
                 id="set-kiosk"
                 type="checkbox"
@@ -199,7 +213,7 @@ export function AttendanceSettingsPage() {
                 onChange={(event) => setSettings({ ...settings, kioskEnabled: event.target.checked })}
               />
             </FormField>
-            <FormField label="PIN-lengte (4–8)" htmlFor="set-pin">
+            <FormField label={t('attendance.settings.pinLength')} htmlFor="set-pin">
               <input
                 id="set-pin"
                 type="number"
@@ -210,9 +224,9 @@ export function AttendanceSettingsPage() {
               />
             </FormField>
             <FormField
-              label="Waarschuwing vergeten uitpunten (uren)"
+              label={t('attendance.settings.forgottenAfter')}
               htmlFor="set-forgotten"
-              hint="Actieve sessies langer dan deze grens krijgen een melding."
+              hint={t('attendance.settings.forgottenAfterHint')}
             >
               <input
                 id="set-forgotten"
@@ -224,9 +238,9 @@ export function AttendanceSettingsPage() {
               />
             </FormField>
             <FormField
-              label="Automatisch afsluiten"
+              label={t('attendance.settings.autoClose')}
               htmlFor="set-autoclose"
-              hint="Standaard uit: het systeem waarschuwt alleen. Automatisch afsluiten laat altijd een audittrail achter."
+              hint={t('attendance.settings.autoCloseHint')}
             >
               <input
                 id="set-autoclose"
@@ -235,7 +249,7 @@ export function AttendanceSettingsPage() {
                 onChange={(event) => setSettings({ ...settings, autoCloseEnabled: event.target.checked })}
               />
             </FormField>
-            <FormField label="Automatisch afsluiten na (uren)" htmlFor="set-autoclose-hours">
+            <FormField label={t('attendance.settings.autoCloseAfter')} htmlFor="set-autoclose-hours">
               <input
                 id="set-autoclose-hours"
                 type="number"
@@ -247,9 +261,9 @@ export function AttendanceSettingsPage() {
               />
             </FormField>
             <FormField
-              label="Marge gepland-niet-ingepunt (minuten)"
+              label={t('attendance.settings.grace')}
               htmlFor="set-grace"
-              hint="Pas na deze marge na de geplande start telt iemand als 'gepland maar niet ingepunt'."
+              hint={t('attendance.settings.graceHint')}
             >
               <input
                 id="set-grace"
@@ -263,16 +277,16 @@ export function AttendanceSettingsPage() {
             </FormField>
           </div>
           <Button onClick={saveSettings} disabled={savingSettings}>
-            Instellingen opslaan
+            {t('attendance.settings.save')}
           </Button>
         </section>
       )}
 
       {canManageKiosks && (
-        <section aria-label="Prikklokken" className="ta-devices">
+        <section aria-label={t('attendance.devices.title')} className="ta-devices">
           <div className="ta-devices-head">
-            <h2>Prikklokken</h2>
-            <Button onClick={() => setCreateOpen(true)}>+ Prikklok toevoegen</Button>
+            <h2>{t('attendance.devices.title')}</h2>
+            <Button onClick={() => setCreateOpen(true)}>{t('attendance.devices.add')}</Button>
           </div>
           <DataTable
             columns={deviceColumns}
@@ -280,51 +294,64 @@ export function AttendanceSettingsPage() {
             rowKey={(row) => row.id}
             isLoading={devices === null}
             error={null}
-            emptyMessage="Nog geen prikklokken geregistreerd."
+            emptyMessage={t('attendance.devices.empty')}
           />
           <p className="ta-devices-hint">
-            Open op de tablet <code>/kiosk</code>, plak daar éénmalig de provisioning-sleutel en zet de
-            browser in kioskmodus (volledig scherm). Zie de handleiding voor details.
+            {t('attendance.devices.hint')}
           </p>
         </section>
       )}
 
       {!canManageSettings && !canManageKiosks && (
-        <p className="placeholder-text">Je hebt geen rechten om urenregistratie-instellingen te beheren.</p>
+        <p className="placeholder-text">{t('attendance.settings.noPermission')}</p>
       )}
 
       {createOpen && (
         <Modal
-          title="Prikklok toevoegen"
+          title={t('attendance.devices.createTitle')}
           onClose={() => setCreateOpen(false)}
           footer={
             <>
               <Button variant="ghost" onClick={() => setCreateOpen(false)}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
-              <Button onClick={createDevice}>Aanmaken</Button>
+              <Button onClick={createDevice}>{t('attendance.devices.create')}</Button>
             </>
           }
         >
-          <FormField label="Naam" htmlFor="dev-name" required>
+          <FormField label={t('attendance.devices.nameField')} htmlFor="dev-name" required>
             <input
               id="dev-name"
               type="text"
               value={newDevice.name}
               onChange={(event) => setNewDevice({ ...newDevice, name: event.target.value })}
-              placeholder="bv. Prikklok magazijn"
+              placeholder={t('attendance.devices.namePlaceholder')}
             />
           </FormField>
-          <FormField label="Locatie (optioneel)" htmlFor="dev-location">
+          <FormField label={t('attendance.devices.locationField')} htmlFor="dev-location">
             <select
               id="dev-location"
               value={newDevice.locationId}
               onChange={(event) => setNewDevice({ ...newDevice, locationId: event.target.value })}
             >
-              <option value="">Geen locatie</option>
+              <option value="">{t('attendance.devices.noLocation')}</option>
               {locations.map((location) => (
                 <option key={location.id} value={location.id}>
                   {location.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label={t('attendance.devices.languageField')} htmlFor="dev-language">
+            <select
+              id="dev-language"
+              value={newDevice.defaultLanguage}
+              onChange={(event) =>
+                setNewDevice({ ...newDevice, defaultLanguage: event.target.value as 'nl' | 'fr' | 'en' })}
+            >
+              {(['nl', 'fr', 'en'] as const).map((language) => (
+                <option key={language} value={language}>
+                  {LANGUAGE_NAMES[language]}
                 </option>
               ))}
             </select>
@@ -334,13 +361,12 @@ export function AttendanceSettingsPage() {
 
       {provisionedKey && (
         <Modal
-          title="Provisioning-sleutel"
+          title={t('attendance.devices.provisionTitle')}
           onClose={() => setProvisionedKey(null)}
-          footer={<Button onClick={() => setProvisionedKey(null)}>Ik heb de sleutel opgeslagen</Button>}
+          footer={<Button onClick={() => setProvisionedKey(null)}>{t('attendance.devices.provisionConfirm')}</Button>}
         >
           <p>
-            Plak deze sleutel éénmalig in het instelscherm van de prikklok (<code>/kiosk</code>).
-            Ze wordt <strong>niet</strong> opnieuw getoond; verlies je ze, vernieuw dan de sleutel.
+            {t('attendance.devices.provisionExplanation')}
           </p>
           <p className="ta-provision-key">{provisionedKey}</p>
         </Modal>

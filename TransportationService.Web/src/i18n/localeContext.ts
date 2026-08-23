@@ -3,13 +3,15 @@ import { formatCurrency, formatDate, formatDateTime } from './formatters'
 import { translate, type Locale } from './translations'
 
 export interface SetLocaleOptions {
-  /** When true the choice is also saved on the portal user via PUT /profile/language. */
+  /** When true the choice is also saved on the user via PUT /api/me/language. */
   persist?: boolean
 }
 
 export interface LocaleContextValue {
   locale: Locale
   setLocale: (locale: Locale, options?: SetLocaleOptions) => void
+  /** Tenant-default toepassen; doet niets wanneer de gebruiker al bewust koos. */
+  applyFallbackLocale: (locale: Locale) => void
   t: (key: string, params?: Record<string, string | number>) => string
   formatDate: (iso: string) => string
   formatDateTime: (iso: string) => string
@@ -26,6 +28,7 @@ export type TranslateFn = LocaleContextValue['t']
 export const DEFAULT_LOCALE_VALUE: LocaleContextValue = {
   locale: 'nl',
   setLocale: () => {},
+  applyFallbackLocale: () => {},
   t: (key, params) => translate('nl', key, params),
   formatDate: (iso) => formatDate('nl', iso),
   formatDateTime: (iso) => formatDateTime('nl', iso),

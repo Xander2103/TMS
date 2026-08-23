@@ -1,0 +1,18 @@
+{
+  "createOrder": "Nouvelle commande de transport",
+  "createCustomer": "Nouveau client",
+  "createTrip": "Planifier une nouvelle tournée",
+  "reportIncident": "Déclarer un incident",
+  "goPlanningCenter": "Ouvrir le tableau de planification",
+  "goOperations": "Ouvrir le suivi en direct",
+  "goDriver": "Ouvrir l'app chauffeur",
+  "goDashboard": "Ouvrir le tableau de bord du jour",
+  "goMyTime": "Ouvrir mes heures",
+  "goAttendance": "Ouvrir les présences",
+  "goProfitability": "Ouvrir la rentabilité",
+  "goDockPlanning": "Ouvrir la planification des quais",
+  "goWarehouses": "Ouvrir les entrepôts (gestion)",
+  "goWarehouseScanning": "Ouvrir chargement & scan",
+  "goPackages": "Rechercher des colis",
+  "goDossiers": "Ouvrir les dossiers"
+}

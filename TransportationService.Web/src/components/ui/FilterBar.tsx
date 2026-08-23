@@ -1,4 +1,5 @@
 import type { ChangeEvent, ReactNode } from 'react'
+import { useLocale } from '../../i18n/localeContext'
 import './FilterBar.css'
 
 interface FilterBarProps {
@@ -16,11 +17,12 @@ interface FilterBarProps {
 export function FilterBar({
   search,
   onSearchChange,
-  searchPlaceholder = 'Zoeken...',
+  searchPlaceholder,
   activeFilter,
   onActiveFilterChange,
   children,
 }: FilterBarProps) {
+  const { t } = useLocale()
   function handleActiveChange(event: ChangeEvent<HTMLSelectElement>) {
     if (!onActiveFilterChange) return
     const { value } = event.target
@@ -32,21 +34,21 @@ export function FilterBar({
       <input
         type="search"
         className="ui-filter-search"
-        placeholder={searchPlaceholder}
+        placeholder={searchPlaceholder ?? t('ui.filter.searchPlaceholder')}
         value={search}
         onChange={(event) => onSearchChange(event.target.value)}
-        aria-label="Zoeken"
+        aria-label={t('ui.filter.searchLabel')}
       />
       {onActiveFilterChange && (
         <select
           className="ui-filter-select"
           value={activeFilter === undefined ? '' : String(activeFilter)}
           onChange={handleActiveChange}
-          aria-label="Statusfilter"
+          aria-label={t('ui.filter.statusLabel')}
         >
-          <option value="">Alle statussen</option>
-          <option value="true">Actief</option>
-          <option value="false">Inactief</option>
+          <option value="">{t('ui.filter.allStatuses')}</option>
+          <option value="true">{t('ui.filter.active')}</option>
+          <option value="false">{t('ui.filter.inactive')}</option>
         </select>
       )}
       {children}

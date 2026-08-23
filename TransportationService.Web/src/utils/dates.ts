@@ -21,6 +21,8 @@
  * tenant preference. That split is deliberate.
  */
 
+import { getActiveLocale } from '../i18n/activeLocale'
+
 export type DateFormatPreference = 'dd/MM/yyyy' | 'MM/dd/yyyy' | 'yyyy-MM-dd' | 'dd-MM-yyyy'
 
 export const DATE_FORMAT_OPTIONS: readonly DateFormatPreference[] =
@@ -92,12 +94,16 @@ export function formatDateTime(value: string | null | undefined): string {
   return `${renderDate(date, activeFormat)} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+const LONG_DATE_LOCALE_TAGS = { nl: 'nl-BE', fr: 'fr-BE', en: 'en-GB' } as const
+
 export function formatDateLong(value: string | null | undefined): string {
   const date = parseIsoDate(value)
   if (!date || Number.isNaN(date.getTime())) return ''
-  // Long form stays language-driven (weekday/month names), with the tenant's format
-  // irrelevant here — nl-BE matches the internal app language.
-  return date.toLocaleDateString('nl-BE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  // Long form is language-driven (weekday/month names follow the UI language, i18n-wave);
+  // the tenant's numeric pattern is irrelevant here.
+  return date.toLocaleDateString(LONG_DATE_LOCALE_TAGS[getActiveLocale()], {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
 }
 
 /** Live example for the settings screen: what "12/08/2026" looks like per option. */
@@ -117,22 +123,23 @@ export function formatTime(value: string | null | undefined): string {
 }
 
 /**
- * Duration in minutes → Belgian "u"-notation: 468 → "7u48", 45 → "0u45", 480 → "8u".
+ * Duration in minutes → hour notation: NL 468 → "7u48" (Belgian "u"), FR/EN → "7h48".
  * The single duration formatter for attendance/planning surfaces (consolidates the
- * employee-planning `formatMinutes` convention).
+ * employee-planning `formatMinutes` convention); the unit letter follows the UI language.
  */
 export function formatDurationMinutes(minutes: number | null | undefined): string {
   if (minutes == null || Number.isNaN(minutes)) return ''
+  const unit = getActiveLocale() === 'nl' ? 'u' : 'h'
   const total = Math.max(0, Math.round(minutes))
   const hours = Math.floor(total / 60)
   const rest = total % 60
-  return rest === 0 ? `${hours}u` : `${hours}u${String(rest).padStart(2, '0')}`
+  return rest === 0 ? `${hours}${unit}` : `${hours}${unit}${String(rest).padStart(2, '0')}`
 }
 
-/** Signed variant for deviations: +19 → "+0u19", -30 → "-0u30", 0 → "0u". */
+/** Signed variant for deviations: +19 → "+0u19", -30 → "-0u30", 0 → "0u" (unit follows the UI language). */
 export function formatSignedDurationMinutes(minutes: number | null | undefined): string {
   if (minutes == null || Number.isNaN(minutes)) return ''
-  if (minutes === 0) return '0u'
+  if (minutes === 0) return `0${getActiveLocale() === 'nl' ? 'u' : 'h'}`
   const sign = minutes > 0 ? '+' : '-'
   return `${sign}${formatDurationMinutes(Math.abs(minutes))}`
 }

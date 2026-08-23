@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { NavModule } from '../navConfig'
 import { getNavModules } from '../navConfig'
 import { filterModule, findActiveModuleId, moduleHasUnread } from '../navState'
+import { translate } from '../../../../i18n/translations'
 import { Truck } from 'lucide-react'
 
 const modules = getNavModules()
 const allowAll = () => true
+/** Nav labels zijn vertaalsleutels; de tests asserteren de nl-weergave. */
+const nl = (key: string) => translate('nl', key)
 
 describe('findActiveModuleId', () => {
   it('matches a nested detail route to its module (longest prefix)', () => {
@@ -41,15 +44,15 @@ describe('filterModule', () => {
   })
 
   it('narrows items by case-insensitive query and drops non-matching modules', () => {
-    const vm = filterModule(planning, { hasAnyPermission: allowAll, hasEmployee: false, query: 'planbord' })!
-    expect(vm.items.map((i) => i.label)).toEqual(['Planbord'])
-    expect(filterModule(planning, { hasAnyPermission: allowAll, hasEmployee: false, query: 'zzz' })).toBeNull()
+    const vm = filterModule(planning, { hasAnyPermission: allowAll, hasEmployee: false, query: 'planbord', translate: nl })!
+    expect(vm.items.map((i) => nl(i.label))).toEqual(['Planbord'])
+    expect(filterModule(planning, { hasAnyPermission: allowAll, hasEmployee: false, query: 'zzz', translate: nl })).toBeNull()
   })
 
   it('filters subgroup items and drops emptied subgroups', () => {
     const parameters = modules.find((m) => m.id === 'parameters')!
-    const vm = filterModule(parameters, { hasAnyPermission: allowAll, hasEmployee: false, query: 'categorie' })!
-    expect(vm.subgroups.map((s) => s.label)).toEqual(['Stamgegevens'])
+    const vm = filterModule(parameters, { hasAnyPermission: allowAll, hasEmployee: false, query: 'categorie', translate: nl })!
+    expect(vm.subgroups.map((s) => nl(s.label))).toEqual(['Stamgegevens'])
   })
 })
 

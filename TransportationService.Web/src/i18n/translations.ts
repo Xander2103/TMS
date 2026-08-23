@@ -1,34 +1,3 @@
-import nlCommon from '../locales/nl/common.json'
-import nlNavigation from '../locales/nl/navigation.json'
-import nlAuth from '../locales/nl/auth.json'
-import nlDashboard from '../locales/nl/dashboard.json'
-import nlOrders from '../locales/nl/orders.json'
-import nlInvoices from '../locales/nl/invoices.json'
-import nlDocuments from '../locales/nl/documents.json'
-import nlNotifications from '../locales/nl/notifications.json'
-import nlMessages from '../locales/nl/messages.json'
-import nlErrors from '../locales/nl/errors.json'
-import frCommon from '../locales/fr/common.json'
-import frNavigation from '../locales/fr/navigation.json'
-import frAuth from '../locales/fr/auth.json'
-import frDashboard from '../locales/fr/dashboard.json'
-import frOrders from '../locales/fr/orders.json'
-import frInvoices from '../locales/fr/invoices.json'
-import frDocuments from '../locales/fr/documents.json'
-import frNotifications from '../locales/fr/notifications.json'
-import frMessages from '../locales/fr/messages.json'
-import frErrors from '../locales/fr/errors.json'
-import enCommon from '../locales/en/common.json'
-import enNavigation from '../locales/en/navigation.json'
-import enAuth from '../locales/en/auth.json'
-import enDashboard from '../locales/en/dashboard.json'
-import enOrders from '../locales/en/orders.json'
-import enInvoices from '../locales/en/invoices.json'
-import enDocuments from '../locales/en/documents.json'
-import enNotifications from '../locales/en/notifications.json'
-import enMessages from '../locales/en/messages.json'
-import enErrors from '../locales/en/errors.json'
-
 export type Locale = 'nl' | 'fr' | 'en'
 
 export const LOCALES: readonly Locale[] = ['nl', 'fr', 'en']
@@ -45,47 +14,29 @@ export interface MessageTree {
 export type MessageBundle = Record<Locale, MessageTree>
 
 /**
- * All portal UI strings, statically imported so vite bundles (and tree-checks) them at build
- * time. Dutch is the source of truth; the completeness test enforces identical key sets.
+ * ALL app UI strings. Namespaces are auto-discovered from `src/locales/<locale>/<domain>.json`
+ * via Vite's eager glob, so adding a domain = adding three JSON files — no central registry
+ * to edit (and no merge conflicts between module migrations). Dutch is the source of truth;
+ * the completeness test enforces identical key sets across nl/fr/en for every domain.
  */
-export const MESSAGES: MessageBundle = {
-  nl: {
-    common: nlCommon,
-    navigation: nlNavigation,
-    auth: nlAuth,
-    dashboard: nlDashboard,
-    orders: nlOrders,
-    invoices: nlInvoices,
-    documents: nlDocuments,
-    notifications: nlNotifications,
-    messages: nlMessages,
-    errors: nlErrors,
-  },
-  fr: {
-    common: frCommon,
-    navigation: frNavigation,
-    auth: frAuth,
-    dashboard: frDashboard,
-    orders: frOrders,
-    invoices: frInvoices,
-    documents: frDocuments,
-    notifications: frNotifications,
-    messages: frMessages,
-    errors: frErrors,
-  },
-  en: {
-    common: enCommon,
-    navigation: enNavigation,
-    auth: enAuth,
-    dashboard: enDashboard,
-    orders: enOrders,
-    invoices: enInvoices,
-    documents: enDocuments,
-    notifications: enNotifications,
-    messages: enMessages,
-    errors: enErrors,
-  },
+const localeModules = import.meta.glob('../locales/*/*.json', { eager: true }) as Record<
+  string,
+  { default: MessageTree }
+>
+
+function buildMessages(): MessageBundle {
+  const bundle: MessageBundle = { nl: {}, fr: {}, en: {} }
+  for (const [path, module] of Object.entries(localeModules)) {
+    // Path shape: ../locales/<locale>/<domain>.json
+    const match = path.match(/\/locales\/(nl|fr|en)\/([\w-]+)\.json$/)
+    if (!match) continue
+    const [, locale, domain] = match
+    bundle[locale as Locale][domain] = module.default
+  }
+  return bundle
 }
+
+export const MESSAGES: MessageBundle = buildMessages()
 
 function resolve(tree: MessageTree, key: string): string | undefined {
   let node: string | MessageTree | undefined = tree
@@ -105,6 +56,12 @@ function interpolate(template: string, params?: Record<string, string | number>)
  * Core lookup, parameterised on the bundle for testability: chosen locale → Dutch fallback →
  * the key itself (with a dev-only warning, so missing keys surface during development without
  * ever breaking the UI for a customer).
+ *
+ * Pluralisation (§37): when `params.count` is a number, `key_one` (count === 1) or
+ * `key_other` is tried first and the bare key is the fallback. nl/fr/en all share the
+ * one/other rule, so CLDR machinery would be dead weight here. NOTE — French treats 0 as
+ * singular in prose ("0 employé"); we deliberately follow the simpler one/other split (0 →
+ * other) app-wide for consistency across the three languages.
  */
 export function translateFrom(
   bundle: MessageBundle,
@@ -112,7 +69,12 @@ export function translateFrom(
   key: string,
   params?: Record<string, string | number>,
 ): string {
-  const value = resolve(bundle[locale], key) ?? resolve(bundle.nl, key)
+  let value: string | undefined
+  if (params && typeof params.count === 'number') {
+    const pluralKey = `${key}_${params.count === 1 ? 'one' : 'other'}`
+    value = resolve(bundle[locale], pluralKey) ?? resolve(bundle.nl, pluralKey)
+  }
+  value ??= resolve(bundle[locale], key) ?? resolve(bundle.nl, key)
   if (value === undefined) {
     if (import.meta.env.DEV) {
       console.warn(`[i18n] Ontbrekende vertaalsleutel "${key}" (taal "${locale}")`)
@@ -126,7 +88,7 @@ export function translate(locale: Locale, key: string, params?: Record<string, s
   return translateFrom(MESSAGES, locale, key, params)
 }
 
-/** Browser languages with an nl/fr/en prefix map onto a portal locale; anything else falls back to Dutch. */
+/** Browser languages with an nl/fr/en prefix map onto a locale; anything else falls back to Dutch. */
 export function detectBrowserLocale(): Locale {
   const language = typeof navigator !== 'undefined' ? (navigator.language ?? '') : ''
   const lower = language.toLowerCase()

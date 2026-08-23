@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useLocale } from '../../i18n/localeContext'
 import './SearchableSelect.css'
 
 export interface SearchableSelectOption {
@@ -45,14 +46,15 @@ export function SearchableSelect({
   value,
   onChange,
   options,
-  placeholder = '— Selecteer —',
+  placeholder,
   disabled,
   isLoading,
   clearable = true,
-  emptyMessage = 'Geen resultaten',
+  emptyMessage,
   ariaLabel,
   onCreate,
 }: SearchableSelectProps) {
+  const { t } = useLocale()
   const generatedId = useId()
   const baseId = id ?? generatedId
   const listboxId = `${baseId}-listbox`
@@ -184,7 +186,7 @@ export function SearchableSelect({
           aria-activedescendant={open && rowCount > 0 ? `${baseId}-opt-${activeIndex}` : undefined}
           aria-label={ariaLabel}
           autoComplete="off"
-          placeholder={selected ? selected.label : placeholder}
+          placeholder={selected ? selected.label : (placeholder ?? t('ui.select.placeholder'))}
           value={displayValue}
           disabled={disabled}
           onFocus={openList}
@@ -200,7 +202,7 @@ export function SearchableSelect({
           <button
             type="button"
             className="ui-searchable-select-clear"
-            aria-label="Selectie wissen"
+            aria-label={t('ui.select.clear')}
             onClick={() => {
               onChange(null)
               setQuery('')
@@ -216,7 +218,7 @@ export function SearchableSelect({
       </div>
       {open && (
         <ul className="ui-searchable-select-list" role="listbox" id={listboxId}>
-          {isLoading && <li className="ui-searchable-select-note">Laden…</li>}
+          {isLoading && <li className="ui-searchable-select-note">{t('ui.select.loading')}</li>}
           {!isLoading &&
             filtered.map((option, index) => (
               <li
@@ -242,7 +244,7 @@ export function SearchableSelect({
               </li>
             ))}
           {!isLoading && filtered.length === 0 && !showCreateRow && (
-            <li className="ui-searchable-select-note">{emptyMessage}</li>
+            <li className="ui-searchable-select-note">{emptyMessage ?? t('ui.select.noResults')}</li>
           )}
           {!isLoading && showCreateRow && (
             <li
@@ -261,7 +263,7 @@ export function SearchableSelect({
               onClick={() => void runCreate()}
               onMouseEnter={() => setHighlighted(filtered.length)}
             >
-              {creating ? 'Bezig met toevoegen…' : `+ ${onCreate!.label(trimmedQuery)}`}
+              {creating ? t('ui.select.adding') : `+ ${onCreate!.label(trimmedQuery)}`}
             </li>
           )}
         </ul>

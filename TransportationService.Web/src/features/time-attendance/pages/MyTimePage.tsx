@@ -6,6 +6,7 @@ import { ApiError } from '../../../api/apiClient'
 import {
   formatDate, formatDateLong, formatDurationMinutes, formatSignedDurationMinutes,
 } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
 import { WorkStatusCard } from '../components/WorkStatusCard'
 import { SessionTimeline } from '../components/SessionTimeline'
 import { getMyAttendanceHistory } from '../api/timeAttendanceApi'
@@ -15,9 +16,9 @@ import './time-attendance.css'
 type Period = 'today' | 'week' | 'month'
 
 const PERIOD_LABELS: Record<Period, string> = {
-  today: 'Vandaag',
-  week: 'Deze week',
-  month: 'Deze maand',
+  today: 'attendance.myTime.periodToday',
+  week: 'attendance.myTime.periodWeek',
+  month: 'attendance.myTime.periodMonth',
 }
 
 function toIso(date: Date): string {
@@ -40,6 +41,7 @@ export function periodRange(period: Period, now = new Date()): { from: string; t
 
 /** Self-service "Mijn uren": eigen sessies, pauzes, correcties en planning-vergelijking. */
 export function MyTimePage() {
+  const { t } = useLocale()
   const [period, setPeriod] = useState<Period>('week')
   const [history, setHistory] = useState<AttendanceHistory | null>(null)
   const [loadedKey, setLoadedKey] = useState<string | null>(null)
@@ -61,8 +63,8 @@ export function MyTimePage() {
       .catch((err) => {
         if (!mounted) return
         setError(err instanceof ApiError && err.status === 404
-          ? 'Er is geen personeelsdossier gekoppeld aan dit account.'
-          : 'Je uren konden niet worden geladen.')
+          ? 'attendance.myTime.noEmployeeLink'
+          : 'attendance.myTime.loadFailed')
       })
     return () => {
       mounted = false
@@ -71,10 +73,10 @@ export function MyTimePage() {
 
   return (
     <div>
-      <PageHeader title="Mijn uren" subtitle="Jouw geregistreerde werktijd, pauzes en planning." />
+      <PageHeader title={t('attendance.myTime.title')} subtitle={t('attendance.myTime.subtitle')} />
       <WorkStatusCard />
 
-      <div className="ta-period" role="group" aria-label="Periode">
+      <div className="ta-period" role="group" aria-label={t('attendance.myTime.periodLabel')}>
         {(Object.keys(PERIOD_LABELS) as Period[]).map((key) => (
           <button
             key={key}
@@ -82,33 +84,33 @@ export function MyTimePage() {
             className={key === period ? 'ta-period-btn ta-period-btn-active' : 'ta-period-btn'}
             onClick={() => setPeriod(key)}
           >
-            {PERIOD_LABELS[key]}
+            {t(PERIOD_LABELS[key])}
           </button>
         ))}
       </div>
 
-      {error && <ErrorState message={error} />}
-      {!error && isLoading && <LoadingState message="Uren laden..." />}
+      {error && <ErrorState message={t(error)} />}
+      {!error && isLoading && <LoadingState message={t('attendance.myTime.loading')} />}
 
       {!error && !isLoading && history && (
         <>
           <dl className="ta-totals">
             <div className="ta-total">
-              <dt>Netto gewerkt</dt>
+              <dt>{t('attendance.myTime.netWorked')}</dt>
               <dd>{formatDurationMinutes(history.totalNetMinutes)}</dd>
             </div>
             <div className="ta-total">
-              <dt>Pauze</dt>
+              <dt>{t('attendance.myTime.break')}</dt>
               <dd>{formatDurationMinutes(history.totalBreakMinutes)}</dd>
             </div>
             {history.totalPlannedMinutes != null && (
               <>
                 <div className="ta-total">
-                  <dt>Gepland</dt>
+                  <dt>{t('attendance.myTime.planned')}</dt>
                   <dd>{formatDurationMinutes(history.totalPlannedMinutes)}</dd>
                 </div>
                 <div className="ta-total">
-                  <dt>Afwijking</dt>
+                  <dt>{t('attendance.myTime.deviation')}</dt>
                   <dd>{formatSignedDurationMinutes(history.totalNetMinutes - history.totalPlannedMinutes)}</dd>
                 </div>
               </>
@@ -116,7 +118,7 @@ export function MyTimePage() {
           </dl>
 
           {history.days.length === 0 && (
-            <p className="placeholder-text">Geen registraties in deze periode.</p>
+            <p className="placeholder-text">{t('attendance.myTime.emptyPeriod')}</p>
           )}
 
           {[...history.days].reverse().map((day) => (
@@ -125,14 +127,14 @@ export function MyTimePage() {
                 <h2>{formatDateLong(day.date)}</h2>
                 <div className="ta-day-figures">
                   <span>
-                    Netto <strong>{formatDurationMinutes(day.netMinutes)}</strong>
+                    {t('attendance.myTime.net')} <strong>{formatDurationMinutes(day.netMinutes)}</strong>
                   </span>
                   <span>
-                    Pauze <strong>{formatDurationMinutes(day.breakMinutes)}</strong>
+                    {t('attendance.myTime.break')} <strong>{formatDurationMinutes(day.breakMinutes)}</strong>
                   </span>
                   {day.plannedMinutes != null && (
                     <span>
-                      Gepland <strong>{formatDurationMinutes(day.plannedMinutes)}</strong>
+                      {t('attendance.myTime.planned')} <strong>{formatDurationMinutes(day.plannedMinutes)}</strong>
                       {day.deviationMinutes != null && day.deviationMinutes !== 0 && (
                         <em className={day.deviationMinutes > 0 ? 'ta-dev-plus' : 'ta-dev-min'}>
                           {' '}({formatSignedDurationMinutes(day.deviationMinutes)})
@@ -147,7 +149,9 @@ export function MyTimePage() {
               ))}
               {day.sessions.length === 0 && (
                 <p className="placeholder-text">
-                  Gepland maar geen registratie{day.plannedMinutes != null ? ` (${formatDurationMinutes(day.plannedMinutes)} gepland)` : ''}.
+                  {day.plannedMinutes != null
+                    ? t('attendance.myTime.plannedNoRegistrationWith', { duration: formatDurationMinutes(day.plannedMinutes) })
+                    : t('attendance.myTime.plannedNoRegistration')}
                 </p>
               )}
             </section>

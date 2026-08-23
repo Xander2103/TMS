@@ -6,6 +6,7 @@ import {
 } from '../../api/resourceLinksApi'
 import { filterCommands, type AppCommand } from '../../config/commands'
 import { useAuth } from '../../features/auth/authContextValue'
+import { useLocale } from '../../i18n/localeContext'
 import './CommandPalette.css'
 
 interface SearchHit {
@@ -48,6 +49,7 @@ interface CommandPaletteProps {
  */
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { hasAnyPermission } = useAuth()
   const [query, setQuery] = useState('')
   const [loadedHits, setLoadedHits] = useState<{ key: string; hits: SearchHit[] } | null>(null)
@@ -100,8 +102,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   }, [open, term])
 
   const commands = useMemo(
-    () => filterCommands(term, hasAnyPermission),
-    [term, hasAnyPermission])
+    () => filterCommands(term, hasAnyPermission, t),
+    [term, hasAnyPermission, t])
 
   const rows: Row[] = useMemo(() => {
     const list: Row[] = commands.map((command) => ({ kind: 'command', command }))
@@ -189,8 +191,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         <button key={`cmd-${row.command.id}`} type="button"
                 className={active ? 'cmdk-hit cmdk-hit-active' : 'cmdk-hit'}
                 onMouseEnter={() => setActiveIndex(index)} onClick={() => openRow(row)}>
-          <span className="cmdk-hit-title">⌘ {row.command.label}</span>
-          <span className="cmdk-hit-subtitle">{row.command.group}</span>
+          <span className="cmdk-hit-title">⌘ {t(row.command.label)}</span>
+          <span className="cmdk-hit-subtitle">
+            {row.command.group === 'create' ? t('ui.palette.groupCreate') : t('ui.palette.groupNavigate')}
+          </span>
         </button>
       )
     }
@@ -218,7 +222,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         {favoritable && (
           <button type="button" className={`cmdk-star${isFavorite ? ' cmdk-star-active' : ''}`}
                   onClick={() => toggleFavorite(row.hit)}
-                  aria-label={isFavorite ? 'Favoriet verwijderen' : 'Aan favorieten toevoegen'}>
+                  aria-label={isFavorite ? t('ui.palette.removeFavorite') : t('ui.palette.addFavorite')}>
             ★
           </button>
         )}
@@ -228,28 +232,28 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   return (
     <div className="cmdk-overlay" onClick={close} role="presentation">
-      <div className="cmdk-panel" onClick={(event) => event.stopPropagation()} role="dialog" aria-label="Globaal zoeken">
+      <div className="cmdk-panel" onClick={(event) => event.stopPropagation()} role="dialog" aria-label={t('ui.palette.globalSearch')}>
         <input
           ref={inputRef}
           className="cmdk-input"
-          placeholder="Zoek of typ een commando… (Esc om te sluiten)"
+          placeholder={t('ui.palette.placeholder')}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onInputKeyDown}
-          aria-label="Zoekterm"
+          aria-label={t('ui.palette.searchTerm')}
         />
         <div className="cmdk-results">
-          {commandRows.length > 0 && <div className="cmdk-category">Commando’s</div>}
+          {commandRows.length > 0 && <div className="cmdk-category">{t('ui.palette.commands')}</div>}
           {commandRows.map(renderRow)}
 
-          {favoriteRows.length > 0 && <div className="cmdk-category">Favorieten</div>}
+          {favoriteRows.length > 0 && <div className="cmdk-category">{t('ui.palette.favorites')}</div>}
           {favoriteRows.map(renderRow)}
 
-          {recentRows.length > 0 && <div className="cmdk-category">Recent bezocht</div>}
+          {recentRows.length > 0 && <div className="cmdk-category">{t('ui.palette.recent')}</div>}
           {recentRows.map(renderRow)}
 
-          {term.length < 2 && <p className="cmdk-hint">Typ minstens 2 tekens om te zoeken.</p>}
-          {term.length >= 2 && !hits && <p className="cmdk-hint">Zoeken...</p>}
+          {term.length < 2 && <p className="cmdk-hint">{t('ui.palette.typeMore')}</p>}
+          {term.length >= 2 && !hits && <p className="cmdk-hint">{t('ui.palette.searching')}</p>}
           {hits && hits.length === 0 && <p className="cmdk-hint">Geen resultaten voor "{term}".</p>}
           {[...groupedHits.entries()].map(([category, categoryRows]) => (
             <div key={category}>

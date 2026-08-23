@@ -1,5 +1,6 @@
 import { Badge } from '../../../components/ui/Badge'
 import { formatDurationMinutes, formatTime } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
 import { ATTENDANCE_SOURCE_LABELS } from '../types'
 import type { AttendanceCorrection, AttendanceSession } from '../types'
 import './time-attendance-shared.css'
@@ -24,24 +25,33 @@ function correctionsFor(
  * correctie-annotatie "gecorrigeerd vanuit … door … reden: …" wanneer die bestaat.
  */
 export function SessionTimeline({ session }: { session: AttendanceSession }) {
+  const { t } = useLocale()
+
+  const correctionAnnotation = (correction: AttendanceCorrection): string =>
+    (correction.oldValue
+      ? t('attendance.timeline.correctionFrom', { time: formatTime(correction.oldValue) })
+      : t('attendance.timeline.correctionPlain'))
+    + (correction.correctedByName ? t('attendance.timeline.correctionBy', { name: correction.correctedByName }) : '')
+    + t('attendance.timeline.correctionReason', { reason: correction.reason })
+
   const entries: TimelineEntry[] = [
     {
       key: 'in',
       time: session.clockInAt,
-      label: 'Ingepunt',
+      label: t('attendance.timeline.clockedIn'),
       corrections: correctionsFor(session, 'ClockIn'),
     },
     ...session.breaks.flatMap((b) => [
-      { key: `bs-${b.id}`, time: b.startedAt, label: 'Pauze gestart', corrections: correctionsFor(session, 'BreakStart', b.id) },
+      { key: `bs-${b.id}`, time: b.startedAt, label: t('attendance.timeline.breakStarted'), corrections: correctionsFor(session, 'BreakStart', b.id) },
       ...(b.endedAt
-        ? [{ key: `be-${b.id}`, time: b.endedAt, label: 'Pauze gestopt', corrections: correctionsFor(session, 'BreakEnd', b.id) }]
+        ? [{ key: `be-${b.id}`, time: b.endedAt, label: t('attendance.timeline.breakEnded'), corrections: correctionsFor(session, 'BreakEnd', b.id) }]
         : []),
     ]),
     ...(session.clockOutAt
       ? [{
           key: 'out',
           time: session.clockOutAt,
-          label: session.status === 'AutoClosed' ? 'Automatisch afgesloten' : 'Uitgepunt',
+          label: session.status === 'AutoClosed' ? t('attendance.timeline.autoClosed') : t('attendance.timeline.clockedOut'),
           corrections: correctionsFor(session, 'ClockOut'),
         }]
       : []),
@@ -53,14 +63,15 @@ export function SessionTimeline({ session }: { session: AttendanceSession }) {
   return (
     <div className={session.status === 'Cancelled' ? 'ta-session ta-session-cancelled' : 'ta-session'}>
       <div className="ta-session-meta">
-        <span className="ta-session-source">{ATTENDANCE_SOURCE_LABELS[session.clockInSource]}</span>
+        <span className="ta-session-source">{t(ATTENDANCE_SOURCE_LABELS[session.clockInSource])}</span>
         {session.locationName && <span className="ta-session-loc">{session.locationName}</span>}
-        {session.status === 'Cancelled' && <Badge tone="danger">Geannuleerd</Badge>}
-        {session.status === 'AutoClosed' && <Badge tone="warning">Automatisch afgesloten</Badge>}
-        {session.hasCorrections && session.status !== 'Cancelled' && <Badge tone="info">Gecorrigeerd</Badge>}
+        {session.status === 'Cancelled' && <Badge tone="danger">{t('attendance.timeline.cancelled')}</Badge>}
+        {session.status === 'AutoClosed' && <Badge tone="warning">{t('attendance.timeline.autoClosed')}</Badge>}
+        {session.hasCorrections && session.status !== 'Cancelled' && <Badge tone="info">{t('attendance.timeline.corrected')}</Badge>}
         <span className="ta-session-net">
-          Netto {formatDurationMinutes(session.netMinutes)}
-          {session.breakMinutes > 0 && ` · pauze ${formatDurationMinutes(session.breakMinutes)}`}
+          {t('attendance.timeline.net', { duration: formatDurationMinutes(session.netMinutes) })}
+          {session.breakMinutes > 0
+            && t('attendance.timeline.breakDuration', { duration: formatDurationMinutes(session.breakMinutes) })}
         </span>
       </div>
       <ol className="ta-timeline">
@@ -70,8 +81,7 @@ export function SessionTimeline({ session }: { session: AttendanceSession }) {
             <span className="ta-timeline-label">{entry.label}</span>
             {entry.corrections.map((correction) => (
               <span key={correction.id} className="ta-correction">
-                ↳ gecorrigeerd{correction.oldValue ? ` vanuit ${formatTime(correction.oldValue)}` : ''}
-                {correction.correctedByName ? ` door ${correction.correctedByName}` : ''} · reden: {correction.reason}
+                {correctionAnnotation(correction)}
               </span>
             ))}
           </li>
@@ -79,14 +89,17 @@ export function SessionTimeline({ session }: { session: AttendanceSession }) {
         {!session.clockOutAt && session.status !== 'Cancelled' && (
           <li>
             <span className="ta-timeline-time">…</span>
-            <span className="ta-timeline-label">Nog niet uitgepunt</span>
+            <span className="ta-timeline-label">{t('attendance.timeline.notClockedOut')}</span>
           </li>
         )}
       </ol>
       {[...cancelCorrections, ...manualCorrections].map((correction) => (
         <p key={correction.id} className="ta-correction">
-          {correction.kind === 'SessionCancelled' ? 'Geannuleerd' : 'Manueel aangemaakt'}
-          {correction.correctedByName ? ` door ${correction.correctedByName}` : ''} · reden: {correction.reason}
+          {(correction.kind === 'SessionCancelled'
+            ? t('attendance.timeline.cancelledBy')
+            : t('attendance.timeline.manualCreated'))
+            + (correction.correctedByName ? t('attendance.timeline.correctionBy', { name: correction.correctedByName }) : '')
+            + t('attendance.timeline.correctionReason', { reason: correction.reason })}
         </p>
       ))}
     </div>

@@ -1,0 +1,122 @@
+{
+  "actions": {
+    "save": "Opslaan",
+    "cancel": "Annuleren",
+    "confirm": "Bevestigen",
+    "close": "Sluiten",
+    "back": "Terug",
+    "busy": "Bezig...",
+    "add": "Toevoegen",
+    "edit": "Bewerken",
+    "delete": "Verwijderen",
+    "search": "Zoeken"
+  },
+  "table": {
+    "empty": "Geen gegevens gevonden.",
+    "loading": "Laden..."
+  },
+  "filter": {
+    "searchPlaceholder": "Zoeken...",
+    "searchLabel": "Zoeken",
+    "statusLabel": "Statusfilter",
+    "allStatuses": "Alle statussen",
+    "active": "Actief",
+    "inactive": "Inactief"
+  },
+  "pagination": {
+    "label": "Paginering",
+    "range": "{start}–{end} van {total}",
+    "previous": "Vorige",
+    "next": "Volgende",
+    "page": "Pagina {page} / {totalPages}"
+  },
+  "select": {
+    "placeholder": "— Selecteer —",
+    "noResults": "Geen resultaten",
+    "loading": "Laden…",
+    "clear": "Selectie wissen",
+    "adding": "Bezig met toevoegen…"
+  },
+  "sections": {
+    "navLabel": "Formuliersecties",
+    "sectionLabel": "Sectie",
+    "hasErrors": "bevat fouten",
+    "hasData": "bevat gegevens",
+    "emptyOptional": "leeg (optioneel)",
+    "empty": "leeg"
+  },
+  "statusBadges": {
+    "active": "Actief",
+    "inactive": "Inactief",
+    "blocked": "Geblokkeerd"
+  },
+  "toast": {
+    "region": "Meldingen",
+    "close": "Melding sluiten"
+  },
+  "unsaved": {
+    "title": "Niet-opgeslagen wijzigingen",
+    "message": "Je hebt wijzigingen die nog niet zijn opgeslagen. Weet je zeker dat je deze pagina wilt verlaten?",
+    "leave": "Pagina verlaten",
+    "stay": "Blijven bewerken"
+  },
+  "validation": {
+    "saveFailed": "Opslaan is niet gelukt"
+  },
+  "modal": {
+    "close": "Sluiten"
+  },
+  "nav": {
+    "mainNavigation": "Hoofdnavigatie",
+    "noMenuItems": "Geen menu-items voor “{query}”.",
+    "filterMenu": "Filter menu",
+    "breadcrumbs": "Kruimelpad",
+    "openMenu": "Menu openen",
+    "closeMenu": "Menu sluiten",
+    "pageLoading": "Pagina laden...",
+    "shortcuts": "Sneltoetsen",
+    "notFoundTitle": "Pagina niet gevonden",
+    "notFoundMessage": "De opgevraagde pagina bestaat niet."
+  },
+  "shortcutList": {
+    "globalSearch": "Globaal zoeken / commando's",
+    "focusSearch": "Zoeken focussen",
+    "showHelp": "Deze hulp tonen",
+    "planningBoard": "Planbord",
+    "operations": "Operationeel centrum",
+    "dossiers": "Dossiers",
+    "incidents": "Incidenten",
+    "profitability": "Rendement",
+    "warehouses": "Magazijnen"
+  },
+  "palette": {
+    "globalSearch": "Globaal zoeken",
+    "placeholder": "Zoek of typ een commando… (Esc om te sluiten)",
+    "searchTerm": "Zoekterm",
+    "commands": "Commando's",
+    "favorites": "Favorieten",
+    "recent": "Recent bezocht",
+    "typeMore": "Typ minstens 2 tekens om te zoeken.",
+    "searching": "Zoeken...",
+    "removeFavorite": "Favoriet verwijderen",
+    "addFavorite": "Aan favorieten toevoegen",
+    "groupCreate": "Aanmaken",
+    "groupNavigate": "Navigeren"
+  },
+  "offline": {
+    "banner": "Offline — scans, stopacties en incidentmeldingen komen in de wachtrij en synchroniseren automatisch."
+  },
+  "calendar": {
+    "month": "Maand",
+    "week": "Week",
+    "list": "Lijst",
+    "today": "Vandaag",
+    "previousPeriod": "Vorige periode",
+    "nextPeriod": "Volgende periode",
+    "previous": "‹ vorige",
+    "next": "volgende ›",
+    "view": "Weergave",
+    "more": "+{count} meer",
+    "free": "vrij"
+  }
+}

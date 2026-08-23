@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { useLocale } from '../../i18n/localeContext'
 import './Modal.css'
 
 interface ModalProps {
@@ -12,6 +13,7 @@ interface ModalProps {
 
 /** Accessible modal dialog: focus-trapping backdrop, Escape-to-close, scroll-locked body. */
 export function Modal({ title, onClose, children, footer, busy = false }: ModalProps) {
+  const { t } = useLocale()
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape' && !busy) onClose()
@@ -35,7 +37,7 @@ export function Modal({ title, onClose, children, footer, busy = false }: ModalP
       >
         <header className="ui-modal-header">
           <h3>{title}</h3>
-          <button type="button" className="ui-modal-close" onClick={onClose} disabled={busy} aria-label="Sluiten">
+          <button type="button" className="ui-modal-close" onClick={onClose} disabled={busy} aria-label={t('ui.modal.close')}>
             ×
           </button>
         </header>

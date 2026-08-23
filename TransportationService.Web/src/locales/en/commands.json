@@ -1,0 +1,18 @@
+{
+  "createOrder": "New transport order",
+  "createCustomer": "New customer",
+  "createTrip": "Plan a new trip",
+  "reportIncident": "Report an incident",
+  "goPlanningCenter": "Open planning board",
+  "goOperations": "Open live operations",
+  "goDriver": "Open driver app",
+  "goDashboard": "Open today's dashboard",
+  "goMyTime": "Open my hours",
+  "goAttendance": "Open attendance",
+  "goProfitability": "Open profitability",
+  "goDockPlanning": "Open dock planning",
+  "goWarehouses": "Open warehouses (admin)",
+  "goWarehouseScanning": "Open loading & scanning",
+  "goPackages": "Find packages",
+  "goDossiers": "Open files"
+}

@@ -43,5 +43,12 @@ drietalig; de interne app blijft Nederlands.
 Vertaald: portalnavigatie, login/activatie/wachtwoordflows, dashboard, opdrachten (+detail,
 nieuwe opdracht), documenten, facturen (+detail), berichten, mededelingen, gebruikersbeheer,
 foutmeldingen, lege toestanden, statuslabels (eigen maps in het portaal), datums.
-Niet vertaald (bewust): de interne applicatie, interne notificatieteksten, e-mailsjablonen
-van bestaande interne events.
+Niet vertaald (bewust, destijds): de interne applicatie, interne notificatieteksten,
+e-mailsjablonen van bestaande interne events.
+
+> **Update i18n-wave 2026-08-23**: die scopegrens is vervallen — de LocaleProvider is
+> naar de app-root verhuisd en de interne applicatie internationaliseert module per
+> module via dezelfde laag. Persist verloopt nu voor iedereen via `PUT /api/me/language`
+> (zelfde User-kolom; het portaal-endpoint blijft backward-compatible bestaan). Zie
+> `docs/localization/` voor de canonieke architectuur; dit document blijft de
+> portaalspecifieke historiek beschrijven.

@@ -6,6 +6,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { formatDurationMinutes, formatTime } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
 import { getAttendanceOverview } from '../api/timeAttendanceApi'
 import {
   ATTENDANCE_OVERVIEW_STATUSES, ATTENDANCE_OVERVIEW_STATUS_LABELS, ATTENDANCE_OVERVIEW_STATUS_TONE,
@@ -27,6 +28,7 @@ function todayIso(): string {
  * van de medewerker.
  */
 export function AttendanceOverviewPage() {
+  const { t } = useLocale()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayIso)
   const [departmentId, setDepartmentId] = useState('')
@@ -51,7 +53,7 @@ export function AttendanceOverviewPage() {
         setError(null)
       })
       .catch(() => {
-        if (mounted) setError('Het aanwezigheidsoverzicht kon niet worden geladen.')
+        if (mounted) setError('attendance.overview.loadFailed')
       })
     return () => {
       mounted = false
@@ -64,40 +66,40 @@ export function AttendanceOverviewPage() {
   }, [overview, statusFilter])
 
   const columns: Column<AttendanceOverviewRow>[] = [
-    { key: 'name', header: 'Naam', render: (row) => row.name },
-    { key: 'department', header: 'Afdeling', width: '160px', render: (row) => row.departmentName ?? '—' },
+    { key: 'name', header: t('attendance.overview.columnName'), render: (row) => row.name },
+    { key: 'department', header: t('attendance.overview.columnDepartment'), width: '160px', render: (row) => row.departmentName ?? '—' },
     {
       key: 'status',
-      header: 'Status',
+      header: t('attendance.overview.columnStatus'),
       width: '190px',
       render: (row) => (
         <span className="ta-cell-status">
           <Badge tone={ATTENDANCE_OVERVIEW_STATUS_TONE[row.status]}>
             {row.status === 'Absent' && row.absenceLabel
               ? row.absenceLabel
-              : ATTENDANCE_OVERVIEW_STATUS_LABELS[row.status]}
+              : t(ATTENDANCE_OVERVIEW_STATUS_LABELS[row.status])}
           </Badge>
-          {row.plannedNotClockedIn && <span className="ta-flag">Gepland, niet ingepunt</span>}
-          {row.hasCorrections && <span className="ta-flag" style={{ color: 'var(--text)' }}>Gecorrigeerd</span>}
+          {row.plannedNotClockedIn && <span className="ta-flag">{t('attendance.overview.plannedNotClockedIn')}</span>}
+          {row.hasCorrections && <span className="ta-flag" style={{ color: 'var(--text)' }}>{t('attendance.overview.corrected')}</span>}
         </span>
       ),
     },
-    { key: 'since', header: 'Sinds', width: '90px', render: (row) => (row.since ? formatTime(row.since) : '—') },
+    { key: 'since', header: t('attendance.overview.columnSince'), width: '90px', render: (row) => (row.since ? formatTime(row.since) : '—') },
     {
       key: 'worked',
-      header: 'Gewerkt',
+      header: t('attendance.overview.columnWorked'),
       width: '100px',
       render: (row) => (row.workedMinutes > 0 || row.since ? formatDurationMinutes(row.workedMinutes) : '—'),
     },
     {
       key: 'break',
-      header: 'Pauze',
+      header: t('attendance.overview.columnBreak'),
       width: '100px',
       render: (row) => (row.breakMinutes > 0 ? formatDurationMinutes(row.breakMinutes) : '—'),
     },
     {
       key: 'planned',
-      header: 'Gepland',
+      header: t('attendance.overview.columnPlanned'),
       width: '140px',
       render: (row) =>
         row.plannedStart && row.plannedEnd
@@ -108,21 +110,21 @@ export function AttendanceOverviewPage() {
 
   const summaryTiles = overview
     ? [
-        { label: 'Aan het werk', value: overview.summary.working, alert: false },
-        { label: 'Pauze', value: overview.summary.onBreak, alert: false },
-        { label: 'Uitgepunt', value: overview.summary.clockedOut, alert: false },
-        { label: 'Afwezig (goedgekeurd)', value: overview.summary.absent, alert: false },
-        { label: 'Gepland, niet ingepunt', value: overview.summary.plannedNotClockedIn, alert: overview.summary.plannedNotClockedIn > 0 },
-        { label: 'Vergeten uit te punten?', value: overview.summary.forgottenClockOut, alert: overview.summary.forgottenClockOut > 0 },
+        { label: t('attendance.overview.working'), value: overview.summary.working, alert: false },
+        { label: t('attendance.overview.onBreak'), value: overview.summary.onBreak, alert: false },
+        { label: t('attendance.overview.clockedOut'), value: overview.summary.clockedOut, alert: false },
+        { label: t('attendance.overview.absentApproved'), value: overview.summary.absent, alert: false },
+        { label: t('attendance.overview.plannedNotClockedIn'), value: overview.summary.plannedNotClockedIn, alert: overview.summary.plannedNotClockedIn > 0 },
+        { label: t('attendance.overview.forgottenClockOut'), value: overview.summary.forgottenClockOut, alert: overview.summary.forgottenClockOut > 0 },
       ]
     : []
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Personeel' }, { label: 'Aanwezigheid' }]} />
-      <PageHeader title="Aanwezigheid" subtitle="Live urenregistratie per medewerker." />
+      <Breadcrumbs items={[{ label: t('navigation.menu.modules.personeel') }, { label: t('navigation.menu.attendance') }]} />
+      <PageHeader title={t('attendance.overview.title')} subtitle={t('attendance.overview.subtitle')} />
 
-      <div className="ta-summary" aria-label="Samenvatting">
+      <div className="ta-summary" aria-label={t('attendance.overview.summaryLabel')}>
         {summaryTiles.map((tile) => (
           <div key={tile.label} className={tile.alert ? 'ta-summary-tile ta-summary-tile-alert' : 'ta-summary-tile'}>
             <span className="ta-summary-value">{tile.value}</span>
@@ -136,21 +138,21 @@ export function AttendanceOverviewPage() {
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Zoek op naam of personeelsnummer..."
-          aria-label="Zoeken"
+          placeholder={t('attendance.overview.searchPlaceholder')}
+          aria-label={t('ui.filter.searchLabel')}
         />
         <input
           type="date"
           value={date}
           onChange={(event) => setDate(event.target.value || todayIso())}
-          aria-label="Datum"
+          aria-label={t('attendance.overview.dateLabel')}
         />
         <select
           value={departmentId}
           onChange={(event) => setDepartmentId(event.target.value)}
-          aria-label="Afdeling"
+          aria-label={t('attendance.overview.departmentLabel')}
         >
-          <option value="">Alle afdelingen</option>
+          <option value="">{t('attendance.overview.allDepartments')}</option>
           {departments.options.map((dept) => (
             <option key={dept.id} value={dept.id}>
               {dept.name}
@@ -160,12 +162,12 @@ export function AttendanceOverviewPage() {
         <select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as AttendanceOverviewStatus | '')}
-          aria-label="Status"
+          aria-label={t('attendance.overview.statusLabel')}
         >
-          <option value="">Alle statussen</option>
+          <option value="">{t('attendance.overview.allStatuses')}</option>
           {ATTENDANCE_OVERVIEW_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {ATTENDANCE_OVERVIEW_STATUS_LABELS[status]}
+              {t(ATTENDANCE_OVERVIEW_STATUS_LABELS[status])}
             </option>
           ))}
         </select>
@@ -176,8 +178,8 @@ export function AttendanceOverviewPage() {
         rows={rows}
         rowKey={(row) => row.employeeId}
         isLoading={!overview && !error}
-        error={error}
-        emptyMessage="Geen medewerkers gevonden."
+        error={error ? t(error) : null}
+        emptyMessage={t('attendance.overview.empty')}
         onRowClick={(row) => navigate(`/employees/${row.employeeId}?tab=uren`)}
       />
     </div>

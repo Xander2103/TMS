@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useLocale } from '../../i18n/localeContext'
 import { DAY_NAMES, addDays, cellAriaLabel, monthGridRange, toIsoDate } from './dateUtils'
 import './calendar.css'
 
@@ -42,6 +43,7 @@ export function MonthGrid<T>({
   maxVisible = 2,
   today = new Date(),
 }: MonthGridProps<T>) {
+  const { t } = useLocale()
   const month = anchor.getMonth()
   const { start, end } = monthGridRange(anchor)
   const totalCells = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1
@@ -81,7 +83,7 @@ export function MonthGrid<T>({
                   </span>
                 ))}
               </span>
-              {overflow > 0 && <span className="cal-month-more">+{overflow} meer</span>}
+              {overflow > 0 && <span className="cal-month-more">{t('ui.calendar.more', { count: overflow })}</span>}
             </button>
           )
         })}

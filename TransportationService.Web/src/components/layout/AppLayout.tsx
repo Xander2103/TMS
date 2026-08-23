@@ -1,7 +1,11 @@
 import { Suspense, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { apiClient } from '../../api/apiClient'
+import { useAuth } from '../../features/auth/authContextValue'
+import { useLocale } from '../../i18n/localeContext'
+import { isLocale } from '../../i18n/translations'
 import { setDateFormatPreference } from '../../utils/dates'
+import { setDecimalSeparatorPreference } from '../../utils/numbers'
 import { useActionQueueSync } from '../../hooks/useActionQueueSync'
 import { useShortcutRegistry } from '../../hooks/useShortcutRegistry'
 import { NotificationBell } from '../../features/notifications/components/NotificationBell'
@@ -23,17 +27,29 @@ import './AppLayout.css'
  */
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false)
+  const { user } = useAuth()
+  const { applyFallbackLocale, t } = useLocale()
   // Offline queues (scans + driver actions) replay automatically when the connection returns.
   const queues = useActionQueueSync()
 
   // Regional display preferences: ONE fetch per session drives the central date formatter
   // (utils/dates.ts). Until it resolves the Belgian default applies; failure is non-fatal.
+  // Taalresolutie: heeft de gebruiker géén eigen voorkeur, dan geldt de tenant-default
+  // als fallback (§7/§9) — een bewuste sessiewissel blijft altijd winnen.
+  const hasOwnLanguage = user?.preferredLanguage != null
   useEffect(() => {
     apiClient
-      .getJson<{ dateFormat: string }>('/api/company-settings/display')
-      .then((prefs) => setDateFormatPreference(prefs.dateFormat))
+      .getJson<{ dateFormat: string; decimalSeparator?: string; defaultLanguage?: string }>(
+        '/api/company-settings/display')
+      .then((prefs) => {
+        setDateFormatPreference(prefs.dateFormat)
+        setDecimalSeparatorPreference(prefs.decimalSeparator)
+        if (!hasOwnLanguage && isLocale(prefs.defaultLanguage)) {
+          applyFallbackLocale(prefs.defaultLanguage)
+        }
+      })
       .catch(() => {})
-  }, [])
+  }, [applyFallbackLocale, hasOwnLanguage])
   // Central keyboard shortcuts: mod+K/'/' palette, 'g x' navigation chords, '?' help.
   const shortcuts = useShortcutRegistry()
 
@@ -46,7 +62,7 @@ export function AppLayout() {
             type="button"
             className="mobile-nav-toggle"
             onClick={() => setNavOpen((open) => !open)}
-            aria-label={navOpen ? 'Menu sluiten' : 'Menu openen'}
+            aria-label={navOpen ? t('ui.nav.closeMenu') : t('ui.nav.openMenu')}
             aria-expanded={navOpen}
           >
             ☰
@@ -57,12 +73,12 @@ export function AppLayout() {
         <Sidebar open={navOpen} onNavigate={() => setNavOpen(false)} />
         <CommandPalette open={shortcuts.paletteOpen} onClose={() => shortcuts.setPaletteOpen(false)} />
         {shortcuts.helpOpen && (
-          <Modal title="Sneltoetsen" onClose={() => shortcuts.setHelpOpen(false)}>
+          <Modal title={t('ui.nav.shortcuts')} onClose={() => shortcuts.setHelpOpen(false)}>
             <ul className="shortcut-help-list">
               {shortcuts.availableShortcuts.map((shortcut) => (
                 <li key={shortcut.keys}>
                   <kbd>{shortcut.keys.replace('mod', navigator.platform.includes('Mac') ? '⌘' : 'Ctrl')}</kbd>
-                  <span>{shortcut.label}</span>
+                  <span>{t(shortcut.label)}</span>
                 </li>
               ))}
             </ul>
@@ -76,7 +92,7 @@ export function AppLayout() {
           </header>
           <main className="content">
             {/* Pages are code-split per route; the shell stays visible while a chunk loads. */}
-            <Suspense fallback={<LoadingState message="Pagina laden..." />}>
+            <Suspense fallback={<LoadingState message={t('ui.nav.pageLoading')} />}>
               <Outlet />
             </Suspense>
           </main>

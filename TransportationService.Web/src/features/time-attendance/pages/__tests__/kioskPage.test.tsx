@@ -27,6 +27,7 @@ const okPing = {
   deviceName: 'Prikklok magazijn',
   locationName: 'Duisburg',
   error: null,
+  defaultLanguage: 'nl' as const,
 }
 
 describe('KioskPage', () => {
@@ -61,6 +62,7 @@ describe('KioskPage', () => {
     vi.spyOn(kioskApi, 'kioskPing').mockResolvedValue(okPing)
     const identify = vi.spyOn(kioskApi, 'kioskIdentify').mockResolvedValue({
       outcome: 'InvalidCode', firstName: null, status: null, interactionToken: null, error: 'Code ongeldig.',
+      preferredLanguage: null,
     })
     render(<KioskPage />)
 
@@ -85,6 +87,7 @@ describe('KioskPage', () => {
       status: status({ status: 'Working', clockInAt: '2026-08-20T05:51:00Z', canClockIn: false, canClockOut: true, canStartBreak: true }),
       interactionToken: 'token-1',
       error: null,
+      preferredLanguage: null,
     })
     const punch = vi.spyOn(kioskApi, 'kioskPunch').mockResolvedValue({
       outcome: 'Success', status: null, occurredAt: '2026-08-20T05:54:00Z', error: null,
@@ -111,6 +114,7 @@ describe('KioskPage', () => {
     vi.spyOn(kioskApi, 'kioskPing').mockResolvedValue(okPing)
     vi.spyOn(kioskApi, 'kioskIdentify').mockResolvedValue({
       outcome: 'Success', firstName: 'Jan', status: status({}), interactionToken: 'token-1', error: null,
+      preferredLanguage: null,
     })
     vi.spyOn(kioskApi, 'kioskPunch').mockResolvedValue({
       outcome: 'Success', status: null, occurredAt: '2026-08-20T05:54:00Z', error: null,

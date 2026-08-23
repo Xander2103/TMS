@@ -13,16 +13,17 @@ export interface ShortcutDef {
   permissions: string[]
 }
 
+// i18n-wave: `label` is een vertaalsleutel (ui.shortcutList.*) — de hulpmodal vertaalt.
 export const SHORTCUTS: ShortcutDef[] = [
-  { keys: 'mod+k', label: 'Globaal zoeken / commando’s', action: { kind: 'palette' }, permissions: [] },
-  { keys: '/', label: 'Zoeken focussen', action: { kind: 'palette' }, permissions: [] },
-  { keys: '?', label: 'Deze hulp tonen', action: { kind: 'help' }, permissions: [] },
-  { keys: 'g p', label: 'Planbord', action: { kind: 'navigate', route: '/planning-center' }, permissions: ['planning.view'] },
-  { keys: 'g o', label: 'Operationeel centrum', action: { kind: 'navigate', route: '/operations' }, permissions: ['operations.view'] },
-  { keys: 'g d', label: 'Dossiers', action: { kind: 'navigate', route: '/dossiers' }, permissions: ['dossiers.view'] },
-  { keys: 'g i', label: 'Incidenten', action: { kind: 'navigate', route: '/incidents' }, permissions: ['incidents.view'] },
-  { keys: 'g f', label: 'Rendement', action: { kind: 'navigate', route: '/profitability' }, permissions: ['profitability.view'] },
-  { keys: 'g w', label: 'Magazijnen', action: { kind: 'navigate', route: '/warehouses' }, permissions: ['warehouse.view', 'warehouse.manage'] },
+  { keys: 'mod+k', label: 'ui.shortcutList.globalSearch', action: { kind: 'palette' }, permissions: [] },
+  { keys: '/', label: 'ui.shortcutList.focusSearch', action: { kind: 'palette' }, permissions: [] },
+  { keys: '?', label: 'ui.shortcutList.showHelp', action: { kind: 'help' }, permissions: [] },
+  { keys: 'g p', label: 'ui.shortcutList.planningBoard', action: { kind: 'navigate', route: '/planning-center' }, permissions: ['planning.view'] },
+  { keys: 'g o', label: 'ui.shortcutList.operations', action: { kind: 'navigate', route: '/operations' }, permissions: ['operations.view'] },
+  { keys: 'g d', label: 'ui.shortcutList.dossiers', action: { kind: 'navigate', route: '/dossiers' }, permissions: ['dossiers.view'] },
+  { keys: 'g i', label: 'ui.shortcutList.incidents', action: { kind: 'navigate', route: '/incidents' }, permissions: ['incidents.view'] },
+  { keys: 'g f', label: 'ui.shortcutList.profitability', action: { kind: 'navigate', route: '/profitability' }, permissions: ['profitability.view'] },
+  { keys: 'g w', label: 'ui.shortcutList.warehouses', action: { kind: 'navigate', route: '/warehouses' }, permissions: ['warehouse.view', 'warehouse.manage'] },
 ]
 
 export const SEQUENCE_TIMEOUT_MS = 1500

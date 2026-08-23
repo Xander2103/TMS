@@ -1,4 +1,5 @@
 import { Badge, type BadgeTone } from './Badge'
+import { useLocale } from '../../i18n/localeContext'
 import './StatusBadges.css'
 
 export interface StatusBadgesProps {
@@ -16,13 +17,14 @@ export interface StatusBadgesProps {
  * badge, an optional blocked badge — never two identical "Actief" pills.
  */
 export function StatusBadges({ active, activeLabels, operational, blocked }: StatusBadgesProps) {
-  const labels = activeLabels ?? { active: 'Actief', inactive: 'Inactief' }
+  const { t } = useLocale()
+  const labels = activeLabels ?? { active: t('ui.statusBadges.active'), inactive: t('ui.statusBadges.inactive') }
   const reason = blocked?.isBlocked ? blocked.reason : operational?.reason
   return (
     <span className="ui-status-badges">
       <Badge tone={active ? 'success' : 'neutral'}>{active ? labels.active : labels.inactive}</Badge>
       {operational && <Badge tone={operational.tone}>{operational.label}</Badge>}
-      {blocked?.isBlocked && <Badge tone="danger">Geblokkeerd</Badge>}
+      {blocked?.isBlocked && <Badge tone="danger">{t('ui.statusBadges.blocked')}</Badge>}
       {reason && <span className="ui-status-badges-reason">— {reason}</span>}
     </span>
   )
