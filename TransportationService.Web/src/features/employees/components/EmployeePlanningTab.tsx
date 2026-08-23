@@ -4,7 +4,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { MonthGrid } from '../../../components/calendar/MonthGrid'
 import { WeekGrid } from '../../../components/calendar/WeekGrid'
 import { CalendarToolbar, type CalendarViewMode } from '../../../components/calendar/CalendarToolbar'
-import { DAY_NAMES, addDays, dayIndexMonday, monthGridRange, startOfMonth, toIsoDate } from '../../../components/calendar/dateUtils'
+import { addDays, dayIndexMonday, getDayNames, monthGridRange, startOfMonth, toIsoDate } from '../../../components/calendar/dateUtils'
 import '../../../components/calendar/calendar.css'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
@@ -157,7 +157,7 @@ export function EmployeePlanningTab({ employeeId }: { employeeId: string }) {
             return (
               <li key={day.date} className="cal-list-day">
                 <div className="cal-list-date">
-                  {DAY_NAMES[dayIndex]} {day.date}
+                  {getDayNames()[dayIndex]} {day.date}
                 </div>
                 <div className="cal-list-entries">
                   {day.entries.map((entry, index) => (

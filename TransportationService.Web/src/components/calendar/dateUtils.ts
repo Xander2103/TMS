@@ -7,15 +7,6 @@
 
 import { getActiveLocale } from '../../i18n/activeLocale'
 
-/** @deprecated Nederlandstalige constante — gebruik getDayNames() (volgt de UI-taal). */
-export const DAY_NAMES = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'] as const
-
-/** @deprecated Nederlandstalige constante — gebruik getMonthNames() (volgt de UI-taal). */
-export const MONTH_NAMES = [
-  'januari', 'februari', 'maart', 'april', 'mei', 'juni',
-  'juli', 'augustus', 'september', 'oktober', 'november', 'december',
-] as const
-
 const LOCALE_TAGS = { nl: 'nl-BE', fr: 'fr-BE', en: 'en-GB' } as const
 
 function localeTag(): string {

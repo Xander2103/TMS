@@ -13,7 +13,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { MonthGrid } from '../../../components/calendar/MonthGrid'
 import { WeekGrid } from '../../../components/calendar/WeekGrid'
 import { CalendarToolbar, type CalendarViewMode } from '../../../components/calendar/CalendarToolbar'
-import { DAY_NAMES, dayIndexMonday, monthGridRange } from '../../../components/calendar/dateUtils'
+import { dayIndexMonday, getDayNames, monthGridRange } from '../../../components/calendar/dateUtils'
 import '../../../components/calendar/calendar.css'
 import { ScheduleChip, ScheduleLegend } from '../../employee-planning/components/ScheduleChip'
 import { mondayOf, toIsoDate, type ScheduleDay, type ScheduleEntry } from '../../employee-planning/types'
@@ -178,7 +178,7 @@ export function PortalPlanningPage() {
             return (
               <li key={day.date} className={`cal-list-day ${day.date === today ? 'cal-today' : ''}`}>
                 <div className="cal-list-date">
-                  {DAY_NAMES[dayIndex]} {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
+                  {getDayNames()[dayIndex]} {day.date.slice(8, 10)}/{day.date.slice(5, 7)}
                   {day.date === today && ` · ${t('portalHome.planning.today')}`}
                 </div>
                 <div className="cal-list-entries">
