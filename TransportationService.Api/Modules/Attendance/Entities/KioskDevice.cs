@@ -19,6 +19,14 @@ public class KioskDevice : AuditableTenantEntity
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Standaardtaal van het prikklokscherm (nl/fr/en, productcatalogus — geen vrije
+    /// string). Het beginscherm toont deze taal; na identificatie mag de interactie
+    /// tijdelijk naar de persoonlijke taal van de medewerker schakelen en na de reset
+    /// keert de kiosk hiernaar terug.
+    /// </summary>
+    public string DefaultLanguage { get; set; } = "nl";
+
     /// <summary>SHA-256-hash van het device-secret (high-entropy random token).</summary>
     public string SecretHash { get; set; } = string.Empty;
 

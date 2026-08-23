@@ -192,9 +192,12 @@ public record CustomerHistoryEntryDto(
     string? UserName,
     string Action,
     string ActionLabel,
+    /// <summary>LEGACY Nederlands categorielabel; logica hoort op CategoryCode (i18n-wave).</summary>
     string Category,
     IReadOnlyList<CustomerHistoryChangeDto> Changes,
-    string Summary);
+    string Summary,
+    /// <summary>Stabiele categoriecode: customer | contacts | locations | billing | communication.</summary>
+    string CategoryCode = "customer");
 
 public record CustomerHistoryPageDto(
     IReadOnlyList<CustomerHistoryEntryDto> Items,

@@ -82,9 +82,12 @@ public class AttendanceController : ControllerBase
     private ActionResult<AttendanceSessionDto> Handle(AttendanceCorrectionResult result) => result.Outcome switch
     {
         AttendanceCorrectionOutcome.Success => Ok(result.Session),
-        AttendanceCorrectionOutcome.NotFound => NotFound(new { message = result.Error }),
-        AttendanceCorrectionOutcome.StaleVersion => Conflict(new { message = result.Error, staleVersion = true }),
-        AttendanceCorrectionOutcome.OverlapsOtherSession => Conflict(new { message = result.Error }),
-        _ => BadRequest(new { message = result.Error }),
+        AttendanceCorrectionOutcome.NotFound =>
+            NotFound(new { message = result.Error, code = Common.ErrorCodes.NotFound }),
+        AttendanceCorrectionOutcome.StaleVersion =>
+            Conflict(new { message = result.Error, staleVersion = true, code = Common.ErrorCodes.AttendanceStaleVersion }),
+        AttendanceCorrectionOutcome.OverlapsOtherSession =>
+            Conflict(new { message = result.Error, code = Common.ErrorCodes.AttendanceSessionOverlap }),
+        _ => BadRequest(new { message = result.Error, code = Common.ErrorCodes.ValidationFailed }),
     };
 }

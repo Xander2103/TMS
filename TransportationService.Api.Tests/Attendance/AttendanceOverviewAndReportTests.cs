@@ -241,10 +241,25 @@ public class AttendanceOverviewAndReportTests
         });
         await h.Db.Context.SaveChangesAsync();
 
-        var export = new AttendanceExportService(h.Report(), new DevCurrentUserContext(null), h.Clock);
+        var export = new AttendanceExportService(h.Report(), new DevCurrentUserContext(null), h.Clock, h.Db.Context);
         var (content, fileName) = await export.BuildAsync(Today, Today, null, null, CancellationToken.None);
 
-        Assert.StartsWith("urenregistratie-", fileName);
+        Assert.StartsWith("urenregistratie-", fileName)
+        ;
+        // FR-gebruiker krijgt Franse koppen — zelfde kolomvolgorde/data (§66).
+        var frUser = new TransportationService.Api.Modules.Identity.Entities.User
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Email = "fr@acme.test",
+            FirstName = "Luc", LastName = "Martin", IsActive = true, PreferredLanguageCode = "fr",
+        };
+        h.Db.Context.Users.Add(frUser);
+        await h.Db.Context.SaveChangesAsync();
+        var frExport = new AttendanceExportService(h.Report(), new DevCurrentUserContext(frUser.Id), h.Clock, h.Db.Context);
+        var (frContent, _) = await frExport.BuildAsync(Today, Today, null, null, CancellationToken.None);
+        using var frWorkbook = new ClosedXML.Excel.XLWorkbook(new MemoryStream(frContent));
+        var frSheet = frWorkbook.Worksheet("Enregistrement des heures");
+        Assert.Equal("Collaborateur", frSheet.Cell(1, 1).GetString());
+        Assert.Equal("Écart (min)", frSheet.Cell(1, 9).GetString());
         using var workbook = new ClosedXML.Excel.XLWorkbook(new MemoryStream(content));
         var sheet = workbook.Worksheet("Urenregistratie");
         var nameCell = sheet.Cell(2, 1);

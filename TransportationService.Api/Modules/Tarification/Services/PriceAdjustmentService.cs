@@ -422,13 +422,21 @@ public class PriceAdjustmentService : IPriceAdjustmentService
 
     private static ScheduledPriceAdjustmentDto Map(ScheduledPriceAdjustment adjustment, DateOnly today)
     {
-        var status = adjustment.Status == ScheduledAdjustmentStatus.Cancelled
-            ? "Geannuleerd"
-            : adjustment.EffectiveDate <= today ? "Actief" : "Gepland";
+        // StatusCode = stabiel contract; het Nederlandse Status-veld blijft één release
+        // als legacy weergave mee (frontend vertaalt intussen op StatusCode).
+        var statusCode = adjustment.Status == ScheduledAdjustmentStatus.Cancelled
+            ? "Cancelled"
+            : adjustment.EffectiveDate <= today ? "Active" : "Planned";
+        var status = statusCode switch
+        {
+            "Cancelled" => "Geannuleerd",
+            "Active" => "Actief",
+            _ => "Gepland",
+        };
         return new ScheduledPriceAdjustmentDto(
             adjustment.Id, adjustment.CustomerId, adjustment.EffectiveDate, adjustment.Percent,
             status, adjustment.Reason, adjustment.Rules.Count, adjustment.CreatedAt,
             adjustment.AgreementId, adjustment.AmountDelta, adjustment.RoundingStep,
-            adjustment.BasisFilter, adjustment.UnitTypeIdFilter);
+            adjustment.BasisFilter, adjustment.UnitTypeIdFilter, statusCode);
     }
 }

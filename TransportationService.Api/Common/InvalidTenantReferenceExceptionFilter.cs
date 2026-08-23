@@ -17,12 +17,14 @@ public sealed class InvalidTenantReferenceExceptionFilter : IExceptionFilter
             return;
         }
 
-        context.Result = new ObjectResult(new ProblemDetails
+        var problem = new ProblemDetails
         {
             Title = "Ongeldige referentie",
             Detail = exception.Message,
             Status = StatusCodes.Status400BadRequest,
-        })
+        };
+        problem.Extensions["code"] = ErrorCodes.InvalidReference;
+        context.Result = new ObjectResult(problem)
         {
             StatusCode = StatusCodes.Status400BadRequest,
             ContentTypes = { "application/problem+json" },

@@ -30,6 +30,9 @@ public class Phase10SystematicSecurityTests
         "AuthController.Logout",
         "AuthController.Me",
         "MeController.ChangePassword",
+        // UI-taalvoorkeur (i18n-wave): strikt self-scoped write van User.PreferredLanguageCode
+        // (eigen rij + eigen tenant, geaudit). Presentatie-only — taal geeft nooit rechten.
+        "MyLanguageController.Set",
 
         // Regional display preferences (settings/system wave): presentation configuration
         // only (date format, separators, timezone, language) — deliberately available to

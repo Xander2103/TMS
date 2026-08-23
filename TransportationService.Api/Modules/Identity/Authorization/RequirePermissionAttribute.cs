@@ -33,12 +33,14 @@ public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
 
         if (currentUser.CurrentUserId is not { } userId)
         {
-            context.Result = new ObjectResult(new ProblemDetails
+            var unauthorized = new ProblemDetails
             {
                 Title = "Unauthorized",
                 Detail = "Authentication is required to access this resource.",
                 Status = StatusCodes.Status401Unauthorized,
-            })
+            };
+            unauthorized.Extensions["code"] = Common.ErrorCodes.Unauthenticated;
+            context.Result = new ObjectResult(unauthorized)
             {
                 StatusCode = StatusCodes.Status401Unauthorized,
                 ContentTypes = { "application/problem+json" },
@@ -59,12 +61,14 @@ public class RequirePermissionAttribute : Attribute, IAsyncActionFilter
 
         if (!hasPermission)
         {
-            context.Result = new ObjectResult(new ProblemDetails
+            var forbidden = new ProblemDetails
             {
                 Title = "Forbidden",
                 Detail = $"Missing permission: {string.Join(" or ", _permissionCodes)}",
                 Status = StatusCodes.Status403Forbidden,
-            })
+            };
+            forbidden.Extensions["code"] = Common.ErrorCodes.Forbidden;
+            context.Result = new ObjectResult(forbidden)
             {
                 StatusCode = StatusCodes.Status403Forbidden,
                 ContentTypes = { "application/problem+json" },

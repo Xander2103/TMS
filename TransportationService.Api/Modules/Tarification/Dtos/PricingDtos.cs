@@ -251,9 +251,13 @@ public record CreatePriceAdjustmentRequest(
 
 public record ScheduledPriceAdjustmentDto(
     Guid Id, Guid? CustomerId, DateOnly EffectiveDate, decimal? Percent,
+    /// <summary>LEGACY weergavetekst (Nederlands). Logica hoort op StatusCode; dit veld
+    /// verdwijnt zodra alle clients zijn overgestapt (i18n-wave).</summary>
     string Status, string? Reason, int RuleCount, DateTime CreatedAt,
     Guid? AgreementId = null, decimal? AmountDelta = null, decimal? RoundingStep = null,
-    string? BasisFilter = null, Guid? UnitTypeIdFilter = null);
+    string? BasisFilter = null, Guid? UnitTypeIdFilter = null,
+    /// <summary>Stabiele statuscode: Planned | Active | Cancelled.</summary>
+    string StatusCode = "Planned");
 
 // --- Agreement duplication (new version) ---
 

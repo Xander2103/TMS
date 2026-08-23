@@ -58,13 +58,14 @@ public class KioskDeviceService : IKioskDeviceService
             Name = name,
             LocationId = request.LocationId,
             IsActive = request.IsActive,
+            DefaultLanguage = Common.SupportedLanguages.Normalize(request.DefaultLanguage),
             SecretHash = KioskDeviceSecrets.Hash(secret),
         };
         _dbContext.KioskDevices.Add(device);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync("KioskDevice", device.Id.ToString(), "Created",
-            null, new { device.Name, device.LocationId, device.IsActive }, cancellationToken);
+            null, new { device.Name, device.LocationId, device.IsActive, device.DefaultLanguage }, cancellationToken);
 
         var locationNames = await LocationNamesAsync([device.LocationId], cancellationToken);
         return new KioskProvisionResult(ToDto(device, locationNames), KioskDeviceSecrets.BuildDeviceKey(device.Id, secret));
@@ -78,15 +79,16 @@ public class KioskDeviceService : IKioskDeviceService
             return null;
         }
 
-        var old = new { device.Name, device.LocationId, device.IsActive };
+        var old = new { device.Name, device.LocationId, device.IsActive, device.DefaultLanguage };
         device.Name = request.Name.Trim();
         device.LocationId = request.LocationId;
         device.IsActive = request.IsActive;
+        device.DefaultLanguage = Common.SupportedLanguages.Normalize(request.DefaultLanguage);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         var action = old.IsActive && !device.IsActive ? "Disabled" : "Updated";
         await _auditService.RecordAsync("KioskDevice", device.Id.ToString(), action,
-            old, new { device.Name, device.LocationId, device.IsActive }, cancellationToken);
+            old, new { device.Name, device.LocationId, device.IsActive, device.DefaultLanguage }, cancellationToken);
 
         var locationNames = await LocationNamesAsync([device.LocationId], cancellationToken);
         return ToDto(device, locationNames);
@@ -128,5 +130,5 @@ public class KioskDeviceService : IKioskDeviceService
     private static KioskDeviceDto ToDto(KioskDevice device, IReadOnlyDictionary<Guid, string> locationNames) =>
         new(device.Id, device.Name, device.LocationId,
             device.LocationId is { } locId && locationNames.TryGetValue(locId, out var name) ? name : null,
-            device.IsActive, device.LastSeenAt, device.LastPunchAt, device.CreatedAt);
+            device.IsActive, device.LastSeenAt, device.LastPunchAt, device.CreatedAt, device.DefaultLanguage);
 }

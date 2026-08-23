@@ -181,7 +181,10 @@ public record EmployeeHistoryChangeDto(string Field, string? Before, string? Aft
 /// </summary>
 public record EmployeeHistoryEntryDto(
     Guid Id, DateTime Timestamp, string? UserName, string Action, string ActionLabel,
-    string Category, IReadOnlyList<EmployeeHistoryChangeDto> Changes, string Summary);
+    /// <summary>LEGACY Nederlands categorielabel; logica hoort op CategoryCode (i18n-wave).</summary>
+    string Category, IReadOnlyList<EmployeeHistoryChangeDto> Changes, string Summary,
+    /// <summary>Stabiele categoriecode: profile | qualifications | documents | notes | issued_items | absences | leave_balance | driver_profile.</summary>
+    string CategoryCode = "profile");
 
 public record EmployeeHistoryPageDto(
     IReadOnlyList<EmployeeHistoryEntryDto> Items, int TotalCount, int Page, int PageSize);

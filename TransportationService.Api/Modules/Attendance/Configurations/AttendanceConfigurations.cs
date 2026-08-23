@@ -143,6 +143,7 @@ public class KioskDeviceConfiguration : IEntityTypeConfiguration<KioskDevice>
         builder.HasKey(d => d.Id);
 
         builder.Property(d => d.Name).IsRequired().HasMaxLength(200);
+        builder.Property(d => d.DefaultLanguage).IsRequired().HasMaxLength(5);
         builder.Property(d => d.SecretHash).IsRequired().HasMaxLength(100);
 
         builder.HasIndex(d => new { d.TenantId, d.Name })

@@ -113,14 +113,20 @@ public enum ExecutionOutcome
     ValidationFailed,
 }
 
-public record ExecutionResult(ExecutionOutcome Outcome, TripExecutionDto? Execution, string? Error = null)
+public record ExecutionResult(
+    ExecutionOutcome Outcome, TripExecutionDto? Execution, string? Error = null,
+    /// <summary>Stabiele machine-leesbare foutcode (Common.ErrorCodes) — de frontend
+    /// vertaalt/branch hierop, nooit op de Nederlandse fouttekst.</summary>
+    string? Code = null)
 {
     public static ExecutionResult Success(TripExecutionDto execution) => new(ExecutionOutcome.Success, execution);
     public static readonly ExecutionResult NotFound = new(ExecutionOutcome.NotFound, null);
     public static readonly ExecutionResult NotYourTrip = new(ExecutionOutcome.NotYourTrip, null,
         "Deze rit is niet aan jou toegewezen.");
-    public static ExecutionResult InvalidState(string error) => new(ExecutionOutcome.InvalidState, null, error);
-    public static ExecutionResult Invalid(string error) => new(ExecutionOutcome.ValidationFailed, null, error);
+    public static ExecutionResult InvalidState(string error, string? code = null) =>
+        new(ExecutionOutcome.InvalidState, null, error, code);
+    public static ExecutionResult Invalid(string error, string? code = null) =>
+        new(ExecutionOutcome.ValidationFailed, null, error, code);
 }
 
 public record StopHistoryResult(ExecutionOutcome Outcome, IReadOnlyList<StopStatusHistoryDto>? History, string? Error = null)

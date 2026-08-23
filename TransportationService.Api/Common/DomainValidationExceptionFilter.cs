@@ -19,6 +19,9 @@ public sealed class DomainValidationExceptionFilter : IExceptionFilter
             Detail = exception.Message,
             Status = StatusCodes.Status400BadRequest,
         };
+        // Machine-leesbaar naast de Nederlandse detail-tekst (i18n-wave): generiek
+        // common.validation_failed; specifiekere codes kunnen per throw-site volgen.
+        problem.Extensions["code"] = ErrorCodes.ValidationFailed;
         if (exception.FieldErrors is { Count: > 0 })
         {
             // Same top-level "errors" shape as ASP.NET's ValidationProblemDetails, so the

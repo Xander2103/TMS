@@ -88,7 +88,10 @@ public record BackupOverviewDto(
     int AutomaticRetentionDays,
     int PreRestoreRetentionDays,
     bool AutomaticEnabled,
-    string StorageStatus);
+    /// <summary>LEGACY Nederlandse weergavetekst; logica hoort op StorageAvailable (i18n-wave).</summary>
+    string StorageStatus,
+    /// <summary>Stabiele machineleesbare status van de back-upopslagmap.</summary>
+    bool StorageAvailable = true);
 
 public record RestoreResultDto(
     Guid SafetyBackupId, string SafetyBackupFileName, string DatabaseStatus, string Advice);
@@ -181,21 +184,23 @@ public class BackupService : IBackupService
             }
         }
 
-        string storageStatus;
+        bool storageAvailable;
         try
         {
             System.IO.Directory.CreateDirectory(BackupDirectory);
-            storageStatus = "Beschikbaar";
+            storageAvailable = true;
         }
         catch
         {
-            storageStatus = "Opslagmap niet beschikbaar";
+            storageAvailable = false;
         }
 
         return new BackupOverviewDto(
             backups.OrderByDescending(b => b.CreatedAtUtc).ToList(),
             _options.AutomaticRetentionDays, _options.PreRestoreRetentionDays,
-            _options.AutomaticEnabled, storageStatus);
+            _options.AutomaticEnabled,
+            storageAvailable ? "Beschikbaar" : "Opslagmap niet beschikbaar",
+            storageAvailable);
     }
 
     public async Task<BackupDto> CreateAsync(string source, string? note, CancellationToken cancellationToken)

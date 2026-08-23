@@ -82,7 +82,8 @@ public class KioskPunchService : IKioskPunchService
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
-        return new KioskPingResult(KioskOutcome.Success, device.Name, locationName, null);
+        return new KioskPingResult(KioskOutcome.Success, device.Name, locationName, null,
+            Common.SupportedLanguages.Normalize(device.DefaultLanguage));
     }
 
     public async Task<KioskIdentifyResult> IdentifyAsync(string? deviceKey, string? pin, CancellationToken cancellationToken)
@@ -146,7 +147,7 @@ public class KioskPunchService : IKioskPunchService
 
         var employee = await _dbContext.Employees.AsNoTracking()
             .Where(e => e.TenantId == device.TenantId && e.Id == credential.EmployeeId)
-            .Select(e => new { e.FirstName, e.IsActive })
+            .Select(e => new { e.FirstName, e.IsActive, e.PreferredLanguageCode })
             .FirstOrDefaultAsync(cancellationToken);
         if (employee is null || !employee.IsActive)
         {
@@ -164,7 +165,10 @@ public class KioskPunchService : IKioskPunchService
         var status = await attendance.GetStatusAsync(credential.EmployeeId, cancellationToken);
         var token = _tokenStore.Issue(device.TenantId, credential.EmployeeId, device.Id);
 
-        return new KioskIdentifyResult(KioskOutcome.Success, employee.FirstName, status, token, null);
+        // Persoonlijke taal reist bewust pas mee NA een geldige identificatie (§18):
+        // het interactiescherm mag ernaar schakelen; de kiosk reset naar de device-default.
+        return new KioskIdentifyResult(KioskOutcome.Success, employee.FirstName, status, token, null,
+            Common.SupportedLanguages.NormalizeOrNull(employee.PreferredLanguageCode));
     }
 
     public async Task<KioskPunchResult> PunchAsync(

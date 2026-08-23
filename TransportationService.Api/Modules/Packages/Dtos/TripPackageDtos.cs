@@ -78,7 +78,10 @@ public record CustomerPackageRowDto(
     string Description,
     decimal Quantity,
     string UnitType,
-    string StatusLabel);
+    /// <summary>LEGACY Nederlandse weergavetekst; logica hoort op StatusCode (i18n-wave).</summary>
+    string StatusLabel,
+    /// <summary>Stabiele klantcategorie: Preparing | InTransit | Delivered | PartiallyDelivered | RedeliveryPlanned | Return | Cancelled | InProgress.</summary>
+    string StatusCode = "InProgress");
 
 /// <summary>One appended custody event, resolved for display. The chain is read-only by design.</summary>
 public record PackageTimelineEventDto(

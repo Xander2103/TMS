@@ -69,7 +69,8 @@ public class PortalMessageService : IPortalMessageService
 {
     private const string EntityType = "PortalMessage";
     private static readonly string[] AllowedRelatedTypes = ["order", "invoice"];
-    private static readonly string[] SupportedLanguages = ["nl", "fr", "en"];
+    // Centrale catalogus — geen eigen kopie van de taallijst meer.
+    private static readonly IReadOnlyList<string> SupportedLanguages = Common.SupportedLanguages.All;
 
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;

@@ -292,6 +292,34 @@ public class KioskSecurityTests
     }
 
     [Fact]
+    public async Task KioskLanguage_DeviceDefaultInPing_PersonalLanguageOnlyAfterValidIdentify()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        await SetPinAsync(h);
+
+        var device = h.Db.Context.KioskDevices.Single(d => d.Id == h.DeviceId);
+        device.DefaultLanguage = "fr";
+        var employee = h.Db.Context.Employees.Single(e => e.Id == h.EmployeeId);
+        employee.PreferredLanguageCode = "en";
+        await h.Db.Context.SaveChangesAsync();
+        var sut = h.Sut();
+
+        // Beginscherm: device-default, geen persoonsgebonden taal.
+        var ping = await sut.PingAsync(h.DeviceKey, CancellationToken.None);
+        Assert.Equal("fr", ping.DefaultLanguage);
+
+        // Foute code lekt géén persoonlijke taal (privacy §18).
+        var invalid = await sut.IdentifyAsync(h.DeviceKey, "9999", CancellationToken.None);
+        Assert.Null(invalid.PreferredLanguage);
+
+        // Geldige identificatie: persoonlijke taal beschikbaar voor het interactiescherm.
+        var identify = await sut.IdentifyAsync(h.DeviceKey, "1234", CancellationToken.None);
+        Assert.Equal(KioskOutcome.Success, identify.Outcome);
+        Assert.Equal("en", identify.PreferredLanguage);
+    }
+
+    [Fact]
     public async Task RotateSecret_InvalidatesTheOldDeviceKey()
     {
         var h = await SeedAsync();

@@ -265,12 +265,15 @@ public sealed record KioskDeviceDto(
     bool IsActive,
     DateTime? LastSeenAt,
     DateTime? LastPunchAt,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    /// <summary>Standaardtaal van het kioskscherm (nl/fr/en).</summary>
+    string DefaultLanguage = "nl");
 
 /// <summary>Provisioningresultaat: de deviceKey wordt hier éénmalig teruggegeven en is daarna onherleidbaar.</summary>
 public sealed record KioskProvisionResult(KioskDeviceDto Device, string DeviceKey);
 
-public sealed record SaveKioskDeviceRequest(string Name, Guid? LocationId, bool IsActive = true);
+public sealed record SaveKioskDeviceRequest(
+    string Name, Guid? LocationId, bool IsActive = true, string DefaultLanguage = "nl");
 
 public enum KioskOutcome
 {
@@ -290,7 +293,11 @@ public sealed record KioskIdentifyResult(
     string? FirstName,
     AttendanceStatusDto? Status,
     string? InteractionToken,
-    string? Error);
+    string? Error,
+    /// <summary>Persoonlijke UI-taal van de geïdentificeerde medewerker (nl/fr/en) — pas ná
+    /// geldige identificatie meegegeven (privacy §18); null = geen voorkeur, kiosk blijft
+    /// op de device-default.</summary>
+    string? PreferredLanguage = null);
 
 public sealed record KioskPunchResult(
     KioskOutcome Outcome,
@@ -302,7 +309,9 @@ public sealed record KioskPingResult(
     KioskOutcome Outcome,
     string? DeviceName,
     string? LocationName,
-    string? Error);
+    string? Error,
+    /// <summary>Standaardtaal van dit device — het beginscherm rendert hierin.</summary>
+    string DefaultLanguage = "nl");
 
 public enum KioskPunchAction
 {

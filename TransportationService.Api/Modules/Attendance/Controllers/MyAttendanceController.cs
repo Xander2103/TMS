@@ -120,8 +120,27 @@ public class MyAttendanceController : ControllerBase
         var result = await action(employeeId, new AttendancePunchContext(AttendanceSource.Web), cancellationToken);
         return result.Outcome == AttendancePunchOutcome.Success
             ? Ok(result.Status)
-            : Conflict(new { message = result.Error, outcome = result.Outcome.ToString() });
+            : Conflict(new
+            {
+                message = result.Error,
+                outcome = result.Outcome.ToString(),
+                code = PunchErrorCode(result.Outcome),
+            });
     }
+
+    /// <summary>Stabiele foutcode per outcome — de frontend vertaalt/branch hierop, nooit op de tekst.</summary>
+    public static string PunchErrorCode(AttendancePunchOutcome outcome) => outcome switch
+    {
+        AttendancePunchOutcome.AlreadyClockedIn => Common.ErrorCodes.AttendanceAlreadyClockedIn,
+        AttendancePunchOutcome.NotClockedIn => Common.ErrorCodes.AttendanceNotClockedIn,
+        AttendancePunchOutcome.BreakAlreadyActive => Common.ErrorCodes.AttendanceBreakAlreadyActive,
+        AttendancePunchOutcome.NoActiveBreak => Common.ErrorCodes.AttendanceNoActiveBreak,
+        AttendancePunchOutcome.EmployeeInactive => Common.ErrorCodes.AttendanceEmployeeInactive,
+        AttendancePunchOutcome.EmployeeNotFound => Common.ErrorCodes.AttendanceEmployeeNotFound,
+        AttendancePunchOutcome.SelfPunchDisabled => Common.ErrorCodes.AttendanceSelfPunchDisabled,
+        AttendancePunchOutcome.KioskDisabled => Common.ErrorCodes.AttendanceKioskDisabled,
+        _ => Common.ErrorCodes.ValidationFailed,
+    };
 
     /// <summary>De ene employee-resolutie: via de employee-link van de ingelogde gebruiker.</summary>
     private async Task<Guid?> MyEmployeeIdAsync(CancellationToken cancellationToken)

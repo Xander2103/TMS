@@ -123,18 +123,34 @@ public class PackageService : IPackageService
             .ToList();
     }
 
-    /// <summary>Neutral customer label per lifecycle status; problems stay "in behandeling" — no operational detail leaks.</summary>
-    private static string CustomerStatusLabel(PackageLifecycleStatus status) => status switch
+    /// <summary>
+    /// Neutrale klantcategorie per lifecycle-status; problemen blijven "InProgress" — geen
+    /// operationeel detail lekt. De CODE is het stabiele contract (badge-tonen/vertaling in
+    /// de frontend); het Nederlandse label reist als legacy weergave mee (i18n-wave).
+    /// </summary>
+    private static string CustomerStatusCode(PackageLifecycleStatus status) => status switch
     {
         PackageLifecycleStatus.Created or PackageLifecycleStatus.Labelled or PackageLifecycleStatus.AwaitingLoading =>
-            "In voorbereiding",
-        PackageLifecycleStatus.Loaded or PackageLifecycleStatus.InTransit or PackageLifecycleStatus.AtStop => "Onderweg",
-        PackageLifecycleStatus.Delivered => "Geleverd",
-        PackageLifecycleStatus.PartiallyDelivered => "Gedeeltelijk geleverd",
-        PackageLifecycleStatus.RedeliveryPlanned => "Nieuwe levering gepland",
+            "Preparing",
+        PackageLifecycleStatus.Loaded or PackageLifecycleStatus.InTransit or PackageLifecycleStatus.AtStop => "InTransit",
+        PackageLifecycleStatus.Delivered => "Delivered",
+        PackageLifecycleStatus.PartiallyDelivered => "PartiallyDelivered",
+        PackageLifecycleStatus.RedeliveryPlanned => "RedeliveryPlanned",
         PackageLifecycleStatus.ReturnPending or PackageLifecycleStatus.ReturnLoaded
-            or PackageLifecycleStatus.ReturnedToDepot or PackageLifecycleStatus.ReturnedToSender => "Retour",
-        PackageLifecycleStatus.Cancelled => "Geannuleerd",
+            or PackageLifecycleStatus.ReturnedToDepot or PackageLifecycleStatus.ReturnedToSender => "Return",
+        PackageLifecycleStatus.Cancelled => "Cancelled",
+        _ => "InProgress",
+    };
+
+    private static string CustomerStatusLabel(string statusCode) => statusCode switch
+    {
+        "Preparing" => "In voorbereiding",
+        "InTransit" => "Onderweg",
+        "Delivered" => "Geleverd",
+        "PartiallyDelivered" => "Gedeeltelijk geleverd",
+        "RedeliveryPlanned" => "Nieuwe levering gepland",
+        "Return" => "Retour",
+        "Cancelled" => "Geannuleerd",
         _ => "In behandeling",
     };
 
@@ -159,9 +175,13 @@ public class PackageService : IPackageService
             .Where(p => !parentIds.Contains(p.Id) && p.CurrentLifecycleStatus != PackageLifecycleStatus.Cancelled)
             .ToList();
 
-        var rows = leaves.Select(p => new CustomerPackageRowDto(
-                p.PackageNumber, p.Description, p.Quantity,
-                p.UnitTypeLabel ?? p.UnitType.ToString(), CustomerStatusLabel(p.CurrentLifecycleStatus)))
+        var rows = leaves.Select(p =>
+            {
+                var statusCode = CustomerStatusCode(p.CurrentLifecycleStatus);
+                return new CustomerPackageRowDto(
+                    p.PackageNumber, p.Description, p.Quantity,
+                    p.UnitTypeLabel ?? p.UnitType.ToString(), CustomerStatusLabel(statusCode), statusCode);
+            })
             .ToList();
 
         return new CustomerPackageSummaryDto(

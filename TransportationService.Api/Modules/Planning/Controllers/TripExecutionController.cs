@@ -127,8 +127,8 @@ public class TripExecutionController : ControllerBase
         ExecutionOutcome.Success => Ok(result.Execution),
         ExecutionOutcome.NotFound => NotFound(),
         ExecutionOutcome.NotYourTrip => StatusCode(StatusCodes.Status403Forbidden, new { message = result.Error }),
-        ExecutionOutcome.InvalidState => BadRequest(new { message = result.Error }),
-        ExecutionOutcome.ValidationFailed => BadRequest(new { message = result.Error }),
+        ExecutionOutcome.InvalidState => BadRequest(new { message = result.Error, code = result.Code }),
+        ExecutionOutcome.ValidationFailed => BadRequest(new { message = result.Error, code = result.Code }),
         _ => Conflict(),
     };
 }

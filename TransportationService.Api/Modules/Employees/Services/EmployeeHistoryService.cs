@@ -80,6 +80,36 @@ public class EmployeeHistoryService : IEmployeeHistoryService
     /// <summary>Valid values for the `category` query filter — the chip labels shown in the UI.</summary>
     private static readonly HashSet<string> KnownCategories = new(CategoryByEntityType.Values, StringComparer.Ordinal);
 
+    // Stabiele categoriecodes (i18n-wave): filter accepteert code én legacy Nederlands label;
+    // de respons draagt beide. Frontendlogica hoort op de code.
+    private static readonly IReadOnlyDictionary<string, string> CategoryCodeByLabel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Profiel"] = "profile",
+        ["Kwalificaties"] = "qualifications",
+        ["Documenten"] = "documents",
+        ["Notities"] = "notes",
+        ["Bedrijfsmiddelen"] = "issued_items",
+        ["Afwezigheden"] = "absences",
+        ["Verlofsaldo"] = "leave_balance",
+        ["Chauffeursprofiel"] = "driver_profile",
+    };
+
+    internal static string? NormalizeCategoryFilter(string? category)
+    {
+        if (string.IsNullOrWhiteSpace(category))
+        {
+            return null;
+        }
+
+        if (CategoryCodeByLabel.TryGetValue(category, out var byLabel))
+        {
+            return byLabel;
+        }
+
+        return CategoryCodeByLabel.Values.FirstOrDefault(code =>
+            string.Equals(code, category, StringComparison.OrdinalIgnoreCase));
+    }
+
     private static readonly IReadOnlyDictionary<string, string> ActionLabels = new Dictionary<string, string>
     {
         ["Created"] = "Aangemaakt",
@@ -306,7 +336,8 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         Guid employeeId, int page, int pageSize, string? category, EmployeeHistoryAccess access,
         CancellationToken cancellationToken)
     {
-        if (category is not null && !KnownCategories.Contains(category))
+        var categoryCodeFilter = NormalizeCategoryFilter(category);
+        if (category is not null && categoryCodeFilter is null)
         {
             throw new DomainValidationException("category", "Onbekende categorie.");
         }
@@ -397,7 +428,8 @@ public class EmployeeHistoryService : IEmployeeHistoryService
             })
             // A save that changed nothing meaningful never becomes a misleading "Gewijzigd" card.
             .Where(e => e.Changes.Count > 0 || e.Action is not "Updated")
-            .Where(e => category is null || e.Category == category)
+            .Where(e => categoryCodeFilter is null
+                        || CategoryCodeByLabel.GetValueOrDefault(e.Category) == categoryCodeFilter)
             .ToList();
 
         var total = pendingEntries.Count;
@@ -512,7 +544,8 @@ public class EmployeeHistoryService : IEmployeeHistoryService
         var actorName = entry.ActorUserId is { } uid ? lookups.Users.GetValueOrDefault(uid) : null;
         var summary = BuildSummary(entry, changes);
         return new EmployeeHistoryEntryDto(
-            entry.Id, entry.Timestamp, actorName, entry.Action, entry.ActionLabel, entry.Category, changes, summary);
+            entry.Id, entry.Timestamp, actorName, entry.Action, entry.ActionLabel, entry.Category, changes, summary,
+            CategoryCodeByLabel.GetValueOrDefault(entry.Category, "profile"));
     }
 
     private static EmployeeHistoryChangeDto ResolveChange(PendingChange change, IdLookups lookups)

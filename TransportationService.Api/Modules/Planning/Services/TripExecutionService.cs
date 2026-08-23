@@ -153,7 +153,8 @@ public class TripExecutionService : ITripExecutionService
                 var numbers = string.Join(", ", unresolved.Select(p => p.PackageNumber).Take(5));
                 return ExecutionResult.Invalid(
                     $"Er zijn nog {unresolved.Count} verplichte colli zonder uitkomst ({numbers}); "
-                    + "scan of registreer ze, of rond af met een vrijgave en reden.");
+                    + "scan of registreer ze, of rond af met een vrijgave en reden.",
+                    Common.ErrorCodes.TripPackagesUnresolved);
             }
             // The override custody trail commits atomically with the completion below.
             _tripPackageService.StageCompletionOverride(tripId, stopId, unresolved, reason);
@@ -295,7 +296,7 @@ public class TripExecutionService : ITripExecutionService
                 StopExecutionStatus.Failed => "een mislukte stop",
                 _ => "een gedeeltelijk afgewerkte stop",
             };
-            return ExecutionResult.Invalid($"Een reden is verplicht bij {noun}.");
+            return ExecutionResult.Invalid($"Een reden is verplicht bij {noun}.", Common.ErrorCodes.TripReasonRequired);
         }
 
         var now = _timeProvider.GetUtcNow().UtcDateTime;
@@ -309,7 +310,8 @@ public class TripExecutionService : ITripExecutionService
                 if (reason is null)
                 {
                     return ExecutionResult.Invalid(
-                        "Je komt aan na het uiterste tijdstip van deze stop; een reden voor de late aankomst is verplicht.");
+                        "Je komt aan na het uiterste tijdstip van deze stop; een reden voor de late aankomst is verplicht.",
+                        Common.ErrorCodes.TripReasonRequired);
                 }
 
                 execution.LateArrivalReason = reason;

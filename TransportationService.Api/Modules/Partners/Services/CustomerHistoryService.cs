@@ -25,6 +25,33 @@ public class CustomerHistoryService : ICustomerHistoryService
 
     private static readonly string[] Categories = ["Klant", "Contactpersonen", "Locaties", "Facturatie", "Communicatie"];
 
+    // Stabiele categoriecodes (i18n-wave): het filter accepteert code én legacy Nederlands
+    // label (backward-compatible); de respons draagt beide. Frontendlogica hoort op de code.
+    private static readonly Dictionary<string, string> CategoryCodeByLabel = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Klant"] = "customer",
+        ["Contactpersonen"] = "contacts",
+        ["Locaties"] = "locations",
+        ["Facturatie"] = "billing",
+        ["Communicatie"] = "communication",
+    };
+
+    private static string? NormalizeCategoryFilter(string? category)
+    {
+        if (string.IsNullOrWhiteSpace(category))
+        {
+            return null;
+        }
+
+        if (CategoryCodeByLabel.TryGetValue(category, out var byLabel))
+        {
+            return byLabel;
+        }
+
+        return CategoryCodeByLabel.Values.FirstOrDefault(code =>
+            string.Equals(code, category, StringComparison.OrdinalIgnoreCase));
+    }
+
     private readonly TransportationDbContext _dbContext;
     private readonly ITenantContext _tenantContext;
 
@@ -37,7 +64,8 @@ public class CustomerHistoryService : ICustomerHistoryService
     public async Task<CustomerHistoryPageDto?> GetHistoryAsync(
         Guid customerId, int page, int pageSize, string? category, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(category) && !Categories.Contains(category, StringComparer.OrdinalIgnoreCase))
+        var categoryCodeFilter = NormalizeCategoryFilter(category);
+        if (!string.IsNullOrWhiteSpace(category) && categoryCodeFilter is null)
         {
             throw new DomainValidationException("category", "Onbekende historiekcategorie.");
         }
@@ -75,8 +103,8 @@ public class CustomerHistoryService : ICustomerHistoryService
         foreach (var log in logs)
         {
             var entryCategory = Categorize(log.EntityType, log.Action);
-            if (!string.IsNullOrWhiteSpace(category)
-                && !string.Equals(entryCategory, category, StringComparison.OrdinalIgnoreCase))
+            var entryCategoryCode = CategoryCodeByLabel[entryCategory];
+            if (categoryCodeFilter is not null && entryCategoryCode != categoryCodeFilter)
             {
                 continue;
             }
@@ -101,7 +129,8 @@ public class CustomerHistoryService : ICustomerHistoryService
                 ActionLabel(log.EntityType, log.Action),
                 entryCategory,
                 changes,
-                Summarize(log.EntityType, log.Action, changes)));
+                Summarize(log.EntityType, log.Action, changes),
+                entryCategoryCode));
         }
 
         page = Math.Max(1, page);

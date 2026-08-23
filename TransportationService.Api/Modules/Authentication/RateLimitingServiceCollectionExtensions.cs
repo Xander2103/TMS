@@ -74,6 +74,7 @@ public static class RateLimitingServiceCollectionExtensions
                     title = "Te veel aanvragen",
                     status = StatusCodes.Status429TooManyRequests,
                     detail = "Te veel pogingen vanaf dit adres. Probeer het over enkele minuten opnieuw.",
+                    code = TransportationService.Api.Common.ErrorCodes.RateLimited,
                 });
                 await context.HttpContext.Response.WriteAsync(payload, cancellationToken);
             };

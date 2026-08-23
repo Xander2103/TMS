@@ -113,8 +113,7 @@ public class CustomerPortalService : ICustomerPortalService
     /// <summary>Persists the portal user's UI/e-mail language (nl/fr/en); audited.</summary>
     public async Task<PortalResult<PortalContextDto>> SetLanguageAsync(string language, CancellationToken cancellationToken)
     {
-        var normalized = (language ?? "").Trim().ToLowerInvariant();
-        if (normalized is not ("nl" or "fr" or "en"))
+        if (Common.SupportedLanguages.NormalizeOrNull(language) is not { } normalized)
         {
             throw new DomainValidationException("language", "Kies nl, fr of en.");
         }
@@ -445,7 +444,7 @@ public class CustomerPortalService : ICustomerPortalService
 
         profile.EmailEnabled = request.EmailEnabled;
         profile.SmsEnabled = request.SmsEnabled;
-        profile.PreferredLanguage = request.PreferredLanguage is "nl" or "fr" or "en" ? request.PreferredLanguage : null;
+        profile.PreferredLanguage = Common.SupportedLanguages.NormalizeOrNull(request.PreferredLanguage);
         // Only the customer-facing subset is toggleable from the portal; null = all kinds.
         profile.EnabledKindsJson = request.EnabledKinds is null
             ? null

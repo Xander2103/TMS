@@ -1,4 +1,6 @@
 using ClosedXML.Excel;
+using Microsoft.EntityFrameworkCore;
+using TransportationService.Api.Data;
 using TransportationService.Api.Modules.Attendance.Dtos;
 using TransportationService.Api.Modules.Identity.Services;
 using TransportationService.Api.Modules.Tenancy.Services;
@@ -24,15 +26,18 @@ public class AttendanceExportService : IAttendanceExportService
     private readonly IAttendanceReportService _reportService;
     private readonly ICurrentUserContext _currentUserContext;
     private readonly TimeProvider _timeProvider;
+    private readonly TransportationDbContext _dbContext;
 
     public AttendanceExportService(
         IAttendanceReportService reportService,
         ICurrentUserContext currentUserContext,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        TransportationDbContext dbContext)
     {
         _reportService = reportService;
         _currentUserContext = currentUserContext;
         _timeProvider = timeProvider;
+        _dbContext = dbContext;
     }
 
     public async Task<(byte[] Content, string FileName)> BuildAsync(
@@ -40,13 +45,17 @@ public class AttendanceExportService : IAttendanceExportService
     {
         var report = await _reportService.BuildAsync(from, to, employeeId, departmentId, cancellationToken);
 
+        // Handmatige export: koppen in de taal van de aanvragende gebruiker; data blijft
+        // in elke taal identiek (machine-to-machine-contracten worden nooit vertaald).
+        var strings = AttendanceExportStrings.For(await CallerLanguageAsync(cancellationToken));
+
         using var workbook = new XLWorkbook();
-        var sheet = workbook.Worksheets.Add("Urenregistratie");
+        var sheet = workbook.Worksheets.Add(strings.SheetName);
         string[] headers =
         [
-            "Medewerker", "Personeelsnummer", "Afdeling", "Datum",
-            "Bruto (min)", "Pauze (min)", "Netto (min)", "Gepland (min)", "Afwijking (min)",
-            "Uitpunt ontbreekt", "Correcties",
+            strings.Employee, strings.EmployeeNumber, strings.Department, strings.Date,
+            strings.GrossMinutes, strings.BreakMinutes, strings.NetMinutes, strings.PlannedMinutes,
+            strings.DeviationMinutes, strings.MissingClockOut, strings.Corrections,
         ];
         for (var i = 0; i < headers.Length; i++)
         {
@@ -76,13 +85,13 @@ public class AttendanceExportService : IAttendanceExportService
                 sheet.Cell(row, 9).Value = deviation;
             }
 
-            sheet.Cell(row, 10).Value = line.MissingClockOut ? "Ja" : string.Empty;
+            sheet.Cell(row, 10).Value = line.MissingClockOut ? strings.Yes : string.Empty;
             sheet.Cell(row, 11).Value = line.CorrectionCount;
             row++;
         }
 
         // Totalenrij.
-        sheet.Cell(row, 1).Value = "Totaal";
+        sheet.Cell(row, 1).Value = strings.Total;
         sheet.Cell(row, 5).Value = report.TotalGrossMinutes;
         sheet.Cell(row, 6).Value = report.TotalBreakMinutes;
         sheet.Cell(row, 7).Value = report.TotalNetMinutes;
@@ -90,7 +99,7 @@ public class AttendanceExportService : IAttendanceExportService
         sheet.Row(row).Style.Font.SetBold();
         sheet.Columns().AdjustToContents();
 
-        AddCriteriaSheet(workbook, from, to, employeeId, departmentId);
+        AddCriteriaSheet(workbook, strings, from, to, employeeId, departmentId);
 
         using var stream = new MemoryStream();
         workbook.SaveAs(stream);
@@ -98,24 +107,40 @@ public class AttendanceExportService : IAttendanceExportService
         return (stream.ToArray(), $"urenregistratie-{stamp}.xlsx");
     }
 
-    private void AddCriteriaSheet(XLWorkbook workbook, DateOnly from, DateOnly to, Guid? employeeId, Guid? departmentId)
+    private void AddCriteriaSheet(
+        XLWorkbook workbook, AttendanceExportStrings strings,
+        DateOnly from, DateOnly to, Guid? employeeId, Guid? departmentId)
     {
         var sheet = workbook.Worksheets.Add("Criteria");
-        sheet.Cell(1, 1).Value = "Rapport";
-        sheet.Cell(1, 2).Value = "Urenregistratie";
-        sheet.Cell(2, 1).Value = "Periode van";
+        sheet.Cell(1, 1).Value = strings.CriteriaReport;
+        sheet.Cell(1, 2).Value = strings.SheetName;
+        sheet.Cell(2, 1).Value = strings.CriteriaFrom;
         sheet.Cell(2, 2).Value = from.ToString("dd-MM-yyyy");
-        sheet.Cell(3, 1).Value = "Periode tot";
+        sheet.Cell(3, 1).Value = strings.CriteriaTo;
         sheet.Cell(3, 2).Value = to.ToString("dd-MM-yyyy");
-        sheet.Cell(4, 1).Value = "Medewerker";
-        sheet.Cell(4, 2).Value = employeeId?.ToString() ?? "alle";
-        sheet.Cell(5, 1).Value = "Afdeling";
-        sheet.Cell(5, 2).Value = departmentId?.ToString() ?? "alle";
-        sheet.Cell(6, 1).Value = "Gegenereerd op";
+        sheet.Cell(4, 1).Value = strings.CriteriaEmployee;
+        sheet.Cell(4, 2).Value = employeeId?.ToString() ?? strings.CriteriaAll;
+        sheet.Cell(5, 1).Value = strings.CriteriaDepartment;
+        sheet.Cell(5, 2).Value = departmentId?.ToString() ?? strings.CriteriaAll;
+        sheet.Cell(6, 1).Value = strings.CriteriaGeneratedAt;
         sheet.Cell(6, 2).Value = _timeProvider.GetUtcNow().UtcDateTime.ToString("dd-MM-yyyy HH:mm") + " UTC";
-        sheet.Cell(7, 1).Value = "Door gebruiker";
+        sheet.Cell(7, 1).Value = strings.CriteriaByUser;
         sheet.Cell(7, 2).Value = _currentUserContext.CurrentUserId?.ToString() ?? "";
         sheet.Column(1).Style.Font.SetBold();
         sheet.Columns().AdjustToContents();
+    }
+
+    /// <summary>Taal van de aanvrager: User.PreferredLanguageCode → nl.</summary>
+    private async Task<string?> CallerLanguageAsync(CancellationToken cancellationToken)
+    {
+        if (_currentUserContext.CurrentUserId is not { } userId)
+        {
+            return null;
+        }
+
+        return await _dbContext.Users.AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Select(u => u.PreferredLanguageCode)
+            .FirstOrDefaultAsync(cancellationToken);
     }
 }

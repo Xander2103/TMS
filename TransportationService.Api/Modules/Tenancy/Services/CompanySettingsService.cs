@@ -87,7 +87,8 @@ public class CompanySettingsService : ICompanySettingsService
         settings.PhoneNumber = Trim(request.PhoneNumber);
         settings.Website = Trim(request.Website);
 
-        settings.DefaultLanguage = Fallback(request.DefaultLanguage, "nl").ToLowerInvariant();
+        // Gesloten productcatalogus (nl/fr/en) — onbekende waarden vallen terug op nl.
+        settings.DefaultLanguage = Common.SupportedLanguages.Normalize(request.DefaultLanguage);
         settings.Timezone = Fallback(request.Timezone, "Europe/Amsterdam");
         settings.DefaultCurrency = Fallback(request.DefaultCurrency, "EUR").ToUpperInvariant();
         settings.DateFormat = NormalizeDateFormat(request.DateFormat, settings.DateFormat);

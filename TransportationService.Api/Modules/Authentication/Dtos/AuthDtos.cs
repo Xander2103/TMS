@@ -28,7 +28,10 @@ public record CurrentUserDto(
     bool MustChangePassword = false,
     /// <summary>Set for customer-portal users only; drives the frontend's post-login routing
     /// into the /klantportaal shell instead of the internal app.</summary>
-    Guid? CustomerId = null);
+    Guid? CustomerId = null,
+    /// <summary>UI-taalvoorkeur (nl/fr/en) van de gebruiker; null = nog niet gekozen, de
+    /// frontend valt dan terug op tenant-default → browser → nl.</summary>
+    string? PreferredLanguage = null);
 
 public enum AuthOutcome
 {
