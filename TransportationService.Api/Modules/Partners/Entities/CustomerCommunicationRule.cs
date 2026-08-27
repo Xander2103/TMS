@@ -15,6 +15,18 @@ public enum CustomerCommunicationType
     GeneralReminder,
     Claims,
     Other,
+
+    // Sprint 3 (contact-centric communication). The column stores the enum as a string, so
+    // appending values is safe for existing rows. Added because the business list has no
+    // existing type that means the same thing.
+    /// <summary>Levering / POD — proof of delivery sent to the customer.</summary>
+    ProofOfDelivery,
+
+    /// <summary>Herlevering — a delivery that is being attempted again.</summary>
+    Redelivery,
+
+    /// <summary>Creditnota's.</summary>
+    CreditNote,
 }
 
 /// <summary>

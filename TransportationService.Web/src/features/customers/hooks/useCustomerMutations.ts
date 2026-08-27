@@ -11,7 +11,7 @@ import {
   updateCustomer,
   updateCustomerContact,
 } from '../api/customersApi'
-import type { CustomerContactInput, CustomerDetail, CustomerInput, UpdateCustomerInput } from '../types'
+import type { CustomerContact, CustomerContactInput, CustomerDetail, CustomerInput, UpdateCustomerInput } from '../types'
 
 interface UseCustomerMutationsResult {
   isSubmitting: boolean
@@ -23,7 +23,8 @@ interface UseCustomerMutationsResult {
   remove: (id: string) => Promise<boolean>
   setBlocked: (id: string, isBlocked: boolean, reason: string | null) => Promise<boolean>
   setActive: (id: string, isActive: boolean) => Promise<boolean>
-  addContact: (customerId: string, input: CustomerContactInput) => Promise<boolean>
+  /** Returns the created contact (its id is needed to store notification choices), null on failure. */
+  addContact: (customerId: string, input: CustomerContactInput) => Promise<CustomerContact | null>
   updateContact: (customerId: string, contactId: string, input: CustomerContactInput) => Promise<boolean>
   removeContact: (customerId: string, contactId: string) => Promise<boolean>
 }
@@ -62,7 +63,7 @@ export function useCustomerMutations(): UseCustomerMutationsResult {
     remove: (id) => run(async () => (await deleteCustomer(id), true), false),
     setBlocked: (id, isBlocked, reason) => run(async () => (await setCustomerBlocked(id, isBlocked, reason), true), false),
     setActive: (id, isActive) => run(async () => (await setCustomerActive(id, isActive), true), false),
-    addContact: (customerId, input) => run(async () => (await addCustomerContact(customerId, input), true), false),
+    addContact: (customerId, input) => run(async () => await addCustomerContact(customerId, input), null),
     updateContact: (customerId, contactId, input) =>
       run(async () => (await updateCustomerContact(customerId, contactId, input), true), false),
     removeContact: (customerId, contactId) =>

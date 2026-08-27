@@ -191,6 +191,21 @@ public class CustomerCommunicationService : ICustomerCommunicationService
             .Where(c => c.TenantId == _tenantContext.TenantId && contactIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, cancellationToken);
 
+        // Sprint 3B — language chain: an explicit rule override, then the contact's own
+        // preference, then the customer's communication language, then the tenant fallback.
+        // Never null, so a template lookup always has a language to work with.
+        var customerLanguage = await _dbContext.Customers
+            .Where(c => c.TenantId == _tenantContext.TenantId && c.Id == customerId)
+            .Select(c => c.DefaultLanguageCode)
+            .FirstOrDefaultAsync(cancellationToken);
+        var tenantLanguage = await _dbContext.TenantSettings
+            .Where(s => s.TenantId == _tenantContext.TenantId)
+            .Select(s => s.DefaultLanguage)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        string? Language(string? ruleOverride, string? contactPreference) =>
+            Blank(ruleOverride) ?? Blank(contactPreference) ?? Blank(customerLanguage) ?? Blank(tenantLanguage);
+
         var recipients = new List<CommunicationRecipientDto>();
         foreach (var rule in rules)
         {
@@ -198,7 +213,7 @@ public class CustomerCommunicationService : ICustomerCommunicationService
                 .Select(link => contacts.GetValueOrDefault(link.ContactId))
                 .Where(c => c is { IsActive: true } && !string.IsNullOrWhiteSpace(c.Email))
                 .Select(c => new CommunicationRecipientDto(
-                    c!.Id, DisplayName(c), c.Email!, rule.LanguageCode ?? c.PreferredLanguageCode, IsFallback: false))
+                    c!.Id, DisplayName(c), c.Email!, Language(rule.LanguageCode, c.PreferredLanguageCode), IsFallback: false))
                 .ToList();
 
             if (resolved.Count == 0 && rule.FallbackContactId is { } fallbackId
@@ -206,7 +221,7 @@ public class CustomerCommunicationService : ICustomerCommunicationService
                 && !string.IsNullOrWhiteSpace(fallback.Email))
             {
                 resolved.Add(new CommunicationRecipientDto(
-                    fallback.Id, DisplayName(fallback), fallback.Email!, rule.LanguageCode ?? fallback.PreferredLanguageCode, IsFallback: true));
+                    fallback.Id, DisplayName(fallback), fallback.Email!, Language(rule.LanguageCode, fallback.PreferredLanguageCode), IsFallback: true));
             }
 
             recipients.AddRange(resolved);
@@ -217,6 +232,9 @@ public class CustomerCommunicationService : ICustomerCommunicationService
 
     private static string DisplayName(CustomerContact c) =>
         c.DisplayName ?? $"{c.FirstName} {c.LastName}".Trim();
+
+    /// <summary>Treats "" and whitespace as "not configured", so a blank field falls through.</summary>
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     private async Task ValidateAsync(Guid customerId, SaveCustomerCommunicationRuleRequest request, CancellationToken cancellationToken)
     {

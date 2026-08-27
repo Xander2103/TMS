@@ -132,16 +132,17 @@ export function CustomerDetailPage() {
   // communication rule) surfaces its Dutch message via the error toast.
   const contactsPanel = (
     <CustomerContactsPanel
+      customerId={id ?? ''}
       contacts={customer.contacts}
       isSubmitting={mutations.isSubmitting}
       onAdd={async (input) => {
-        if (!id) return false
-        const ok = await mutations.addContact(id, input)
-        if (ok) {
+        if (!id) return null
+        const created = await mutations.addContact(id, input)
+        if (created) {
           toast.showSuccess(t('customers.contacts.added'))
           reload()
         }
-        return ok
+        return created
       }}
       onUpdate={async (contactId, input) => {
         if (!id) return false

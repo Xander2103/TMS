@@ -53,6 +53,7 @@ function renderPanel(
 ) {
   return render(
     <CustomerContactsPanel
+      customerId="c1"
       contacts={contacts}
       isSubmitting={false}
       onAdd={vi.fn().mockResolvedValue(true)}

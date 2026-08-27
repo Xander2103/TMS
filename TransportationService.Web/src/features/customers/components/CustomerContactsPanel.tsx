@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
@@ -7,6 +7,17 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
+import {
+  CONTACT_LANGUAGES,
+  CONTACT_LANGUAGE_KEYS,
+  NOTIFICATION_GROUP_KEYS,
+  NOTIFICATION_OPTION_KEYS,
+  getContactNotifications,
+  getNotificationOptions,
+  setContactNotifications,
+  type CustomerNotificationGroup,
+  type CustomerNotificationOption,
+} from '../api/customerNotificationsApi'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import {
@@ -18,9 +29,11 @@ import {
 } from '../types'
 
 interface CustomerContactsPanelProps {
+  /** Needed to store "Ontvangt meldingen" against the contact (sprint 3). */
+  customerId: string
   contacts: CustomerContact[]
   isSubmitting: boolean
-  onAdd: (input: CustomerContactInput) => Promise<boolean>
+  onAdd: (input: CustomerContactInput) => Promise<CustomerContact | null>
   onUpdate: (contactId: string, input: CustomerContactInput) => Promise<boolean>
   onRemove: (contactId: string) => Promise<boolean>
 }
@@ -37,7 +50,7 @@ function contactTypeLabel(t: TranslateFn, type: CustomerContactType): string {
   return key ? t(key) : type
 }
 
-export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate, onRemove }: CustomerContactsPanelProps) {
+export function CustomerContactsPanel({ customerId, contacts, isSubmitting, onAdd, onUpdate, onRemove }: CustomerContactsPanelProps) {
   const { t } = useLocale()
   const [dialog, setDialog] = useState<DialogState>(null)
   const [removeTarget, setRemoveTarget] = useState<CustomerContact | null>(null)
@@ -134,12 +147,24 @@ export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate,
 
       {dialog && (
         <ContactDialog
+          customerId={customerId}
           contact={dialog.mode === 'edit' ? dialog.contact : undefined}
           isSubmitting={isSubmitting}
           onClose={() => setDialog(null)}
-          onSubmit={async (input) => {
-            const ok = dialog.mode === 'edit' ? await onUpdate(dialog.contact.id, input) : await onAdd(input)
-            if (ok) setDialog(null)
+          onSubmit={async (input, notificationKeys) => {
+            // A new contact has no id until it exists, so the notification choices are stored
+            // right after the contact itself is created.
+            const contactId =
+              dialog.mode === 'edit'
+                ? (await onUpdate(dialog.contact.id, input)) ? dialog.contact.id : null
+                : ((await onAdd(input))?.id ?? null)
+            if (!contactId) return
+            try {
+              await setContactNotifications(customerId, contactId, notificationKeys)
+            } catch {
+              // The contact itself is saved; a failed routing update must not lose that.
+            }
+            setDialog(null)
           }}
         />
       )}
@@ -165,14 +190,16 @@ export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate,
 }
 
 function ContactDialog({
+  customerId,
   contact,
   isSubmitting,
   onSubmit,
   onClose,
 }: {
+  customerId: string
   contact?: CustomerContact
   isSubmitting: boolean
-  onSubmit: (input: CustomerContactInput) => void
+  onSubmit: (input: CustomerContactInput, notificationKeys: string[]) => void
   onClose: () => void
 }) {
   const { t } = useLocale()
@@ -191,6 +218,38 @@ function ContactDialog({
   const [isActive, setIsActive] = useState(contact?.isActive ?? true)
   const [notes, setNotes] = useState(contact?.notes ?? '')
   const [errors, setErrors] = useState<{ firstName?: string; lastName?: string }>({})
+  // "Ontvangt meldingen" (sprint 3): the business question, not a routing rule.
+  const [options, setOptions] = useState<CustomerNotificationOption[]>([])
+  const [notificationKeys, setNotificationKeys] = useState<string[]>([])
+
+  useEffect(() => {
+    let active = true
+    void getNotificationOptions()
+      .then((data) => {
+        if (active) setOptions(data)
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!contact) return
+    let active = true
+    void getContactNotifications(customerId, contact.id)
+      .then((data) => {
+        if (active) setNotificationKeys(data.optionKeys)
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [customerId, contact])
+
+  function toggleNotification(key: string, on: boolean) {
+    setNotificationKeys((keys) => (on ? [...new Set([...keys, key])] : keys.filter((k) => k !== key)))
+  }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -216,7 +275,7 @@ function ContactDialog({
       departmentId: departmentId || null,
       preferredLanguageCode: preferredLanguageCode.trim() || null,
       isActive,
-    })
+    }, notificationKeys)
   }
 
   return (
@@ -281,12 +340,44 @@ function ContactDialog({
         <FormField label={t('customers.contacts.mobile')} htmlFor="ct-mobile">
           <input id="ct-mobile" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} maxLength={30} />
         </FormField>
-        <FormField label={t('customers.form.preferredLanguage')} htmlFor="ct-language" hint={t('customers.contacts.languageHint')}>
-          <input id="ct-language" value={preferredLanguageCode} onChange={(e) => setPreferredLanguageCode(e.target.value)} maxLength={10} />
+        <FormField label={t('customers.form.preferredLanguage')} htmlFor="ct-language" hint={t('customers.contacts.languageSelectHint')}>
+          <select id="ct-language" value={preferredLanguageCode} onChange={(e) => setPreferredLanguageCode(e.target.value)}>
+            <option value="">{t('customers.form.sameAsPreferredLanguage')}</option>
+            {CONTACT_LANGUAGES.map((code) => (
+              <option key={code} value={code}>
+                {t(CONTACT_LANGUAGE_KEYS[code])}
+              </option>
+            ))}
+          </select>
         </FormField>
         <FormField label={t('customers.contacts.notes')} htmlFor="ct-notes">
           <textarea id="ct-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} />
         </FormField>
+        {options.length > 0 && (
+          <fieldset className="customer-form-requirements form-span-all">
+            <legend>{t('customers.notifications.receivesTitle')}</legend>
+            <p className="customer-form-muted">{t('customers.notifications.receivesHint')}</p>
+            {(['Transport', 'Facturatie', 'Algemeen'] as CustomerNotificationGroup[]).map((group) => {
+              const groupOptions = options.filter((o) => o.group === group)
+              if (groupOptions.length === 0) return null
+              return (
+                <div key={group} className="customer-notification-group">
+                  <div className="nav-subgroup-label">{t(NOTIFICATION_GROUP_KEYS[group])}</div>
+                  {groupOptions.map((option) => (
+                    <label key={option.key} className="customer-form-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={notificationKeys.includes(option.key)}
+                        onChange={(e) => toggleNotification(option.key, e.target.checked)}
+                      />
+                      {t(NOTIFICATION_OPTION_KEYS[option.key] ?? option.key)}
+                    </label>
+                  ))}
+                </div>
+              )
+            })}
+          </fieldset>
+        )}
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={isPrimary} onChange={(e) => setIsPrimary(e.target.checked)} />
           {t('customers.contacts.primaryForType')}

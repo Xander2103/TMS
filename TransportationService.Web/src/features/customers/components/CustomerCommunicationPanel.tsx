@@ -10,6 +10,13 @@ import { describeApiError, getFieldError, type FieldErrors } from '../../../api/
 import { useAuth } from '../../auth/authContextValue'
 import { useLocale } from '../../../i18n/localeContext'
 import {
+  NOTIFICATION_GROUP_KEYS,
+  NOTIFICATION_OPTION_KEYS,
+  getNotificationOverview,
+  type CustomerNotificationGroup,
+  type NotificationOverviewLine,
+} from '../api/customerNotificationsApi'
+import {
   createCommunicationRule,
   deleteCommunicationRule,
   listCommunicationRules,
@@ -48,10 +55,13 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
   const [dialog, setDialog] = useState<DialogState>(null)
   const [removeTarget, setRemoveTarget] = useState<CustomerCommunicationRule | null>(null)
   const [busy, setBusy] = useState(false)
+  // Bumped whenever a rule changes so the overview above re-reads the recipients.
+  const [overviewToken, setOverviewToken] = useState(0)
 
   const contactsById = useMemo(() => new Map(contacts.map((contact) => [contact.id, contact])), [contacts])
 
   const reload = useCallback(() => {
+    setOverviewToken((token) => token + 1)
     listCommunicationRules(customerId)
       .then((data) => {
         setRules(data)
@@ -137,6 +147,11 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
 
   return (
     <div className="customer-contacts">
+      <NotificationOverview customerId={customerId} reloadToken={overviewToken} />
+
+      <details className="customer-communication-advanced">
+        <summary>{t('customers.communication.advancedSummary')}</summary>
+        <p className="customer-form-muted">{t('customers.communication.advancedHint')}</p>
       <div className="page-header">
         <h3 style={{ margin: 0 }}>{t('customers.communication.title')}</h3>
         {canManage && (
@@ -190,7 +205,82 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
           onCancel={() => setRemoveTarget(null)}
         />
       )}
+      </details>
     </div>
+  )
+}
+
+/**
+ * Sprint 3C — the readable answer to "who receives what?": one line per notification type with
+ * the people behind it. CC mailboxes and fallback contacts are routing detail and are only
+ * shown when the user asks for them.
+ */
+function NotificationOverview({ customerId, reloadToken }: { customerId: string; reloadToken: number }) {
+  const { t } = useLocale()
+  const [lines, setLines] = useState<NotificationOverviewLine[] | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    void getNotificationOverview(customerId)
+      .then((data) => {
+        if (active) setLines(data)
+      })
+      .catch(() => {
+        if (active) setLines([])
+      })
+    return () => {
+      active = false
+    }
+  }, [customerId, reloadToken])
+
+  if (lines === null) return <p className="placeholder-text">{t('customers.communication.overviewLoading')}</p>
+
+  const configured = lines.filter((line) =>
+    line.recipients.some((r) => showAdvanced || !r.isAdvanced),
+  )
+
+  return (
+    <section className="customer-panel">
+      <div className="customer-panel-header">
+        <h3>{t('customers.communication.overviewTitle')}</h3>
+        <label className="customer-form-checkbox">
+          <input type="checkbox" checked={showAdvanced} onChange={(e) => setShowAdvanced(e.target.checked)} />
+          {t('customers.communication.showAdvancedRouting')}
+        </label>
+      </div>
+      <p className="customer-form-muted">{t('customers.communication.overviewHint')}</p>
+
+      {configured.length === 0 && <p className="placeholder-text">{t('customers.communication.overviewEmpty')}</p>}
+
+      {(['Transport', 'Facturatie', 'Algemeen'] as CustomerNotificationGroup[]).map((group) => {
+        const groupLines = configured.filter((line) => line.group === group)
+        if (groupLines.length === 0) return null
+        return (
+          <div key={group} className="customer-notification-group">
+            <div className="nav-subgroup-label">{t(NOTIFICATION_GROUP_KEYS[group])}</div>
+            {groupLines.map((line) => (
+              <div key={line.optionKey} className="customer-notification-line">
+                <strong>{t(NOTIFICATION_OPTION_KEYS[line.optionKey] ?? line.optionKey)}</strong>
+                <ul>
+                  {line.recipients
+                    .filter((r) => showAdvanced || !r.isAdvanced)
+                    .map((r, index) => (
+                      <li key={`${r.contactId ?? r.email}-${index}`}>
+                        {r.name}
+                        {!r.isActive && <span className="customer-form-muted"> {t('customers.form.inactiveSuffix')}</span>}
+                        {r.isAdvanced && (
+                          <span className="customer-form-muted"> ({t('customers.communication.advancedRoutingBadge')})</span>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )
+      })}
+    </section>
   )
 }
 

@@ -257,6 +257,9 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.I
     TransportationService.Api.Modules.Partners.Services.CustomerImportService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerCommunicationService,
     TransportationService.Api.Modules.Partners.Services.CustomerCommunicationService>();
+// Sprint 3: the contact-centric layer over the same communication rules.
+builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerContactSubscriptionService,
+    TransportationService.Api.Modules.Partners.Services.CustomerContactSubscriptionService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Partners.Services.ICustomerBillingConfigService,
     TransportationService.Api.Modules.Partners.Services.CustomerBillingConfigService>();
 // Official company-registry seam: no provider configured by default (no scraping).
