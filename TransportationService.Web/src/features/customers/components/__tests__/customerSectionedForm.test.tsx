@@ -90,7 +90,7 @@ describe('CustomerForm section structure (quick-entry consolidation)', () => {
     expect(screen.getByText('Algemene contactgegevens')).toBeInTheDocument()
 
     // Sprint 1C: adressen en contactpersonen zijn eigen secties.
-    await openSection(/Locaties & adressen/i)
+    await openSection(/^Adressen$/i)
     expect(screen.getByText('Hoofdzetel / algemeen adres')).toBeInTheDocument()
     await openSection(/Contactpersonen/i)
     expect(screen.getByRole('button', { name: '+ Contactpersoon toevoegen' })).toBeInTheDocument()

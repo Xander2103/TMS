@@ -91,7 +91,7 @@ describe('LocationForm (sectioned)', () => {
     await goTo(/Openingstijden/)
     await userEvent.click(screen.getByRole('button', { name: 'Tijdvak toevoegen (Ma)' }))
 
-    await clickSubmit('Locatie aanmaken')
+    await clickSubmit('Adres aanmaken')
 
     expect(onSubmit).toHaveBeenCalledTimes(1)
     const payload = onSubmit.mock.calls[0][0] as LocationInput
@@ -107,7 +107,7 @@ describe('LocationForm (sectioned)', () => {
     await userEvent.type(nameField(), 'Depot')
     await goTo(/Operationeel/)
     await userEvent.selectOptions(screen.getByLabelText('ADR toegelaten'), 'false')
-    await clickSubmit('Locatie aanmaken')
+    await clickSubmit('Adres aanmaken')
     expect((first.mock.calls[0][0] as LocationInput).adrAllowed).toBe(false)
   })
 
@@ -131,7 +131,7 @@ describe('LocationForm (sectioned)', () => {
     const onSubmit = renderForm()
 
     // Submit while empty: error badge on Algemeen, focus jumps to the name field.
-    await clickSubmit('Locatie aanmaken')
+    await clickSubmit('Adres aanmaken')
     expect(onSubmit).not.toHaveBeenCalled()
     expect(screen.getAllByText('Naam is verplicht.').length).toBeGreaterThan(0)
     expect(screen.getByRole('tab', { name: /Algemeen/ })).toHaveAttribute('data-has-error', 'true')
@@ -142,7 +142,7 @@ describe('LocationForm (sectioned)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tijdvak toevoegen (Di)' }))
     // Make the interval invalid: end before start.
     fireEvent.change(screen.getByLabelText('Tot (Di)'), { target: { value: '07:00' } })
-    await clickSubmit('Locatie aanmaken')
+    await clickSubmit('Adres aanmaken')
     expect(screen.getAllByText('Corrigeer eerst de openingsuren.').length).toBeGreaterThan(0)
     expect(screen.getByRole('tab', { name: /Openingstijden/ })).toHaveAttribute('data-has-error', 'true')
     expect(onSubmit).not.toHaveBeenCalled()
@@ -151,7 +151,7 @@ describe('LocationForm (sectioned)', () => {
   it('navigates to the failing section when a validation-summary entry is clicked', async () => {
     const onSubmit = renderForm()
     await goTo(/Planning/)
-    await clickSubmit('Locatie aanmaken')
+    await clickSubmit('Adres aanmaken')
     expect(onSubmit).not.toHaveBeenCalled()
 
     await goTo(/Planning/) // walk away from the auto-activated section again
@@ -229,7 +229,7 @@ describe('LocationForm (sectioned)', () => {
     expect(screen.getByLabelText('Gsm')).toHaveValue('0470 11 22 33')
     expect(screen.getByLabelText(/E-mail/)).toHaveValue('an@klant.be')
 
-    await clickSubmit('Locatie aanmaken')
+    await clickSubmit('Adres aanmaken')
     const payload = onSubmit.mock.calls[0][0] as LocationInput
     expect(payload.customerContactId).toBe('ct-1')
   })

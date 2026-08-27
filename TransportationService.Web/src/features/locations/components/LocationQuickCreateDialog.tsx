@@ -7,6 +7,7 @@ import { describeApiError, getFieldError, type FieldErrors } from '../../../api/
 import { useLocale } from '../../../i18n/localeContext'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
 import { createLocation } from '../api/locationsApi'
+import { checkAddressDuplicates, type AddressDuplicateCandidate } from '../api/customerAddressesApi'
 import { LOCATION_TYPE_LABEL_KEYS, LOCATION_TYPES, type LocationOption, type LocationType } from '../types'
 
 interface LocationQuickCreateDialogProps {
@@ -34,6 +35,10 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [clientErrors, setClientErrors] = useState<{ code?: string; name?: string }>({})
   const [saving, setSaving] = useState(false)
+  // Duplicate detection (sprint 2C): an EXACT match blocks the first submit; the user either
+  // reuses the existing address or deliberately overrides.
+  const [duplicates, setDuplicates] = useState<AddressDuplicateCandidate[] | null>(null)
+  const [overrideDuplicate, setOverrideDuplicate] = useState(false)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -47,6 +52,22 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
     setError(null)
     setFieldErrors({})
     try {
+      if (!overrideDuplicate) {
+        const check = await checkAddressDuplicates({
+          street: street.trim() || null,
+          houseNumber: houseNumber.trim() || null,
+          postalCode: postalCode.trim() || null,
+          city: city.trim() || null,
+          countryCode,
+        })
+        if (check.hasExactMatch) {
+          // Same front door: never silently create a second record for it.
+          setDuplicates(check.candidates)
+          setSaving(false)
+          return
+        }
+      }
+
       const created = await createLocation({
         code: code.trim(),
         name: name.trim(),
@@ -134,6 +155,56 @@ export function LocationQuickCreateDialog({ customerId, initialName, onClose }: 
       }
     >
       <form id="location-quick-create" onSubmit={handleSubmit} noValidate>
+        {duplicates && duplicates.length > 0 && (
+          <div className="location-duplicate-warning" role="status">
+            <strong>{t('locations.duplicate.title')}</strong>
+            <ul>
+              {duplicates.map((candidate) => (
+                <li key={candidate.locationId}>
+                  <button
+                    type="button"
+                    className="link-button"
+                    disabled={saving}
+                    onClick={() =>
+                      onClose({
+                        id: candidate.locationId,
+                        code: candidate.code,
+                        name: candidate.name,
+                        type,
+                        city: candidate.city,
+                        isDefaultLoadingLocation: false,
+                        isDefaultUnloadingLocation: false,
+                        isDefaultBillingLocation: false,
+                      })
+                    }
+                  >
+                    {t('locations.duplicate.useExisting')}
+                  </button>{' '}
+                  <span>
+                    {candidate.name} — {[candidate.street, candidate.houseNumber].filter(Boolean).join(' ')}
+                    {candidate.postalCode || candidate.city ? `, ${[candidate.postalCode, candidate.city].filter(Boolean).join(' ')}` : ''}
+                  </span>
+                  {candidate.linkedCustomers.length > 0 && (
+                    <span className="customer-form-muted">
+                      {' '}
+                      ({t('locations.duplicate.usedBy', { customers: candidate.linkedCustomers.join(', ') })})
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <Button
+              variant="secondary"
+              disabled={saving}
+              onClick={() => {
+                setOverrideDuplicate(true)
+                setDuplicates(null)
+              }}
+            >
+              {t('locations.duplicate.createAnyway')}
+            </Button>
+          </div>
+        )}
         <ValidationSummary
           message={error}
           fieldErrors={fieldErrors}

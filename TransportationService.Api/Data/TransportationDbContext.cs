@@ -241,6 +241,9 @@ public class TransportationDbContext : DbContext
     // Locations
     public DbSet<Location> Locations => Set<Location>();
 
+    /// <summary>Customer ↔ physical address relationships (sprint 2, central address master).</summary>
+    public DbSet<CustomerLocationLink> CustomerLocationLinks => Set<CustomerLocationLink>();
+
     // Partners
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerContact> CustomerContacts => Set<CustomerContact>();

@@ -47,6 +47,17 @@ public class Location : AuditableTenantEntity
     public string? City { get; set; }
     public string? CountryCode { get; set; }
 
+    // --- Duplicate-detection keys (sprint 2, central address master) ---
+    // Derived from the physical fields above by AddressNormalizer and refreshed on every
+    // create/update; persisted so "does this address already exist?" is an indexed lookup
+    // instead of a scan. Never set these from a request payload.
+
+    /// <summary>country|postcode|city|street|houseNumber — the same front door.</summary>
+    public string? AddressExactKey { get; set; }
+
+    /// <summary>country|postcode|city|street — the same street, house number ignored.</summary>
+    public string? AddressStreetKey { get; set; }
+
     // Geocoordinates (optional; WGS84)
     public decimal? Latitude { get; set; }
     public decimal? Longitude { get; set; }

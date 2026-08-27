@@ -46,7 +46,13 @@ public class LocationService : ILocationService
 
         if (type is { } t) query = query.Where(l => l.Type == t);
         if (isActive is { } active) query = query.Where(l => l.IsActive == active);
-        if (customerId is { } cust) query = query.Where(l => l.CustomerId == cust);
+        // Sprint 2: membership comes from the customer↔address links, not from the legacy
+        // owning column — one physical address can serve several customers.
+        if (customerId is { } cust)
+        {
+            query = query.Where(l => _dbContext.CustomerLocationLinks
+                .Any(link => link.LocationId == l.Id && link.CustomerId == cust));
+        }
         if (!string.IsNullOrWhiteSpace(country))
         {
             var cc = country.Trim().ToUpperInvariant();
@@ -116,7 +122,13 @@ public class LocationService : ILocationService
         var query = TenantScoped().AsNoTracking();
         if (type is { } t) query = query.Where(l => l.Type == t);
         if (isActive is { } active) query = query.Where(l => l.IsActive == active);
-        if (customerId is { } cust) query = query.Where(l => l.CustomerId == cust);
+        // Sprint 2: membership comes from the customer↔address links, not from the legacy
+        // owning column — one physical address can serve several customers.
+        if (customerId is { } cust)
+        {
+            query = query.Where(l => _dbContext.CustomerLocationLinks
+                .Any(link => link.LocationId == l.Id && link.CustomerId == cust));
+        }
         if (!string.IsNullOrWhiteSpace(country))
         {
             var cc = country.Trim().ToUpperInvariant();
@@ -198,7 +210,12 @@ public class LocationService : ILocationService
         if (type is { } t) query = query.Where(l => l.Type == t);
         // Customer scope = the customer's own sites plus company-wide (unlinked) locations;
         // other customers' sites are never offered.
-        if (customerId is { } cust) query = query.Where(l => l.CustomerId == cust || l.CustomerId == null);
+        if (customerId is { } cust)
+        {
+            query = query.Where(l =>
+                _dbContext.CustomerLocationLinks.Any(link => link.LocationId == l.Id && link.CustomerId == cust)
+                || !_dbContext.CustomerLocationLinks.Any(link => link.LocationId == l.Id));
+        }
 
         return await query
             .OrderByDescending(l => l.IsDefaultLoadingLocation || l.IsDefaultUnloadingLocation)
@@ -289,6 +306,8 @@ public class LocationService : ILocationService
             }
         }
 
+        await SyncCustomerLinkAsync(location, previousCustomerId: null, cancellationToken);
+
         await _auditService.RecordAsync(EntityType, location.Id.ToString(), "Created", null,
             await BuildAuditPayloadAsync(location, cancellationToken), cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -307,6 +326,7 @@ public class LocationService : ILocationService
             return LocationOperationResult.NotFound;
         }
 
+        var previousCustomerId = location.CustomerId;
         var code = request.Code.Trim();
         if (!CoordinatesValid(request.Latitude, request.Longitude))
         {
@@ -353,6 +373,8 @@ public class LocationService : ILocationService
         {
             return LocationOperationResult.DuplicateCode;
         }
+
+        await SyncCustomerLinkAsync(location, previousCustomerId, cancellationToken);
 
         await _auditService.RecordAsync(EntityType, location.Id.ToString(), "Updated", before,
             await BuildAuditPayloadAsync(location, cancellationToken), cancellationToken);
@@ -401,6 +423,74 @@ public class LocationService : ILocationService
         await transaction.CommitAsync(cancellationToken);
 
         return LocationOperationResult.Success(await MapToDetailAsync(location, cancellationToken));
+    }
+
+    /// <summary>
+    /// Sprint 2: keeps the customer↔address RELATIONSHIP in step with the legacy
+    /// <c>Location.CustomerId</c> field that the address form still writes. Setting a customer on
+    /// the address form is simply another way of saying "this customer uses this address", so it
+    /// must produce the same link the customer's address panel would — otherwise the address
+    /// would be invisible everywhere that now reads the links.
+    ///
+    /// Only the relationship implied by the legacy field is touched: links other customers hold
+    /// on the same physical address are never affected.
+    /// </summary>
+    private async Task SyncCustomerLinkAsync(Location location, Guid? previousCustomerId, CancellationToken cancellationToken)
+    {
+        if (previousCustomerId is { } previous && previous != location.CustomerId)
+        {
+            await _dbContext.CustomerLocationLinks
+                .Where(l => l.TenantId == location.TenantId && l.LocationId == location.Id && l.CustomerId == previous)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
+        if (location.CustomerId is not { } customerId) return;
+
+        var link = await _dbContext.CustomerLocationLinks
+            .FirstOrDefaultAsync(l => l.TenantId == location.TenantId && l.LocationId == location.Id && l.CustomerId == customerId, cancellationToken);
+
+        // Demote the customer's other links before promoting this one; the filtered unique index
+        // allows a single default holder of each kind per customer.
+        if (location.IsDefaultLoadingLocation || location.IsDefaultUnloadingLocation || location.IsDefaultBillingLocation)
+        {
+            await _dbContext.CustomerLocationLinks
+                .Where(l => l.TenantId == location.TenantId && l.CustomerId == customerId && l.LocationId != location.Id
+                    && ((location.IsDefaultLoadingLocation && l.IsDefaultLoading)
+                        || (location.IsDefaultUnloadingLocation && l.IsDefaultUnloading)
+                        || (location.IsDefaultBillingLocation && l.IsDefaultBilling)))
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(l => l.IsDefaultLoading, l => !location.IsDefaultLoadingLocation && l.IsDefaultLoading)
+                    .SetProperty(l => l.IsDefaultUnloading, l => !location.IsDefaultUnloadingLocation && l.IsDefaultUnloading)
+                    .SetProperty(l => l.IsDefaultBilling, l => !location.IsDefaultBillingLocation && l.IsDefaultBilling),
+                    cancellationToken);
+        }
+
+        if (link is null)
+        {
+            _dbContext.CustomerLocationLinks.Add(new CustomerLocationLink
+            {
+                Id = Guid.NewGuid(),
+                TenantId = location.TenantId,
+                CustomerId = customerId,
+                LocationId = location.Id,
+                Role = CustomerLocationRole.Both,
+                CustomerReference = location.ExternalReference,
+                IsDefaultLoading = location.IsDefaultLoadingLocation,
+                IsDefaultUnloading = location.IsDefaultUnloadingLocation,
+                IsDefaultBilling = location.IsDefaultBillingLocation,
+                IsActive = location.IsActive,
+            });
+        }
+        else
+        {
+            // Alias/role/instructions are relationship-level choices the address form does not
+            // know about, so they are preserved.
+            link.IsDefaultLoading = location.IsDefaultLoadingLocation;
+            link.IsDefaultUnloading = location.IsDefaultUnloadingLocation;
+            link.IsDefaultBilling = location.IsDefaultBillingLocation;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     /// <summary>
@@ -618,6 +708,10 @@ public class LocationService : ILocationService
         l.PostalCode = Trim(r.PostalCode);
         l.City = Trim(r.City);
         l.CountryCode = r.CountryCode is null ? null : Trim(r.CountryCode)?.ToUpperInvariant();
+        // Duplicate-detection keys are derived, never accepted from the request; refreshed here
+        // because this is the single write path for the physical address fields.
+        l.AddressExactKey = AddressNormalizer.ExactKey(l.CountryCode, l.PostalCode, l.City, l.Street, l.HouseNumber);
+        l.AddressStreetKey = AddressNormalizer.StreetKey(l.CountryCode, l.PostalCode, l.City, l.Street);
         l.Latitude = r.Latitude;
         l.Longitude = r.Longitude;
         l.ContactName = Trim(r.ContactName);

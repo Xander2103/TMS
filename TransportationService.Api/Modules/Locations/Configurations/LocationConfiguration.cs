@@ -21,6 +21,12 @@ public class LocationConfiguration : IEntityTypeConfiguration<Location>
         builder.Property(l => l.City).HasMaxLength(100);
         builder.Property(l => l.CountryCode).HasMaxLength(2);
 
+        // Derived duplicate-detection keys; indexed, not unique — two customers legitimately
+        // sharing one address is the point of the link table, and a deliberate override may
+        // still create a second record for the same key.
+        builder.Property(l => l.AddressExactKey).HasMaxLength(400);
+        builder.Property(l => l.AddressStreetKey).HasMaxLength(400);
+
         builder.Property(l => l.Latitude).HasPrecision(9, 6);
         builder.Property(l => l.Longitude).HasPrecision(9, 6);
 
@@ -66,6 +72,8 @@ public class LocationConfiguration : IEntityTypeConfiguration<Location>
         builder.HasIndex(l => new { l.TenantId, l.Type });
         builder.HasIndex(l => new { l.TenantId, l.IsActive });
         builder.HasIndex(l => new { l.TenantId, l.CustomerId });
+        builder.HasIndex(l => new { l.TenantId, l.AddressExactKey });
+        builder.HasIndex(l => new { l.TenantId, l.AddressStreetKey });
 
         // Business rule: at most one default loading and one default unloading location per
         // customer (soft-deleted rows excluded, matching the Code index filter style). The

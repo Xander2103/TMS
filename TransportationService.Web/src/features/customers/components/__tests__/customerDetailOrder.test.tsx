@@ -110,7 +110,7 @@ describe('customer detail — section order (1C)', () => {
     const tabs = await screen.findAllByRole('tab')
     expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
       'Klantgegevens',
-      'Locaties & adressen',
+      'Adressen',
       'Contactpersonen',
       'Facturatie',
       'Fiscaal & Peppol',
@@ -124,7 +124,7 @@ describe('customer detail — section order (1C)', () => {
   it('puts the address panel in its own section rather than inside Klantgegevens', async () => {
     renderEditForm()
     const tabs = await screen.findAllByRole('tab')
-    const addresses = tabs.find((tab) => tab.textContent?.includes('adressen'))
+    const addresses = tabs.find((tab) => tab.textContent?.includes('Adressen'))
     expect(addresses).toBeDefined()
     // Klantgegevens is shown first and must no longer carry the address panel.
     expect(screen.queryByText('adressen-paneel')).not.toBeInTheDocument()

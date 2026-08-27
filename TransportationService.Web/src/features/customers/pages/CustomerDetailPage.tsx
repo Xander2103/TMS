@@ -22,7 +22,7 @@ import { CustomerContactsPanel } from '../components/CustomerContactsPanel'
 import { CustomerDayDocumentsCard } from '../components/CustomerDayDocumentsCard'
 import { CustomerHistoryPanel } from '../components/CustomerHistoryPanel'
 import { CustomerMessagesPanel } from '../components/CustomerMessagesPanel'
-import { CustomerLocationsPanel } from '../components/CustomerLocationsPanel'
+import { CustomerAddressesPanel } from '../components/CustomerAddressesPanel'
 import { CustomerCommunicationPanel } from '../components/CustomerCommunicationPanel'
 import { CustomerBillingPanel } from '../components/CustomerBillingPanel'
 import { CustomerPriceAdjustmentsPanel } from '../components/CustomerPriceAdjustmentsPanel'
@@ -234,7 +234,7 @@ export function CustomerDetailPage() {
           editPanels={{
             adressen:
               canViewLocations && id ? (
-                <CustomerLocationsPanel customerId={id} />
+                <CustomerAddressesPanel customerId={id} />
               ) : (
                 <p className="customer-form-muted">{t('customers.detail.noAddressRights')}</p>
               ),
@@ -429,7 +429,7 @@ export function CustomerDetailPage() {
 
           {activeTab === 'locations' && canViewLocations && id && (
             <TabPanel tabId="locations">
-              <CustomerLocationsPanel customerId={id} />
+              <CustomerAddressesPanel customerId={id} />
             </TabPanel>
           )}
 

@@ -286,6 +286,9 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Organization.Servic
 // Locations
 builder.Services.AddScoped<TransportationService.Api.Modules.Locations.Services.ILocationService,
     TransportationService.Api.Modules.Locations.Services.LocationService>();
+// Sprint 2: the customer ↔ physical address relationship (link/unlink, duplicate detection).
+builder.Services.AddScoped<TransportationService.Api.Modules.Locations.Services.ICustomerAddressService,
+    TransportationService.Api.Modules.Locations.Services.CustomerAddressService>();
 // Pure, stateless opening-hours check — singleton by design.
 builder.Services.AddSingleton<TransportationService.Api.Modules.Locations.Services.IOpeningHoursEvaluator,
     TransportationService.Api.Modules.Locations.Services.OpeningHoursEvaluator>();
@@ -682,6 +685,12 @@ using (var referenceScope = app.Services.CreateScope())
 
     // Wave 2: typed coverage roll-up for pre-wave pricing snapshots (idempotent, indexed-only).
     await TransportationService.Api.Modules.Orders.Services.CoverageStatusBackfillSeeder.SyncAsync(
+        referenceDbContext);
+
+    // Sprint 2 (central address master): derive the address duplicate-detection keys and turn
+    // legacy Location.CustomerId ownership into customer↔address relationships. Idempotent;
+    // the legacy columns are left untouched.
+    await TransportationService.Api.Modules.Locations.Services.AddressMasterBackfillSeeder.SyncAsync(
         referenceDbContext);
 }
 

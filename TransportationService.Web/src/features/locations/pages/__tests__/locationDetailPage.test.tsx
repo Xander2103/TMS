@@ -199,7 +199,7 @@ describe('LocationDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Dupliceren' })).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Deactiveren' }))
-    const dialog = screen.getByRole('dialog', { name: 'Locatie deactiveren' })
+    const dialog = screen.getByRole('dialog', { name: 'Adres deactiveren' })
     expect(within(dialog).getByText(/'Magazijn Leuven' deactiveren\?/)).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole('button', { name: 'Deactiveren' }))
 
@@ -220,7 +220,7 @@ describe('LocationDetailPage', () => {
 
     expect(api.duplicateLocation).toHaveBeenCalledWith('loc-1')
     expect(await screen.findByRole('heading', { name: 'Magazijn Leuven (kopie)' })).toBeInTheDocument()
-    expect(toast.showSuccess).toHaveBeenCalledWith('Locatie gedupliceerd.')
+    expect(toast.showSuccess).toHaveBeenCalledWith('Adres gedupliceerd.')
   })
 
   it('opens the sectioned edit form via Bewerken', async () => {

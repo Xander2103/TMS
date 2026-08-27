@@ -159,7 +159,7 @@ describe('LocationsPage — weergave per klant', () => {
 
     expect(await screen.findByRole('button', { name: /Alfa NV/ })).toBeInTheDocument()
     const toggles = screen.getAllByRole('button', { name: /\(\d+\)/ })
-    expect(toggles[toggles.length - 1]).toHaveTextContent('Ongekoppelde locaties')
+    expect(toggles[toggles.length - 1]).toHaveTextContent('Ongekoppelde adressen')
     expect(screen.getByText('Vrij terrein')).toBeInTheDocument()
     expect(api.searchLocationsGrouped).toHaveBeenCalledWith(expect.objectContaining({ innerSort: 'name' }))
 
