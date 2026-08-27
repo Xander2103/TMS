@@ -5,6 +5,8 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { FormField } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../components/ui/toastContext'
+import { useLocale } from '../../i18n/localeContext'
+import { formatCurrency } from '../../utils/numbers'
 import { useAuth } from '../auth/authContextValue'
 import {
   createLeasingContract,
@@ -39,11 +41,12 @@ function emptyForm(): LeasingContractInput {
 
 function money(amount: number | null, currency: string): string {
   if (amount === null) return '—'
-  return amount.toLocaleString('nl-BE', { style: 'currency', currency: currency || 'EUR' })
+  return formatCurrency(amount, !currency || currency === 'EUR' ? '€' : currency)
 }
 
 /** Leasing contracts for a vehicle or trailer. Financial amounts are gated on fleet_finance. */
 export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerType; ownerId: string }) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('fleet_finance.manage')
@@ -73,12 +76,12 @@ export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerTy
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Leasingcontracten konden niet worden geladen.')
+        if (mounted) setLoadError(t('fleet.leasing.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [ownerType, ownerId, reloadToken])
+  }, [ownerType, ownerId, reloadToken, t])
 
   function set<K extends keyof LeasingContractInput>(key: K, value: LeasingContractInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -114,22 +117,22 @@ export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerTy
     event.preventDefault()
     setFormError(null)
     if (!form.leasingCompany.trim()) {
-      setFormError('De leasingmaatschappij is verplicht.')
+      setFormError(t('fleet.leasing.companyRequired'))
       return
     }
     setSaving(true)
     try {
       if (editingId) {
         await updateLeasingContract(editingId, form)
-        showSuccess('Leasingcontract bijgewerkt.')
+        showSuccess(t('fleet.leasing.updated'))
       } else {
         await createLeasingContract(ownerType, ownerId, form)
-        showSuccess('Leasingcontract toegevoegd.')
+        showSuccess(t('fleet.leasing.created'))
       }
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      setFormError('Het contract kon niet worden opgeslagen.')
+      setFormError(t('fleet.leasing.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -139,11 +142,11 @@ export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerTy
     if (!deleteTarget) return
     try {
       await deleteLeasingContract(deleteTarget.id)
-      showSuccess('Leasingcontract verwijderd.')
+      showSuccess(t('fleet.leasing.deleted'))
       setDeleteTarget(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het contract kon niet worden verwijderd.')
+      showError(t('fleet.leasing.deleteFailed'))
       setDeleteTarget(null)
     }
   }
@@ -162,10 +165,10 @@ export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerTy
     setUploadingId(id)
     try {
       await uploadLeasingFile(id, file)
-      showSuccess('Contract geüpload.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('fleet.leasing.uploaded'))
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het bestand kon niet worden geüpload (max. 10 MB, pdf/jpg/png).')
+      showError(t('fleet.leasing.uploadFailed'))
     } finally {
       setUploadingId(null)
     }
@@ -174,35 +177,35 @@ export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerTy
   return (
     <section className="fleet-compliance">
       <div className="fleet-compliance-header">
-        <h2>Leasing</h2>
+        <h2>{t('fleet.leasing.title')}</h2>
         {canManage && (
           <Button variant="secondary" onClick={openCreate}>
-            Contract toevoegen
+            {t('fleet.leasing.add')}
           </Button>
         )}
       </div>
 
       {!canViewFinance && (
-        <p className="fleet-compliance-note">Bedragen zijn verborgen — je mist het recht om financiële gegevens te bekijken.</p>
+        <p className="fleet-compliance-note">{t('fleet.leasing.financeHidden')}</p>
       )}
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && items === null && <p className="placeholder-text">Laden…</p>}
+      {!loadError && items === null && <p className="placeholder-text">{t('fleet.common.loading')}</p>}
       {!loadError && items !== null && items.length === 0 && (
-        <p className="placeholder-text">Nog geen leasingcontracten geregistreerd.</p>
+        <p className="placeholder-text">{t('fleet.leasing.empty')}</p>
       )}
 
       {!loadError && items !== null && items.length > 0 && (
         <table className="fleet-compliance-table">
           <thead>
             <tr>
-              <th>Maatschappij</th>
-              <th>Contractnr.</th>
-              <th>Looptijd</th>
-              <th>Maandbedrag</th>
-              <th>Status</th>
-              <th>Bestand</th>
-              <th aria-label="Acties" />
+              <th>{t('fleet.leasing.colCompany')}</th>
+              <th>{t('fleet.leasing.colNumber')}</th>
+              <th>{t('fleet.leasing.colTerm')}</th>
+              <th>{t('fleet.leasing.colMonthly')}</th>
+              <th>{t('fleet.leasing.colStatus')}</th>
+              <th>{t('fleet.leasing.colFile')}</th>
+              <th aria-label={t('fleet.common.actions')} />
             </tr>
           </thead>
           <tbody>
@@ -215,31 +218,33 @@ export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerTy
                 </td>
                 <td>{canViewFinance ? money(item.monthlyAmount, item.currency) : '•••'}</td>
                 <td>
-                  <Badge tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Actief' : 'Beëindigd'}</Badge>
+                  <Badge tone={item.isActive ? 'success' : 'neutral'}>
+                    {item.isActive ? t('ui.statusBadges.active') : t('fleet.leasing.ended')}
+                  </Badge>
                 </td>
                 <td className="fleet-compliance-file">
                   {item.hasAttachment ? (
-                    <button type="button" className="fleet-compliance-link" onClick={() => downloadLeasingFile(item.id, item.fileName ?? 'contract').catch(() => showError('Downloaden mislukt.'))}>
-                      Downloaden
+                    <button type="button" className="fleet-compliance-link" onClick={() => downloadLeasingFile(item.id, item.fileName ?? 'contract').catch(() => showError(t('fleet.common.downloadFailed')))}>
+                      {t('fleet.common.download')}
                     </button>
                   ) : (
                     '—'
                   )}
                   {canManage && (
                     <button type="button" className="fleet-compliance-link" onClick={() => pickFile(item.id)} disabled={uploadingId === item.id}>
-                      {uploadingId === item.id ? 'Bezig…' : item.hasAttachment ? 'Vervangen' : 'Uploaden'}
+                      {uploadingId === item.id ? t('fleet.common.busy') : item.hasAttachment ? t('fleet.common.replace') : t('fleet.common.upload')}
                     </button>
                   )}
                 </td>
                 <td className="fleet-compliance-actions">
                   {canManage && (
                     <button type="button" className="fleet-compliance-link" onClick={() => openEdit(item)}>
-                      Bewerken
+                      {t('ui.actions.edit')}
                     </button>
                   )}
                   {canManage && (
                     <button type="button" className="fleet-compliance-link fleet-compliance-link-danger" onClick={() => setDeleteTarget(item)}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   )}
                 </td>
@@ -251,16 +256,16 @@ export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerTy
 
       {editorOpen && (
         <Modal
-          title={editingId ? 'Leasingcontract bewerken' : 'Leasingcontract toevoegen'}
+          title={editingId ? t('fleet.leasing.editTitle') : t('fleet.leasing.addTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="leasing-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('fleet.common.saving') : t('ui.actions.save')}
               </Button>
             </>
           }
@@ -271,49 +276,49 @@ export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerTy
                 {formError}
               </div>
             )}
-            <FormField label="Leasingmaatschappij" htmlFor="lf-company" required>
+            <FormField label={t('fleet.leasing.company')} htmlFor="lf-company" required>
               <input id="lf-company" value={form.leasingCompany} onChange={(e) => set('leasingCompany', e.target.value)} disabled={saving} maxLength={150} />
             </FormField>
-            <FormField label="Contractnummer" htmlFor="lf-number">
+            <FormField label={t('fleet.leasing.contractNumber')} htmlFor="lf-number">
               <input id="lf-number" value={form.contractNumber ?? ''} onChange={(e) => set('contractNumber', e.target.value || null)} disabled={saving} maxLength={100} />
             </FormField>
             <div className="fleet-compliance-form-row">
-              <FormField label="Startdatum" htmlFor="lf-start">
+              <FormField label={t('fleet.leasing.startDate')} htmlFor="lf-start">
                 <input id="lf-start" type="date" value={form.startDate ?? ''} onChange={(e) => set('startDate', e.target.value || null)} disabled={saving} />
               </FormField>
-              <FormField label="Einddatum" htmlFor="lf-end">
+              <FormField label={t('fleet.leasing.endDate')} htmlFor="lf-end">
                 <input id="lf-end" type="date" value={form.endDate ?? ''} onChange={(e) => set('endDate', e.target.value || null)} disabled={saving} />
               </FormField>
             </div>
             {canViewFinance && (
               <>
                 <div className="fleet-compliance-form-row">
-                  <FormField label="Maandbedrag" htmlFor="lf-amount">
+                  <FormField label={t('fleet.leasing.monthlyAmount')} htmlFor="lf-amount">
                     <input id="lf-amount" type="number" min={0} step="0.01" value={form.monthlyAmount ?? ''} onChange={(e) => set('monthlyAmount', e.target.value === '' ? null : Number(e.target.value))} disabled={saving} />
                   </FormField>
-                  <FormField label="Munt" htmlFor="lf-currency">
+                  <FormField label={t('fleet.leasing.currency')} htmlFor="lf-currency">
                     <input id="lf-currency" value={form.currency ?? 'EUR'} onChange={(e) => set('currency', e.target.value || null)} disabled={saving} maxLength={3} />
                   </FormField>
                 </div>
                 <div className="fleet-compliance-form-row">
-                  <FormField label="Km/jaar toegestaan" htmlFor="lf-km">
+                  <FormField label={t('fleet.leasing.kmPerYear')} htmlFor="lf-km">
                     <input id="lf-km" type="number" min={0} value={form.kilometerAllowancePerYear ?? ''} onChange={(e) => set('kilometerAllowancePerYear', e.target.value === '' ? null : Number(e.target.value))} disabled={saving} />
                   </FormField>
-                  <FormField label="Km bij einde contract" htmlFor="lf-endkm">
+                  <FormField label={t('fleet.leasing.kmAtEnd')} htmlFor="lf-endkm">
                     <input id="lf-endkm" type="number" min={0} value={form.endOfContractMileageKm ?? ''} onChange={(e) => set('endOfContractMileageKm', e.target.value === '' ? null : Number(e.target.value))} disabled={saving} />
                   </FormField>
                 </div>
               </>
             )}
-            <FormField label="Contactpersoon" htmlFor="lf-contact">
+            <FormField label={t('fleet.leasing.contactPerson')} htmlFor="lf-contact">
               <input id="lf-contact" value={form.contactPerson ?? ''} onChange={(e) => set('contactPerson', e.target.value || null)} disabled={saving} maxLength={150} />
             </FormField>
-            <FormField label="Notities" htmlFor="lf-notes">
+            <FormField label={t('fleet.leasing.notes')} htmlFor="lf-notes">
               <textarea id="lf-notes" rows={2} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={saving} />
             </FormField>
             <label className="fleet-compliance-checkbox">
               <input type="checkbox" checked={form.isActive} onChange={(e) => set('isActive', e.target.checked)} disabled={saving} />
-              <span>Contract is actief</span>
+              <span>{t('fleet.leasing.isActive')}</span>
             </label>
           </form>
         </Modal>
@@ -321,9 +326,9 @@ export function LeasingPanel({ ownerType, ownerId }: { ownerType: LeasingOwnerTy
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Contract verwijderen"
-          message={`Weet je zeker dat je het leasingcontract van "${deleteTarget.leasingCompany}" wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('fleet.leasing.deleteTitle')}
+          message={t('fleet.leasing.deleteMessage', { company: deleteTarget.leasingCompany })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

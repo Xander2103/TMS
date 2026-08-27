@@ -3,7 +3,8 @@ import { Button } from '../../../components/ui/Button'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { agreementToInput } from '../agreementInputHelpers'
 import { updatePricingAgreement, type PricingAgreement } from '../api/pricingApi'
 import type { SurchargeKind } from '../types'
@@ -38,6 +39,7 @@ const includedTimeMode = (agreement: PricingAgreement): IncludedTimeMode =>
  * is charged at the hourly rate, but only ever as a PROPOSAL on the order until confirmed.
  */
 export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: AgreementSurchargesPanelProps) {
+  const { t } = useLocale()
   const { showSuccess } = useToast()
   const [surcharges, setSurcharges] = useState<SurchargeDraft[]>(() => toDrafts(agreement))
   const [timeMode, setTimeMode] = useState<IncludedTimeMode>(() => includedTimeMode(agreement))
@@ -84,9 +86,9 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
         extraHourlyRate: timeMode === 'none' || !extraHourlyRate.trim() ? null : Number(extraHourlyRate),
       })
       onUpdated(updated)
-      showSuccess('Toeslagen en inbegrepen tijd opgeslagen.')
+      showSuccess(t('tarification.surcharges.saved'))
     } catch (err) {
-      setError(describeApiError(err, 'De toeslagen konden niet worden opgeslagen.').message)
+      setError(localizeApiError(t, err, t('tarification.surcharges.saveError')))
     } finally {
       setBusy(false)
     }
@@ -95,34 +97,34 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Automatische toeslagen</h3>
+        <h3>{t('tarification.surcharges.title')}</h3>
       </div>
       {error && (
         <div className="issued-items-form-error" role="alert">
           {error}
         </div>
       )}
-      {surcharges.length === 0 && <EmptyState message="Nog geen automatische toeslagen op deze tabel." />}
+      {surcharges.length === 0 && <EmptyState message={t('tarification.surcharges.empty')} />}
       {surcharges.map((surcharge, index) => (
         <div key={index} className="issued-items-form-row customer-rule-bracket">
           <input
-            aria-label={`Toeslag ${index + 1} naam`}
-            placeholder="naam"
+            aria-label={t('tarification.surcharges.ariaName', { index: index + 1 })}
+            placeholder={t('tarification.surcharges.namePlaceholder')}
             value={surcharge.name}
             disabled={!canManage}
             onChange={(e) => setSurcharges((s) => s.map((x, i) => (i === index ? { ...x, name: e.target.value } : x)))}
           />
           <select
-            aria-label={`Toeslag ${index + 1} soort`}
+            aria-label={t('tarification.surcharges.ariaKind', { index: index + 1 })}
             value={surcharge.kind}
             disabled={!canManage}
             onChange={(e) => setSurcharges((s) => s.map((x, i) => (i === index ? { ...x, kind: e.target.value as SurchargeKind } : x)))}
           >
-            <option value="Percent">Percentage</option>
-            <option value="Fixed">Vast bedrag</option>
+            <option value="Percent">{t('tarification.common.percentage')}</option>
+            <option value="Fixed">{t('tarification.common.fixedAmount')}</option>
           </select>
           <input
-            aria-label={`Toeslag ${index + 1} waarde`}
+            aria-label={t('tarification.surcharges.ariaValue', { index: index + 1 })}
             type="number"
             step="0.01"
             value={surcharge.value}
@@ -131,7 +133,7 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
           />
           {canManage && (
             <Button variant="ghost" onClick={() => setSurcharges((s) => s.filter((_, i) => i !== index))}>
-              Verwijderen
+              {t('ui.actions.delete')}
             </Button>
           )}
         </div>
@@ -141,17 +143,14 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
           variant="secondary"
           onClick={() => setSurcharges((s) => [...s, { name: '', kind: 'Percent', value: '' }])}
         >
-          + Toeslag
+          {t('tarification.surcharges.addSurcharge')}
         </Button>
       )}
 
       <div className="customer-panel-header">
-        <h3>Inbegrepen laad-/lostijd</h3>
+        <h3>{t('tarification.surcharges.includedTitle')}</h3>
       </div>
-      <p className="customer-form-muted">
-        Tijd boven de inbegrepen duur wordt op de order als voorstel getoond aan het uurtarief hieronder — nooit
-        automatisch gefactureerd.
-      </p>
+      <p className="customer-form-muted">{t('tarification.surcharges.includedHint')}</p>
       <div className="issued-items-form-row">
         <label className="tof-checkbox">
           <input
@@ -161,7 +160,7 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
             disabled={!canManage}
             onChange={() => setTimeMode('none')}
           />
-          Geen
+          {t('tarification.common.none')}
         </label>
         <label className="tof-checkbox">
           <input
@@ -171,7 +170,7 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
             disabled={!canManage}
             onChange={() => setTimeMode('separate')}
           />
-          Per activiteit
+          {t('tarification.surcharges.modeSeparate')}
         </label>
         <label className="tof-checkbox">
           <input
@@ -181,12 +180,12 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
             disabled={!canManage}
             onChange={() => setTimeMode('combined')}
           />
-          Gecombineerd
+          {t('tarification.surcharges.modeCombined')}
         </label>
       </div>
       {timeMode === 'separate' && (
         <div className="issued-items-form-row">
-          <FormField label="Inbegrepen laadtijd (min)" htmlFor="agreement-included-loading">
+          <FormField label={t('tarification.surcharges.loadingMinutes')} htmlFor="agreement-included-loading">
             <input
               id="agreement-included-loading"
               type="number"
@@ -196,7 +195,7 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
               onChange={(e) => setIncludedLoadingMinutes(e.target.value)}
             />
           </FormField>
-          <FormField label="Inbegrepen lostijd (min)" htmlFor="agreement-included-unloading">
+          <FormField label={t('tarification.surcharges.unloadingMinutes')} htmlFor="agreement-included-unloading">
             <input
               id="agreement-included-unloading"
               type="number"
@@ -210,7 +209,7 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
       )}
       {timeMode === 'combined' && (
         <div className="issued-items-form-row">
-          <FormField label="Inbegrepen laad-/lostijd totaal (min)" htmlFor="agreement-included-combined">
+          <FormField label={t('tarification.surcharges.combinedMinutes')} htmlFor="agreement-included-combined">
             <input
               id="agreement-included-combined"
               type="number"
@@ -224,7 +223,7 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
       )}
       {timeMode !== 'none' && (
         <div className="issued-items-form-row">
-          <FormField label="Uurtarief extra tijd (€/u)" htmlFor="agreement-extra-hourly-rate">
+          <FormField label={t('tarification.surcharges.extraRate')} htmlFor="agreement-extra-hourly-rate">
             <input
               id="agreement-extra-hourly-rate"
               type="number"
@@ -241,7 +240,7 @@ export function AgreementSurchargesPanel({ agreement, canManage, onUpdated }: Ag
       {canManage && (
         <div className="customer-panel-header">
           <Button onClick={() => void save()} disabled={busy}>
-            {busy ? 'Bezig...' : 'Opslaan'}
+            {busy ? t('ui.actions.busy') : t('ui.actions.save')}
           </Button>
         </div>
       )}

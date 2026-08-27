@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { useAuth } from '../../auth/authContextValue'
 import { AssignmentSlot } from '../../fleet-assignment/AssignmentSlot'
@@ -22,11 +23,12 @@ const READINESS_TONE: Record<DriverDetail['readiness']['status'], BadgeTone> = {
   NotReady: 'danger',
   Blocked: 'danger',
 }
+/** i18n-keys (driversAdmin.readiness.*) — render via t(READINESS_LABEL[s]). */
 const READINESS_LABEL: Record<DriverDetail['readiness']['status'], string> = {
-  Ready: 'Inzetbaar',
-  Warning: 'Let op',
-  NotReady: 'Niet inzetbaar',
-  Blocked: 'Geblokkeerd',
+  Ready: 'driversAdmin.readiness.Ready',
+  Warning: 'driversAdmin.readiness.Warning',
+  NotReady: 'driversAdmin.readiness.NotReady',
+  Blocked: 'driversAdmin.readiness.Blocked',
 }
 const QUAL_TONE: Record<string, BadgeTone> = {
   Valid: 'success',
@@ -35,6 +37,15 @@ const QUAL_TONE: Record<string, BadgeTone> = {
   Suspended: 'danger',
   Rejected: 'danger',
   Pending: 'neutral',
+}
+/** i18n-keys (driversAdmin.qualStatus.*); unknown backend statuses render as their raw code. */
+const QUAL_STATUS_LABELS: Record<string, string> = {
+  Valid: 'driversAdmin.qualStatus.Valid',
+  ExpiringSoon: 'driversAdmin.qualStatus.ExpiringSoon',
+  Expired: 'driversAdmin.qualStatus.Expired',
+  Suspended: 'driversAdmin.qualStatus.Suspended',
+  Rejected: 'driversAdmin.qualStatus.Rejected',
+  Pending: 'driversAdmin.qualStatus.Pending',
 }
 
 interface DriverProfilePanelProps {
@@ -52,6 +63,7 @@ interface DriverProfilePanelProps {
  * "Chauffeursgegevens" block (read-only) / section (edit) — the standalone driver page redirects here.
  */
 export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverProfilePanelProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const { options: categories } = useLookupOptions('/api/driver-categories')
@@ -79,12 +91,12 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Chauffeur kon niet worden geladen.')
+        if (mounted) setLoadError(t('driversAdmin.panel.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [driverId])
+  }, [driverId, t])
 
   const loading = driver === null && loadError === null
 
@@ -103,7 +115,7 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
   function reloadDriver() {
     getDriver(driverId)
       .then(setDriver)
-      .catch(() => showError('Chauffeur kon niet opnieuw worden geladen.'))
+      .catch(() => showError(t('driversAdmin.panel.reloadFailed')))
   }
 
   async function saveEdit() {
@@ -121,10 +133,10 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
       })
       setDriver(updated)
       setEditing(false)
-      showSuccess('Chauffeur bijgewerkt.')
+      showSuccess(t('driversAdmin.panel.updated'))
       onChanged?.()
     } catch {
-      showError('Wijzigingen konden niet worden opgeslagen.')
+      showError(t('fleet.common.saveChangesFailed'))
     } finally {
       setSaving(false)
     }
@@ -137,10 +149,10 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
       const updated = await setDriverBlocked(driverId, !driver.isBlocked, driver.isBlocked ? null : blockReason.trim() || null)
       setDriver(updated)
       setBlockReason('')
-      showSuccess(updated.isBlocked ? 'Chauffeur geblokkeerd.' : 'Blokkering opgeheven.')
+      showSuccess(updated.isBlocked ? t('driversAdmin.panel.blocked') : t('driversAdmin.panel.unblocked'))
       onChanged?.()
     } catch {
-      showError('De blokkeerstatus kon niet worden gewijzigd.')
+      showError(t('driversAdmin.panel.blockFailed'))
     } finally {
       setBlocking(false)
     }
@@ -149,16 +161,16 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
   async function handleDelete() {
     try {
       await deleteDriver(driverId)
-      showSuccess('Chauffeur verwijderd.')
+      showSuccess(t('driversAdmin.panel.deleted'))
       onDeleted?.()
     } catch {
-      showError('Chauffeur kon niet worden verwijderd.')
+      showError(t('driversAdmin.panel.deleteFailed'))
       setConfirmDelete(false)
     }
   }
 
-  if (loading) return <p className="placeholder-text">Chauffeur laden…</p>
-  if (loadError || !driver) return <p className="placeholder-text">{loadError ?? 'Niet gevonden.'}</p>
+  if (loading) return <p className="placeholder-text">{t('driversAdmin.panel.loading')}</p>
+  if (loadError || !driver) return <p className="placeholder-text">{loadError ?? t('fleet.common.notFound')}</p>
 
   const canEdit = hasPermission('drivers.edit')
 
@@ -173,17 +185,17 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
         <div className="driver-actions">
           {canEdit && !editing && (
             <Button variant="secondary" onClick={startEdit}>
-              Bewerken
+              {t('ui.actions.edit')}
             </Button>
           )}
           {hasPermission('drivers.block') && (
             <Button variant={driver.isBlocked ? 'secondary' : 'danger'} onClick={toggleBlock} disabled={blocking}>
-              {driver.isBlocked ? 'Deblokkeren' : 'Blokkeren'}
+              {driver.isBlocked ? t('driversAdmin.panel.unblock') : t('driversAdmin.panel.block')}
             </Button>
           )}
           {hasPermission('drivers.delete') && (
             <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-              Verwijderen
+              {t('ui.actions.delete')}
             </Button>
           )}
         </div>
@@ -191,8 +203,8 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
 
       <section className="driver-readiness">
         <div className="driver-readiness-header">
-          <span>Inzetbaarheid</span>
-          <Badge tone={READINESS_TONE[driver.readiness.status]}>{READINESS_LABEL[driver.readiness.status]}</Badge>
+          <span>{t('driversAdmin.panel.readinessTitle')}</span>
+          <Badge tone={READINESS_TONE[driver.readiness.status]}>{t(READINESS_LABEL[driver.readiness.status])}</Badge>
         </div>
         {driver.readiness.blockingReasons.length > 0 && (
           <ul className="driver-reasons driver-reasons-blocking">
@@ -209,7 +221,7 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
           </ul>
         )}
         {driver.readiness.blockingReasons.length === 0 && driver.readiness.warnings.length === 0 && (
-          <p className="driver-reasons-ok">Geen belemmeringen. Chauffeur is inzetbaar.</p>
+          <p className="driver-reasons-ok">{t('driversAdmin.panel.readinessOk')}</p>
         )}
       </section>
 
@@ -217,7 +229,7 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
         <div className="driver-block-reason">
           <input
             type="text"
-            placeholder="Reden voor blokkade (optioneel)"
+            placeholder={t('driversAdmin.panel.blockReasonPlaceholder')}
             value={blockReason}
             onChange={(e) => setBlockReason(e.target.value)}
           />
@@ -225,10 +237,10 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
       )}
 
       <section className="driver-grid">
-        <FormField label="Categorieën" hint={editing ? 'De eerst aangevinkte categorie is de primaire.' : undefined}>
+        <FormField label={t('driversAdmin.panel.categories')} hint={editing ? t('driversAdmin.panel.categoriesHint') : undefined}>
           {editing ? (
             <div className="driver-category-options">
-              {categories.length === 0 && <span className="placeholder-text">Geen categorieën beschikbaar.</span>}
+              {categories.length === 0 && <span className="placeholder-text">{t('driversAdmin.panel.noCategories')}</span>}
               {categories.map((c) => {
                 const position = formCategoryIds.indexOf(c.id)
                 return (
@@ -244,7 +256,7 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
                     />
                     <span>
                       {c.name}
-                      {position === 0 && ' (primair)'}
+                      {position === 0 ? ` ${t('driversAdmin.panel.primary')}` : ''}
                     </span>
                   </label>
                 )
@@ -257,7 +269,7 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
           )}
         </FormField>
 
-        <FormField label="Beschikbaarheid">
+        <FormField label={t('driversAdmin.fields.availability')}>
           {editing ? (
             <select
               value={form.availabilityStatus ?? driver.availabilityStatus}
@@ -265,44 +277,44 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
             >
               {(Object.keys(AVAILABILITY_LABELS) as DriverAvailabilityStatus[]).map((s) => (
                 <option key={s} value={s}>
-                  {AVAILABILITY_LABELS[s]}
+                  {t(AVAILABILITY_LABELS[s])}
                 </option>
               ))}
             </select>
           ) : (
-            <span>{AVAILABILITY_LABELS[driver.availabilityStatus]}</span>
+            <span>{t(AVAILABILITY_LABELS[driver.availabilityStatus])}</span>
           )}
         </FormField>
 
-        <FormField label="Actief">
+        <FormField label={t('driversAdmin.panel.active')}>
           {editing ? (
             <label className="driver-checkbox">
               <input type="checkbox" checked={form.isActive ?? driver.isActive} onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))} />
-              <span>Chauffeur is actief</span>
+              <span>{t('driversAdmin.panel.activeCheckbox')}</span>
             </label>
           ) : (
-            <span>{driver.isActive ? 'Ja' : 'Nee'}</span>
+            <span>{driver.isActive ? t('fleet.common.yes') : t('fleet.common.no')}</span>
           )}
         </FormField>
 
-        <FormField label="Vaste oplegger" hint="Langetermijnvoorkeur; geen operationele koppeling.">
+        <FormField label={t('driversAdmin.panel.fixedTrailer')} hint={t('driversAdmin.panel.fixedTrailerHint')}>
           {editing ? (
             <SearchableSelect
               value={form.fixedTrailerId ?? null}
               onChange={(v) => setForm((f) => ({ ...f, fixedTrailerId: v }))}
-              options={trailerOptions.map((t) => ({
-                value: t.id,
-                label: `${t.internalNumber} · ${t.licensePlate}`,
-                keywords: t.licensePlate,
+              options={trailerOptions.map((tr) => ({
+                value: tr.id,
+                label: `${tr.internalNumber} · ${tr.licensePlate}`,
+                keywords: tr.licensePlate,
               }))}
-              placeholder="— Geen —"
+              placeholder={t('fleet.form.none')}
             />
           ) : (
             <span>{driver.fixedTrailerLabel ?? '—'}</span>
           )}
         </FormField>
 
-        <FormField label="Notities" className="driver-grid-full">
+        <FormField label={t('driversAdmin.fields.notes')} className="driver-grid-full">
           {editing ? (
             <textarea rows={3} value={form.notes ?? driver.notes ?? ''} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
           ) : (
@@ -314,28 +326,27 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
       {editing && (
         <div className="driver-form-actions">
           <Button variant="secondary" onClick={() => setEditing(false)} disabled={saving}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button onClick={saveEdit} disabled={saving}>
-            {saving ? 'Opslaan…' : 'Opslaan'}
+            {saving ? t('fleet.common.saving') : t('ui.actions.save')}
           </Button>
         </div>
       )}
 
       <section className="driver-vehicles">
-        <h2>Voertuigen</h2>
+        <h2>{t('navigation.menu.vehicles')}</h2>
         <p className="assignment-slots-note">
-          <strong>Vast voertuig</strong> is een langetermijnvoorkeur; <strong>actueel voertuig</strong> is de tijdelijke
-          operationele toewijzing. De rittoewijzing voor een specifieke dag gebeurt in de planning. Wijzigingen hier
-          worden ook op de voertuigpagina zichtbaar — het is dezelfde koppeling.
+          <strong>{t('driversAdmin.panel.noteFixedLead')}</strong> {t('driversAdmin.panel.noteFixedText')}{' '}
+          <strong>{t('driversAdmin.panel.noteCurrentLead')}</strong> {t('driversAdmin.panel.noteCurrentText')}
         </p>
         <div className="assignment-slots">
           <AssignmentSlot
-            title="Vast voertuig"
-            description="Voorkeursvoertuig op lange termijn."
+            title={t('driversAdmin.panel.fixedVehicle')}
+            description={t('driversAdmin.panel.fixedVehicleDesc')}
             assigned={driver.fixedVehicle ? { label: driver.fixedVehicle.label, linkTo: `/vehicles/${driver.fixedVehicle.id}` } : null}
             canEdit={canEdit}
-            pickerLabel="Voertuig"
+            pickerLabel={t('driversAdmin.panel.pickerVehicle')}
             loadOptions={async () =>
               (await getVehicleOptions()).map((v) => ({
                 value: v.id,
@@ -350,11 +361,11 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
             onChanged={reloadDriver}
           />
           <AssignmentSlot
-            title="Actueel voertuig"
-            description="Tijdelijke operationele toewijzing (bv. tijdens vervanging)."
+            title={t('driversAdmin.panel.currentVehicle')}
+            description={t('driversAdmin.panel.currentVehicleDesc')}
             assigned={driver.currentVehicle ? { label: driver.currentVehicle.label, linkTo: `/vehicles/${driver.currentVehicle.id}` } : null}
             canEdit={canEdit}
-            pickerLabel="Voertuig"
+            pickerLabel={t('driversAdmin.panel.pickerVehicle')}
             loadOptions={async () =>
               (await getVehicleOptions()).map((v) => ({
                 value: v.id,
@@ -372,20 +383,20 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
       </section>
 
       <section className="driver-qualifications">
-        <h2>Kwalificaties</h2>
+        <h2>{t('navigation.menu.qualifications')}</h2>
         <p className="assignment-slots-note">
-          Rijbewijs- en vakbekwaamheidsgegevens worden beheerd via het tabblad{' '}
-          <Link to={`?tab=kwalificaties`}>Kwalificaties</Link>.
+          {t('driversAdmin.panel.qualNote')}{' '}
+          <Link to={`?tab=kwalificaties`}>{t('navigation.menu.qualifications')}</Link>.
         </p>
         {driver.qualifications.length === 0 ? (
-          <p className="placeholder-text">Nog geen kwalificaties geregistreerd.</p>
+          <p className="placeholder-text">{t('driversAdmin.panel.qualEmpty')}</p>
         ) : (
           <table className="driver-qual-table">
             <thead>
               <tr>
-                <th>Kwalificatie</th>
-                <th>Status</th>
-                <th>Vervaldatum</th>
+                <th>{t('driversAdmin.panel.colQualification')}</th>
+                <th>{t('driversAdmin.panel.colStatus')}</th>
+                <th>{t('driversAdmin.panel.colExpiry')}</th>
               </tr>
             </thead>
             <tbody>
@@ -393,7 +404,9 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
                 <tr key={q.typeCode}>
                   <td>{q.typeName}</td>
                   <td>
-                    <Badge tone={QUAL_TONE[q.status] ?? 'neutral'}>{q.status}</Badge>
+                    <Badge tone={QUAL_TONE[q.status] ?? 'neutral'}>
+                      {QUAL_STATUS_LABELS[q.status] ? t(QUAL_STATUS_LABELS[q.status]) : q.status}
+                    </Badge>
                   </td>
                   <td>{q.expiryDate ?? '—'}</td>
                 </tr>
@@ -405,9 +418,9 @@ export function DriverProfilePanel({ driverId, onChanged, onDeleted }: DriverPro
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Chauffeur verwijderen"
-          message={`Weet je zeker dat je chauffeur ${driver.driverNumber} wilt verwijderen? Het personeelsdossier blijft behouden.`}
-          confirmLabel="Verwijderen"
+          title={t('driversAdmin.panel.deleteTitle')}
+          message={t('driversAdmin.panel.deleteMessage', { number: driver.driverNumber })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}

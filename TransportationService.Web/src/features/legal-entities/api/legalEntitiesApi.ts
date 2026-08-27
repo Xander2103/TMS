@@ -38,7 +38,9 @@ export async function uploadLegalEntityLogo(id: string, file: File): Promise<Leg
     body,
   })
   if (!response.ok) {
-    let message = 'Het logo kon niet worden geüpload.'
+    // Servermessage wint; zonder servermessage (lege string) toont de aanroeper zijn eigen
+    // vertaalde fallback via describeApiError.
+    let message = ''
     try {
       const data = (await response.json()) as { detail?: string; message?: string }
       message = data.detail ?? data.message ?? message

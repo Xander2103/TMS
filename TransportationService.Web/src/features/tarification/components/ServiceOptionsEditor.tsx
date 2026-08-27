@@ -6,7 +6,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { SURCHARGE_KIND_LABELS, type SurchargeKind } from '../types'
 import { formatServiceValue } from '../serviceValueFormat'
 import {
@@ -53,53 +54,56 @@ interface OptionDraft {
   quantitySource: ServiceQuantitySource
 }
 
+/** Vertaalsleutels — renderen als t(TIME_CONDITION_KIND_LABELS[kind]). */
 const TIME_CONDITION_KIND_LABELS: Record<ServiceTimeCondition['kind'], string> = {
-  StopTimeBefore: 'Vóór een uur',
-  StopTimeAfter: 'Na een uur',
-  AppointmentRequired: 'Afspraak verplicht',
-  Weekend: 'Weekend',
-  Holiday: 'Feestdag',
+  StopTimeBefore: 'tarification.services.timeConditionKind.StopTimeBefore',
+  StopTimeAfter: 'tarification.services.timeConditionKind.StopTimeAfter',
+  AppointmentRequired: 'tarification.services.timeConditionKind.AppointmentRequired',
+  Weekend: 'tarification.services.timeConditionKind.Weekend',
+  Holiday: 'tarification.services.timeConditionKind.Holiday',
 }
 
+/** Vertaalsleutels — renderen als t(TIME_CONDITION_SCOPE_LABELS[scope]). */
 const TIME_CONDITION_SCOPE_LABELS: Record<ServiceTimeCondition['stopScope'], string> = {
-  Any: 'Elke stop',
-  Loading: 'Laden',
-  Unloading: 'Lossen',
+  Any: 'tarification.services.timeConditionScope.Any',
+  Loading: 'tarification.services.timeConditionScope.Loading',
+  Unloading: 'tarification.services.timeConditionScope.Unloading',
 }
 
 /** "Lossen vóór 10:00 (prioriteit 1)" — badge/summary text of a configured time condition. */
-function timeConditionSummary(condition: ServiceTimeCondition): string {
-  const scope = TIME_CONDITION_SCOPE_LABELS[condition.stopScope]
+function timeConditionSummary(t: TranslateFn, condition: ServiceTimeCondition): string {
+  const scope = t(TIME_CONDITION_SCOPE_LABELS[condition.stopScope])
   const time = condition.timeOfDay?.slice(0, 5)
   const core =
     condition.kind === 'StopTimeBefore'
-      ? `${scope} vóór ${time ?? '?'}`
+      ? t('tarification.services.summaryBefore', { scope, time: time ?? '?' })
       : condition.kind === 'StopTimeAfter'
-        ? `${scope} na ${time ?? '?'}`
+        ? t('tarification.services.summaryAfter', { scope, time: time ?? '?' })
         : condition.kind === 'AppointmentRequired'
-          ? `${scope}: afspraak verplicht`
+          ? t('tarification.services.summaryAppointment', { scope })
           : condition.kind === 'Holiday'
-            ? `${scope}: feestdag`
-            : `${scope}: weekend`
+            ? t('tarification.services.summaryHoliday', { scope })
+            : t('tarification.services.summaryWeekend', { scope })
   const extras = [
-    condition.priority !== 0 ? `prioriteit ${condition.priority}` : null,
-    condition.allowStacking ? 'stapelt' : null,
+    condition.priority !== 0 ? t('tarification.services.summaryPriority', { priority: condition.priority }) : null,
+    condition.allowStacking ? t('tarification.services.summaryStacks') : null,
   ].filter(Boolean)
   return extras.length > 0 ? `${core} (${extras.join(', ')})` : core
 }
 
+/** Vertaalsleutels per berekeningswijze voor het waardelabel. */
 const VALUE_LABEL_BY_KIND: Partial<Record<SurchargeKind, string>> = {
-  Percent: 'Standaard (%)',
-  PerHour: 'Standaardprijs per uur (€)',
-  PerStop: 'Standaardprijs per stop (€)',
-  PerUnit: 'Standaardprijs per eenheid (€)',
-  PerOrderLine: 'Standaardprijs per orderlijn (€)',
-  PerKg: 'Standaardprijs per kg (€)',
-  PerM3: 'Standaardprijs per m³ (€)',
-  PerLdm: 'Standaardprijs per laadmeter (€)',
-  PerDay: 'Standaardprijs per dag (€)',
-  PerPalletDay: 'Standaardprijs per pallet/dag (€)',
-  PerKm: 'Standaardprijs per km (€)',
+  Percent: 'tarification.services.valueLabel.Percent',
+  PerHour: 'tarification.services.valueLabel.PerHour',
+  PerStop: 'tarification.services.valueLabel.PerStop',
+  PerUnit: 'tarification.services.valueLabel.PerUnit',
+  PerOrderLine: 'tarification.services.valueLabel.PerOrderLine',
+  PerKg: 'tarification.services.valueLabel.PerKg',
+  PerM3: 'tarification.services.valueLabel.PerM3',
+  PerLdm: 'tarification.services.valueLabel.PerLdm',
+  PerDay: 'tarification.services.valueLabel.PerDay',
+  PerPalletDay: 'tarification.services.valueLabel.PerPalletDay',
+  PerKm: 'tarification.services.valueLabel.PerKm',
 }
 
 /**
@@ -108,6 +112,7 @@ const VALUE_LABEL_BY_KIND: Partial<Record<SurchargeKind, string>> = {
  * "Tarieven & toeslagen" tab; nothing here is hardcoded in the order form.
  */
 export function ServiceOptionsEditor() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canView = hasPermission('tariffs.view') || hasPermission('tariffs.manage')
@@ -117,7 +122,7 @@ export function ServiceOptionsEditor() {
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [salesCategories, setSalesCategories] = useState<SalesCategory[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [draft, setDraft] = useState<OptionDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ServiceOption | null>(null)
@@ -128,9 +133,9 @@ export function ServiceOptionsEditor() {
     listServiceOptions(true)
       .then((data) => {
         setOptions(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
-      .catch(() => setLoadError('De diensten konden niet worden geladen.'))
+      .catch(() => setLoadErrorKey('tarification.services.loadError'))
     listUnitTypeSettings()
       .then(setUnits)
       .catch(() => {})
@@ -148,9 +153,9 @@ export function ServiceOptionsEditor() {
     reload()
   }, [reload])
 
-  if (!canView) return <p className="placeholder-text">Je hebt geen rechten om diensten te bekijken.</p>
-  if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (options === null) return <p className="placeholder-text">Diensten laden…</p>
+  if (!canView) return <p className="placeholder-text">{t('tarification.services.noViewPermission')}</p>
+  if (loadErrorKey) return <p className="placeholder-text">{t(loadErrorKey)}</p>
+  if (options === null) return <p className="placeholder-text">{t('tarification.services.loading')}</p>
 
   function openDraft(option: ServiceOption | null) {
     setDraftError(null)
@@ -232,39 +237,39 @@ export function ServiceOptionsEditor() {
       }
       if (draft.option) {
         await updateServiceOption(draft.option.id, input)
-        showSuccess('Dienst bijgewerkt.')
+        showSuccess(t('tarification.services.updated'))
       } else {
         await createServiceOption(input)
-        showSuccess('Dienst toegevoegd.')
+        showSuccess(t('tarification.services.added'))
       }
       setDraft(null)
       reload()
     } catch (err) {
-      setDraftError(describeApiError(err, 'De dienst kon niet worden opgeslagen.').message)
+      setDraftError(localizeApiError(t, err, t('tarification.services.saveError')))
     } finally {
       setBusy(false)
     }
   }
 
-  const valueLabel = draft ? (VALUE_LABEL_BY_KIND[draft.kind] ?? 'Standaardprijs (€)') : 'Standaardprijs (€)'
+  const valueLabel = t(draft ? (VALUE_LABEL_BY_KIND[draft.kind] ?? 'tarification.services.valueLabel.default') : 'tarification.services.valueLabel.default')
   const activeUnits = units.filter((u) => u.isActive)
 
   return (
     <div>
       {canManage && (
         <div className="tof-documents-toolbar">
-          <Button onClick={() => openDraft(null)}>+ Dienst</Button>
+          <Button onClick={() => openDraft(null)}>{t('tarification.services.addService')}</Button>
         </div>
       )}
       <table className="issued-items-table">
         <thead>
           <tr>
-            <th>Naam</th>
-            <th>Berekeningswijze</th>
-            <th>Standaardprijs</th>
-            <th>In orders</th>
-            <th>Status</th>
-            {canManage && <th aria-label="Acties" />}
+            <th>{t('tarification.common.name')}</th>
+            <th>{t('tarification.services.colKind')}</th>
+            <th>{t('tarification.services.colDefault')}</th>
+            <th>{t('tarification.services.colInOrders')}</th>
+            <th>{t('tarification.common.status')}</th>
+            {canManage && <th aria-label={t('tarification.common.actions')} />}
           </tr>
         </thead>
         <tbody>
@@ -274,34 +279,36 @@ export function ServiceOptionsEditor() {
                 {option.name}
                 {option.description && <div className="customer-form-muted">{option.description}</div>}
               </td>
-              <td>{SURCHARGE_KIND_LABELS[option.kind]}</td>
+              <td>{t(SURCHARGE_KIND_LABELS[option.kind])}</td>
               <td>
-                {formatServiceValue(option.kind, option.defaultValue, option.unitTypeName)}
-                {option.autoApply && <Badge tone="info">Automatisch</Badge>}
+                {formatServiceValue(option.kind, option.defaultValue, option.unitTypeName, t)}
+                {option.autoApply && <Badge tone="info">{t('tarification.services.badgeAuto')}</Badge>}
                 {option.quantitySource && option.quantitySource !== 'Ordered' && (
-                  <Badge tone="info">{SERVICE_QUANTITY_SOURCE_LABELS[option.quantitySource]}</Badge>
+                  <Badge tone="info">{t(SERVICE_QUANTITY_SOURCE_LABELS[option.quantitySource])}</Badge>
                 )}
-                {option.onlyForAdr && <Badge tone="warning">Alleen bij ADR</Badge>}
+                {option.onlyForAdr && <Badge tone="warning">{t('tarification.services.badgeAdr')}</Badge>}
                 {(option.warehouseNames?.length ?? 0) > 0 && (
-                  <Badge tone="warning">Magazijn: {option.warehouseNames!.join(', ')}</Badge>
+                  <Badge tone="warning">{t('tarification.services.badgeWarehouse', { names: option.warehouseNames!.join(', ') })}</Badge>
                 )}
                 {(option.timeConditions ?? []).map((condition, index) => (
                   <Badge key={index} tone="info">
-                    {timeConditionSummary(condition)}
+                    {timeConditionSummary(t, condition)}
                   </Badge>
                 ))}
               </td>
-              <td>{option.selectableInOrders ? 'Ja' : 'Nee'}</td>
+              <td>{option.selectableInOrders ? t('tarification.common.yes') : t('tarification.common.no')}</td>
               <td>
-                <Badge tone={option.isActive ? 'success' : 'neutral'}>{option.isActive ? 'Actief' : 'Inactief'}</Badge>
+                <Badge tone={option.isActive ? 'success' : 'neutral'}>
+                  {option.isActive ? t('tarification.common.active') : t('tarification.common.inactive')}
+                </Badge>
               </td>
               {canManage && (
                 <td className="issued-items-row-actions">
                   <button type="button" className="issued-items-link" onClick={() => openDraft(option)}>
-                    Bewerken
+                    {t('ui.actions.edit')}
                   </button>
                   <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(option)}>
-                    Verwijderen
+                    {t('ui.actions.delete')}
                   </button>
                 </td>
               )}
@@ -312,16 +319,16 @@ export function ServiceOptionsEditor() {
 
       {draft && (
         <Modal
-          title={draft.option ? `Dienst bewerken — ${draft.option.name}` : 'Dienst toevoegen'}
+          title={draft.option ? t('tarification.services.editTitle', { name: draft.option.name }) : t('tarification.services.addTitle')}
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="service-option-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -333,19 +340,19 @@ export function ServiceOptionsEditor() {
               </div>
             )}
             <div className="issued-items-form-row">
-              <FormField label="Code" htmlFor="opt-code" required hint="bv. VOOR10">
+              <FormField label={t('tarification.unitMaster.codeLabel')} htmlFor="opt-code" required hint={t('tarification.services.codeHint')}>
                 <input id="opt-code" value={draft.code} onChange={(e) => setDraft((d) => (d ? { ...d, code: e.target.value } : d))} maxLength={50} />
               </FormField>
-              <FormField label="Naam" htmlFor="opt-name" required>
+              <FormField label={t('tarification.common.name')} htmlFor="opt-name" required>
                 <input id="opt-name" value={draft.name} onChange={(e) => setDraft((d) => (d ? { ...d, name: e.target.value } : d))} maxLength={200} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Berekeningswijze" htmlFor="opt-kind" hint="Vast bedrag, percentage, per uur/stop, per eenheid/orderlijn, per kg/m³/laadmeter of per dag/pallet-dag.">
+              <FormField label={t('tarification.services.colKind')} htmlFor="opt-kind" hint={t('tarification.services.kindHint')}>
                 <select id="opt-kind" value={draft.kind} onChange={(e) => setDraft((d) => (d ? { ...d, kind: e.target.value as SurchargeKind } : d))}>
-                  {Object.entries(SURCHARGE_KIND_LABELS).map(([value, label]) => (
+                  {Object.entries(SURCHARGE_KIND_LABELS).map(([value, labelKey]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(labelKey)}
                     </option>
                   ))}
                 </select>
@@ -355,35 +362,35 @@ export function ServiceOptionsEditor() {
               </FormField>
             </div>
             <FormField
-              label="Hoeveelheid uit"
+              label={t('tarification.services.quantitySourceLabel')}
               htmlFor="opt-quantity-source"
-              hint="Waar de factureerbare hoeveelheid vandaan komt: de bestelde aantallen of de werkelijke magazijnactiviteit (scans/picks/opslagdagen)."
+              hint={t('tarification.services.quantitySourceHint')}
             >
               <select
                 id="opt-quantity-source"
                 value={draft.quantitySource}
                 onChange={(e) => setDraft((d) => (d ? { ...d, quantitySource: e.target.value as ServiceQuantitySource } : d))}
               >
-                {Object.entries(SERVICE_QUANTITY_SOURCE_LABELS).map(([value, label]) => (
+                {Object.entries(SERVICE_QUANTITY_SOURCE_LABELS).map(([value, labelKey]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(labelKey)}
                   </option>
                 ))}
               </select>
             </FormField>
             {draft.kind === 'PerUnit' && (
               <FormField
-                label="Eenheid"
+                label={t('tarification.common.unit')}
                 htmlFor="opt-unit"
                 required={!SCAN_QUANTITY_SOURCES.includes(draft.quantitySource)}
                 hint={
                   SCAN_QUANTITY_SOURCES.includes(draft.quantitySource)
-                    ? 'Optioneel bij een scanbron: er wordt op fysieke pakketten geteld, niet op een besteleenheid.'
-                    : 'De eenheid waarvan het aantal op de order deze service telt (bv. Colli, Pallet).'
+                    ? t('tarification.services.unitOptionalHint')
+                    : t('tarification.services.unitRequiredHint')
                 }
               >
                 <select id="opt-unit" value={draft.unitTypeId} onChange={(e) => setDraft((d) => (d ? { ...d, unitTypeId: e.target.value } : d))}>
-                  <option value="">— Kies eenheid —</option>
+                  <option value="">{t('tarification.grid.chooseUnit')}</option>
                   {activeUnits.map((unit) => (
                     <option key={unit.id} value={unit.id}>
                       {unit.name}
@@ -392,15 +399,15 @@ export function ServiceOptionsEditor() {
                 </select>
               </FormField>
             )}
-            <FormField label="Omschrijving (intern)" htmlFor="opt-desc">
+            <FormField label={t('tarification.services.descLabel')} htmlFor="opt-desc">
               <input id="opt-desc" value={draft.description} onChange={(e) => setDraft((d) => (d ? { ...d, description: e.target.value } : d))} maxLength={1000} />
             </FormField>
-            <FormField label="Factuuromschrijving" htmlFor="opt-invoice" hint="Leeg = de naam van de dienst.">
+            <FormField label={t('tarification.services.invoiceDescLabel')} htmlFor="opt-invoice" hint={t('tarification.services.invoiceDescHint')}>
               <input id="opt-invoice" value={draft.invoiceDescription} onChange={(e) => setDraft((d) => (d ? { ...d, invoiceDescription: e.target.value } : d))} maxLength={300} />
             </FormField>
-            <FormField label="Verkoopcategorie" htmlFor="opt-sales-cat" hint="Verkoopcode op factuurlijnen van deze dienst. Leeg = standaardrol Supplementen.">
+            <FormField label={t('tarification.services.salesCatLabel')} htmlFor="opt-sales-cat" hint={t('tarification.services.salesCatHint')}>
               <select id="opt-sales-cat" value={draft.salesCategoryId} onChange={(e) => setDraft((d) => (d ? { ...d, salesCategoryId: e.target.value } : d))}>
-                <option value="">— Standaard (Supplementen) —</option>
+                <option value="">{t('tarification.services.salesCatDefault')}</option>
                 {salesCategories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -408,20 +415,20 @@ export function ServiceOptionsEditor() {
             </FormField>
             <label className="tof-checkbox">
               <input type="checkbox" checked={draft.selectableInOrders} onChange={(e) => setDraft((d) => (d ? { ...d, selectableInOrders: e.target.checked } : d))} />
-              Selecteerbaar in transportorders
+              {t('tarification.services.selectable')}
             </label>
             <label className="tof-checkbox">
               <input type="checkbox" checked={draft.autoApply} onChange={(e) => setDraft((d) => (d ? { ...d, autoApply: e.target.checked } : d))} />
-              Automatisch toepassen (contractdienst, geen selectie nodig)
+              {t('tarification.services.autoApply')}
             </label>
             <label className="tof-checkbox">
               <input type="checkbox" checked={draft.onlyForAdr} onChange={(e) => setDraft((d) => (d ? { ...d, onlyForAdr: e.target.checked } : d))} />
-              Alleen bij ADR
+              {t('tarification.services.badgeAdr')}
             </label>
             {warehouses.length > 0 && (
               <FormField
-                label="Alleen voor magazijnen"
-                hint="Niets aangevinkt = alle orders. Meerdere magazijnen: één ervan volstaat (of); samen met 'Alleen bij ADR' moeten beide voorwaarden gelden (en)."
+                label={t('tarification.services.warehousesLabel')}
+                hint={t('tarification.services.warehousesHint')}
               >
                 <div>
                   {warehouses.filter((w) => w.isActive || draft.warehouseIds.includes(w.id)).map((warehouse) => (
@@ -449,14 +456,14 @@ export function ServiceOptionsEditor() {
               </FormField>
             )}
             <FormField
-              label="Tijdsvoorwaarden"
-              hint="Automatische toeslag op basis van de tijdseis van een stop (bv. Lossen vóór 10:00). Bij overlappende 'vóór'-voorwaarden geldt de hoogste prioriteit, dan het meest specifieke uur; 'stapelt' past de toeslag altijd toe naast de winnaar."
+              label={t('tarification.services.timeCondLabel')}
+              hint={t('tarification.services.timeCondHint')}
             >
               <div>
                 {draft.timeConditions.map((condition, index) => (
                   <div key={index} className="issued-items-form-row" data-testid="time-condition-row">
                     <select
-                      aria-label="Voorwaarde"
+                      aria-label={t('tarification.services.ariaCondition')}
                       value={condition.kind}
                       onChange={(e) =>
                         setDraft((d) => {
@@ -467,14 +474,14 @@ export function ServiceOptionsEditor() {
                         })
                       }
                     >
-                      {Object.entries(TIME_CONDITION_KIND_LABELS).map(([value, label]) => (
+                      {Object.entries(TIME_CONDITION_KIND_LABELS).map(([value, labelKey]) => (
                         <option key={value} value={value}>
-                          {label}
+                          {t(labelKey)}
                         </option>
                       ))}
                     </select>
                     <select
-                      aria-label="Stoptype"
+                      aria-label={t('tarification.services.ariaStopType')}
                       value={condition.stopScope}
                       onChange={(e) =>
                         setDraft((d) => {
@@ -485,15 +492,15 @@ export function ServiceOptionsEditor() {
                         })
                       }
                     >
-                      {Object.entries(TIME_CONDITION_SCOPE_LABELS).map(([value, label]) => (
+                      {Object.entries(TIME_CONDITION_SCOPE_LABELS).map(([value, labelKey]) => (
                         <option key={value} value={value}>
-                          {label}
+                          {t(labelKey)}
                         </option>
                       ))}
                     </select>
                     {(condition.kind === 'StopTimeBefore' || condition.kind === 'StopTimeAfter') && (
                       <input
-                        aria-label="Uur"
+                        aria-label={t('tarification.services.ariaHour')}
                         type="time"
                         value={condition.timeOfDay}
                         onChange={(e) =>
@@ -507,7 +514,7 @@ export function ServiceOptionsEditor() {
                       />
                     )}
                     <input
-                      aria-label="Prioriteit"
+                      aria-label={t('tarification.services.ariaPriority')}
                       type="number"
                       value={condition.priority}
                       onChange={(e) =>
@@ -533,7 +540,7 @@ export function ServiceOptionsEditor() {
                           })
                         }
                       />
-                      Stapelt
+                      {t('tarification.services.stacksCheckbox')}
                     </label>
                     <button
                       type="button"
@@ -544,7 +551,7 @@ export function ServiceOptionsEditor() {
                         )
                       }
                     >
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   </div>
                 ))}
@@ -564,13 +571,13 @@ export function ServiceOptionsEditor() {
                     )
                   }
                 >
-                  + Tijdsvoorwaarde
+                  {t('tarification.services.addTimeCondition')}
                 </Button>
               </div>
             </FormField>
             <label className="tof-checkbox">
               <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />
-              Actief
+              {t('tarification.common.active')}
             </label>
           </form>
         </Modal>
@@ -578,19 +585,19 @@ export function ServiceOptionsEditor() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Dienst verwijderen"
-          message={`Weet je zeker dat je "${deleteTarget.name}" wilt verwijderen? Bestaande orders behouden hun snapshot.`}
-          confirmLabel="Verwijderen"
+          title={t('tarification.services.deleteTitle')}
+          message={t('tarification.services.deleteMessage', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={async () => {
             const target = deleteTarget
             setDeleteTarget(null)
             try {
               await deleteServiceOption(target.id)
-              showSuccess('Dienst verwijderd.')
+              showSuccess(t('tarification.services.deleted'))
               reload()
             } catch (err) {
-              showError(describeApiError(err, 'De dienst kon niet worden verwijderd.').message)
+              showError(localizeApiError(t, err, t('tarification.services.deleteError')))
             }
           }}
           onCancel={() => setDeleteTarget(null)}

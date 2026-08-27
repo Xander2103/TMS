@@ -150,9 +150,10 @@ export interface DossierActivityInput {
   version?: string
 }
 
+/** Vertaalsleutels per status — renderen als t(DOSSIER_STATUS_LABELS[status]). */
 export const DOSSIER_STATUS_LABELS: Record<DossierStatus, string> = {
-  Open: 'Open',
-  Closed: 'Gesloten',
+  Open: 'dossiers.status.Open',
+  Closed: 'dossiers.status.Closed',
 }
 
 export const DOSSIER_STATUS_TONE: Record<DossierStatus, BadgeTone> = {
@@ -160,11 +161,12 @@ export const DOSSIER_STATUS_TONE: Record<DossierStatus, BadgeTone> = {
   Closed: 'neutral',
 }
 
+/** Vertaalsleutels per relatietype — renderen als t(DOSSIER_RELATION_LABELS[type]). */
 export const DOSSIER_RELATION_LABELS: Record<DossierRelationType, string> = {
-  FollowUp: 'Vervolgdossier',
-  Return: 'Retour',
-  Claim: 'Claim/schade',
-  Replacement: 'Vervanging',
-  Duplicate: 'Duplicaat',
-  Other: 'Overig',
+  FollowUp: 'dossiers.relationType.FollowUp',
+  Return: 'dossiers.relationType.Return',
+  Claim: 'dossiers.relationType.Claim',
+  Replacement: 'dossiers.relationType.Replacement',
+  Duplicate: 'dossiers.relationType.Duplicate',
+  Other: 'dossiers.relationType.Other',
 }

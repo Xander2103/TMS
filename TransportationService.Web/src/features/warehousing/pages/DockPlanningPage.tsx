@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react'
 import { ApiError } from '../../../api/apiClient'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
+import { formatTime } from '../../../utils/dates'
 import { ORDER_PRIORITY_LABELS } from '../../transport-orders/types'
 import {
   changeDockAppointmentStatus, createDockAppointment, deleteDockAppointment, getDockBoard,
@@ -32,6 +34,7 @@ interface ConflictPrompt {
 
 /** The dock planning board: docks as rows, the day horizontally, appointments as blocks. */
 export function DockPlanningPage() {
+  const { t } = useLocale()
   const { showError, showSuccess } = useToast()
   const { hasPermission } = useAuth()
   const canSchedule = hasPermission('warehouse.schedule')
@@ -55,7 +58,7 @@ export function DockPlanningPage() {
         setWarehouses(data)
         setWarehouseId((current) => current || (data[0]?.id ?? ''))
       })
-      .catch((error: unknown) => showError(describeApiError(error, 'Magazijnen laden mislukt.').message))
+      .catch((error: unknown) => showError(localizeApiError(t, error, t('warehousing.warehouses.loadFailed'))))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -66,7 +69,7 @@ export function DockPlanningPage() {
       .then((data) => {
         if (!cancelled) setBoard(data)
       })
-      .catch((error: unknown) => showError(describeApiError(error, 'Dockplanning laden mislukt.').message))
+      .catch((error: unknown) => showError(localizeApiError(t, error, t('warehousing.dockPlanning.loadBoardFailed'))))
     getWarehouseDashboard(warehouseId, date)
       .then((data) => {
         if (!cancelled) setDashboard(data)
@@ -78,7 +81,7 @@ export function DockPlanningPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warehouseId, date, reloadToken])
 
-  const reload = () => setReloadToken((t) => t + 1)
+  const reload = () => setReloadToken((token) => token + 1)
   const appointmentsByDock = useMemo(() => {
     const map = new Map<string, DockAppointment[]>()
     for (const appointment of board?.appointments ?? []) {
@@ -101,17 +104,21 @@ export function DockPlanningPage() {
       if (error instanceof ApiError && error.status === 409) {
         const body = (error.body ?? {}) as { message?: string; conflicts?: DockConflict[]; staleVersion?: boolean }
         if (body.staleVersion) {
-          showError('De afspraak is intussen gewijzigd; het bord is ververst.')
+          showError(t('warehousing.dockPlanning.staleVersion'))
           reload()
         } else if (body.conflicts && retry) {
           setOverrideReason('')
-          setConflictPrompt({ message: body.message ?? 'Conflict.', conflicts: body.conflicts, retry })
+          setConflictPrompt({
+            message: body.message ?? t('warehousing.dockPlanning.conflictFallback'),
+            conflicts: body.conflicts,
+            retry,
+          })
         } else {
-          showError(body.message ?? 'De actie is geweigerd.')
+          showError(body.message ?? t('warehousing.dockPlanning.actionRefused'))
           reload()
         }
       } else {
-        showError(describeApiError(error, 'De actie is mislukt.').message)
+        showError(localizeApiError(t, error, t('warehousing.dockPlanning.actionFailed')))
       }
     } finally {
       setBusy(false)
@@ -135,7 +142,7 @@ export function DockPlanningPage() {
     const input = toInput(appointment, { dockId })
     void run(
       () => updateDockAppointment(appointment.id, input),
-      dockId ? 'Afspraak naar dock verplaatst.' : 'Afspraak naar wachtrij verplaatst.',
+      dockId ? t('warehousing.dockPlanning.movedToDock') : t('warehousing.dockPlanning.movedToQueue'),
       (reason) => updateDockAppointment(appointment.id, { ...input, override: true, overrideReason: reason }),
     )
   }
@@ -145,20 +152,20 @@ export function DockPlanningPage() {
   return (
     <div className="dp-page">
       <header className="dp-header">
-        <h1>Dockplanning</h1>
+        <h1>{t('warehousing.dockPlanning.title')}</h1>
         <div className="dp-controls">
-          <select value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} aria-label="Magazijn">
+          <select value={warehouseId} onChange={(event) => setWarehouseId(event.target.value)} aria-label={t('warehousing.dockPlanning.warehouseAria')}>
             {warehouses.map((warehouse) => (
               <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
             ))}
           </select>
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value || date)} aria-label="Datum" />
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value || date)} aria-label={t('warehousing.dockPlanning.dateAria')} />
           {canSchedule && activeWarehouse && (
             <Button onClick={() => setEditing({
               warehouseId, dockId: null, operationType: 'Loading',
               plannedStart: `${date}T08:00`, plannedEnd: `${date}T09:00`,
             })}>
-              Nieuwe afspraak
+              {t('warehousing.dockPlanning.newAppointment')}
             </Button>
           )}
         </div>
@@ -166,17 +173,17 @@ export function DockPlanningPage() {
 
       {dashboard && (
         <div className="dp-kpis">
-          <span>Verwacht: <strong>{dashboard.expectedToday}</strong></span>
-          <span>Wachtrij: <strong>{dashboard.waiting}</strong></span>
-          <span>Bezig: <strong>{dashboard.inProgress}</strong></span>
-          <span>Afgerond: <strong>{dashboard.completed}</strong></span>
-          <span className={dashboard.delayed > 0 ? 'dp-alert' : ''}>Vertraagd: <strong>{dashboard.delayed}</strong></span>
-          <span className={dashboard.noShows > 0 ? 'dp-alert' : ''}>No-show: <strong>{dashboard.noShows}</strong></span>
+          <span>{t('warehousing.dockPlanning.kpiExpected')}: <strong>{dashboard.expectedToday}</strong></span>
+          <span>{t('warehousing.dockPlanning.kpiQueue')}: <strong>{dashboard.waiting}</strong></span>
+          <span>{t('warehousing.dockPlanning.kpiInProgress')}: <strong>{dashboard.inProgress}</strong></span>
+          <span>{t('warehousing.dockPlanning.kpiCompleted')}: <strong>{dashboard.completed}</strong></span>
+          <span className={dashboard.delayed > 0 ? 'dp-alert' : ''}>{t('warehousing.dockPlanning.kpiDelayed')}: <strong>{dashboard.delayed}</strong></span>
+          <span className={dashboard.noShows > 0 ? 'dp-alert' : ''}>{t('warehousing.dockPlanning.kpiNoShow')}: <strong>{dashboard.noShows}</strong></span>
         </div>
       )}
 
       <div className="dp-layout">
-        <section className="dp-board" aria-label="Docktijdlijn">
+        <section className="dp-board" aria-label={t('warehousing.dockPlanning.timelineAria')}>
           <div className="dp-board-scale">
             <span>{board?.opensAt?.slice(0, 5) ?? '06:00'}</span>
             <span>{board?.closesAt?.slice(0, 5) ?? '20:00'}</span>
@@ -204,10 +211,12 @@ export function DockPlanningPage() {
                       className={`dp-block dp-block-${appointment.status.toLowerCase()}`}
                       style={{ left: `${pos.leftPct}%`, width: `${pos.widthPct}%` }}
                       onClick={() => setSelected(appointment)}
-                      aria-label={`Afspraak ${appointment.orderNumber ?? appointment.tripNumber ?? appointment.reference ?? ''}`}
+                      aria-label={t('warehousing.dockPlanning.appointmentAria', {
+                        reference: appointment.orderNumber ?? appointment.tripNumber ?? appointment.reference ?? '',
+                      })}
                     >
                       <span className="dp-block-title">
-                        {OPERATION_LABELS[appointment.operationType]} · {appointment.orderNumber ?? appointment.tripNumber ?? appointment.vehicleNumber ?? '—'}
+                        {t(OPERATION_LABELS[appointment.operationType])} · {appointment.orderNumber ?? appointment.tripNumber ?? appointment.vehicleNumber ?? '—'}
                       </span>
                       {appointment.packageCount > 0 && (
                         <span className="dp-block-progress">{appointment.packagesHandled}/{appointment.packageCount}</span>
@@ -220,9 +229,9 @@ export function DockPlanningPage() {
           ))}
         </section>
 
-        <aside className="dp-queue" aria-label="Wachtrij" onDragOver={allowDrop}
+        <aside className="dp-queue" aria-label={t('warehousing.dockPlanning.queueTitle')} onDragOver={allowDrop}
                onDrop={(event) => handleDropOnDock(null, event)}>
-          <h2>Wachtrij</h2>
+          <h2>{t('warehousing.dockPlanning.queueTitle')}</h2>
           {(board?.queue ?? []).map((appointment) => (
             <button key={appointment.id} type="button" className="dp-queue-item"
                     draggable={canSchedule}
@@ -230,31 +239,34 @@ export function DockPlanningPage() {
                       event.dataTransfer.setData(APPOINTMENT_MIME, JSON.stringify({ id: appointment.id }))
                     }}
                     onClick={() => setSelected(appointment)}>
-              <strong>{appointment.orderNumber ?? appointment.tripNumber ?? appointment.vehicleNumber ?? 'Afspraak'}</strong>
+              <strong>{appointment.orderNumber ?? appointment.tripNumber ?? appointment.vehicleNumber ?? t('warehousing.dockPlanning.appointmentFallback')}</strong>
               <span className="dp-muted">
-                {ORDER_PRIORITY_LABELS[appointment.priority]} · aangekomen{' '}
-                {appointment.arrivedAt ? new Date(appointment.arrivedAt).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                {t(ORDER_PRIORITY_LABELS[appointment.priority])} ·{' '}
+                {t('warehousing.dockPlanning.arrived', { time: appointment.arrivedAt ? formatTime(appointment.arrivedAt) : '—' })}
               </span>
             </button>
           ))}
-          {(board?.queue.length ?? 0) === 0 && <p className="dp-muted">Niemand in de wachtrij.</p>}
+          {(board?.queue.length ?? 0) === 0 && <p className="dp-muted">{t('warehousing.dockPlanning.queueEmpty')}</p>}
         </aside>
       </div>
 
       {selected && (
-        <Modal title={`Afspraak ${selected.orderNumber ?? selected.tripNumber ?? ''}`} onClose={() => setSelected(null)} busy={busy}>
+        <Modal
+          title={t('warehousing.dockPlanning.detailTitle', { reference: selected.orderNumber ?? selected.tripNumber ?? '' })}
+          onClose={() => setSelected(null)}
+          busy={busy}
+        >
           <div className="dp-detail">
             <p>
-              <Badge tone={DOCK_STATUS_TONE[selected.status]}>{DOCK_STATUS_LABELS[selected.status]}</Badge>{' '}
-              {OPERATION_LABELS[selected.operationType]} · {selected.dockCode ?? 'wachtrij'} ·{' '}
-              {new Date(selected.plannedStart).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}–
-              {new Date(selected.plannedEnd).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+              <Badge tone={DOCK_STATUS_TONE[selected.status]}>{t(DOCK_STATUS_LABELS[selected.status])}</Badge>{' '}
+              {t(OPERATION_LABELS[selected.operationType])} · {selected.dockCode ?? t('warehousing.dockPlanning.queueLower')} ·{' '}
+              {formatTime(selected.plannedStart)}–{formatTime(selected.plannedEnd)}
             </p>
             {selected.customerName && <p>{selected.customerName}</p>}
             {selected.packageCount > 0 && (
               <p>
-                Scanvoortgang: {selected.packagesHandled}/{selected.packageCount} colli
-                {selected.hasOpenDiscrepancies && <Badge tone="danger"> afwijking open</Badge>}
+                {t('warehousing.dockPlanning.scanProgress', { handled: selected.packagesHandled, total: selected.packageCount })}
+                {selected.hasOpenDiscrepancies && <Badge tone="danger"> {t('warehousing.dockPlanning.openDiscrepancy')}</Badge>}
               </p>
             )}
             {selected.remarks && <p className="dp-muted">{selected.remarks}</p>}
@@ -264,9 +276,9 @@ export function DockPlanningPage() {
                   <Button key={target} variant="secondary" disabled={busy}
                           onClick={() => void run(
                             () => changeDockAppointmentStatus(selected.id, target, selected.version),
-                            `Status → ${DOCK_STATUS_LABELS[target]}.`,
+                            t('warehousing.dockPlanning.statusChanged', { status: t(DOCK_STATUS_LABELS[target]) }),
                           )}>
-                    {DOCK_STATUS_LABELS[target]}
+                    {t(DOCK_STATUS_LABELS[target])}
                   </Button>
                 ))}
                 <Button variant="secondary" disabled={busy} onClick={() => {
@@ -277,13 +289,14 @@ export function DockPlanningPage() {
                   })
                   setSelected(null)
                 }}>
-                  Bewerken
+                  {t('warehousing.dockPlanning.edit')}
                 </Button>
                 {['Planned', 'Expected'].includes(selected.status) && (
                   <Button variant="secondary" disabled={busy}
                           onClick={() => void run(
-                            () => deleteDockAppointment(selected.id, selected.version), 'Afspraak verwijderd.')}>
-                    Verwijderen
+                            () => deleteDockAppointment(selected.id, selected.version),
+                            t('warehousing.dockPlanning.deleted'))}>
+                    {t('warehousing.dockPlanning.delete')}
                   </Button>
                 )}
               </div>
@@ -293,13 +306,17 @@ export function DockPlanningPage() {
       )}
 
       {editing && (
-        <Modal title={editing.id ? 'Afspraak bewerken' : 'Nieuwe afspraak'} onClose={() => setEditing(null)} busy={busy}>
+        <Modal
+          title={editing.id ? t('warehousing.dockPlanning.editTitle') : t('warehousing.dockPlanning.newAppointment')}
+          onClose={() => setEditing(null)}
+          busy={busy}
+        >
           <form className="wh-form" onSubmit={(event: FormEvent) => {
             event.preventDefault()
             const { id, ...input } = editing
             void run(
               () => (id ? updateDockAppointment(id, input) : createDockAppointment(input)),
-              'Afspraak opgeslagen.',
+              t('warehousing.dockPlanning.saved'),
               (reason) => (id
                 ? updateDockAppointment(id, { ...input, override: true, overrideReason: reason })
                 : createDockAppointment({ ...input, override: true, overrideReason: reason })),
@@ -307,61 +324,67 @@ export function DockPlanningPage() {
           }}>
             <div className="wh-form-row">
               <label>
-                Dock
+                {t('warehousing.dockPlanning.dock')}
                 <select value={editing.dockId ?? ''} onChange={(event) => setEditing({ ...editing, dockId: event.target.value || null })}>
-                  <option value="">Wachtrij (geen dock)</option>
+                  <option value="">{t('warehousing.dockPlanning.queueNoDock')}</option>
                   {(activeWarehouse?.docks ?? []).filter((d) => d.isActive).map((dock) => (
                     <option key={dock.id} value={dock.id}>{dock.code}</option>
                   ))}
                 </select>
               </label>
               <label>
-                Operatie
+                {t('warehousing.dockPlanning.operationLabel')}
                 <select value={editing.operationType}
                         onChange={(event) => setEditing({ ...editing, operationType: event.target.value as 'Loading' | 'Unloading' })}>
-                  <option value="Loading">Laden</option>
-                  <option value="Unloading">Lossen</option>
+                  <option value="Loading">{t(OPERATION_LABELS.Loading)}</option>
+                  <option value="Unloading">{t(OPERATION_LABELS.Unloading)}</option>
                 </select>
               </label>
             </div>
             <div className="wh-form-row">
               <label>
-                Start
+                {t('warehousing.dockPlanning.start')}
                 <input type="datetime-local" value={editing.plannedStart} required
                        onChange={(event) => setEditing({ ...editing, plannedStart: event.target.value })} />
               </label>
               <label>
-                Einde
+                {t('warehousing.dockPlanning.end')}
                 <input type="datetime-local" value={editing.plannedEnd} required
                        onChange={(event) => setEditing({ ...editing, plannedEnd: event.target.value })} />
               </label>
             </div>
             <label>
-              Referentie
+              {t('warehousing.dockPlanning.reference')}
               <input value={editing.reference ?? ''} maxLength={100}
                      onChange={(event) => setEditing({ ...editing, reference: event.target.value || null })} />
             </label>
             <label>
-              Opmerkingen
+              {t('warehousing.dockPlanning.remarks')}
               <textarea rows={2} value={editing.remarks ?? ''}
                         onChange={(event) => setEditing({ ...editing, remarks: event.target.value || null })} />
             </label>
             <div className="wh-form-actions">
-              <Button variant="secondary" type="button" onClick={() => setEditing(null)} disabled={busy}>Annuleren</Button>
-              <Button type="submit" disabled={busy}>Opslaan</Button>
+              <Button variant="secondary" type="button" onClick={() => setEditing(null)} disabled={busy}>
+                {t('warehousing.dockPlanning.cancel')}
+              </Button>
+              <Button type="submit" disabled={busy}>{t('warehousing.dockPlanning.save')}</Button>
             </div>
           </form>
         </Modal>
       )}
 
       {conflictPrompt && (
-        <Modal title="Dockconflicten" onClose={() => setConflictPrompt(null)} busy={busy}>
+        <Modal title={t('warehousing.dockPlanning.conflictsTitle')} onClose={() => setConflictPrompt(null)} busy={busy}>
           <p>{conflictPrompt.message}</p>
           <ul className="dp-conflicts">
             {conflictPrompt.conflicts.map((conflict, index) => (
               <li key={index}>
                 <Badge tone={conflict.severity === 'Blocking' ? 'danger' : conflict.severity === 'Warning' ? 'warning' : 'info'}>
-                  {conflict.severity === 'Blocking' ? 'Blokkerend' : conflict.severity === 'Warning' ? 'Waarschuwing' : 'Info'}
+                  {conflict.severity === 'Blocking'
+                    ? t('warehousing.dockPlanning.severityBlocking')
+                    : conflict.severity === 'Warning'
+                      ? t('warehousing.dockPlanning.severityWarning')
+                      : t('warehousing.dockPlanning.severityInfo')}
                 </Badge>
                 <span>{conflict.description}</span>
               </li>
@@ -369,20 +392,22 @@ export function DockPlanningPage() {
           </ul>
           {canOverride && conflictPrompt.conflicts.filter((c) => c.severity === 'Blocking').every((c) => c.overrideAllowed) && (
             <>
-              <label className="dp-override-label" htmlFor="dp-override-reason">Reden voor overschrijven (verplicht)</label>
+              <label className="dp-override-label" htmlFor="dp-override-reason">{t('warehousing.dockPlanning.overrideReason')}</label>
               <textarea id="dp-override-reason" rows={2} value={overrideReason}
                         onChange={(event) => setOverrideReason(event.target.value)} />
             </>
           )}
           <div className="wh-form-actions">
-            <Button variant="secondary" onClick={() => setConflictPrompt(null)} disabled={busy}>Sluiten</Button>
+            <Button variant="secondary" onClick={() => setConflictPrompt(null)} disabled={busy}>
+              {t('warehousing.dockPlanning.close')}
+            </Button>
             {canOverride && conflictPrompt.conflicts.filter((c) => c.severity === 'Blocking').every((c) => c.overrideAllowed) && (
               <Button disabled={busy || overrideReason.trim().length === 0} onClick={() => {
                 const prompt = conflictPrompt
                 setConflictPrompt(null)
-                void run(() => prompt.retry(overrideReason.trim()), 'Overschreven en opgeslagen.')
+                void run(() => prompt.retry(overrideReason.trim()), t('warehousing.dockPlanning.overridden'))
               }}>
-                Overschrijven en doorgaan
+                {t('warehousing.dockPlanning.overrideConfirm')}
               </Button>
             )}
           </div>

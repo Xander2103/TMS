@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { useLocale } from '../../../i18n/localeContext'
 import { getCountryOptions, type CountryOption } from '../api/countriesApi'
 
 interface CountryComboboxProps {
@@ -18,6 +19,7 @@ interface CountryComboboxProps {
  * name, alpha-2 and alpha-3 codes; stores the alpha-2 code.
  */
 export function CountryCombobox({ id, value, onChange, disabled, placeholder, ariaLabel }: CountryComboboxProps) {
+  const { t } = useLocale()
   const [options, setOptions] = useState<CountryOption[]>([])
   const [loaded, setLoaded] = useState(false)
 
@@ -45,10 +47,10 @@ export function CountryCombobox({ id, value, onChange, disabled, placeholder, ar
         description: c.code,
         keywords: `${c.code} ${c.alpha3}`,
       }))}
-      placeholder={placeholder ?? '— Selecteer een land —'}
+      placeholder={placeholder ?? t('reference.country.placeholder')}
       disabled={disabled}
       isLoading={!loaded}
-      emptyMessage="Geen landen gevonden"
+      emptyMessage={t('reference.country.empty')}
       ariaLabel={ariaLabel}
     />
   )

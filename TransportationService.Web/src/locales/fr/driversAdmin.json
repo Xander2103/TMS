@@ -1,0 +1,83 @@
+{
+  "availability": {
+    "Available": "Disponible",
+    "Unavailable": "Indisponible",
+    "OnLeave": "Absent",
+    "OnTrip": "En route"
+  },
+  "readiness": {
+    "Ready": "Apte au service",
+    "Warning": "Attention",
+    "NotReady": "Inapte au service",
+    "Blocked": "Bloqué"
+  },
+  "qualStatus": {
+    "Valid": "Valide",
+    "ExpiringSoon": "Expire bientôt",
+    "Expired": "Expiré",
+    "Suspended": "Suspendu",
+    "Rejected": "Refusé",
+    "Pending": "En attente"
+  },
+  "fields": {
+    "availability": "Disponibilité",
+    "notes": "Notes"
+  },
+  "panel": {
+    "loading": "Chargement du chauffeur…",
+    "loadFailed": "Le chauffeur n'a pas pu être chargé.",
+    "reloadFailed": "Le chauffeur n'a pas pu être rechargé.",
+    "updated": "Chauffeur mis à jour.",
+    "blocked": "Chauffeur bloqué.",
+    "unblocked": "Blocage levé.",
+    "blockFailed": "Le statut de blocage n'a pas pu être modifié.",
+    "deleted": "Chauffeur supprimé.",
+    "deleteFailed": "Le chauffeur n'a pas pu être supprimé.",
+    "block": "Bloquer",
+    "unblock": "Débloquer",
+    "readinessTitle": "Aptitude au service",
+    "readinessOk": "Aucun obstacle. Le chauffeur est apte au service.",
+    "blockReasonPlaceholder": "Motif du blocage (facultatif)",
+    "categories": "Catégories",
+    "categoriesHint": "La première catégorie cochée est la catégorie principale.",
+    "noCategories": "Aucune catégorie disponible.",
+    "primary": "(principale)",
+    "active": "Actif",
+    "activeCheckbox": "Le chauffeur est actif",
+    "fixedTrailer": "Semi-remorque attitrée",
+    "fixedTrailerHint": "Préférence à long terme ; aucun lien opérationnel.",
+    "noteFixedLead": "Véhicule attitré",
+    "noteFixedText": "est une préférence à long terme ;",
+    "noteCurrentLead": "véhicule actuel",
+    "noteCurrentText": "est l'affectation opérationnelle temporaire. L'affectation aux tournées d'un jour précis se fait dans le planning. Les modifications effectuées ici apparaissent aussi sur la page du véhicule — c'est le même lien.",
+    "fixedVehicle": "Véhicule attitré",
+    "fixedVehicleDesc": "Véhicule préféré à long terme.",
+    "currentVehicle": "Véhicule actuel",
+    "currentVehicleDesc": "Affectation opérationnelle temporaire (p. ex. pendant un remplacement).",
+    "pickerVehicle": "Véhicule",
+    "qualNote": "Les données de permis et d'aptitude professionnelle sont gérées via l'onglet",
+    "qualEmpty": "Aucune qualification enregistrée pour l'instant.",
+    "colQualification": "Qualification",
+    "colStatus": "Statut",
+    "colExpiry": "Date d'échéance",
+    "deleteTitle": "Supprimer le chauffeur",
+    "deleteMessage": "Voulez-vous vraiment supprimer le chauffeur {number} ? Le dossier du personnel est conservé."
+  },
+  "newPage": {
+    "breadcrumb": "Chauffeurs",
+    "title": "Nouveau chauffeur",
+    "employeesLoadFailed": "Les collaborateurs n'ont pas pu être chargés.",
+    "selectEmployee": "Sélectionnez un collaborateur.",
+    "created": "Chauffeur {number} créé.",
+    "duplicate": "Ce collaborateur est déjà lié à un chauffeur.",
+    "createFailed": "Le chauffeur n'a pas pu être créé.",
+    "employee": "Collaborateur",
+    "employeeHint": "Uniquement les collaborateurs sans profil de chauffeur existant ; les données personnelles proviennent du dossier du personnel.",
+    "employeePlaceholder": "— Sélectionnez un collaborateur —",
+    "category": "Catégorie de chauffeur",
+    "create": "Créer le chauffeur"
+  },
+  "redirect": {
+    "opening": "Ouverture du profil du chauffeur…"
+  }
+}

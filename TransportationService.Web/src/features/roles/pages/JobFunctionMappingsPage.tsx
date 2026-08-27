@@ -9,8 +9,9 @@ import { Modal } from '../../../components/ui/Modal'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
 import { apiClient } from '../../../api/apiClient'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { getRoles } from '../api/rolesApi'
 import type { Role } from '../types/role'
@@ -28,6 +29,7 @@ interface Mapping {
  * created from an employee; the administrator always confirms the final set.
  */
 export function JobFunctionMappingsPage() {
+  const { t } = useLocale()
   const toast = useToast()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('roles.manage_permissions')
@@ -48,9 +50,10 @@ export function JobFunctionMappingsPage() {
         setLoaded(true)
       })
       .catch(() => {
-        setError('Koppelingen konden niet worden geladen.')
+        setError(t('usersRoles.roles.mappings.loadFailed'))
         setLoaded(true)
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -58,16 +61,16 @@ export function JobFunctionMappingsPage() {
   }, [reload])
 
   const columns: Column<Mapping>[] = [
-    { key: 'function', header: 'Functie', render: (row) => row.jobFunctionName },
-    { key: 'role', header: 'Voorgestelde rol', render: (row) => row.roleName },
+    { key: 'function', header: t('usersRoles.roles.mappings.columnFunction'), render: (row) => row.jobFunctionName },
+    { key: 'role', header: t('usersRoles.roles.mappings.columnRole'), render: (row) => row.roleName },
     ...(canManage
       ? [
           {
             key: 'actions',
-            header: 'Acties',
+            header: t('usersRoles.roles.mappings.columnActions'),
             render: (row: Mapping) => (
               <Button variant="ghost" onClick={() => setConfirmDelete(row)}>
-                Verwijderen
+                {t('ui.actions.delete')}
               </Button>
             ),
           },
@@ -77,11 +80,13 @@ export function JobFunctionMappingsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Rollen', to: '/roles' }, { label: 'Functie→rol-koppelingen' }]} />
+      <Breadcrumbs
+        items={[{ label: t('usersRoles.roles.mappings.breadcrumbRoles'), to: '/roles' }, { label: t('usersRoles.roles.mappings.title') }]}
+      />
       <PageHeader
-        title="Functie→rol-koppelingen"
-        subtitle="Bij het aanmaken van een account uit een medewerker worden deze rollen voorgesteld; de beheerder bevestigt altijd."
-        action={canManage && <Button onClick={() => setAddOpen(true)}>Nieuwe koppeling</Button>}
+        title={t('usersRoles.roles.mappings.title')}
+        subtitle={t('usersRoles.roles.mappings.subtitle')}
+        action={canManage && <Button onClick={() => setAddOpen(true)}>{t('usersRoles.roles.mappings.newMapping')}</Button>}
       />
       <DataTable
         columns={columns}
@@ -89,8 +94,8 @@ export function JobFunctionMappingsPage() {
         rowKey={(row) => row.id}
         isLoading={!loaded}
         error={error}
-        emptyMessage="Nog geen koppelingen — accounts krijgen dan geen voorgestelde rollen."
-        loadingMessage="Koppelingen laden..."
+        emptyMessage={t('usersRoles.roles.mappings.empty')}
+        loadingMessage={t('usersRoles.roles.mappings.loading')}
       />
 
       {addOpen && (
@@ -98,7 +103,7 @@ export function JobFunctionMappingsPage() {
           onClose={(saved) => {
             setAddOpen(false)
             if (saved) {
-              toast.showSuccess('Koppeling toegevoegd.')
+              toast.showSuccess(t('usersRoles.roles.mappings.added'))
               reload()
             }
           }}
@@ -107,20 +112,23 @@ export function JobFunctionMappingsPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Koppeling verwijderen"
-          message={`Koppeling '${confirmDelete.jobFunctionName} → ${confirmDelete.roleName}' verwijderen? Bestaande accounts behouden hun rollen.`}
-          confirmLabel="Verwijderen"
+          title={t('usersRoles.roles.mappings.deleteTitle')}
+          message={t('usersRoles.roles.mappings.deleteMessage', {
+            functionName: confirmDelete.jobFunctionName,
+            roleName: confirmDelete.roleName,
+          })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={busy}
           onConfirm={async () => {
             setBusy(true)
             try {
               await apiClient.deleteRequest(`/api/job-function-role-mappings/${confirmDelete.id}`)
-              toast.showSuccess('Koppeling verwijderd.')
+              toast.showSuccess(t('usersRoles.roles.mappings.deleted'))
               setConfirmDelete(null)
               reload()
             } catch (err) {
-              toast.showError(describeApiError(err, 'De koppeling kon niet worden verwijderd.').message)
+              toast.showError(localizeApiError(t, err, t('usersRoles.roles.mappings.deleteFailed')))
             } finally {
               setBusy(false)
             }
@@ -133,6 +141,7 @@ export function JobFunctionMappingsPage() {
 }
 
 function AddMappingDialog({ onClose }: { onClose: (saved: boolean) => void }) {
+  const { t } = useLocale()
   const functions = useLookupOptions('/api/job-functions')
   const [roles, setRoles] = useState<Role[]>([])
   const [functionId, setFunctionId] = useState('')
@@ -143,13 +152,14 @@ function AddMappingDialog({ onClose }: { onClose: (saved: boolean) => void }) {
   useEffect(() => {
     getRoles()
       .then((data) => setRoles(data.filter((role) => role.isActive)))
-      .catch(() => setError('Rollen konden niet worden geladen.'))
+      .catch(() => setError(t('usersRoles.roles.mappings.rolesLoadFailed')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!functionId || !roleId) {
-      setError('Kies zowel een functie als een rol.')
+      setError(t('usersRoles.roles.mappings.chooseBoth'))
       return
     }
     setSaving(true)
@@ -161,32 +171,32 @@ function AddMappingDialog({ onClose }: { onClose: (saved: boolean) => void }) {
       )
       onClose(true)
     } catch (err) {
-      setError(describeApiError(err, 'De koppeling kon niet worden toegevoegd.').message)
+      setError(localizeApiError(t, err, t('usersRoles.roles.mappings.addFailed')))
       setSaving(false)
     }
   }
 
   return (
     <Modal
-      title="Nieuwe functie→rol-koppeling"
+      title={t('usersRoles.roles.mappings.dialogTitle')}
       onClose={() => onClose(false)}
       busy={saving}
       footer={
         <>
           <Button variant="secondary" onClick={() => onClose(false)} disabled={saving}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="mapping-form" disabled={saving}>
-            {saving ? 'Toevoegen…' : 'Toevoegen'}
+            {saving ? t('usersRoles.roles.mappings.adding') : t('usersRoles.roles.mappings.add')}
           </Button>
         </>
       }
     >
       <form id="mapping-form" onSubmit={handleSubmit} noValidate>
         <ValidationSummary message={error} />
-        <FormField label="Functie" htmlFor="mp-function" required>
+        <FormField label={t('usersRoles.roles.mappings.function')} htmlFor="mp-function" required>
           <select id="mp-function" value={functionId} onChange={(e) => setFunctionId(e.target.value)} disabled={saving}>
-            <option value="">— Kies functie —</option>
+            <option value="">{t('usersRoles.roles.mappings.chooseFunction')}</option>
             {functions.options.map((option) => (
               <option key={option.id} value={option.id}>
                 {option.name}
@@ -194,9 +204,9 @@ function AddMappingDialog({ onClose }: { onClose: (saved: boolean) => void }) {
             ))}
           </select>
         </FormField>
-        <FormField label="Rol" htmlFor="mp-role" required>
+        <FormField label={t('usersRoles.roles.mappings.role')} htmlFor="mp-role" required>
           <select id="mp-role" value={roleId} onChange={(e) => setRoleId(e.target.value)} disabled={saving}>
-            <option value="">— Kies rol —</option>
+            <option value="">{t('usersRoles.roles.mappings.chooseRole')}</option>
             {roles.map((role) => (
               <option key={role.id} value={role.id}>
                 {role.name}

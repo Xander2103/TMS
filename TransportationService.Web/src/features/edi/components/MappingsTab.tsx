@@ -5,7 +5,8 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FormField } from '../../../components/ui/FormField'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { getLocationOptions } from '../../locations/api/locationsApi'
 import { searchCustomers } from '../../customers/api/customersApi'
 import {
@@ -23,6 +24,7 @@ import { MessageDetailModal } from './MessageDetailModal'
 /** "Mappings" tab: klantkoppeling + locatiemappings per partner, and the unresolved-mapping
  * queue (Failed/DeadLettered messages flagged mappingIssue) linking straight to the message. */
 export function MappingsTab() {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [partners, setPartners] = useState<EdiPartner[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
@@ -73,10 +75,10 @@ export function MappingsTab() {
         isActive: selected.isActive,
         notes: selected.notes,
       })
-      showSuccess('Klantkoppeling bijgewerkt.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('edi.mappings.customerUpdated'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De klantkoppeling kon niet worden bijgewerkt.').message)
+      showError(localizeApiError(t, err, t('edi.mappings.customerUpdateFailed')))
     } finally {
       setBusy(false)
     }
@@ -85,18 +87,18 @@ export function MappingsTab() {
   async function addMapping(event: FormEvent) {
     event.preventDefault()
     if (!selected || !newCode.trim() || !newLocationId) {
-      showError('Externe code en locatie zijn verplicht.')
+      showError(t('edi.mappings.validation'))
       return
     }
     setBusy(true)
     try {
       await addLocationMapping(selected.id, { externalLocationCode: newCode.trim(), locationId: newLocationId })
-      showSuccess('Locatiemapping toegevoegd.')
+      showSuccess(t('edi.mappings.added'))
       setNewCode('')
       setNewLocationId(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De locatiemapping kon niet worden toegevoegd.').message)
+      showError(localizeApiError(t, err, t('edi.mappings.addFailed')))
     } finally {
       setBusy(false)
     }
@@ -107,10 +109,10 @@ export function MappingsTab() {
     setBusy(true)
     try {
       await deleteLocationMapping(selected.id, deleteTarget.id)
-      showSuccess('Locatiemapping verwijderd.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('edi.mappings.removed'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De locatiemapping kon niet worden verwijderd.').message)
+      showError(localizeApiError(t, err, t('edi.mappings.removeFailed')))
     } finally {
       setBusy(false)
       setDeleteTarget(null)
@@ -118,14 +120,14 @@ export function MappingsTab() {
   }
 
   const columns: Column<EdiPartnerLocationMapping>[] = [
-    { key: 'code', header: 'Externe code', render: (m) => <code>{m.externalLocationCode}</code> },
-    { key: 'location', header: 'Locatie', render: (m) => m.locationName },
+    { key: 'code', header: t('edi.mappings.codeHeader'), render: (m) => <code>{m.externalLocationCode}</code> },
+    { key: 'location', header: t('edi.mappings.locationHeader'), render: (m) => m.locationName },
     {
       key: 'actions',
-      header: 'Acties',
+      header: t('edi.mappings.actionsHeader'),
       render: (m) => (
         <Button variant="ghost" onClick={() => setDeleteTarget(m)}>
-          Verwijderen
+          {t('edi.mappings.remove')}
         </Button>
       ),
     },
@@ -133,9 +135,9 @@ export function MappingsTab() {
 
   return (
     <div>
-      <FormField label="Handelspartner" htmlFor="edi-mappings-partner">
+      <FormField label={t('edi.mappings.partnerLabel')} htmlFor="edi-mappings-partner">
         <select id="edi-mappings-partner" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-          {partners.length === 0 && <option value="">Geen partners</option>}
+          {partners.length === 0 && <option value="">{t('edi.mappings.noPartners')}</option>}
           {partners.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} ({p.code})
@@ -146,59 +148,59 @@ export function MappingsTab() {
 
       {selected && (
         <>
-          <FormField label="Klantkoppeling" htmlFor="edi-mappings-customer" hint="Onze klant waarvoor deze partner orders aanlevert.">
+          <FormField label={t('edi.mappings.customerLabel')} htmlFor="edi-mappings-customer" hint={t('edi.mappings.customerHint')}>
             <SearchableSelect
               id="edi-mappings-customer"
               value={selected.customerId}
               onChange={(value) => void changeCustomer(value)}
               options={customers}
-              placeholder="— Geen klant gekoppeld —"
+              placeholder={t('edi.mappings.customerPlaceholder')}
               disabled={busy}
-              ariaLabel="Klantkoppeling"
+              ariaLabel={t('edi.mappings.customerLabel')}
             />
           </FormField>
 
-          <h3>Locatiemappings</h3>
+          <h3>{t('edi.mappings.locationsTitle')}</h3>
           <DataTable
             columns={columns}
             rows={selected.locations}
             rowKey={(m) => m.id}
-            emptyMessage="Nog geen locatiemappings voor deze partner."
+            emptyMessage={t('edi.mappings.empty')}
           />
 
           <form className="edi-mapping-form" onSubmit={addMapping} noValidate>
-            <FormField label="Externe locatiecode" htmlFor="edi-mapping-code">
+            <FormField label={t('edi.mappings.externalCodeLabel')} htmlFor="edi-mapping-code">
               <input id="edi-mapping-code" value={newCode} maxLength={100} onChange={(e) => setNewCode(e.target.value)} disabled={busy} />
             </FormField>
-            <FormField label="Locatie" htmlFor="edi-mapping-location">
+            <FormField label={t('edi.mappings.locationLabel')} htmlFor="edi-mapping-location">
               <SearchableSelect
                 id="edi-mapping-location"
                 value={newLocationId}
                 onChange={setNewLocationId}
                 options={locationOptions}
-                placeholder="— Selecteer locatie —"
+                placeholder={t('edi.mappings.locationPlaceholder')}
                 disabled={busy}
-                ariaLabel="Locatie"
+                ariaLabel={t('edi.mappings.locationLabel')}
               />
             </FormField>
             <Button type="submit" variant="secondary" disabled={busy}>
-              + Mapping toevoegen
+              {t('edi.mappings.add')}
             </Button>
           </form>
         </>
       )}
 
       <section className="edi-section">
-        <h3>Openstaande mappingproblemen</h3>
-        {queue.length === 0 && <p className="placeholder-text">Geen openstaande mappingproblemen.</p>}
+        <h3>{t('edi.mappings.queueTitle')}</h3>
+        {queue.length === 0 && <p className="placeholder-text">{t('edi.mappings.queueEmpty')}</p>}
         {queue.length > 0 && (
           <ul className="edi-mapping-queue">
             {queue.map((m) => (
               <li key={m.id}>
-                <code>{m.partnerCode}</code> — {m.externalReference ?? '(geen referentie)'} —{' '}
+                <code>{m.partnerCode}</code> — {m.externalReference ?? t('edi.mappings.noReference')} —{' '}
                 <span title={m.errorDetail ?? undefined}>{m.errorDetail}</span>{' '}
                 <Button variant="ghost" onClick={() => setDetailId(m.id)}>
-                  Bekijken
+                  {t('edi.mappings.view')}
                 </Button>
               </li>
             ))}
@@ -208,9 +210,9 @@ export function MappingsTab() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Locatiemapping verwijderen"
-          message={`Mapping voor '${deleteTarget.externalLocationCode}' verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('edi.mappings.deleteTitle')}
+          message={t('edi.mappings.deleteMessage', { code: deleteTarget.externalLocationCode })}
+          confirmLabel={t('edi.mappings.deleteConfirm')}
           destructive
           busy={busy}
           onConfirm={() => void removeMapping()}
@@ -227,7 +229,7 @@ export function MappingsTab() {
           onClose={() => setDetailId(null)}
           onReplayed={() => {
             setDetailId(null)
-            setReloadToken((t) => t + 1)
+            setReloadToken((token) => token + 1)
           }}
         />
       )}

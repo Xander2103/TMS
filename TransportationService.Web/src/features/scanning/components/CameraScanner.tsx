@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
+import { useLocale } from '../../../i18n/localeContext'
 import { createScanDebouncer } from '../scanDebounce'
 
 interface DetectedBarcode {
@@ -31,6 +32,7 @@ interface CameraScannerProps {
  * input path — the feature degrades, it never blocks.
  */
 export function CameraScanner({ disabled, onDetected }: CameraScannerProps) {
+  const { t } = useLocale()
   const [active, setActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -75,7 +77,7 @@ export function CameraScanner({ disabled, onDetected }: CameraScannerProps) {
         void tick()
       } catch {
         if (!cancelled) {
-          setError('Camera niet beschikbaar of toegang geweigerd.')
+          setError(t('scanning.camera.notAvailable'))
           setActive(false)
         }
       }
@@ -84,9 +86,10 @@ export function CameraScanner({ disabled, onDetected }: CameraScannerProps) {
     return () => {
       cancelled = true
       if (timer !== undefined) window.clearTimeout(timer)
-      streamRef.current?.getTracks().forEach((t) => t.stop())
+      streamRef.current?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, onDetected])
 
   if (!supported) {
@@ -105,7 +108,7 @@ export function CameraScanner({ disabled, onDetected }: CameraScannerProps) {
           {/* Live camera preview: intentionally muted, no captions apply. */}
           <video ref={videoRef} className="scan-camera-view" playsInline muted />
           <Button variant="secondary" onClick={() => setActive(false)} disabled={disabled}>
-            Camera stoppen
+            {t('scanning.camera.stop')}
           </Button>
         </>
       ) : (
@@ -117,7 +120,7 @@ export function CameraScanner({ disabled, onDetected }: CameraScannerProps) {
           }}
           disabled={disabled}
         >
-          📷 Camera scannen
+          📷 {t('scanning.camera.start')}
         </Button>
       )}
     </div>

@@ -16,17 +16,21 @@ export interface ReportCatalogEntry {
 
 export interface ReportCategoryMeta {
   icon: string
-  description: string
+  /** Vertaalsleutel — renderen als t(descriptionKey). */
+  descriptionKey: string
 }
 
-/** Presentation metadata per category; unknown categories fall back to a neutral card. */
+/**
+ * Presentation metadata per category; unknown categories fall back to a neutral card.
+ * Gekeyd op de stabiele categoriestring die de backendcatalogus levert.
+ */
 export const REPORT_CATEGORY_META: Record<string, ReportCategoryMeta> = {
-  Operationeel: { icon: '🚚', description: 'Opdrachten, colli, scans en incidenten.' },
-  Planning: { icon: '🗓️', description: 'Betrouwbaarheid en bezetting van de planning.' },
-  Financieel: { icon: '💶', description: 'Winstgevendheid, KPI’s en facturatie.' },
-  Vloot: { icon: '🚛', description: 'Voertuigen, verbruik en uitstoot.' },
-  HR: { icon: '👥', description: 'Uren, kwalificaties en beschikbaarheid.' },
-  Klanten: { icon: '🤝', description: 'Klantoverzichten en orderboeken.' },
+  Operationeel: { icon: '🚚', descriptionKey: 'kpiReports.reports.categories.Operationeel' },
+  Planning: { icon: '🗓️', descriptionKey: 'kpiReports.reports.categories.Planning' },
+  Financieel: { icon: '💶', descriptionKey: 'kpiReports.reports.categories.Financieel' },
+  Vloot: { icon: '🚛', descriptionKey: 'kpiReports.reports.categories.Vloot' },
+  HR: { icon: '👥', descriptionKey: 'kpiReports.reports.categories.HR' },
+  Klanten: { icon: '🤝', descriptionKey: 'kpiReports.reports.categories.Klanten' },
 }
 
 export const REPORT_CATEGORY_ORDER = ['Operationeel', 'Planning', 'Financieel', 'Vloot', 'HR', 'Klanten']

@@ -1,0 +1,93 @@
+{
+  "priority": {
+    "Normal": "Normale",
+    "High": "Haute",
+    "Urgent": "Urgente"
+  },
+  "displayMode": {
+    "Notification": "Notification",
+    "DashboardBanner": "Bannière du tableau de bord",
+    "BlockingAcknowledgement": "Confirmation bloquante"
+  },
+  "displayModeHint": {
+    "Notification": "Apparaît dans la liste des communications du portail.",
+    "DashboardBanner": "Apparaît en plus comme bannière en haut du tableau de bord du portail.",
+    "BlockingAcknowledgement": "Bloquant : le tableau de bord est masqué jusqu'à confirmation par l'utilisateur — à utiliser avec parcimonie."
+  },
+  "status": {
+    "cancelled": "Retiré",
+    "expired": "Expiré",
+    "scheduled": "Planifié",
+    "active": "Actif"
+  },
+  "page": {
+    "breadcrumbAdmin": "Gestion",
+    "title": "Messages du portail",
+    "subtitle": "Messages aux utilisateurs du portail client, avec traductions et suivi de remise.",
+    "newMessage": "Nouveau message",
+    "loadFailed": "Les messages du portail n'ont pas pu être chargés.",
+    "empty": "Aucun message de portail pour le moment.",
+    "loading": "Chargement des messages du portail...",
+    "sent": "Message de portail envoyé."
+  },
+  "columns": {
+    "title": "Titre (NL)",
+    "customers": "Clients",
+    "displayMode": "Affichage",
+    "priority": "Priorité",
+    "status": "Statut"
+  },
+  "actions": {
+    "deliveryStatus": "Statut de remise",
+    "cancel": "Retirer"
+  },
+  "cancelDialog": {
+    "title": "Retirer le message",
+    "message": "Voulez-vous vraiment retirer « {title} » ? Les utilisateurs du portail ne verront plus ce message.",
+    "confirm": "Retirer",
+    "cancelled": "Message retiré.",
+    "cancelFailed": "Le message n'a pas pu être retiré."
+  },
+  "compose": {
+    "title": "Nouveau message de portail",
+    "customersLoadFailed": "La liste des clients n'a pas pu être chargée.",
+    "sendFailed": "Le message de portail n'a pas pu être envoyé.",
+    "sending": "Envoi…",
+    "send": "Envoyer",
+    "legendNl": "Néerlandais (obligatoire)",
+    "legendFr": "Français (facultatif)",
+    "legendEn": "Anglais (facultatif)",
+    "titleNl": "Titre (NL)",
+    "bodyNl": "Contenu (NL)",
+    "titleFr": "Titre (FR)",
+    "bodyFr": "Contenu (FR)",
+    "titleEn": "Titre (EN)",
+    "bodyEn": "Contenu (EN)",
+    "customers": "Clients",
+    "customersHint": "Sélectionner plusieurs clients exige le droit d'envoi en masse (portal_messages.send_bulk).",
+    "bulkWarning": "Attention : vous envoyez à plusieurs clients. Cela exige le droit portal_messages.send_bulk.",
+    "displayMode": "Mode d'affichage",
+    "priority": "Priorité",
+    "options": "Options",
+    "requiresAck": "Confirmation exigée",
+    "sendEmail": "Envoyer aussi par e-mail",
+    "visibleFrom": "Visible à partir de",
+    "visibleFromHint": "Vide = visible immédiatement",
+    "expiresAt": "Expire le",
+    "expiresAtHint": "Vide = pas de date de fin"
+  },
+  "delivery": {
+    "title": "Statut de remise",
+    "loadFailed": "Le statut de remise n'a pas pu être chargé.",
+    "loading": "Chargement du statut de remise...",
+    "createdAt": "créé le {dateTime}",
+    "cancelledAt": "Retiré le {dateTime}",
+    "columns": {
+      "name": "Nom",
+      "customer": "Client",
+      "read": "Lu",
+      "acknowledged": "Confirmé",
+      "email": "E-mail"
+    }
+  }
+}

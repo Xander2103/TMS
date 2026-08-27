@@ -5,8 +5,9 @@ import { Modal } from '../../../components/ui/Modal'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   blockTask,
   cancelTask,
@@ -37,9 +38,10 @@ type NoteDialogKind = 'block' | 'complete' | 'reject' | null
 /**
  * Task detail modal: all fields, evidence attachments and the status-action buttons.
  * Every action sends expectedVersion = task.version; a 400 (conflict/illegal transition)
- * surfaces the backend's NL message as a toast and reloads the task.
+ * surfaces the backend's message as a toast and reloads the task.
  */
 export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelProps) {
+  const { t } = useLocale()
   const { user, hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const [task, setTask] = useState<EmployeeTask | null>(null)
@@ -55,8 +57,8 @@ export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelP
         setTask(data)
         setLoadError(null)
       })
-      .catch(() => setLoadError('De taak kon niet worden geladen.'))
-  }, [taskId])
+      .catch(() => setLoadError(t('tasks.detail.loadFailed')))
+  }, [taskId, t])
 
   useEffect(() => {
     load()
@@ -83,8 +85,8 @@ export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelP
       setNoteDialog(null)
       setConfirmCancel(false)
     } catch (err) {
-      // Version conflict or illegal transition: show the backend's NL detail and reload.
-      showError(describeApiError(err, 'De actie kon niet worden uitgevoerd.').message)
+      // Version conflict or illegal transition: show the backend's detail and reload.
+      showError(localizeApiError(t, err, t('tasks.detail.actionFailed')))
       setNoteDialog(null)
       setConfirmCancel(false)
       load()
@@ -96,7 +98,7 @@ export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelP
 
   if (loadError) {
     return (
-      <Modal title="Taak" onClose={onClose}>
+      <Modal title={t('tasks.detail.fallbackTitle')} onClose={onClose}>
         <ErrorState message={loadError} />
       </Modal>
     )
@@ -104,8 +106,8 @@ export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelP
 
   if (!task) {
     return (
-      <Modal title="Taak" onClose={onClose}>
-        <LoadingState message="Taak laden..." />
+      <Modal title={t('tasks.detail.fallbackTitle')} onClose={onClose}>
+        <LoadingState message={t('tasks.detail.loading')} />
       </Modal>
     )
   }
@@ -124,66 +126,66 @@ export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelP
 
       <dl className="task-detail-grid">
         <div>
-          <dt>Toegewezen aan</dt>
+          <dt>{t('tasks.detail.assignedTo')}</dt>
           <dd>{task.assignedEmployeeName}</dd>
         </div>
         <div>
-          <dt>Aangemaakt door</dt>
+          <dt>{t('tasks.detail.createdBy')}</dt>
           <dd>{task.createdByName ?? '—'}</dd>
         </div>
         <div>
-          <dt>Start</dt>
+          <dt>{t('tasks.detail.start')}</dt>
           <dd>{formatTaskDateTime(task.startAt)}</dd>
         </div>
         <div>
-          <dt>Deadline</dt>
+          <dt>{t('tasks.detail.due')}</dt>
           <dd>
             <TaskDueCell task={task} />
           </dd>
         </div>
         {task.completedAt && (
           <div>
-            <dt>Voltooid op</dt>
+            <dt>{t('tasks.detail.completedAt')}</dt>
             <dd>{formatTaskDateTime(task.completedAt)}</dd>
           </div>
         )}
         {task.cancelledAt && (
           <div>
-            <dt>Geannuleerd op</dt>
+            <dt>{t('tasks.detail.cancelledAt')}</dt>
             <dd>{formatTaskDateTime(task.cancelledAt)}</dd>
           </div>
         )}
         <div>
-          <dt>Laatste update</dt>
+          <dt>{t('tasks.detail.updated')}</dt>
           <dd>{formatTaskDateTime(task.updatedAt)}</dd>
         </div>
         <div>
-          <dt>Vereisten</dt>
+          <dt>{t('tasks.detail.requirements')}</dt>
           <dd>
             {[
-              task.requiresReview ? 'controle' : null,
-              task.requiresCompletionNote ? 'notitie bij voltooien' : null,
-              task.requiresEvidence ? 'bewijs (bijlage)' : null,
+              task.requiresReview ? t('tasks.detail.requirementReview') : null,
+              task.requiresCompletionNote ? t('tasks.detail.requirementNote') : null,
+              task.requiresEvidence ? t('tasks.detail.requirementEvidence') : null,
             ]
               .filter(Boolean)
-              .join(', ') || 'Geen'}
+              .join(', ') || t('tasks.detail.requirementsNone')}
           </dd>
         </div>
       </dl>
 
       {task.blockedReason && task.status === 'Blocked' && (
         <div className="task-detail-note is-danger">
-          <strong>Geblokkeerd:</strong> {task.blockedReason}
+          <strong>{t('tasks.detail.blockedLabel')}</strong> {task.blockedReason}
         </div>
       )}
       {task.completionNote && (
         <div className="task-detail-note">
-          <strong>Notitie bij voltooien:</strong> {task.completionNote}
+          <strong>{t('tasks.detail.completionNoteLabel')}</strong> {task.completionNote}
         </div>
       )}
       {task.reviewNote && (
         <div className="task-detail-note">
-          <strong>Controlenotitie:</strong> {task.reviewNote}
+          <strong>{t('tasks.detail.reviewNoteLabel')}</strong> {task.reviewNote}
         </div>
       )}
 
@@ -191,8 +193,11 @@ export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelP
 
       <div className="task-detail-actions">
         {canExecute && task.status === 'Todo' && (
-          <Button onClick={() => void run((v) => startTask(task.id, { expectedVersion: v }), 'Taak gestart.')} disabled={busy}>
-            Start
+          <Button
+            onClick={() => void run((v) => startTask(task.id, { expectedVersion: v }), t('tasks.toasts.started'))}
+            disabled={busy}
+          >
+            {t('tasks.actions.start')}
           </Button>
         )}
         {canExecute && task.status === 'InProgress' && (
@@ -200,77 +205,87 @@ export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelP
             {task.requiresReview ? (
               <Button
                 onClick={() =>
-                  void run((v) => submitTaskForReview(task.id, { expectedVersion: v }), 'Taak ingediend ter controle.')
+                  void run(
+                    (v) => submitTaskForReview(task.id, { expectedVersion: v }),
+                    t('tasks.toasts.submittedForReview'),
+                  )
                 }
                 disabled={busy}
               >
-                Indienen ter controle
+                {t('tasks.actions.submitForReview')}
               </Button>
             ) : (
               <Button onClick={() => setNoteDialog('complete')} disabled={busy}>
-                Voltooi
+                {t('tasks.actions.complete')}
               </Button>
             )}
             <Button variant="secondary" onClick={() => setNoteDialog('block')} disabled={busy}>
-              Blokkeer
+              {t('tasks.actions.block')}
             </Button>
           </>
         )}
         {canExecute && task.status === 'Blocked' && (
-          <Button onClick={() => void run((v) => resumeTask(task.id, { expectedVersion: v }), 'Taak hervat.')} disabled={busy}>
-            Hervat
+          <Button
+            onClick={() => void run((v) => resumeTask(task.id, { expectedVersion: v }), t('tasks.toasts.resumed'))}
+            disabled={busy}
+          >
+            {t('tasks.actions.resume')}
           </Button>
         )}
         {canReview && task.status === 'WaitingForReview' && (
           <>
             <Button
               onClick={() =>
-                void run((v) => reviewTask(task.id, { expectedVersion: v, approve: true }), 'Taak goedgekeurd.')
+                void run((v) => reviewTask(task.id, { expectedVersion: v, approve: true }), t('tasks.toasts.approved'))
               }
               disabled={busy}
             >
-              Goedkeuren
+              {t('tasks.actions.approve')}
             </Button>
             <Button variant="secondary" onClick={() => setNoteDialog('reject')} disabled={busy}>
-              Afkeuren
+              {t('tasks.actions.reject')}
             </Button>
           </>
         )}
         {canCancel && isOpen && (
           <Button variant="danger" onClick={() => setConfirmCancel(true)} disabled={busy}>
-            Annuleren
+            {t('tasks.actions.cancel')}
           </Button>
         )}
         {canReopen && (task.status === 'Completed' || task.status === 'Cancelled') && (
-          <Button variant="secondary" onClick={() => void run((v) => reopenTask(task.id, { expectedVersion: v }), 'Taak heropend.')} disabled={busy}>
-            Heropen
+          <Button
+            variant="secondary"
+            onClick={() => void run((v) => reopenTask(task.id, { expectedVersion: v }), t('tasks.toasts.reopened'))}
+            disabled={busy}
+          >
+            {t('tasks.actions.reopen')}
           </Button>
         )}
       </div>
 
       {noteDialog === 'block' && (
         <TaskNoteDialog
-          title="Taak blokkeren"
-          label="Reden"
-          confirmLabel="Blokkeer"
+          title={t('tasks.noteDialog.blockTitle')}
+          label={t('tasks.noteDialog.reason')}
+          confirmLabel={t('tasks.actions.block')}
           requireNote
           destructive
           busy={busy}
-          onSubmit={(note) => void run((v) => blockTask(task.id, { expectedVersion: v, note }), 'Taak geblokkeerd.')}
+          onSubmit={(note) => void run((v) => blockTask(task.id, { expectedVersion: v, note }), t('tasks.toasts.blocked'))}
           onClose={() => setNoteDialog(null)}
         />
       )}
 
       {noteDialog === 'complete' && (
         <TaskNoteDialog
-          title="Taak voltooien"
-          label="Notitie"
-          confirmLabel="Voltooi"
+          title={t('tasks.noteDialog.completeTitle')}
+          label={t('tasks.noteDialog.note')}
+          confirmLabel={t('tasks.actions.complete')}
           requireNote={task.requiresCompletionNote}
-          hint={evidenceMissing ? 'Deze taak vereist bewijs: voeg eerst een bijlage toe.' : undefined}
+          hint={evidenceMissing ? t('tasks.noteDialog.evidenceHint') : undefined}
           busy={busy}
           onSubmit={(note) =>
-            void run((v) => completeTask(task.id, { expectedVersion: v, note: note || undefined }), 'Taak voltooid.')
+            void run((v) => completeTask(task.id, { expectedVersion: v, note: note || undefined }), t('tasks.toasts.completed'))
           }
           onClose={() => setNoteDialog(null)}
         />
@@ -278,14 +293,14 @@ export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelP
 
       {noteDialog === 'reject' && (
         <TaskNoteDialog
-          title="Taak afkeuren"
-          label="Reden"
-          confirmLabel="Afkeuren"
+          title={t('tasks.noteDialog.rejectTitle')}
+          label={t('tasks.noteDialog.reason')}
+          confirmLabel={t('tasks.actions.reject')}
           requireNote
           destructive
           busy={busy}
           onSubmit={(note) =>
-            void run((v) => reviewTask(task.id, { expectedVersion: v, approve: false, note }), 'Taak afgekeurd.')
+            void run((v) => reviewTask(task.id, { expectedVersion: v, approve: false, note }), t('tasks.toasts.rejected'))
           }
           onClose={() => setNoteDialog(null)}
         />
@@ -293,12 +308,12 @@ export function TaskDetailPanel({ taskId, onClose, onChanged }: TaskDetailPanelP
 
       {confirmCancel && (
         <ConfirmDialog
-          title="Taak annuleren"
-          message={`"${task.title}" annuleren? De taak blijft zichtbaar in de historiek.`}
-          confirmLabel="Taak annuleren"
+          title={t('tasks.cancelDialog.title')}
+          message={t('tasks.cancelDialog.message', { title: task.title })}
+          confirmLabel={t('tasks.cancelDialog.confirm')}
           destructive
           busy={busy}
-          onConfirm={() => void run((v) => cancelTask(task.id, { expectedVersion: v }), 'Taak geannuleerd.')}
+          onConfirm={() => void run((v) => cancelTask(task.id, { expectedVersion: v }), t('tasks.toasts.cancelled'))}
           onCancel={() => setConfirmCancel(false)}
         />
       )}

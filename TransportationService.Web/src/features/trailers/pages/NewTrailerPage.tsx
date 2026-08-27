@@ -4,7 +4,8 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { PreparedFleetDocumentsEditor } from '../../fleet-documents/components/PreparedFleetDocumentsEditor'
 import { FleetCreateFollowUpDialog } from '../../fleet-documents/components/FleetCreateFollowUpDialog'
 import {
@@ -44,6 +45,7 @@ const EMPTY: TrailerInput = {
 
 export function NewTrailerPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess } = useToast()
   const [preparedDocs, setPreparedDocs] = useState<PreparedFleetDocument[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -61,7 +63,7 @@ export function NewTrailerPage() {
         ? await uploadPreparedFleetDocuments('trailer', trailer.id, preparedDocs)
         : []
       if (results.every((r) => r.ok)) {
-        showSuccess(`Oplegger ${trailer.internalNumber} aangemaakt.`)
+        showSuccess(t('trailers.new.created', { number: trailer.internalNumber }))
         navigate(`/trailers/${trailer.id}`)
         return
       }
@@ -72,13 +74,13 @@ export function NewTrailerPage() {
           return result?.createdDocumentId ? { ...doc, createdDocumentId: result.createdDocumentId } : doc
         }),
       )
-      setFollowUp({ trailerId: trailer.id, label: `Oplegger ${trailer.internalNumber}`, results })
+      setFollowUp({ trailerId: trailer.id, label: t('trailers.new.followUpLabel', { number: trailer.internalNumber }), results })
       setSubmitting(false)
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 409
-          ? 'Er bestaat al een oplegger met dit kenteken.'
-          : describeApiError(err, 'Oplegger kon niet worden aangemaakt.').message,
+          ? t('trailers.new.duplicate')
+          : localizeApiError(t, err, t('trailers.new.createFailed')),
       )
       setSubmitting(false)
     }
@@ -99,7 +101,7 @@ export function NewTrailerPage() {
     )
     setRetrying(false)
     if (merged.every((r) => r.ok)) {
-      showSuccess('Alle documenten zijn verwerkt.')
+      showSuccess(t('fleet.docs.followUp.allProcessed'))
       navigate(`/trailers/${followUp.trailerId}`)
       return
     }
@@ -108,8 +110,8 @@ export function NewTrailerPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Opleggers', to: '/trailers' }, { label: 'Nieuw' }]} />
-      <PageHeader title="Nieuwe oplegger" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.trailers'), to: '/trailers' }, { label: t('fleet.common.new') }]} />
+      <PageHeader title={t('trailers.list.new')} />
       <TrailerForm
         mode="create"
         initial={EMPTY}

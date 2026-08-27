@@ -1,10 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ApiError } from '../../../api/apiClient'
+import { localizeApiError } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { euro } from '../../invoices/types'
 import {
@@ -41,13 +43,15 @@ interface TripCostingPanelProps {
  * arrives from the server when the caller holds profitability.view.
  */
 export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('trip_costs.manage')
   const canOverride = hasPermission('trip_costs.override')
 
   const [costing, setCosting] = useState<TripCosting | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [phaseTab, setPhaseTab] = useState<TripCostPhase>('Estimated')
 
@@ -73,13 +77,13 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
       .then((data) => {
         if (!mounted) return
         setCosting(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
       .catch((err) => {
         if (!mounted) return
-        setLoadError(err instanceof ApiError && err.status === 403
-          ? 'Je hebt geen toegang tot kostengegevens.'
-          : 'De kosten konden niet worden geladen.')
+        setLoadErrorKey(err instanceof ApiError && err.status === 403
+          ? 'tripCosting.panel.loadForbidden'
+          : 'tripCosting.panel.loadFailed')
       })
     return () => {
       mounted = false
@@ -93,15 +97,15 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
       showSuccess(successMessage)
       return true
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De bewerking is mislukt.')
+      showError(localizeApiError(t, err, t('tripCosting.panel.actionFailed')))
       return false
     } finally {
       setBusy(false)
     }
   }
 
-  if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (!costing) return <p className="placeholder-text">Kosten laden…</p>
+  if (loadErrorKey) return <p className="placeholder-text">{t(loadErrorKey)}</p>
+  if (!costing) return <p className="placeholder-text">{t('tripCosting.panel.loading')}</p>
 
   const lines = costing.lines.filter((line) => line.phase === phaseTab)
   const isDraftOrPlanned = tripStatus === 'Draft' || tripStatus === 'Planned'
@@ -123,7 +127,7 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
     const quantity = Number(lineQuantity.replace(',', '.'))
     const rate = Number(lineRate.replace(',', '.'))
     if (!lineDescription.trim() || Number.isNaN(quantity) || Number.isNaN(rate)) {
-      showError('Omschrijving, aantal en tarief zijn verplicht.')
+      showError(t('tripCosting.panel.lineDialog.validation'))
       return
     }
     const ok = await run(
@@ -135,7 +139,7 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
         unit: lineUnit.trim() || 'stuk',
         unitRate: rate,
       }),
-      'Kostenregel toegevoegd.',
+      t('tripCosting.panel.toasts.lineAdded'),
     )
     if (ok) setLineDialogOpen(false)
   }
@@ -145,12 +149,12 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
     if (!overrideTarget) return
     const amount = Number(overrideAmount.replace(',', '.'))
     if (Number.isNaN(amount) || !overrideReason.trim()) {
-      showError('Bedrag en reden zijn verplicht.')
+      showError(t('tripCosting.panel.overrideDialog.validation'))
       return
     }
     const ok = await run(
       () => overrideCostLine(costing!.tripId, overrideTarget.id, amount, overrideReason.trim()),
-      'Kostenregel overschreven.',
+      t('tripCosting.panel.toasts.lineOverridden'),
     )
     if (ok) setOverrideTarget(null)
   }
@@ -160,70 +164,70 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
     const distance = actualDistance.trim() === '' ? null : Number(actualDistance.replace(',', '.'))
     const empty = actualEmpty.trim() === '' ? null : Number(actualEmpty.replace(',', '.'))
     if ((distance !== null && Number.isNaN(distance)) || (empty !== null && Number.isNaN(empty))) {
-      showError('Geef geldige kilometers op.')
+      showError(t('tripCosting.panel.actualsDialog.validation'))
       return
     }
     const ok = await run(
       () => updateTripActuals(costing!.tripId, distance, empty),
-      'Werkelijke afstanden bijgewerkt.',
+      t('tripCosting.panel.toasts.actualsUpdated'),
     )
     if (ok) setActualsOpen(false)
   }
 
   return (
     <section className="pl-section tc-panel">
-      <h2>Kosten &amp; rendement</h2>
+      <h2>{t('tripCosting.panel.title')}</h2>
 
       <div className="tc-totals">
         <div className="tc-total">
-          <span className="tc-total-label">Geschat</span>
+          <span className="tc-total-label">{t('tripCosting.phase.Estimated')}</span>
           <span className="tc-total-value">{euro(costing.estimatedTotal)}</span>
         </div>
         <div className="tc-total">
-          <span className="tc-total-label">Werkelijk</span>
+          <span className="tc-total-label">{t('tripCosting.phase.Actual')}</span>
           <span className="tc-total-value">{euro(costing.actualTotal)}</span>
         </div>
         <div className="tc-total">
-          <span className="tc-total-label">Geprojecteerd</span>
+          <span className="tc-total-label">{t('tripCosting.panel.totals.projected')}</span>
           <span className="tc-total-value">{euro(costing.projectedTotal)}</span>
         </div>
         <div className="tc-total">
-          <span className="tc-total-label">Definitief</span>
+          <span className="tc-total-label">{t('tripCosting.panel.totals.final')}</span>
           <span className="tc-total-value">
             {costing.finalCost !== null ? euro(costing.finalCost) : '—'}
           </span>
-          {costing.isFinalized && <Badge tone="success">Afgerond</Badge>}
+          {costing.isFinalized && <Badge tone="success">{t('tripCosting.panel.totals.finalized')}</Badge>}
         </div>
       </div>
 
       {profitability && (
         <div className="tc-profitability">
-          <h3>Rendement</h3>
+          <h3>{t('tripCosting.panel.profitability.title')}</h3>
           <div className="tc-profit-grid">
-            <div><span>Omzet</span><strong>{euro(profitability.revenue)}</strong></div>
-            <div><span>Kosten</span><strong>{euro(profitability.cost)}</strong></div>
+            <div><span>{t('tripCosting.panel.profitability.revenue')}</span><strong>{euro(profitability.revenue)}</strong></div>
+            <div><span>{t('tripCosting.panel.profitability.costs')}</span><strong>{euro(profitability.cost)}</strong></div>
             <div>
-              <span>Winst</span>
+              <span>{t('tripCosting.panel.profitability.profit')}</span>
               <strong className={profitability.grossProfit < 0 ? 'tc-negative' : 'tc-positive'}>
                 {euro(profitability.grossProfit)}
               </strong>
             </div>
-            <div><span>Marge</span><strong>{formatMarginPct(profitability.marginPct)}</strong></div>
-            <div><span>Omzet/km</span><strong>{profitability.revenuePerKm !== null ? euro(profitability.revenuePerKm) : '—'}</strong></div>
-            <div><span>Kosten/km</span><strong>{profitability.costPerKm !== null ? euro(profitability.costPerKm) : '—'}</strong></div>
-            <div><span>Omzet/uur</span><strong>{profitability.revenuePerHour !== null ? euro(profitability.revenuePerHour) : '—'}</strong></div>
-            <div><span>Kosten/uur</span><strong>{profitability.costPerHour !== null ? euro(profitability.costPerHour) : '—'}</strong></div>
+            <div><span>{t('tripCosting.panel.profitability.margin')}</span><strong>{formatMarginPct(profitability.marginPct)}</strong></div>
+            <div><span>{t('tripCosting.panel.profitability.revenuePerKm')}</span><strong>{profitability.revenuePerKm !== null ? euro(profitability.revenuePerKm) : '—'}</strong></div>
+            <div><span>{t('tripCosting.panel.profitability.costPerKm')}</span><strong>{profitability.costPerKm !== null ? euro(profitability.costPerKm) : '—'}</strong></div>
+            <div><span>{t('tripCosting.panel.profitability.revenuePerHour')}</span><strong>{profitability.revenuePerHour !== null ? euro(profitability.revenuePerHour) : '—'}</strong></div>
+            <div><span>{t('tripCosting.panel.profitability.costPerHour')}</span><strong>{profitability.costPerHour !== null ? euro(profitability.costPerHour) : '—'}</strong></div>
           </div>
           {profitability.perOrder.length > 1 && (
             <table className="tc-table">
               <thead>
                 <tr>
-                  <th>Opdracht</th>
-                  <th>Klant</th>
-                  <th className="tc-num">Omzet</th>
-                  <th className="tc-num">Toegerekende kost</th>
-                  <th className="tc-num">Winst</th>
-                  <th className="tc-num">Marge</th>
+                  <th>{t('tripCosting.panel.profitability.colOrder')}</th>
+                  <th>{t('tripCosting.panel.profitability.colCustomer')}</th>
+                  <th className="tc-num">{t('tripCosting.panel.profitability.colRevenue')}</th>
+                  <th className="tc-num">{t('tripCosting.panel.profitability.colAllocatedCost')}</th>
+                  <th className="tc-num">{t('tripCosting.panel.profitability.colProfit')}</th>
+                  <th className="tc-num">{t('tripCosting.panel.profitability.colMargin')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -244,7 +248,7 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
       )}
 
       <div className="tc-toolbar">
-        <div className="tc-phase-tabs" role="tablist" aria-label="Kostenfase">
+        <div className="tc-phase-tabs" role="tablist" aria-label={t('tripCosting.panel.phaseTablist')}>
           {(['Estimated', 'Actual'] as TripCostPhase[]).map((phase) => (
             <button
               key={phase}
@@ -254,25 +258,29 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
               className={`tc-phase-tab ${phaseTab === phase ? 'tc-phase-tab-active' : ''}`}
               onClick={() => setPhaseTab(phase)}
             >
-              {COST_PHASE_LABELS[phase]}
+              {t(COST_PHASE_LABELS[phase])}
             </button>
           ))}
         </div>
         <span className="tc-distances">
-          Gepland: {costing.plannedDistanceKm ?? '—'} km ({costing.plannedEmptyKm ?? 0} leeg) ·
-          Werkelijk: {costing.actualDistanceKm ?? '—'} km ({costing.actualEmptyKm ?? '—'} leeg)
+          {t('tripCosting.panel.distances', {
+            planned: costing.plannedDistanceKm ?? '—',
+            plannedEmpty: costing.plannedEmptyKm ?? 0,
+            actual: costing.actualDistanceKm ?? '—',
+            actualEmpty: costing.actualEmptyKm ?? '—',
+          })}
         </span>
         {canManage && !costing.isFinalized && (
           <div className="tc-actions">
             {isDraftOrPlanned && (
-              <Button variant="secondary" onClick={() => void run(() => recalculateEstimate(tripId), 'Schatting herberekend.')} disabled={busy}>
-                Herbereken schatting
+              <Button variant="secondary" onClick={() => void run(() => recalculateEstimate(tripId), t('tripCosting.panel.toasts.estimateRecalculated'))} disabled={busy}>
+                {t('tripCosting.panel.actions.recalcEstimate')}
               </Button>
             )}
             {isRunningOrDone && (
               <>
-                <Button variant="secondary" onClick={() => void run(() => recalculateActual(tripId), 'Werkelijke kosten herberekend.')} disabled={busy}>
-                  Herbereken werkelijk
+                <Button variant="secondary" onClick={() => void run(() => recalculateActual(tripId), t('tripCosting.panel.toasts.actualRecalculated'))} disabled={busy}>
+                  {t('tripCosting.panel.actions.recalcActual')}
                 </Button>
                 <Button
                   variant="secondary"
@@ -283,52 +291,54 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
                   }}
                   disabled={busy}
                 >
-                  Werkelijke km
+                  {t('tripCosting.panel.actions.actualKm')}
                 </Button>
               </>
             )}
             <Button variant="secondary" onClick={openLineDialog} disabled={busy}>
-              + Kostenregel
+              {t('tripCosting.panel.actions.addLine')}
             </Button>
             {(tripStatus === 'Completed' || tripStatus === 'Cancelled') && (
-              <Button onClick={() => void run(() => finalizeTripCosting(tripId), 'Kosten definitief afgerond.')} disabled={busy}>
-                Afronden
+              <Button onClick={() => void run(() => finalizeTripCosting(tripId), t('tripCosting.panel.toasts.finalized'))} disabled={busy}>
+                {t('tripCosting.panel.actions.finalize')}
               </Button>
             )}
           </div>
         )}
         {canOverride && costing.isFinalized && (
-          <Button variant="danger" onClick={() => void run(() => reopenTripCosting(tripId), 'Kosten heropend.')} disabled={busy}>
-            Heropenen
+          <Button variant="danger" onClick={() => void run(() => reopenTripCosting(tripId), t('tripCosting.panel.toasts.reopened'))} disabled={busy}>
+            {t('tripCosting.panel.actions.reopen')}
           </Button>
         )}
       </div>
 
-      {lines.length === 0 && <p className="placeholder-text">Geen {COST_PHASE_LABELS[phaseTab].toLowerCase()}e kostenregels.</p>}
+      {lines.length === 0 && <p className="placeholder-text">{t(`tripCosting.panel.emptyLines.${phaseTab}`)}</p>}
       {lines.length > 0 && (
         <table className="tc-table">
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Omschrijving</th>
-              <th className="tc-num">Aantal</th>
-              <th>Eenheid</th>
-              <th className="tc-num">Tarief</th>
-              <th className="tc-num">Bedrag</th>
-              <th>Bron</th>
-              {canManage && !costing.isFinalized && <th aria-label="Acties" />}
+              <th>{t('tripCosting.panel.table.colType')}</th>
+              <th>{t('tripCosting.panel.table.colDescription')}</th>
+              <th className="tc-num">{t('tripCosting.panel.table.colQuantity')}</th>
+              <th>{t('tripCosting.panel.table.colUnit')}</th>
+              <th className="tc-num">{t('tripCosting.panel.table.colRate')}</th>
+              <th className="tc-num">{t('tripCosting.panel.table.colAmount')}</th>
+              <th>{t('tripCosting.panel.table.colSource')}</th>
+              {canManage && !costing.isFinalized && <th aria-label={t('tripCosting.panel.table.colActions')} />}
             </tr>
           </thead>
           <tbody>
             {lines.map((line) => (
               <tr key={line.id} className={line.isManualOverride ? 'tc-overridden' : undefined}>
-                <td>{COST_TYPE_LABELS[line.costType]}</td>
+                <td>{t(COST_TYPE_LABELS[line.costType])}</td>
                 <td>
                   {line.description}
                   {line.isManualOverride && (
                     <span className="tc-override-note" title={line.overrideReason ?? undefined}>
                       {' '}
-                      · overschreven{line.overrideReason ? `: ${line.overrideReason}` : ''}
+                      {line.overrideReason
+                        ? t('tripCosting.panel.overriddenNoteReason', { reason: line.overrideReason })
+                        : t('tripCosting.panel.overriddenNote')}
                     </span>
                   )}
                 </td>
@@ -349,16 +359,16 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
                           setOverrideReason('')
                         }}
                       >
-                        Overschrijven
+                        {t('tripCosting.panel.actions.override')}
                       </button>
                     )}
                     {line.source === 'Handmatig' && (
                       <button
                         type="button"
                         className="tc-link-button tc-danger"
-                        onClick={() => void run(() => deleteCostLine(tripId, line.id), 'Kostenregel verwijderd.')}
+                        onClick={() => void run(() => deleteCostLine(tripId, line.id), t('tripCosting.panel.toasts.lineDeleted'))}
                       >
-                        Verwijderen
+                        {t('ui.actions.delete')}
                       </button>
                     )}
                   </td>
@@ -371,49 +381,49 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
 
       {lineDialogOpen && (
         <Modal
-          title="Kostenregel toevoegen"
+          title={t('tripCosting.panel.lineDialog.title')}
           onClose={() => setLineDialogOpen(false)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setLineDialogOpen(false)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="tc-line-form" disabled={busy}>
-                Toevoegen
+                {t('ui.actions.add')}
               </Button>
             </>
           }
         >
           <form id="tc-line-form" className="tc-form" onSubmit={submitLine} noValidate>
             <div className="tc-form-row">
-              <FormField label="Fase" htmlFor="tc-line-phase" required>
+              <FormField label={t('tripCosting.panel.lineDialog.phase')} htmlFor="tc-line-phase" required>
                 <select id="tc-line-phase" value={linePhase} onChange={(e) => setLinePhase(e.target.value as TripCostPhase)} disabled={busy}>
-                  <option value="Estimated">Geschat</option>
-                  <option value="Actual">Werkelijk</option>
+                  <option value="Estimated">{t('tripCosting.phase.Estimated')}</option>
+                  <option value="Actual">{t('tripCosting.phase.Actual')}</option>
                 </select>
               </FormField>
-              <FormField label="Type" htmlFor="tc-line-type" required>
+              <FormField label={t('tripCosting.panel.lineDialog.type')} htmlFor="tc-line-type" required>
                 <select id="tc-line-type" value={lineType} onChange={(e) => setLineType(e.target.value as TripCostType)} disabled={busy}>
                   {MANUAL_COST_TYPES.map((type) => (
                     <option key={type} value={type}>
-                      {COST_TYPE_LABELS[type]}
+                      {t(COST_TYPE_LABELS[type])}
                     </option>
                   ))}
                 </select>
               </FormField>
             </div>
-            <FormField label="Omschrijving" htmlFor="tc-line-description" required>
+            <FormField label={t('tripCosting.panel.lineDialog.description')} htmlFor="tc-line-description" required>
               <input id="tc-line-description" value={lineDescription} onChange={(e) => setLineDescription(e.target.value)} maxLength={300} disabled={busy} />
             </FormField>
             <div className="tc-form-row">
-              <FormField label="Aantal" htmlFor="tc-line-quantity" required>
+              <FormField label={t('tripCosting.panel.lineDialog.quantity')} htmlFor="tc-line-quantity" required>
                 <input id="tc-line-quantity" inputMode="decimal" value={lineQuantity} onChange={(e) => setLineQuantity(e.target.value)} disabled={busy} />
               </FormField>
-              <FormField label="Eenheid" htmlFor="tc-line-unit">
+              <FormField label={t('tripCosting.panel.lineDialog.unit')} htmlFor="tc-line-unit">
                 <input id="tc-line-unit" value={lineUnit} onChange={(e) => setLineUnit(e.target.value)} maxLength={10} disabled={busy} />
               </FormField>
-              <FormField label="Tarief (€)" htmlFor="tc-line-rate" required hint="Negatief alleen bij correctie/credit.">
+              <FormField label={t('tripCosting.panel.lineDialog.rate')} htmlFor="tc-line-rate" required hint={t('tripCosting.panel.lineDialog.rateHint')}>
                 <input id="tc-line-rate" inputMode="decimal" value={lineRate} onChange={(e) => setLineRate(e.target.value)} disabled={busy} />
               </FormField>
             </div>
@@ -423,28 +433,28 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
 
       {overrideTarget && (
         <Modal
-          title={`Regel overschrijven — ${COST_TYPE_LABELS[overrideTarget.costType]}`}
+          title={t('tripCosting.panel.overrideDialog.title', { type: t(COST_TYPE_LABELS[overrideTarget.costType]) })}
           onClose={() => setOverrideTarget(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setOverrideTarget(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="tc-override-form" disabled={busy}>
-                Overschrijven
+                {t('tripCosting.panel.actions.override')}
               </Button>
             </>
           }
         >
           <form id="tc-override-form" className="tc-form" onSubmit={submitOverride} noValidate>
             <p className="tc-override-current">
-              Huidig bedrag: <strong>{euro(overrideTarget.amount)}</strong> ({overrideTarget.description})
+              {t('tripCosting.panel.overrideDialog.current')} <strong>{euro(overrideTarget.amount)}</strong> ({overrideTarget.description})
             </p>
-            <FormField label="Nieuw bedrag (€)" htmlFor="tc-override-amount" required>
+            <FormField label={t('tripCosting.panel.overrideDialog.newAmount')} htmlFor="tc-override-amount" required>
               <input id="tc-override-amount" inputMode="decimal" value={overrideAmount} onChange={(e) => setOverrideAmount(e.target.value)} disabled={busy} />
             </FormField>
-            <FormField label="Reden" htmlFor="tc-override-reason" required hint="Verplicht; wordt gelogd in de historiek.">
+            <FormField label={t('tripCosting.panel.overrideDialog.reason')} htmlFor="tc-override-reason" required hint={t('tripCosting.panel.overrideDialog.reasonHint')}>
               <textarea id="tc-override-reason" rows={2} value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} maxLength={500} disabled={busy} />
             </FormField>
           </form>
@@ -453,26 +463,26 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
 
       {actualsOpen && (
         <Modal
-          title="Werkelijke afstanden"
+          title={t('tripCosting.panel.actualsDialog.title')}
           onClose={() => setActualsOpen(false)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setActualsOpen(false)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="tc-actuals-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
         >
           <form id="tc-actuals-form" className="tc-form" onSubmit={submitActuals} noValidate>
             <div className="tc-form-row">
-              <FormField label="Werkelijke afstand (km)" htmlFor="tc-actual-distance">
+              <FormField label={t('tripCosting.panel.actualsDialog.distance')} htmlFor="tc-actual-distance">
                 <input id="tc-actual-distance" inputMode="decimal" value={actualDistance} onChange={(e) => setActualDistance(e.target.value)} disabled={busy} />
               </FormField>
-              <FormField label="Waarvan leeg (km)" htmlFor="tc-actual-empty">
+              <FormField label={t('tripCosting.panel.actualsDialog.empty')} htmlFor="tc-actual-empty">
                 <input id="tc-actual-empty" inputMode="decimal" value={actualEmpty} onChange={(e) => setActualEmpty(e.target.value)} disabled={busy} />
               </FormField>
             </div>

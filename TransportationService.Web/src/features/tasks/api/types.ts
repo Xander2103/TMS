@@ -194,15 +194,16 @@ export interface SaveTaskRecurrenceInput {
   isActive: boolean
 }
 
-// ------------------------------------------------------------------ labels & tones
+// ---------------------------------------------------------- label keys & tones
 
+/** Translation keys per status; render via t(TASK_STATUS_LABELS[status]). */
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  Todo: 'Te doen',
-  InProgress: 'In uitvoering',
-  Blocked: 'Geblokkeerd',
-  WaitingForReview: 'Wacht op controle',
-  Completed: 'Voltooid',
-  Cancelled: 'Geannuleerd',
+  Todo: 'tasks.status.Todo',
+  InProgress: 'tasks.status.InProgress',
+  Blocked: 'tasks.status.Blocked',
+  WaitingForReview: 'tasks.status.WaitingForReview',
+  Completed: 'tasks.status.Completed',
+  Cancelled: 'tasks.status.Cancelled',
 }
 
 export const TASK_STATUS_TONES: Record<TaskStatus, BadgeTone> = {
@@ -214,11 +215,12 @@ export const TASK_STATUS_TONES: Record<TaskStatus, BadgeTone> = {
   Cancelled: 'neutral',
 }
 
+/** Translation keys per priority; render via t(TASK_PRIORITY_LABELS[priority]). */
 export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
-  Low: 'Laag',
-  Normal: 'Normaal',
-  High: 'Hoog',
-  Urgent: 'Dringend',
+  Low: 'tasks.priority.Low',
+  Normal: 'tasks.priority.Normal',
+  High: 'tasks.priority.High',
+  Urgent: 'tasks.priority.Urgent',
 }
 
 export const TASK_PRIORITY_TONES: Record<TaskPriority, BadgeTone> = {
@@ -228,12 +230,13 @@ export const TASK_PRIORITY_TONES: Record<TaskPriority, BadgeTone> = {
   Urgent: 'danger',
 }
 
+/** Translation keys per interval; render via t(TASK_RECURRENCE_INTERVAL_LABELS[interval]). */
 export const TASK_RECURRENCE_INTERVAL_LABELS: Record<TaskRecurrenceInterval, string> = {
-  Daily: 'Dagelijks',
-  Weekly: 'Wekelijks',
-  Monthly: 'Maandelijks',
-  Yearly: 'Jaarlijks',
-  CustomDays: 'Eigen interval (dagen)',
+  Daily: 'tasks.interval.Daily',
+  Weekly: 'tasks.interval.Weekly',
+  Monthly: 'tasks.interval.Monthly',
+  Yearly: 'tasks.interval.Yearly',
+  CustomDays: 'tasks.interval.CustomDays',
 }
 
 /** Statuses that count as "open" (mirrors TaskStatusMachine.OpenStatuses). */

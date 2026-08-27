@@ -8,6 +8,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { Pagination } from '../../../components/ui/Pagination'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { apiClient, ApiError } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
 import { formatDateTime } from '../../../utils/dates'
@@ -49,17 +50,19 @@ const STATUS_TONE: Record<OutboxStatus, 'neutral' | 'success' | 'warning' | 'dan
   Suppressed: 'neutral',
 }
 
+/** Translation keys per outbox status; render via t(STATUS_LABELS[status]). */
 const STATUS_LABELS: Record<OutboxStatus, string> = {
-  Pending: 'In wachtrij',
-  Sent: 'Verzonden',
-  Failed: 'Mislukt',
-  Suppressed: 'Onderdrukt',
+  Pending: 'messaging.status.Pending',
+  Sent: 'messaging.status.Sent',
+  Failed: 'messaging.status.Failed',
+  Suppressed: 'messaging.status.Suppressed',
 }
 
 const PAGE_SIZE = 25
 
 /** Outbox monitor + template editor for the provider-neutral messaging layer. */
 export function MessagingPage() {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const canTemplates = hasPermission('message_templates.manage')
@@ -90,7 +93,7 @@ export function MessagingPage() {
         if (mounted) setOutbox(data)
       })
       .catch(() => {
-        if (mounted) showError('De outbox kon niet worden geladen.')
+        if (mounted) showError(t('messaging.page.loadFailed'))
       })
     return () => {
       mounted = false
@@ -115,17 +118,17 @@ export function MessagingPage() {
   async function retry(id: string) {
     try {
       await apiClient.postJson(`/api/messaging/outbox/${id}/retry`, {})
-      showSuccess('Bericht opnieuw in de wachtrij gezet.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('messaging.outbox.retried'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'Opnieuw verzenden mislukt.')
+      showError(err instanceof ApiError ? err.message : t('messaging.outbox.retryFailed'))
     }
   }
 
   async function saveTemplate(event: FormEvent) {
     event.preventDefault()
     if (!tplBody.trim()) {
-      showError('De inhoud van het sjabloon is verplicht.')
+      showError(t('messaging.templates.bodyRequired'))
       return
     }
     setBusy(true)
@@ -138,11 +141,11 @@ export function MessagingPage() {
         body: tplBody,
         isActive: true,
       })
-      showSuccess('Sjabloon opgeslagen.')
+      showSuccess(t('messaging.templates.saved'))
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'Het sjabloon kon niet worden opgeslagen.')
+      showError(err instanceof ApiError ? err.message : t('messaging.templates.saveFailed'))
     } finally {
       setBusy(false)
     }
@@ -160,7 +163,7 @@ export function MessagingPage() {
         }),
       )
     } catch {
-      showError('De preview kon niet worden geladen.')
+      showError(t('messaging.templates.previewFailed'))
     } finally {
       setBusy(false)
     }
@@ -169,19 +172,19 @@ export function MessagingPage() {
   async function removeTemplate(id: string) {
     try {
       await apiClient.deleteRequest(`/api/message-templates/${id}`)
-      showSuccess('Sjabloon verwijderd — het ingebouwde sjabloon geldt weer.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('messaging.templates.deleted'))
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het sjabloon kon niet worden verwijderd.')
+      showError(t('messaging.templates.deleteFailed'))
     }
   }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Berichten' }]} />
+      <Breadcrumbs items={[{ label: t('messaging.page.title') }]} />
       <PageHeader
-        title="Berichten"
-        subtitle="E-mail/SMS-outbox met bezorgstatus — providers worden pas gekoppeld zodra er inloggegevens zijn (nu: ontwikkelsink)."
+        title={t('messaging.page.title')}
+        subtitle={t('messaging.page.subtitle')}
         action={
           canTemplates ? (
             <Button
@@ -191,18 +194,22 @@ export function MessagingPage() {
                 setEditorOpen(true)
               }}
             >
-              Sjabloon bewerken
+              {t('messaging.page.editTemplate')}
             </Button>
           ) : undefined
         }
       />
 
       <div className="msg-filters">
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value as OutboxStatus | ''); setPage(1) }} aria-label="Status">
-          <option value="">Alle statussen</option>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value as OutboxStatus | ''); setPage(1) }}
+          aria-label={t('messaging.page.statusAria')}
+        >
+          <option value="">{t('messaging.page.allStatuses')}</option>
           {(Object.keys(STATUS_LABELS) as OutboxStatus[]).map((status) => (
             <option key={status} value={status}>
-              {STATUS_LABELS[status]}
+              {t(STATUS_LABELS[status])}
             </option>
           ))}
         </select>
@@ -211,14 +218,14 @@ export function MessagingPage() {
       <table className="to-stops-table">
         <thead>
           <tr>
-            <th>Aangemaakt</th>
-            <th>Kanaal</th>
-            <th>Type</th>
-            <th>Ontvanger</th>
-            <th>Status</th>
-            <th>Pogingen</th>
-            <th>Detail</th>
-            <th aria-label="Acties" />
+            <th>{t('messaging.columns.created')}</th>
+            <th>{t('messaging.columns.channel')}</th>
+            <th>{t('messaging.columns.kind')}</th>
+            <th>{t('messaging.columns.recipient')}</th>
+            <th>{t('messaging.columns.status')}</th>
+            <th>{t('messaging.columns.attempts')}</th>
+            <th>{t('messaging.columns.detail')}</th>
+            <th aria-label={t('messaging.columns.actionsAria')} />
           </tr>
         </thead>
         <tbody>
@@ -227,7 +234,7 @@ export function MessagingPage() {
               <td>{formatDateTime(row.createdAt)}</td>
               <td>
                 {row.channel === 'Email' ? '✉' : '📱'} {row.channel}
-                {row.isFallback && <Badge tone="warning">fallback</Badge>}
+                {row.isFallback && <Badge tone="warning">{t('messaging.outbox.fallback')}</Badge>}
               </td>
               <td>
                 <code>{row.kind}</code>
@@ -237,16 +244,18 @@ export function MessagingPage() {
                 {row.recipientAddress}
               </td>
               <td>
-                <Badge tone={STATUS_TONE[row.status]}>{STATUS_LABELS[row.status]}</Badge>
+                <Badge tone={STATUS_TONE[row.status]}>{t(STATUS_LABELS[row.status])}</Badge>
               </td>
               <td>{row.attemptCount}</td>
               <td className="msg-failure" title={row.failureReason ?? undefined}>
-                {row.status === 'Sent' && row.sentAt ? `verzonden ${row.sentAt.slice(11, 16)}` : row.failureReason ?? '—'}
+                {row.status === 'Sent' && row.sentAt
+                  ? t('messaging.outbox.sentAtTime', { time: row.sentAt.slice(11, 16) })
+                  : row.failureReason ?? '—'}
               </td>
               <td>
                 {(row.status === 'Failed' || row.status === 'Suppressed') && (
                   <Button variant="ghost" onClick={() => void retry(row.id)}>
-                    Opnieuw
+                    {t('messaging.outbox.retry')}
                   </Button>
                 )}
               </td>
@@ -254,7 +263,7 @@ export function MessagingPage() {
           ))}
           {outbox !== null && outbox.items.length === 0 && (
             <tr>
-              <td colSpan={8}>Geen berichten gevonden.</td>
+              <td colSpan={8}>{t('messaging.page.empty')}</td>
             </tr>
           )}
         </tbody>
@@ -263,12 +272,12 @@ export function MessagingPage() {
 
       {canTemplates && templates && templates.length > 0 && (
         <section className="to-section">
-          <h2>Eigen sjablonen</h2>
+          <h2>{t('messaging.templates.heading')}</h2>
           <ul className="msg-templates">
             {templates.map((template) => (
               <li key={template.id}>
                 <code>{template.kind}</code> · {template.channel} · {template.language}
-                {!template.isActive && <Badge tone="neutral">inactief</Badge>}
+                {!template.isActive && <Badge tone="neutral">{t('messaging.templates.inactive')}</Badge>}
                 <button
                   type="button"
                   className="msg-template-edit"
@@ -282,10 +291,10 @@ export function MessagingPage() {
                     setEditorOpen(true)
                   }}
                 >
-                  bewerken
+                  {t('messaging.templates.edit')}
                 </button>
                 <button type="button" className="msg-template-delete" onClick={() => void removeTemplate(template.id)}>
-                  verwijderen
+                  {t('messaging.templates.delete')}
                 </button>
               </li>
             ))}
@@ -295,23 +304,23 @@ export function MessagingPage() {
 
       {editorOpen && (
         <Modal
-          title="Berichtsjabloon"
+          title={t('messaging.templates.modalTitle')}
           onClose={() => setEditorOpen(false)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => void loadPreview()} disabled={busy}>
-                Voorbeeld
+                {t('messaging.templates.preview')}
               </Button>
               <Button type="submit" form="msg-template-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
         >
           <form id="msg-template-form" className="msg-form" onSubmit={saveTemplate} noValidate>
             <div className="msg-form-row">
-              <FormField label="Type" htmlFor="msg-kind">
+              <FormField label={t('messaging.templates.form.kind')} htmlFor="msg-kind">
                 <select id="msg-kind" value={tplKind} onChange={(e) => setTplKind(e.target.value)} disabled={busy}>
                   {kinds.map((kind) => (
                     <option key={kind} value={kind}>
@@ -320,27 +329,27 @@ export function MessagingPage() {
                   ))}
                 </select>
               </FormField>
-              <FormField label="Kanaal" htmlFor="msg-channel">
+              <FormField label={t('messaging.templates.form.channel')} htmlFor="msg-channel">
                 <select id="msg-channel" value={tplChannel} onChange={(e) => setTplChannel(e.target.value as MessageChannel)} disabled={busy}>
-                  <option value="Email">E-mail</option>
-                  <option value="Sms">SMS</option>
+                  <option value="Email">{t('messaging.templates.form.channelEmail')}</option>
+                  <option value="Sms">{t('messaging.templates.form.channelSms')}</option>
                 </select>
               </FormField>
-              <FormField label="Taal" htmlFor="msg-language">
+              <FormField label={t('messaging.templates.form.language')} htmlFor="msg-language">
                 <input id="msg-language" value={tplLanguage} onChange={(e) => setTplLanguage(e.target.value)} disabled={busy} maxLength={5} />
               </FormField>
             </div>
             {tplChannel === 'Email' && (
-              <FormField label="Onderwerp" htmlFor="msg-subject" hint="Tokens zoals {{orderNumber}} worden ingevuld.">
+              <FormField label={t('messaging.templates.form.subject')} htmlFor="msg-subject" hint={t('messaging.templates.form.subjectHint')}>
                 <input id="msg-subject" value={tplSubject} onChange={(e) => setTplSubject(e.target.value)} disabled={busy} maxLength={300} />
               </FormField>
             )}
-            <FormField label="Inhoud" htmlFor="msg-body" required>
+            <FormField label={t('messaging.templates.form.body')} htmlFor="msg-body" required>
               <textarea id="msg-body" rows={6} value={tplBody} onChange={(e) => setTplBody(e.target.value)} disabled={busy} maxLength={8000} />
             </FormField>
             {preview && (
               <div className="msg-preview">
-                <h3>Voorbeeld</h3>
+                <h3>{t('messaging.templates.preview')}</h3>
                 {preview.subject && <p className="msg-preview-subject">{preview.subject}</p>}
                 <pre>{preview.body}</pre>
               </div>

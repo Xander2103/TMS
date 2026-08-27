@@ -1,9 +1,13 @@
+import { getActiveLocale } from '../../i18n/activeLocale'
+import { formatDecimal } from '../../utils/numbers'
+
 export type RevenueSource = 'Invoiced' | 'Agreed' | 'None'
 
+/** Vertaalsleutels — renderen als t(REVENUE_SOURCE_LABELS[source]). */
 export const REVENUE_SOURCE_LABELS: Record<RevenueSource, string> = {
-  Invoiced: 'Gefactureerd',
-  Agreed: 'Afgesproken',
-  None: 'Geen omzet',
+  Invoiced: 'profitability.revenueSource.Invoiced',
+  Agreed: 'profitability.revenueSource.Agreed',
+  None: 'profitability.revenueSource.None',
 }
 
 export interface TripProfitability {
@@ -58,11 +62,12 @@ export interface ProfitabilityOverview {
 
 export type ProfitabilityDimension = 'Customer' | 'Driver' | 'Vehicle' | 'Week'
 
+/** Vertaalsleutels — renderen als t(DIMENSION_LABELS[dimension]). */
 export const DIMENSION_LABELS: Record<ProfitabilityDimension, string> = {
-  Customer: 'Klanten',
-  Driver: 'Chauffeurs',
-  Vehicle: 'Voertuigen',
-  Week: 'Per week',
+  Customer: 'profitability.dimension.Customer',
+  Driver: 'profitability.dimension.Driver',
+  Vehicle: 'profitability.dimension.Vehicle',
+  Week: 'profitability.dimension.Week',
 }
 
 export interface ProfitabilityGroup {
@@ -95,26 +100,36 @@ export interface TripExplanation {
   calculationNote: string
 }
 
+/** Vertaalsleutels — renderen als t(COST_TYPE_LABELS[type] ?? …) met de code als fallback. */
 export const COST_TYPE_LABELS: Record<string, string> = {
-  Fuel: 'Brandstof',
-  Toll: 'Tol/Maut',
-  DriverLabour: 'Chauffeur',
-  Overtime: 'Overuren',
-  WaitingTime: 'Wachttijd',
-  VehicleDistance: 'Voertuig (km)',
-  VehicleTime: 'Voertuig (tijd)',
-  Maintenance: 'Onderhoud',
-  Depreciation: 'Afschrijving',
-  Trailer: 'Oplegger',
-  Equipment: 'Uitrusting',
-  Subcontractor: 'Onderaannemer',
-  FerryTunnelParking: 'Ferry/tunnel/parking',
-  Manual: 'Handmatig',
-  Correction: 'Correctie',
+  Fuel: 'profitability.costType.Fuel',
+  Toll: 'profitability.costType.Toll',
+  DriverLabour: 'profitability.costType.DriverLabour',
+  Overtime: 'profitability.costType.Overtime',
+  WaitingTime: 'profitability.costType.WaitingTime',
+  VehicleDistance: 'profitability.costType.VehicleDistance',
+  VehicleTime: 'profitability.costType.VehicleTime',
+  Maintenance: 'profitability.costType.Maintenance',
+  Depreciation: 'profitability.costType.Depreciation',
+  Trailer: 'profitability.costType.Trailer',
+  Equipment: 'profitability.costType.Equipment',
+  Subcontractor: 'profitability.costType.Subcontractor',
+  FerryTunnelParking: 'profitability.costType.FerryTunnelParking',
+  Manual: 'profitability.costType.Manual',
+  Correction: 'profitability.costType.Correction',
 }
 
+/** Hele euro's met tenant-cijferconventie en symboolpositie per UI-taal (0 decimalen). */
 export function formatEuro(value: number): string {
-  return value.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+  const body = formatDecimal(value, 0)
+  switch (getActiveLocale()) {
+    case 'fr':
+      return `${body} €`
+    case 'en':
+      return `€${body}`
+    default:
+      return `€ ${body}`
+  }
 }
 
 /** Margin tone: red below zero, amber under 10%, green otherwise. */

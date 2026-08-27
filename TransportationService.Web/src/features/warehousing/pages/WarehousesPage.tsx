@@ -1,15 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { getLocationOptions } from '../../locations/api/locationsApi'
 import type { LocationOption } from '../../locations/types'
 import { createDock, createWarehouse, deleteDock, listWarehouses, updateDock, updateWarehouse } from '../api/warehousingApi'
 import { WarehouseLocationsPanel } from '../components/WarehouseLocationsPanel'
-import type { Dock, DockInput, Warehouse, WarehouseInput } from '../types'
+import { OPERATION_LABELS, type Dock, type DockInput, type Warehouse, type WarehouseInput } from '../types'
 import './warehousing.css'
 
 const EMPTY_WAREHOUSE: WarehouseInput = {
@@ -24,6 +25,7 @@ const EMPTY_DOCK: DockInput = {
 
 /** Warehouse & dock master data; the physical address stays on the linked master location. */
 export function WarehousesPage() {
+  const { t } = useLocale()
   const { showError, showSuccess } = useToast()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('warehouse.manage')
@@ -42,7 +44,7 @@ export function WarehousesPage() {
       .then((data) => {
         if (!cancelled) setWarehouses(data)
       })
-      .catch((error: unknown) => showError(describeApiError(error, 'Magazijnen laden mislukt.').message))
+      .catch((error: unknown) => showError(localizeApiError(t, error, t('warehousing.warehouses.loadFailed'))))
     return () => {
       cancelled = true
     }
@@ -65,11 +67,11 @@ export function WarehousesPage() {
       } else {
         await createWarehouse(editing.input)
       }
-      showSuccess('Magazijn opgeslagen.')
+      showSuccess(t('warehousing.warehouses.saved'))
       setEditing(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (error) {
-      showError(describeApiError(error, 'Opslaan mislukt.').message)
+      showError(localizeApiError(t, error, t('warehousing.warehouses.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -85,11 +87,11 @@ export function WarehousesPage() {
       } else {
         await createDock(dockEditing.warehouseId, dockEditing.input)
       }
-      showSuccess('Dock opgeslagen.')
+      showSuccess(t('warehousing.docks.saved'))
       setDockEditing(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (error) {
-      showError(describeApiError(error, 'Opslaan mislukt.').message)
+      showError(localizeApiError(t, error, t('warehousing.warehouses.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -98,13 +100,13 @@ export function WarehousesPage() {
   return (
     <div className="wh-page">
       <header className="wh-header">
-        <h1>Magazijnen</h1>
+        <h1>{t('warehousing.warehouses.title')}</h1>
         {canManage && (
-          <Button onClick={() => setEditing({ id: null, input: EMPTY_WAREHOUSE })}>Nieuw magazijn</Button>
+          <Button onClick={() => setEditing({ id: null, input: EMPTY_WAREHOUSE })}>{t('warehousing.warehouses.new')}</Button>
         )}
       </header>
 
-      {warehouses.length === 0 && <p className="wh-muted">Nog geen magazijnen aangemaakt.</p>}
+      {warehouses.length === 0 && <p className="wh-muted">{t('warehousing.warehouses.none')}</p>}
 
       {warehouses.map((warehouse) => (
         <section key={warehouse.id} className="wh-card">
@@ -118,7 +120,7 @@ export function WarehousesPage() {
               </p>
             </div>
             <div className="wh-card-actions">
-              {!warehouse.isActive && <Badge tone="danger">Inactief</Badge>}
+              {!warehouse.isActive && <Badge tone="danger">{t('warehousing.warehouses.inactive')}</Badge>}
               {canManage && (
                 <>
                   <Button variant="secondary" onClick={() => setEditing({
@@ -130,12 +132,12 @@ export function WarehousesPage() {
                       contactEmail: warehouse.contactEmail, notes: warehouse.notes,
                     },
                   })}>
-                    Bewerken
+                    {t('warehousing.warehouses.edit')}
                   </Button>
                   <Button variant="secondary" onClick={() => setDockEditing({
                     warehouseId: warehouse.id, dockId: null, input: EMPTY_DOCK,
                   })}>
-                    Dock toevoegen
+                    {t('warehousing.warehouses.addDock')}
                   </Button>
                 </>
               )}
@@ -158,30 +160,34 @@ export function WarehousesPage() {
                 })}
                 onDelete={() => {
                   void deleteDock(warehouse.id, dock.id)
-                    .then(() => setReloadToken((t) => t + 1))
-                    .catch((error: unknown) => showError(describeApiError(error, 'Verwijderen mislukt.').message))
+                    .then(() => setReloadToken((token) => token + 1))
+                    .catch((error: unknown) => showError(localizeApiError(t, error, t('warehousing.warehouses.deleteFailed'))))
                 }}
               />
             ))}
-            {warehouse.docks.length === 0 && <p className="wh-muted">Nog geen docks.</p>}
+            {warehouse.docks.length === 0 && <p className="wh-muted">{t('warehousing.warehouses.noDocks')}</p>}
           </div>
           <WarehouseLocationsPanel warehouseId={warehouse.id} canManage={canManage} />
         </section>
       ))}
 
       {editing && (
-        <Modal title={editing.id ? 'Magazijn bewerken' : 'Nieuw magazijn'} onClose={() => setEditing(null)} busy={busy}>
+        <Modal
+          title={editing.id ? t('warehousing.warehouses.editTitle') : t('warehousing.warehouses.new')}
+          onClose={() => setEditing(null)}
+          busy={busy}
+        >
           <form className="wh-form" onSubmit={(event) => void submitWarehouse(event)}>
             <label>
-              Naam
+              {t('warehousing.warehouses.name')}
               <input value={editing.input.name} required maxLength={200}
                      onChange={(event) => setEditing({ ...editing, input: { ...editing.input, name: event.target.value } })} />
             </label>
             <label>
-              Locatie (adres)
+              {t('warehousing.warehouses.locationAddress')}
               <select value={editing.input.locationId} required
                       onChange={(event) => setEditing({ ...editing, input: { ...editing.input, locationId: event.target.value } })}>
-                <option value="">— kies een locatie —</option>
+                <option value="">{t('warehousing.warehouses.chooseLocation')}</option>
                 {locations.map((location) => (
                   <option key={location.id} value={location.id}>
                     {location.name}{location.city ? ` (${location.city})` : ''}
@@ -191,45 +197,51 @@ export function WarehousesPage() {
             </label>
             <div className="wh-form-row">
               <label>
-                Opent
+                {t('warehousing.warehouses.opensAt')}
                 <input type="time" value={editing.input.opensAt ?? ''}
                        onChange={(event) => setEditing({ ...editing, input: { ...editing.input, opensAt: event.target.value || null } })} />
               </label>
               <label>
-                Sluit
+                {t('warehousing.warehouses.closesAt')}
                 <input type="time" value={editing.input.closesAt ?? ''}
                        onChange={(event) => setEditing({ ...editing, input: { ...editing.input, closesAt: event.target.value || null } })} />
               </label>
             </div>
             <label>
-              Contactpersoon
+              {t('warehousing.warehouses.contactName')}
               <input value={editing.input.contactName ?? ''}
                      onChange={(event) => setEditing({ ...editing, input: { ...editing.input, contactName: event.target.value || null } })} />
             </label>
             <label className="wh-check">
               <input type="checkbox" checked={editing.input.isActive}
                      onChange={(event) => setEditing({ ...editing, input: { ...editing.input, isActive: event.target.checked } })} />
-              Actief
+              {t('warehousing.warehouses.active')}
             </label>
             <div className="wh-form-actions">
-              <Button variant="secondary" type="button" onClick={() => setEditing(null)} disabled={busy}>Annuleren</Button>
-              <Button type="submit" disabled={busy}>Opslaan</Button>
+              <Button variant="secondary" type="button" onClick={() => setEditing(null)} disabled={busy}>
+                {t('warehousing.warehouses.cancel')}
+              </Button>
+              <Button type="submit" disabled={busy}>{t('warehousing.warehouses.save')}</Button>
             </div>
           </form>
         </Modal>
       )}
 
       {dockEditing && (
-        <Modal title={dockEditing.dockId ? 'Dock bewerken' : 'Nieuw dock'} onClose={() => setDockEditing(null)} busy={busy}>
+        <Modal
+          title={dockEditing.dockId ? t('warehousing.docks.editTitle') : t('warehousing.docks.newTitle')}
+          onClose={() => setDockEditing(null)}
+          busy={busy}
+        >
           <form className="wh-form" onSubmit={(event) => void submitDock(event)}>
             <div className="wh-form-row">
               <label>
-                Code
+                {t('warehousing.docks.code')}
                 <input value={dockEditing.input.code} required maxLength={30}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, code: event.target.value } })} />
               </label>
               <label>
-                Naam
+                {t('warehousing.docks.name')}
                 <input value={dockEditing.input.name ?? ''}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, name: event.target.value || null } })} />
               </label>
@@ -238,32 +250,34 @@ export function WarehousesPage() {
               <label className="wh-check">
                 <input type="checkbox" checked={dockEditing.input.allowsLoading}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, allowsLoading: event.target.checked } })} />
-                Laden
+                {t(OPERATION_LABELS.Loading)}
               </label>
               <label className="wh-check">
                 <input type="checkbox" checked={dockEditing.input.allowsUnloading}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, allowsUnloading: event.target.checked } })} />
-                Lossen
+                {t(OPERATION_LABELS.Unloading)}
               </label>
               <label className="wh-check">
                 <input type="checkbox" checked={dockEditing.input.allowsAdr}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, allowsAdr: event.target.checked } })} />
-                ADR
+                {t('warehousing.docks.adr')}
               </label>
               <label className="wh-check">
                 <input type="checkbox" checked={dockEditing.input.refrigerated}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, refrigerated: event.target.checked } })} />
-                Koeling
+                {t('warehousing.docks.refrigerated')}
               </label>
               <label className="wh-check">
                 <input type="checkbox" checked={dockEditing.input.isActive}
                        onChange={(event) => setDockEditing({ ...dockEditing, input: { ...dockEditing.input, isActive: event.target.checked } })} />
-                Actief
+                {t('warehousing.docks.active')}
               </label>
             </div>
             <div className="wh-form-actions">
-              <Button variant="secondary" type="button" onClick={() => setDockEditing(null)} disabled={busy}>Annuleren</Button>
-              <Button type="submit" disabled={busy}>Opslaan</Button>
+              <Button variant="secondary" type="button" onClick={() => setDockEditing(null)} disabled={busy}>
+                {t('warehousing.warehouses.cancel')}
+              </Button>
+              <Button type="submit" disabled={busy}>{t('warehousing.warehouses.save')}</Button>
             </div>
           </form>
         </Modal>
@@ -278,6 +292,7 @@ function DockCard({ dock, canManage, onEdit, onDelete }: {
   onEdit: () => void
   onDelete: () => void
 }) {
+  const { t } = useLocale()
   return (
     <div className="wh-dock">
       <div className="wh-dock-head">
@@ -285,16 +300,16 @@ function DockCard({ dock, canManage, onEdit, onDelete }: {
         {dock.name && <span className="wh-muted">{dock.name}</span>}
       </div>
       <div className="wh-dock-badges">
-        {dock.allowsLoading && <Badge tone="info">Laden</Badge>}
-        {dock.allowsUnloading && <Badge tone="info">Lossen</Badge>}
-        {dock.allowsAdr && <Badge tone="warning">ADR</Badge>}
-        {dock.refrigerated && <Badge tone="info">Koeling</Badge>}
-        {!dock.isActive && <Badge tone="danger">Inactief</Badge>}
+        {dock.allowsLoading && <Badge tone="info">{t(OPERATION_LABELS.Loading)}</Badge>}
+        {dock.allowsUnloading && <Badge tone="info">{t(OPERATION_LABELS.Unloading)}</Badge>}
+        {dock.allowsAdr && <Badge tone="warning">{t('warehousing.docks.adr')}</Badge>}
+        {dock.refrigerated && <Badge tone="info">{t('warehousing.docks.refrigerated')}</Badge>}
+        {!dock.isActive && <Badge tone="danger">{t('warehousing.warehouses.inactive')}</Badge>}
       </div>
       {canManage && (
         <div className="wh-dock-actions">
-          <button type="button" className="wh-link" onClick={onEdit}>Bewerken</button>
-          <button type="button" className="wh-link wh-link-danger" onClick={onDelete}>Verwijderen</button>
+          <button type="button" className="wh-link" onClick={onEdit}>{t('warehousing.warehouses.edit')}</button>
+          <button type="button" className="wh-link wh-link-danger" onClick={onDelete}>{t('warehousing.warehouses.delete')}</button>
         </div>
       )}
     </div>

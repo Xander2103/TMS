@@ -5,7 +5,8 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   getCustomerStorage,
   getWarehouseOverview,
@@ -24,11 +25,12 @@ import type { CustomerListItem } from '../../customers/types'
 import type { Warehouse } from '../types'
 import { formatDateTime } from '../../../utils/dates'
 
+/** Vertaalsleutels — renderen als t(SCAN_TYPE_LABELS[type]). */
 const SCAN_TYPE_LABELS: Record<WarehouseScanType, string> = {
-  Received: 'Ontvangst',
-  Moved: 'Verplaatsen',
-  Staged: 'Klaarzetten',
-  Return: 'Retour inboeken',
+  Received: 'warehousing.scanType.Received',
+  Moved: 'warehousing.scanType.Moved',
+  Staged: 'warehousing.scanType.Staged',
+  Return: 'warehousing.scanType.Return',
 }
 
 /**
@@ -38,6 +40,7 @@ const SCAN_TYPE_LABELS: Record<WarehouseScanType, string> = {
  * wacht op morgen.
  */
 export function WarehouseTracePage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showError } = useToast()
   const canScan = hasPermission('scanning.execute')
@@ -78,7 +81,7 @@ export function WarehouseTracePage() {
     try {
       setStorage(await getCustomerStorage(storageCustomerId, storageFrom, storageTo))
     } catch (err) {
-      showError(describeApiError(err, 'De opslagberekening kon niet worden geladen.').message)
+      showError(localizeApiError(t, err, t('warehousing.trace.storageFailed')))
     }
   }
 
@@ -107,7 +110,7 @@ export function WarehouseTracePage() {
     event.preventDefault()
     if (!barcode.trim()) return
     if (scanType === 'Moved' && !locationId) {
-      showError('Kies de doellocatie voor een verplaatsing.')
+      showError(t('warehousing.trace.chooseTargetLocation'))
       return
     }
     setBusy(true)
@@ -125,7 +128,7 @@ export function WarehouseTracePage() {
         getWarehouseOverview(warehouseId).then(setOverview).catch(() => {})
       }
     } catch (err) {
-      showError(describeApiError(err, 'De scan kon niet worden verwerkt.').message)
+      showError(localizeApiError(t, err, t('warehousing.trace.scanFailed')))
     } finally {
       setBusy(false)
     }
@@ -135,44 +138,44 @@ export function WarehouseTracePage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Magazijn' }, { label: 'Trace & voorraad' }]} />
+      <Breadcrumbs items={[{ label: t('warehousing.trace.breadcrumbWarehouse') }, { label: t('warehousing.trace.breadcrumbTrace') }]} />
       <PageHeader
-        title="Magazijn — trace & voorraad"
-        subtitle="Scan of typ een barcode: waar is de collo, en registreer ontvangst, verplaatsing, klaarzetten of retour zonder rit."
+        title={t('warehousing.trace.title')}
+        subtitle={t('warehousing.trace.subtitle')}
       />
 
       <form className="wh-trace-bar" onSubmit={(e) => void scan(e)}>
         <input
           value={barcode}
           onChange={(e) => setBarcode(e.target.value)}
-          placeholder="Barcode…"
-          aria-label="Barcode"
+          placeholder={t('warehousing.trace.barcodePlaceholder')}
+          aria-label={t('warehousing.trace.barcodeAria')}
           autoFocus
           disabled={busy}
         />
         <Button type="button" variant="secondary" onClick={() => void lookup()} disabled={busy || !barcode.trim()}>
-          Zoek
+          {t('warehousing.trace.search')}
         </Button>
         {canScan && (
           <>
-            <select value={scanType} onChange={(e) => setScanType(e.target.value as WarehouseScanType)} aria-label="Scansoort" disabled={busy}>
-              {Object.entries(SCAN_TYPE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+            <select value={scanType} onChange={(e) => setScanType(e.target.value as WarehouseScanType)} aria-label={t('warehousing.trace.scanTypeAria')} disabled={busy}>
+              {(Object.keys(SCAN_TYPE_LABELS) as WarehouseScanType[]).map((value) => (
+                <option key={value} value={value}>{t(SCAN_TYPE_LABELS[value])}</option>
               ))}
             </select>
-            <select value={warehouseId} onChange={(e) => { setWarehouseId(e.target.value); setLocationId('') }} aria-label="Magazijn" disabled={busy}>
+            <select value={warehouseId} onChange={(e) => { setWarehouseId(e.target.value); setLocationId('') }} aria-label={t('warehousing.trace.warehouseAria')} disabled={busy}>
               {warehouses.map((w) => (
                 <option key={w.id} value={w.id}>{w.name}</option>
               ))}
             </select>
-            <select value={locationId} onChange={(e) => setLocationId(e.target.value)} aria-label="Locatie" disabled={busy}>
-              <option value="">— Geen locatie —</option>
+            <select value={locationId} onChange={(e) => setLocationId(e.target.value)} aria-label={t('warehousing.trace.locationAria')} disabled={busy}>
+              <option value="">{t('warehousing.trace.noLocation')}</option>
               {activeLocations.map((l) => (
                 <option key={l.id} value={l.id}>{l.code} — {l.name}</option>
               ))}
             </select>
             <Button type="submit" disabled={busy || !barcode.trim()}>
-              {SCAN_TYPE_LABELS[scanType]}
+              {t(SCAN_TYPE_LABELS[scanType])}
             </Button>
           </>
         )}
@@ -183,7 +186,7 @@ export function WarehouseTracePage() {
           {feedback.message}
         </p>
       )}
-      {traceMissing && <p className="wh-muted">Geen collo gevonden voor deze barcode.</p>}
+      {traceMissing && <p className="wh-muted">{t('warehousing.trace.notFound')}</p>}
 
       {trace && (
         <section className="wh-card">
@@ -201,14 +204,19 @@ export function WarehouseTracePage() {
             </div>
           </div>
           <p>
-            Locatie:{' '}
+            {t('warehousing.trace.location')}{' '}
             {trace.locationCode
               ? <strong>{trace.warehouseName} · {trace.locationCode} — {trace.locationName}</strong>
-              : <span className="wh-muted">geen magazijnlocatie geregistreerd (onderweg of niet ontvangen)</span>}
+              : <span className="wh-muted">{t('warehousing.trace.noLocationRegistered')}</span>}
           </p>
           <table className="issued-items-table">
             <thead>
-              <tr><th>Gebeurtenis</th><th>Tijdstip</th><th>Locatie</th><th>Rit</th></tr>
+              <tr>
+                <th>{t('warehousing.trace.eventHeader')}</th>
+                <th>{t('warehousing.trace.timeHeader')}</th>
+                <th>{t('warehousing.trace.locationHeader')}</th>
+                <th>{t('warehousing.trace.tripHeader')}</th>
+              </tr>
             </thead>
             <tbody>
               {trace.lastEvents.map((event, index) => (
@@ -226,19 +234,19 @@ export function WarehouseTracePage() {
 
       {overview && (
         <section className="wh-card">
-          <h2>Overzicht — {overview.warehouseName}</h2>
+          <h2>{t('warehousing.trace.overviewTitle', { warehouse: overview.warehouseName })}</h2>
           {overview.shouldHaveLeftToday.length > 0 && (
             <p className="wh-trace-alert" role="alert">
-              ⚠ Had vandaag buiten gemoeten: {overview.shouldHaveLeftToday.map((p) => p.packageNumber).join(', ')}
+              {t('warehousing.trace.shouldHaveLeft', { packages: overview.shouldHaveLeftToday.map((p) => p.packageNumber).join(', ') })}
             </p>
           )}
           {overview.waitsForTomorrow.length > 0 && (
             <p className="wh-muted">
-              Wacht op morgen: {overview.waitsForTomorrow.map((p) => p.packageNumber).join(', ')}
+              {t('warehousing.trace.waitsForTomorrow', { packages: overview.waitsForTomorrow.map((p) => p.packageNumber).join(', ') })}
             </p>
           )}
           {overview.locations.every((l) => l.packages.length === 0) && (
-            <p className="wh-muted">Geen colli op magazijnlocaties geregistreerd.</p>
+            <p className="wh-muted">{t('warehousing.trace.noPackages')}</p>
           )}
           {overview.locations.filter((l) => l.packages.length > 0).map((location) => (
             <div key={location.locationId} className="wh-location-zone">
@@ -252,34 +260,37 @@ export function WarehouseTracePage() {
       )}
 
       <section className="wh-card">
-        <h2>Opslag per klant (pallet-dagen)</h2>
-        <p className="wh-muted">
-          Berekend uit de bewegingsklok (ontvangst tot vertrek, per begonnen dag). Handmatig
-          ingevulde dagen op een order winnen altijd.
-        </p>
+        <h2>{t('warehousing.trace.storageTitle')}</h2>
+        <p className="wh-muted">{t('warehousing.trace.storageHint')}</p>
         <div className="wh-trace-bar">
-          <select value={storageCustomerId} onChange={(e) => setStorageCustomerId(e.target.value)} aria-label="Klant">
-            <option value="">Selecteer een klant…</option>
+          <select value={storageCustomerId} onChange={(e) => setStorageCustomerId(e.target.value)} aria-label={t('warehousing.trace.customerAria')}>
+            <option value="">{t('warehousing.trace.selectCustomer')}</option>
             {customers.map((customer) => (
               <option key={customer.id} value={customer.id}>{customer.name}</option>
             ))}
           </select>
-          <input type="date" value={storageFrom} onChange={(e) => setStorageFrom(e.target.value)} aria-label="Van" />
-          <input type="date" value={storageTo} onChange={(e) => setStorageTo(e.target.value)} aria-label="Tot" />
+          <input type="date" value={storageFrom} onChange={(e) => setStorageFrom(e.target.value)} aria-label={t('warehousing.trace.fromAria')} />
+          <input type="date" value={storageTo} onChange={(e) => setStorageTo(e.target.value)} aria-label={t('warehousing.trace.toAria')} />
           <Button type="button" variant="secondary" onClick={() => void lookupStorage()} disabled={!storageCustomerId}>
-            Bereken
+            {t('warehousing.trace.calculate')}
           </Button>
         </div>
         {storage && (
           <div>
             <p>
-              Totaal: <strong>{storage.totalPalletDays} pallet-dagen</strong>
-              {storage.openStays > 0 && <span className="wh-muted"> · {storage.openStays} colli nog aanwezig</span>}
+              {t('warehousing.trace.total')} <strong>{t('warehousing.trace.palletDays', { count: storage.totalPalletDays })}</strong>
+              {storage.openStays > 0 && (
+                <span className="wh-muted"> · {t('warehousing.trace.stillPresent', { count: storage.openStays })}</span>
+              )}
             </p>
             {storage.perOrder.length > 0 && (
               <table className="issued-items-table">
                 <thead>
-                  <tr><th>Order</th><th>Colli</th><th>Pallet-dagen</th></tr>
+                  <tr>
+                    <th>{t('warehousing.trace.orderHeader')}</th>
+                    <th>{t('warehousing.trace.colliHeader')}</th>
+                    <th>{t('warehousing.trace.palletDaysHeader')}</th>
+                  </tr>
                 </thead>
                 <tbody>
                   {storage.perOrder.map((row) => (

@@ -1,5 +1,7 @@
 import { apiBaseUrl } from '../../../config/env'
 import { apiClient } from '../../../api/apiClient'
+import { getActiveLocale } from '../../../i18n/activeLocale'
+import { translate } from '../../../i18n/translations'
 import { getAccessToken } from '../../auth/authStorage'
 
 export type TransportDocumentKind = 'delivery-note' | 'cmr'
@@ -38,7 +40,7 @@ async function downloadPdf(url: string, fallbackName: string): Promise<void> {
   const response = await fetch(`${apiBaseUrl}${url}`, {
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
-  if (!response.ok) throw new Error('Het document kon niet worden gegenereerd.')
+  if (!response.ok) throw new Error(translate(getActiveLocale(), 'transportOrders.documents.generateFailed'))
   const blob = await response.blob()
   const disposition = response.headers.get('content-disposition')
   const fileName = disposition?.match(/filename="?([^";]+)"?/)?.[1] ?? fallbackName

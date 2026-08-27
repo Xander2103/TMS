@@ -4,6 +4,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { PermissionMatrix } from '../components/PermissionMatrix'
+import { useLocale } from '../../../i18n/localeContext'
 import { useRole } from '../hooks/useRole'
 import { useRoleMutations } from '../hooks/useRoleMutations'
 import './RoleDetailPage.css'
@@ -11,15 +12,16 @@ import './RoleDetailPage.css'
 const NAME_MAX_LENGTH = 150
 
 export function RoleDetailPage() {
+  const { t } = useLocale()
   const { id = '' } = useParams<{ id: string }>()
   const { role, isLoading, error, reload } = useRole(id)
 
   if (isLoading) {
-    return <LoadingState message="Rol laden..." />
+    return <LoadingState message={t('usersRoles.roles.detail.loading')} />
   }
 
   if (error || !role) {
-    return <ErrorState message={error ?? 'Rol niet gevonden.'} />
+    return <ErrorState message={error ?? t('usersRoles.roles.detail.notFound')} />
   }
 
   return (
@@ -27,7 +29,7 @@ export function RoleDetailPage() {
       <PageHeader title={role.name} />
 
       <section>
-        <h3>Gegevens</h3>
+        <h3>{t('usersRoles.roles.detail.sectionData')}</h3>
         <RoleDetailsForm
           roleId={role.id}
           isSystemRole={role.isSystemRole}
@@ -38,12 +40,12 @@ export function RoleDetailPage() {
       </section>
 
       <section>
-        <h3>Rechten</h3>
+        <h3>{t('usersRoles.roles.detail.sectionPermissions')}</h3>
         <PermissionMatrix key={role.permissionCodes.join(',')} role={role} onSaved={reload} />
       </section>
 
       <section>
-        <h3>Deactiveren</h3>
+        <h3>{t('usersRoles.roles.detail.sectionDeactivate')}</h3>
         <DeactivateControl roleId={role.id} isSystemRole={role.isSystemRole} isActive={role.isActive} onSaved={reload} />
       </section>
     </>
@@ -59,6 +61,7 @@ interface RoleDetailsFormProps {
 }
 
 function RoleDetailsForm({ roleId, isSystemRole, initialName, initialDescription, onSaved }: RoleDetailsFormProps) {
+  const { t } = useLocale()
   const [name, setName] = useState(initialName)
   const [description, setDescription] = useState(initialDescription)
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -74,11 +77,11 @@ function RoleDetailsForm({ roleId, isSystemRole, initialName, initialDescription
 
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setValidationError('Naam is verplicht.')
+      setValidationError(t('usersRoles.roles.page.nameRequired'))
       return
     }
     if (trimmedName.length > NAME_MAX_LENGTH) {
-      setValidationError(`Naam mag maximaal ${NAME_MAX_LENGTH} tekens bevatten.`)
+      setValidationError(t('usersRoles.roles.page.nameMax', { max: NAME_MAX_LENGTH }))
       return
     }
 
@@ -91,7 +94,7 @@ function RoleDetailsForm({ roleId, isSystemRole, initialName, initialDescription
   return (
     <form className="user-form" onSubmit={handleSubmit} noValidate>
       <div className="form-field">
-        <label htmlFor="roleName">Naam</label>
+        <label htmlFor="roleName">{t('usersRoles.roles.page.name')}</label>
         <input
           id="roleName"
           name="roleName"
@@ -104,7 +107,7 @@ function RoleDetailsForm({ roleId, isSystemRole, initialName, initialDescription
           disabled={isSystemRole}
           aria-invalid={Boolean(validationError)}
         />
-        {isSystemRole && <p className="field-hint">Systeemrollen kunnen niet worden hernoemd.</p>}
+        {isSystemRole && <p className="field-hint">{t('usersRoles.roles.detail.systemRoleRenameHint')}</p>}
         {validationError && (
           <p className="field-error" role="alert">
             {validationError}
@@ -112,7 +115,7 @@ function RoleDetailsForm({ roleId, isSystemRole, initialName, initialDescription
         )}
       </div>
       <div className="form-field">
-        <label htmlFor="roleDescription">Omschrijving</label>
+        <label htmlFor="roleDescription">{t('usersRoles.roles.page.description')}</label>
         <input
           id="roleDescription"
           name="roleDescription"
@@ -130,7 +133,7 @@ function RoleDetailsForm({ roleId, isSystemRole, initialName, initialDescription
       )}
       <div className="form-actions">
         <button type="submit" className="primary-button" disabled={isSubmitting}>
-          {isSubmitting ? 'Opslaan...' : 'Wijzigingen opslaan'}
+          {isSubmitting ? t('usersRoles.roles.detail.saving') : t('usersRoles.roles.detail.saveChanges')}
         </button>
       </div>
     </form>
@@ -145,10 +148,11 @@ interface DeactivateControlProps {
 }
 
 function DeactivateControl({ roleId, isSystemRole, isActive, onSaved }: DeactivateControlProps) {
+  const { t } = useLocale()
   const { isSubmitting, error, deactivate } = useRoleMutations()
 
   async function handleDeactivate() {
-    if (!window.confirm('Weet u zeker dat u deze rol wilt deactiveren?')) {
+    if (!window.confirm(t('usersRoles.roles.detail.confirmDeactivate'))) {
       return
     }
     const saved = await deactivate(roleId)
@@ -158,15 +162,15 @@ function DeactivateControl({ roleId, isSystemRole, isActive, onSaved }: Deactiva
   }
 
   if (!isActive) {
-    return <p className="muted-text">Deze rol is al inactief.</p>
+    return <p className="muted-text">{t('usersRoles.roles.detail.alreadyInactive')}</p>
   }
 
   return (
     <div>
       <button type="button" className="primary-button" onClick={handleDeactivate} disabled={isSystemRole || isSubmitting}>
-        Rol deactiveren
+        {t('usersRoles.roles.detail.deactivateRole')}
       </button>
-      {isSystemRole && <p className="field-hint">Systeemrollen kunnen niet worden gedeactiveerd.</p>}
+      {isSystemRole && <p className="field-hint">{t('usersRoles.roles.detail.systemRoleDeactivateHint')}</p>}
       {error && (
         <p className="form-error" role="alert">
           {error}

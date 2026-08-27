@@ -3,6 +3,9 @@ import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import type { PagedResult } from '../../../api/types'
 import type { BadgeTone } from '../../../components/ui/Badge'
+import type { TranslateFn } from '../../../i18n/localeContext'
+import { getActiveLocale } from '../../../i18n/activeLocale'
+import { translate } from '../../../i18n/translations'
 
 // --- Statussen & labels ---
 
@@ -17,16 +20,17 @@ export type PeppolTransmissionStatus =
   | 'Rejected'
   | 'Cancelled'
 
-export const PEPPOL_STATUS_LABELS: Record<PeppolTransmissionStatus, string> = {
-  Draft: 'Concept',
-  Validated: 'Gevalideerd',
-  Queued: 'In wachtrij',
-  SubmittedToProvider: 'Aangeboden aan provider',
-  AcceptedByProvider: 'Aanvaard door provider',
-  Delivered: 'Afgeleverd',
-  Failed: 'Mislukt',
-  Rejected: 'Geweigerd',
-  Cancelled: 'Geannuleerd',
+/** Vertaalsleutels — renderen als t(PEPPOL_STATUS_LABEL_KEYS[status]). Gedeeld met het klantportaal. */
+export const PEPPOL_STATUS_LABEL_KEYS: Record<PeppolTransmissionStatus, string> = {
+  Draft: 'invoices.peppolStatus.Draft',
+  Validated: 'invoices.peppolStatus.Validated',
+  Queued: 'invoices.peppolStatus.Queued',
+  SubmittedToProvider: 'invoices.peppolStatus.SubmittedToProvider',
+  AcceptedByProvider: 'invoices.peppolStatus.AcceptedByProvider',
+  Delivered: 'invoices.peppolStatus.Delivered',
+  Failed: 'invoices.peppolStatus.Failed',
+  Rejected: 'invoices.peppolStatus.Rejected',
+  Cancelled: 'invoices.peppolStatus.Cancelled',
 }
 
 export const PEPPOL_STATUS_TONE: Record<PeppolTransmissionStatus, BadgeTone> = {
@@ -41,9 +45,10 @@ export const PEPPOL_STATUS_TONE: Record<PeppolTransmissionStatus, BadgeTone> = {
   Cancelled: 'neutral',
 }
 
-/** Dutch label for a raw transmission status string (unknown values fall through unchanged). */
-export function peppolStatusLabel(status: string): string {
-  return PEPPOL_STATUS_LABELS[status as PeppolTransmissionStatus] ?? status
+/** Label for a raw transmission status string (unknown values fall through unchanged). */
+export function peppolStatusLabel(t: TranslateFn, status: string): string {
+  const key = PEPPOL_STATUS_LABEL_KEYS[status as PeppolTransmissionStatus]
+  return key ? t(key) : status
 }
 
 export function peppolStatusTone(status: string): BadgeTone {
@@ -52,18 +57,20 @@ export function peppolStatusTone(status: string): BadgeTone {
 
 export type PeppolDocumentKind = 'Invoice' | 'CreditNote'
 
-export const PEPPOL_KIND_LABELS: Record<PeppolDocumentKind, string> = {
-  Invoice: 'Factuur',
-  CreditNote: 'Creditnota',
+/** Vertaalsleutels — renderen als t(PEPPOL_KIND_LABEL_KEYS[kind]). */
+export const PEPPOL_KIND_LABEL_KEYS: Record<PeppolDocumentKind, string> = {
+  Invoice: 'peppol.kind.Invoice',
+  CreditNote: 'peppol.kind.CreditNote',
 }
 
 export type PeppolIncomingStatus = 'Received' | 'NeedsReview' | 'Linked' | 'Rejected'
 
-export const PEPPOL_INCOMING_STATUS_LABELS: Record<PeppolIncomingStatus, string> = {
-  Received: 'Ontvangen',
-  NeedsReview: 'Te controleren',
-  Linked: 'Verwerkt',
-  Rejected: 'Afgewezen',
+/** Vertaalsleutels — renderen als t(PEPPOL_INCOMING_STATUS_LABEL_KEYS[status]). */
+export const PEPPOL_INCOMING_STATUS_LABEL_KEYS: Record<PeppolIncomingStatus, string> = {
+  Received: 'peppol.incomingStatus.Received',
+  NeedsReview: 'peppol.incomingStatus.NeedsReview',
+  Linked: 'peppol.incomingStatus.Linked',
+  Rejected: 'peppol.incomingStatus.Rejected',
 }
 
 export const PEPPOL_INCOMING_STATUS_TONE: Record<PeppolIncomingStatus, BadgeTone> = {
@@ -335,7 +342,7 @@ export async function downloadInvoicePeppolXml(invoiceId: string, invoiceNumber:
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
   if (!response.ok) {
-    let message = 'De Peppol-XML kon niet worden gedownload.'
+    let message = translate(getActiveLocale(), 'peppol.xml.downloadFailed')
     try {
       const data = (await response.json()) as { detail?: string; issues?: { message?: string }[] }
       const firstIssue = data.issues?.find((issue) => typeof issue.message === 'string')

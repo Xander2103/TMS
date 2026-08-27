@@ -1,13 +1,16 @@
 import { ApiError, apiClient } from '../../api/apiClient'
 import { apiBaseUrl } from '../../config/env'
+import { getActiveLocale } from '../../i18n/activeLocale'
+import { translate } from '../../i18n/translations'
 import { getAccessToken } from '../auth/authStorage'
 
 export type TachographStatus = 'Valid' | 'ExpiringSoon' | 'Overdue'
 
+/** i18n-keys (fleet.tachograph.status.*) — render via t(TACHOGRAPH_STATUS_LABELS[s]). */
 export const TACHOGRAPH_STATUS_LABELS: Record<TachographStatus, string> = {
-  Valid: 'Geldig',
-  ExpiringSoon: 'Verloopt binnenkort',
-  Overdue: 'Vervallen',
+  Valid: 'fleet.tachograph.status.Valid',
+  ExpiringSoon: 'fleet.tachograph.status.ExpiringSoon',
+  Overdue: 'fleet.tachograph.status.Overdue',
 }
 
 export interface TachographCalibration {
@@ -82,7 +85,7 @@ export async function uploadTachographFile(vehicleId: string, id: string, file: 
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
     body,
   })
-  if (!response.ok) return readError(response, 'Uploaden is mislukt.')
+  if (!response.ok) return readError(response, translate(getActiveLocale(), 'fleet.api.uploadFailed'))
   return (await response.json()) as TachographCalibration
 }
 
@@ -90,7 +93,7 @@ export async function downloadTachographFile(vehicleId: string, id: string, file
   const response = await fetch(`${apiBaseUrl}${base(vehicleId)}/${id}/document`, {
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
-  if (!response.ok) throw new ApiError('Bestand kon niet worden gedownload.', response.status)
+  if (!response.ok) throw new ApiError(translate(getActiveLocale(), 'fleet.api.downloadFailed'), response.status)
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')

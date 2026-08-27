@@ -4,6 +4,7 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { TabPanel, Tabs, type TabItem } from '../../../components/ui/Tabs'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { CustomerOverridesTab } from '../components/CustomerOverridesTab'
 import { EventsTab } from '../components/EventsTab'
 import { OutboxTab } from '../components/OutboxTab'
@@ -22,6 +23,7 @@ type TabId = (typeof TAB_IDS)[number]
  * themselves — rather than render disabled — when the user lacks it, same as the nav item.
  */
 export function NotificationAdminPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -31,17 +33,17 @@ export function NotificationAdminPage() {
   const canMessaging = hasPermission('messaging.manage')
 
   const tabs: TabItem[] = useMemo(() => {
-    const list: TabItem[] = [{ id: 'gebeurtenissen', label: 'Gebeurtenissen' }]
-    if (canTemplates) list.push({ id: 'sjablonen', label: 'Sjablonen' })
-    list.push({ id: 'ontvangers', label: 'Ontvangers' })
-    list.push({ id: 'klantafwijkingen', label: 'Klantafwijkingen' })
+    const list: TabItem[] = [{ id: 'gebeurtenissen', label: t('notificationAdmin.page.tabs.events') }]
+    if (canTemplates) list.push({ id: 'sjablonen', label: t('notificationAdmin.page.tabs.templates') })
+    list.push({ id: 'ontvangers', label: t('notificationAdmin.page.tabs.recipients') })
+    list.push({ id: 'klantafwijkingen', label: t('notificationAdmin.page.tabs.overrides') })
     if (canMessaging) {
-      list.push({ id: 'controle', label: 'Wacht op controle' })
-      list.push({ id: 'verzonden', label: 'Verzonden berichten' })
-      list.push({ id: 'mislukt', label: 'Mislukte berichten' })
+      list.push({ id: 'controle', label: t('notificationAdmin.page.tabs.review') })
+      list.push({ id: 'verzonden', label: t('notificationAdmin.page.tabs.sent') })
+      list.push({ id: 'mislukt', label: t('notificationAdmin.page.tabs.failed') })
     }
     return list
-  }, [canTemplates, canMessaging])
+  }, [canTemplates, canMessaging, t])
 
   const requestedTab = searchParams.get('tab')
   const tab: TabId =
@@ -54,16 +56,15 @@ export function NotificationAdminPage() {
   }
 
   if (!canView) {
-    return <p className="placeholder-text">Je hebt geen rechten om meldingen en e-mails te beheren.</p>
+    return <p className="placeholder-text">{t('notificationAdmin.page.noPermission')}</p>
   }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Meldingen en e-mails' }]} />
-      <PageHeader
-        title="Meldingen en e-mails"
-        subtitle="Wie wordt wanneer verwittigd — per gebeurtenis, per klant, en met welke tekst."
+      <Breadcrumbs
+        items={[{ label: t('navigation.menu.settings'), to: '/settings' }, { label: t('notificationAdmin.page.title') }]}
       />
+      <PageHeader title={t('notificationAdmin.page.title')} subtitle={t('notificationAdmin.page.subtitle')} />
 
       <Tabs tabs={tabs} activeId={tab} onChange={setTab} />
 

@@ -1,5 +1,6 @@
 import { Modal } from '../../../components/ui/Modal'
 import { Button } from '../../../components/ui/Button'
+import { useLocale } from '../../../i18n/localeContext'
 import type { FleetFollowUpResult } from '../utils/preparedFleetDocs'
 
 interface FleetCreateFollowUpDialogProps {
@@ -16,35 +17,40 @@ interface FleetCreateFollowUpDialogProps {
  * The asset IS created (never lost); the failed uploads stay retryable.
  */
 export function FleetCreateFollowUpDialog({ entityLabel, results, busy, onRetry, onClose }: FleetCreateFollowUpDialogProps) {
+  const { t } = useLocale()
   const failed = results.filter((r) => !r.ok)
   const succeeded = results.filter((r) => r.ok)
 
   return (
     <Modal
-      title="Aangemaakt — documenten deels mislukt"
+      title={t('fleet.docs.followUp.title')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Sluiten en naar detailpagina
+            {t('fleet.docs.followUp.close')}
           </Button>
           {failed.length > 0 && (
             <Button onClick={onRetry} disabled={busy}>
-              {busy ? 'Opnieuw proberen…' : `Mislukte opnieuw proberen (${failed.length})`}
+              {busy ? t('fleet.docs.followUp.retrying') : t('fleet.docs.followUp.retry', { count: failed.length })}
             </Button>
           )}
         </>
       }
     >
       <p>
-        {entityLabel} is aangemaakt. {succeeded.length} van {results.length} documenten zijn verwerkt; {failed.length}{' '}
-        mislukt. Je bestanden blijven behouden.
+        {t('fleet.docs.followUp.body', {
+          entity: entityLabel,
+          succeeded: succeeded.length,
+          total: results.length,
+          failed: failed.length,
+        })}
       </p>
       <ul className="followup-results">
         {results.map((r) => (
           <li key={r.key} className={r.ok ? 'followup-ok' : 'followup-failed'}>
-            <span aria-hidden="true">{r.ok ? '✓' : '✗'}</span> Document: {r.label}
+            <span aria-hidden="true">{r.ok ? '✓' : '✗'}</span> {t('fleet.docs.followUp.docLabel', { label: r.label })}
             {!r.ok && r.error && <span className="ui-form-field-error"> — {r.error}</span>}
           </li>
         ))}

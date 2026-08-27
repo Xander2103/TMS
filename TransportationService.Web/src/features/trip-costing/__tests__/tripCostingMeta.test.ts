@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { translate } from '../../../i18n/translations'
 import {
   COST_PHASE_LABELS,
   COST_TYPE_LABELS,
@@ -12,10 +13,12 @@ describe('trip costing metadata', () => {
     const allTypes = Object.keys(COST_TYPE_LABELS) as TripCostType[]
     expect(allTypes).toHaveLength(15)
     for (const type of allTypes) {
-      expect(COST_TYPE_LABELS[type], `label ${type}`).toBeTruthy()
+      // Key-map: de waarde is een vertaalsleutel die in het nl-bundle moet bestaan.
+      expect(COST_TYPE_LABELS[type], `label ${type}`).toBe(`tripCosting.costType.${type}`)
+      expect(translate('nl', COST_TYPE_LABELS[type]), `nl-vertaling ${type}`).not.toBe(COST_TYPE_LABELS[type])
     }
-    expect(COST_PHASE_LABELS.Estimated).toBe('Geschat')
-    expect(COST_PHASE_LABELS.Actual).toBe('Werkelijk')
+    expect(translate('nl', COST_PHASE_LABELS.Estimated)).toBe('Geschat')
+    expect(translate('nl', COST_PHASE_LABELS.Actual)).toBe('Werkelijk')
   })
 
   it('offers only expense-style types for manual lines', () => {

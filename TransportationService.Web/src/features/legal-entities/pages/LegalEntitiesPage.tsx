@@ -11,6 +11,7 @@ import { FormSection } from '../../../components/ui/FormSection'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { getPeppolSchemes } from '../../customers/api/customersApi'
 import { PeppolFieldGroup } from '../../customers/components/PeppolFieldGroup'
 import type { PeppolScheme } from '../../customers/types'
@@ -101,6 +102,7 @@ interface EditorState {
 /** Beheer van eigen (facturerende) juridische entiteiten. */
 export function LegalEntitiesPage() {
   const { showError, showSuccess } = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('legal_entities.manage')
 
@@ -141,7 +143,7 @@ export function LegalEntitiesPage() {
         setLoadError(null)
       })
       .catch((error: unknown) => {
-        if (!cancelled) setLoadError(describeApiError(error, 'Eigen bedrijven konden niet worden geladen.').message)
+        if (!cancelled) setLoadError(describeApiError(error, t('legalEntities.page.loadFailed')).message)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -149,7 +151,7 @@ export function LegalEntitiesPage() {
     return () => {
       cancelled = true
     }
-  }, [reloadToken])
+  }, [reloadToken, t])
 
   // Loading is flipped here (not inside the effect) so the effect only synchronises with the API.
   const reload = useCallback(() => {
@@ -208,11 +210,11 @@ export function LegalEntitiesPage() {
       } else {
         await createLegalEntity(editor.form)
       }
-      showSuccess('Bedrijf opgeslagen.')
+      showSuccess(t('legalEntities.page.saved'))
       setEditor(null)
       reload()
     } catch (error) {
-      const described = describeApiError(error, 'Het bedrijf kon niet worden opgeslagen.')
+      const described = describeApiError(error, t('legalEntities.page.saveFailed'))
       setFormError(described.message)
       setFieldErrors(described.fieldErrors)
     } finally {
@@ -225,12 +227,12 @@ export function LegalEntitiesPage() {
     setBusy(true)
     try {
       await setLegalEntityActive(deactivating.id, false)
-      showSuccess('Bedrijf gedeactiveerd.')
+      showSuccess(t('legalEntities.page.deactivated'))
       setDeactivating(null)
       reload()
     } catch (error) {
       // Surface backend rules (e.g. "de standaardentiteit kan niet worden gedeactiveerd").
-      showError(describeApiError(error, 'Het bedrijf kon niet worden gedeactiveerd.').message)
+      showError(describeApiError(error, t('legalEntities.page.deactivateFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -240,10 +242,10 @@ export function LegalEntitiesPage() {
     setBusy(true)
     try {
       await setLegalEntityActive(entity.id, true)
-      showSuccess('Bedrijf geheractiveerd.')
+      showSuccess(t('legalEntities.page.reactivated'))
       reload()
     } catch (error) {
-      showError(describeApiError(error, 'Het bedrijf kon niet worden geheractiveerd.').message)
+      showError(describeApiError(error, t('legalEntities.page.reactivateFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -256,10 +258,10 @@ export function LegalEntitiesPage() {
     try {
       const updated = await uploadLegalEntityLogo(editor.id, file)
       setEditor((current) => (current ? { ...current, entity: updated } : current))
-      showSuccess('Logo geüpload.')
+      showSuccess(t('legalEntities.page.logoUploaded'))
       reload()
     } catch (error) {
-      showError(describeApiError(error, 'Het logo kon niet worden geüpload.').message)
+      showError(describeApiError(error, t('legalEntities.page.logoUploadFailed')).message)
     } finally {
       setBusy(false)
       if (logoInputRef.current) logoInputRef.current.value = ''
@@ -272,10 +274,10 @@ export function LegalEntitiesPage() {
     try {
       const updated = await deleteLegalEntityLogo(editor.id)
       setEditor((current) => (current ? { ...current, entity: updated } : current))
-      showSuccess('Logo verwijderd.')
+      showSuccess(t('legalEntities.page.logoRemoved'))
       reload()
     } catch (error) {
-      showError(describeApiError(error, 'Het logo kon niet worden verwijderd.').message)
+      showError(describeApiError(error, t('legalEntities.page.logoRemoveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -284,7 +286,7 @@ export function LegalEntitiesPage() {
   const columns: Column<LegalEntity>[] = [
     {
       key: 'name',
-      header: 'Naam',
+      header: t('legalEntities.page.columnName'),
       render: (row) => (
         <div className="le-name">
           <span className="le-name-legal">{row.legalName}</span>
@@ -292,16 +294,21 @@ export function LegalEntitiesPage() {
         </div>
       ),
     },
-    { key: 'vat', header: 'BTW-nummer', render: (row) => row.vatNumber ?? '—' },
+    { key: 'vat', header: t('legalEntities.page.columnVat'), render: (row) => row.vatNumber ?? '—' },
     {
       key: 'default',
-      header: 'Standaard',
-      render: (row) => (row.isDefault ? <Badge tone="info">Standaard</Badge> : null),
+      header: t('legalEntities.page.columnDefault'),
+      render: (row) => (row.isDefault ? <Badge tone="info">{t('legalEntities.page.defaultBadge')}</Badge> : null),
     },
     {
       key: 'status',
-      header: 'Status',
-      render: (row) => (row.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="danger">Inactief</Badge>),
+      header: t('legalEntities.page.columnStatus'),
+      render: (row) =>
+        row.isActive ? (
+          <Badge tone="success">{t('ui.statusBadges.active')}</Badge>
+        ) : (
+          <Badge tone="danger">{t('ui.statusBadges.inactive')}</Badge>
+        ),
     },
     ...(canManage
       ? [
@@ -312,15 +319,15 @@ export function LegalEntitiesPage() {
             render: (row: LegalEntity) => (
               <div className="le-actions">
                 <button type="button" className="le-link" onClick={() => openEdit(row)}>
-                  Bewerken
+                  {t('ui.actions.edit')}
                 </button>
                 {row.isActive ? (
                   <button type="button" className="le-link le-link-danger" onClick={() => setDeactivating(row)}>
-                    Deactiveren
+                    {t('legalEntities.page.deactivateAction')}
                   </button>
                 ) : (
                   <button type="button" className="le-link" onClick={() => void handleReactivate(row)}>
-                    Heractiveren
+                    {t('legalEntities.page.reactivateAction')}
                   </button>
                 )}
               </div>
@@ -332,11 +339,11 @@ export function LegalEntitiesPage() {
 
   return (
     <div className="le-page">
-      <Breadcrumbs items={[{ label: 'Eigen bedrijven' }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.legalEntities') }]} />
       <PageHeader
-        title="Eigen bedrijven"
-        subtitle="Facturerende entiteiten van deze organisatie."
-        action={canManage ? <Button onClick={openCreate}>Nieuw bedrijf</Button> : undefined}
+        title={t('navigation.menu.legalEntities')}
+        subtitle={t('legalEntities.page.subtitle')}
+        action={canManage ? <Button onClick={openCreate}>{t('legalEntities.page.newEntity')}</Button> : undefined}
       />
 
       <DataTable
@@ -345,13 +352,13 @@ export function LegalEntitiesPage() {
         rowKey={(row) => row.id}
         isLoading={loading}
         error={loadError}
-        emptyMessage="Nog geen eigen bedrijven aangemaakt."
-        loadingMessage="Eigen bedrijven laden..."
+        emptyMessage={t('legalEntities.page.empty')}
+        loadingMessage={t('legalEntities.page.loading')}
       />
 
       {editor && (
         <Modal
-          title={editor.id ? 'Bedrijf bewerken' : 'Nieuw bedrijf'}
+          title={editor.id ? t('legalEntities.page.editTitle') : t('legalEntities.page.newEntity')}
           onClose={() => setEditor(null)}
           busy={busy}
         >
@@ -362,11 +369,11 @@ export function LegalEntitiesPage() {
               </p>
             )}
 
-            <FormSection title="Identiteit">
-              {text('legalName', 'Juridische naam', { required: true, maxLength: 200 })}
-              {text('tradingName', 'Handelsnaam', { maxLength: 200 })}
-              {text('companyNumber', 'Ondernemingsnummer', { maxLength: 50 })}
-              {text('vatNumber', 'BTW-nummer', { maxLength: 50 })}
+            <FormSection title={t('legalEntities.form.sectionIdentity')}>
+              {text('legalName', t('legalEntities.form.legalName'), { required: true, maxLength: 200 })}
+              {text('tradingName', t('legalEntities.form.tradingName'), { maxLength: 200 })}
+              {text('companyNumber', t('legalEntities.form.companyNumber'), { maxLength: 50 })}
+              {text('vatNumber', t('legalEntities.form.vatNumber'), { maxLength: 50 })}
               <div className="form-span-all">
                 <PeppolFieldGroup
                   scheme={editor.form.peppolScheme ?? ''}
@@ -393,15 +400,15 @@ export function LegalEntitiesPage() {
               </div>
             </FormSection>
 
-            <FormSection title="Adres">
-              {text('street', 'Straat', { maxLength: 200 })}
-              {text('houseNumber', 'Nummer', { maxLength: 20 })}
-              {text('postalCode', 'Postcode', { maxLength: 20 })}
-              {text('city', 'Gemeente', { maxLength: 100 })}
+            <FormSection title={t('legalEntities.form.sectionAddress')}>
+              {text('street', t('legalEntities.form.street'), { maxLength: 200 })}
+              {text('houseNumber', t('legalEntities.form.houseNumber'), { maxLength: 20 })}
+              {text('postalCode', t('legalEntities.form.postalCode'), { maxLength: 20 })}
+              {text('city', t('legalEntities.form.city'), { maxLength: 100 })}
               <FormField
-                label="Land"
+                label={t('legalEntities.form.country')}
                 htmlFor="le-countryCode"
-                hint="Tweeletterige landcode (bv. BE)."
+                hint={t('legalEntities.form.countryHint')}
                 error={getFieldError(fieldErrors, 'countryCode')}
               >
                 <input
@@ -417,22 +424,22 @@ export function LegalEntitiesPage() {
               </FormField>
             </FormSection>
 
-            <FormSection title="Contact">
-              {text('email', 'E-mail', { maxLength: 200 })}
-              {text('phoneNumber', 'Telefoon', { maxLength: 50 })}
-              {text('website', 'Website', { maxLength: 200 })}
+            <FormSection title={t('legalEntities.form.sectionContact')}>
+              {text('email', t('legalEntities.form.email'), { maxLength: 200 })}
+              {text('phoneNumber', t('legalEntities.form.phone'), { maxLength: 50 })}
+              {text('website', t('legalEntities.form.website'), { maxLength: 200 })}
             </FormSection>
 
-            <FormSection title="Bank">
-              {text('iban', 'IBAN', { maxLength: 50 })}
-              {text('bic', 'BIC', { maxLength: 20 })}
-              {text('bankName', 'Banknaam', { maxLength: 100 })}
+            <FormSection title={t('legalEntities.form.sectionBank')}>
+              {text('iban', t('legalEntities.form.iban'), { maxLength: 50 })}
+              {text('bic', t('legalEntities.form.bic'), { maxLength: 20 })}
+              {text('bankName', t('legalEntities.form.bankName'), { maxLength: 100 })}
             </FormSection>
 
-            <FormSection title="Facturatie">
-              {text('defaultCurrency', 'Valuta (ISO)', { maxLength: 3 })}
+            <FormSection title={t('legalEntities.form.sectionBilling')}>
+              {text('defaultCurrency', t('legalEntities.form.currency'), { maxLength: 3 })}
               <FormField
-                label="Betaaltermijn (dagen)"
+                label={t('legalEntities.form.paymentTermDays')}
                 htmlFor="le-paymentTermDays"
                 error={getFieldError(fieldErrors, 'paymentTermDays')}
               >
@@ -446,12 +453,13 @@ export function LegalEntitiesPage() {
                   onChange={(event) => setField('paymentTermDays', Number(event.target.value) || 0)}
                 />
               </FormField>
-              {text('invoiceNumberFormat', 'Factuurnummerformaat', {
+              {text('invoiceNumberFormat', t('legalEntities.form.invoiceNumberFormat'), {
                 maxLength: 100,
-                hint: 'Tokens: {YYYY} {YY} {MM} {SEQ} {PREFIX}',
+                // Tokens zijn technisch contract; de hint blijft bewust letterlijk in elke taal.
+                hint: t('legalEntities.form.invoiceNumberFormatHint'),
               })}
               <FormField
-                label="Volgnummer-breedte"
+                label={t('legalEntities.form.sequencePadding')}
                 htmlFor="le-invoiceSequencePadding"
                 error={getFieldError(fieldErrors, 'invoiceSequencePadding')}
               >
@@ -465,13 +473,13 @@ export function LegalEntitiesPage() {
                   onChange={(event) => setField('invoiceSequencePadding', Number(event.target.value) || 4)}
                 />
               </FormField>
-              {text('invoicePrefix', 'Voorvoegsel', { maxLength: 20 })}
-              {text('creditNotePrefix', 'Creditnotavoorvoegsel', {
+              {text('invoicePrefix', t('legalEntities.form.invoicePrefix'), { maxLength: 20 })}
+              {text('creditNotePrefix', t('legalEntities.form.creditNotePrefix'), {
                 maxLength: 20,
-                hint: 'Leeg = factuurvoorvoegsel + "CN".',
+                hint: t('legalEntities.form.creditNotePrefixHint'),
               })}
               <FormField
-                label="Factuurvoettekst"
+                label={t('legalEntities.form.invoiceFooter')}
                 htmlFor="le-invoiceFooter"
                 className="form-span-all"
                 error={getFieldError(fieldErrors, 'invoiceFooter')}
@@ -491,19 +499,19 @@ export function LegalEntitiesPage() {
                   disabled={busy}
                   onChange={(event) => setField('isDefault', event.target.checked)}
                 />
-                Standaardentiteit
+                {t('legalEntities.form.defaultEntity')}
               </label>
             </FormSection>
 
             {editor.id && (
-              <FormSection title="Logo" columns={1}>
+              <FormSection title={t('legalEntities.form.sectionLogo')} columns={1}>
                 <div className="le-logo">
                   {editor.entity?.hasLogo ? (
                     <p className="le-logo-current">
-                      Huidig logo: <strong>{editor.entity.logoFileName ?? 'logo'}</strong>
+                      {t('legalEntities.form.currentLogo')} <strong>{editor.entity.logoFileName ?? 'logo'}</strong>
                     </p>
                   ) : (
-                    <p className="le-logo-current">Nog geen logo geüpload.</p>
+                    <p className="le-logo-current">{t('legalEntities.form.noLogoYet')}</p>
                   )}
                   <div className="le-logo-actions">
                     <input
@@ -511,26 +519,26 @@ export function LegalEntitiesPage() {
                       type="file"
                       accept=".png,.jpg,.jpeg,.svg"
                       disabled={busy}
-                      aria-label="Logo uploaden"
+                      aria-label={t('legalEntities.form.logoUploadAria')}
                       onChange={(event) => void handleLogoUpload(event)}
                     />
                     {editor.entity?.hasLogo && (
                       <Button variant="danger" onClick={() => void handleLogoDelete()} disabled={busy}>
-                        Logo verwijderen
+                        {t('legalEntities.form.logoDelete')}
                       </Button>
                     )}
                   </div>
-                  <p className="le-logo-hint">PNG, JPG of SVG, maximaal 2 MB.</p>
+                  <p className="le-logo-hint">{t('legalEntities.form.logoHint')}</p>
                 </div>
               </FormSection>
             )}
 
             <div className="le-form-actions">
               <Button variant="secondary" type="button" onClick={() => setEditor(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" disabled={busy}>
-                {busy ? 'Opslaan…' : 'Opslaan'}
+                {busy ? t('legalEntities.page.savingBusy') : t('ui.actions.save')}
               </Button>
             </div>
           </form>
@@ -539,9 +547,9 @@ export function LegalEntitiesPage() {
 
       {deactivating && (
         <ConfirmDialog
-          title="Bedrijf deactiveren"
-          message={`Weet je zeker dat je "${deactivating.legalName}" wilt deactiveren? Het bedrijf is daarna niet meer selecteerbaar voor nieuwe documenten.`}
-          confirmLabel="Deactiveren"
+          title={t('legalEntities.page.deactivateTitle')}
+          message={t('legalEntities.page.deactivateMessage', { name: deactivating.legalName })}
+          confirmLabel={t('legalEntities.page.deactivateAction')}
           destructive
           busy={busy}
           onConfirm={() => void handleDeactivate()}

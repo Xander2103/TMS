@@ -3,7 +3,8 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { createPartner, updatePartner, type EdiPartner } from '../api/ediApi'
 
@@ -17,6 +18,7 @@ interface PartnerModalProps {
 /** Create/edit modal for a trading partner — code+naam+klant on creation; naam/klant/externe
  * code/profiel/notities/actief afterwards. Never inline-embedded in the partner list. */
 export function PartnerModal({ partner, onClose, onSaved }: PartnerModalProps) {
+  const { t } = useLocale()
   const [code, setCode] = useState(partner?.code ?? '')
   const [name, setName] = useState(partner?.name ?? '')
   const [customerId, setCustomerId] = useState<string | null>(partner?.customerId ?? null)
@@ -43,7 +45,7 @@ export function PartnerModal({ partner, onClose, onSaved }: PartnerModalProps) {
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!name.trim() || (!partner && !code.trim())) {
-      setError('Code en naam zijn verplicht.')
+      setError(t('edi.partnerModal.validation'))
       return
     }
     setBusy(true)
@@ -69,7 +71,7 @@ export function PartnerModal({ partner, onClose, onSaved }: PartnerModalProps) {
       }
       onSaved()
     } catch (err) {
-      setError(describeApiError(err, 'De partner kon niet worden opgeslagen.').message)
+      setError(localizeApiError(t, err, t('edi.partnerModal.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -77,16 +79,16 @@ export function PartnerModal({ partner, onClose, onSaved }: PartnerModalProps) {
 
   return (
     <Modal
-      title={partner ? `Handelspartner bewerken — ${partner.code}` : 'Nieuwe handelspartner'}
+      title={partner ? t('edi.partnerModal.editTitle', { code: partner.code }) : t('edi.partnerModal.newTitle')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('edi.partnerModal.cancel')}
           </Button>
           <Button type="submit" form="edi-partner-form" disabled={busy}>
-            {busy ? 'Bezig...' : 'Opslaan'}
+            {busy ? t('edi.partnerModal.busy') : t('edi.partnerModal.save')}
           </Button>
         </>
       }
@@ -98,25 +100,25 @@ export function PartnerModal({ partner, onClose, onSaved }: PartnerModalProps) {
           </div>
         )}
         {!partner && (
-          <FormField label="Code" htmlFor="edi-partner-code" required hint="Technische partnercode, gebruikt in het inbound-endpoint.">
+          <FormField label={t('edi.partnerModal.codeLabel')} htmlFor="edi-partner-code" required hint={t('edi.partnerModal.codeHint')}>
             <input id="edi-partner-code" value={code} maxLength={50} onChange={(e) => setCode(e.target.value)} disabled={busy} />
           </FormField>
         )}
-        <FormField label="Naam" htmlFor="edi-partner-name" required>
+        <FormField label={t('edi.partnerModal.nameLabel')} htmlFor="edi-partner-name" required>
           <input id="edi-partner-name" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} disabled={busy} />
         </FormField>
-        <FormField label="Klant" htmlFor="edi-partner-customer" hint="Onze klant waarvoor deze partner orders aanlevert.">
+        <FormField label={t('edi.partnerModal.customerLabel')} htmlFor="edi-partner-customer" hint={t('edi.partnerModal.customerHint')}>
           <SearchableSelect
             id="edi-partner-customer"
             value={customerId}
             onChange={setCustomerId}
             options={customers}
-            placeholder="— Geen klant gekoppeld —"
+            placeholder={t('edi.partnerModal.customerPlaceholder')}
             disabled={busy}
-            ariaLabel="Klant"
+            ariaLabel={t('edi.partnerModal.customerAria')}
           />
         </FormField>
-        <FormField label="Externe klantcode" htmlFor="edi-partner-external" hint="De identifier die deze partner zelf voor de klant gebruikt.">
+        <FormField label={t('edi.partnerModal.externalLabel')} htmlFor="edi-partner-external" hint={t('edi.partnerModal.externalHint')}>
           <input
             id="edi-partner-external"
             value={externalCustomerIdentifier}
@@ -126,16 +128,17 @@ export function PartnerModal({ partner, onClose, onSaved }: PartnerModalProps) {
           />
         </FormField>
         {partner && (
-          <FormField label="Notities" htmlFor="edi-partner-notes">
+          <FormField label={t('edi.partnerModal.notesLabel')} htmlFor="edi-partner-notes">
             <input id="edi-partner-notes" value={notes} maxLength={1000} onChange={(e) => setNotes(e.target.value)} disabled={busy} />
           </FormField>
         )}
         <label className="tof-checkbox">
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} disabled={busy} />
-          Actief
+          {t('edi.partnerModal.active')}
         </label>
         <p className="edi-profile-note">
-          Actief profiel: <strong>Generiek JSON</strong> — partnerspecifieke formaten volgen zodra er een specificatie is.
+          {t('edi.partnerModal.profileActive')} <strong>{t('edi.partnerModal.profileName')}</strong>{' '}
+          {t('edi.partnerModal.profileFollowUp')}
         </p>
       </form>
     </Modal>

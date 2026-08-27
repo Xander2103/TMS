@@ -5,8 +5,9 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
-import { AGREEMENT_STATUS_TONE, agreementSamenstelling, agreementStatus } from '../agreementStatus'
+import { AGREEMENT_STATUS_LABELS, AGREEMENT_STATUS_TONE, agreementSamenstelling, agreementStatus } from '../agreementStatus'
 import { listAllPricingAgreements, type PricingAgreement } from '../api/pricingApi'
 import { PricingTableWizard } from '../components/PricingTableWizard'
 
@@ -16,21 +17,23 @@ import { PricingTableWizard } from '../components/PricingTableWizard'
  * chosen calculation basis so a new table starts from a sensible template rather than blank.
  */
 export function PricingTablesPage() {
+  const { t } = useLocale()
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('tariffs.manage')
 
   const [agreements, setAgreements] = useState<PricingAgreement[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [showWizard, setShowWizard] = useState(false)
 
   const reload = useCallback(() => {
     listAllPricingAgreements()
       .then((data) => {
         setAgreements(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
-      .catch(() => setLoadError('De tarieventabellen konden niet worden geladen.'))
+      .catch(() => setLoadErrorKey('tarification.tables.loadError'))
   }, [])
 
   useEffect(() => {
@@ -40,45 +43,61 @@ export function PricingTablesPage() {
   const columns: Column<PricingAgreement>[] = [
     {
       key: 'name',
-      header: 'Naam',
+      header: t('tarification.common.name'),
       render: (a) => (
         <>
           {a.name}
-          {a.baseAgreementId && <Badge tone="info"> Afgeleid van {a.baseAgreementName ?? '—'}</Badge>}
+          {a.baseAgreementId && (
+            <Badge tone="info"> {t('tarification.tables.derivedFrom', { name: a.baseAgreementName ?? '—' })}</Badge>
+          )}
         </>
       ),
     },
-    { key: 'samenstelling', header: 'Samenstelling', render: (a) => <Badge tone="neutral">{agreementSamenstelling(a)}</Badge> },
+    {
+      key: 'samenstelling',
+      header: t('tarification.tables.colComposition'),
+      render: (a) => {
+        const composition = agreementSamenstelling(a)
+        return <Badge tone="neutral">{t(composition.key, composition.params)}</Badge>
+      },
+    },
     {
       key: 'validity',
-      header: 'Geldigheid',
-      render: (a) => `${a.effectiveFrom} — ${a.effectiveUntil ?? 'onbeperkt'}`,
+      header: t('tarification.tables.colValidity'),
+      render: (a) => `${a.effectiveFrom} — ${a.effectiveUntil ?? t('tarification.common.unlimited')}`,
     },
     {
       key: 'status',
-      header: 'Status',
-      render: (a) => <Badge tone={AGREEMENT_STATUS_TONE[agreementStatus(a)]}>{agreementStatus(a)}</Badge>,
+      header: t('tarification.common.status'),
+      render: (a) => {
+        const status = agreementStatus(a)
+        return <Badge tone={AGREEMENT_STATUS_TONE[status]}>{t(AGREEMENT_STATUS_LABELS[status])}</Badge>
+      },
     },
-    { key: 'customers', header: 'Klanten', render: (a) => `Gebruikt door ${a.customerCount} klant${a.customerCount === 1 ? '' : 'en'}` },
-    { key: 'surcharges', header: 'Toeslagen', render: (a) => a.surcharges.length, align: 'right' },
+    {
+      key: 'customers',
+      header: t('tarification.tables.colCustomers'),
+      render: (a) => t('tarification.tables.usedBy', { count: a.customerCount }),
+    },
+    { key: 'surcharges', header: t('tarification.tables.colSurcharges'), render: (a) => a.surcharges.length, align: 'right' },
   ]
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Prijzen' }, { label: 'Tarieventabellen' }]} />
+      <Breadcrumbs items={[{ label: t('tarification.common.pricing') }, { label: t('tarification.tables.title') }]} />
       <PageHeader
-        title="Tarieventabellen"
-        subtitle="Alle prijsafspraken (tarieventabellen): gedeelde, algemene en klantspecifieke tabellen."
-        action={canManage && <Button onClick={() => setShowWizard(true)}>+ Nieuwe tarieventabel</Button>}
+        title={t('tarification.tables.title')}
+        subtitle={t('tarification.tables.subtitle')}
+        action={canManage && <Button onClick={() => setShowWizard(true)}>{t('tarification.tables.newTable')}</Button>}
       />
 
       <DataTable
         columns={columns}
         rows={agreements ?? []}
         rowKey={(a) => a.id}
-        isLoading={agreements === null && !loadError}
-        error={loadError}
-        emptyMessage="Nog geen tarieventabellen. Maak er één aan om te starten."
+        isLoading={agreements === null && !loadErrorKey}
+        error={loadErrorKey ? t(loadErrorKey) : null}
+        emptyMessage={t('tarification.tables.empty')}
         onRowClick={(a) => navigate(`/pricing/tables/${a.id}`)}
       />
 

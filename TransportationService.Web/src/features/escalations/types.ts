@@ -14,12 +14,13 @@ export const ESCALATION_KINDS: EscalationKind[] = [
   'ReturnOverdue',
 ]
 
+/** Vertaalsleutels per escalatiesoort; renderen als t(ESCALATION_KIND_LABELS[kind]). */
 export const ESCALATION_KIND_LABELS: Record<EscalationKind, string> = {
-  NegativeStockUnresolved: 'Negatieve voorraad onopgelost',
-  CriticalStockUnhandled: 'Kritieke voorraad onbehandeld',
-  TaskOverdue: 'Taak achterstallig',
-  AcknowledgementMissing: 'Bevestiging ontbreekt',
-  ReturnOverdue: 'Retour te laat',
+  NegativeStockUnresolved: 'escalations.kind.NegativeStockUnresolved',
+  CriticalStockUnhandled: 'escalations.kind.CriticalStockUnhandled',
+  TaskOverdue: 'escalations.kind.TaskOverdue',
+  AcknowledgementMissing: 'escalations.kind.AcknowledgementMissing',
+  ReturnOverdue: 'escalations.kind.ReturnOverdue',
 }
 
 /** Mirrors GET /api/escalation-policies (camelCase JSON). */

@@ -6,7 +6,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import {
   getAgreementAssignments,
@@ -43,6 +44,7 @@ function adjustmentLabel(assignment: PricingAssignment): string {
 
 /** "Klanten" tab: which customers a shared rate table is assigned to, with an optional per-customer ±% or fixed adjustment on top of the table's own prices. */
 export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: AgreementAssignmentsPanelProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [assignments, setAssignments] = useState<PricingAssignment[] | null>(null)
   const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
@@ -70,10 +72,10 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
   }, [isShared])
 
   if (!isShared) {
-    return <EmptyState message="Klantkoppelingen zijn alleen mogelijk op herbruikbare (gedeelde) tabellen." />
+    return <EmptyState message={t('tarification.assignments.notShared')} />
   }
 
-  if (assignments === null) return <p className="placeholder-text">Klantkoppelingen laden…</p>
+  if (assignments === null) return <p className="placeholder-text">{t('tarification.assignments.loading')}</p>
 
   function asInputs(): PricingAssignmentInput[] {
     return (assignments ?? []).map((a) => ({
@@ -93,9 +95,9 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
       if (message) showSuccess(message)
       return true
     } catch (err) {
-      const described = describeApiError(err, 'De klantkoppelingen konden niet worden opgeslagen.')
-      showError(described.message)
-      setError(described.message)
+      const message = localizeApiError(t, err, t('tarification.assignments.saveError'))
+      showError(message)
+      setError(message)
       return false
     }
   }
@@ -104,7 +106,7 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
     event.preventDefault()
     if (!draft) return
     if (!draft.customerId) {
-      setError('Kies een klant.')
+      setError(t('tarification.common.chooseCustomer'))
       return
     }
 
@@ -122,7 +124,7 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
           notes: draft.notes.trim() || null,
         },
       ],
-      'Klant gekoppeld.',
+      t('tarification.assignments.linked'),
     )
     setBusy(false)
     if (ok) setDraft(null)
@@ -132,13 +134,13 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
     if (!deleteTarget) return
     const target = deleteTarget
     setDeleteTarget(null)
-    await persist(asInputs().filter((a) => a.customerId !== target.customerId), 'Klantkoppeling verwijderd.')
+    await persist(asInputs().filter((a) => a.customerId !== target.customerId), t('tarification.assignments.removed'))
   }
 
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Klantkoppelingen</h3>
+        <h3>{t('tarification.assignments.title')}</h3>
         {canManage && (
           <Button
             onClick={() => {
@@ -146,22 +148,22 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
               setDraft({ customerId: '', mode: 'none', value: '', effectiveFrom: '', effectiveUntil: '', notes: '' })
             }}
           >
-            + Klant koppelen
+            {t('tarification.assignments.link')}
           </Button>
         )}
       </div>
 
-      {assignments.length === 0 && <EmptyState message="Nog geen klanten gekoppeld aan deze tabel." />}
+      {assignments.length === 0 && <EmptyState message={t('tarification.assignments.empty')} />}
       {assignments.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Klant</th>
-              <th>Aanpassing</th>
-              <th>Geldig van</th>
-              <th>Geldig tot</th>
-              <th>Notities</th>
-              {canManage && <th aria-label="Acties" />}
+              <th>{t('tarification.common.customer')}</th>
+              <th>{t('tarification.common.adjustment')}</th>
+              <th>{t('tarification.common.validFrom')}</th>
+              <th>{t('tarification.common.validUntil')}</th>
+              <th>{t('tarification.common.notes')}</th>
+              {canManage && <th aria-label={t('tarification.common.actions')} />}
             </tr>
           </thead>
           <tbody>
@@ -179,7 +181,7 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
                       className="issued-items-link issued-items-link-danger"
                       onClick={() => setDeleteTarget(a)}
                     >
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   </td>
                 )}
@@ -191,16 +193,16 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
 
       {draft && (
         <Modal
-          title="Klant koppelen"
+          title={t('tarification.assignments.modalTitle')}
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="assignment-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -211,7 +213,7 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
                 {error}
               </div>
             )}
-            <FormField label="Klant" htmlFor="assignment-customer" required>
+            <FormField label={t('tarification.common.customer')} htmlFor="assignment-customer" required>
               <SearchableSelect
                 id="assignment-customer"
                 value={draft.customerId || null}
@@ -219,19 +221,19 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
                 options={customerOptions}
               />
             </FormField>
-            <FormField label="Aanpassing" htmlFor="assignment-mode">
+            <FormField label={t('tarification.common.adjustment')} htmlFor="assignment-mode">
               <select
                 id="assignment-mode"
                 value={draft.mode}
                 onChange={(e) => setDraft((d) => (d ? { ...d, mode: e.target.value as AssignmentDraft['mode'] } : d))}
               >
-                <option value="none">Geen</option>
-                <option value="percent">Percentage</option>
-                <option value="fixed">Vast bedrag</option>
+                <option value="none">{t('tarification.common.none')}</option>
+                <option value="percent">{t('tarification.common.percentage')}</option>
+                <option value="fixed">{t('tarification.common.fixedAmount')}</option>
               </select>
             </FormField>
             {draft.mode !== 'none' && (
-              <FormField label="Waarde" htmlFor="assignment-value">
+              <FormField label={t('tarification.common.value')} htmlFor="assignment-value">
                 <input
                   id="assignment-value"
                   type="number"
@@ -242,7 +244,7 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
               </FormField>
             )}
             <div className="issued-items-form-row">
-              <FormField label="Geldig van" htmlFor="assignment-from" hint="Leeg = altijd.">
+              <FormField label={t('tarification.common.validFrom')} htmlFor="assignment-from" hint={t('tarification.assignments.fromHint')}>
                 <input
                   id="assignment-from"
                   type="date"
@@ -250,7 +252,7 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
                   onChange={(e) => setDraft((d) => (d ? { ...d, effectiveFrom: e.target.value } : d))}
                 />
               </FormField>
-              <FormField label="Geldig tot" htmlFor="assignment-until" hint="Leeg = onbeperkt.">
+              <FormField label={t('tarification.common.validUntil')} htmlFor="assignment-until" hint={t('tarification.assignments.untilHint')}>
                 <input
                   id="assignment-until"
                   type="date"
@@ -259,7 +261,7 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
                 />
               </FormField>
             </div>
-            <FormField label="Notities" htmlFor="assignment-notes">
+            <FormField label={t('tarification.common.notes')} htmlFor="assignment-notes">
               <input
                 id="assignment-notes"
                 value={draft.notes}
@@ -273,9 +275,9 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Klantkoppeling verwijderen"
-          message={`Koppeling met "${deleteTarget.customerName}" verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('tarification.assignments.deleteTitle')}
+          message={t('tarification.assignments.deleteMessage', { name: deleteTarget.customerName })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

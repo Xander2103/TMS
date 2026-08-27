@@ -6,10 +6,11 @@ import { Badge } from '../../../components/ui/Badge'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { LookupSelect } from '../../master-data/components/LookupSelect'
 import {
-  CUSTOMER_CONTACT_TYPE_LABELS,
+  CUSTOMER_CONTACT_TYPE_LABEL_KEYS,
   CUSTOMER_CONTACT_TYPES,
   type CustomerContact,
   type CustomerContactInput,
@@ -30,7 +31,14 @@ function contactDisplayName(contact: CustomerContact): string {
   return contact.displayName?.trim() || `${contact.firstName} ${contact.lastName}`
 }
 
+/** Vertaald label voor een contacttype; onbekende (nieuwe) enumwaarden vallen terug op de code. */
+function contactTypeLabel(t: TranslateFn, type: CustomerContactType): string {
+  const key = CUSTOMER_CONTACT_TYPE_LABEL_KEYS[type]
+  return key ? t(key) : type
+}
+
 export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate, onRemove }: CustomerContactsPanelProps) {
+  const { t } = useLocale()
   const [dialog, setDialog] = useState<DialogState>(null)
   const [removeTarget, setRemoveTarget] = useState<CustomerContact | null>(null)
   const [typeFilter, setTypeFilter] = useState<CustomerContactType | ''>('')
@@ -44,44 +52,44 @@ export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate,
   const columns: Column<CustomerContact>[] = [
     {
       key: 'name',
-      header: 'Naam',
+      header: t('customers.contacts.columnName'),
       render: (contact) => (
         <span className="customer-contact-name">
           {contactDisplayName(contact)}{' '}
-          {!contact.isActive && <Badge tone="neutral">Inactief</Badge>}
+          {!contact.isActive && <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>}
         </span>
       ),
     },
     {
       key: 'type',
-      header: 'Type',
+      header: t('customers.contacts.type'),
       render: (contact) => (
         <span className="customer-contact-name">
-          {CUSTOMER_CONTACT_TYPE_LABELS[contact.contactType] ?? contact.contactType}
+          {contactTypeLabel(t, contact.contactType)}
           {/* Primair geldt binnen het type: hoogstens één primaire contactpersoon per type. */}
-          {contact.isPrimary && <Badge tone="info">Primair</Badge>}
+          {contact.isPrimary && <Badge tone="info">{t('customers.contacts.primaryBadge')}</Badge>}
         </span>
       ),
     },
-    { key: 'role', header: 'Functie', render: (contact) => contact.role ?? '—' },
+    { key: 'role', header: t('customers.contacts.role'), render: (contact) => contact.role ?? '—' },
     {
       key: 'department',
-      header: 'Afdeling',
+      header: t('customers.contacts.department'),
       render: (contact) => (contact.departmentId ? (departmentNames.get(contact.departmentId) ?? '—') : '—'),
     },
-    { key: 'email', header: 'E-mail', render: (contact) => contact.email ?? '—' },
-    { key: 'phone', header: 'Telefoon', render: (contact) => contact.phoneNumber ?? '—' },
-    { key: 'mobile', header: 'GSM', render: (contact) => contact.mobilePhone ?? '—' },
+    { key: 'email', header: t('customers.contacts.email'), render: (contact) => contact.email ?? '—' },
+    { key: 'phone', header: t('customers.contacts.phone'), render: (contact) => contact.phoneNumber ?? '—' },
+    { key: 'mobile', header: t('customers.contacts.mobile'), render: (contact) => contact.mobilePhone ?? '—' },
     {
       key: 'actions',
-      header: 'Acties',
+      header: t('customers.contacts.columnActions'),
       render: (contact) => (
         <span className="customer-contact-actions">
           <Button variant="ghost" onClick={() => setDialog({ mode: 'edit', contact })}>
-            Bewerken
+            {t('ui.actions.edit')}
           </Button>
           <Button variant="ghost" onClick={() => setRemoveTarget(contact)}>
-            Verwijderen
+            {t('ui.actions.delete')}
           </Button>
         </span>
       ),
@@ -91,25 +99,25 @@ export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate,
   return (
     <div className="customer-contacts">
       <div className="page-header">
-        <h3 style={{ margin: 0 }}>Contactpersonen</h3>
+        <h3 style={{ margin: 0 }}>{t('customers.contacts.title')}</h3>
         <Button variant="secondary" onClick={() => setDialog({ mode: 'create' })}>
-          + Contact toevoegen
+          {t('customers.contacts.addContact')}
         </Button>
       </div>
 
       <div className="customer-locations-toolbar">
         <label className="customer-form-muted" htmlFor="ct-type-filter">
-          Type
+          {t('customers.contacts.type')}
         </label>
         <select
           id="ct-type-filter"
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as CustomerContactType | '')}
         >
-          <option value="">Alle types</option>
+          <option value="">{t('customers.contacts.allTypes')}</option>
           {CUSTOMER_CONTACT_TYPES.map((type) => (
             <option key={type} value={type}>
-              {CUSTOMER_CONTACT_TYPE_LABELS[type]}
+              {contactTypeLabel(t, type)}
             </option>
           ))}
         </select>
@@ -121,7 +129,7 @@ export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate,
         rowKey={(contact) => contact.id}
         isLoading={false}
         error={null}
-        emptyMessage="Nog geen contactpersonen."
+        emptyMessage={t('customers.contacts.empty')}
       />
 
       {dialog && (
@@ -138,9 +146,11 @@ export function CustomerContactsPanel({ contacts, isSubmitting, onAdd, onUpdate,
 
       {removeTarget && (
         <ConfirmDialog
-          title="Contactpersoon verwijderen"
-          message={`Weet u zeker dat u '${removeTarget.firstName} ${removeTarget.lastName}' wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('customers.contacts.removeTitle')}
+          message={t('customers.contacts.removeMessage', {
+            name: `${removeTarget.firstName} ${removeTarget.lastName}`,
+          })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={isSubmitting}
           onConfirm={async () => {
@@ -165,6 +175,7 @@ function ContactDialog({
   onSubmit: (input: CustomerContactInput) => void
   onClose: () => void
 }) {
+  const { t } = useLocale()
   const [firstName, setFirstName] = useState(contact?.firstName ?? '')
   const [lastName, setLastName] = useState(contact?.lastName ?? '')
   const [displayName, setDisplayName] = useState(contact?.displayName ?? '')
@@ -184,8 +195,8 @@ function ContactDialog({
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
     const next: { firstName?: string; lastName?: string } = {}
-    if (!firstName.trim()) next.firstName = 'Voornaam is verplicht.'
-    if (!lastName.trim()) next.lastName = 'Achternaam is verplicht.'
+    if (!firstName.trim()) next.firstName = t('customers.contacts.firstNameRequired')
+    if (!lastName.trim()) next.lastName = t('customers.contacts.lastNameRequired')
     if (Object.keys(next).length > 0) {
       setErrors(next)
       return
@@ -210,79 +221,79 @@ function ContactDialog({
 
   return (
     <Modal
-      title={contact ? 'Contactpersoon bewerken' : 'Nieuwe contactpersoon'}
+      title={contact ? t('customers.contacts.editTitle') : t('customers.contacts.newTitle')}
       onClose={onClose}
       busy={isSubmitting}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="contact-form" disabled={isSubmitting}>
-            {isSubmitting ? 'Opslaan...' : 'Opslaan'}
+            {isSubmitting ? t('customers.common.saving') : t('ui.actions.save')}
           </Button>
         </>
       }
     >
       <form id="contact-form" onSubmit={handleSubmit} className="customer-form">
-        <FormField label="Voornaam" htmlFor="ct-first" error={errors.firstName} required>
+        <FormField label={t('customers.contacts.firstName')} htmlFor="ct-first" error={errors.firstName} required>
           <input id="ct-first" value={firstName} onChange={(e) => setFirstName(e.target.value)} aria-invalid={errors.firstName ? 'true' : undefined} maxLength={100} autoFocus />
         </FormField>
-        <FormField label="Achternaam" htmlFor="ct-last" error={errors.lastName} required>
+        <FormField label={t('customers.contacts.lastName')} htmlFor="ct-last" error={errors.lastName} required>
           <input id="ct-last" value={lastName} onChange={(e) => setLastName(e.target.value)} aria-invalid={errors.lastName ? 'true' : undefined} maxLength={100} />
         </FormField>
-        <FormField label="Weergavenaam" htmlFor="ct-display" hint="Leeg = voornaam + achternaam.">
+        <FormField label={t('customers.contacts.displayName')} htmlFor="ct-display" hint={t('customers.contacts.displayNameHint')}>
           <input id="ct-display" value={displayName} onChange={(e) => setDisplayName(e.target.value)} maxLength={200} />
         </FormField>
-        <FormField label="Roepnaam" htmlFor="ct-nickname">
+        <FormField label={t('customers.fields.nickname')} htmlFor="ct-nickname">
           <input id="ct-nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={100} />
         </FormField>
-        <FormField label="Functie" htmlFor="ct-role">
+        <FormField label={t('customers.contacts.role')} htmlFor="ct-role">
           <input id="ct-role" value={role} onChange={(e) => setRole(e.target.value)} maxLength={100} />
         </FormField>
-        <FormField label="Type" htmlFor="ct-type" hint="Primair geldt binnen dit type.">
+        <FormField label={t('customers.contacts.type')} htmlFor="ct-type" hint={t('customers.contacts.typeHint')}>
           <select id="ct-type" value={contactType} onChange={(e) => setContactType(e.target.value as CustomerContactType)}>
             {CUSTOMER_CONTACT_TYPES.map((type) => (
               <option key={type} value={type}>
-                {CUSTOMER_CONTACT_TYPE_LABELS[type]}
+                {contactTypeLabel(t, type)}
               </option>
             ))}
           </select>
         </FormField>
-        <FormField label="Afdeling" htmlFor="ct-department">
+        <FormField label={t('customers.contacts.department')} htmlFor="ct-department">
           <LookupSelect
             id="ct-department"
             basePath="/api/contact-departments"
             viewPermission="contact_departments.view"
             managePermission="contact_departments.manage"
-            singular="afdeling"
+            singular="masterData.singular.departments"
             value={departmentId}
             onChange={setDepartmentId}
-            placeholder="— Geen afdeling —"
+            placeholder={t('customers.contacts.noDepartment')}
           />
         </FormField>
-        <FormField label="E-mail" htmlFor="ct-email">
+        <FormField label={t('customers.contacts.email')} htmlFor="ct-email">
           <input id="ct-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} />
         </FormField>
-        <FormField label="Telefoon" htmlFor="ct-phone">
+        <FormField label={t('customers.contacts.phone')} htmlFor="ct-phone">
           <input id="ct-phone" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} maxLength={30} />
         </FormField>
-        <FormField label="GSM" htmlFor="ct-mobile">
+        <FormField label={t('customers.contacts.mobile')} htmlFor="ct-mobile">
           <input id="ct-mobile" value={mobilePhone} onChange={(e) => setMobilePhone(e.target.value)} maxLength={30} />
         </FormField>
-        <FormField label="Voorkeurstaal" htmlFor="ct-language" hint="Taalcode, bv. nl, fr of en.">
+        <FormField label={t('customers.form.preferredLanguage')} htmlFor="ct-language" hint={t('customers.contacts.languageHint')}>
           <input id="ct-language" value={preferredLanguageCode} onChange={(e) => setPreferredLanguageCode(e.target.value)} maxLength={10} />
         </FormField>
-        <FormField label="Notities" htmlFor="ct-notes">
+        <FormField label={t('customers.contacts.notes')} htmlFor="ct-notes">
           <textarea id="ct-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={1000} />
         </FormField>
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={isPrimary} onChange={(e) => setIsPrimary(e.target.checked)} />
-          Primair voor dit type
+          {t('customers.contacts.primaryForType')}
         </label>
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-          Actief
+          {t('ui.statusBadges.active')}
         </label>
       </form>
     </Modal>

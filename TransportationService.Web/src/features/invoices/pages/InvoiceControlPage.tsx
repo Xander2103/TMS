@@ -5,7 +5,8 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   createInvoice,
   getInvoiceControl,
@@ -15,15 +16,8 @@ import {
   type InvoiceProposal,
 } from '../api/invoicesApi'
 import { euro } from '../types'
+import { READINESS_REASON_KEYS } from '../utils/readiness'
 import './invoices.css'
-
-const READINESS_REASON_TEXT: Record<string, string> = {
-  'pricing.none': 'nog geen prijs',
-  'pricing.coverage.partial': 'niet alle onderdelen geprijsd',
-  'pricing.coverage.none': 'geen onderdeel volledig geprijsd',
-  'pricing.stale': 'prijs verouderd — herbereken',
-  'pod.missing': 'afleverbewijs ontbreekt',
-}
 
 /**
  * Wave 10: de facturatiecontrole-werkplek. Voorstellen volgen de groeperingsvoorkeur van de
@@ -35,6 +29,7 @@ const READINESS_REASON_TEXT: Record<string, string> = {
  */
 export function InvoiceControlPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [control, setControl] = useState<InvoiceControl | null>(null)
   const [busy, setBusy] = useState(false)
@@ -68,7 +63,7 @@ export function InvoiceControlPage() {
   async function createFromProposal(proposal: InvoiceProposal) {
     const orders = selectedOrders(proposal)
     if (orders.length === 0) {
-      showError('Vink minstens één order aan voor de factuur.')
+      showError(t('invoices.control.needsOrder'))
       return
     }
     setBusy(true)
@@ -80,10 +75,10 @@ export function InvoiceControlPage() {
         manualLines: [],
         notes: null,
       })
-      showSuccess(`Factuur ${invoice.invoiceNumber ?? ''} aangemaakt (${orders.length} orders).`)
+      showSuccess(t('invoices.control.created', { number: invoice.invoiceNumber ?? '', total: orders.length }))
       navigate(`/invoices/${invoice.id}`)
     } catch (err) {
-      showError(describeApiError(err, 'De factuur kon niet worden aangemaakt.').message)
+      showError(localizeApiError(t, err, t('invoices.new.createError')))
     } finally {
       setBusy(false)
     }
@@ -97,17 +92,17 @@ export function InvoiceControlPage() {
 
   async function confirmSnooze(orderId: string) {
     if (!snoozeUntil) {
-      showError('Kies een datum tot wanneer de facturatie wordt uitgesteld.')
+      showError(t('invoices.control.snoozeMissingDate'))
       return
     }
     setBusy(true)
     try {
       await snoozeInvoiceControlOrder(orderId, { until: snoozeUntil, reason: snoozeReason.trim() || null })
-      showSuccess('Facturatie uitgesteld.')
+      showSuccess(t('invoices.control.snoozed'))
       setSnoozeTargetId(null)
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'Het uitstel kon niet worden opgeslagen.').message)
+      showError(localizeApiError(t, err, t('invoices.control.snoozeError')))
     } finally {
       setBusy(false)
     }
@@ -117,10 +112,10 @@ export function InvoiceControlPage() {
     setBusy(true)
     try {
       await snoozeInvoiceControlOrder(orderId, { until: null, reason: null })
-      showSuccess('Uitstel opgeheven — de order telt weer mee.')
+      showSuccess(t('invoices.control.snoozeCleared'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'Het uitstel kon niet worden opgeheven.').message)
+      showError(localizeApiError(t, err, t('invoices.control.snoozeClearError')))
     } finally {
       setBusy(false)
     }
@@ -132,23 +127,23 @@ export function InvoiceControlPage() {
       <span className="inv-snooze-editor">
         <input
           type="date"
-          aria-label={`Uitstellen tot voor ${order.orderNumber}`}
+          aria-label={t('invoices.control.snoozeUntilFor', { number: order.orderNumber })}
           value={snoozeUntil}
           onChange={(e) => setSnoozeUntil(e.target.value)}
           disabled={busy}
         />
         <input
-          aria-label={`Reden van uitstel voor ${order.orderNumber}`}
-          placeholder="Reden"
+          aria-label={t('invoices.control.snoozeReasonFor', { number: order.orderNumber })}
+          placeholder={t('invoices.common.reason')}
           value={snoozeReason}
           onChange={(e) => setSnoozeReason(e.target.value)}
           disabled={busy}
         />
         <Button variant="secondary" disabled={busy} onClick={() => void confirmSnooze(order.transportOrderId)}>
-          Bevestig uitstel
+          {t('invoices.control.confirmSnooze')}
         </Button>
         <Button variant="ghost" disabled={busy} onClick={() => setSnoozeTargetId(null)}>
-          Annuleren
+          {t('ui.actions.cancel')}
         </Button>
       </span>
     )
@@ -156,17 +151,17 @@ export function InvoiceControlPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Facturen', to: '/invoices' }, { label: 'Facturatiecontrole' }]} />
+      <Breadcrumbs items={[{ label: t('invoices.list.title'), to: '/invoices' }, { label: t('invoices.control.title') }]} />
       <PageHeader
-        title="Facturatiecontrole"
-        subtitle="Voorstellen volgens de klantvoorkeur, en per order waarom die nog niet factureerbaar is."
+        title={t('invoices.control.title')}
+        subtitle={t('invoices.control.subtitle')}
       />
 
-      {control === null && <p className="placeholder-text">Werkplek laden…</p>}
+      {control === null && <p className="placeholder-text">{t('invoices.control.loading')}</p>}
 
       {control && control.pendingCharges.length > 0 && (
         <section className="ui-form-section">
-          <h3>Goedgekeurde doorrekeningen — handmatig toe te voegen</h3>
+          <h3>{t('invoices.control.pendingChargesTitle')}</h3>
           {control.pendingCharges.map((line, index) => (
             <p key={index} className="inv-period-warning">{line}</p>
           ))}
@@ -175,15 +170,19 @@ export function InvoiceControlPage() {
 
       {control && (
         <section className="ui-form-section">
-          <h3>Factuurvoorstellen ({control.proposals.length})</h3>
-          {control.proposals.length === 0 && <p className="placeholder-text">Geen orders klaar voor facturatie.</p>}
+          <h3>{t('invoices.control.proposalsTitle', { total: control.proposals.length })}</h3>
+          {control.proposals.length === 0 && <p className="placeholder-text">{t('invoices.control.noProposals')}</p>}
           {control.proposals.map((proposal) => (
             <div key={proposal.customerId + proposal.groupLabel} className="wh-card">
               <div className="wh-card-head">
                 <div>
                   <h4 style={{ margin: 0 }}>{proposal.customerName} — {proposal.groupLabel}</h4>
                   <p className="wh-muted">
-                    {selectedOrders(proposal).length} van {proposal.orders.length} orders aangevinkt · {euro(proposal.totalAmount)}
+                    {t('invoices.control.selectedSummary', {
+                      selected: selectedOrders(proposal).length,
+                      total: proposal.orders.length,
+                      amount: euro(proposal.totalAmount),
+                    })}
                   </p>
                 </div>
                 <Button
@@ -191,12 +190,12 @@ export function InvoiceControlPage() {
                   disabled={busy || selectedOrders(proposal).length === 0}
                   onClick={() => void createFromProposal(proposal)}
                 >
-                  Maak factuur
+                  {t('invoices.control.createInvoice')}
                 </Button>
               </div>
               <table className="issued-items-table">
                 <thead>
-                  <tr><th /><th>Order</th><th>Datum</th><th>Dossier</th><th>Bedrag</th><th /></tr>
+                  <tr><th /><th>{t('invoices.control.columns.order')}</th><th>{t('invoices.control.columns.date')}</th><th>{t('invoices.control.columns.dossier')}</th><th>{t('invoices.control.columns.amount')}</th><th /></tr>
                 </thead>
                 <tbody>
                   {proposal.orders.map((order) => (
@@ -204,7 +203,7 @@ export function InvoiceControlPage() {
                       <td>
                         <input
                           type="checkbox"
-                          aria-label={`Order ${order.orderNumber} meenemen op de factuur`}
+                          aria-label={t('invoices.control.includeOrder', { number: order.orderNumber })}
                           checked={!deselected.has(order.transportOrderId)}
                           disabled={busy}
                           onChange={() => toggleOrder(order.transportOrderId)}
@@ -224,10 +223,10 @@ export function InvoiceControlPage() {
                             disabled={busy}
                             onClick={() => openSnooze(order.transportOrderId)}
                           >
-                            Uitstellen
+                            {t('invoices.control.snoozeAction')}
                           </button>
                         )}
-                        <Link to={`/transport-orders/${order.transportOrderId}`}>Naar opdracht</Link>
+                        <Link to={`/transport-orders/${order.transportOrderId}`}>{t('invoices.control.toOrder')}</Link>
                       </td>
                     </tr>
                   ))}
@@ -240,12 +239,12 @@ export function InvoiceControlPage() {
 
       {control && (
         <section className="ui-form-section">
-          <h3>Nakijken vóór facturatie ({control.needsReview.length})</h3>
-          {control.needsReview.length === 0 && <p className="placeholder-text">Niets na te kijken — alles is klaar of nog onderweg.</p>}
+          <h3>{t('invoices.control.reviewTitle', { total: control.needsReview.length })}</h3>
+          {control.needsReview.length === 0 && <p className="placeholder-text">{t('invoices.control.reviewEmpty')}</p>}
           {control.needsReview.length > 0 && (
             <table className="issued-items-table">
               <thead>
-                <tr><th>Order</th><th>Datum</th><th>Dossier</th><th>Bedrag</th><th>Redenen</th><th /></tr>
+                <tr><th>{t('invoices.control.columns.order')}</th><th>{t('invoices.control.columns.date')}</th><th>{t('invoices.control.columns.dossier')}</th><th>{t('invoices.control.columns.amount')}</th><th>{t('invoices.control.columns.reasons')}</th><th /></tr>
               </thead>
               <tbody>
                 {control.needsReview.map((order) => (
@@ -256,7 +255,9 @@ export function InvoiceControlPage() {
                     <td>{order.agreedPrice !== null ? euro(order.agreedPrice) : '—'}</td>
                     <td>
                       {order.reasons.map((reason) => (
-                        <Badge key={reason} tone="warning">{READINESS_REASON_TEXT[reason] ?? reason}</Badge>
+                        <Badge key={reason} tone="warning">
+                          {READINESS_REASON_KEYS[reason] ? t(READINESS_REASON_KEYS[reason]) : reason}
+                        </Badge>
                       ))}
                     </td>
                     <td className="issued-items-row-actions">
@@ -269,10 +270,10 @@ export function InvoiceControlPage() {
                           disabled={busy}
                           onClick={() => openSnooze(order.transportOrderId)}
                         >
-                          Uitstellen
+                          {t('invoices.control.snoozeAction')}
                         </button>
                       )}
-                      <Link to={`/transport-orders/${order.transportOrderId}`}>Naar opdracht</Link>
+                      <Link to={`/transport-orders/${order.transportOrderId}`}>{t('invoices.control.toOrder')}</Link>
                     </td>
                   </tr>
                 ))}
@@ -284,10 +285,10 @@ export function InvoiceControlPage() {
 
       {control && control.snoozed.length > 0 && (
         <section className="ui-form-section">
-          <h3>Uitgesteld ({control.snoozed.length})</h3>
+          <h3>{t('invoices.control.snoozedTitle', { total: control.snoozed.length })}</h3>
           <table className="issued-items-table">
             <thead>
-              <tr><th>Order</th><th>Datum</th><th>Dossier</th><th>Bedrag</th><th>Uitgesteld tot</th><th>Reden</th><th /></tr>
+              <tr><th>{t('invoices.control.columns.order')}</th><th>{t('invoices.control.columns.date')}</th><th>{t('invoices.control.columns.dossier')}</th><th>{t('invoices.control.columns.amount')}</th><th>{t('invoices.control.columns.snoozedUntil')}</th><th>{t('invoices.common.reason')}</th><th /></tr>
             </thead>
             <tbody>
               {control.snoozed.map((order) => (
@@ -305,9 +306,9 @@ export function InvoiceControlPage() {
                       disabled={busy}
                       onClick={() => void clearSnooze(order.transportOrderId)}
                     >
-                      Uitstel opheffen
+                      {t('invoices.control.clearSnooze')}
                     </button>
-                    <Link to={`/transport-orders/${order.transportOrderId}`}>Naar opdracht</Link>
+                    <Link to={`/transport-orders/${order.transportOrderId}`}>{t('invoices.control.toOrder')}</Link>
                   </td>
                 </tr>
               ))}

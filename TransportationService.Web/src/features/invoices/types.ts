@@ -1,10 +1,11 @@
 export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Cancelled'
 
+/** Vertaalsleutels — renderen als t(INVOICE_STATUS_LABELS[status]). */
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
-  Draft: 'Concept',
-  Sent: 'Verzonden',
-  Paid: 'Betaald',
-  Cancelled: 'Geannuleerd',
+  Draft: 'invoices.status.Draft',
+  Sent: 'invoices.status.Sent',
+  Paid: 'invoices.status.Paid',
+  Cancelled: 'invoices.status.Cancelled',
 }
 
 export const INVOICE_STATUSES: InvoiceStatus[] = ['Draft', 'Sent', 'Paid', 'Cancelled']
@@ -16,11 +17,12 @@ export const INVOICE_STATUS_TONE: Record<InvoiceStatus, 'neutral' | 'success' | 
   Cancelled: 'danger',
 }
 
+/** Vertaalsleutels — renderen als t(INVOICE_TRANSITION_LABELS[target]). */
 export const INVOICE_TRANSITION_LABELS: Record<InvoiceStatus, string> = {
-  Draft: 'Terug naar concept',
-  Sent: 'Verzenden',
-  Paid: 'Markeer als betaald',
-  Cancelled: 'Annuleren',
+  Draft: 'invoices.transition.Draft',
+  Sent: 'invoices.transition.Sent',
+  Paid: 'invoices.transition.Paid',
+  Cancelled: 'invoices.transition.Cancelled',
 }
 
 export interface InvoiceListItem {

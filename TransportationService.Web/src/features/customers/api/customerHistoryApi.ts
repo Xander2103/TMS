@@ -12,7 +12,10 @@ export interface CustomerHistoryEntry {
   userName: string | null
   action: string
   actionLabel: string
+  /** Legacy Dutch display label; prefer `categoryCode` for filtering and translation. */
   category: string
+  /** Stable category code (customer|contacts|locations|billing|communication). */
+  categoryCode: string
   changes: CustomerHistoryChange[]
   summary: string
 }

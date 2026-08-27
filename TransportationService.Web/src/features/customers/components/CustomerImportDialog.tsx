@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { describeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   commitCustomerImport,
   downloadCustomerImportErrorWorkbook,
@@ -19,14 +20,16 @@ interface CustomerImportDialogProps {
   onImported: () => void
 }
 
-const ACTION_PRESENTATION: Record<CustomerImportRowAction, { label: string; tone: BadgeTone }> = {
-  Create: { label: 'Nieuw', tone: 'success' },
-  Update: { label: 'Bijwerken', tone: 'info' },
-  Error: { label: 'Fout', tone: 'danger' },
+/** Vertaalsleutel + badge-toon per rij-actie (toon blijft op de code gekeyd). */
+const ACTION_PRESENTATION: Record<CustomerImportRowAction, { labelKey: string; tone: BadgeTone }> = {
+  Create: { labelKey: 'customers.import.actionCreate', tone: 'success' },
+  Update: { labelKey: 'customers.import.actionUpdate', tone: 'info' },
+  Error: { labelKey: 'customers.import.actionError', tone: 'danger' },
 }
 
 /** Excel customer import: template download, preview and (all-or-nothing) commit. */
 export function CustomerImportDialog({ onClose, onImported }: CustomerImportDialogProps) {
+  const { t } = useLocale()
   const [file, setFile] = useState<File | null>(null)
   const [allowUpdates, setAllowUpdates] = useState(false)
   const [allOrNothing, setAllOrNothing] = useState(true)
@@ -49,7 +52,7 @@ export function CustomerImportDialog({ onClose, onImported }: CustomerImportDial
     try {
       await downloadCustomerImportTemplate()
     } catch (err) {
-      setError(describeApiError(err, 'Het sjabloon kon niet worden gedownload.').message)
+      setError(describeApiError(err, t('customers.import.templateFailed')).message)
     }
   }
 
@@ -61,7 +64,7 @@ export function CustomerImportDialog({ onClose, onImported }: CustomerImportDial
     try {
       setPreview(await previewCustomerImport(file))
     } catch (err) {
-      setError(describeApiError(err, 'Het voorbeeld kon niet worden gemaakt.').message)
+      setError(describeApiError(err, t('customers.import.previewFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -75,13 +78,13 @@ export function CustomerImportDialog({ onClose, onImported }: CustomerImportDial
       const commit = await commitCustomerImport(file, { allOrNothing, allowUpdates })
       setResult(commit)
       if (!commit.committed) {
-        setError('Import afgebroken: het bestand bevat fouten (alles-of-niets).')
+        setError(t('customers.import.abortedAllOrNothing'))
       }
       if (commit.committed) {
         onImported()
       }
     } catch (err) {
-      setError(describeApiError(err, 'De import is mislukt.').message)
+      setError(describeApiError(err, t('customers.import.commitFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -89,32 +92,32 @@ export function CustomerImportDialog({ onClose, onImported }: CustomerImportDial
 
   return (
     <Modal
-      title="Klanten importeren"
+      title={t('customers.import.title')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Sluiten
+            {t('ui.actions.close')}
           </Button>
           <Button onClick={() => void handlePreview()} disabled={busy || !file}>
-            Voorbeeld
+            {t('customers.import.previewAction')}
           </Button>
           <Button onClick={() => void handleCommit()} disabled={busy || !file || preview === null || result?.committed === true}>
-            Importeren
+            {t('customers.import.importAction')}
           </Button>
         </>
       }
     >
       <div className="customer-import-dialog">
         <p className="customer-import-intro">
-          Importeer klanten uit een Excel-bestand.{' '}
+          {t('customers.import.intro')}{' '}
           <button type="button" className="customer-import-template-link" onClick={() => void handleTemplate()} disabled={busy}>
-            Sjabloon downloaden
+            {t('customers.import.templateDownload')}
           </button>
         </p>
 
-        <FormField label="Bestand (.xlsx)" htmlFor="cust-import-file">
+        <FormField label={t('customers.import.fileField')} htmlFor="cust-import-file">
           <input
             id="cust-import-file"
             type="file"
@@ -132,7 +135,7 @@ export function CustomerImportDialog({ onClose, onImported }: CustomerImportDial
               onChange={(e) => setAllowUpdates(e.target.checked)}
               disabled={busy}
             />
-            Bestaande klanten bijwerken
+            {t('customers.import.allowUpdates')}
           </label>
           <label className="customer-form-checkbox">
             <input
@@ -141,9 +144,9 @@ export function CustomerImportDialog({ onClose, onImported }: CustomerImportDial
               onChange={(e) => setAllOrNothing(e.target.checked)}
               disabled={busy}
             />
-            Alles-of-niets
+            {t('customers.import.allOrNothing')}
           </label>
-          <p className="customer-import-hint">Bij fouten wordt niets geïmporteerd.</p>
+          <p className="customer-import-hint">{t('customers.import.allOrNothingHint')}</p>
         </div>
 
         {error && (
@@ -156,23 +159,30 @@ export function CustomerImportDialog({ onClose, onImported }: CustomerImportDial
           <div className="customer-import-summary">
             <p>
               {result.committed
-                ? `Import klaar: ${result.created} aangemaakt, ${result.updated} bijgewerkt, ${result.failed} fouten.`
-                : `Niets geïmporteerd: ${result.failed} fouten.`}
+                ? t('customers.import.doneSummary', {
+                    created: result.created,
+                    updated: result.updated,
+                    failed: result.failed,
+                  })
+                : t('customers.import.nothingImported', { failed: result.failed })}
             </p>
             {result.errorWorkbookBase64 !== null && result.errorWorkbookBase64 !== '' && (
               <Button
                 variant="secondary"
                 onClick={() => downloadCustomerImportErrorWorkbook(result.errorWorkbookBase64 ?? '')}
               >
-                Foutenbestand downloaden
+                {t('customers.import.errorWorkbookDownload')}
               </Button>
             )}
           </div>
         ) : (
           preview && (
             <p className="customer-import-summary">
-              <strong>{preview.totalRows}</strong> rijen · {preview.creates} nieuw · {preview.updates} bijwerken ·{' '}
-              <strong className={preview.errors > 0 ? 'customer-import-danger' : undefined}>{preview.errors} fouten</strong>
+              <strong>{preview.totalRows}</strong> {t('customers.import.previewSummaryRows')} · {preview.creates}{' '}
+              {t('customers.import.previewSummaryNew')} · {preview.updates} {t('customers.import.previewSummaryUpdate')} ·{' '}
+              <strong className={preview.errors > 0 ? 'customer-import-danger' : undefined}>
+                {preview.errors} {t('customers.import.previewSummaryErrors')}
+              </strong>
             </p>
           )
         )}
@@ -182,11 +192,11 @@ export function CustomerImportDialog({ onClose, onImported }: CustomerImportDial
             <table className="customer-import-table">
               <thead>
                 <tr>
-                  <th>Rij</th>
-                  <th>Actie</th>
-                  <th>Klantnummer</th>
-                  <th>Naam</th>
-                  <th>Meldingen</th>
+                  <th>{t('customers.import.columnRow')}</th>
+                  <th>{t('customers.import.columnAction')}</th>
+                  <th>{t('customers.fields.customerNumber')}</th>
+                  <th>{t('customers.fields.name')}</th>
+                  <th>{t('customers.import.columnMessages')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,7 +206,7 @@ export function CustomerImportDialog({ onClose, onImported }: CustomerImportDial
                     <tr key={row.rowNumber} className={row.action === 'Error' ? 'customer-import-row-error' : undefined}>
                       <td>{row.rowNumber}</td>
                       <td>
-                        <Badge tone={presentation.tone}>{presentation.label}</Badge>
+                        <Badge tone={presentation.tone}>{t(presentation.labelKey)}</Badge>
                       </td>
                       <td>{row.customerNumber ? <code>{row.customerNumber}</code> : '—'}</td>
                       <td>{row.name || '—'}</td>

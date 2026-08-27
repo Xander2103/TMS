@@ -4,6 +4,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { CustomerForm } from '../components/CustomerForm'
 import { PreparedLocationsEditor } from '../components/PreparedLocationsEditor'
 import { CustomerCreateFollowUpDialog } from '../components/CustomerCreateFollowUpDialog'
@@ -25,6 +26,7 @@ export function NewCustomerPage() {
 function NewCustomerPageContent({ onSavedAndNew }: { onSavedAndNew: () => void }) {
   const navigate = useNavigate()
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { create, isSubmitting, error, fieldErrors } = useCustomerMutations()
   const canCreateLocations = hasPermission('locations.create')
@@ -46,18 +48,23 @@ function NewCustomerPageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
   async function processFollowUps(customer: CustomerDetail, startNextEntry: boolean) {
     const finish = startNextEntry ? onSavedAndNew : () => goToCustomer(customer)
     if (stagedLocations.length === 0) {
-      toast.showSuccess(`Klant ${customer.customerNumber} aangemaakt.`)
+      toast.showSuccess(t('customers.create.created', { number: customer.customerNumber }))
       finish()
       return
     }
     setFollowUpBusy(true)
     try {
-      const results = await createPreparedLocations(customer.id, stagedLocations)
+      const results = await createPreparedLocations(customer.id, stagedLocations, {
+        label: t('customers.staged.fallbackLabel'),
+        error: t('customers.staged.createFailed'),
+      })
       if (results.every((r) => r.ok)) {
-        toast.showSuccess(`Klant ${customer.customerNumber} aangemaakt; ${results.length} locatie(s) aangemaakt.`)
+        toast.showSuccess(
+          t('customers.create.createdWithLocations', { number: customer.customerNumber, count: results.length }),
+        )
         finish()
       } else {
-        toast.showError('Klant aangemaakt, maar enkele locaties zijn mislukt.')
+        toast.showError(t('customers.create.locationsPartlyFailed'))
         setCreatedCustomer(customer)
         setFollowUpResults(results)
       }
@@ -74,11 +81,12 @@ function NewCustomerPageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
       const retried = await createPreparedLocations(
         createdCustomer.id,
         stagedLocations.filter((row) => failedKeys.has(row.key)),
+        { label: t('customers.staged.fallbackLabel'), error: t('customers.staged.createFailed') },
       )
       const merged = followUpResults.map((r) => retried.find((n) => n.key === r.key) ?? r)
       if (merged.every((r) => r.ok)) {
         const customer = createdCustomer
-        toast.showSuccess('Alle locaties aangemaakt.')
+        toast.showSuccess(t('customers.create.allLocationsCreated'))
         setFollowUpResults(null)
         setCreatedCustomer(null)
         goToCustomer(customer)
@@ -99,8 +107,8 @@ function NewCustomerPageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klanten', to: '/customers' }, { label: 'Nieuwe klant' }]} />
-      <PageHeader title="Nieuwe klant" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.customers'), to: '/customers' }, { label: t('customers.list.newCustomer') }]} />
+      <PageHeader title={t('customers.list.newCustomer')} />
       <CustomerForm
         mode="create"
         isSubmitting={isSubmitting || followUpBusy}
@@ -111,7 +119,7 @@ function NewCustomerPageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
           canCreateLocations ? (
             <PreparedLocationsEditor value={stagedLocations} onChange={setStagedLocations} disabled={isSubmitting || followUpBusy} />
           ) : (
-            <p className="customer-form-muted">Je hebt geen rechten om locaties aan te maken.</p>
+            <p className="customer-form-muted">{t('customers.create.noLocationRights')}</p>
           )
         }
         onSubmit={async (values, intent) => {
@@ -122,7 +130,7 @@ function NewCustomerPageContent({ onSavedAndNew }: { onSavedAndNew: () => void }
       />
       {createdCustomer && followUpResults && (
         <CustomerCreateFollowUpDialog
-          customerLabel={`Klant ${createdCustomer.customerNumber}`}
+          customerLabel={t('customers.create.customerLabel', { number: createdCustomer.customerNumber })}
           results={followUpResults}
           busy={followUpBusy}
           onRetry={retryFailedFollowUps}

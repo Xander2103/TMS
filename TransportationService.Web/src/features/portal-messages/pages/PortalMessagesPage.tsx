@@ -9,8 +9,9 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
 import {
@@ -26,19 +27,25 @@ import {
 import { formatDateTime } from '../../../utils/dates'
 import './portal-messages.css'
 
-const PRIORITY_LABELS: Record<PortalMessagePriority, string> = { Normal: 'Normaal', High: 'Hoog', Urgent: 'Dringend' }
-
-const DISPLAY_MODE_LABELS: Record<PortalMessageDisplayMode, string> = {
-  Notification: 'Melding',
-  DashboardBanner: 'Dashboardbanner',
-  BlockingAcknowledgement: 'Blokkerende bevestiging',
+/** Translation keys per priority; render via t(PRIORITY_LABELS[priority]). */
+const PRIORITY_LABELS: Record<PortalMessagePriority, string> = {
+  Normal: 'portalMessages.priority.Normal',
+  High: 'portalMessages.priority.High',
+  Urgent: 'portalMessages.priority.Urgent',
 }
 
+/** Translation keys per display mode; render via t(DISPLAY_MODE_LABELS[mode]). */
+const DISPLAY_MODE_LABELS: Record<PortalMessageDisplayMode, string> = {
+  Notification: 'portalMessages.displayMode.Notification',
+  DashboardBanner: 'portalMessages.displayMode.DashboardBanner',
+  BlockingAcknowledgement: 'portalMessages.displayMode.BlockingAcknowledgement',
+}
+
+/** Translation keys per display-mode hint; render via t(DISPLAY_MODE_HINTS[mode]). */
 const DISPLAY_MODE_HINTS: Record<PortalMessageDisplayMode, string> = {
-  Notification: 'Verschijnt in de mededelingenlijst van het portaal.',
-  DashboardBanner: 'Verschijnt bovendien als banner bovenaan het portaaldashboard.',
-  BlockingAcknowledgement:
-    'Blokkerend: het dashboard wordt afgedekt tot de gebruiker bevestigt — spaarzaam gebruiken.',
+  Notification: 'portalMessages.displayModeHint.Notification',
+  DashboardBanner: 'portalMessages.displayModeHint.DashboardBanner',
+  BlockingAcknowledgement: 'portalMessages.displayModeHint.BlockingAcknowledgement',
 }
 
 function formatTimestamp(iso: string): string {
@@ -49,16 +56,19 @@ function fromDateTimeLocal(value: string): string | null {
   return value ? new Date(value).toISOString() : null
 }
 
-function statusBadge(row: PortalMessageAdminItem) {
-  if (row.cancelledAt) return <Badge tone="neutral">Ingetrokken</Badge>
+function statusBadge(t: TranslateFn, row: PortalMessageAdminItem) {
+  if (row.cancelledAt) return <Badge tone="neutral">{t('portalMessages.status.cancelled')}</Badge>
   const now = Date.now()
-  if (row.expiresAt && new Date(row.expiresAt).getTime() < now) return <Badge tone="neutral">Verlopen</Badge>
-  if (row.visibleFrom && new Date(row.visibleFrom).getTime() > now) return <Badge tone="info">Gepland</Badge>
-  return <Badge tone="success">Actief</Badge>
+  if (row.expiresAt && new Date(row.expiresAt).getTime() < now)
+    return <Badge tone="neutral">{t('portalMessages.status.expired')}</Badge>
+  if (row.visibleFrom && new Date(row.visibleFrom).getTime() > now)
+    return <Badge tone="info">{t('portalMessages.status.scheduled')}</Badge>
+  return <Badge tone="success">{t('portalMessages.status.active')}</Badge>
 }
 
 /** Staff management of customer-portal messages (Beheer → Portaalberichten). */
 export function PortalMessagesPage() {
+  const { t } = useLocale()
   const toast = useToast()
   const { hasPermission } = useAuth()
   const canSend = hasPermission('portal_messages.send')
@@ -79,7 +89,7 @@ export function PortalMessagesPage() {
         setError(null)
       })
       .catch(() => {
-        setError('De portaalberichten konden niet worden geladen.')
+        setError(t('portalMessages.page.loadFailed'))
         setLoaded(true)
       })
   }
@@ -91,41 +101,45 @@ export function PortalMessagesPage() {
     setCancelBusy(true)
     try {
       await cancelPortalMessage(cancelTarget.id)
-      toast.showSuccess('Bericht ingetrokken.')
+      toast.showSuccess(t('portalMessages.cancelDialog.cancelled'))
       setCancelTarget(null)
       load()
     } catch (err) {
-      toast.showError(describeApiError(err, 'Het bericht kon niet worden ingetrokken.').message)
+      toast.showError(localizeApiError(t, err, t('portalMessages.cancelDialog.cancelFailed')))
     } finally {
       setCancelBusy(false)
     }
   }
 
   const columns: Column<PortalMessageAdminItem>[] = [
-    { key: 'title', header: 'Titel (NL)', render: (row) => row.titleNl },
+    { key: 'title', header: t('portalMessages.columns.title'), render: (row) => row.titleNl },
     {
       key: 'customers',
-      header: 'Klanten',
+      header: t('portalMessages.columns.customers'),
       render: (row) => (row.customerNames.length > 0 ? row.customerNames.join(', ') : '—'),
     },
-    { key: 'displayMode', header: 'Weergave', render: (row) => DISPLAY_MODE_LABELS[row.displayMode] ?? row.displayMode },
+    {
+      key: 'displayMode',
+      header: t('portalMessages.columns.displayMode'),
+      render: (row) => (DISPLAY_MODE_LABELS[row.displayMode] ? t(DISPLAY_MODE_LABELS[row.displayMode]) : row.displayMode),
+    },
     {
       key: 'priority',
-      header: 'Prioriteit',
-      render: (row) => PRIORITY_LABELS[row.priority] ?? row.priority,
+      header: t('portalMessages.columns.priority'),
+      render: (row) => (PRIORITY_LABELS[row.priority] ? t(PRIORITY_LABELS[row.priority]) : row.priority),
     },
-    { key: 'status', header: 'Status', render: statusBadge },
+    { key: 'status', header: t('portalMessages.columns.status'), render: (row) => statusBadge(t, row) },
     {
       key: 'actions',
       header: '',
       render: (row) => (
         <span className="pm-actions">
           <Button variant="secondary" onClick={() => setStatusTarget(row)}>
-            Bezorgstatus
+            {t('portalMessages.actions.deliveryStatus')}
           </Button>
           {row.cancelledAt === null && canSend && (
             <Button variant="secondary" onClick={() => setCancelTarget(row)}>
-              Intrekken
+              {t('portalMessages.actions.cancel')}
             </Button>
           )}
         </span>
@@ -135,11 +149,11 @@ export function PortalMessagesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Beheer' }, { label: 'Portaalberichten' }]} />
+      <Breadcrumbs items={[{ label: t('portalMessages.page.breadcrumbAdmin') }, { label: t('portalMessages.page.title') }]} />
       <PageHeader
-        title="Portaalberichten"
-        subtitle="Berichten aan klantportaalgebruikers, met vertalingen en bezorgopvolging."
-        action={canSend && <Button onClick={() => setComposeOpen(true)}>Nieuw bericht</Button>}
+        title={t('portalMessages.page.title')}
+        subtitle={t('portalMessages.page.subtitle')}
+        action={canSend && <Button onClick={() => setComposeOpen(true)}>{t('portalMessages.page.newMessage')}</Button>}
       />
       <DataTable
         columns={columns}
@@ -147,8 +161,8 @@ export function PortalMessagesPage() {
         rowKey={(row) => row.id}
         isLoading={!loaded}
         error={error}
-        emptyMessage="Nog geen portaalberichten."
-        loadingMessage="Portaalberichten laden..."
+        emptyMessage={t('portalMessages.page.empty')}
+        loadingMessage={t('portalMessages.page.loading')}
       />
 
       {composeOpen && (
@@ -156,7 +170,7 @@ export function PortalMessagesPage() {
           onClose={(sentOk) => {
             setComposeOpen(false)
             if (sentOk) {
-              toast.showSuccess('Portaalbericht verzonden.')
+              toast.showSuccess(t('portalMessages.page.sent'))
               load()
             }
           }}
@@ -167,9 +181,9 @@ export function PortalMessagesPage() {
 
       {cancelTarget && (
         <ConfirmDialog
-          title="Bericht intrekken"
-          message={`Weet u zeker dat u "${cancelTarget.titleNl}" wilt intrekken? Portaalgebruikers zien het bericht daarna niet meer.`}
-          confirmLabel="Intrekken"
+          title={t('portalMessages.cancelDialog.title')}
+          message={t('portalMessages.cancelDialog.message', { title: cancelTarget.titleNl })}
+          confirmLabel={t('portalMessages.cancelDialog.confirm')}
           destructive
           busy={cancelBusy}
           onConfirm={() => void handleCancel()}
@@ -181,6 +195,7 @@ export function PortalMessagesPage() {
 }
 
 function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void }) {
+  const { t } = useLocale()
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set())
   const [titleNl, setTitleNl] = useState('')
@@ -201,7 +216,8 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
   useEffect(() => {
     searchCustomers({ page: 1, pageSize: 500, isActive: true })
       .then((result) => setCustomers(result.items))
-      .catch(() => setError('De klantenlijst kon niet worden geladen.'))
+      .catch(() => setError(t('portalMessages.compose.customersLoadFailed')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function toggleCustomer(id: string) {
@@ -235,23 +251,23 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
       })
       onClose(true)
     } catch (err) {
-      setError(describeApiError(err, 'Het portaalbericht kon niet worden verzonden.').message)
+      setError(localizeApiError(t, err, t('portalMessages.compose.sendFailed')))
       setSaving(false)
     }
   }
 
   return (
     <Modal
-      title="Nieuw portaalbericht"
+      title={t('portalMessages.compose.title')}
       onClose={() => onClose(false)}
       busy={saving}
       footer={
         <>
           <Button variant="secondary" onClick={() => onClose(false)} disabled={saving}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="portal-message-form" disabled={saving}>
-            {saving ? 'Verzenden…' : 'Verzenden'}
+            {saving ? t('portalMessages.compose.sending') : t('portalMessages.compose.send')}
           </Button>
         </>
       }
@@ -260,39 +276,39 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
         {error && <p className="placeholder-text" role="alert">{error}</p>}
 
         <fieldset className="pm-lang-section">
-          <legend>Nederlands (verplicht)</legend>
-          <FormField label="Titel (NL)" htmlFor="pm-title-nl" required>
+          <legend>{t('portalMessages.compose.legendNl')}</legend>
+          <FormField label={t('portalMessages.compose.titleNl')} htmlFor="pm-title-nl" required>
             <input id="pm-title-nl" value={titleNl} onChange={(e) => setTitleNl(e.target.value)} maxLength={200} disabled={saving} />
           </FormField>
-          <FormField label="Inhoud (NL)" htmlFor="pm-body-nl" required>
+          <FormField label={t('portalMessages.compose.bodyNl')} htmlFor="pm-body-nl" required>
             <textarea id="pm-body-nl" rows={4} value={bodyNl} onChange={(e) => setBodyNl(e.target.value)} maxLength={8000} disabled={saving} />
           </FormField>
         </fieldset>
 
         <fieldset className="pm-lang-section">
-          <legend>Frans (optioneel)</legend>
-          <FormField label="Titel (FR)" htmlFor="pm-title-fr">
+          <legend>{t('portalMessages.compose.legendFr')}</legend>
+          <FormField label={t('portalMessages.compose.titleFr')} htmlFor="pm-title-fr">
             <input id="pm-title-fr" value={titleFr} onChange={(e) => setTitleFr(e.target.value)} maxLength={200} disabled={saving} />
           </FormField>
-          <FormField label="Inhoud (FR)" htmlFor="pm-body-fr">
+          <FormField label={t('portalMessages.compose.bodyFr')} htmlFor="pm-body-fr">
             <textarea id="pm-body-fr" rows={4} value={bodyFr} onChange={(e) => setBodyFr(e.target.value)} maxLength={8000} disabled={saving} />
           </FormField>
         </fieldset>
 
         <fieldset className="pm-lang-section">
-          <legend>Engels (optioneel)</legend>
-          <FormField label="Titel (EN)" htmlFor="pm-title-en">
+          <legend>{t('portalMessages.compose.legendEn')}</legend>
+          <FormField label={t('portalMessages.compose.titleEn')} htmlFor="pm-title-en">
             <input id="pm-title-en" value={titleEn} onChange={(e) => setTitleEn(e.target.value)} maxLength={200} disabled={saving} />
           </FormField>
-          <FormField label="Inhoud (EN)" htmlFor="pm-body-en">
+          <FormField label={t('portalMessages.compose.bodyEn')} htmlFor="pm-body-en">
             <textarea id="pm-body-en" rows={4} value={bodyEn} onChange={(e) => setBodyEn(e.target.value)} maxLength={8000} disabled={saving} />
           </FormField>
         </fieldset>
 
         <FormField
-          label="Klanten"
+          label={t('portalMessages.compose.customers')}
           htmlFor="pm-customers"
-          hint="Meerdere klanten selecteren vereist de bulkpermissie (portal_messages.send_bulk)."
+          hint={t('portalMessages.compose.customersHint')}
         >
           <div id="pm-customers" className="pm-customer-list">
             {customers.map((customer) => (
@@ -310,11 +326,11 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
         </FormField>
         {selectedCustomers.size > 1 && (
           <p className="pm-bulk-warning" role="note">
-            Let op: u verstuurt naar meerdere klanten. Dit vereist de permissie portal_messages.send_bulk.
+            {t('portalMessages.compose.bulkWarning')}
           </p>
         )}
 
-        <FormField label="Weergavemodus" htmlFor="pm-display-mode" hint={DISPLAY_MODE_HINTS[displayMode]}>
+        <FormField label={t('portalMessages.compose.displayMode')} htmlFor="pm-display-mode" hint={t(DISPLAY_MODE_HINTS[displayMode])}>
           <select
             id="pm-display-mode"
             value={displayMode}
@@ -323,26 +339,26 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
           >
             {(Object.keys(DISPLAY_MODE_LABELS) as PortalMessageDisplayMode[]).map((mode) => (
               <option key={mode} value={mode}>
-                {DISPLAY_MODE_LABELS[mode]}
+                {t(DISPLAY_MODE_LABELS[mode])}
               </option>
             ))}
           </select>
         </FormField>
 
-        <FormField label="Prioriteit" htmlFor="pm-priority">
+        <FormField label={t('portalMessages.compose.priority')} htmlFor="pm-priority">
           <select
             id="pm-priority"
             value={priority}
             onChange={(e) => setPriority(e.target.value as PortalMessagePriority)}
             disabled={saving}
           >
-            <option value="Normal">{PRIORITY_LABELS.Normal}</option>
-            <option value="High">{PRIORITY_LABELS.High}</option>
-            <option value="Urgent">{PRIORITY_LABELS.Urgent}</option>
+            <option value="Normal">{t(PRIORITY_LABELS.Normal)}</option>
+            <option value="High">{t(PRIORITY_LABELS.High)}</option>
+            <option value="Urgent">{t(PRIORITY_LABELS.Urgent)}</option>
           </select>
         </FormField>
 
-        <FormField label="Opties" htmlFor="pm-ack">
+        <FormField label={t('portalMessages.compose.options')} htmlFor="pm-ack">
           <label className="customer-form-checkbox">
             <input
               id="pm-ack"
@@ -351,7 +367,7 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
               onChange={(e) => setRequiresAcknowledgement(e.target.checked)}
               disabled={saving}
             />
-            Bevestiging vereist
+            {t('portalMessages.compose.requiresAck')}
           </label>
           <label className="customer-form-checkbox">
             <input
@@ -361,11 +377,11 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
               onChange={(e) => setSendEmail(e.target.checked)}
               disabled={saving}
             />
-            Ook per e-mail versturen
+            {t('portalMessages.compose.sendEmail')}
           </label>
         </FormField>
 
-        <FormField label="Zichtbaar vanaf" htmlFor="pm-visible-from" hint="Leeg = direct zichtbaar">
+        <FormField label={t('portalMessages.compose.visibleFrom')} htmlFor="pm-visible-from" hint={t('portalMessages.compose.visibleFromHint')}>
           <input
             id="pm-visible-from"
             type="datetime-local"
@@ -374,7 +390,7 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
             disabled={saving}
           />
         </FormField>
-        <FormField label="Verloopt op" htmlFor="pm-expires-at" hint="Leeg = geen einddatum">
+        <FormField label={t('portalMessages.compose.expiresAt')} htmlFor="pm-expires-at" hint={t('portalMessages.compose.expiresAtHint')}>
           <input
             id="pm-expires-at"
             type="datetime-local"
@@ -389,33 +405,36 @@ function ComposeMessageDialog({ onClose }: { onClose: (sent: boolean) => void })
 }
 
 function PortalDeliveryStatusDialog({ message, onClose }: { message: PortalMessageAdminItem; onClose: () => void }) {
+  const { t } = useLocale()
   const [status, setStatus] = useState<PortalMessageDeliveryStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     getPortalMessageDeliveryStatus(message.id)
       .then(setStatus)
-      .catch(() => setError('De bezorgstatus kon niet worden geladen.'))
+      .catch(() => setError(t('portalMessages.delivery.loadFailed')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message.id])
 
   return (
-    <Modal title="Bezorgstatus" onClose={onClose} footer={<Button onClick={onClose}>Sluiten</Button>}>
+    <Modal title={t('portalMessages.delivery.title')} onClose={onClose} footer={<Button onClick={onClose}>{t('ui.actions.close')}</Button>}>
       {error && <p className="placeholder-text" role="alert">{error}</p>}
-      {!error && status === null && <LoadingState message="Bezorgstatus laden..." />}
+      {!error && status === null && <LoadingState message={t('portalMessages.delivery.loading')} />}
       {status && (
         <>
           <p className="pm-status-meta">
-            {status.titleNl} · aangemaakt {formatTimestamp(status.createdAt)}
-            {status.cancelledAt && ` · Ingetrokken op ${formatTimestamp(status.cancelledAt)}`}
+            {status.titleNl} · {t('portalMessages.delivery.createdAt', { dateTime: formatTimestamp(status.createdAt) })}
+            {status.cancelledAt &&
+              ` · ${t('portalMessages.delivery.cancelledAt', { dateTime: formatTimestamp(status.cancelledAt) })}`}
           </p>
           <table className="pm-status-table">
             <thead>
               <tr>
-                <th>Naam</th>
-                <th>Klant</th>
-                <th>Gelezen</th>
-                {status.requiresAcknowledgement && <th>Bevestigd</th>}
-                <th>E-mail</th>
+                <th>{t('portalMessages.delivery.columns.name')}</th>
+                <th>{t('portalMessages.delivery.columns.customer')}</th>
+                <th>{t('portalMessages.delivery.columns.read')}</th>
+                {status.requiresAcknowledgement && <th>{t('portalMessages.delivery.columns.acknowledged')}</th>}
+                <th>{t('portalMessages.delivery.columns.email')}</th>
               </tr>
             </thead>
             <tbody>

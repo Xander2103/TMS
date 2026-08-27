@@ -1,4 +1,5 @@
 import { Button } from '../../../components/ui/Button'
+import { useLocale } from '../../../i18n/localeContext'
 import type { TransportOrderDetail } from '../../transport-orders/types'
 
 interface DossierGoodsSummaryProps {
@@ -10,15 +11,16 @@ interface DossierGoodsSummaryProps {
 
 /** §11 Goederen section: compact "2 × Europallet"-style lines from the first linked order. */
 export function DossierGoodsSummary({ order, loading, canEdit, onEdit }: DossierGoodsSummaryProps) {
+  const { t } = useLocale()
   const lines = order?.cargoItems ?? []
   return (
     <>
-      {loading && <p className="placeholder-text">Goederen laden…</p>}
+      {loading && <p className="placeholder-text">{t('dossiers.goods.loading')}</p>}
       {!loading && order && lines.length === 0 && (
         <p className="placeholder-text">
           {order.goodsDescription
             ? order.goodsDescription
-            : 'Nog geen goederenlijnen.'}
+            : t('dossiers.goods.noLines')}
           {order.quantity != null && order.quantityUnit && ` — ${order.quantity} ${order.quantityUnit}`}
         </p>
       )}
@@ -26,7 +28,7 @@ export function DossierGoodsSummary({ order, loading, canEdit, onEdit }: Dossier
         <ul className="dossier-goods-lines">
           {lines.map((line) => (
             <li key={line.id}>
-              {line.expectedQuantity} × {line.quantityUnitCode ?? line.quantityUnit ?? 'stuks'}
+              {line.expectedQuantity} × {line.quantityUnitCode ?? line.quantityUnit ?? t('dossiers.goods.fallbackUnit')}
               {line.description && ` — ${line.description}`}
             </li>
           ))}
@@ -35,7 +37,7 @@ export function DossierGoodsSummary({ order, loading, canEdit, onEdit }: Dossier
       {canEdit && order && (
         <p>
           <Button variant="secondary" onClick={onEdit}>
-            {lines.length > 0 ? 'Goederen bewerken' : '+ Goederen'}
+            {lines.length > 0 ? t('dossiers.goods.edit') : t('dossiers.goods.add')}
           </Button>
         </p>
       )}

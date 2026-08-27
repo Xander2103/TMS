@@ -5,12 +5,14 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import type { DriverListItem } from '../../drivers/types'
 import { searchTankCards } from '../../tank-cards/api/tankCardsApi'
 import { maskCardNumber, type TankCard } from '../../tank-cards/types'
 import { formatDate } from '../../../utils/dates'
+import { formatCurrency, formatDecimal, formatInteger } from '../../../utils/numbers'
 import {
   createFuelTransaction,
   deleteFuelTransaction,
@@ -44,8 +46,9 @@ const EMPTY_FORM: FuelForm = {
   notes: '',
 }
 
-function euro(value: number): string {
-  return value.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
+/** Whole numbers render without decimals; fractional values keep up to two. */
+function quantity(value: number): string {
+  return Number.isInteger(value) ? formatInteger(value) : formatDecimal(value, 2)
 }
 
 interface FuelPanelProps {
@@ -54,6 +57,7 @@ interface FuelPanelProps {
 
 /** Fuel history for a vehicle: manual transactions, computed consumption and anomaly warnings. */
 export function FuelPanel({ vehicleId }: FuelPanelProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
 
@@ -81,12 +85,12 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Tankbeurten konden niet worden geladen.')
+        if (mounted) setLoadError(t('fuel.panel.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [vehicleId, reloadToken])
+  }, [vehicleId, reloadToken, t])
 
   // Selector data for the editor; failures keep the selects usable as "Geen".
   useEffect(() => {
@@ -138,17 +142,17 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
     event.preventDefault()
     setFormError(null)
     if (!form.transactionDate) {
-      setFormError('De datum is verplicht.')
+      setFormError(t('fuel.panel.dateRequired'))
       return
     }
     const litres = Number(form.litres)
     if (!form.litres || Number.isNaN(litres) || litres <= 0) {
-      setFormError('Het aantal liter moet groter zijn dan nul.')
+      setFormError(t('fuel.panel.litresPositive'))
       return
     }
     const totalAmount = form.totalAmount === '' ? 0 : Number(form.totalAmount)
     if (Number.isNaN(totalAmount) || totalAmount < 0) {
-      setFormError('Het bedrag kan niet negatief zijn.')
+      setFormError(t('fuel.panel.amountNegative'))
       return
     }
     const input: FuelTransactionInput = {
@@ -166,15 +170,15 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
     try {
       if (editing) {
         await updateFuelTransaction(editing.id, input)
-        showSuccess('Tankbeurt bijgewerkt.')
+        showSuccess(t('fuel.panel.updated'))
       } else {
         await createFuelTransaction(vehicleId, input)
-        showSuccess('Tankbeurt geregistreerd.')
+        showSuccess(t('fuel.panel.created'))
       }
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      setFormError('De tankbeurt kon niet worden opgeslagen.')
+      setFormError(t('fuel.panel.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -184,11 +188,11 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
     if (!deleteTarget) return
     try {
       await deleteFuelTransaction(deleteTarget.id)
-      showSuccess('Tankbeurt verwijderd.')
+      showSuccess(t('fuel.panel.deleted'))
       setDeleteTarget(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('De tankbeurt kon niet worden verwijderd.')
+      showError(t('fuel.panel.deleteFailed'))
       setDeleteTarget(null)
     }
   }
@@ -196,50 +200,50 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
   return (
     <section className="fuel">
       <div className="fuel-header">
-        <h2>Brandstof</h2>
+        <h2>{t('fuel.panel.title')}</h2>
         {hasPermission('fuel.create') && (
           <Button variant="secondary" onClick={openCreate}>
-            Tankbeurt registreren
+            {t('fuel.panel.register')}
           </Button>
         )}
       </div>
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && overview === null && <p className="placeholder-text">Tankbeurten laden…</p>}
+      {!loadError && overview === null && <p className="placeholder-text">{t('fuel.panel.loading')}</p>}
       {!loadError && overview !== null && overview.items.length === 0 && (
-        <p className="placeholder-text">Nog geen tankbeurten geregistreerd.</p>
+        <p className="placeholder-text">{t('fuel.panel.empty')}</p>
       )}
 
       {!loadError && overview !== null && overview.items.length > 0 && (
         <>
           <div className="fuel-summary">
             <span>
-              Gem. verbruik:{' '}
+              {t('fuel.panel.avgConsumption')}{' '}
               <strong>
                 {overview.averageConsumptionLPer100Km !== null
-                  ? `${overview.averageConsumptionLPer100Km.toLocaleString('nl-BE')} l/100km`
+                  ? `${quantity(overview.averageConsumptionLPer100Km)} l/100km`
                   : '—'}
               </strong>
             </span>
             <span>
-              Totaal getankt: <strong>{overview.totalLitres.toLocaleString('nl-BE')} l</strong>
+              {t('fuel.panel.totalFuelled')} <strong>{quantity(overview.totalLitres)} l</strong>
             </span>
             <span>
-              Totale kost: <strong>{euro(overview.totalAmount)}</strong>
+              {t('fuel.panel.totalCost')} <strong>{formatCurrency(overview.totalAmount)}</strong>
             </span>
           </div>
           <table className="fuel-table">
             <thead>
               <tr>
-                <th>Datum</th>
-                <th>Liter</th>
-                <th>Bedrag</th>
-                <th>€/l</th>
-                <th>Km-stand</th>
-                <th>Verbruik</th>
-                <th>Chauffeur</th>
-                <th aria-label="Waarschuwingen" />
-                <th aria-label="Acties" />
+                <th>{t('fuel.panel.colDate')}</th>
+                <th>{t('fuel.panel.colLitres')}</th>
+                <th>{t('fuel.panel.colAmount')}</th>
+                <th>{t('fuel.panel.colPricePerLitre')}</th>
+                <th>{t('fuel.panel.colOdometer')}</th>
+                <th>{t('fuel.panel.colConsumption')}</th>
+                <th>{t('fuel.panel.colDriver')}</th>
+                <th aria-label={t('fuel.panel.warningsAria')} />
+                <th aria-label={t('fleet.common.actions')} />
               </tr>
             </thead>
             <tbody>
@@ -247,20 +251,20 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
                 <tr key={transaction.id}>
                   <td>{formatDate(transaction.transactionDate)}</td>
                   <td>
-                    {transaction.litres.toLocaleString('nl-BE')} l{!transaction.fullTank && <span className="fuel-partial"> (deels)</span>}
+                    {quantity(transaction.litres)} l{!transaction.fullTank && <span className="fuel-partial"> {t('fuel.panel.partial')}</span>}
                   </td>
-                  <td>{euro(transaction.totalAmount)}</td>
-                  <td>{transaction.pricePerLitre !== null ? transaction.pricePerLitre.toLocaleString('nl-BE') : '—'}</td>
-                  <td>{transaction.odometerKm !== null ? transaction.odometerKm.toLocaleString('nl-BE') : '—'}</td>
+                  <td>{formatCurrency(transaction.totalAmount)}</td>
+                  <td>{transaction.pricePerLitre !== null ? formatDecimal(transaction.pricePerLitre, 3) : '—'}</td>
+                  <td>{transaction.odometerKm !== null ? formatInteger(transaction.odometerKm) : '—'}</td>
                   <td>
                     {transaction.consumptionLPer100Km !== null
-                      ? `${transaction.consumptionLPer100Km.toLocaleString('nl-BE')} l/100km`
+                      ? `${quantity(transaction.consumptionLPer100Km)} l/100km`
                       : '—'}
                   </td>
                   <td>{transaction.driverName ?? '—'}</td>
                   <td>
                     {transaction.warnings.length > 0 && (
-                      <span title={transaction.warnings.map((w) => FUEL_WARNING_LABELS[w]).join('\n')}>
+                      <span title={transaction.warnings.map((w) => t(FUEL_WARNING_LABELS[w])).join('\n')}>
                         <Badge tone="warning">⚠ {transaction.warnings.length}</Badge>
                       </span>
                     )}
@@ -268,12 +272,12 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
                   <td className="fuel-actions">
                     {hasPermission('fuel.edit') && (
                       <button type="button" className="fuel-link" onClick={() => openEdit(transaction)}>
-                        Bewerken
+                        {t('ui.actions.edit')}
                       </button>
                     )}
                     {hasPermission('fuel.delete') && (
                       <button type="button" className="fuel-link fuel-link-danger" onClick={() => setDeleteTarget(transaction)}>
-                        Verwijderen
+                        {t('ui.actions.delete')}
                       </button>
                     )}
                   </td>
@@ -286,16 +290,16 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
 
       {editorOpen && (
         <Modal
-          title={editing ? 'Tankbeurt bewerken' : 'Tankbeurt registreren'}
+          title={editing ? t('fuel.panel.editTitle') : t('fuel.panel.registerTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="fuel-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('fleet.common.saving') : t('ui.actions.save')}
               </Button>
             </>
           }
@@ -307,7 +311,7 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
               </div>
             )}
             <div className="fuel-form-row">
-              <FormField label="Datum" htmlFor="fu-date" required>
+              <FormField label={t('fuel.panel.date')} htmlFor="fu-date" required>
                 <input
                   id="fu-date"
                   type="date"
@@ -316,7 +320,7 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
                   disabled={saving}
                 />
               </FormField>
-              <FormField label="Kilometerstand" htmlFor="fu-odo" hint="Nodig voor de verbruiksberekening">
+              <FormField label={t('fuel.panel.odometer')} htmlFor="fu-odo" hint={t('fuel.panel.odometerHint')}>
                 <input
                   id="fu-odo"
                   type="number"
@@ -328,7 +332,7 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
               </FormField>
             </div>
             <div className="fuel-form-row">
-              <FormField label="Aantal liter" htmlFor="fu-litres" required>
+              <FormField label={t('fuel.panel.litres')} htmlFor="fu-litres" required>
                 <input
                   id="fu-litres"
                   type="number"
@@ -339,7 +343,7 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
                   disabled={saving}
                 />
               </FormField>
-              <FormField label="Totaalbedrag (€)" htmlFor="fu-amount">
+              <FormField label={t('fuel.panel.amount')} htmlFor="fu-amount">
                 <input
                   id="fu-amount"
                   type="number"
@@ -358,12 +362,12 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
                 onChange={(e) => set('fullTank', e.target.checked)}
                 disabled={saving}
               />
-              Volledig volgetankt (nodig voor verbruiksberekening)
+              {t('fuel.panel.fullTank')}
             </label>
             <div className="fuel-form-row">
-              <FormField label="Chauffeur" htmlFor="fu-driver">
+              <FormField label={t('fuel.panel.driver')} htmlFor="fu-driver">
                 <select id="fu-driver" value={form.driverId} onChange={(e) => set('driverId', e.target.value)} disabled={saving}>
-                  <option value="">Geen</option>
+                  <option value="">{t('fuel.panel.none')}</option>
                   {drivers.map((driver) => (
                     <option key={driver.id} value={driver.id}>
                       {driver.fullName} ({driver.driverNumber})
@@ -371,9 +375,9 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
                   ))}
                 </select>
               </FormField>
-              <FormField label="Tankkaart" htmlFor="fu-card">
+              <FormField label={t('fuel.panel.tankCard')} htmlFor="fu-card">
                 <select id="fu-card" value={form.tankCardId} onChange={(e) => set('tankCardId', e.target.value)} disabled={saving}>
-                  <option value="">Geen</option>
+                  <option value="">{t('fuel.panel.none')}</option>
                   {cards.map((card) => (
                     <option key={card.id} value={card.id}>
                       {maskCardNumber(card.cardNumber)} ({card.provider})
@@ -382,17 +386,17 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
                 </select>
               </FormField>
             </div>
-            <FormField label="Tankstation" htmlFor="fu-station">
+            <FormField label={t('fuel.panel.station')} htmlFor="fu-station">
               <input
                 id="fu-station"
                 value={form.station}
                 onChange={(e) => set('station', e.target.value)}
                 disabled={saving}
                 maxLength={200}
-                placeholder="bv. Total Antwerpen"
+                placeholder={t('fuel.panel.stationPlaceholder')}
               />
             </FormField>
-            <FormField label="Notities" htmlFor="fu-notes">
+            <FormField label={t('fuel.panel.notes')} htmlFor="fu-notes">
               <textarea id="fu-notes" rows={2} value={form.notes} onChange={(e) => set('notes', e.target.value)} disabled={saving} />
             </FormField>
           </form>
@@ -401,9 +405,9 @@ export function FuelPanel({ vehicleId }: FuelPanelProps) {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Tankbeurt verwijderen"
-          message={`Weet je zeker dat je de tankbeurt van ${formatDate(deleteTarget.transactionDate)} (${deleteTarget.litres.toLocaleString('nl-BE')} l) wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('fuel.panel.deleteTitle')}
+          message={t('fuel.panel.deleteMessage', { date: formatDate(deleteTarget.transactionDate), litres: quantity(deleteTarget.litres) })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

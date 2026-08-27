@@ -23,7 +23,8 @@ export async function downloadProfitabilityExport(from: string, to: string): Pro
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
   if (!response.ok) {
-    throw new Error('Export mislukt.')
+    // Geen user-facing tekst hier: de aanroepende component toont zijn eigen vertaalde fallback.
+    throw new Error('profitability export failed')
   }
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)

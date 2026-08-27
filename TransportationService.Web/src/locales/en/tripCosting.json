@@ -1,0 +1,173 @@
+{
+  "phase": {
+    "Estimated": "Estimated",
+    "Actual": "Actual"
+  },
+  "costType": {
+    "Fuel": "Fuel",
+    "Toll": "Toll/Maut",
+    "DriverLabour": "Driver",
+    "Overtime": "Overtime",
+    "WaitingTime": "Waiting time",
+    "VehicleDistance": "Vehicle per km",
+    "VehicleTime": "Vehicle per hour",
+    "Maintenance": "Maintenance",
+    "Depreciation": "Depreciation",
+    "Trailer": "Trailer",
+    "Equipment": "Equipment",
+    "Subcontractor": "Subcontractor",
+    "FerryTunnelParking": "Ferry/tunnel/parking",
+    "Manual": "Manual",
+    "Correction": "Correction/credit"
+  },
+  "panel": {
+    "title": "Costs & profitability",
+    "loading": "Loading costs…",
+    "loadForbidden": "You do not have access to cost data.",
+    "loadFailed": "The costs could not be loaded.",
+    "actionFailed": "The operation failed.",
+    "totals": {
+      "projected": "Projected",
+      "final": "Final",
+      "finalized": "Finalised"
+    },
+    "profitability": {
+      "title": "Profitability",
+      "revenue": "Revenue",
+      "costs": "Costs",
+      "profit": "Profit",
+      "margin": "Margin",
+      "revenuePerKm": "Revenue/km",
+      "costPerKm": "Costs/km",
+      "revenuePerHour": "Revenue/hour",
+      "costPerHour": "Costs/hour",
+      "colOrder": "Order",
+      "colCustomer": "Customer",
+      "colRevenue": "Revenue",
+      "colAllocatedCost": "Allocated cost",
+      "colProfit": "Profit",
+      "colMargin": "Margin"
+    },
+    "phaseTablist": "Cost phase",
+    "distances": "Planned: {planned} km ({plannedEmpty} empty) · Actual: {actual} km ({actualEmpty} empty)",
+    "actions": {
+      "recalcEstimate": "Recalculate estimate",
+      "recalcActual": "Recalculate actuals",
+      "actualKm": "Actual km",
+      "addLine": "+ Cost line",
+      "finalize": "Finalise",
+      "reopen": "Reopen",
+      "override": "Override"
+    },
+    "toasts": {
+      "estimateRecalculated": "Estimate recalculated.",
+      "actualRecalculated": "Actual costs recalculated.",
+      "lineAdded": "Cost line added.",
+      "lineOverridden": "Cost line overridden.",
+      "lineDeleted": "Cost line deleted.",
+      "actualsUpdated": "Actual distances updated.",
+      "finalized": "Costs finalised.",
+      "reopened": "Costs reopened."
+    },
+    "emptyLines": {
+      "Estimated": "No estimated cost lines.",
+      "Actual": "No actual cost lines."
+    },
+    "table": {
+      "colType": "Type",
+      "colDescription": "Description",
+      "colQuantity": "Quantity",
+      "colUnit": "Unit",
+      "colRate": "Rate",
+      "colAmount": "Amount",
+      "colSource": "Source",
+      "colActions": "Actions"
+    },
+    "overriddenNote": "· overridden",
+    "overriddenNoteReason": "· overridden: {reason}",
+    "lineDialog": {
+      "title": "Add cost line",
+      "phase": "Phase",
+      "type": "Type",
+      "description": "Description",
+      "quantity": "Quantity",
+      "unit": "Unit",
+      "rate": "Rate (€)",
+      "rateHint": "Negative only for correction/credit.",
+      "validation": "Description, quantity and rate are required."
+    },
+    "overrideDialog": {
+      "title": "Override line — {type}",
+      "current": "Current amount:",
+      "newAmount": "New amount (€)",
+      "reason": "Reason",
+      "reasonHint": "Required; logged in the history.",
+      "validation": "Amount and reason are required."
+    },
+    "actualsDialog": {
+      "title": "Actual distances",
+      "distance": "Actual distance (km)",
+      "empty": "Of which empty (km)",
+      "validation": "Enter valid kilometres."
+    }
+  },
+  "rates": {
+    "title": "Cost rates",
+    "subtitle": "Effective-dated rate sets feed the trip cost calculation. Historic trips keep their calculated snapshots.",
+    "newSet": "New rate set",
+    "loading": "Loading rates…",
+    "loadFailed": "The rates could not be loaded.",
+    "empty": "No rate set yet. Without rates, no trip costs are calculated.",
+    "effectiveFromRequired": "An effective date is required.",
+    "saveFailed": "The rate set could not be saved.",
+    "deleteFailed": "The rate set could not be deleted.",
+    "toasts": {
+      "created": "Rate set created.",
+      "updated": "Rate set updated.",
+      "deleted": "Rate set deleted."
+    },
+    "table": {
+      "effectiveFrom": "Effective from",
+      "name": "Name",
+      "fuel": "Fuel €/l",
+      "driver": "Driver €/h",
+      "vehicleKm": "Vehicle €/km",
+      "vehicleHour": "Vehicle €/h",
+      "depreciation": "Depreciation €/day",
+      "actions": "Actions"
+    },
+    "editor": {
+      "editTitle": "Edit rate set — from {date}",
+      "busy": "Working…",
+      "effectiveFrom": "Effective from",
+      "effectiveFromHint": "Trips from this date onwards use these rates.",
+      "name": "Name"
+    },
+    "deleteDialog": {
+      "title": "Delete rate set",
+      "message": "Delete the rate set effective from {date}? Trip costs already calculated remain unchanged."
+    },
+    "fields": {
+      "fuelPricePerLitre": "Fuel price (€/l)",
+      "defaultConsumptionLPer100Km": "Default consumption (l/100km)",
+      "defaultConsumptionLPer100KmHint": "Used when the vehicle has no standard consumption.",
+      "vehicleCostPerKm": "Vehicle cost (€/km)",
+      "vehicleCostPerHour": "Vehicle cost (€/hour)",
+      "driverCostPerHour": "Driver wage (€/hour)",
+      "employerCostMultiplier": "Employer cost multiplier",
+      "employerCostMultiplierHint": "E.g. 1.35 = wage + 35% overheads.",
+      "maintenanceCostPerKm": "Maintenance (€/km)",
+      "depreciationPerDay": "Depreciation (€/day)",
+      "trailerCostPerDay": "Trailer (€/day)",
+      "equipmentCostPerDay": "Equipment crane/cooling (€/day)",
+      "defaultTollPerTrip": "Default toll per trip (€)",
+      "overtimeThresholdMinutesPerDay": "Overtime threshold (min/day)",
+      "overtimeThresholdMinutesPerDayHint": "480 = 8 hours.",
+      "overtimeRateMultiplier": "Overtime multiplier",
+      "overtimeRateMultiplierHint": "E.g. 1.5 = 150% of the hourly wage.",
+      "waitingTimeCostPerHour": "Waiting time (€/hour)",
+      "co2KgPerLitreDiesel": "CO₂ diesel (kg/l)",
+      "co2KgPerLitreOther": "CO₂ petrol/other (kg/l)"
+    }
+  }
+}

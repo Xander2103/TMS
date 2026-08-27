@@ -1,4 +1,6 @@
 import { ApiError } from '../../../api/apiClient'
+import { getActiveLocale } from '../../../i18n/activeLocale'
+import { translate } from '../../../i18n/translations'
 import { createFleetDocument, uploadFleetDocumentFile, type FleetDocumentOwnerType } from '../api/fleetDocumentsApi'
 import type { FleetDocumentType } from '../types'
 
@@ -69,7 +71,7 @@ export async function uploadPreparedFleetDocuments(
         key: doc.key,
         label: doc.file.name,
         ok: false,
-        error: describe(err, 'Uploaden is mislukt.'),
+        error: describe(err, translate(getActiveLocale(), 'fleet.api.uploadFailed')),
         createdDocumentId: createdId,
       })
     }

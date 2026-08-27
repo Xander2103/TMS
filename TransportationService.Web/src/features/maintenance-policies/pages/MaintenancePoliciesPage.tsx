@@ -9,7 +9,9 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { describeApiError, getFieldError, localizeApiError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
+import { formatInteger } from '../../../utils/numbers'
 import { useAuth } from '../../auth/authContextValue'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import {
@@ -38,6 +40,7 @@ interface DialogState {
  */
 export function MaintenancePoliciesPage() {
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('maintenance_policies.manage')
 
@@ -56,48 +59,48 @@ export function MaintenancePoliciesPage() {
         setLoaded(true)
       })
       .catch(() => {
-        setError('Onderhoudsbeleid kon niet worden geladen.')
+        setError(t('maintenance.policy.loadFailed'))
         setLoaded(true)
       })
-  }, [])
+  }, [t])
 
   useEffect(() => {
     reload()
   }, [reload])
 
   const columns: Column<MaintenancePolicy>[] = [
-    { key: 'kind', header: 'Soort', render: (row) => POLICY_KIND_LABELS[row.kind] },
-    { key: 'asset', header: 'Activatype', render: (row) => ASSET_KIND_LABELS[row.assetKind] },
-    { key: 'level', header: 'Geldt voor', render: (row) => policyLevelLabel(row) },
+    { key: 'kind', header: t('maintenance.policies.colKind'), render: (row) => t(POLICY_KIND_LABELS[row.kind]) },
+    { key: 'asset', header: t('maintenance.policies.colAssetKind'), render: (row) => t(ASSET_KIND_LABELS[row.assetKind]) },
+    { key: 'level', header: t('maintenance.policies.colAppliesTo'), render: (row) => policyLevelLabel(t, row) },
     {
       key: 'interval',
-      header: 'Interval',
+      header: t('maintenance.policies.colInterval'),
       render: (row) =>
         [
-          row.intervalMonths !== null ? `${row.intervalMonths} maanden` : null,
-          row.intervalKm !== null ? `${row.intervalKm.toLocaleString('nl-BE')} km` : null,
+          row.intervalMonths !== null ? t('maintenance.policies.months', { months: row.intervalMonths }) : null,
+          row.intervalKm !== null ? t('maintenance.policies.km', { km: formatInteger(row.intervalKm) }) : null,
         ]
           .filter(Boolean)
-          .join(' of '),
+          .join(` ${t('maintenance.policy.or')} `),
     },
-    { key: 'warning', header: 'Waarschuwing', render: (row) => `${row.warningDays} dagen vooraf` },
+    { key: 'warning', header: t('maintenance.policies.colWarning'), render: (row) => t('maintenance.policies.warningDaysAfter', { days: row.warningDays }) },
     {
       key: 'status',
-      header: 'Status',
-      render: (row) => (row.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>),
+      header: t('maintenance.policies.colStatus'),
+      render: (row) => (row.isActive ? <Badge tone="success">{t('ui.statusBadges.active')}</Badge> : <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>),
     },
     ...(canManage
       ? [
           {
             key: 'actions',
-            header: 'Acties',
+            header: t('fleet.common.actions'),
             render: (row: MaintenancePolicy) => (
               <span className="customer-locations-actions">
                 <Button variant="ghost" onClick={() => setDialog({ policy: row })}>
-                  Bewerken
+                  {t('ui.actions.edit')}
                 </Button>
                 <Button variant="ghost" onClick={() => setConfirmDelete(row)}>
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </Button>
               </span>
             ),
@@ -108,11 +111,11 @@ export function MaintenancePoliciesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Vloot', to: '/fleet' }, { label: 'Onderhoudsbeleid' }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.modules.vloot'), to: '/fleet' }, { label: t('maintenance.policies.breadcrumb') }]} />
       <PageHeader
-        title="Onderhoudsbeleid"
-        subtitle="Standaardintervallen voor onderhoud en keuringen. Volgorde: specifiek voertuig/oplegger → categorie → bedrijfsstandaard."
-        action={canManage && <Button onClick={() => setDialog({ policy: null })}>Nieuwe regel</Button>}
+        title={t('maintenance.policies.title')}
+        subtitle={t('maintenance.policies.subtitle')}
+        action={canManage && <Button onClick={() => setDialog({ policy: null })}>{t('maintenance.policies.newRule')}</Button>}
       />
 
       <DataTable
@@ -121,8 +124,8 @@ export function MaintenancePoliciesPage() {
         rowKey={(row) => row.id}
         isLoading={!loaded}
         error={error}
-        emptyMessage="Nog geen regels — voertuigen en opleggers krijgen dan geen automatisch geplande onderhoudsbeurten."
-        loadingMessage="Beleid laden..."
+        emptyMessage={t('maintenance.policies.empty')}
+        loadingMessage={t('maintenance.policies.loading')}
       />
 
       {dialog && (
@@ -131,7 +134,7 @@ export function MaintenancePoliciesPage() {
           onClose={(saved) => {
             setDialog(null)
             if (saved) {
-              toast.showSuccess(dialog.policy ? 'Regel bijgewerkt.' : 'Regel toegevoegd.')
+              toast.showSuccess(dialog.policy ? t('maintenance.policies.updatedToast') : t('maintenance.policies.createdToast'))
               reload()
             }
           }}
@@ -140,20 +143,20 @@ export function MaintenancePoliciesPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Regel verwijderen"
-          message={`Deze ${POLICY_KIND_LABELS[confirmDelete.kind].toLowerCase()}sregel (${policyLevelLabel(confirmDelete)}) verwijderen? Al ingeplande beurten blijven bestaan.`}
-          confirmLabel="Verwijderen"
+          title={t('maintenance.policies.deleteTitle')}
+          message={t(`maintenance.policies.deleteMessage.${confirmDelete.kind}`, { level: policyLevelLabel(t, confirmDelete) })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={busy}
           onConfirm={async () => {
             setBusy(true)
             try {
               await deleteMaintenancePolicy(confirmDelete.id)
-              toast.showSuccess('Regel verwijderd.')
+              toast.showSuccess(t('maintenance.policies.deleted'))
               setConfirmDelete(null)
               reload()
             } catch (err) {
-              toast.showError(describeApiError(err, 'Regel kon niet worden verwijderd.').message)
+              toast.showError(localizeApiError(t, err, t('maintenance.policies.deleteFailed')))
             } finally {
               setBusy(false)
             }
@@ -166,6 +169,7 @@ export function MaintenancePoliciesPage() {
 }
 
 function PolicyDialog({ policy, onClose }: { policy: MaintenancePolicy | null; onClose: (saved: boolean) => void }) {
+  const { t } = useLocale()
   const vehicleCategories = useLookupOptions('/api/vehicle-categories')
   const trailerCategories = useLookupOptions('/api/trailer-categories')
 
@@ -210,8 +214,8 @@ function PolicyDialog({ policy, onClose }: { policy: MaintenancePolicy | null; o
       }
       onClose(true)
     } catch (err) {
-      const described = describeApiError(err, 'Regel kon niet worden opgeslagen.')
-      setError(described.message)
+      const described = describeApiError(err, t('maintenance.policies.saveFailed'))
+      setError(localizeApiError(t, err, t('maintenance.policies.saveFailed')))
       setFieldErrors(described.fieldErrors)
       setSaving(false)
     }
@@ -219,16 +223,16 @@ function PolicyDialog({ policy, onClose }: { policy: MaintenancePolicy | null; o
 
   return (
     <Modal
-      title={policy ? 'Regel bewerken' : 'Nieuwe regel'}
+      title={policy ? t('maintenance.policies.editTitle') : t('maintenance.policies.newTitle')}
       onClose={() => onClose(false)}
       busy={saving}
       footer={
         <>
           <Button variant="secondary" onClick={() => onClose(false)} disabled={saving}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="policy-form" disabled={saving}>
-            {saving ? 'Opslaan…' : 'Opslaan'}
+            {saving ? t('fleet.common.saving') : t('ui.actions.save')}
           </Button>
         </>
       }
@@ -237,18 +241,18 @@ function PolicyDialog({ policy, onClose }: { policy: MaintenancePolicy | null; o
         <ValidationSummary
           message={error}
           fieldErrors={fieldErrors}
-          fieldLabels={{ intervalMonths: 'Interval (maanden)', intervalKm: 'Interval (km)', warningDays: 'Waarschuwingstermijn' }}
+          fieldLabels={{ intervalMonths: t('maintenance.policy.intervalMonths'), intervalKm: t('maintenance.policy.intervalKm'), warningDays: t('maintenance.policies.warningTermLabel') }}
         />
-        <FormField label="Soort" htmlFor="mp-kind">
+        <FormField label={t('maintenance.policies.colKind')} htmlFor="mp-kind">
           <select id="mp-kind" value={kind} onChange={(e) => setKind(e.target.value as MaintenancePolicyKind)} disabled={saving}>
             {Object.entries(POLICY_KIND_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
-                {label}
+                {t(label)}
               </option>
             ))}
           </select>
         </FormField>
-        <FormField label="Activatype" htmlFor="mp-asset">
+        <FormField label={t('maintenance.policies.colAssetKind')} htmlFor="mp-asset">
           <select
             id="mp-asset"
             value={assetKind}
@@ -260,14 +264,14 @@ function PolicyDialog({ policy, onClose }: { policy: MaintenancePolicy | null; o
           >
             {Object.entries(ASSET_KIND_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
-                {label}
+                {t(label)}
               </option>
             ))}
           </select>
         </FormField>
-        <FormField label="Categorie" htmlFor="mp-category" hint="Leeg = bedrijfsstandaard voor dit activatype.">
+        <FormField label={t('maintenance.policies.fieldCategory')} htmlFor="mp-category" hint={t('maintenance.policies.categoryHint')}>
           <select id="mp-category" value={categoryId ?? ''} onChange={(e) => setCategoryId(e.target.value || null)} disabled={saving}>
-            <option value="">— Bedrijfsstandaard —</option>
+            <option value="">{t('maintenance.policies.companyDefaultOption')}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -275,24 +279,24 @@ function PolicyDialog({ policy, onClose }: { policy: MaintenancePolicy | null; o
             ))}
           </select>
         </FormField>
-        <FormField label="Interval (maanden)" htmlFor="mp-months" error={getFieldError(fieldErrors, 'intervalMonths')}>
+        <FormField label={t('maintenance.policy.intervalMonths')} htmlFor="mp-months" error={getFieldError(fieldErrors, 'intervalMonths')}>
           <input id="mp-months" type="number" min={1} value={intervalMonths} onChange={(e) => setIntervalMonths(e.target.value)} disabled={saving} />
         </FormField>
         {assetKind === 'Vehicle' && (
-          <FormField label="Interval (km)" htmlFor="mp-km" error={getFieldError(fieldErrors, 'intervalKm')} hint="Alleen voor voertuigen.">
+          <FormField label={t('maintenance.policy.intervalKm')} htmlFor="mp-km" error={getFieldError(fieldErrors, 'intervalKm')} hint={t('maintenance.policies.intervalKmOnlyVehicles')}>
             <input id="mp-km" type="number" min={1} value={intervalKm} onChange={(e) => setIntervalKm(e.target.value)} disabled={saving} />
           </FormField>
         )}
-        <FormField label="Waarschuwing (dagen vooraf)" htmlFor="mp-warning" error={getFieldError(fieldErrors, 'warningDays')}>
+        <FormField label={t('maintenance.policy.warningDaysBefore')} htmlFor="mp-warning" error={getFieldError(fieldErrors, 'warningDays')}>
           <input id="mp-warning" type="number" min={0} max={365} value={warningDays} onChange={(e) => setWarningDays(e.target.value)} disabled={saving} />
         </FormField>
-        <FormField label="Omschrijving" htmlFor="mp-description">
+        <FormField label={t('maintenance.policy.description')} htmlFor="mp-description">
           <input id="mp-description" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} disabled={saving} />
         </FormField>
-        <FormField label="Status" htmlFor="mp-active">
+        <FormField label={t('maintenance.policies.colStatus')} htmlFor="mp-active">
           <label className="customer-form-checkbox">
             <input id="mp-active" type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} disabled={saving} />
-            Regel is actief
+            {t('maintenance.policies.isActive')}
           </label>
         </FormField>
       </form>

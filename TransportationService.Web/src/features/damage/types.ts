@@ -1,19 +1,20 @@
 export type DamageSeverity = 'Minor' | 'Moderate' | 'Severe' | 'TotalLoss'
 export type DamageStatus = 'Reported' | 'UnderAssessment' | 'InRepair' | 'Repaired' | 'Closed'
 
+/** Vertaalsleutels (i18n-wave): render via t(DAMAGE_..._LABELS[code]). */
 export const DAMAGE_SEVERITY_LABELS: Record<DamageSeverity, string> = {
-  Minor: 'Licht',
-  Moderate: 'Matig',
-  Severe: 'Zwaar',
-  TotalLoss: 'Totaal verlies',
+  Minor: 'damage.severity.Minor',
+  Moderate: 'damage.severity.Moderate',
+  Severe: 'damage.severity.Severe',
+  TotalLoss: 'damage.severity.TotalLoss',
 }
 
 export const DAMAGE_STATUS_LABELS: Record<DamageStatus, string> = {
-  Reported: 'Gemeld',
-  UnderAssessment: 'In beoordeling',
-  InRepair: 'In herstelling',
-  Repaired: 'Hersteld',
-  Closed: 'Afgesloten',
+  Reported: 'damage.status.Reported',
+  UnderAssessment: 'damage.status.UnderAssessment',
+  InRepair: 'damage.status.InRepair',
+  Repaired: 'damage.status.Repaired',
+  Closed: 'damage.status.Closed',
 }
 
 export interface DamageReport {

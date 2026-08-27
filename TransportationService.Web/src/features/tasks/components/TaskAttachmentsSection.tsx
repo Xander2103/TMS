@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   deleteTaskAttachment,
   downloadTaskAttachment,
@@ -27,6 +28,7 @@ function formatSize(bytes: number): string {
 
 /** Evidence attachments on a task: list + download + upload (pdf/jpg/png ≤ 10 MB) + delete. */
 export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: TaskAttachmentsSectionProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [attachments, setAttachments] = useState<TaskAttachment[]>([])
   const [note, setNote] = useState('')
@@ -39,7 +41,7 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
         setAttachments(data)
         onCountChange?.(data.length)
       })
-      .catch(() => showError('De bijlagen konden niet worden geladen.'))
+      .catch(() => showError(t('tasks.attachments.loadFailed')))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId])
 
@@ -51,11 +53,11 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
     setBusy(true)
     try {
       await uploadTaskAttachment(taskId, file, note.trim() || undefined)
-      showSuccess('Bijlage toegevoegd.')
+      showSuccess(t('tasks.attachments.uploaded'))
       setNote('')
       load()
     } catch (err) {
-      showError(describeApiError(err, 'Uploaden is mislukt.').message)
+      showError(localizeApiError(t, err, t('tasks.attachments.uploadFailed')))
     } finally {
       setBusy(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -66,10 +68,10 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
     setBusy(true)
     try {
       await deleteTaskAttachment(taskId, attachment.id)
-      showSuccess('Bijlage verwijderd.')
+      showSuccess(t('tasks.attachments.deleted'))
       load()
     } catch (err) {
-      showError(describeApiError(err, 'Verwijderen is mislukt.').message)
+      showError(localizeApiError(t, err, t('tasks.attachments.deleteFailed')))
     } finally {
       setBusy(false)
     }
@@ -77,9 +79,9 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
 
   return (
     <div className="task-detail-section">
-      <h4>Bijlagen (bewijs)</h4>
+      <h4>{t('tasks.attachments.title')}</h4>
       {attachments.length === 0 ? (
-        <p className="placeholder-text">Nog geen bijlagen.</p>
+        <p className="placeholder-text">{t('tasks.attachments.empty')}</p>
       ) : (
         <ul className="task-attachment-list">
           {attachments.map((attachment) => (
@@ -89,7 +91,7 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
                 className="ui-button ui-button-ghost"
                 onClick={() =>
                   downloadTaskAttachment(taskId, attachment.id, attachment.fileName).catch(() =>
-                    showError('Bijlage kon niet worden gedownload.'),
+                    showError(t('tasks.attachments.downloadFailed')),
                   )
                 }
               >
@@ -101,7 +103,7 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
               </span>
               {canManage && (
                 <Button variant="ghost" onClick={() => void handleDelete(attachment)} disabled={busy}>
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </Button>
               )}
             </li>
@@ -112,17 +114,17 @@ export function TaskAttachmentsSection({ taskId, canManage, onCountChange }: Tas
         <div className="task-attachment-upload">
           <input
             type="text"
-            placeholder="Notitie bij de bijlage (optioneel)"
+            placeholder={t('tasks.attachments.notePlaceholder')}
             value={note}
             onChange={(event) => setNote(event.target.value)}
-            aria-label="Notitie bij de bijlage"
+            aria-label={t('tasks.attachments.noteAria')}
             disabled={busy}
           />
           <input
             ref={fileInputRef}
             type="file"
             accept={TASK_ATTACHMENT_ACCEPT}
-            aria-label="Bijlage uploaden"
+            aria-label={t('tasks.attachments.uploadAria')}
             disabled={busy}
             onChange={(event) => {
               const file = event.target.files?.[0]

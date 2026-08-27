@@ -1,14 +1,16 @@
 export type MaintenancePolicyKind = 'Maintenance' | 'Inspection'
 export type FleetAssetKind = 'Vehicle' | 'Trailer'
 
+/** i18n-keys (maintenance.policy.kind.*) — render via t(POLICY_KIND_LABELS[x]). */
 export const POLICY_KIND_LABELS: Record<MaintenancePolicyKind, string> = {
-  Maintenance: 'Onderhoud',
-  Inspection: 'Keuring',
+  Maintenance: 'maintenance.policy.kind.Maintenance',
+  Inspection: 'maintenance.policy.kind.Inspection',
 }
 
+/** i18n-keys (maintenance.policy.assetKind.*) — render via t(ASSET_KIND_LABELS[x]). */
 export const ASSET_KIND_LABELS: Record<FleetAssetKind, string> = {
-  Vehicle: 'Voertuig',
-  Trailer: 'Oplegger',
+  Vehicle: 'maintenance.policy.assetKind.Vehicle',
+  Trailer: 'maintenance.policy.assetKind.Trailer',
 }
 
 export interface MaintenancePolicy {
@@ -59,9 +61,12 @@ export interface EffectivePolicies {
 }
 
 /** Human description of which level a rule targets (resolution: asset > category > company). */
-export function policyLevelLabel(policy: MaintenancePolicy): string {
-  if (policy.vehicleNumber) return `Voertuig ${policy.vehicleNumber}`
-  if (policy.trailerNumber) return `Oplegger ${policy.trailerNumber}`
-  if (policy.categoryName) return `Categorie ${policy.categoryName}`
-  return 'Bedrijfsstandaard'
+export function policyLevelLabel(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  policy: MaintenancePolicy,
+): string {
+  if (policy.vehicleNumber) return t('maintenance.policies.levelVehicle', { number: policy.vehicleNumber })
+  if (policy.trailerNumber) return t('maintenance.policies.levelTrailer', { number: policy.trailerNumber })
+  if (policy.categoryName) return t('maintenance.policies.levelCategory', { name: policy.categoryName })
+  return t('maintenance.policies.levelCompany')
 }

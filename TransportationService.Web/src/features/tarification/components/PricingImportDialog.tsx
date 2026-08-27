@@ -3,7 +3,8 @@ import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   commitPricingImport,
   downloadAgreementExport,
@@ -51,11 +52,12 @@ function RuleChangeRow({ change }: { change: PricingImportRuleChange }) {
  * importeren") — the latter never touches the source table.
  */
 export function PricingImportDialog({ agreementId, agreementName, onClose, onImported }: PricingImportDialogProps) {
+  const { t } = useLocale()
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<PricingImportPreview | null>(null)
   const [applyRemovals, setApplyRemovals] = useState(false)
   const [mode, setMode] = useState<PricingImportMode>('UpdateAgreement')
-  const [newName, setNewName] = useState(`${agreementName} (nieuwe versie)`)
+  const [newName, setNewName] = useState(() => t('tarification.importDialog.newVersionDefault', { name: agreementName }))
   const [newEffectiveFrom, setNewEffectiveFrom] = useState(today())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,7 +75,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
     try {
       await downloadAgreementExport(agreementId, agreementName)
     } catch (err) {
-      setError(describeApiError(err, 'De tabel kon niet worden gedownload.').message)
+      setError(localizeApiError(t, err, t('tarification.importDialog.downloadError')))
     }
   }
 
@@ -85,7 +87,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
     try {
       setPreview(await previewPricingImport(agreementId, file))
     } catch (err) {
-      setError(describeApiError(err, 'Het voorbeeld kon niet worden gemaakt.').message)
+      setError(localizeApiError(t, err, t('tarification.importDialog.previewError')))
     } finally {
       setBusy(false)
     }
@@ -94,7 +96,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
   async function handleCommit() {
     if (!file || !preview) return
     if (mode === 'DuplicateAsNewVersion' && (!newName.trim() || !newEffectiveFrom)) {
-      setError('Kies een naam en een ingangsdatum voor de nieuwe versie.')
+      setError(t('tarification.importDialog.nameDateRequired'))
       return
     }
 
@@ -110,7 +112,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
       setCommitted(result)
       onImported(result)
     } catch (err) {
-      setError(describeApiError(err, 'De import is mislukt.').message)
+      setError(localizeApiError(t, err, t('tarification.importDialog.commitError')))
     } finally {
       setBusy(false)
     }
@@ -120,32 +122,32 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
 
   return (
     <Modal
-      title="Tarieventabel importeren"
+      title={t('tarification.importDialog.title')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Sluiten
+            {t('ui.actions.close')}
           </Button>
           <Button onClick={() => void handlePreview()} disabled={busy || !file}>
-            Voorbeeld
+            {t('tarification.common.preview')}
           </Button>
           <Button onClick={() => void handleCommit()} disabled={busy || !canCommit}>
-            Importeren
+            {t('tarification.importDialog.import')}
           </Button>
         </>
       }
     >
       <div className="pricing-import-dialog">
         <p className="customer-form-muted">
-          Importeer regels uit een Excel-bestand.{' '}
+          {t('tarification.importDialog.intro')}{' '}
           <button type="button" className="customer-import-template-link" onClick={() => void handleDownload()} disabled={busy}>
-            Huidige tabel downloaden
+            {t('tarification.importDialog.downloadCurrent')}
           </button>
         </p>
 
-        <FormField label="Bestand (.xlsx)" htmlFor="pricing-import-file">
+        <FormField label={t('tarification.importDialog.fileLabel')} htmlFor="pricing-import-file">
           <input
             id="pricing-import-file"
             type="file"
@@ -164,7 +166,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
               onChange={() => setMode('UpdateAgreement')}
               disabled={busy}
             />
-            Deze tabel bijwerken
+            {t('tarification.importDialog.modeUpdate')}
           </label>
           <label className="tof-checkbox">
             <input
@@ -174,12 +176,12 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
               onChange={() => setMode('DuplicateAsNewVersion')}
               disabled={busy}
             />
-            Als nieuwe versie importeren
+            {t('tarification.importDialog.modeNewVersion')}
           </label>
 
           {mode === 'DuplicateAsNewVersion' && (
             <div className="issued-items-form-row">
-              <FormField label="Naam nieuwe versie" htmlFor="pricing-import-new-name" required>
+              <FormField label={t('tarification.importDialog.newNameLabel')} htmlFor="pricing-import-new-name" required>
                 <input
                   id="pricing-import-new-name"
                   value={newName}
@@ -188,7 +190,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
                   maxLength={200}
                 />
               </FormField>
-              <FormField label="Ingangsdatum" htmlFor="pricing-import-new-from" required>
+              <FormField label={t('tarification.common.effectiveDate')} htmlFor="pricing-import-new-from" required>
                 <input
                   id="pricing-import-new-from"
                   type="date"
@@ -203,7 +205,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
 
         <label className="tof-checkbox">
           <input type="checkbox" checked={applyRemovals} onChange={(e) => setApplyRemovals(e.target.checked)} disabled={busy} />
-          Verwijderingen toepassen (regels die niet meer in het bestand staan, verwijderen)
+          {t('tarification.importDialog.applyRemovals')}
         </label>
 
         {error && (
@@ -214,33 +216,33 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
 
         {committed && (
           <p className="pricing-import-summary" role="status">
-            Import klaar: {committed.added} toegevoegd, {committed.updated} gewijzigd, {committed.removed} verwijderd.
+            {t('tarification.importDialog.done', { added: committed.added, updated: committed.updated, removed: committed.removed })}
           </p>
         )}
 
         {!committed && preview && (
           <>
             <p className="pricing-import-summary">
-              <strong>{preview.rowsFound}</strong> rijen gevonden — {preview.rowsValid} geldig,{' '}
-              {preview.warnings.length} waarschuwing{preview.warnings.length === 1 ? '' : 'en'},{' '}
+              <strong>{preview.rowsFound}</strong> {t('tarification.importDialog.rowsFoundTail', { valid: preview.rowsValid })}{' '}
+              {t('tarification.importDialog.warningCount', { count: preview.warnings.length })},{' '}
               <strong className={preview.errors.length > 0 ? 'customer-import-danger' : undefined}>
-                {preview.errors.length} fout{preview.errors.length === 1 ? '' : 'en'}
+                {t('tarification.importDialog.errorCount', { count: preview.errors.length })}
               </strong>
             </p>
             <div className="pricing-import-badges">
-              <ChangeBadge label="Toevoegen" tone="success" count={preview.added.length} />
-              <ChangeBadge label="Wijzigen" tone="info" count={preview.updated.length} />
-              <ChangeBadge label="Verwijderen" tone="warning" count={preview.removed.length} />
+              <ChangeBadge label={t('tarification.importDialog.badgeAdd')} tone="success" count={preview.added.length} />
+              <ChangeBadge label={t('tarification.importDialog.badgeUpdate')} tone="info" count={preview.updated.length} />
+              <ChangeBadge label={t('tarification.importDialog.badgeRemove')} tone="warning" count={preview.removed.length} />
             </div>
 
             {preview.errors.length > 0 && (
               <div className="pricing-import-table-wrapper customer-import-table-wrapper">
-                <h4>Fouten</h4>
+                <h4>{t('tarification.importDialog.headingErrors')}</h4>
                 <table className="customer-import-table">
                   <thead>
                     <tr>
-                      <th>Rij</th>
-                      <th>Melding</th>
+                      <th>{t('tarification.importDialog.colRow')}</th>
+                      <th>{t('tarification.importDialog.colMessage')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -257,12 +259,12 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
 
             {preview.warnings.length > 0 && (
               <div className="pricing-import-table-wrapper customer-import-table-wrapper">
-                <h4>Waarschuwingen</h4>
+                <h4>{t('tarification.importDialog.headingWarnings')}</h4>
                 <table className="customer-import-table">
                   <thead>
                     <tr>
-                      <th>Rij</th>
-                      <th>Melding</th>
+                      <th>{t('tarification.importDialog.colRow')}</th>
+                      <th>{t('tarification.importDialog.colMessage')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -279,12 +281,12 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
 
             {preview.added.length > 0 && (
               <div className="pricing-import-table-wrapper customer-import-table-wrapper">
-                <h4>Toevoegen</h4>
+                <h4>{t('tarification.importDialog.badgeAdd')}</h4>
                 <table className="customer-import-table">
                   <thead>
                     <tr>
-                      <th>Naam</th>
-                      <th>Details</th>
+                      <th>{t('tarification.common.name')}</th>
+                      <th>{t('tarification.importDialog.colDetails')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -298,12 +300,12 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
 
             {preview.updated.length > 0 && (
               <div className="pricing-import-table-wrapper customer-import-table-wrapper">
-                <h4>Wijzigen</h4>
+                <h4>{t('tarification.importDialog.badgeUpdate')}</h4>
                 <table className="customer-import-table">
                   <thead>
                     <tr>
-                      <th>Naam</th>
-                      <th>Veldwijzigingen</th>
+                      <th>{t('tarification.common.name')}</th>
+                      <th>{t('tarification.importDialog.colFieldChanges')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -317,11 +319,11 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
 
             {preview.removed.length > 0 && (
               <div className="pricing-import-table-wrapper customer-import-table-wrapper">
-                <h4>Verwijderen</h4>
+                <h4>{t('tarification.importDialog.badgeRemove')}</h4>
                 <table className="customer-import-table">
                   <thead>
                     <tr>
-                      <th>Naam</th>
+                      <th>{t('tarification.common.name')}</th>
                     </tr>
                   </thead>
                   <tbody>

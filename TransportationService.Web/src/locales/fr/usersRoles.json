@@ -1,0 +1,140 @@
+{
+  "users": {
+    "page": {
+      "title": "Utilisateurs",
+      "newUser": "Nouvel utilisateur",
+      "loading": "Chargement des utilisateurs...",
+      "loadFailed": "Les utilisateurs n'ont pas pu être chargés."
+    },
+    "table": {
+      "empty": "Il n'y a pas encore d'utilisateurs.",
+      "name": "Nom",
+      "email": "E-mail",
+      "roles": "Rôles",
+      "status": "Statut",
+      "noRoles": "Aucun rôle",
+      "active": "Actif",
+      "inactive": "Inactif",
+      "blocked": "Bloqué"
+    },
+    "form": {
+      "email": "E-mail",
+      "firstName": "Prénom",
+      "lastName": "Nom",
+      "employeeId": "Collaborateur lié (id)",
+      "customerId": "Client lié (id)",
+      "saving": "Enregistrement...",
+      "saveChanges": "Enregistrer les modifications",
+      "create": "Créer l'utilisateur"
+    },
+    "validation": {
+      "emailRequired": "L'e-mail est obligatoire.",
+      "emailMax": "L'e-mail peut contenir au maximum {max} caractères.",
+      "emailInvalid": "Adresse e-mail invalide.",
+      "firstNameRequired": "Le prénom est obligatoire.",
+      "firstNameMax": "Le prénom peut contenir au maximum {max} caractères.",
+      "lastNameRequired": "Le nom est obligatoire.",
+      "lastNameMax": "Le nom peut contenir au maximum {max} caractères."
+    },
+    "mutations": {
+      "submitFailed": "L'action n'a pas pu être exécutée. Veuillez réessayer.",
+      "lastAdmin": "Ceci est le dernier administrateur actif et ne peut pas être modifié."
+    },
+    "detail": {
+      "loading": "Chargement de l'utilisateur...",
+      "loadFailed": "L'utilisateur n'a pas pu être chargé.",
+      "notFound": "Utilisateur introuvable.",
+      "confirmDeactivate": "Voulez-vous vraiment désactiver {name} ?",
+      "confirmBlock": "Voulez-vous vraiment bloquer {name} ?",
+      "sectionData": "Données",
+      "sectionStatus": "Statut",
+      "sectionRoles": "Rôles",
+      "deactivate": "Désactiver",
+      "activate": "Activer",
+      "unblock": "Débloquer",
+      "block": "Bloquer"
+    },
+    "rolesPanel": {
+      "loading": "Chargement des rôles...",
+      "systemRole": "Rôle système",
+      "saving": "Enregistrement...",
+      "save": "Enregistrer les rôles"
+    }
+  },
+  "roles": {
+    "page": {
+      "title": "Rôles et droits",
+      "newRole": "Nouveau rôle",
+      "name": "Nom",
+      "description": "Description",
+      "nameRequired": "Le nom est obligatoire.",
+      "nameMax": "Le nom peut contenir au maximum {max} caractères.",
+      "creating": "Création...",
+      "create": "Créer le rôle",
+      "loading": "Chargement des rôles...",
+      "loadFailed": "Les rôles n'ont pas pu être chargés."
+    },
+    "table": {
+      "empty": "Il n'y a pas encore de rôles.",
+      "name": "Nom",
+      "description": "Description",
+      "status": "Statut",
+      "systemRole": "Rôle système",
+      "noDescription": "Aucune description",
+      "active": "Actif",
+      "inactive": "Inactif"
+    },
+    "detail": {
+      "loading": "Chargement du rôle...",
+      "loadFailed": "Le rôle n'a pas pu être chargé.",
+      "notFound": "Rôle introuvable.",
+      "sectionData": "Données",
+      "sectionPermissions": "Droits",
+      "sectionDeactivate": "Désactiver",
+      "systemRoleRenameHint": "Les rôles système ne peuvent pas être renommés.",
+      "saveChanges": "Enregistrer les modifications",
+      "saving": "Enregistrement...",
+      "confirmDeactivate": "Voulez-vous vraiment désactiver ce rôle ?",
+      "alreadyInactive": "Ce rôle est déjà inactif.",
+      "deactivateRole": "Désactiver le rôle",
+      "systemRoleDeactivateHint": "Les rôles système ne peuvent pas être désactivés."
+    },
+    "matrix": {
+      "loading": "Chargement des droits...",
+      "loadFailed": "Les droits n'ont pas pu être chargés.",
+      "saving": "Enregistrement...",
+      "save": "Enregistrer les droits"
+    },
+    "mutations": {
+      "submitFailed": "L'action n'a pas pu être exécutée. Veuillez réessayer.",
+      "systemRoleConflict": "Cette action n'est pas autorisée pour un rôle système."
+    },
+    "mappings": {
+      "breadcrumbRoles": "Rôles",
+      "title": "Liaisons fonction→rôle",
+      "subtitle": "Lors de la création d'un compte à partir d'un collaborateur, ces rôles sont proposés ; l'administrateur confirme toujours.",
+      "newMapping": "Nouvelle liaison",
+      "loadFailed": "Les liaisons n'ont pas pu être chargées.",
+      "loading": "Chargement des liaisons...",
+      "empty": "Aucune liaison pour le moment — les comptes ne recevront alors aucun rôle proposé.",
+      "columnFunction": "Fonction",
+      "columnRole": "Rôle proposé",
+      "columnActions": "Actions",
+      "added": "Liaison ajoutée.",
+      "deleteTitle": "Supprimer la liaison",
+      "deleteMessage": "Supprimer la liaison « {functionName} → {roleName} » ? Les comptes existants conservent leurs rôles.",
+      "deleted": "Liaison supprimée.",
+      "deleteFailed": "La liaison n'a pas pu être supprimée.",
+      "dialogTitle": "Nouvelle liaison fonction→rôle",
+      "adding": "Ajout…",
+      "add": "Ajouter",
+      "rolesLoadFailed": "Les rôles n'ont pas pu être chargés.",
+      "chooseBoth": "Choisissez à la fois une fonction et un rôle.",
+      "addFailed": "La liaison n'a pas pu être ajoutée.",
+      "function": "Fonction",
+      "chooseFunction": "— Choisissez une fonction —",
+      "role": "Rôle",
+      "chooseRole": "— Choisissez un rôle —"
+    }
+  }
+}

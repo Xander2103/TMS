@@ -1,3 +1,5 @@
+import { getActiveLocale } from '../../../../i18n/activeLocale'
+import { translate } from '../../../../i18n/translations'
 import { computeVolumeM3 } from '../../../../utils/volume'
 import type { ServiceOption } from '../../../tarification/api/pricingApi'
 import type { PackageUnitType } from '../../../packages/types'
@@ -84,20 +86,20 @@ export interface StopFormRow {
   collapsed: boolean
 }
 
-/** Dutch label per calculation method, for the services tab's "Berekeningswijze" and kind badges. */
+/** Translation KEY per calculation method (render via t()), for "Berekeningswijze" and kind badges. */
 export const SERVICE_KIND_LABELS: Record<ServiceOption['kind'], string> = {
-  Percent: 'Percentage',
-  Fixed: 'Vast bedrag',
-  PerHour: 'Per uur',
-  PerStop: 'Per stop',
-  PerUnit: 'Per eenheid',
-  PerOrderLine: 'Per orderlijn',
-  PerKg: 'Per kg',
-  PerM3: 'Per m³',
-  PerLdm: 'Per laadmeter',
-  PerDay: 'Per dag',
-  PerPalletDay: 'Per pallet-dag',
-  PerKm: 'Per km',
+  Percent: 'transportOrders.serviceKind.Percent',
+  Fixed: 'transportOrders.serviceKind.Fixed',
+  PerHour: 'transportOrders.serviceKind.PerHour',
+  PerStop: 'transportOrders.serviceKind.PerStop',
+  PerUnit: 'transportOrders.serviceKind.PerUnit',
+  PerOrderLine: 'transportOrders.serviceKind.PerOrderLine',
+  PerKg: 'transportOrders.serviceKind.PerKg',
+  PerM3: 'transportOrders.serviceKind.PerM3',
+  PerLdm: 'transportOrders.serviceKind.PerLdm',
+  PerDay: 'transportOrders.serviceKind.PerDay',
+  PerPalletDay: 'transportOrders.serviceKind.PerPalletDay',
+  PerKm: 'transportOrders.serviceKind.PerKm',
 }
 
 export function numberOrNullFrom(value: string): number | null {
@@ -213,13 +215,14 @@ export function toTimeInput(value: string | null | undefined): string {
   return value ? value.slice(0, 5) : ''
 }
 
-/** §15 badge text ("Vóór 10:00") for a stop's time requirement, '' when none. */
+/** §15 badge text ("Vóór 10:00") for a stop's time requirement, '' when none. Locale-aware via the active locale. */
 export function timeRequirementBadge(stop: Pick<StopFormRow, 'timeRequirement' | 'timeReqFrom' | 'timeReqTo'>): string {
+  const locale = getActiveLocale()
   switch (stop.timeRequirement) {
     case 'Before':
-      return stop.timeReqTo ? `Vóór ${stop.timeReqTo}` : ''
+      return stop.timeReqTo ? translate(locale, 'transportOrders.timeReq.before', { time: stop.timeReqTo }) : ''
     case 'After':
-      return stop.timeReqFrom ? `Na ${stop.timeReqFrom}` : ''
+      return stop.timeReqFrom ? translate(locale, 'transportOrders.timeReq.after', { time: stop.timeReqFrom }) : ''
     case 'Window':
       return stop.timeReqFrom && stop.timeReqTo ? `${stop.timeReqFrom}–${stop.timeReqTo}` : ''
     default:
@@ -478,26 +481,29 @@ const SECTION_ORDER = ['algemeen', 'route', 'goederen', 'services', 'documenten'
 /**
  * Validates the whole form and returns EVERY failing field (section-ordered), so the
  * ValidationSummary can list them and route the user to the first failing section.
+ * Runs outside React — labels/messages are translated via the module-level active locale.
  */
 export function validateOrderForm(values: OrderFormValues): OrderFormValidationError[] {
+  const locale = getActiveLocale()
+  const tr = (key: string, params?: Record<string, string | number>) => translate(locale, key, params)
   const errors: OrderFormValidationError[] = []
   const add = (section: string, field: string, label: string, message: string) =>
     errors.push({ section, field, label, message })
 
   if (!values.customerId) {
-    add('algemeen', 'customerId', 'Klant', 'Selecteer een klant.')
+    add('algemeen', 'customerId', tr('transportOrders.validation.customerLabel'), tr('transportOrders.validation.customerRequired'))
   }
   if (values.dieselSurchargeOverride && !values.dieselSurchargeOverrideReason.trim()) {
     add(
-      'algemeen', 'dieselSurchargeOverrideReason', 'Dieseltoeslag — reden',
-      'Geef een reden op voor het afwijkende dieseltoeslagpercentage.',
+      'algemeen', 'dieselSurchargeOverrideReason', tr('transportOrders.validation.dieselReasonLabel'),
+      tr('transportOrders.validation.dieselReasonMessage'),
     )
   }
 
   values.stops.forEach((stop, index) => {
-    const stopLabel = `Stop ${index + 1}`
+    const number = index + 1
     if (!stop.locationId && !stop.city.trim()) {
-      add('route', `stops[${index}].city`, `${stopLabel} — plaats`, 'Elke stop heeft een locatie of minstens een plaatsnaam nodig.')
+      add('route', `stops[${index}].city`, tr('transportOrders.validation.stopCityLabel', { number }), tr('transportOrders.validation.stopCityMessage'))
     }
     const windowPairs: Array<[string, string]> = [
       [stop.fromTime, stop.toTime],
@@ -505,23 +511,23 @@ export function validateOrderForm(values: OrderFormValues): OrderFormValidationE
       [stop.confirmedFrom, stop.confirmedTo],
     ]
     if (windowPairs.some(([from, to]) => from && to && to < from)) {
-      add('route', `stops[${index}].window`, `${stopLabel} — tijdvenster`, 'Het einde van een tijdvenster moet na het begin liggen.')
+      add('route', `stops[${index}].window`, tr('transportOrders.validation.stopWindowLabel', { number }), tr('transportOrders.validation.stopWindowMessage'))
     }
     if (stop.earliestAllowed && stop.latestAllowed && stop.latestAllowed < stop.earliestAllowed) {
-      add('route', `stops[${index}].latestAllowed`, `${stopLabel} — uiterste tijdstip`, 'Het uiterste tijdstip moet na het vroegst toegelaten tijdstip liggen.')
+      add('route', `stops[${index}].latestAllowed`, tr('transportOrders.validation.stopLatestLabel', { number }), tr('transportOrders.validation.stopLatestMessage'))
     }
     // §15: the simple time requirement needs the time(s) its kind uses.
     if (stop.timeRequirement === 'Before' && !stop.timeReqTo) {
-      add('route', `stops[${index}].timeReqTo`, `${stopLabel} — tijdseis`, 'Geef het uur op waarvóór deze stop moet gebeuren.')
+      add('route', `stops[${index}].timeReqTo`, tr('transportOrders.validation.stopTimeReqLabel', { number }), tr('transportOrders.validation.beforeMessage'))
     }
     if (stop.timeRequirement === 'After' && !stop.timeReqFrom) {
-      add('route', `stops[${index}].timeReqFrom`, `${stopLabel} — tijdseis`, 'Geef het uur op waarvóór deze stop niet mag gebeuren.')
+      add('route', `stops[${index}].timeReqFrom`, tr('transportOrders.validation.stopTimeReqLabel', { number }), tr('transportOrders.validation.afterMessage'))
     }
     if (stop.timeRequirement === 'Window') {
       if (!stop.timeReqFrom || !stop.timeReqTo) {
-        add('route', `stops[${index}].timeReqFrom`, `${stopLabel} — tijdseis`, 'Geef het volledige tijdvenster (van en tot) van deze stop op.')
+        add('route', `stops[${index}].timeReqFrom`, tr('transportOrders.validation.stopTimeReqLabel', { number }), tr('transportOrders.validation.windowRequiredMessage'))
       } else if (stop.timeReqTo <= stop.timeReqFrom) {
-        add('route', `stops[${index}].timeReqTo`, `${stopLabel} — tijdseis`, 'Het einde van het tijdvenster moet na het begin liggen.')
+        add('route', `stops[${index}].timeReqTo`, tr('transportOrders.validation.stopTimeReqLabel', { number }), tr('transportOrders.validation.windowOrderMessage'))
       }
     }
   })
@@ -529,8 +535,8 @@ export function validateOrderForm(values: OrderFormValues): OrderFormValidationE
   values.cargoItems.forEach((cargo, index) => {
     if (cargo.expectedQuantity === '' || Number(cargo.expectedQuantity) <= 0) {
       add(
-        'goederen', `cargoItems[${index}].expectedQuantity`, `Goederenlijn ${index + 1} — verwacht aantal`,
-        'De verwachte hoeveelheid van een goederenlijn moet groter dan nul zijn.',
+        'goederen', `cargoItems[${index}].expectedQuantity`, tr('transportOrders.validation.cargoQtyLabel', { number: index + 1 }),
+        tr('transportOrders.validation.cargoQtyMessage'),
       )
     }
   })
@@ -540,21 +546,21 @@ export function validateOrderForm(values: OrderFormValues): OrderFormValidationE
     values.quantity !== '' && Number(values.quantity) > 0 && Boolean(values.quantityUnitCode || values.quantityUnit.trim())
   if (!hasHeaderQuantity && values.cargoItems.length === 0 && !values.goodsDescription.trim()) {
     add(
-      'goederen', 'goodsDescription', 'Goederen',
-      'Vul minstens een hoeveelheid en eenheid in, voeg een goederenlijn toe of beschrijf de goederen.',
+      'goederen', 'goodsDescription', tr('transportOrders.validation.goodsLabel'),
+      tr('transportOrders.validation.goodsMessage'),
     )
   }
 
   const barcodes = values.cargoItems.map((c) => c.barcode.trim().toLowerCase()).filter(Boolean)
   if (barcodes.length !== new Set(barcodes).size) {
-    add('goederen', 'cargoBarcodes', 'Barcode', 'Een barcode mag maar één keer voorkomen binnen dezelfde opdracht.')
+    add('goederen', 'cargoBarcodes', tr('transportOrders.validation.barcodeLabel'), tr('transportOrders.validation.barcodeMessage'))
   }
 
   if (values.priceIsManual && !values.priceOverrideReason.trim()) {
-    add('prijs', 'priceOverrideReason', 'Handmatige prijs — reden', 'Geef een reden op voor de handmatige prijs.')
+    add('prijs', 'priceOverrideReason', tr('transportOrders.validation.manualPriceLabel'), tr('transportOrders.validation.manualPriceMessage'))
   }
   if (values.pricingSource === 'OneOff' && values.oneOffFixedAmount.trim() === '') {
-    add('prijs', 'oneOffFixedAmount', 'Eenmalige prijsafspraak — vast bedrag', 'Geef het vaste bedrag van de eenmalige prijsafspraak op.')
+    add('prijs', 'oneOffFixedAmount', tr('transportOrders.validation.oneOffLabel'), tr('transportOrders.validation.oneOffMessage'))
   }
 
   // Present errors in section order so "jump to the first failing section" matches the list.

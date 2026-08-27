@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { useUserMutations } from '../hooks/useUserMutations'
 import {
   toCreateUserInput,
@@ -27,6 +28,7 @@ function valuesFromUser(user?: User): UserFormValues {
 }
 
 export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
+  const { t } = useLocale()
   const isEditMode = Boolean(user)
   const [values, setValues] = useState<UserFormValues>(() => valuesFromUser(user))
   const [errors, setErrors] = useState<UserFormErrors>({})
@@ -47,7 +49,7 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
       return
     }
 
-    const validationErrors = validateUserForm(values)
+    const validationErrors = validateUserForm(t, values)
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors)
       return
@@ -65,7 +67,7 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
   return (
     <form className="user-form" onSubmit={handleSubmit} noValidate>
       <div className="form-field">
-        <label htmlFor="email">E-mail</label>
+        <label htmlFor="email">{t('usersRoles.users.form.email')}</label>
         <input
           id="email"
           name="email"
@@ -87,7 +89,7 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
       </div>
 
       <div className="form-field">
-        <label htmlFor="firstName">Voornaam</label>
+        <label htmlFor="firstName">{t('usersRoles.users.form.firstName')}</label>
         <input
           id="firstName"
           name="firstName"
@@ -108,7 +110,7 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
       </div>
 
       <div className="form-field">
-        <label htmlFor="lastName">Achternaam</label>
+        <label htmlFor="lastName">{t('usersRoles.users.form.lastName')}</label>
         <input
           id="lastName"
           name="lastName"
@@ -129,7 +131,7 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
       </div>
 
       <div className="form-field">
-        <label htmlFor="employeeId">Gekoppelde medewerker (id)</label>
+        <label htmlFor="employeeId">{t('usersRoles.users.form.employeeId')}</label>
         <input
           id="employeeId"
           name="employeeId"
@@ -141,7 +143,7 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
       </div>
 
       <div className="form-field">
-        <label htmlFor="customerId">Gekoppelde klant (id)</label>
+        <label htmlFor="customerId">{t('usersRoles.users.form.customerId')}</label>
         <input
           id="customerId"
           name="customerId"
@@ -160,7 +162,11 @@ export function UserForm({ user, onSaved, secondaryAction }: UserFormProps) {
 
       <div className="form-actions">
         <button type="submit" className="primary-button" disabled={isSubmitting}>
-          {isSubmitting ? 'Opslaan...' : isEditMode ? 'Wijzigingen opslaan' : 'Gebruiker aanmaken'}
+          {isSubmitting
+            ? t('usersRoles.users.form.saving')
+            : isEditMode
+              ? t('usersRoles.users.form.saveChanges')
+              : t('usersRoles.users.form.create')}
         </button>
         {secondaryAction}
       </div>

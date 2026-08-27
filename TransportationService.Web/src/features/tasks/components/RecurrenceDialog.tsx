@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   TASK_RECURRENCE_INTERVAL_LABELS,
   type SaveTaskRecurrenceInput,
@@ -22,6 +23,7 @@ interface RecurrenceDialogProps {
 
 /** Create/edit a recurring schedule that materialises a template into tasks. */
 export function RecurrenceDialog({ initial, templates, busy, onSubmit, onClose }: RecurrenceDialogProps) {
+  const { t } = useLocale()
   const [templateId, setTemplateId] = useState(initial?.templateId ?? '')
   const [employeeId, setEmployeeId] = useState<string | null>(initial?.assignedEmployeeId ?? null)
   const [interval, setInterval] = useState<TaskRecurrenceInterval>(initial?.interval ?? 'Weekly')
@@ -35,11 +37,11 @@ export function RecurrenceDialog({ initial, templates, busy, onSubmit, onClose }
 
   function submit() {
     const next: Record<string, string> = {}
-    if (!templateId) next.template = 'Kies een sjabloon.'
-    if (!employeeId) next.employee = 'Kies een medewerker.'
-    if (!startDate) next.startDate = 'Een startdatum is verplicht.'
+    if (!templateId) next.template = t('tasks.recurrenceDialog.chooseTemplate')
+    if (!employeeId) next.employee = t('tasks.recurrenceDialog.chooseEmployee')
+    if (!startDate) next.startDate = t('tasks.recurrenceDialog.startDateRequired')
     if (interval === 'CustomDays' && (!customIntervalDays || Number(customIntervalDays) < 1)) {
-      next.customDays = 'Geef een geldig aantal dagen op.'
+      next.customDays = t('tasks.recurrenceDialog.invalidDays')
     }
     setErrors(next)
     if (Object.keys(next).length > 0) return
@@ -57,28 +59,28 @@ export function RecurrenceDialog({ initial, templates, busy, onSubmit, onClose }
 
   return (
     <Modal
-      title={initial ? 'Terugkerende taak bewerken' : 'Nieuwe terugkerende taak'}
+      title={initial ? t('tasks.recurrenceDialog.editTitle') : t('tasks.recurrenceDialog.newTitle')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button onClick={submit} disabled={busy}>
-            {busy ? 'Bezig...' : 'Opslaan'}
+            {busy ? t('ui.actions.busy') : t('ui.actions.save')}
           </Button>
         </>
       }
     >
-      <FormField label="Sjabloon" htmlFor="recurrence-template" required error={errors.template}>
+      <FormField label={t('tasks.recurrenceDialog.template')} htmlFor="recurrence-template" required error={errors.template}>
         <select
           id="recurrence-template"
           value={templateId}
           onChange={(event) => setTemplateId(event.target.value)}
           disabled={busy}
         >
-          <option value="">— Selecteer —</option>
+          <option value="">{t('ui.select.placeholder')}</option>
           {templates.map((template) => (
             <option key={template.id} value={template.id}>
               {template.name}
@@ -87,12 +89,12 @@ export function RecurrenceDialog({ initial, templates, busy, onSubmit, onClose }
         </select>
       </FormField>
 
-      <FormField label="Medewerker" required error={errors.employee}>
+      <FormField label={t('tasks.recurrenceDialog.employee')} required error={errors.employee}>
         <EmployeeSelect value={employeeId} onChange={setEmployeeId} disabled={busy} />
       </FormField>
 
       <div className="task-form-row">
-        <FormField label="Interval" htmlFor="recurrence-interval">
+        <FormField label={t('tasks.recurrenceDialog.interval')} htmlFor="recurrence-interval">
           <select
             id="recurrence-interval"
             value={interval}
@@ -101,13 +103,13 @@ export function RecurrenceDialog({ initial, templates, busy, onSubmit, onClose }
           >
             {Object.entries(TASK_RECURRENCE_INTERVAL_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
-                {label}
+                {t(label)}
               </option>
             ))}
           </select>
         </FormField>
         {interval === 'CustomDays' && (
-          <FormField label="Aantal dagen" htmlFor="recurrence-custom-days" required error={errors.customDays}>
+          <FormField label={t('tasks.recurrenceDialog.customDays')} htmlFor="recurrence-custom-days" required error={errors.customDays}>
             <input
               id="recurrence-custom-days"
               type="number"
@@ -121,7 +123,7 @@ export function RecurrenceDialog({ initial, templates, busy, onSubmit, onClose }
       </div>
 
       <div className="task-form-row">
-        <FormField label="Startdatum" htmlFor="recurrence-start" required error={errors.startDate}>
+        <FormField label={t('tasks.recurrenceDialog.startDate')} htmlFor="recurrence-start" required error={errors.startDate}>
           <input
             id="recurrence-start"
             type="date"
@@ -130,7 +132,7 @@ export function RecurrenceDialog({ initial, templates, busy, onSubmit, onClose }
             disabled={busy}
           />
         </FormField>
-        <FormField label="Einddatum (optioneel)" htmlFor="recurrence-end">
+        <FormField label={t('tasks.recurrenceDialog.endDate')} htmlFor="recurrence-end">
           <input
             id="recurrence-end"
             type="date"
@@ -143,7 +145,7 @@ export function RecurrenceDialog({ initial, templates, busy, onSubmit, onClose }
 
       <label className="task-check-label">
         <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} disabled={busy} />
-        Actief
+        {t('tasks.recurrenceDialog.active')}
       </label>
     </Modal>
   )

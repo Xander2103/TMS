@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { KpiCard } from '../../kpi/components/KpiCard'
 import { Badge } from '../../../components/ui/Badge'
+import { useLocale } from '../../../i18n/localeContext'
 import { getPeppolOverview, type PeppolOverview } from '../api/peppolApi'
 
 function CheckMark({ ok, label }: { ok: boolean; label: string }) {
@@ -13,8 +14,10 @@ function CheckMark({ ok, label }: { ok: boolean; label: string }) {
 
 /** "Overzicht": configuratiechecklist per eigen bedrijf + stat-tegels + klantwaarschuwingen. */
 export function OverviewTab() {
+  const { t } = useLocale()
   const [overview, setOverview] = useState<PeppolOverview | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [errorKey, setErrorKey] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -23,59 +26,67 @@ export function OverviewTab() {
         if (mounted) setOverview(data)
       })
       .catch(() => {
-        if (mounted) setError('Het Peppol-overzicht kon niet worden geladen.')
+        if (mounted) setErrorKey('peppol.overview.loadFailed')
       })
     return () => {
       mounted = false
     }
   }, [])
 
-  if (error) return <p className="placeholder-text">{error}</p>
-  if (overview === null) return <p className="placeholder-text">Overzicht laden…</p>
+  if (errorKey) return <p className="placeholder-text">{t(errorKey)}</p>
+  if (overview === null) return <p className="placeholder-text">{t('peppol.overview.loading')}</p>
 
   return (
     <div>
       <div className="kpi-grid">
-        <KpiCard label="In wachtrij" value={overview.counts.queued} to="/peppol?tab=uitgaand" />
-        <KpiCard label="Afgeleverd" value={overview.counts.delivered} to="/peppol?tab=uitgaand" />
+        <KpiCard label={t('invoices.peppolStatus.Queued')} value={overview.counts.queued} to="/peppol?tab=uitgaand" />
         <KpiCard
-          label="Mislukt"
+          label={t('invoices.peppolStatus.Delivered')}
+          value={overview.counts.delivered}
+          to="/peppol?tab=uitgaand"
+        />
+        <KpiCard
+          label={t('invoices.peppolStatus.Failed')}
           value={overview.counts.failed}
           tone={overview.counts.failed > 0 ? 'danger' : undefined}
           to="/peppol?tab=uitgaand"
         />
-        <KpiCard label="Inkomend ontvangen" value={overview.counts.receivedIncoming} to="/peppol?tab=inkomend" />
+        <KpiCard
+          label={t('peppol.overview.kpiReceivedIncoming')}
+          value={overview.counts.receivedIncoming}
+          to="/peppol?tab=inkomend"
+        />
       </div>
 
       {overview.customersEnabledWithoutPeppolId > 0 && (
         <p className="peppol-warning" role="alert">
-          {overview.customersEnabledWithoutPeppolId}{' '}
-          {overview.customersEnabledWithoutPeppolId === 1 ? 'klant' : 'klanten'} met Peppol aan maar zonder Peppol-ID
+          {t('peppol.overview.customersEnabledWithoutId', { count: overview.customersEnabledWithoutPeppolId })}
         </p>
       )}
       {overview.activeCustomersMissingPeppolData > 0 && (
         <p className="peppol-info-note">
-          {overview.activeCustomersMissingPeppolData} actieve{' '}
-          {overview.activeCustomersMissingPeppolData === 1 ? 'klant' : 'klanten'} zonder Peppol-gegevens
+          {t('peppol.overview.customersMissingData', { count: overview.activeCustomersMissingPeppolData })}
         </p>
       )}
 
       <section className="edi-section">
-        <h3>Configuratie per eigen bedrijf</h3>
+        <h3>{t('peppol.overview.checklistTitle')}</h3>
         <ul className="peppol-checklist">
           {overview.legalEntities.map((entity) => (
             <li key={entity.legalEntityId} className="peppol-checklist-row">
               <span className="peppol-checklist-name">{entity.legalEntityName}</span>
-              <CheckMark ok={entity.hasPeppolIdentity} label="Peppol-ID" />
-              <CheckMark ok={entity.hasVatNumber} label="BTW-nummer" />
-              <CheckMark ok={entity.hasIban} label="IBAN" />
-              <Badge tone={entity.enabled ? 'success' : 'neutral'}>{entity.enabled ? 'Actief' : 'Inactief'}</Badge>
+              <CheckMark ok={entity.hasPeppolIdentity} label={t('peppol.fields.peppolId')} />
+              <CheckMark ok={entity.hasVatNumber} label={t('peppol.fields.vatNumber')} />
+              <CheckMark ok={entity.hasIban} label={t('peppol.fields.iban')} />
+              <Badge tone={entity.enabled ? 'success' : 'neutral'}>
+                {entity.enabled ? t('ui.statusBadges.active') : t('ui.statusBadges.inactive')}
+              </Badge>
               <Badge tone={entity.environment === 'Live' ? 'success' : 'info'}>
-                {entity.environment === 'Live' ? 'Live' : 'Sandbox'}
+                {entity.environment === 'Live' ? t('peppol.environment.Live') : t('peppol.environment.Sandbox')}
               </Badge>
             </li>
           ))}
-          {overview.legalEntities.length === 0 && <li>Nog geen eigen bedrijven geconfigureerd.</li>}
+          {overview.legalEntities.length === 0 && <li>{t('peppol.overview.noEntities')}</li>}
         </ul>
       </section>
     </div>

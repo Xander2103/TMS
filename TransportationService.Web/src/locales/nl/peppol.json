@@ -1,0 +1,148 @@
+{
+  "page": {
+    "title": "Peppol",
+    "subtitle": "E-facturatie via het Peppol-netwerk: verzendstatus per factuur, inkomende documenten en configuratie per eigen bedrijf.",
+    "noPermission": "Je hebt geen rechten om Peppol te bekijken.",
+    "tabs": {
+      "overview": "Overzicht",
+      "outgoing": "Uitgaand",
+      "incoming": "Inkomend",
+      "settings": "Configuratie",
+      "validation": "Validatieproblemen"
+    }
+  },
+  "kind": {
+    "Invoice": "Factuur",
+    "CreditNote": "Creditnota"
+  },
+  "incomingKind": {
+    "SupplierInvoice": "Leveranciersfactuur",
+    "SupplierCreditNote": "Leverancierscreditnota",
+    "StatusMessage": "Statusbericht"
+  },
+  "incomingStatus": {
+    "Received": "Ontvangen",
+    "NeedsReview": "Te controleren",
+    "Linked": "Verwerkt",
+    "Rejected": "Afgewezen"
+  },
+  "environment": {
+    "Sandbox": "Sandbox",
+    "Live": "Live"
+  },
+  "fields": {
+    "peppolId": "Peppol-ID",
+    "vatNumber": "BTW-nummer",
+    "iban": "IBAN"
+  },
+  "overview": {
+    "loadFailed": "Het Peppol-overzicht kon niet worden geladen.",
+    "loading": "Overzicht laden…",
+    "kpiReceivedIncoming": "Inkomend ontvangen",
+    "customersEnabledWithoutId_one": "{count} klant met Peppol aan maar zonder Peppol-ID",
+    "customersEnabledWithoutId_other": "{count} klanten met Peppol aan maar zonder Peppol-ID",
+    "customersMissingData_one": "{count} actieve klant zonder Peppol-gegevens",
+    "customersMissingData_other": "{count} actieve klanten zonder Peppol-gegevens",
+    "checklistTitle": "Configuratie per eigen bedrijf",
+    "noEntities": "Nog geen eigen bedrijven geconfigureerd."
+  },
+  "outgoing": {
+    "loadFailed": "De Peppol-transmissies konden niet worden geladen.",
+    "retryQueued": "Transmissie opnieuw in de wachtrij gezet.",
+    "retryFailed": "De transmissie kon niet opnieuw worden aangeboden.",
+    "cancelled": "Transmissie geannuleerd.",
+    "cancelFailed": "De transmissie kon niet worden geannuleerd.",
+    "colInvoice": "Factuur",
+    "colKind": "Type",
+    "colCustomer": "Klant",
+    "colAmount": "Bedrag",
+    "colDate": "Datum",
+    "colEnvironment": "Omgeving",
+    "colStatus": "Status",
+    "colProviderRef": "Provider-referentie",
+    "colError": "Fout",
+    "colAttempts": "Poging/versie",
+    "colActions": "Acties",
+    "retry": "Opnieuw",
+    "searchPlaceholder": "Zoeken op factuurnummer of klant...",
+    "statusFilterLabel": "Status",
+    "empty": "Geen Peppol-transmissies gevonden.",
+    "cancelTitle": "Transmissie annuleren",
+    "cancelMessage": "Weet je zeker dat je de Peppol-verzending van factuur {invoiceNumber} wilt annuleren?"
+  },
+  "incoming": {
+    "loadFailed": "De inkomende Peppol-documenten konden niet worden geladen.",
+    "reviewed": "Document gemarkeerd als verwerkt.",
+    "rejected": "Document afgewezen.",
+    "actionFailed": "De actie kon niet worden uitgevoerd.",
+    "colSupplier": "Leverancier",
+    "colDocumentNumber": "Documentnr",
+    "colKind": "Soort",
+    "colAmount": "Bedrag",
+    "colReceivedAt": "Ontvangen",
+    "colStatus": "Status",
+    "colNote": "Notitie",
+    "colActions": "Acties",
+    "markReviewed": "Markeer als verwerkt",
+    "reject": "Afwijzen",
+    "rejectTitle": "Document afwijzen",
+    "statusFilterLabel": "Status",
+    "empty": "Geen inkomende Peppol-documenten gevonden.",
+    "busy": "Bezig…",
+    "confirmReview": "Document {documentNumber} markeren als verwerkt?",
+    "confirmReject": "Document {documentNumber} afwijzen?",
+    "noteLabel": "Notitie (optioneel)"
+  },
+  "settings": {
+    "entitiesLoadFailed": "De eigen bedrijven konden niet worden geladen.",
+    "loadFailed": "De Peppol-instellingen konden niet worden geladen.",
+    "saved": "Peppol-instellingen opgeslagen.",
+    "saveFailed": "De instellingen konden niet worden opgeslagen.",
+    "testFailed": "De verbindingstest kon niet worden uitgevoerd.",
+    "entityLabel": "Eigen bedrijf",
+    "peppolId": "Peppol-ID: {id}",
+    "peppolIdMissing": "Peppol-ID ontbreekt",
+    "vat": "BTW: {vatNumber}",
+    "vatMissing": "BTW-nummer ontbreekt",
+    "iban": "IBAN: {iban}",
+    "ibanMissing": "IBAN ontbreekt",
+    "manageHintPrefix": "Deze gegevens beheer je via",
+    "manageHintLink": "Instellingen → Eigen bedrijven",
+    "loading": "Instellingen laden…",
+    "enabled": "Actief",
+    "environmentLabel": "Omgeving",
+    "providerLabel": "Provider",
+    "providerSandbox": "Sandbox (test-omgeving)",
+    "emailFallbackLabel": "E-mailterugval",
+    "emailFallbackHint": "E-mailadres waarop de factuur wordt afgeleverd als de klant niet via Peppol bereikbaar is.",
+    "defaultNoteLabel": "Standaardnotitie",
+    "saving": "Opslaan…",
+    "testConnection": "Verbinding testen",
+    "testing": "Testen…",
+    "found": "Gevonden",
+    "notFound": "Niet gevonden",
+    "providerReference": "Provider-referentie:",
+    "supportedDocTypes": "Ondersteunde documenttypes: {types}"
+  },
+  "validation": {
+    "loadFailed": "De validatieproblemen konden niet worden geladen.",
+    "loading": "Validatieproblemen laden…",
+    "intro": "Voordat een factuur via Peppol verzonden kan worden, moeten zowel het versturende eigen bedrijf als de ontvangende klant volledige Peppol-gegevens hebben. Hieronder staan de openstaande problemen.",
+    "entitiesTitle": "Onvolledige eigen bedrijven",
+    "entitiesComplete": "Alle eigen bedrijven zijn volledig geconfigureerd.",
+    "missing": "ontbreekt: {fields}",
+    "entitiesHintPrefix": "Vul de ontbrekende gegevens aan via",
+    "entitiesHintLink": "Instellingen → Eigen bedrijven",
+    "customersTitle": "Klanten",
+    "customersOk": "Geen klantproblemen gevonden.",
+    "enabledWithoutId_one": "klant met Peppol aan maar zonder Peppol-ID — verzenden mislukt voor deze klanten tot het Peppol-ID is ingevuld.",
+    "enabledWithoutId_other": "klanten met Peppol aan maar zonder Peppol-ID — verzenden mislukt voor deze klanten tot het Peppol-ID is ingevuld.",
+    "missingData_one": "actieve klant zonder Peppol-gegevens (informatief — Peppol is voor deze klanten mogelijk niet gewenst).",
+    "missingData_other": "actieve klanten zonder Peppol-gegevens (informatief — Peppol is voor deze klanten mogelijk niet gewenst).",
+    "customersHintPrefix": "Peppol-gegevens van een klant beheer je op de klantfiche via",
+    "customersHintLink": "Klanten"
+  },
+  "xml": {
+    "downloadFailed": "De Peppol-XML kon niet worden gedownload."
+  }
+}

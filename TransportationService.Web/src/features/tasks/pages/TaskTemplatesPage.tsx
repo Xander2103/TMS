@@ -6,8 +6,9 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import {
   applyTaskTemplate,
@@ -34,6 +35,7 @@ import '../components/tasks.css'
 
 /** Beheer van taaksjablonen en terugkerende taken (onboarding-checklists, periodieke controles). */
 export function TaskTemplatesPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManageTemplates = hasPermission('tasks.manage_templates')
@@ -61,10 +63,10 @@ export function TaskTemplatesPage() {
         setIsLoading(false)
       })
       .catch(() => {
-        setError('De sjablonen konden niet worden geladen.')
+        setError(t('tasks.templates.loadFailed'))
         setIsLoading(false)
       })
-  }, [canManageRecurring])
+  }, [canManageRecurring, t])
 
   useEffect(() => {
     reload()
@@ -78,11 +80,11 @@ export function TaskTemplatesPage() {
       } else {
         await createTaskTemplate(input)
       }
-      showSuccess('Sjabloon opgeslagen.')
+      showSuccess(t('tasks.templates.saved'))
       setTemplateDialog(null)
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'Opslaan is mislukt.').message)
+      showError(localizeApiError(t, err, t('tasks.templates.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -92,10 +94,10 @@ export function TaskTemplatesPage() {
     setBusy(true)
     try {
       const created = await applyTaskTemplate(template.id, { employeeId, startAt: startAt ?? undefined })
-      showSuccess(`${created.length} taken aangemaakt uit "${template.name}".`)
+      showSuccess(t('tasks.templates.applied', { count: created.length, name: template.name }))
       setApplyDialog(null)
     } catch (err) {
-      showError(describeApiError(err, 'Toepassen is mislukt.').message)
+      showError(localizeApiError(t, err, t('tasks.templates.applyFailed')))
     } finally {
       setBusy(false)
     }
@@ -109,11 +111,11 @@ export function TaskTemplatesPage() {
       } else {
         await createTaskRecurrence(input)
       }
-      showSuccess('Terugkerende taak opgeslagen.')
+      showSuccess(t('tasks.templates.recurrenceSaved'))
       setRecurrenceDialog(null)
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'Opslaan is mislukt.').message)
+      showError(localizeApiError(t, err, t('tasks.templates.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -125,21 +127,25 @@ export function TaskTemplatesPage() {
     setDeleteTarget(null)
     try {
       await (target.kind === 'template' ? deleteTaskTemplate(target.id) : deleteTaskRecurrence(target.id))
-      showSuccess(`'${target.name}' verwijderd.`)
+      showSuccess(t('tasks.templates.deleted', { name: target.name }))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'Verwijderen is mislukt.').message)
+      showError(localizeApiError(t, err, t('tasks.templates.deleteFailed')))
     }
   }
 
   const templateColumns: Column<TaskTemplate>[] = [
-    { key: 'name', header: 'Naam', render: (row) => row.name },
-    { key: 'description', header: 'Beschrijving', render: (row) => row.description ?? '—' },
-    { key: 'items', header: 'Taken', render: (row) => String(row.items.length) },
+    { key: 'name', header: t('tasks.templates.columns.name'), render: (row) => row.name },
+    { key: 'description', header: t('tasks.templates.columns.description'), render: (row) => row.description ?? '—' },
+    { key: 'items', header: t('tasks.templates.columns.items'), render: (row) => String(row.items.length) },
     {
       key: 'active',
-      header: 'Actief',
-      render: (row) => <Badge tone={row.isActive ? 'success' : 'neutral'}>{row.isActive ? 'Actief' : 'Inactief'}</Badge>,
+      header: t('tasks.templates.columns.active'),
+      render: (row) => (
+        <Badge tone={row.isActive ? 'success' : 'neutral'}>
+          {row.isActive ? t('tasks.templates.statusActive') : t('tasks.templates.statusInactive')}
+        </Badge>
+      ),
     },
     {
       key: 'actions',
@@ -148,20 +154,20 @@ export function TaskTemplatesPage() {
         <>
           {canApply && (
             <Button variant="ghost" onClick={() => setApplyDialog(row)} disabled={busy || !row.isActive}>
-              Toepassen op medewerker
+              {t('tasks.templates.applyToEmployee')}
             </Button>
           )}
           {canManageTemplates && (
             <>
               <Button variant="ghost" onClick={() => setTemplateDialog({ initial: row })} disabled={busy}>
-                Bewerken
+                {t('ui.actions.edit')}
               </Button>
               <Button
                 variant="ghost"
                 onClick={() => setDeleteTarget({ kind: 'template', id: row.id, name: row.name })}
                 disabled={busy}
               >
-                Verwijderen
+                {t('ui.actions.delete')}
               </Button>
             </>
           )}
@@ -171,22 +177,26 @@ export function TaskTemplatesPage() {
   ]
 
   const recurrenceColumns: Column<TaskRecurrence>[] = [
-    { key: 'template', header: 'Sjabloon', render: (row) => row.templateName },
-    { key: 'employee', header: 'Medewerker', render: (row) => row.assignedEmployeeName },
+    { key: 'template', header: t('tasks.templates.columns.template'), render: (row) => row.templateName },
+    { key: 'employee', header: t('tasks.templates.columns.employee'), render: (row) => row.assignedEmployeeName },
     {
       key: 'interval',
-      header: 'Interval',
+      header: t('tasks.templates.columns.interval'),
       render: (row) =>
         row.interval === 'CustomDays' && row.customIntervalDays != null
-          ? `Elke ${row.customIntervalDays} dagen`
-          : TASK_RECURRENCE_INTERVAL_LABELS[row.interval],
+          ? t('tasks.templates.everyXDays', { count: row.customIntervalDays })
+          : t(TASK_RECURRENCE_INTERVAL_LABELS[row.interval]),
     },
-    { key: 'start', header: 'Start', render: (row) => row.startDate },
-    { key: 'end', header: 'Einde', render: (row) => row.endDate ?? '—' },
+    { key: 'start', header: t('tasks.templates.columns.start'), render: (row) => row.startDate },
+    { key: 'end', header: t('tasks.templates.columns.end'), render: (row) => row.endDate ?? '—' },
     {
       key: 'active',
-      header: 'Actief',
-      render: (row) => <Badge tone={row.isActive ? 'success' : 'neutral'}>{row.isActive ? 'Actief' : 'Inactief'}</Badge>,
+      header: t('tasks.templates.columns.active'),
+      render: (row) => (
+        <Badge tone={row.isActive ? 'success' : 'neutral'}>
+          {row.isActive ? t('tasks.templates.statusActive') : t('tasks.templates.statusInactive')}
+        </Badge>
+      ),
     },
     {
       key: 'actions',
@@ -195,14 +205,14 @@ export function TaskTemplatesPage() {
         canManageRecurring ? (
           <>
             <Button variant="ghost" onClick={() => setRecurrenceDialog({ initial: row })} disabled={busy}>
-              Bewerken
+              {t('ui.actions.edit')}
             </Button>
             <Button
               variant="ghost"
               onClick={() => setDeleteTarget({ kind: 'recurrence', id: row.id, name: row.templateName })}
               disabled={busy}
             >
-              Verwijderen
+              {t('ui.actions.delete')}
             </Button>
           </>
         ) : null,
@@ -211,14 +221,16 @@ export function TaskTemplatesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Taaksjablonen' }]} />
+      <Breadcrumbs
+        items={[{ label: t('navigation.menu.settings'), to: '/settings' }, { label: t('tasks.templates.title') }]}
+      />
       <PageHeader
-        title="Taaksjablonen"
-        subtitle="Sjablonen voor terugkerende checklists en periodiek gegenereerde taken."
+        title={t('tasks.templates.title')}
+        subtitle={t('tasks.templates.subtitle')}
         action={
           canManageTemplates ? (
             <Button onClick={() => setTemplateDialog({ initial: null })} disabled={busy}>
-              Nieuw sjabloon
+              {t('tasks.templates.newTemplate')}
             </Button>
           ) : undefined
         }
@@ -230,15 +242,15 @@ export function TaskTemplatesPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Nog geen sjablonen."
+        emptyMessage={t('tasks.templates.empty')}
       />
 
       {canManageRecurring && (
         <section className="task-settings-section">
           <div className="task-settings-section-head">
-            <h3>Terugkerende taken</h3>
+            <h3>{t('tasks.templates.recurringTitle')}</h3>
             <Button variant="secondary" onClick={() => setRecurrenceDialog({ initial: null })} disabled={busy}>
-              Nieuwe terugkerende taak
+              {t('tasks.templates.newRecurrence')}
             </Button>
           </div>
           <DataTable
@@ -246,7 +258,7 @@ export function TaskTemplatesPage() {
             rows={recurrences}
             rowKey={(row) => row.id}
             isLoading={isLoading}
-            emptyMessage="Nog geen terugkerende taken."
+            emptyMessage={t('tasks.templates.emptyRecurrences')}
           />
         </section>
       )}
@@ -282,9 +294,13 @@ export function TaskTemplatesPage() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title={deleteTarget.kind === 'template' ? 'Sjabloon verwijderen' : 'Terugkerende taak verwijderen'}
-          message={`Weet je zeker dat je '${deleteTarget.name}' wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={
+            deleteTarget.kind === 'template'
+              ? t('tasks.templates.deleteTemplateTitle')
+              : t('tasks.templates.deleteRecurrenceTitle')
+          }
+          message={t('tasks.templates.deleteConfirm', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={() => void handleDelete()}
           onCancel={() => setDeleteTarget(null)}

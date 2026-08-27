@@ -3,7 +3,8 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   listPartners,
   simulate,
@@ -15,13 +16,14 @@ import {
 import { MessageDetailModal } from './MessageDetailModal'
 
 interface TestenTabProps {
-  /** Whether the detail modal opened after "Versturen naar test" may show its replay button (edi.retry or edi.manage). */
+  /** Whether the detail modal opened after sending to test may show its replay button (edi.retry or edi.manage). */
   canRetry: boolean
 }
 
 /** "Testen" tab: dry-run validation against the live mapping (no side effects) plus the
  * development simulator that actually ingests a sample order. */
 export function TestenTab({ canRetry }: TestenTabProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [partners, setPartners] = useState<EdiPartner[]>([])
   const [partnerCode, setPartnerCode] = useState('')
@@ -41,7 +43,7 @@ export function TestenTab({ canRetry }: TestenTabProps) {
 
   async function runValidate() {
     if (!partnerCode) {
-      showError('Kies eerst een handelspartner.')
+      showError(t('edi.test.choosePartner'))
       return
     }
     setBusy(true)
@@ -50,7 +52,7 @@ export function TestenTab({ canRetry }: TestenTabProps) {
       const outcome = await validatePayload({ partnerCode, messageType, payload })
       setResult(outcome)
     } catch (err) {
-      showError(describeApiError(err, 'Valideren is mislukt.').message)
+      showError(localizeApiError(t, err, t('edi.test.validateFailed')))
     } finally {
       setBusy(false)
     }
@@ -58,16 +60,16 @@ export function TestenTab({ canRetry }: TestenTabProps) {
 
   async function runSimulate() {
     if (!partnerCode) {
-      showError('Kies eerst een handelspartner.')
+      showError(t('edi.test.choosePartner'))
       return
     }
     setBusy(true)
     try {
       const message = await simulate(partnerCode)
-      showSuccess('Testbericht verzonden en verwerkt.')
+      showSuccess(t('edi.test.sent'))
       setCreatedMessageId(message.id)
     } catch (err) {
-      showError(describeApiError(err, 'De simulatie mislukte.').message)
+      showError(localizeApiError(t, err, t('edi.test.simulateFailed')))
     } finally {
       setBusy(false)
     }
@@ -75,9 +77,9 @@ export function TestenTab({ canRetry }: TestenTabProps) {
 
   return (
     <div>
-      <FormField label="Handelspartner" htmlFor="edi-test-partner">
+      <FormField label={t('edi.test.partnerLabel')} htmlFor="edi-test-partner">
         <select id="edi-test-partner" value={partnerCode} onChange={(e) => setPartnerCode(e.target.value)}>
-          {partners.length === 0 && <option value="">Geen partners</option>}
+          {partners.length === 0 && <option value="">{t('edi.test.noPartners')}</option>}
           {partners.map((p) => (
             <option key={p.id} value={p.code}>
               {p.name} ({p.code})
@@ -85,12 +87,12 @@ export function TestenTab({ canRetry }: TestenTabProps) {
           ))}
         </select>
       </FormField>
-      <FormField label="Berichttype" htmlFor="edi-test-type">
+      <FormField label={t('edi.test.typeLabel')} htmlFor="edi-test-type">
         <select id="edi-test-type" value={messageType} disabled>
           <option value="order">order</option>
         </select>
       </FormField>
-      <FormField label="Payload (generiek JSON-profiel)" htmlFor="edi-test-payload">
+      <FormField label={t('edi.test.payloadLabel')} htmlFor="edi-test-payload">
         <textarea
           id="edi-test-payload"
           className="edi-payload-input"
@@ -103,10 +105,10 @@ export function TestenTab({ canRetry }: TestenTabProps) {
 
       <div className="edi-test-actions">
         <Button variant="secondary" onClick={() => void runValidate()} disabled={busy}>
-          Valideren zonder te versturen
+          {t('edi.test.validate')}
         </Button>
         <Button onClick={() => void runSimulate()} disabled={busy}>
-          Versturen naar test
+          {t('edi.test.send')}
         </Button>
       </div>
 
@@ -114,29 +116,29 @@ export function TestenTab({ canRetry }: TestenTabProps) {
         <section className="edi-test-result">
           {result.valid ? (
             <div>
-              <Badge tone="success">Geldig ✓</Badge>
+              <Badge tone="success">{t('edi.test.valid')}</Badge>
               {result.wouldCreate && (
                 <dl className="edi-detail-grid">
-                  <dt>Externe order-id</dt>
+                  <dt>{t('edi.test.externalOrderId')}</dt>
                   <dd>{result.wouldCreate.externalOrderId}</dd>
-                  <dt>Klantreferentie</dt>
+                  <dt>{t('edi.test.customerReference')}</dt>
                   <dd>{result.wouldCreate.customerReference ?? '—'}</dd>
-                  <dt>Omschrijving</dt>
+                  <dt>{t('edi.test.description')}</dt>
                   <dd>{result.wouldCreate.goodsDescription}</dd>
-                  <dt>Aantal stops</dt>
+                  <dt>{t('edi.test.stopCount')}</dt>
                   <dd>{result.wouldCreate.stopCount}</dd>
-                  <dt>Aantal goederenlijnen</dt>
+                  <dt>{t('edi.test.cargoLineCount')}</dt>
                   <dd>{result.wouldCreate.cargoLineCount}</dd>
-                  <dt>Herkende locaties</dt>
+                  <dt>{t('edi.test.resolvedLocations')}</dt>
                   <dd>{result.wouldCreate.resolvedLocationCodes.join(', ') || '—'}</dd>
-                  <dt>Herkende eenheden</dt>
+                  <dt>{t('edi.test.resolvedUnits')}</dt>
                   <dd>{result.wouldCreate.resolvedUnitCodes.join(', ') || '—'}</dd>
                 </dl>
               )}
             </div>
           ) : (
             <div>
-              <Badge tone="danger">Ongeldig</Badge>
+              <Badge tone="danger">{t('edi.test.invalid')}</Badge>
               <ul className="edi-test-errors">
                 {result.errors.map((e, i) => (
                   <li key={i}>{e}</li>

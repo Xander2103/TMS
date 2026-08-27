@@ -57,6 +57,7 @@ import {
   type TransportOrderStop,
 } from '../types'
 import { formatDate, formatDateTime, parseIsoDate } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
 import './transport-orders.css'
 
 function formatWindow(from: string | null, to: string | null): string {
@@ -113,6 +114,7 @@ function calculationLabel(line: OrderPricingLine): string {
 }
 
 export function TransportOrderDetailPage() {
+  const { t } = useLocale()
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
@@ -197,7 +199,7 @@ export function TransportOrderDetailPage() {
     try {
       const updated = await changeTransportOrderStatus(id, target)
       setOrder(updated)
-      showSuccess(`Status gewijzigd naar ${ORDER_STATUS_LABELS[target]}.`)
+      showSuccess(`Status gewijzigd naar ${t(ORDER_STATUS_LABELS[target])}.`)
     } catch {
       showError('De status kon niet worden gewijzigd.')
     } finally {
@@ -240,7 +242,7 @@ export function TransportOrderDetailPage() {
       setCorrectDialogOpen(false)
       setCorrectTarget('')
       setCorrectReason('')
-      showSuccess(`Status gecorrigeerd naar ${ORDER_STATUS_LABELS[updated.status]}.`)
+      showSuccess(`Status gecorrigeerd naar ${t(ORDER_STATUS_LABELS[updated.status])}.`)
     } catch (err) {
       showError(err instanceof ApiError ? err.message : 'De status kon niet worden gecorrigeerd.')
     } finally {
@@ -534,7 +536,7 @@ export function TransportOrderDetailPage() {
                 {order.dossierNumber}
               </Link>
             )}
-            <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
+            <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_LABELS[order.status])}</Badge>
             {/* Wave 9: leveringsbon/CMR uit de bevroren ordergegevens. */}
             <Button
               variant="secondary"
@@ -565,7 +567,7 @@ export function TransportOrderDetailPage() {
             {hasAnyPermission(['orders.change_status', 'orders.manage']) &&
               order.allowedTransitions.map((target) => (
                 <Button key={target} onClick={() => void applyTransition(target)} disabled={busy || editing}>
-                  {ORDER_TRANSITION_LABELS[target]}
+                  {t(ORDER_TRANSITION_LABELS[target])}
                 </Button>
               ))}
             {order.canCancel && hasAnyPermission(['orders.cancel', 'orders.manage']) && (
@@ -609,10 +611,10 @@ export function TransportOrderDetailPage() {
           </div>
           <div className="to-price-summary-status">
             <span>
-              Opdracht: <Badge tone={ORDER_STATUS_TONE[order.status]}>{ORDER_STATUS_LABELS[order.status]}</Badge>
+              Opdracht: <Badge tone={ORDER_STATUS_TONE[order.status]}>{t(ORDER_STATUS_LABELS[order.status])}</Badge>
             </span>
             <span>
-              Prijs: <Badge tone={priceDisplay.tone}>{priceDisplay.label}</Badge>
+              Prijs: <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>
             </span>
           </div>
           {order.pricingSnapshot?.confirmedAtUtc && (
@@ -717,7 +719,7 @@ export function TransportOrderDetailPage() {
           {order.pricingLines && order.pricingLines.length > 0 && (
             <section className="to-section">
               <h2>
-                Prijs <Badge tone={priceDisplay.tone}>{priceDisplay.label}</Badge>
+                Prijs <Badge tone={priceDisplay.tone}>{t(priceDisplay.labelKey)}</Badge>
               </h2>
               <div className="to-header-actions to-price-status-actions">
                 {canLockPrice && (pricingStatus === 'Draft' || pricingStatus === 'Reviewed') && (
@@ -773,7 +775,7 @@ export function TransportOrderDetailPage() {
                   <ul>
                     {coverage.map((c, index) => (
                       <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
-                        <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{PRICING_COVERAGE_LABELS[c.status]}</Badge>{' '}
+                        <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{t(PRICING_COVERAGE_LABELS[c.status])}</Badge>{' '}
                         {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}
                         {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: € ${c.baseAmount.toFixed(2)}`}
                         {c.status !== 'Full' && c.reason ? ` — ${c.reason}` : ''}
@@ -816,7 +818,7 @@ export function TransportOrderDetailPage() {
                         )}
                       </td>
                       <td>
-                        <Badge tone={ORDER_PRICE_LINE_KIND_TONE[line.kind]}>{lineBadge(line)}</Badge>
+                        <Badge tone={ORDER_PRICE_LINE_KIND_TONE[line.kind]}>{t(lineBadge(line))}</Badge>
                       </td>
                       <td>{calculationLabel(line)}</td>
                       <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
@@ -890,7 +892,7 @@ export function TransportOrderDetailPage() {
                   <tr>
                     <td>{stop.sequence}</td>
                     <td>
-                      <Badge tone={stop.stopType === 'Loading' ? 'info' : 'success'}>{STOP_TYPE_LABELS[stop.stopType]}</Badge>
+                      <Badge tone={stop.stopType === 'Loading' ? 'info' : 'success'}>{t(STOP_TYPE_LABELS[stop.stopType])}</Badge>
                     </td>
                     <td title={stop.instructions ?? undefined}>
                       {(stop.warnings?.length ?? 0) > 0 && (
@@ -985,7 +987,7 @@ export function TransportOrderDetailPage() {
                     <tr key={item.id}>
                       <td>{item.sequence}</td>
                       <td>{item.description ?? `${item.expectedQuantity} × ${unitLabel(item.quantityUnitCode, item.quantityUnit)}`}</td>
-                      <td>{item.unitType ? (item.unitTypeLabel ?? UNIT_TYPE_LABELS[item.unitType]) : '—'}</td>
+                      <td>{item.unitType ? (item.unitTypeLabel ?? t(UNIT_TYPE_LABELS[item.unitType])) : '—'}</td>
                       <td>{item.barcode ? <code>{item.barcode}</code> : '—'}</td>
                       <td>
                         {item.expectedQuantity} {unitLabel(item.quantityUnitCode, item.quantityUnit)}
@@ -1090,7 +1092,7 @@ export function TransportOrderDetailPage() {
               <option value="">— Kies status —</option>
               {order.allowedCorrections.map((target) => (
                 <option key={target} value={target}>
-                  {ORDER_STATUS_LABELS[target]}
+                  {t(ORDER_STATUS_LABELS[target])}
                 </option>
               ))}
             </select>
@@ -1350,7 +1352,7 @@ export function TransportOrderDetailPage() {
               <ul>
                 {coverage.map((c, index) => (
                   <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
-                    <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{PRICING_COVERAGE_LABELS[c.status]}</Badge>{' '}
+                    <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{t(PRICING_COVERAGE_LABELS[c.status])}</Badge>{' '}
                     {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}
                     {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: € ${c.baseAmount.toFixed(2)}`}
                     {c.status !== 'Full' && c.reason ? ` — ${c.reason}` : ''}

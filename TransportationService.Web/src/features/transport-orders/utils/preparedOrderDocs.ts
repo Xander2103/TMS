@@ -1,4 +1,6 @@
 import { ApiError } from '../../../api/apiClient'
+import { getActiveLocale } from '../../../i18n/activeLocale'
+import { translate } from '../../../i18n/translations'
 import { createOrderDocument, uploadOrderDocumentFile, type OrderDocumentType } from '../api/orderDocumentsApi'
 
 /**
@@ -57,7 +59,7 @@ export async function uploadPreparedOrderDocuments(
         key: doc.key,
         label: doc.file.name,
         ok: false,
-        error: describe(err, 'Uploaden is mislukt.'),
+        error: describe(err, translate(getActiveLocale(), 'transportOrders.documents.uploadFailed')),
         createdDocumentId: createdId,
       })
     }

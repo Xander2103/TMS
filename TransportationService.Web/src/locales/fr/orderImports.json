@@ -1,0 +1,60 @@
+{
+  "batchStatus": {
+    "Validated": "Validé",
+    "Processed": "Traité",
+    "Failed": "Échoué"
+  },
+  "batchStatusDryRun": "{status} (essai)",
+  "rowStatus": {
+    "Created": "Créée",
+    "Skipped": "Ignorée",
+    "Error": "Erreur"
+  },
+  "subtitle": "Créer automatiquement des commandes à partir d'un fichier Excel",
+  "noPermission": "Vous n'avez pas les droits nécessaires pour consulter les imports de commandes.",
+  "historyError": "L'historique des imports n'a pas pu être chargé.",
+  "detailError": "Les détails du lot n'ont pas pu être chargés.",
+  "uploadSection": "Importer un nouveau fichier",
+  "form": {
+    "profile": "Profil d'import",
+    "noProfiles": "Aucun profil",
+    "customerSearch": "Rechercher un client",
+    "customerSearchPlaceholder": "Rechercher par nom ou numéro...",
+    "customer": "Client",
+    "chooseCustomer": "Choisissez un client",
+    "file": "Fichier (.xlsx)",
+    "dryRun": "Valider uniquement (essai)",
+    "validate": "Valider",
+    "import": "Importer",
+    "busy": "Traitement…",
+    "chooseProfile": "Choisissez un profil d'import.",
+    "chooseCustomerError": "Choisissez un client.",
+    "chooseFile": "Choisissez un fichier Excel (.xlsx).",
+    "uploadFailed": "L'import a échoué.",
+    "validatedToast": "Validation : {success} lignes sur {total} sont correctes.",
+    "processedToast": "Traitement terminé : {orders}, {failures}.",
+    "processedOrders_one": "1 commande créée",
+    "processedOrders_other": "{count} commandes créées",
+    "processedFailures_one": "1 erreur",
+    "processedFailures_other": "{count} erreurs"
+  },
+  "columns": {
+    "file": "Fichier",
+    "customer": "Client",
+    "profile": "Profil",
+    "status": "Statut",
+    "rows": "Lignes",
+    "uploaded": "Importé le",
+    "row": "Ligne",
+    "reference": "Référence",
+    "message": "Message"
+  },
+  "counts": "{success} ok / {failure} en erreur / {total} au total",
+  "details": "Détails",
+  "empty": "Aucun import pour le moment.",
+  "loading": "Chargement des imports...",
+  "detailSection": "Détails du lot",
+  "detailLoading": "Chargement des détails...",
+  "dryRunTitleSuffix": "(essai)",
+  "emptyRows": "Aucune ligne dans ce lot."
+}

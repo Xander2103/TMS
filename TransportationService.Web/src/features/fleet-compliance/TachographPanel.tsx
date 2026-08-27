@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { FormField } from '../../components/ui/FormField'
 import { Modal } from '../../components/ui/Modal'
 import { useToast } from '../../components/ui/toastContext'
+import { useLocale } from '../../i18n/localeContext'
 import { useAuth } from '../auth/authContextValue'
 import {
   createTachographCalibration,
@@ -47,6 +48,7 @@ function emptyForm(): TachographInput {
 
 /** Tachograph calibrations for a vehicle: list, add, edit, delete, attachment, status. */
 export function TachographPanel({ vehicleId }: { vehicleId: string }) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('tachograph.manage')
@@ -75,12 +77,12 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Tachograafgegevens konden niet worden geladen.')
+        if (mounted) setLoadError(t('fleet.tachograph.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [vehicleId, reloadToken])
+  }, [vehicleId, reloadToken, t])
 
   function set<K extends keyof TachographInput>(key: K, value: TachographInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -117,22 +119,22 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
     event.preventDefault()
     setFormError(null)
     if (!form.calibrationDate || !form.nextCalibrationDue) {
-      setFormError('IJkdatum en volgende ijkdatum zijn verplicht.')
+      setFormError(t('fleet.tachograph.datesRequired'))
       return
     }
     setSaving(true)
     try {
       if (editingId) {
         await updateTachographCalibration(vehicleId, editingId, form)
-        showSuccess('Tachograafijking bijgewerkt.')
+        showSuccess(t('fleet.tachograph.updated'))
       } else {
         await createTachographCalibration(vehicleId, form)
-        showSuccess('Tachograafijking toegevoegd.')
+        showSuccess(t('fleet.tachograph.created'))
       }
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      setFormError('De ijking kon niet worden opgeslagen.')
+      setFormError(t('fleet.tachograph.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -142,11 +144,11 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
     if (!deleteTarget) return
     try {
       await deleteTachographCalibration(vehicleId, deleteTarget.id)
-      showSuccess('Tachograafijking verwijderd.')
+      showSuccess(t('fleet.tachograph.deleted'))
       setDeleteTarget(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('De ijking kon niet worden verwijderd.')
+      showError(t('fleet.tachograph.deleteFailed'))
       setDeleteTarget(null)
     }
   }
@@ -165,10 +167,10 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
     setUploadingId(id)
     try {
       await uploadTachographFile(vehicleId, id, file)
-      showSuccess('Certificaat geüpload.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('fleet.tachograph.certUploaded'))
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het certificaat kon niet worden geüpload (max. 10 MB, pdf/jpg/png).')
+      showError(t('fleet.tachograph.certUploadFailed'))
     } finally {
       setUploadingId(null)
     }
@@ -177,31 +179,31 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
   return (
     <section className="fleet-compliance">
       <div className="fleet-compliance-header">
-        <h2>Tachograaf</h2>
+        <h2>{t('fleet.tachograph.title')}</h2>
         {canManage && (
           <Button variant="secondary" onClick={openCreate}>
-            IJking toevoegen
+            {t('fleet.tachograph.add')}
           </Button>
         )}
       </div>
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && items === null && <p className="placeholder-text">Laden…</p>}
+      {!loadError && items === null && <p className="placeholder-text">{t('fleet.common.loading')}</p>}
       {!loadError && items !== null && items.length === 0 && (
-        <p className="placeholder-text">Nog geen tachograafijkingen geregistreerd.</p>
+        <p className="placeholder-text">{t('fleet.tachograph.empty')}</p>
       )}
 
       {!loadError && items !== null && items.length > 0 && (
         <table className="fleet-compliance-table">
           <thead>
             <tr>
-              <th>Type</th>
-              <th>IJkdatum</th>
-              <th>Volgende ijking</th>
-              <th>Werkplaats</th>
-              <th>Status</th>
-              <th>Bestand</th>
-              <th aria-label="Acties" />
+              <th>{t('fleet.tachograph.colType')}</th>
+              <th>{t('fleet.tachograph.colDate')}</th>
+              <th>{t('fleet.tachograph.colNext')}</th>
+              <th>{t('fleet.tachograph.colWorkshop')}</th>
+              <th>{t('fleet.tachograph.colStatus')}</th>
+              <th>{t('fleet.tachograph.colFile')}</th>
+              <th aria-label={t('fleet.common.actions')} />
             </tr>
           </thead>
           <tbody>
@@ -212,31 +214,31 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
                 <td>{item.nextCalibrationDue}</td>
                 <td>{item.workshop ?? '—'}</td>
                 <td>
-                  <Badge tone={STATUS_TONE[item.status]}>{TACHOGRAPH_STATUS_LABELS[item.status]}</Badge>
+                  <Badge tone={STATUS_TONE[item.status]}>{t(TACHOGRAPH_STATUS_LABELS[item.status])}</Badge>
                 </td>
                 <td className="fleet-compliance-file">
                   {item.hasAttachment ? (
-                    <button type="button" className="fleet-compliance-link" onClick={() => downloadTachographFile(vehicleId, item.id, item.fileName ?? 'certificaat').catch(() => showError('Downloaden mislukt.'))}>
-                      Downloaden
+                    <button type="button" className="fleet-compliance-link" onClick={() => downloadTachographFile(vehicleId, item.id, item.fileName ?? 'certificaat').catch(() => showError(t('fleet.common.downloadFailed')))}>
+                      {t('fleet.common.download')}
                     </button>
                   ) : (
                     '—'
                   )}
                   {canManage && (
                     <button type="button" className="fleet-compliance-link" onClick={() => pickFile(item.id)} disabled={uploadingId === item.id}>
-                      {uploadingId === item.id ? 'Bezig…' : item.hasAttachment ? 'Vervangen' : 'Uploaden'}
+                      {uploadingId === item.id ? t('fleet.common.busy') : item.hasAttachment ? t('fleet.common.replace') : t('fleet.common.upload')}
                     </button>
                   )}
                 </td>
                 <td className="fleet-compliance-actions">
                   {canManage && (
                     <button type="button" className="fleet-compliance-link" onClick={() => openEdit(item)}>
-                      Bewerken
+                      {t('ui.actions.edit')}
                     </button>
                   )}
                   {canManage && (
                     <button type="button" className="fleet-compliance-link fleet-compliance-link-danger" onClick={() => setDeleteTarget(item)}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   )}
                 </td>
@@ -248,16 +250,16 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
 
       {editorOpen && (
         <Modal
-          title={editingId ? 'Tachograafijking bewerken' : 'Tachograafijking toevoegen'}
+          title={editingId ? t('fleet.tachograph.editTitle') : t('fleet.tachograph.addTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="tacho-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('fleet.common.saving') : t('ui.actions.save')}
               </Button>
             </>
           }
@@ -269,49 +271,49 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
               </div>
             )}
             <div className="fleet-compliance-form-row">
-              <FormField label="IJkdatum" htmlFor="tf-date" required>
+              <FormField label={t('fleet.tachograph.date')} htmlFor="tf-date" required>
                 <input id="tf-date" type="date" value={form.calibrationDate} onChange={(e) => set('calibrationDate', e.target.value)} disabled={saving} />
               </FormField>
-              <FormField label="Volgende ijking" htmlFor="tf-due" required>
+              <FormField label={t('fleet.tachograph.nextDue')} htmlFor="tf-due" required>
                 <input id="tf-due" type="date" value={form.nextCalibrationDue} onChange={(e) => set('nextCalibrationDue', e.target.value)} disabled={saving} />
               </FormField>
             </div>
-            <FormField label="Type" htmlFor="tf-type" hint="Analoog / Digitaal / Smart">
+            <FormField label={t('fleet.tachograph.type')} htmlFor="tf-type" hint={t('fleet.tachograph.typeHint')}>
               <input id="tf-type" value={form.tachographType ?? ''} onChange={(e) => set('tachographType', e.target.value || null)} disabled={saving} maxLength={50} />
             </FormField>
             <div className="fleet-compliance-form-row">
-              <FormField label="Fabrikant" htmlFor="tf-manu">
+              <FormField label={t('fleet.tachograph.manufacturer')} htmlFor="tf-manu">
                 <input id="tf-manu" value={form.manufacturer ?? ''} onChange={(e) => set('manufacturer', e.target.value || null)} disabled={saving} maxLength={100} />
               </FormField>
-              <FormField label="Model" htmlFor="tf-model">
+              <FormField label={t('fleet.tachograph.model')} htmlFor="tf-model">
                 <input id="tf-model" value={form.model ?? ''} onChange={(e) => set('model', e.target.value || null)} disabled={saving} maxLength={100} />
               </FormField>
             </div>
             <div className="fleet-compliance-form-row">
-              <FormField label="Serienummer" htmlFor="tf-serial">
+              <FormField label={t('fleet.tachograph.serialNumber')} htmlFor="tf-serial">
                 <input id="tf-serial" value={form.serialNumber ?? ''} onChange={(e) => set('serialNumber', e.target.value || null)} disabled={saving} maxLength={100} />
               </FormField>
-              <FormField label="Werkplaats" htmlFor="tf-workshop">
+              <FormField label={t('fleet.tachograph.workshop')} htmlFor="tf-workshop">
                 <input id="tf-workshop" value={form.workshop ?? ''} onChange={(e) => set('workshop', e.target.value || null)} disabled={saving} maxLength={150} />
               </FormField>
             </div>
             <div className="fleet-compliance-form-row">
-              <FormField label="Certificaatnummer" htmlFor="tf-cert">
+              <FormField label={t('fleet.tachograph.certificateNumber')} htmlFor="tf-cert">
                 <input id="tf-cert" value={form.certificateNumber ?? ''} onChange={(e) => set('certificateNumber', e.target.value || null)} disabled={saving} maxLength={100} />
               </FormField>
-              <FormField label="Zegelreferentie" htmlFor="tf-seal">
+              <FormField label={t('fleet.tachograph.sealReference')} htmlFor="tf-seal">
                 <input id="tf-seal" value={form.sealReference ?? ''} onChange={(e) => set('sealReference', e.target.value || null)} disabled={saving} maxLength={100} />
               </FormField>
             </div>
             <div className="fleet-compliance-form-row">
-              <FormField label="Kilometerstand" htmlFor="tf-odo">
+              <FormField label={t('fleet.tachograph.odometer')} htmlFor="tf-odo">
                 <input id="tf-odo" type="number" min={0} value={form.odometerKm ?? ''} onChange={(e) => set('odometerKm', e.target.value === '' ? null : Number(e.target.value))} disabled={saving} />
               </FormField>
-              <FormField label="Bandomtrek (mm)" htmlFor="tf-tyre">
+              <FormField label={t('fleet.tachograph.tyreCircumference')} htmlFor="tf-tyre">
                 <input id="tf-tyre" type="number" min={0} value={form.tyreCircumferenceMm ?? ''} onChange={(e) => set('tyreCircumferenceMm', e.target.value === '' ? null : Number(e.target.value))} disabled={saving} />
               </FormField>
             </div>
-            <FormField label="Notities" htmlFor="tf-notes">
+            <FormField label={t('fleet.tachograph.notes')} htmlFor="tf-notes">
               <textarea id="tf-notes" rows={2} value={form.notes ?? ''} onChange={(e) => set('notes', e.target.value || null)} disabled={saving} />
             </FormField>
           </form>
@@ -320,9 +322,9 @@ export function TachographPanel({ vehicleId }: { vehicleId: string }) {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="IJking verwijderen"
-          message="Weet je zeker dat je deze tachograafijking wilt verwijderen?"
-          confirmLabel="Verwijderen"
+          title={t('fleet.tachograph.deleteTitle')}
+          message={t('fleet.tachograph.deleteMessage')}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

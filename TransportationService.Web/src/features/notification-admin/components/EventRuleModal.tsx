@@ -4,9 +4,10 @@ import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { usePermissions } from '../../roles/hooks/usePermissions'
-import { COMMUNICATION_TYPES, COMMUNICATION_TYPE_LABELS, type CustomerCommunicationType } from '../../customers/types'
+import { COMMUNICATION_TYPES, COMMUNICATION_TYPE_LABEL_KEYS, type CustomerCommunicationType } from '../../customers/types'
 import { updateNotificationRule } from '../api/notificationAdminApi'
 import {
   RECIPIENT_TYPES_WITH_VALUE,
@@ -27,6 +28,7 @@ interface EventRuleModalProps {
 
 /** Recipients + channel/enable editor for one notification event (Gebeurtenissen tab). */
 export function EventRuleModal({ rule, onClose, onSaved }: EventRuleModalProps) {
+  const { t } = useLocale()
   const { showSuccess } = useToast()
   const { permissions } = usePermissions()
 
@@ -54,10 +56,10 @@ export function EventRuleModal({ rule, onClose, onSaved }: EventRuleModalProps) 
     for (const recipient of recipients) {
       const value = recipient.value?.trim() ?? ''
       if (recipient.type === 'ExplicitEmail' && !EMAIL_PATTERN.test(value)) {
-        return 'Vul voor elke expliciete ontvanger een geldig e-mailadres in.'
+        return t('notificationAdmin.ruleModal.invalidEmail')
       }
       if (RECIPIENT_TYPES_WITH_VALUE.includes(recipient.type) && recipient.type !== 'ExplicitEmail' && !value) {
-        return `Kies een waarde voor elke ontvanger van het type "${RECIPIENT_TYPE_LABELS[recipient.type]}".`
+        return t('notificationAdmin.ruleModal.valueRequired', { type: t(RECIPIENT_TYPE_LABELS[recipient.type]) })
       }
     }
     return null
@@ -84,10 +86,10 @@ export function EventRuleModal({ rule, onClose, onSaved }: EventRuleModalProps) 
         // Echo the effective review setting — the modal edits recipients/channels, not the hold.
         requiresReview: rule.requiresReview,
       })
-      showSuccess('Meldingsregel opgeslagen.')
+      showSuccess(t('notificationAdmin.ruleModal.saved'))
       onSaved()
     } catch (err) {
-      setError(describeApiError(err, 'De meldingsregel kon niet worden opgeslagen.').message)
+      setError(localizeApiError(t, err, t('notificationAdmin.ruleModal.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -101,24 +103,24 @@ export function EventRuleModal({ rule, onClose, onSaved }: EventRuleModalProps) 
 
   return (
     <Modal
-      title={`Meldingsregel — ${rule.label}`}
+      title={t('notificationAdmin.ruleModal.title', { label: rule.label })}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button onClick={() => void handleSave()} disabled={busy}>
-            Opslaan
+            {t('ui.actions.save')}
           </Button>
         </>
       }
     >
       {rule.peppolPending && (
         <p className="notification-admin-peppol-note">
-          <Badge tone="warning">Nog niet actief</Badge> Peppol-koppeling is nog niet aangesloten; deze gebeurtenis
-          wordt pas verstuurd zodra dat gekoppeld is. Ontvangers kun je alvast instellen.
+          <Badge tone="warning">{t('notificationAdmin.events.peppolPending')}</Badge>{' '}
+          {t('notificationAdmin.ruleModal.peppolNote')}
         </p>
       )}
       {error && (
@@ -130,19 +132,19 @@ export function EventRuleModal({ rule, onClose, onSaved }: EventRuleModalProps) 
       <div className="notification-admin-modal-row">
         <label className="notification-admin-checkbox">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} disabled={busy} />
-          Actief
+          {t('notificationAdmin.ruleModal.active')}
         </label>
         <label className="notification-admin-checkbox">
           <input type="checkbox" checked={inAppEnabled} onChange={(e) => setInAppEnabled(e.target.checked)} disabled={busy} />
-          In-app
+          {t('notificationAdmin.events.inApp')}
         </label>
         <label className="notification-admin-checkbox">
           <input type="checkbox" checked={emailEnabled} onChange={(e) => setEmailEnabled(e.target.checked)} disabled={busy} />
-          E-mail
+          {t('notificationAdmin.events.email')}
         </label>
         <label className="notification-admin-checkbox notification-admin-checkbox-disabled">
-          <input type="checkbox" checked={false} disabled title="SMS is nog niet beschikbaar" />
-          SMS (binnenkort)
+          <input type="checkbox" checked={false} disabled title={t('notificationAdmin.events.smsUnavailable')} />
+          {t('notificationAdmin.ruleModal.smsSoon')}
         </label>
       </div>
 
@@ -153,32 +155,34 @@ export function EventRuleModal({ rule, onClose, onSaved }: EventRuleModalProps) 
           onChange={(e) => setAllowCustomerOverride(e.target.checked)}
           disabled={busy}
         />
-        Klanten mogen deze melding voor zichzelf uitschakelen (Klantafwijkingen)
+        {t('notificationAdmin.ruleModal.allowOverride')}
       </label>
 
       <fieldset className="notification-admin-recipients">
-        <legend>Ontvangers</legend>
-        {recipients.length === 0 && <p className="placeholder-text">Geen ontvangers ingesteld — er wordt niets verstuurd.</p>}
+        <legend>{t('notificationAdmin.ruleModal.recipientsLegend')}</legend>
+        {recipients.length === 0 && (
+          <p className="placeholder-text">{t('notificationAdmin.ruleModal.noRecipients')}</p>
+        )}
         {recipients.map((recipient, index) => (
           <div key={index} className="notification-admin-recipient-row">
             <select
-              aria-label={`Type ontvanger ${index + 1}`}
+              aria-label={t('notificationAdmin.ruleModal.typeAria', { number: index + 1 })}
               value={recipient.type}
               disabled={busy}
               onChange={(e) => updateRecipient(index, { type: e.target.value as NotificationRecipientType, value: null })}
             >
               {RECIPIENT_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {RECIPIENT_TYPE_LABELS[type]}
+                  {t(RECIPIENT_TYPE_LABELS[type])}
                 </option>
               ))}
             </select>
 
             {recipient.type === 'ExplicitEmail' && (
               <input
-                aria-label={`E-mailadres ontvanger ${index + 1}`}
+                aria-label={t('notificationAdmin.ruleModal.emailAria', { number: index + 1 })}
                 type="email"
-                placeholder="naam@bedrijf.be"
+                placeholder={t('notificationAdmin.ruleModal.emailPlaceholder')}
                 value={recipient.value ?? ''}
                 disabled={busy}
                 onChange={(e) => updateRecipient(index, { value: e.target.value })}
@@ -187,21 +191,21 @@ export function EventRuleModal({ rule, onClose, onSaved }: EventRuleModalProps) 
 
             {recipient.type === 'InternalPermission' && (
               <SearchableSelect
-                ariaLabel={`Recht voor ontvanger ${index + 1}`}
+                ariaLabel={t('notificationAdmin.ruleModal.permissionAria', { number: index + 1 })}
                 value={recipient.value}
                 onChange={(value) => updateRecipient(index, { value })}
                 options={permissionOptions}
                 disabled={busy}
-                placeholder="Kies een recht..."
+                placeholder={t('notificationAdmin.ruleModal.permissionPlaceholder')}
               />
             )}
 
             {recipient.type === 'InternalRole' && (
               <span className="notification-admin-inline-field">
                 <input
-                  aria-label={`Rolcode ontvanger ${index + 1}`}
-                  placeholder="bv. management, hr, planner"
-                  title="Sjabloon-rolcode — zie Rollen & rechten voor de exacte code."
+                  aria-label={t('notificationAdmin.ruleModal.roleAria', { number: index + 1 })}
+                  placeholder={t('notificationAdmin.ruleModal.rolePlaceholder')}
+                  title={t('notificationAdmin.ruleModal.roleTitle')}
                   value={recipient.value ?? ''}
                   disabled={busy}
                   onChange={(e) => updateRecipient(index, { value: e.target.value })}
@@ -211,31 +215,31 @@ export function EventRuleModal({ rule, onClose, onSaved }: EventRuleModalProps) 
 
             {recipient.type === 'CustomerCommunicationRule' && (
               <select
-                aria-label={`Communicatietype ontvanger ${index + 1}`}
+                aria-label={t('notificationAdmin.ruleModal.communicationAria', { number: index + 1 })}
                 value={recipient.value ?? ''}
                 disabled={busy}
                 onChange={(e) => updateRecipient(index, { value: e.target.value })}
               >
-                <option value="">— Kies een communicatietype —</option>
+                <option value="">{t('notificationAdmin.ruleModal.communicationPlaceholder')}</option>
                 {COMMUNICATION_TYPES.map((type: CustomerCommunicationType) => (
                   <option key={type} value={type}>
-                    {COMMUNICATION_TYPE_LABELS[type]}
+                    {t(COMMUNICATION_TYPE_LABEL_KEYS[type])}
                   </option>
                 ))}
               </select>
             )}
 
             {(recipient.type === 'CustomerPrimaryContact' || recipient.type === 'Driver') && (
-              <span className="notification-admin-muted">Geen extra gegevens nodig.</span>
+              <span className="notification-admin-muted">{t('notificationAdmin.ruleModal.noExtraData')}</span>
             )}
 
             <Button variant="ghost" onClick={() => removeRecipient(index)} disabled={busy}>
-              Verwijderen
+              {t('ui.actions.delete')}
             </Button>
           </div>
         ))}
         <Button variant="secondary" onClick={addRecipient} disabled={busy}>
-          + E-mailadres toevoegen
+          {t('notificationAdmin.ruleModal.addEmail')}
         </Button>
       </fieldset>
     </Modal>

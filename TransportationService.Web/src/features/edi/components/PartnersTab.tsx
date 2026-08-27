@@ -4,13 +4,15 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { listPartners, updatePartner, type EdiPartner } from '../api/ediApi'
 import { PartnerModal } from './PartnerModal'
 
 /** "Handelspartners" tab: partner administration table. Creation always goes through the
  * modal — never an inline form under the list. */
 export function PartnersTab() {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [partners, setPartners] = useState<EdiPartner[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -24,7 +26,8 @@ export function PartnersTab() {
         setPartners(data)
         setLoadError(null)
       })
-      .catch(() => setLoadError('De handelspartners konden niet worden geladen.'))
+      .catch(() => setLoadError(t('edi.partners.loadFailed')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -42,10 +45,10 @@ export function PartnersTab() {
         isActive: !partner.isActive,
         notes: partner.notes,
       })
-      showSuccess(partner.isActive ? 'Partner gedeactiveerd.' : 'Partner geactiveerd.')
+      showSuccess(partner.isActive ? t('edi.partners.deactivated') : t('edi.partners.activated'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De partnerstatus kon niet worden gewijzigd.').message)
+      showError(localizeApiError(t, err, t('edi.partners.toggleFailed')))
     } finally {
       setBusy(false)
       setToggleTarget(null)
@@ -53,30 +56,30 @@ export function PartnersTab() {
   }
 
   const columns: Column<EdiPartner>[] = [
-    { key: 'code', header: 'Code', render: (p) => <code>{p.code}</code> },
-    { key: 'name', header: 'Naam', render: (p) => p.name },
+    { key: 'code', header: t('edi.partners.codeHeader'), render: (p) => <code>{p.code}</code> },
+    { key: 'name', header: t('edi.partners.nameHeader'), render: (p) => p.name },
     {
       key: 'customer',
-      header: 'Gekoppelde klant',
-      render: (p) => (p.customerName ? p.customerName : <Badge tone="warning">geen klant gekoppeld</Badge>),
+      header: t('edi.partners.customerHeader'),
+      render: (p) => (p.customerName ? p.customerName : <Badge tone="warning">{t('edi.partners.noCustomer')}</Badge>),
     },
-    { key: 'profile', header: 'Profiel', render: () => 'Generiek JSON' },
-    { key: 'locations', header: 'Locatiemappings', align: 'right', render: (p) => p.locations.length },
+    { key: 'profile', header: t('edi.partners.profileHeader'), render: () => t('edi.partners.profileGeneric') },
+    { key: 'locations', header: t('edi.partners.mappingsHeader'), align: 'right', render: (p) => p.locations.length },
     {
       key: 'status',
-      header: 'Status',
-      render: (p) => <Badge tone={p.isActive ? 'success' : 'neutral'}>{p.isActive ? 'Actief' : 'Inactief'}</Badge>,
+      header: t('edi.partners.statusHeader'),
+      render: (p) => <Badge tone={p.isActive ? 'success' : 'neutral'}>{p.isActive ? t('edi.partners.active') : t('edi.partners.inactive')}</Badge>,
     },
     {
       key: 'actions',
-      header: 'Acties',
+      header: t('edi.partners.actionsHeader'),
       render: (p) => (
         <span className="edi-row-actions">
           <Button variant="ghost" onClick={() => setEditing(p)}>
-            Bewerken
+            {t('edi.partners.edit')}
           </Button>
           <Button variant="ghost" onClick={() => setToggleTarget(p)}>
-            {p.isActive ? 'Deactiveren' : 'Activeren'}
+            {p.isActive ? t('edi.partners.deactivate') : t('edi.partners.activate')}
           </Button>
         </span>
       ),
@@ -86,7 +89,7 @@ export function PartnersTab() {
   return (
     <div>
       <div className="edi-tab-toolbar">
-        <Button onClick={() => setEditing('new')}>+ Nieuwe partner</Button>
+        <Button onClick={() => setEditing('new')}>{t('edi.partners.new')}</Button>
       </div>
 
       <DataTable
@@ -95,7 +98,7 @@ export function PartnersTab() {
         rowKey={(p) => p.id}
         isLoading={partners === null}
         error={loadError}
-        emptyMessage="Nog geen handelspartners."
+        emptyMessage={t('edi.partners.empty')}
       />
 
       {editing && (
@@ -104,7 +107,7 @@ export function PartnersTab() {
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null)
-            showSuccess(editing === 'new' ? 'Partner toegevoegd.' : 'Partner bijgewerkt.')
+            showSuccess(editing === 'new' ? t('edi.partners.added') : t('edi.partners.updated'))
             reload()
           }}
         />
@@ -112,13 +115,13 @@ export function PartnersTab() {
 
       {toggleTarget && (
         <ConfirmDialog
-          title={toggleTarget.isActive ? 'Partner deactiveren' : 'Partner activeren'}
+          title={toggleTarget.isActive ? t('edi.partners.deactivateTitle') : t('edi.partners.activateTitle')}
           message={
             toggleTarget.isActive
-              ? `'${toggleTarget.name}' deactiveren? Inkomende berichten van deze partner worden dan geweigerd.`
-              : `'${toggleTarget.name}' opnieuw activeren?`
+              ? t('edi.partners.deactivateMessage', { name: toggleTarget.name })
+              : t('edi.partners.activateMessage', { name: toggleTarget.name })
           }
-          confirmLabel={toggleTarget.isActive ? 'Deactiveren' : 'Activeren'}
+          confirmLabel={toggleTarget.isActive ? t('edi.partners.deactivate') : t('edi.partners.activate')}
           destructive={toggleTarget.isActive}
           busy={busy}
           onConfirm={() => void toggleActive(toggleTarget)}

@@ -76,9 +76,10 @@ export interface UpdateDriverInput {
   driverCategoryIds: string[] | null
 }
 
+/** i18n-keys (driversAdmin.availability.*) — render via t(AVAILABILITY_LABELS[s]). */
 export const AVAILABILITY_LABELS: Record<DriverAvailabilityStatus, string> = {
-  Available: 'Beschikbaar',
-  Unavailable: 'Niet beschikbaar',
-  OnLeave: 'Afwezig',
-  OnTrip: 'Onderweg',
+  Available: 'driversAdmin.availability.Available',
+  Unavailable: 'driversAdmin.availability.Unavailable',
+  OnLeave: 'driversAdmin.availability.OnLeave',
+  OnTrip: 'driversAdmin.availability.OnTrip',
 }

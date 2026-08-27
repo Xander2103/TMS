@@ -6,7 +6,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { listUnitTypeSettings, type UnitTypeSettings } from '../api/pricingApi'
 import {
   DEGRESSION_SCOPE_LABELS,
@@ -73,6 +74,7 @@ function toDraft(discount: CombinedUnitDiscount | null): DiscountDraft {
  * a pricing table (agreement-linked discount, only fires when that agreement is engaged).
  */
 export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDiscountsPanelProps) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('tariffs.manage')
   const { showSuccess, showError } = useToast()
@@ -100,7 +102,7 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
       .catch(() => setUnits([]))
   }, [])
 
-  if (discounts === null) return <p className="placeholder-text">Combinatiekortingen laden…</p>
+  if (discounts === null) return <p className="placeholder-text">{t('tarification.discounts.loading')}</p>
 
   function unitName(unitTypeId: string): string {
     return units.find((u) => u.id === unitTypeId)?.name ?? '?'
@@ -110,7 +112,7 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
     event.preventDefault()
     if (!draft) return
     if (!draft.name.trim()) {
-      setError('De naam is verplicht.')
+      setError(t('tarification.common.nameRequired'))
       return
     }
 
@@ -119,19 +121,19 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
       equivalentFactor: Number(u.equivalentFactor) || 0,
     }))
     if (unitInputs.length === 0) {
-      setError('Kies minstens één eenheid.')
+      setError(t('tarification.discounts.chooseUnit'))
       return
     }
 
     const tierInputs = draft.tiers
-      .filter((t) => t.fromCount.trim() !== '' && t.percent.trim() !== '')
-      .map((t) => ({
-        fromCount: Number(t.fromCount) || 0,
-        toCount: t.toCount.trim() === '' ? null : Number(t.toCount),
-        percent: Number(t.percent) || 0,
+      .filter((tier) => tier.fromCount.trim() !== '' && tier.percent.trim() !== '')
+      .map((tier) => ({
+        fromCount: Number(tier.fromCount) || 0,
+        toCount: tier.toCount.trim() === '' ? null : Number(tier.toCount),
+        percent: Number(tier.percent) || 0,
       }))
     if (tierInputs.length === 0) {
-      setError('Voeg minstens één staffel toe.')
+      setError(t('tarification.discounts.addTierRequired'))
       return
     }
 
@@ -157,10 +159,10 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
         const others = (prev ?? []).filter((d) => d.id !== saved.id)
         return [...others, saved].sort((a, b) => a.name.localeCompare(b.name))
       })
-      showSuccess(draft.discount ? 'Combinatiekorting bijgewerkt.' : 'Combinatiekorting aangemaakt.')
+      showSuccess(draft.discount ? t('tarification.discounts.updated') : t('tarification.discounts.created'))
       setDraft(null)
     } catch (err) {
-      setError(describeApiError(err, 'De combinatiekorting kon niet worden opgeslagen.').message)
+      setError(localizeApiError(t, err, t('tarification.discounts.saveError')))
     } finally {
       setBusy(false)
     }
@@ -173,59 +175,56 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
     try {
       await deleteCombinedDiscount(target.id)
       setDiscounts((prev) => (prev ?? []).filter((d) => d.id !== target.id))
-      showSuccess('Combinatiekorting verwijderd.')
+      showSuccess(t('tarification.discounts.deleted'))
     } catch (err) {
-      showError(describeApiError(err, 'De combinatiekorting kon niet worden verwijderd.').message)
+      showError(localizeApiError(t, err, t('tarification.discounts.deleteError')))
     }
   }
 
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Combinatiekortingen</h3>
-        {canManage && <Button onClick={() => setDraft(toDraft(null))}>+ Combinatiekorting</Button>}
+        <h3>{t('tarification.discounts.title')}</h3>
+        {canManage && <Button onClick={() => setDraft(toDraft(null))}>{t('tarification.discounts.new')}</Button>}
       </div>
-      <p className="customer-form-muted">
-        Combineert verschillende eenheden tot één gewogen aantal (bv. 1 europallet + 1 blokpallet + 2 colli = 4
-        eenheden) en past een staffelkorting toe — per leveradres, per stop, of over de hele order.
-      </p>
+      <p className="customer-form-muted">{t('tarification.discounts.intro')}</p>
 
-      {discounts.length === 0 && <EmptyState message="Nog geen combinatiekortingen geconfigureerd." />}
+      {discounts.length === 0 && <EmptyState message={t('tarification.discounts.empty')} />}
       {discounts.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Naam</th>
-              <th>Bereik</th>
-              <th>Eenheden</th>
-              <th>Staffels</th>
-              <th>Geldig van</th>
-              <th>Geldig tot</th>
-              <th>Actief</th>
-              {canManage && <th aria-label="Acties" />}
+              <th>{t('tarification.common.name')}</th>
+              <th>{t('tarification.discounts.colScope')}</th>
+              <th>{t('tarification.discounts.colUnits')}</th>
+              <th>{t('tarification.discounts.colTiers')}</th>
+              <th>{t('tarification.common.validFrom')}</th>
+              <th>{t('tarification.common.validUntil')}</th>
+              <th>{t('tarification.common.active')}</th>
+              {canManage && <th aria-label={t('tarification.common.actions')} />}
             </tr>
           </thead>
           <tbody>
             {discounts.map((d) => (
               <tr key={d.id}>
                 <td>{d.name}</td>
-                <td>{DEGRESSION_SCOPE_LABELS[d.scope]}</td>
+                <td>{t(DEGRESSION_SCOPE_LABELS[d.scope])}</td>
                 <td>{d.units.map((u) => u.unitTypeName ?? unitName(u.unitTypeId)).join(', ')}</td>
                 <td>{d.tiers.length}</td>
                 <td>{d.effectiveFrom}</td>
                 <td>{d.effectiveUntil ?? '—'}</td>
-                <td>{d.isActive ? 'Ja' : 'Nee'}</td>
+                <td>{d.isActive ? t('tarification.common.yes') : t('tarification.common.no')}</td>
                 {canManage && (
                   <td className="issued-items-row-actions">
                     <button type="button" className="issued-items-link" onClick={() => setDraft(toDraft(d))}>
-                      Bewerken
+                      {t('ui.actions.edit')}
                     </button>
                     <button
                       type="button"
                       className="issued-items-link issued-items-link-danger"
                       onClick={() => setDeleteTarget(d)}
                     >
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   </td>
                 )}
@@ -237,16 +236,16 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
 
       {draft && (
         <Modal
-          title={draft.discount ? 'Combinatiekorting bewerken' : 'Combinatiekorting toevoegen'}
+          title={draft.discount ? t('tarification.discounts.editTitle') : t('tarification.discounts.addTitle')}
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="combined-discount-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -257,7 +256,7 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
                 {error}
               </div>
             )}
-            <FormField label="Naam" htmlFor="discount-name" required>
+            <FormField label={t('tarification.common.name')} htmlFor="discount-name" required>
               <input
                 id="discount-name"
                 value={draft.name}
@@ -265,21 +264,21 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
                 maxLength={200}
               />
             </FormField>
-            <FormField label="Bereik" htmlFor="discount-scope" hint="Hoe eenheden gecombineerd worden voordat de staffel wordt bepaald.">
+            <FormField label={t('tarification.discounts.colScope')} htmlFor="discount-scope" hint={t('tarification.discounts.scopeHint')}>
               <select
                 id="discount-scope"
                 value={draft.scope}
                 onChange={(e) => setDraft((d) => (d ? { ...d, scope: e.target.value as DegressionScope } : d))}
               >
-                {Object.entries(DEGRESSION_SCOPE_LABELS).map(([value, label]) => (
+                {Object.entries(DEGRESSION_SCOPE_LABELS).map(([value, labelKey]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(labelKey)}
                   </option>
                 ))}
               </select>
             </FormField>
             <div className="issued-items-form-row">
-              <FormField label="Geldig van" htmlFor="discount-from">
+              <FormField label={t('tarification.common.validFrom')} htmlFor="discount-from">
                 <input
                   id="discount-from"
                   type="date"
@@ -287,7 +286,7 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
                   onChange={(e) => setDraft((d) => (d ? { ...d, effectiveFrom: e.target.value } : d))}
                 />
               </FormField>
-              <FormField label="Geldig tot" htmlFor="discount-until" hint="Leeg = onbeperkt.">
+              <FormField label={t('tarification.common.validUntil')} htmlFor="discount-until" hint={t('tarification.assignments.untilHint')}>
                 <input
                   id="discount-until"
                   type="date"
@@ -302,14 +301,14 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
                 checked={draft.isActive}
                 onChange={(e) => setDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))}
               />
-              Actief
+              {t('tarification.common.active')}
             </label>
 
-            <h4>Eenheden</h4>
+            <h4>{t('tarification.discounts.unitsHeading')}</h4>
             {draft.units.map((row, index) => (
               <div key={index} className="issued-items-form-row customer-rule-bracket">
                 <select
-                  aria-label={`Eenheid ${index + 1}`}
+                  aria-label={t('tarification.discounts.ariaUnit', { index: index + 1 })}
                   value={row.unitTypeId}
                   onChange={(e) =>
                     setDraft((d) =>
@@ -317,7 +316,7 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
                     )
                   }
                 >
-                  <option value="">— Kies eenheid —</option>
+                  <option value="">{t('tarification.discounts.chooseUnitOption')}</option>
                   {units.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.name}
@@ -325,11 +324,11 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
                   ))}
                 </select>
                 <input
-                  aria-label={`Eenheid ${index + 1} factor`}
+                  aria-label={t('tarification.discounts.ariaFactor', { index: index + 1 })}
                   type="number"
                   step="0.001"
                   min={0}
-                  placeholder="factor"
+                  placeholder={t('tarification.discounts.factorPlaceholder')}
                   value={row.equivalentFactor}
                   onChange={(e) =>
                     setDraft((d) =>
@@ -343,7 +342,7 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
                   variant="ghost"
                   onClick={() => setDraft((d) => (d ? { ...d, units: d.units.filter((_, i) => i !== index) } : d))}
                 >
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </Button>
               </div>
             ))}
@@ -351,49 +350,49 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
               variant="secondary"
               onClick={() => setDraft((d) => (d ? { ...d, units: [...d.units, { unitTypeId: '', equivalentFactor: '1' }] } : d))}
             >
-              + Eenheid
+              {t('tarification.discounts.addUnit')}
             </Button>
 
-            <h4>Staffels</h4>
+            <h4>{t('tarification.discounts.tiersHeading')}</h4>
             {draft.tiers.map((row, index) => (
               <div key={index} className="issued-items-form-row customer-rule-bracket">
                 <input
-                  aria-label={`Staffel ${index + 1} van`}
+                  aria-label={t('tarification.discounts.ariaTierFrom', { index: index + 1 })}
                   type="number"
                   step="0.01"
                   min={0}
-                  placeholder="van"
+                  placeholder={t('tarification.discounts.tierFromPlaceholder')}
                   value={row.fromCount}
                   onChange={(e) =>
                     setDraft((d) =>
-                      d ? { ...d, tiers: d.tiers.map((t, i) => (i === index ? { ...t, fromCount: e.target.value } : t)) } : d,
+                      d ? { ...d, tiers: d.tiers.map((x, i) => (i === index ? { ...x, fromCount: e.target.value } : x)) } : d,
                     )
                   }
                 />
                 <input
-                  aria-label={`Staffel ${index + 1} tot`}
+                  aria-label={t('tarification.discounts.ariaTierTo', { index: index + 1 })}
                   type="number"
                   step="0.01"
                   min={0}
-                  placeholder="tot (leeg = open)"
+                  placeholder={t('tarification.discounts.tierToPlaceholder')}
                   value={row.toCount}
                   onChange={(e) =>
                     setDraft((d) =>
-                      d ? { ...d, tiers: d.tiers.map((t, i) => (i === index ? { ...t, toCount: e.target.value } : t)) } : d,
+                      d ? { ...d, tiers: d.tiers.map((x, i) => (i === index ? { ...x, toCount: e.target.value } : x)) } : d,
                     )
                   }
                 />
                 <input
-                  aria-label={`Staffel ${index + 1} korting %`}
+                  aria-label={t('tarification.discounts.ariaTierPercent', { index: index + 1 })}
                   type="number"
                   step="0.01"
                   min={0}
                   max={100}
-                  placeholder="korting %"
+                  placeholder={t('tarification.discounts.tierPercentPlaceholder')}
                   value={row.percent}
                   onChange={(e) =>
                     setDraft((d) =>
-                      d ? { ...d, tiers: d.tiers.map((t, i) => (i === index ? { ...t, percent: e.target.value } : t)) } : d,
+                      d ? { ...d, tiers: d.tiers.map((x, i) => (i === index ? { ...x, percent: e.target.value } : x)) } : d,
                     )
                   }
                 />
@@ -401,7 +400,7 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
                   variant="ghost"
                   onClick={() => setDraft((d) => (d ? { ...d, tiers: d.tiers.filter((_, i) => i !== index) } : d))}
                 >
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </Button>
               </div>
             ))}
@@ -409,7 +408,7 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
               variant="secondary"
               onClick={() => setDraft((d) => (d ? { ...d, tiers: [...d.tiers, { fromCount: '', toCount: '', percent: '' }] } : d))}
             >
-              + Staffel
+              {t('tarification.discounts.addTier')}
             </Button>
           </form>
         </Modal>
@@ -417,9 +416,9 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Combinatiekorting verwijderen"
-          message={`Combinatiekorting "${deleteTarget.name}" verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('tarification.discounts.deleteTitle')}
+          message={t('tarification.discounts.deleteMessage', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

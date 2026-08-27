@@ -5,7 +5,8 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   listMessages,
   listPartners,
@@ -23,13 +24,14 @@ import { MessageDetailModal } from './MessageDetailModal'
 const PAGE_SIZE = 25
 
 interface MessagesTabProps {
-  /** Whether the "Opnieuw" action is shown (edi.retry or edi.manage). */
+  /** Whether the retry action is shown (edi.retry or edi.manage). */
   canRetry: boolean
 }
 
 /** "Berichten" tab: the EDI inbox/outbox with direction/status/partner filters, search on the
  * external reference, and replay for Failed/DeadLettered rows. */
 export function MessagesTab({ canRetry }: MessagesTabProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [direction, setDirection] = useState<EdiDirection | ''>('')
   const [status, setStatus] = useState<EdiStatus | ''>('')
@@ -65,7 +67,7 @@ export function MessagesTab({ canRetry }: MessagesTabProps) {
       })
       .catch(() => {
         if (!mounted) return
-        setResult((current) => ({ ...current, error: 'De EDI-berichten konden niet worden geladen.', loadedKey: requestKey }))
+        setResult((current) => ({ ...current, error: t('edi.messages.loadFailed'), loadedKey: requestKey }))
       })
     return () => {
       mounted = false
@@ -86,35 +88,35 @@ export function MessagesTab({ canRetry }: MessagesTabProps) {
     setBusyId(id)
     try {
       await replayMessage(id)
-      showSuccess('Bericht opnieuw verwerkt.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('edi.messages.replayed'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De verwerking mislukte opnieuw.').message)
+      showError(localizeApiError(t, err, t('edi.messages.replayFailed')))
     } finally {
       setBusyId(null)
     }
   }
 
   const columns: Column<EdiMessageRow>[] = [
-    { key: 'createdAt', header: 'Ontvangen/verzonden', render: (r) => formatDateTime(r.createdAt) },
-    { key: 'direction', header: 'Richting', render: (r) => (r.direction === 'Inbound' ? '↓ in' : '↑ uit') },
-    { key: 'partner', header: 'Partner', render: (r) => <code>{r.partnerCode}</code> },
-    { key: 'type', header: 'Type', render: (r) => r.messageType },
-    { key: 'externalReference', header: 'Externe referentie', render: (r) => r.externalReference ?? '—' },
+    { key: 'createdAt', header: t('edi.messages.createdHeader'), render: (r) => formatDateTime(r.createdAt) },
+    { key: 'direction', header: t('edi.messages.directionHeader'), render: (r) => (r.direction === 'Inbound' ? t('edi.dashboard.inShort') : t('edi.dashboard.outShort')) },
+    { key: 'partner', header: t('edi.messages.partnerHeader'), render: (r) => <code>{r.partnerCode}</code> },
+    { key: 'type', header: t('edi.messages.typeHeader'), render: (r) => r.messageType },
+    { key: 'externalReference', header: t('edi.messages.externalRefHeader'), render: (r) => r.externalReference ?? '—' },
     {
       key: 'status',
-      header: 'Status',
+      header: t('edi.messages.statusHeader'),
       render: (r) => (
         <>
-          <Badge tone={STATUS_TONE[r.status]}>{STATUS_LABELS[r.status]}</Badge>
-          {r.mappingIssue && <Badge tone="warning">mapping</Badge>}
+          <Badge tone={STATUS_TONE[r.status]}>{t(STATUS_LABELS[r.status])}</Badge>
+          {r.mappingIssue && <Badge tone="warning">{t('edi.messages.mappingBadge')}</Badge>}
           {r.attemptCount > 1 && ` (${r.attemptCount}×)`}
         </>
       ),
     },
     {
       key: 'error',
-      header: 'Fout',
+      header: t('edi.messages.errorHeader'),
       render: (r) => (
         <span className="edi-error" title={r.errorDetail ?? undefined}>
           {r.errorDetail ?? '—'}
@@ -123,15 +125,15 @@ export function MessagesTab({ canRetry }: MessagesTabProps) {
     },
     {
       key: 'actions',
-      header: 'Acties',
+      header: t('edi.messages.actionsHeader'),
       render: (r) => (
         <span className="edi-row-actions">
           <Button variant="ghost" onClick={() => setDetailId(r.id)}>
-            Detail
+            {t('edi.messages.detail')}
           </Button>
           {canRetry && (r.status === 'Failed' || r.status === 'DeadLettered') && (
             <Button variant="ghost" disabled={busyId === r.id} onClick={() => void replay(r.id)}>
-              Opnieuw
+              {t('edi.messages.retry')}
             </Button>
           )}
         </span>
@@ -147,47 +149,47 @@ export function MessagesTab({ canRetry }: MessagesTabProps) {
           setSearch(value)
           setPage(1)
         }}
-        searchPlaceholder="Zoeken op externe referentie..."
+        searchPlaceholder={t('edi.messages.searchPlaceholder')}
       >
         <select
           className="ui-filter-select"
-          aria-label="Richting"
+          aria-label={t('edi.messages.directionAria')}
           value={direction}
           onChange={(e) => {
             setDirection(e.target.value as EdiDirection | '')
             setPage(1)
           }}
         >
-          <option value="">Alle richtingen</option>
-          <option value="Inbound">Inkomend</option>
-          <option value="Outbound">Uitgaand</option>
+          <option value="">{t('edi.messages.allDirections')}</option>
+          <option value="Inbound">{t('edi.messages.inbound')}</option>
+          <option value="Outbound">{t('edi.messages.outbound')}</option>
         </select>
         <select
           className="ui-filter-select"
-          aria-label="Status"
+          aria-label={t('edi.messages.statusAria')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value as EdiStatus | '')
             setPage(1)
           }}
         >
-          <option value="">Alle statussen</option>
+          <option value="">{t('edi.messages.allStatuses')}</option>
           {(Object.keys(STATUS_LABELS) as EdiStatus[]).map((s) => (
             <option key={s} value={s}>
-              {STATUS_LABELS[s]}
+              {t(STATUS_LABELS[s])}
             </option>
           ))}
         </select>
         <select
           className="ui-filter-select"
-          aria-label="Partner"
+          aria-label={t('edi.messages.partnerAria')}
           value={partnerId}
           onChange={(e) => {
             setPartnerId(e.target.value)
             setPage(1)
           }}
         >
-          <option value="">Alle partners</option>
+          <option value="">{t('edi.messages.allPartners')}</option>
           {partners.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -202,7 +204,7 @@ export function MessagesTab({ canRetry }: MessagesTabProps) {
         rowKey={(r) => r.id}
         isLoading={isLoading}
         error={loadError}
-        emptyMessage="Geen EDI-berichten gevonden."
+        emptyMessage={t('edi.messages.empty')}
       />
       <Pagination page={page} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={setPage} />
 
@@ -213,7 +215,7 @@ export function MessagesTab({ canRetry }: MessagesTabProps) {
           onClose={() => setDetailId(null)}
           onReplayed={() => {
             setDetailId(null)
-            setReloadToken((t) => t + 1)
+            setReloadToken((token) => token + 1)
           }}
         />
       )}

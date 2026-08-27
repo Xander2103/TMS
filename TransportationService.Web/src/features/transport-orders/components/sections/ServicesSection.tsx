@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { Badge } from '../../../../components/ui/Badge'
 import { Button } from '../../../../components/ui/Button'
 import { FormField } from '../../../../components/ui/FormField'
+import { useLocale } from '../../../../i18n/localeContext'
 import type {
   CustomerServiceOptionPrice,
   PriceCalculationResult,
@@ -83,6 +84,7 @@ export function ServicesSection({
   includedTimeOverrideOpen,
   setIncludedTimeOverrideOpen,
 }: ServicesSectionProps) {
+  const { t } = useLocale()
   // Options currently rendered as read-only "Automatisch" rows (from the live preview) must not
   // also appear as a manually-selectable checkbox below — that would duplicate the row.
   const autoAppliedServiceOptionIds = new Set(
@@ -157,7 +159,11 @@ export function ServicesSection({
       <>
         {needsQuantity && (
           <FormField
-            label={option.kind === 'PerHour' ? `Aantal uur — ${option.name}` : `Aantal stops — ${option.name}`}
+            label={
+              option.kind === 'PerHour'
+                ? t('transportOrders.services.qtyHours', { name: option.name })
+                : t('transportOrders.services.qtyStops', { name: option.name })
+            }
             htmlFor={`svc-qty-${option.id}`}
           >
             <input
@@ -172,7 +178,7 @@ export function ServicesSection({
           </FormField>
         )}
         {isPerDay && (
-          <FormField label={`Aantal dagen — ${option.name}`} htmlFor={`svc-days-${option.id}`}>
+          <FormField label={t('transportOrders.services.qtyDays', { name: option.name })} htmlFor={`svc-days-${option.id}`}>
             <input
               id={`svc-days-${option.id}`}
               type="number"
@@ -186,7 +192,7 @@ export function ServicesSection({
         )}
         {isPerPalletDay && (
           <div className="tof-row">
-            <FormField label={`Pallets — ${option.name}`} htmlFor={`svc-pallets-${option.id}`}>
+            <FormField label={t('transportOrders.services.pallets', { name: option.name })} htmlFor={`svc-pallets-${option.id}`}>
               <input
                 id={`svc-pallets-${option.id}`}
                 type="number"
@@ -197,7 +203,7 @@ export function ServicesSection({
                 disabled={saving}
               />
             </FormField>
-            <FormField label={`Dagen — ${option.name}`} htmlFor={`svc-pd-days-${option.id}`}>
+            <FormField label={t('transportOrders.services.days', { name: option.name })} htmlFor={`svc-pd-days-${option.id}`}>
               <input
                 id={`svc-pd-days-${option.id}`}
                 type="number"
@@ -209,12 +215,16 @@ export function ServicesSection({
               />
             </FormField>
             <FormField
-              label={`Pallet-dagen — ${option.name}`}
+              label={t('transportOrders.services.palletDays', { name: option.name })}
               htmlFor={`svc-qty-${option.id}`}
               hint={
                 palletsValue.trim() && daysValue.trim()
-                  ? `${palletsValue} pallets × ${daysValue} dagen = ${Number(palletsValue) * Number(daysValue)} pallet-dagen; handmatig aanpasbaar.`
-                  : 'Wordt berekend als pallets × dagen; handmatig aanpasbaar.'
+                  ? t('transportOrders.services.palletDaysHintCalc', {
+                      pallets: palletsValue,
+                      days: daysValue,
+                      total: Number(palletsValue) * Number(daysValue),
+                    })
+                  : t('transportOrders.services.palletDaysHint')
               }
             >
               <input
@@ -234,14 +244,14 @@ export function ServicesSection({
   }
 
   const renderServiceNoteInput = (option: ServiceOption) => (
-    <FormField label={`Notitie — ${option.name}`} htmlFor={`svc-note-${option.id}`}>
+    <FormField label={t('transportOrders.services.note', { name: option.name })} htmlFor={`svc-note-${option.id}`}>
       <input
         id={`svc-note-${option.id}`}
         type="text"
         value={serviceNotes[option.id] ?? ''}
         onChange={(e) => setServiceNotes((q) => ({ ...q, [option.id]: e.target.value }))}
         disabled={saving}
-        placeholder="Optionele notitie, bv. afspraak met de klant"
+        placeholder={t('transportOrders.services.notePlaceholder')}
       />
     </FormField>
   )
@@ -259,7 +269,7 @@ export function ServicesSection({
       : (serviceQuantities[draftServiceOption.id]?.trim() ? Number(serviceQuantities[draftServiceOption.id]) : null)
     return quantity != null
       ? `€ ${(price * quantity).toFixed(2)}`
-      : `${formatServiceValue(draftServiceOption.kind, price)} — vul een aantal in`
+      : t('transportOrders.services.indicationFillQuantity', { value: formatServiceValue(draftServiceOption.kind, price) })
   })()
 
   // "Niet toegepast": informational preview lines the engine emits for a selected service that
@@ -277,12 +287,12 @@ export function ServicesSection({
     extraTimeRoundingStepMinutes, extraTimeMinimumBillableMinutes,
   ].some((value) => value.trim() !== '')
   const includedTimeSourceLabel = stops.some((s) => s.includedTimeMinutesOverride.trim() !== '')
-    ? 'Bron: Afwijking op stop'
+    ? t('transportOrders.services.sourceStop')
     : hasIncludedTimeOverride
-      ? 'Bron: Afwijking op order'
+      ? t('transportOrders.services.sourceOrder')
       : includedTimeInfo?.source === 'Contract'
-        ? 'Bron: Klantcontract'
-        : 'Bron: Geen contractwaarde'
+        ? t('transportOrders.services.sourceContract')
+        : t('transportOrders.services.sourceNone')
   // Mirrors PricingEngine.ResolveIncludedTime: the combined allowance only survives while NEITHER
   // per-activity minutes override is set — an override to the rate/rounding/minimum alone does not
   // switch the agreement out of combined mode, so the combined row must still show.
@@ -306,14 +316,13 @@ export function ServicesSection({
   return (
     <>
       <p className="ui-form-section-description">
-        Gekozen diensten tellen mee in de prijsberekening en worden bij facturatie aparte factuurlijnen. De effectieve
-        prijs komt uit de klantenfiche (klanttarief) of de algemene standaard.
+        {t('transportOrders.services.description')}
       </p>
 
       <div className="tof-service-group">
-        <h4>Automatisch toegepast</h4>
+        <h4>{t('transportOrders.services.autoTitle')}</h4>
         {autoAppliedServiceLines.length === 0 && (
-          <p className="placeholder-text">Geen automatisch toegepaste diensten voor deze opdracht.</p>
+          <p className="placeholder-text">{t('transportOrders.services.autoEmpty')}</p>
         )}
         {autoAppliedServiceLines.length > 0 && (
           <div className="tof-service-options">
@@ -322,7 +331,7 @@ export function ServicesSection({
                 <label className="tof-checkbox">
                   <input type="checkbox" checked readOnly disabled />
                   <span>
-                    {line.name} <Badge>AUTO</Badge>{' '}
+                    {line.name} <Badge>{t('transportOrders.lineKind.Auto')}</Badge>{' '}
                     <span className="customer-form-muted">
                       ({formatServiceValue(line.kind, line.value)}
                       {line.quantity != null ? ` × ${line.quantity}` : ''} = € {line.amount.toFixed(2)})
@@ -336,23 +345,23 @@ export function ServicesSection({
       </div>
 
       <div className="tof-service-group">
-        <h4>Handmatig geselecteerd</h4>
+        <h4>{t('transportOrders.services.manualTitle')}</h4>
         {manuallySelectedServiceOptionIds.length === 0 && (
-          <p className="placeholder-text">Nog geen diensten of toeslagen handmatig geselecteerd.</p>
+          <p className="placeholder-text">{t('transportOrders.services.manualEmpty')}</p>
         )}
         {manuallySelectedServiceOptionIds.length > 0 && (
           <div className="tof-service-options">
             {manuallySelectedServiceOptionIds.map((id) => {
               const option = serviceOptions.find((o) => o.id === id)
               if (!option) return null
-              const source = customerServiceById.get(option.id)?.source ?? 'Algemene standaard'
+              const source = customerServiceById.get(option.id)?.source ?? t('transportOrders.services.sourceDefault')
               return (
                 <div key={id} className="tof-service-option">
                   <div className="tof-service-option-header">
                     <span>
-                      {option.name} <Badge tone="info">MANUEEL</Badge>{' '}
+                      {option.name} <Badge tone="info">{t('transportOrders.lineKind.Manual')}</Badge>{' '}
                       <span className="customer-form-muted">
-                        ({SERVICE_KIND_LABELS[option.kind]} — {formatServiceValue(option.kind, effectiveOptionPrice(option))} — {source})
+                        ({t(SERVICE_KIND_LABELS[option.kind])} — {formatServiceValue(option.kind, effectiveOptionPrice(option))} — {source})
                       </span>
                     </span>
                     <button
@@ -361,7 +370,7 @@ export function ServicesSection({
                       onClick={() => removeSelectedService(id)}
                       disabled={saving}
                     >
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   </div>
                   {renderServiceQuantityInputs(option)}
@@ -374,16 +383,16 @@ export function ServicesSection({
 
         <div className="tof-stop-toolbar">
           <Button variant="secondary" onClick={() => setAddServicePanelOpen((open) => !open)} disabled={saving}>
-            + Dienst of toeslag toevoegen
+            {t('transportOrders.services.addService')}
           </Button>
         </div>
 
         {addServicePanelOpen && (
           <div className="tof-service-add-panel">
             {addableServiceOptions.length === 0 && (
-              <p className="placeholder-text">Geen extra diensten meer beschikbaar voor deze klant.</p>
+              <p className="placeholder-text">{t('transportOrders.services.noMore')}</p>
             )}
-            <FormField label="Dienst of toeslag" htmlFor="svc-add-select">
+            <FormField label={t('transportOrders.services.serviceField')} htmlFor="svc-add-select">
               <select
                 id="svc-add-select"
                 value={draftServiceOptionId}
@@ -410,7 +419,7 @@ export function ServicesSection({
                 }}
                 disabled={saving}
               >
-                <option value="">Kies een dienst of toeslag…</option>
+                <option value="">{t('transportOrders.services.choose')}</option>
                 {addableServiceOptions.map((option) => (
                   <option key={option.id} value={option.id}>
                     {option.name}
@@ -420,17 +429,17 @@ export function ServicesSection({
             </FormField>
             {draftServiceOption && (
               <>
-                <FormField label="Berekeningswijze" htmlFor="svc-add-kind">
-                  <input id="svc-add-kind" type="text" value={SERVICE_KIND_LABELS[draftServiceOption.kind]} readOnly disabled />
+                <FormField label={t('transportOrders.services.calcMethod')} htmlFor="svc-add-kind">
+                  <input id="svc-add-kind" type="text" value={t(SERVICE_KIND_LABELS[draftServiceOption.kind])} readOnly disabled />
                 </FormField>
                 {renderServiceQuantityInputs(draftServiceOption)}
                 {renderServiceNoteInput(draftServiceOption)}
-                <p className="customer-form-muted">Prijsindicatie: {draftPriceIndication}</p>
+                <p className="customer-form-muted">{t('transportOrders.services.priceIndication', { value: draftPriceIndication ?? '' })}</p>
               </>
             )}
             <div className="tof-stop-toolbar">
               <Button variant="secondary" onClick={addDraftService} disabled={saving || !draftServiceOptionId}>
-                Toevoegen
+                {t('ui.actions.add')}
               </Button>
               <button
                 type="button"
@@ -441,7 +450,7 @@ export function ServicesSection({
                 }}
                 disabled={saving}
               >
-                Annuleren
+                {t('ui.actions.cancel')}
               </button>
             </div>
           </div>
@@ -449,9 +458,9 @@ export function ServicesSection({
       </div>
 
       <div className="tof-service-group">
-        <h4>Niet toegepast</h4>
+        <h4>{t('transportOrders.services.notAppliedTitle')}</h4>
         {notAppliedServiceLines.length === 0 ? (
-          <p className="placeholder-text">Alle geselecteerde diensten worden op dit moment toegepast.</p>
+          <p className="placeholder-text">{t('transportOrders.services.allApplied')}</p>
         ) : (
           <ul className="tof-service-not-applied">
             {notAppliedServiceLines.map((line, index) => (
@@ -462,22 +471,32 @@ export function ServicesSection({
       </div>
 
       <div className="tof-service-group">
-        <h4>Laad- en lostijd</h4>
+        <h4>{t('transportOrders.services.timeTitle')}</h4>
         {pricingSource === 'OneOff' ? (
           <p className="ui-form-field-hint">
-            Bij een eenmalige prijsafspraak gebruik je de eenmalige laad- en lostijdvelden.
+            {t('transportOrders.services.oneOffTimeHint')}
           </p>
         ) : (
           <>
             {includedCombinedMinutes != null ? (
-              <p>Inbegrepen laad- en lostijd (gecombineerd): {includedCombinedMinutes} minuten</p>
+              <p>{t('transportOrders.services.combinedIncluded', { minutes: includedCombinedMinutes })}</p>
             ) : (
               <>
                 <p>
-                  Inbegrepen laadtijd: {effectiveIncludedLoadingMinutes != null ? `${effectiveIncludedLoadingMinutes} minuten` : '—'}
+                  {t('transportOrders.services.includedLoading', {
+                    value:
+                      effectiveIncludedLoadingMinutes != null
+                        ? t('transportOrders.services.minutesValue', { count: effectiveIncludedLoadingMinutes })
+                        : '—',
+                  })}
                 </p>
                 <p>
-                  Inbegrepen lostijd: {effectiveIncludedUnloadingMinutes != null ? `${effectiveIncludedUnloadingMinutes} minuten` : '—'}
+                  {t('transportOrders.services.includedUnloading', {
+                    value:
+                      effectiveIncludedUnloadingMinutes != null
+                        ? t('transportOrders.services.minutesValue', { count: effectiveIncludedUnloadingMinutes })
+                        : '—',
+                  })}
                 </p>
               </>
             )}
@@ -486,7 +505,7 @@ export function ServicesSection({
             {!includedTimeOverrideOpen && (
               <div className="tof-stop-toolbar">
                 <Button variant="secondary" onClick={() => setIncludedTimeOverrideOpen(true)} disabled={saving}>
-                  Afwijken voor deze order
+                  {t('transportOrders.services.override')}
                 </Button>
               </div>
             )}
@@ -494,7 +513,7 @@ export function ServicesSection({
             {includedTimeOverrideOpen && (
               <div className="tof-stop">
                 <div className="tof-row">
-                  <FormField label="Inbegrepen laadtijd (minuten)" htmlFor="to-included-loading-override">
+                  <FormField label={t('transportOrders.services.overrideLoading')} htmlFor="to-included-loading-override">
                     <input
                       id="to-included-loading-override"
                       type="number"
@@ -505,7 +524,7 @@ export function ServicesSection({
                       disabled={saving}
                     />
                   </FormField>
-                  <FormField label="Inbegrepen lostijd (minuten)" htmlFor="to-included-unloading-override">
+                  <FormField label={t('transportOrders.services.overrideUnloading')} htmlFor="to-included-unloading-override">
                     <input
                       id="to-included-unloading-override"
                       type="number"
@@ -518,7 +537,7 @@ export function ServicesSection({
                   </FormField>
                 </div>
                 <div className="tof-row">
-                  <FormField label="Uurtarief extra tijd (€)" htmlFor="to-extra-rate-override">
+                  <FormField label={t('transportOrders.services.overrideRate')} htmlFor="to-extra-rate-override">
                     <input
                       id="to-extra-rate-override"
                       type="number"
@@ -529,7 +548,7 @@ export function ServicesSection({
                       disabled={saving}
                     />
                   </FormField>
-                  <FormField label="Afronding (minuten)" htmlFor="to-extra-rounding-override">
+                  <FormField label={t('transportOrders.services.overrideRounding')} htmlFor="to-extra-rounding-override">
                     <input
                       id="to-extra-rounding-override"
                       type="number"
@@ -540,7 +559,7 @@ export function ServicesSection({
                       disabled={saving}
                     />
                   </FormField>
-                  <FormField label="Minimum extra tijd (minuten)" htmlFor="to-extra-minimum-override">
+                  <FormField label={t('transportOrders.services.overrideMinimum')} htmlFor="to-extra-minimum-override">
                     <input
                       id="to-extra-minimum-override"
                       type="number"
@@ -555,7 +574,7 @@ export function ServicesSection({
                 {hasIncludedTimeOverride && (
                   <div className="tof-stop-toolbar">
                     <Button variant="secondary" onClick={resetIncludedTimeOverrides} disabled={saving}>
-                      Terugzetten naar contractwaarde
+                      {t('transportOrders.services.resetContract')}
                     </Button>
                   </div>
                 )}

@@ -12,6 +12,8 @@ import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
+import { useLocale } from '../../../i18n/localeContext'
+import { formatInteger } from '../../../utils/numbers'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { AssignmentSlot } from '../../fleet-assignment/AssignmentSlot'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
@@ -43,6 +45,7 @@ type TabId = (typeof TAB_IDS)[number]
 export function VehicleDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -68,12 +71,12 @@ export function VehicleDetailPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Voertuig kon niet worden geladen.')
+        if (mounted) setLoadError(t('vehicles.detail.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, t])
 
   const loading = vehicle === null && loadError === null
   const canEdit = hasPermission('vehicles.edit')
@@ -86,7 +89,7 @@ export function VehicleDetailPage() {
     if (!id) return
     getVehicle(id)
       .then(setVehicle)
-      .catch(() => showError('Voertuig kon niet opnieuw worden geladen.'))
+      .catch(() => showError(t('vehicles.detail.reloadFailed')))
   }
 
   function startEdit() {
@@ -133,9 +136,9 @@ export function VehicleDetailPage() {
       const updated = await updateVehicle(id, values)
       setVehicle(updated)
       setEditing(false)
-      showSuccess('Voertuig bijgewerkt.')
+      showSuccess(t('vehicles.detail.updated'))
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'Wijzigingen konden niet worden opgeslagen.')
+      showError(err instanceof ApiError ? err.message : t('fleet.common.saveChangesFailed'))
     } finally {
       setSaving(false)
     }
@@ -145,10 +148,10 @@ export function VehicleDetailPage() {
     if (!id) return
     try {
       await deleteVehicle(id)
-      showSuccess('Voertuig verwijderd.')
+      showSuccess(t('vehicles.detail.deleted'))
       navigate('/vehicles')
     } catch {
-      showError('Voertuig kon niet worden verwijderd.')
+      showError(t('vehicles.detail.deleteFailed'))
       setConfirmDelete(false)
     }
   }
@@ -163,26 +166,26 @@ export function VehicleDetailPage() {
     }))
   }
 
-  if (loading) return <p className="placeholder-text">Voertuig laden…</p>
-  if (loadError || !vehicle) return <p className="placeholder-text">{loadError ?? 'Niet gevonden.'}</p>
+  if (loading) return <p className="placeholder-text">{t('vehicles.detail.loading')}</p>
+  if (loadError || !vehicle) return <p className="placeholder-text">{loadError ?? t('fleet.common.notFound')}</p>
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Voertuigen', to: '/vehicles' }, { label: vehicle.internalNumber }]} />
-      <BackButton to="/vehicles" label="Terug naar voertuigen" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.vehicles'), to: '/vehicles' }, { label: vehicle.internalNumber }]} />
+      <BackButton to="/vehicles" label={t('vehicles.detail.back')} />
       <PageHeader
         title={`${vehicle.brand ?? ''} ${vehicle.model ?? ''}`.trim() || vehicle.internalNumber}
         subtitle={`${vehicle.internalNumber} · ${vehicle.licensePlate}`}
         action={
           <div className="vehicle-detail-actions">
-            {canEdit && !editing && <Button variant="secondary" onClick={startEdit}>Bewerken</Button>}
+            {canEdit && !editing && <Button variant="secondary" onClick={startEdit}>{t('ui.actions.edit')}</Button>}
             {canEdit && !editing && (
               <Button variant="secondary" onClick={() => setConfirmActive(vehicle.isActive ? 'deactivate' : 'activate')}>
-                {vehicle.isActive ? 'Deactiveren' : 'Heractiveren'}
+                {vehicle.isActive ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate')}
               </Button>
             )}
             {hasPermission('vehicles.delete') && !editing && (
-              <Button variant="danger" onClick={() => setConfirmDelete(true)}>Verwijderen</Button>
+              <Button variant="danger" onClick={() => setConfirmDelete(true)}>{t('ui.actions.delete')}</Button>
             )}
           </div>
         }
@@ -192,15 +195,15 @@ export function VehicleDetailPage() {
         <StatusBadges
           active={vehicle.isActive}
           operational={{
-            label: OPERATIONAL_STATUS_LABELS[vehicle.operationalStatus],
+            label: t(OPERATIONAL_STATUS_LABELS[vehicle.operationalStatus]),
             tone: OPERATIONAL_STATUS_TONES[vehicle.operationalStatus],
             reason: vehicle.statusReason,
           }}
         />
-        {vehicle.adrSuitable && <Badge tone="warning">ADR</Badge>}
-        {vehicle.hasCrane && <Badge tone="info">Kraan</Badge>}
-        {vehicle.hasRefrigeration && <Badge tone="info">Koeling</Badge>}
-        {vehicle.hasTailLift && <Badge tone="info">Laadklep</Badge>}
+        {vehicle.adrSuitable && <Badge tone="warning">{t('fleet.common.equipment.adrShort')}</Badge>}
+        {vehicle.hasCrane && <Badge tone="info">{t('fleet.common.equipment.crane')}</Badge>}
+        {vehicle.hasRefrigeration && <Badge tone="info">{t('fleet.common.equipment.refrigeration')}</Badge>}
+        {vehicle.hasTailLift && <Badge tone="info">{t('fleet.common.equipment.tailLift')}</Badge>}
       </div>
 
       {editing && form ? (
@@ -217,18 +220,18 @@ export function VehicleDetailPage() {
         <>
           <Tabs
             tabs={[
-              { id: 'overzicht', label: 'Overzicht' },
-              { id: 'techniek', label: 'Techniek' },
-              { id: 'toewijzing', label: 'Toewijzing' },
-              { id: 'documenten', label: 'Documenten' },
-              ...(hasPermission('tachograph.view') ? [{ id: 'tachograaf', label: 'Tachograaf' }] : []),
-              { id: 'leasing', label: 'Leasing' },
-              { id: 'onderhoud', label: 'Onderhoud' },
-              { id: 'keuringen', label: 'Keuringen' },
-              { id: 'schade', label: 'Schade' },
-              { id: 'brandstof', label: 'Brandstof' },
-              { id: 'kpi', label: 'KPI' },
-              { id: 'historiek', label: 'Historiek' },
+              { id: 'overzicht', label: t('fleet.tabs.overview') },
+              { id: 'techniek', label: t('fleet.tabs.technical') },
+              { id: 'toewijzing', label: t('fleet.tabs.assignment') },
+              { id: 'documenten', label: t('fleet.tabs.documents') },
+              ...(hasPermission('tachograph.view') ? [{ id: 'tachograaf', label: t('fleet.tabs.tachograph') }] : []),
+              { id: 'leasing', label: t('fleet.tabs.leasing') },
+              { id: 'onderhoud', label: t('fleet.tabs.maintenance') },
+              { id: 'keuringen', label: t('fleet.tabs.inspections') },
+              { id: 'schade', label: t('fleet.tabs.damage') },
+              { id: 'brandstof', label: t('fleet.tabs.fuel') },
+              { id: 'kpi', label: t('fleet.tabs.kpi') },
+              { id: 'historiek', label: t('fleet.tabs.history') },
             ]}
             activeId={tab}
             onChange={setTab}
@@ -237,16 +240,16 @@ export function VehicleDetailPage() {
           {tab === 'overzicht' && (
             <TabPanel tabId="overzicht">
               <div className="vehicle-detail-grid">
-                <FormField label="Kenteken"><span>{vehicle.licensePlate}</span></FormField>
-                <FormField label="VIN"><span>{vehicle.vin ?? '—'}</span></FormField>
-                <FormField label="Categorie"><span>{vehicle.categoryName ?? '—'}</span></FormField>
-                <FormField label="Bouwjaar"><span>{vehicle.year ?? '—'}</span></FormField>
-                <FormField label="Eerste inschrijving"><span>{vehicle.firstRegistrationDate ?? '—'}</span></FormField>
-                <FormField label="Eigendomsvorm"><span>{OWNERSHIP_TYPE_LABELS[vehicle.ownershipType]}</span></FormField>
-                <FormField label="Kilometerstand"><span>{vehicle.odometerKm.toLocaleString('nl-BE')} km</span></FormField>
-                <FormField label="Vaste chauffeur"><span>{vehicle.fixedDriverName ?? '—'}</span></FormField>
-                <FormField label="Actuele chauffeur"><span>{vehicle.currentDriverName ?? '—'}</span></FormField>
-                <FormField label="Notities" className="vehicle-detail-full"><span>{vehicle.notes ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.plate')}><span>{vehicle.licensePlate}</span></FormField>
+                <FormField label={t('vehicles.detail.vin')}><span>{vehicle.vin ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.category')}><span>{vehicle.categoryName ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.year')}><span>{vehicle.year ?? '—'}</span></FormField>
+                <FormField label={t('vehicles.form.firstRegistration')}><span>{vehicle.firstRegistrationDate ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.ownership')}><span>{t(OWNERSHIP_TYPE_LABELS[vehicle.ownershipType])}</span></FormField>
+                <FormField label={t('vehicles.form.odometer')}><span>{formatInteger(vehicle.odometerKm)} km</span></FormField>
+                <FormField label={t('vehicles.detail.fixedDriver')}><span>{vehicle.fixedDriverName ?? '—'}</span></FormField>
+                <FormField label={t('vehicles.detail.currentDriver')}><span>{vehicle.currentDriverName ?? '—'}</span></FormField>
+                <FormField label={t('fleet.sections.notes')} className="vehicle-detail-full"><span>{vehicle.notes ?? '—'}</span></FormField>
               </div>
             </TabPanel>
           )}
@@ -254,29 +257,29 @@ export function VehicleDetailPage() {
           {tab === 'techniek' && (
             <TabPanel tabId="techniek">
               <div className="vehicle-detail-grid">
-                <FormField label="Brandstof"><span>{FUEL_TYPE_LABELS[vehicle.fuelType]}</span></FormField>
-                <FormField label="Emissieklasse"><span>{vehicle.emissionClass ? EMISSION_CLASS_LABELS[vehicle.emissionClass] : '—'}</span></FormField>
-                <FormField label="Aantal assen" hint="Voor Maut/tolberekening."><span>{vehicle.axleCount || '—'}</span></FormField>
-                <FormField label="Laadmeters"><span>{vehicle.loadingMeters ? `${vehicle.loadingMeters} ldm` : '—'}</span></FormField>
-                <FormField label="Vereist rijbewijs"><span>{vehicle.requiredLicenceCode ?? '—'}</span></FormField>
-                <FormField label="MTM"><span>{vehicle.grossVehicleWeightKg !== null ? `${vehicle.grossVehicleWeightKg} kg` : '—'}</span></FormField>
-                <FormField label="Laadvermogen"><span>{vehicle.payloadKg !== null ? `${vehicle.payloadKg} kg` : '—'}</span></FormField>
-                <FormField label="Afmetingen (L×B×H)">
+                <FormField label={t('vehicles.form.fuel')}><span>{t(FUEL_TYPE_LABELS[vehicle.fuelType])}</span></FormField>
+                <FormField label={t('vehicles.form.emissionClass')}><span>{vehicle.emissionClass ? t(EMISSION_CLASS_LABELS[vehicle.emissionClass]) : '—'}</span></FormField>
+                <FormField label={t('fleet.form.axles')} hint={t('fleet.form.axlesHint')}><span>{vehicle.axleCount || '—'}</span></FormField>
+                <FormField label={t('fleet.form.loadingMeters')}><span>{vehicle.loadingMeters ? `${vehicle.loadingMeters} ldm` : '—'}</span></FormField>
+                <FormField label={t('vehicles.form.requiredLicence')}><span>{vehicle.requiredLicenceCode ?? '—'}</span></FormField>
+                <FormField label={t('vehicles.detail.gvw')}><span>{vehicle.grossVehicleWeightKg !== null ? `${vehicle.grossVehicleWeightKg} kg` : '—'}</span></FormField>
+                <FormField label={t('vehicles.detail.payload')}><span>{vehicle.payloadKg !== null ? `${vehicle.payloadKg} kg` : '—'}</span></FormField>
+                <FormField label={t('vehicles.detail.dimensions')}>
                   <span>
                     {vehicle.lengthMeters ?? '—'} × {vehicle.widthMeters ?? '—'} × {vehicle.heightMeters ?? '—'} m
                   </span>
                 </FormField>
-                <FormField label="Volume"><span>{vehicle.volumeM3 !== null ? `${vehicle.volumeM3} m³` : '—'}</span></FormField>
-                <FormField label="Uitrusting" className="vehicle-detail-full">
+                <FormField label={t('vehicles.detail.volume')}><span>{vehicle.volumeM3 !== null ? `${vehicle.volumeM3} m³` : '—'}</span></FormField>
+                <FormField label={t('vehicles.detail.equipment')} className="vehicle-detail-full">
                   <span>
                     {[
-                      vehicle.hasCrane ? 'Kraan' : null,
-                      vehicle.hasRefrigeration ? 'Koeling' : null,
-                      vehicle.hasTailLift ? 'Laadklep' : null,
-                      vehicle.adrSuitable ? 'ADR' : null,
+                      vehicle.hasCrane ? t('fleet.common.equipment.crane') : null,
+                      vehicle.hasRefrigeration ? t('fleet.common.equipment.refrigeration') : null,
+                      vehicle.hasTailLift ? t('fleet.common.equipment.tailLift') : null,
+                      vehicle.adrSuitable ? t('fleet.common.equipment.adrShort') : null,
                     ]
                       .filter(Boolean)
-                      .join(' · ') || 'Geen bijzondere uitrusting'}
+                      .join(' · ') || t('vehicles.detail.noEquipment')}
                   </span>
                 </FormField>
               </div>
@@ -286,17 +289,16 @@ export function VehicleDetailPage() {
           {tab === 'toewijzing' && (
             <TabPanel tabId="toewijzing">
               <p className="assignment-slots-note">
-                <strong>Vaste chauffeur</strong> is een langetermijnvoorkeur; <strong>actuele chauffeur</strong> is de
-                tijdelijke operationele toewijzing. De rittoewijzing voor een specifieke dag gebeurt in de planning.
-                Wijzigingen hier worden ook op de chauffeurspagina zichtbaar — het is dezelfde koppeling.
+                <strong>{t('vehicles.detail.noteFixedLead')}</strong> {t('vehicles.detail.noteFixedText')}{' '}
+                <strong>{t('vehicles.detail.noteCurrentLead')}</strong> {t('vehicles.detail.noteCurrentText')}
               </p>
               <div className="assignment-slots">
                 <AssignmentSlot
-                  title="Vaste chauffeur"
-                  description="Rijdt standaard met dit voertuig."
+                  title={t('vehicles.detail.fixedDriver')}
+                  description={t('vehicles.detail.fixedDesc')}
                   assigned={vehicle.fixedDriverId && vehicle.fixedDriverName ? { label: vehicle.fixedDriverName, linkTo: `/drivers/${vehicle.fixedDriverId}` } : null}
                   canEdit={canEdit}
-                  pickerLabel="Chauffeur"
+                  pickerLabel={t('vehicles.detail.pickerDriver')}
                   loadOptions={loadDriverOptions}
                   assign={async (driverId, replaceExisting) => {
                     await setVehicleDriver(vehicle.id, 'fixed-driver', driverId, replaceExisting)
@@ -304,11 +306,11 @@ export function VehicleDetailPage() {
                   onChanged={reloadVehicle}
                 />
                 <AssignmentSlot
-                  title="Actuele chauffeur"
-                  description="Tijdelijke operationele toewijzing."
+                  title={t('vehicles.detail.currentDriver')}
+                  description={t('vehicles.detail.currentDesc')}
                   assigned={vehicle.currentDriverId && vehicle.currentDriverName ? { label: vehicle.currentDriverName, linkTo: `/drivers/${vehicle.currentDriverId}` } : null}
                   canEdit={canEdit}
-                  pickerLabel="Chauffeur"
+                  pickerLabel={t('vehicles.detail.pickerDriver')}
                   loadOptions={loadDriverOptions}
                   assign={async (driverId, replaceExisting) => {
                     await setVehicleDriver(vehicle.id, 'current-driver', driverId, replaceExisting)
@@ -370,9 +372,9 @@ export function VehicleDetailPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Voertuig verwijderen"
-          message={`Weet je zeker dat je voertuig ${vehicle.internalNumber} wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('vehicles.detail.confirmDeleteTitle')}
+          message={t('vehicles.detail.confirmDeleteMessage', { number: vehicle.internalNumber })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}
@@ -381,22 +383,22 @@ export function VehicleDetailPage() {
 
       {confirmActive && (
         <ConfirmDialog
-          title={confirmActive === 'deactivate' ? 'Voertuig deactiveren' : 'Voertuig heractiveren'}
+          title={confirmActive === 'deactivate' ? t('vehicles.detail.deactivateTitle') : t('vehicles.detail.reactivateTitle')}
           message={
             confirmActive === 'deactivate'
-              ? `${vehicle.internalNumber} deactiveren? Historiek blijft behouden, maar het voertuig is niet meer inzetbaar voor nieuwe ritten.`
-              : `${vehicle.internalNumber} heractiveren? Het voertuig is daarna weer inzetbaar.`
+              ? t('vehicles.detail.deactivateMessage', { number: vehicle.internalNumber })
+              : t('vehicles.detail.reactivateMessage', { number: vehicle.internalNumber })
           }
-          confirmLabel={confirmActive === 'deactivate' ? 'Deactiveren' : 'Heractiveren'}
+          confirmLabel={confirmActive === 'deactivate' ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate')}
           onConfirm={async () => {
             if (!id) return
             try {
               await setVehicleActive(id, confirmActive === 'activate')
-              showSuccess(confirmActive === 'activate' ? 'Voertuig geheractiveerd.' : 'Voertuig gedeactiveerd.')
+              showSuccess(confirmActive === 'activate' ? t('vehicles.detail.reactivated') : t('vehicles.detail.deactivated'))
               setConfirmActive(null)
               reloadVehicle()
             } catch (err) {
-              showError(err instanceof ApiError ? err.message : 'De actie kon niet worden uitgevoerd.')
+              showError(err instanceof ApiError ? err.message : t('fleet.common.actionFailed'))
               setConfirmActive(null)
             }
           }}

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   downloadCustomerDayDocuments,
@@ -20,12 +21,12 @@ function todayIso(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
 
-/** Beslissing/reden-label per orderregel in de voorvertoning. */
-function rowDecision(row: CustomerDayDocumentRow): string {
-  if (row.usesCustomerDocument) return `Klantdocument — ${row.reason}`
-  if (row.noneRequired) return `Geen document — ${row.reason}`
-  if (row.undecided) return `Nog te beslissen — ${row.reason}`
-  const kind = row.kind === 'Cmr' ? 'CMR' : 'Leveringsbon'
+/** Beslissing/reden-label per orderregel in de voorvertoning (reden komt als tekst van de server). */
+function rowDecision(t: TranslateFn, row: CustomerDayDocumentRow): string {
+  if (row.usesCustomerDocument) return t('customers.dayDocs.decisionCustomerDocument', { reason: row.reason })
+  if (row.noneRequired) return t('customers.dayDocs.decisionNone', { reason: row.reason })
+  if (row.undecided) return t('customers.dayDocs.decisionUndecided', { reason: row.reason })
+  const kind = row.kind === 'Cmr' ? 'CMR' : t('customers.dayDocs.deliveryNote')
   return `${kind} — ${row.reason}`
 }
 
@@ -36,6 +37,7 @@ function rowDecision(row: CustomerDayDocumentRow): string {
  */
 export function CustomerDayDocumentsCard({ customerId }: CustomerDayDocumentsCardProps) {
   const { showError } = useToast()
+  const { t } = useLocale()
   const [date, setDate] = useState(todayIso)
   const [preview, setPreview] = useState<CustomerDayDocumentsPreview | null>(null)
   const [loading, setLoading] = useState(false)
@@ -49,7 +51,7 @@ export function CustomerDayDocumentsCard({ customerId }: CustomerDayDocumentsCar
       setPreview(await getCustomerDayDocumentsPreview(customerId, date))
     } catch (err) {
       setPreview(null)
-      setLoadError(describeApiError(err, 'De voorvertoning kon niet worden geladen.').message)
+      setLoadError(describeApiError(err, t('customers.dayDocs.previewFailed')).message)
     } finally {
       setLoading(false)
     }
@@ -60,11 +62,7 @@ export function CustomerDayDocumentsCard({ customerId }: CustomerDayDocumentsCar
     try {
       await downloadCustomerDayDocuments(customerId, kind, date)
     } catch {
-      showError(
-        kind === 'cmr'
-          ? "De CMR's konden niet worden gegenereerd."
-          : 'De leveringsbonnen konden niet worden gegenereerd.',
-      )
+      showError(kind === 'cmr' ? t('customers.dayDocs.cmrsFailed') : t('customers.dayDocs.deliveryNotesFailed'))
     } finally {
       setDownloading(null)
     }
@@ -72,27 +70,27 @@ export function CustomerDayDocumentsCard({ customerId }: CustomerDayDocumentsCar
 
   return (
     <div className="customer-summary customer-day-documents">
-      <h3>Documenten per dag</h3>
+      <h3>{t('customers.dayDocs.title')}</h3>
       <div className="customer-day-documents-toolbar">
-        <FormField label="Leveringsdag" htmlFor="day-docs-date">
+        <FormField label={t('customers.dayDocs.dateLabel')} htmlFor="day-docs-date">
           <input id="day-docs-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </FormField>
         <Button variant="secondary" onClick={() => void loadPreview()} disabled={loading || !date}>
-          {loading ? 'Laden…' : 'Voorvertoning'}
+          {loading ? t('customers.dayDocs.loadingBusy') : t('customers.dayDocs.previewAction')}
         </Button>
         <Button
           variant="secondary"
           onClick={() => void handleDownload('delivery-note')}
           disabled={downloading !== null || (preview?.ownDeliveryNotes ?? 0) === 0}
         >
-          {downloading === 'delivery-note' ? 'Genereren…' : 'Download leveringsbonnen'}
+          {downloading === 'delivery-note' ? t('customers.dayDocs.generatingBusy') : t('customers.dayDocs.downloadDeliveryNotes')}
         </Button>
         <Button
           variant="secondary"
           onClick={() => void handleDownload('cmr')}
           disabled={downloading !== null || (preview?.ownCmrs ?? 0) === 0}
         >
-          {downloading === 'cmr' ? 'Genereren…' : "Download CMR's"}
+          {downloading === 'cmr' ? t('customers.dayDocs.generatingBusy') : t('customers.dayDocs.downloadCmrs')}
         </Button>
       </div>
 
@@ -105,19 +103,24 @@ export function CustomerDayDocumentsCard({ customerId }: CustomerDayDocumentsCar
       {preview && (
         <>
           <p className="customer-form-muted">
-            {preview.totalOrders} leveringen · {preview.ownDeliveryNotes} eigen leveringsbonnen · {preview.ownCmrs}{' '}
-            CMR&apos;s · {preview.customerDocuments} klantdocumenten · {preview.noneRequired} zonder document ·{' '}
-            {preview.undecided} nog te beslissen
+            {t('customers.dayDocs.previewSummary', {
+              totalOrders: preview.totalOrders,
+              ownDeliveryNotes: preview.ownDeliveryNotes,
+              ownCmrs: preview.ownCmrs,
+              customerDocuments: preview.customerDocuments,
+              noneRequired: preview.noneRequired,
+              undecided: preview.undecided,
+            })}
           </p>
           {preview.rows.length === 0 ? (
-            <p className="placeholder-text">Geen leveringen voor deze klant op {preview.date}.</p>
+            <p className="placeholder-text">{t('customers.dayDocs.noDeliveries', { date: preview.date })}</p>
           ) : (
             <table className="issued-items-table">
               <thead>
                 <tr>
-                  <th>Ordernummer</th>
-                  <th>Losstad</th>
-                  <th>Beslissing</th>
+                  <th>{t('customers.dayDocs.columnOrderNumber')}</th>
+                  <th>{t('customers.dayDocs.columnUnloadingCity')}</th>
+                  <th>{t('customers.dayDocs.columnDecision')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -125,7 +128,7 @@ export function CustomerDayDocumentsCard({ customerId }: CustomerDayDocumentsCar
                   <tr key={row.orderId}>
                     <td>{row.orderNumber}</td>
                     <td>{row.unloadingCity ?? '—'}</td>
-                    <td>{rowDecision(row)}</td>
+                    <td>{rowDecision(t, row)}</td>
                   </tr>
                 ))}
               </tbody>

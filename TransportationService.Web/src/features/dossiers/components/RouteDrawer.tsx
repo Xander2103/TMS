@@ -3,6 +3,7 @@ import { ApiError } from '../../../api/apiClient'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
+import { useLocale } from '../../../i18n/localeContext'
 import { updateTransportOrder } from '../../transport-orders/api/transportOrdersApi'
 import type { TransportOrderDetail } from '../../transport-orders/types'
 import { RouteSection } from '../../transport-orders/components/sections/RouteSection'
@@ -32,6 +33,7 @@ interface RouteDrawerProps {
  * a stale save surfaces the 409 rebase banner instead of silently losing work).
  */
 export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
+  const { t } = useLocale()
   const [baseOrder, setBaseOrder] = useState(order)
   const [stops, setStops] = useState<StopFormRow[]>(() => stopsFromOrder(order))
   const [dirty, setDirty] = useState(false)
@@ -67,7 +69,7 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
     const routeErrors = validateOrderForm(values).filter((e) => e.section === 'route')
     setErrors(fieldErrorMap(routeErrors))
     if (routeErrors.length > 0) {
-      setError('Controleer de gemarkeerde stops.')
+      setError(t('dossiers.orderDrawer.checkStops'))
       return
     }
     setSaving(true)
@@ -80,7 +82,7 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
       if (err instanceof ApiError && err.status === 409 && err.body && typeof err.body === 'object' && 'stops' in err.body) {
         setConflict(err.body as TransportOrderDetail)
       } else {
-        setError(err instanceof Error ? err.message : 'De route kon niet worden opgeslagen.')
+        setError(err instanceof Error ? err.message : t('dossiers.orderDrawer.routeSaveFailed'))
       }
     } finally {
       setSaving(false)
@@ -97,12 +99,18 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
   }
 
   return (
-    <SectionDrawer title={`Route — ${baseOrder.orderNumber}`} dirty={dirty} busy={saving} onClose={onClose} onSave={() => void save()}>
+    <SectionDrawer
+      title={t('dossiers.orderDrawer.routeTitle', { orderNumber: baseOrder.orderNumber })}
+      dirty={dirty}
+      busy={saving}
+      onClose={onClose}
+      onSave={() => void save()}
+    >
       {conflict && (
         <div className="dossier-conflict-banner" role="alert">
-          <span>⚠ Deze opdracht is intussen gewijzigd door een collega. Uw wijzigingen zijn niet opgeslagen.</span>
+          <span>{t('dossiers.orderDrawer.conflict')}</span>
           <Button variant="secondary" onClick={reloadFromConflict}>
-            Herladen
+            {t('dossiers.orderDrawer.reload')}
           </Button>
         </div>
       )}
@@ -124,9 +132,9 @@ export function RouteDrawer({ order, onClose, onSaved }: RouteDrawerProps) {
 
       {refreshTarget && (
         <ConfirmDialog
-          title="Opnieuw overnemen van locatie"
-          message="Lokale aanpassingen op deze stop worden vervangen door de actuele locatiegegevens."
-          confirmLabel="Opnieuw overnemen"
+          title={t('transportOrders.form.refreshTitle')}
+          message={t('transportOrders.form.refreshMessage')}
+          confirmLabel={t('transportOrders.form.refreshConfirm')}
           onConfirm={() => {
             setStop(refreshTarget, { refreshSnapshot: true })
             setRefreshTarget(null)

@@ -5,6 +5,8 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
+import type { TranslateFn } from '../../../i18n/localeContext'
 import { getCustomer, searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
 import { getPoPolicy } from '../../customers/api/customerBillingConfigApi'
@@ -13,6 +15,7 @@ import type { LegalEntityOption } from '../../legal-entities/types'
 import { createInvoice, getNextInvoiceNumber, listUninvoicedOrders } from '../api/invoicesApi'
 import { euro, type ManualLineInput, type UninvoicedOrder } from '../types'
 import { comparePeriods, dateToPeriod, formatPeriod, monthInputToPeriod, periodToMonthInput } from '../utils/invoicePeriod'
+import { READINESS_REASON_KEYS } from '../utils/readiness'
 import './invoices.css'
 
 interface ManualRow extends ManualLineInput {
@@ -22,24 +25,21 @@ interface ManualRow extends ManualLineInput {
 let manualKey = 0
 
 /** Wave 2 §6: readable tooltip for the semicolon-separated readiness reason codes. */
-function READINESS_REASON_LABELS(reasons: string | null | undefined): string {
-  if (!reasons) return 'Nakijken vóór facturatie.'
-  const labels: Record<string, string> = {
-    'pricing.none': 'nog geen prijs',
-    'pricing.coverage.partial': 'niet alle onderdelen geprijsd',
-    'pricing.coverage.none': 'geen onderdeel volledig geprijsd',
-    'pricing.stale': 'prijs verouderd — herbereken',
-    'pod.missing': 'afleverbewijs ontbreekt',
-  }
+function readinessTooltip(t: TranslateFn, reasons: string | null | undefined): string {
+  if (!reasons) return t('invoices.readiness.tooltipFallback')
   return reasons
     .split(';')
-    .map((code) => labels[code] ?? code)
+    .map((code) => {
+      const key = READINESS_REASON_KEYS[code]
+      return key ? t(key) : code
+    })
     .join(', ')
 }
 
 /** Invoice builder: pick a customer, tick completed orders, add manual lines. */
 export function NewInvoicePage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
 
   const [customers, setCustomers] = useState<CustomerListItem[]>([])
@@ -191,16 +191,16 @@ export function NewInvoicePage() {
 
   async function handleCreate() {
     if (!customerId) {
-      showError('Selecteer eerst een klant.')
+      showError(t('invoices.new.selectCustomer'))
       return
     }
     if (selectedOrderIds.length === 0 && manualLines.length === 0) {
-      showError('Selecteer minstens één opdracht of voeg een lijn toe.')
+      showError(t('invoices.new.needsSelection'))
       return
     }
     for (const line of manualLines) {
       if (!line.description.trim() || line.quantity <= 0) {
-        showError('Elke handmatige lijn heeft een omschrijving en een hoeveelheid groter dan nul nodig.')
+        showError(t('invoices.new.invalidManualLine'))
         return
       }
     }
@@ -222,10 +222,10 @@ export function NewInvoicePage() {
         invoicePeriodYear: period?.year ?? null,
         invoicePeriodMonth: period?.month ?? null,
       })
-      showSuccess(`Factuur ${invoice.invoiceNumber} aangemaakt.`)
+      showSuccess(t('invoices.new.created', { number: invoice.invoiceNumber }))
       navigate(`/invoices/${invoice.id}`)
     } catch {
-      showError('De factuur kon niet worden aangemaakt.')
+      showError(t('invoices.new.createError'))
     } finally {
       setBusy(false)
     }
@@ -233,13 +233,13 @@ export function NewInvoicePage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Facturen', to: '/invoices' }, { label: 'Nieuwe factuur' }]} />
-      <PageHeader title="Nieuwe factuur" subtitle="Gebaseerd op afgeronde, nog niet gefactureerde opdrachten." />
+      <Breadcrumbs items={[{ label: t('invoices.list.title'), to: '/invoices' }, { label: t('invoices.internalList.newInvoice') }]} />
+      <PageHeader title={t('invoices.internalList.newInvoice')} subtitle={t('invoices.new.subtitle')} />
 
       <div className="inv-builder">
-        <FormField label="Klant" htmlFor="inv-customer" required>
+        <FormField label={t('invoices.fields.customer')} htmlFor="inv-customer" required>
           <select id="inv-customer" value={customerId} onChange={(e) => handleCustomerChange(e.target.value)} disabled={busy}>
-            <option value="">Selecteer een klant…</option>
+            <option value="">{t('invoices.new.customerPlaceholder')}</option>
             {customers.map((customer) => (
               <option key={customer.id} value={customer.id}>
                 {customer.name} ({customer.customerNumber})
@@ -249,31 +249,31 @@ export function NewInvoicePage() {
         </FormField>
         {invoiceGrouping && invoiceGrouping !== 'Manual' && (
           <p className="inv-grouping-hint" role="note">
-            {invoiceGrouping === 'PerDossier' && 'Deze klant verwacht één factuur per dossier.'}
-            {invoiceGrouping === 'Weekly' && 'Deze klant verwacht een wekelijkse verzamelfactuur.'}
-            {invoiceGrouping === 'Monthly' && 'Deze klant verwacht een maandelijkse verzamelfactuur.'}
-            {invoiceGrouping === 'ByReference' && 'Deze klant verwacht één factuur per klantreferentie.'}
+            {invoiceGrouping === 'PerDossier' && t('invoices.new.grouping.PerDossier')}
+            {invoiceGrouping === 'Weekly' && t('invoices.new.grouping.Weekly')}
+            {invoiceGrouping === 'Monthly' && t('invoices.new.grouping.Monthly')}
+            {invoiceGrouping === 'ByReference' && t('invoices.new.grouping.ByReference')}
           </p>
         )}
 
         <div className="inv-entity-period">
-          <FormField label="Facturerende entiteit" htmlFor="inv-legal-entity">
+          <FormField label={t('invoices.fields.billingEntity')} htmlFor="inv-legal-entity">
             <select
               id="inv-legal-entity"
               value={legalEntityId}
               onChange={(e) => setLegalEntityId(e.target.value)}
               disabled={busy}
             >
-              {entities.length === 0 && <option value="">Geen entiteit beschikbaar</option>}
+              {entities.length === 0 && <option value="">{t('invoices.new.noEntity')}</option>}
               {entities.map((entity) => (
                 <option key={entity.id} value={entity.id}>
                   {entity.displayName}
-                  {entity.isDefault ? ' (standaard)' : ''}
+                  {entity.isDefault ? ` ${t('invoices.new.defaultSuffix')}` : ''}
                 </option>
               ))}
             </select>
           </FormField>
-          <FormField label="Factuurperiode" htmlFor="inv-period">
+          <FormField label={t('invoices.fields.period')} htmlFor="inv-period">
             <input
               id="inv-period"
               type="month"
@@ -285,37 +285,37 @@ export function NewInvoicePage() {
         </div>
         {nextNumber && (
           <p className="inv-next-number">
-            Volgend factuurnummer: <strong>{nextNumber}</strong>
+            {t('invoices.new.nextNumber')} <strong>{nextNumber}</strong>
           </p>
         )}
         {isPastPeriod && period && (
-          <p className="inv-period-warning">Je factureert in een eerdere periode ({formatPeriod(period.year, period.month)}).</p>
+          <p className="inv-period-warning">{t('invoices.new.pastPeriod', { period: formatPeriod(period.year, period.month) })}</p>
         )}
 
-        <FormField label="PO-nummer" htmlFor="inv-po" hint="Optioneel referentienummer van de klant.">
+        <FormField label={t('invoices.fields.poNumber')} htmlFor="inv-po" hint={t('invoices.new.poHint')}>
           <input id="inv-po" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} disabled={busy} maxLength={100} />
         </FormField>
         {poPolicyRequired && poNumber.trim() === '' && (
-          <p className="inv-period-warning">Deze klant vereist een PO-nummer.</p>
+          <p className="inv-period-warning">{t('invoices.new.poRequired')}</p>
         )}
 
         {customerId && orders !== null && (
           <section className="inv-section">
-            <h3>Factureerbare opdrachten ({orders.length})</h3>
+            <h3>{t('invoices.new.billableOrders', { total: orders.length })}</h3>
             {orders.length === 0 && (
-              <p className="placeholder-text">Geen afgeronde, onggefactureerde opdrachten voor deze klant.</p>
+              <p className="placeholder-text">{t('invoices.new.noOrders')}</p>
             )}
             {orders.length > 0 && (
               <table className="inv-orders-table">
                 <thead>
                   <tr>
-                    <th aria-label="Selectie" />
-                    <th>Nummer</th>
-                    <th>Datum</th>
-                    <th>Goederen</th>
-                    <th>Route</th>
-                    <th>Prijs</th>
-                    <th>Facturatie</th>
+                    <th aria-label={t('invoices.new.orderColumns.selection')} />
+                    <th>{t('invoices.new.orderColumns.number')}</th>
+                    <th>{t('invoices.new.orderColumns.date')}</th>
+                    <th>{t('invoices.new.orderColumns.goods')}</th>
+                    <th>{t('invoices.new.orderColumns.route')}</th>
+                    <th>{t('invoices.new.orderColumns.price')}</th>
+                    <th>{t('invoices.new.orderColumns.invoicing')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -327,7 +327,7 @@ export function NewInvoicePage() {
                           checked={selectedOrderIds.includes(order.id)}
                           onChange={() => toggleOrder(order.id)}
                           onClick={(e) => e.stopPropagation()}
-                          aria-label={`Selecteer ${order.orderNumber}`}
+                          aria-label={t('invoices.new.selectOrder', { number: order.orderNumber })}
                         />
                       </td>
                       <td>
@@ -341,14 +341,14 @@ export function NewInvoicePage() {
                       <td>{order.agreedPrice !== null ? euro(order.agreedPrice) : '—'}</td>
                       <td>
                         {order.invoiceReadiness === 'ReadyForInvoice' && (
-                          <span className="inv-readiness inv-readiness-ready">Klaar</span>
+                          <span className="inv-readiness inv-readiness-ready">{t('invoices.readiness.ready')}</span>
                         )}
                         {order.invoiceReadiness === 'ReviewRequired' && (
                           <span
                             className="inv-readiness inv-readiness-review"
-                            title={READINESS_REASON_LABELS(order.invoiceReadinessReasons)}
+                            title={readinessTooltip(t, order.invoiceReadinessReasons)}
                           >
-                            Nakijken
+                            {t('invoices.readiness.review')}
                           </span>
                         )}
                         {(!order.invoiceReadiness || order.invoiceReadiness === 'NotReady') && '—'}
@@ -363,7 +363,7 @@ export function NewInvoicePage() {
 
         <section className="inv-section">
           <div className="inv-manual-head">
-            <h3>Extra lijnen</h3>
+            <h3>{t('invoices.new.manualTitle')}</h3>
             <Button
               variant="secondary"
               onClick={() =>
@@ -374,7 +374,7 @@ export function NewInvoicePage() {
               }
               disabled={busy}
             >
-              + Lijn toevoegen
+              {t('invoices.internalLines.addLine')}
             </Button>
           </div>
           {manualLines.map((line) => (
@@ -382,7 +382,7 @@ export function NewInvoicePage() {
               <input
                 value={line.description}
                 onChange={(e) => setManual(line.key, { description: e.target.value })}
-                placeholder="Omschrijving (bv. wachturen)"
+                placeholder={t('invoices.new.manualDescriptionPlaceholder')}
                 disabled={busy}
                 maxLength={500}
               />
@@ -393,7 +393,7 @@ export function NewInvoicePage() {
                 value={line.quantity}
                 onChange={(e) => setManual(line.key, { quantity: Number(e.target.value) })}
                 disabled={busy}
-                aria-label="Hoeveelheid"
+                aria-label={t('invoices.new.quantityLabel')}
               />
               <input
                 type="number"
@@ -402,7 +402,7 @@ export function NewInvoicePage() {
                 value={line.unitPrice}
                 onChange={(e) => setManual(line.key, { unitPrice: Number(e.target.value) })}
                 disabled={busy}
-                aria-label="Eenheidsprijs"
+                aria-label={t('invoices.new.unitPriceLabel')}
               />
               <button
                 type="button"
@@ -410,24 +410,24 @@ export function NewInvoicePage() {
                 onClick={() => setManualLines((rows) => rows.filter((r) => r.key !== line.key))}
                 disabled={busy}
               >
-                Verwijderen
+                {t('ui.actions.delete')}
               </button>
             </div>
           ))}
         </section>
 
-        <FormField label="Notities" htmlFor="inv-notes">
+        <FormField label={t('invoices.fields.notes')} htmlFor="inv-notes">
           <textarea id="inv-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} maxLength={4000} />
         </FormField>
 
         <div className="inv-builder-footer">
-          <span className="inv-estimate">Geschat subtotaal (excl. btw): <strong>{euro(estimatedSubtotal)}</strong></span>
+          <span className="inv-estimate">{t('invoices.new.estimatedSubtotal')} <strong>{euro(estimatedSubtotal)}</strong></span>
           <span className="inv-builder-actions">
             <Button variant="secondary" onClick={() => navigate('/invoices')} disabled={busy}>
-              Annuleren
+              {t('ui.actions.cancel')}
             </Button>
             <Button onClick={() => void handleCreate()} disabled={busy}>
-              {busy ? 'Bezig…' : 'Factuur aanmaken'}
+              {busy ? t('invoices.common.busy') : t('invoices.new.create')}
             </Button>
           </span>
         </div>

@@ -4,7 +4,8 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import type { DriverListItem } from '../../drivers/types'
 import { PreparedFleetDocumentsEditor } from '../../fleet-documents/components/PreparedFleetDocumentsEditor'
@@ -56,6 +57,7 @@ const EMPTY: CreateVehicleInput = {
 
 export function NewVehiclePage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [drivers, setDrivers] = useState<DriverListItem[]>([])
   const [preparedDocs, setPreparedDocs] = useState<PreparedFleetDocument[]>([])
@@ -71,12 +73,12 @@ export function NewVehiclePage() {
         if (mounted) setDrivers(result.items)
       })
       .catch(() => {
-        if (mounted) showError('Chauffeurs konden niet worden geladen.')
+        if (mounted) showError(t('vehicles.new.driversLoadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [showError])
+  }, [showError, t])
 
   async function handleSubmit(values: CreateVehicleInput) {
     setError(null)
@@ -89,7 +91,7 @@ export function NewVehiclePage() {
         ? await uploadPreparedFleetDocuments('vehicle', vehicle.id, preparedDocs)
         : []
       if (results.every((r) => r.ok)) {
-        showSuccess(`Voertuig ${vehicle.internalNumber} aangemaakt.`)
+        showSuccess(t('vehicles.new.created', { number: vehicle.internalNumber }))
         navigate(`/vehicles/${vehicle.id}`)
         return
       }
@@ -101,13 +103,13 @@ export function NewVehiclePage() {
           return result?.createdDocumentId ? { ...doc, createdDocumentId: result.createdDocumentId } : doc
         }),
       )
-      setFollowUp({ vehicleId: vehicle.id, label: `Voertuig ${vehicle.internalNumber}`, results })
+      setFollowUp({ vehicleId: vehicle.id, label: t('vehicles.new.followUpLabel', { number: vehicle.internalNumber }), results })
       setSubmitting(false)
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 409
-          ? 'Er bestaat al een voertuig met dit kenteken.'
-          : describeApiError(err, 'Voertuig kon niet worden aangemaakt.').message,
+          ? t('vehicles.new.duplicate')
+          : localizeApiError(t, err, t('vehicles.new.createFailed')),
       )
       setSubmitting(false)
     }
@@ -128,7 +130,7 @@ export function NewVehiclePage() {
     )
     setRetrying(false)
     if (merged.every((r) => r.ok)) {
-      showSuccess('Alle documenten zijn verwerkt.')
+      showSuccess(t('fleet.docs.followUp.allProcessed'))
       navigate(`/vehicles/${followUp.vehicleId}`)
       return
     }
@@ -137,8 +139,8 @@ export function NewVehiclePage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Voertuigen', to: '/vehicles' }, { label: 'Nieuw' }]} />
-      <PageHeader title="Nieuw voertuig" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.vehicles'), to: '/vehicles' }, { label: t('fleet.common.new') }]} />
+      <PageHeader title={t('vehicles.list.new')} />
       <VehicleForm
         mode="create"
         initial={EMPTY}

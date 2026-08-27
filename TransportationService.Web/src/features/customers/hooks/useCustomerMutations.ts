@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { describeApiError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   addCustomerContact,
   createCustomer,
@@ -27,9 +28,8 @@ interface UseCustomerMutationsResult {
   removeContact: (customerId: string, contactId: string) => Promise<boolean>
 }
 
-const GENERIC_ERROR = 'De actie kon niet worden uitgevoerd.'
-
 export function useCustomerMutations(): UseCustomerMutationsResult {
+  const { t } = useLocale()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
@@ -43,7 +43,7 @@ export function useCustomerMutations(): UseCustomerMutationsResult {
       return await action()
     } catch (err) {
       if (isMounted.current) {
-        const described = describeApiError(err, GENERIC_ERROR)
+        const described = describeApiError(err, t('customers.common.actionFailed'))
         setError(described.message)
         setFieldErrors(described.fieldErrors)
       }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   getCustomerPricingConfig,
@@ -24,6 +25,7 @@ interface CustomerUnitsPanelProps {
 export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
   const { hasPermission } = useAuth()
   const { showError, showSuccess } = useToast()
+  const { t } = useLocale()
   const canView = hasPermission('tariffs.view') || hasPermission('tariffs.manage')
   const canManage = hasPermission('tariffs.manage')
 
@@ -40,8 +42,8 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
         setUnits(unitData)
         setLoadError(null)
       })
-      .catch(() => setLoadError('De klant-eenheden konden niet worden geladen.'))
-  }, [customerId, canView])
+      .catch(() => setLoadError(t('customers.units.loadFailed')))
+  }, [customerId, canView, t])
 
   useEffect(() => {
     reload()
@@ -49,7 +51,7 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
 
   if (!canView) return null
   if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (!config) return <p className="placeholder-text">Klant-eenheden laden…</p>
+  if (!config) return <p className="placeholder-text">{t('customers.units.loading')}</p>
 
   const configured = config.preferredUnits
   const configuredIds = new Set(configured.map((u) => u.unitTypeId))
@@ -65,7 +67,7 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
       setConfig(saved)
       if (message) showSuccess(message)
     } catch (err) {
-      showError(describeApiError(err, 'De klant-eenheden konden niet worden opgeslagen.').message)
+      showError(describeApiError(err, t('customers.units.saveFailed')).message)
     }
   }
 
@@ -104,7 +106,7 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
         excelCode: null,
         isFavourite: true,
       }],
-      'Eenheid toegevoegd.',
+      t('customers.units.unitAdded'),
     )
     setAddUnitId('')
   }
@@ -112,25 +114,22 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Eenheden van deze klant</h3>
+        <h3>{t('customers.units.title')}</h3>
       </div>
-      <p className="customer-form-muted">
-        Deze eenheden verschijnen bovenaan bij orderinvoer (favorieten eerst); andere actieve eenheden blijven kiesbaar.
-        Externe EDI-/Excel-codes worden bij import automatisch naar de juiste eenheid vertaald.
-      </p>
+      <p className="customer-form-muted">{t('customers.units.explanation')}</p>
 
-      {configured.length === 0 && <p className="placeholder-text">Nog geen eenheden geconfigureerd voor deze klant.</p>}
+      {configured.length === 0 && <p className="placeholder-text">{t('customers.units.empty')}</p>}
       {configured.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Eenheid</th>
-              <th>Klantbenaming</th>
-              <th>EDI-code</th>
-              <th>Excel-code</th>
-              <th>Favoriet</th>
-              {canManage && <th>Volgorde</th>}
-              {canManage && <th aria-label="Acties" />}
+              <th>{t('customers.units.columnUnit')}</th>
+              <th>{t('customers.units.columnCustomerLabel')}</th>
+              <th>{t('customers.units.columnEdiCode')}</th>
+              <th>{t('customers.units.columnExcelCode')}</th>
+              <th>{t('customers.units.columnFavourite')}</th>
+              {canManage && <th>{t('customers.units.columnOrder')}</th>}
+              {canManage && <th aria-label={t('customers.units.actionsAria')} />}
             </tr>
           </thead>
           <tbody>
@@ -139,7 +138,7 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
                 <td>{unit.name}</td>
                 <td>
                   <input
-                    aria-label={`Klantbenaming voor ${unit.name}`}
+                    aria-label={t('customers.units.customerLabelAria', { name: unit.name })}
                     defaultValue={unit.customerLabel ?? ''}
                     placeholder={unit.name}
                     maxLength={150}
@@ -152,7 +151,7 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
                 </td>
                 <td>
                   <input
-                    aria-label={`EDI-code voor ${unit.name}`}
+                    aria-label={t('customers.units.ediCodeAria', { name: unit.name })}
                     defaultValue={unit.ediCode ?? ''}
                     maxLength={50}
                     disabled={!canManage}
@@ -164,7 +163,7 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
                 </td>
                 <td>
                   <input
-                    aria-label={`Excel-code voor ${unit.name}`}
+                    aria-label={t('customers.units.excelCodeAria', { name: unit.name })}
                     defaultValue={unit.excelCode ?? ''}
                     maxLength={50}
                     disabled={!canManage}
@@ -178,7 +177,7 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
                   <button
                     type="button"
                     className="issued-items-link"
-                    aria-label={`Favoriet ${unit.name}`}
+                    aria-label={t('customers.units.favouriteAria', { name: unit.name })}
                     aria-pressed={unit.isFavourite}
                     disabled={!canManage}
                     onClick={() => updateUnit(unit.unitTypeId, { isFavourite: !unit.isFavourite })}
@@ -188,10 +187,20 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
                 </td>
                 {canManage && (
                   <td>
-                    <button type="button" className="issued-items-link" aria-label={`${unit.name} omhoog`} onClick={() => move(unit.unitTypeId, -1)}>
+                    <button
+                      type="button"
+                      className="issued-items-link"
+                      aria-label={t('customers.units.moveUpAria', { name: unit.name })}
+                      onClick={() => move(unit.unitTypeId, -1)}
+                    >
                       ↑
                     </button>
-                    <button type="button" className="issued-items-link" aria-label={`${unit.name} omlaag`} onClick={() => move(unit.unitTypeId, 1)}>
+                    <button
+                      type="button"
+                      className="issued-items-link"
+                      aria-label={t('customers.units.moveDownAria', { name: unit.name })}
+                      onClick={() => move(unit.unitTypeId, 1)}
+                    >
                       ↓
                     </button>
                   </td>
@@ -201,9 +210,11 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
                     <button
                       type="button"
                       className="issued-items-link issued-items-link-danger"
-                      onClick={() => void save(asInputs().filter((u) => u.unitTypeId !== unit.unitTypeId), 'Eenheid verwijderd.')}
+                      onClick={() =>
+                        void save(asInputs().filter((u) => u.unitTypeId !== unit.unitTypeId), t('customers.units.unitRemoved'))
+                      }
                     >
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   </td>
                 )}
@@ -215,8 +226,8 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
 
       {canManage && available.length > 0 && (
         <div className="customer-panel-header">
-          <select aria-label="Eenheid toevoegen" value={addUnitId} onChange={(e) => setAddUnitId(e.target.value)}>
-            <option value="">— Kies een eenheid —</option>
+          <select aria-label={t('customers.units.addUnitAria')} value={addUnitId} onChange={(e) => setAddUnitId(e.target.value)}>
+            <option value="">{t('customers.units.chooseUnit')}</option>
             {available.map((unit) => (
               <option key={unit.id} value={unit.id}>
                 {unit.name}
@@ -224,7 +235,7 @@ export function CustomerUnitsPanel({ customerId }: CustomerUnitsPanelProps) {
             ))}
           </select>
           <Button variant="secondary" onClick={addUnit} disabled={!addUnitId}>
-            + Eenheid toevoegen
+            {t('customers.units.addUnit')}
           </Button>
         </div>
       )}

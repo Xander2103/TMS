@@ -7,6 +7,7 @@ import { BackButton } from '../../../components/ui/BackButton'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import { ORDER_STATUS_LABELS, ORDER_STATUSES } from '../../transport-orders/types'
@@ -26,6 +27,7 @@ function isoDaysAgo(days: number): string {
 export function ReportViewerPage() {
   const { reportId } = useParams<{ reportId: string }>()
   const navigate = useNavigate()
+  const { t } = useLocale()
   const toast = useToast()
 
   const [report, setReport] = useState<ReportCatalogEntry | null | undefined>(undefined)
@@ -55,9 +57,9 @@ export function ReportViewerPage() {
     }
   }, [report, navigate])
 
-  if (report === undefined) return <LoadingState message="Rapport laden..." />
+  if (report === undefined) return <LoadingState message={t('kpiReports.reports.viewer.loading')} />
   if (report === null || report.kind === 'ComingSoon' || !report.endpoint) {
-    return <ErrorState message="Dit rapport bestaat niet of is nog niet beschikbaar." />
+    return <ErrorState message={t('kpiReports.reports.viewer.missing')} />
   }
 
   const has = (filter: string) => report.filters.includes(filter)
@@ -86,7 +88,7 @@ export function ReportViewerPage() {
       anchor.click()
       URL.revokeObjectURL(objectUrl)
     } catch {
-      toast.showError('Het rapport kon niet worden gedownload.')
+      toast.showError(t('kpiReports.reports.viewer.downloadFailed'))
     } finally {
       setBusy(false)
     }
@@ -94,37 +96,37 @@ export function ReportViewerPage() {
 
   return (
     <div>
-      <BackButton to="/reports" label="Terug naar rapportcentrum" />
+      <BackButton to="/reports" label={t('kpiReports.reports.viewer.back')} />
       <PageHeader title={report.title} subtitle={report.description} />
 
       <div className="reports-runner">
         {has('dateRange') && (
           <>
-            <FormField label="Van" htmlFor="report-from">
+            <FormField label={t('kpiReports.reports.viewer.from')} htmlFor="report-from">
               <input id="report-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
             </FormField>
-            <FormField label="Tot en met" htmlFor="report-to">
+            <FormField label={t('kpiReports.reports.viewer.to')} htmlFor="report-to">
               <input id="report-to" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
             </FormField>
           </>
         )}
         {has('search') && (
-          <FormField label="Zoekterm" htmlFor="report-search">
+          <FormField label={t('kpiReports.reports.viewer.searchLabel')} htmlFor="report-search">
             <input
               id="report-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Optioneel"
+              placeholder={t('kpiReports.reports.viewer.searchPlaceholder')}
             />
           </FormField>
         )}
         {has('orderStatus') && (
-          <FormField label="Status" htmlFor="report-status">
+          <FormField label={t('kpiReports.reports.viewer.statusLabel')} htmlFor="report-status">
             <select id="report-status" value={orderStatus} onChange={(event) => setOrderStatus(event.target.value)}>
-              <option value="">Alle statussen</option>
+              <option value="">{t('kpiReports.reports.viewer.allStatuses')}</option>
               {ORDER_STATUSES.map((status) => (
                 <option key={status} value={status}>
-                  {ORDER_STATUS_LABELS[status]}
+                  {t(ORDER_STATUS_LABELS[status])}
                 </option>
               ))}
             </select>
@@ -133,7 +135,9 @@ export function ReportViewerPage() {
       </div>
 
       <Button onClick={() => void download()} disabled={busy}>
-        {busy ? 'Bezig met genereren…' : `Download (${(report.fileType ?? 'xlsx').toUpperCase()})`}
+        {busy
+          ? t('kpiReports.reports.viewer.generating')
+          : t('kpiReports.reports.viewer.download', { type: (report.fileType ?? 'xlsx').toUpperCase() })}
       </Button>
     </div>
   )

@@ -9,6 +9,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../api/customersApi'
 import { CustomerImportDialog } from '../components/CustomerImportDialog'
 import type { CustomerListItem } from '../types'
@@ -17,6 +18,7 @@ import '../components/customers.css'
 export function CustomersPage() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState<boolean | undefined>(undefined)
   const [page, setPage] = useState(1)
@@ -24,22 +26,26 @@ export function CustomersPage() {
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<CustomerListItem>(
     (args) => searchCustomers(args),
-    { search, isActive: activeFilter, page, errorMessage: 'Klanten konden niet worden geladen.' },
+    { search, isActive: activeFilter, page, errorMessage: t('customers.list.loadFailed') },
   )
 
   const columns: Column<CustomerListItem>[] = [
-    { key: 'number', header: 'Nummer', width: '130px', render: (row) => <code>{row.customerNumber}</code> },
-    { key: 'name', header: 'Naam', render: (row) => row.name },
-    { key: 'city', header: 'Plaats', render: (row) => row.city ?? '—' },
-    { key: 'category', header: 'Categorie', render: (row) => row.categoryName ?? '—' },
+    { key: 'number', header: t('customers.list.columnNumber'), width: '130px', render: (row) => <code>{row.customerNumber}</code> },
+    { key: 'name', header: t('customers.fields.name'), render: (row) => row.name },
+    { key: 'city', header: t('customers.list.columnCity'), render: (row) => row.city ?? '—' },
+    { key: 'category', header: t('customers.list.columnCategory'), render: (row) => row.categoryName ?? '—' },
     {
       key: 'status',
-      header: 'Status',
+      header: t('customers.list.columnStatus'),
       width: '190px',
       render: (row) => (
         <span className="customer-status-badges">
-          {row.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>}
-          {row.isBlocked && <Badge tone="danger">Geblokkeerd</Badge>}
+          {row.isActive ? (
+            <Badge tone="success">{t('ui.statusBadges.active')}</Badge>
+          ) : (
+            <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>
+          )}
+          {row.isBlocked && <Badge tone="danger">{t('ui.statusBadges.blocked')}</Badge>}
         </span>
       ),
     },
@@ -47,18 +53,18 @@ export function CustomersPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klanten' }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.customers') }]} />
       <PageHeader
-        title="Klanten"
+        title={t('navigation.menu.customers')}
         action={
           <div className="customer-detail-toolbar">
             {hasPermission('customers.import') && (
               <Button variant="secondary" onClick={() => setShowImportDialog(true)}>
-                Importeren
+                {t('customers.list.importAction')}
               </Button>
             )}
             {hasPermission('customers.create') && (
-              <Button onClick={() => navigate('/customers/new')}>Nieuwe klant</Button>
+              <Button onClick={() => navigate('/customers/new')}>{t('customers.list.newCustomer')}</Button>
             )}
           </div>
         }
@@ -69,7 +75,7 @@ export function CustomersPage() {
           setSearch(value)
           setPage(1)
         }}
-        searchPlaceholder="Zoeken op nummer, naam, BTW of plaats..."
+        searchPlaceholder={t('customers.list.searchPlaceholder')}
         activeFilter={activeFilter}
         onActiveFilterChange={(value) => {
           setActiveFilter(value)
@@ -82,8 +88,8 @@ export function CustomersPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Nog geen klanten."
-        loadingMessage="Klanten laden..."
+        emptyMessage={t('customers.list.empty')}
+        loadingMessage={t('customers.list.loading')}
         onRowClick={(row) => navigate(`/customers/${row.id}`)}
       />
       <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />

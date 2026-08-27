@@ -56,7 +56,8 @@ export async function downloadAgreementExport(agreementId: string, agreementName
   const response = await fetch(`${apiBaseUrl}/api/pricing/agreements/${agreementId}/export`, {
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
-  if (!response.ok) throw new Error('De tarieventabel kon niet worden geëxporteerd.')
+  // Geen hardgecodeerde NL-boodschap: een lege message laat de vertaalde fallback van de caller winnen.
+  if (!response.ok) throw new Error()
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -81,7 +82,8 @@ async function postWorkbook<T>(path: string, file: File, fields?: Record<string,
   })
   const data = (await response.json().catch(() => null)) as T | { message?: string } | null
   if (!response.ok) {
-    throw new Error((data as { message?: string } | null)?.message ?? 'Import mislukt.')
+    // Servermessage wint; zonder message laat een lege Error de vertaalde fallback van de caller winnen.
+    throw new Error((data as { message?: string } | null)?.message ?? '')
   }
 
   return data as T

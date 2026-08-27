@@ -6,15 +6,17 @@ import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { adjustmentSummary, formatEuro } from '../adjustmentFormat'
 import {
+  ADJUSTMENT_STATUS_LABELS,
   cancelAgreementAdjustment,
   createAgreementAdjustment,
   listAgreementAdjustments,
   listUnitTypeSettings,
   previewAgreementAdjustment,
-  PRICE_RULE_BASIS_LABELS,
+  PRICE_RULE_BASIS_KEYS,
   type PriceAdjustmentInput,
   type PriceAdjustmentRulePreview,
   type PriceRuleBasis,
@@ -40,8 +42,8 @@ interface WizardState {
   preview: PriceAdjustmentRulePreview[] | null
 }
 
-const statusTone = (status: ScheduledPriceAdjustment['status']) =>
-  status === 'Gepland' ? 'info' : status === 'Actief' ? 'success' : 'neutral'
+const statusTone = (statusCode: ScheduledPriceAdjustment['statusCode']) =>
+  statusCode === 'Planned' ? 'info' : statusCode === 'Active' ? 'success' : 'neutral'
 
 /**
  * "Prijsaanpassing" tab (bulk adjustment v2): plan a percentage OR fixed-amount change, optionally
@@ -50,6 +52,7 @@ const statusTone = (status: ScheduledPriceAdjustment['status']) =>
  * flow (see CustomerPriceAdjustmentsPanel) with the v2 fields.
  */
 export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementAdjustmentsPanelProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [adjustments, setAdjustments] = useState<ScheduledPriceAdjustment[] | null>(null)
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
@@ -106,7 +109,7 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
       const preview = await previewAgreementAdjustment(agreementId, buildInput(wizard))
       setWizard((w) => (w ? { ...w, preview } : w))
     } catch (err) {
-      setWizardError(describeApiError(err, 'De preview kon niet worden berekend.').message)
+      setWizardError(localizeApiError(t, err, t('tarification.adjustments.previewError')))
     } finally {
       setBusy(false)
     }
@@ -117,11 +120,11 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
     setBusy(true)
     try {
       await createAgreementAdjustment(agreementId, { ...buildInput(wizard), reason: wizard.reason.trim() || null })
-      showSuccess('Prijsaanpassing ingepland.')
+      showSuccess(t('tarification.adjustments.scheduled'))
       setWizard(null)
       reload()
     } catch (err) {
-      setWizardError(describeApiError(err, 'De prijsaanpassing kon niet worden ingepland.').message)
+      setWizardError(localizeApiError(t, err, t('tarification.adjustments.scheduleError')))
     } finally {
       setBusy(false)
     }
@@ -133,36 +136,36 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
     setCancelTarget(null)
     try {
       await cancelAgreementAdjustment(agreementId, target.id)
-      showSuccess('Prijsaanpassing geannuleerd.')
+      showSuccess(t('tarification.adjustments.cancelled'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De prijsaanpassing kon niet worden geannuleerd.').message)
+      showError(localizeApiError(t, err, t('tarification.adjustments.cancelError')))
     }
   }
 
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Geplande prijsaanpassingen</h3>
-        {canManage && <Button onClick={openWizard}>+ Nieuwe prijsaanpassing</Button>}
+        <h3>{t('tarification.adjustments.title')}</h3>
+        {canManage && <Button onClick={openWizard}>{t('tarification.adjustments.new')}</Button>}
       </div>
 
-      {adjustments === null && <p className="placeholder-text">Prijsaanpassingen laden…</p>}
+      {adjustments === null && <p className="placeholder-text">{t('tarification.adjustments.loading')}</p>}
       {adjustments !== null && adjustments.length === 0 && (
-        <EmptyState message="Geen geplande prijsaanpassingen voor deze tabel." />
+        <EmptyState message={t('tarification.adjustments.empty')} />
       )}
       {adjustments !== null && adjustments.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Ingangsdatum</th>
-              <th>Aanpassing</th>
-              <th>Afronding</th>
-              <th>Filter</th>
-              <th>Regels</th>
-              <th>Reden</th>
-              <th>Status</th>
-              {canManage && <th aria-label="Acties" />}
+              <th>{t('tarification.common.effectiveDate')}</th>
+              <th>{t('tarification.common.adjustment')}</th>
+              <th>{t('tarification.common.rounding')}</th>
+              <th>{t('tarification.adjustments.colFilter')}</th>
+              <th>{t('tarification.adjustments.colRules')}</th>
+              <th>{t('tarification.adjustments.colReason')}</th>
+              <th>{t('tarification.common.status')}</th>
+              {canManage && <th aria-label={t('tarification.common.actions')} />}
             </tr>
           </thead>
           <tbody>
@@ -172,23 +175,23 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
                 <td>{adjustmentSummary(a)}</td>
                 <td>{a.roundingStep !== null ? formatEuro(a.roundingStep) : '—'}</td>
                 <td>
-                  {a.basisFilter ?? 'Alle bases'}
-                  {a.unitTypeIdFilter ? ' · 1 eenheid' : ''}
+                  {a.basisFilter ?? t('tarification.adjustments.allBases')}
+                  {a.unitTypeIdFilter ? ` · ${t('tarification.adjustments.unitFilterSuffix')}` : ''}
                 </td>
                 <td>{a.ruleCount}</td>
                 <td>{a.reason ?? '—'}</td>
                 <td>
-                  <Badge tone={statusTone(a.status)}>{a.status}</Badge>
+                  <Badge tone={statusTone(a.statusCode)}>{t(ADJUSTMENT_STATUS_LABELS[a.statusCode])}</Badge>
                 </td>
                 {canManage && (
                   <td className="issued-items-row-actions">
-                    {a.status === 'Gepland' && (
+                    {a.statusCode === 'Planned' && (
                       <button
                         type="button"
                         className="issued-items-link issued-items-link-danger"
                         onClick={() => setCancelTarget(a)}
                       >
-                        Annuleren
+                        {t('ui.actions.cancel')}
                       </button>
                     )}
                   </td>
@@ -201,22 +204,22 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
 
       {wizard && (
         <Modal
-          title="Nieuwe prijsaanpassing"
+          title={t('tarification.adjustments.modalTitle')}
           onClose={() => setWizard(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setWizard(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               {wizard.preview === null && (
                 <Button onClick={() => void loadPreview()} disabled={busy || !wizard.effectiveDate || !wizard.value}>
-                  Voorbeeld
+                  {t('tarification.common.preview')}
                 </Button>
               )}
               {wizard.preview !== null && (
                 <Button onClick={() => void confirm()} disabled={busy || wizard.preview.length === 0}>
-                  Bevestigen
+                  {t('ui.actions.confirm')}
                 </Button>
               )}
             </>
@@ -229,21 +232,21 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
               </div>
             )}
             <div className="issued-items-form-row">
-              <FormField label="Type" htmlFor="agr-adj-type">
+              <FormField label={t('tarification.adjustments.typeLabel')} htmlFor="agr-adj-type">
                 <select
                   id="agr-adj-type"
                   value={wizard.type}
                   onChange={(e) => setWizard((w) => (w ? { ...w, type: e.target.value as 'percent' | 'amount', preview: null } : w))}
                 >
-                  <option value="percent">Percentage</option>
-                  <option value="amount">Vast bedrag</option>
+                  <option value="percent">{t('tarification.common.percentage')}</option>
+                  <option value="amount">{t('tarification.common.fixedAmount')}</option>
                 </select>
               </FormField>
               <FormField
-                label="Waarde"
+                label={t('tarification.common.value')}
                 htmlFor="agr-adj-value"
                 required
-                hint={wizard.type === 'percent' ? 'Bv. 4 of -2,5.' : 'Bv. 5 of -2,50 (€).'}
+                hint={wizard.type === 'percent' ? t('tarification.adjustments.valueHintPercent') : t('tarification.adjustments.valueHintAmount')}
               >
                 <input
                   id="agr-adj-value"
@@ -255,7 +258,7 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Ingangsdatum" htmlFor="agr-adj-date" required hint="Moet in de toekomst liggen.">
+              <FormField label={t('tarification.common.effectiveDate')} htmlFor="agr-adj-date" required hint={t('tarification.adjustments.dateHint')}>
                 <input
                   id="agr-adj-date"
                   type="date"
@@ -263,26 +266,26 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
                   onChange={(e) => setWizard((w) => (w ? { ...w, effectiveDate: e.target.value, preview: null } : w))}
                 />
               </FormField>
-              <FormField label="Afronding" htmlFor="agr-adj-rounding">
+              <FormField label={t('tarification.common.rounding')} htmlFor="agr-adj-rounding">
                 <select
                   id="agr-adj-rounding"
                   value={wizard.roundingStep}
                   onChange={(e) => setWizard((w) => (w ? { ...w, roundingStep: e.target.value as RoundingChoice, preview: null } : w))}
                 >
-                  <option value="">Geen</option>
+                  <option value="">{t('tarification.common.none')}</option>
                   <option value="0.01">€ 0,01</option>
                   <option value="0.05">€ 0,05</option>
                   <option value="0.10">€ 0,10</option>
                 </select>
               </FormField>
             </div>
-            <FormField label="Eenheid" htmlFor="agr-adj-unit" hint="Optioneel: alleen regels voor deze eenheid.">
+            <FormField label={t('tarification.common.unit')} htmlFor="agr-adj-unit" hint={t('tarification.adjustments.unitHint')}>
               <select
                 id="agr-adj-unit"
                 value={wizard.unitTypeId}
                 onChange={(e) => setWizard((w) => (w ? { ...w, unitTypeId: e.target.value, preview: null } : w))}
               >
-                <option value="">— Alle eenheden —</option>
+                <option value="">{t('tarification.adjustments.allUnits')}</option>
                 {units.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
@@ -291,9 +294,9 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
               </select>
             </FormField>
             <fieldset className="issued-items-generate-dimension">
-              <legend>Basis (optioneel filter)</legend>
+              <legend>{t('tarification.adjustments.basisLegend')}</legend>
               <div className="customer-preferred-units">
-                {Object.entries(PRICE_RULE_BASIS_LABELS).map(([value, label]) => (
+                {Object.entries(PRICE_RULE_BASIS_KEYS).map(([value, labelKey]) => (
                   <label key={value} className="tof-checkbox">
                     <input
                       type="checkbox"
@@ -308,12 +311,12 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
                         })
                       }
                     />
-                    {label}
+                    {t(labelKey)}
                   </label>
                 ))}
               </div>
             </fieldset>
-            <FormField label="Reden (intern)" htmlFor="agr-adj-reason">
+            <FormField label={t('tarification.adjustments.reasonLabel')} htmlFor="agr-adj-reason">
               <input
                 id="agr-adj-reason"
                 value={wizard.reason}
@@ -324,9 +327,9 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
 
             {wizard.preview !== null && (
               <>
-                <h4>Voorbeeld</h4>
+                <h4>{t('tarification.common.preview')}</h4>
                 {wizard.preview.length === 0 && (
-                  <p className="placeholder-text">Geen aanpasbare tariefregels binnen deze selectie.</p>
+                  <p className="placeholder-text">{t('tarification.adjustments.previewEmpty')}</p>
                 )}
                 {wizard.preview.map((rule) => (
                   <div key={rule.priceRuleId}>
@@ -334,10 +337,10 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
                     <table className="issued-items-table">
                       <thead>
                         <tr>
-                          <th>Veld</th>
-                          <th>Oud</th>
-                          <th>Nieuw</th>
-                          <th>Verschil</th>
+                          <th>{t('tarification.adjustments.previewColField')}</th>
+                          <th>{t('tarification.adjustments.previewColOld')}</th>
+                          <th>{t('tarification.adjustments.previewColNew')}</th>
+                          <th>{t('tarification.adjustments.previewColDiff')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -361,9 +364,9 @@ export function AgreementAdjustmentsPanel({ agreementId, canManage }: AgreementA
 
       {cancelTarget && (
         <ConfirmDialog
-          title="Prijsaanpassing annuleren"
-          message={`De geplande aanpassing per ${cancelTarget.effectiveDate} wordt geannuleerd; de huidige tarieven blijven gelden.`}
-          confirmLabel="Annuleren bevestigen"
+          title={t('tarification.adjustments.cancelTitle')}
+          message={t('tarification.adjustments.cancelMessage', { date: cancelTarget.effectiveDate })}
+          confirmLabel={t('tarification.adjustments.cancelConfirm')}
           destructive
           onConfirm={handleCancel}
           onCancel={() => setCancelTarget(null)}

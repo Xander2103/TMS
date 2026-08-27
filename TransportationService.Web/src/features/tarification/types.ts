@@ -12,19 +12,20 @@ export type SurchargeKind =
   | 'PerPalletDay'
   | 'PerKm'
 
+/** Vertaalsleutels — renderen als t(SURCHARGE_KIND_LABELS[kind]). */
 export const SURCHARGE_KIND_LABELS: Record<SurchargeKind, string> = {
-  Fixed: 'Vast bedrag',
-  Percent: 'Percentage',
-  PerHour: 'Per uur',
-  PerStop: 'Per stop',
-  PerUnit: 'Per eenheid…',
-  PerOrderLine: 'Per orderlijn',
-  PerKg: 'Per kg',
-  PerM3: 'Per m³',
-  PerLdm: 'Per laadmeter',
-  PerDay: 'Per dag',
-  PerPalletDay: 'Per pallet/dag',
-  PerKm: 'Per km (bv. Maut)',
+  Fixed: 'tarification.surchargeKind.Fixed',
+  Percent: 'tarification.surchargeKind.Percent',
+  PerHour: 'tarification.surchargeKind.PerHour',
+  PerStop: 'tarification.surchargeKind.PerStop',
+  PerUnit: 'tarification.surchargeKind.PerUnit',
+  PerOrderLine: 'tarification.surchargeKind.PerOrderLine',
+  PerKg: 'tarification.surchargeKind.PerKg',
+  PerM3: 'tarification.surchargeKind.PerM3',
+  PerLdm: 'tarification.surchargeKind.PerLdm',
+  PerDay: 'tarification.surchargeKind.PerDay',
+  PerPalletDay: 'tarification.surchargeKind.PerPalletDay',
+  PerKm: 'tarification.surchargeKind.PerKm',
 }
 
 /** Calculation bases that need a managed unit (Kind == 'PerUnit' only, e.g. Colli, Pallet). */

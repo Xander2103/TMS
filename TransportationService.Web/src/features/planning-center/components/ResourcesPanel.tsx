@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge'
+import { useLocale } from '../../../i18n/localeContext'
+import type { TranslateFn } from '../../../i18n/localeContext'
+import { formatInteger } from '../../../utils/numbers'
 import {
   DRAG_MIME, encodeDragPayload,
   type PlanningDriver, type PlanningResources, type PlanningTrailer, type PlanningVehicle,
@@ -17,6 +20,7 @@ interface ResourcesPanelProps {
 
 /** Right zone: draggable drivers / vehicles / trailers with availability context. */
 export function ResourcesPanel({ resources, isLoading, pinnedIds, onTogglePin }: ResourcesPanelProps) {
+  const { t } = useLocale()
   const [tab, setTab] = useState<ResourceTab>('drivers')
   const [search, setSearch] = useState('')
   const [onlyAvailable, setOnlyAvailable] = useState(false)
@@ -39,50 +43,50 @@ export function ResourcesPanel({ resources, isLoading, pinnedIds, onTogglePin }:
 
   const trailers = useMemo(() => {
     const list = (resources?.trailers ?? [])
-      .filter((t) => !term || t.internalNumber.toLowerCase().includes(term) || t.licensePlate.toLowerCase().includes(term))
-      .filter((t) => !onlyAvailable || (t.isActive && t.operationalStatus === 'Available' && t.assignments.length === 0))
-    return sortPinnedFirst(list, pinnedIds, (t) => t.id)
+      .filter((tr) => !term || tr.internalNumber.toLowerCase().includes(term) || tr.licensePlate.toLowerCase().includes(term))
+      .filter((tr) => !onlyAvailable || (tr.isActive && tr.operationalStatus === 'Available' && tr.assignments.length === 0))
+    return sortPinnedFirst(list, pinnedIds, (tr) => tr.id)
   }, [resources, term, onlyAvailable, pinnedIds])
 
   return (
-    <section className="pc-panel pc-resources" aria-label="Middelen">
+    <section className="pc-panel pc-resources" aria-label={t('planningCenter.resources.label')}>
       <header className="pc-panel-header">
-        <h2>Middelen</h2>
+        <h2>{t('planningCenter.resources.title')}</h2>
       </header>
       <div className="pc-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'drivers'} className={tab === 'drivers' ? 'pc-tab-active' : ''} onClick={() => setTab('drivers')}>
-          Chauffeurs
+          {t('planningCenter.resources.tabDrivers')}
         </button>
         <button role="tab" aria-selected={tab === 'vehicles'} className={tab === 'vehicles' ? 'pc-tab-active' : ''} onClick={() => setTab('vehicles')}>
-          Voertuigen
+          {t('planningCenter.resources.tabVehicles')}
         </button>
         <button role="tab" aria-selected={tab === 'trailers'} className={tab === 'trailers' ? 'pc-tab-active' : ''} onClick={() => setTab('trailers')}>
-          Opleggers
+          {t('planningCenter.resources.tabTrailers')}
         </button>
       </div>
       <div className="pc-filters">
         <input
           type="search"
-          placeholder="Zoeken…"
+          placeholder={t('planningCenter.resources.searchPlaceholder')}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          aria-label="Zoeken in middelen"
+          aria-label={t('planningCenter.resources.searchLabel')}
         />
         <label className="pc-check">
           <input type="checkbox" checked={onlyAvailable} onChange={(event) => setOnlyAvailable(event.target.checked)} />
-          Alleen beschikbaar
+          {t('planningCenter.resources.onlyAvailable')}
         </label>
       </div>
       <div className="pc-resource-list" role="list">
-        {isLoading && <p className="pc-muted">Laden…</p>}
+        {isLoading && <p className="pc-muted">{t('planningCenter.resources.loading')}</p>}
         {!isLoading && tab === 'drivers' && drivers.map((driver) => (
-          <DriverCard key={driver.id} driver={driver} pinned={pinnedIds.has(driver.id)} onTogglePin={onTogglePin} />
+          <DriverCard key={driver.id} driver={driver} pinned={pinnedIds.has(driver.id)} onTogglePin={onTogglePin} t={t} />
         ))}
         {!isLoading && tab === 'vehicles' && vehicles.map((vehicle) => (
-          <VehicleCard key={vehicle.id} vehicle={vehicle} pinned={pinnedIds.has(vehicle.id)} onTogglePin={onTogglePin} />
+          <VehicleCard key={vehicle.id} vehicle={vehicle} pinned={pinnedIds.has(vehicle.id)} onTogglePin={onTogglePin} t={t} />
         ))}
         {!isLoading && tab === 'trailers' && trailers.map((trailer) => (
-          <TrailerCard key={trailer.id} trailer={trailer} pinned={pinnedIds.has(trailer.id)} onTogglePin={onTogglePin} />
+          <TrailerCard key={trailer.id} trailer={trailer} pinned={pinnedIds.has(trailer.id)} onTogglePin={onTogglePin} t={t} />
         ))}
       </div>
     </section>
@@ -93,7 +97,8 @@ function sortPinnedFirst<T>(items: T[], pinned: ReadonlySet<string>, idOf: (item
   return [...items].sort((a, b) => Number(pinned.has(idOf(b))) - Number(pinned.has(idOf(a))))
 }
 
-function PinButton({ pinned, onClick }: { pinned: boolean; onClick: () => void }) {
+function PinButton({ pinned, onClick, t }: { pinned: boolean; onClick: () => void; t: TranslateFn }) {
+  const label = pinned ? t('planningCenter.resources.unpin') : t('planningCenter.resources.pin')
   return (
     <button
       type="button"
@@ -102,18 +107,19 @@ function PinButton({ pinned, onClick }: { pinned: boolean; onClick: () => void }
         event.stopPropagation()
         onClick()
       }}
-      aria-label={pinned ? 'Losmaken' : 'Vastpinnen'}
-      title={pinned ? 'Losmaken' : 'Vastpinnen'}
+      aria-label={label}
+      title={label}
     >
       ★
     </button>
   )
 }
 
-function DriverCard({ driver, pinned, onTogglePin }: {
+function DriverCard({ driver, pinned, onTogglePin, t }: {
   driver: PlanningDriver
   pinned: boolean
   onTogglePin: ResourcesPanelProps['onTogglePin']
+  t: TranslateFn
 }) {
   const busyDates = driver.assignments.length
   return (
@@ -128,32 +134,35 @@ function DriverCard({ driver, pinned, onTogglePin }: {
     >
       <div className="pc-resource-head">
         <strong>{driver.name}</strong>
-        <PinButton pinned={pinned} onClick={() => onTogglePin('Driver', driver.id, driver.name)} />
+        <PinButton pinned={pinned} onClick={() => onTogglePin('Driver', driver.id, driver.name)} t={t} />
       </div>
       <p className="pc-resource-meta">
         <span>{driver.driverNumber}</span>
-        {driver.fixedVehicleNumber && <span>Vast: {driver.fixedVehicleNumber}</span>}
+        {driver.fixedVehicleNumber && <span>{t('planningCenter.resources.fixed', { label: driver.fixedVehicleNumber })}</span>}
       </p>
       <div className="pc-resource-badges">
-        {!driver.isActive && <Badge tone="danger">Inactief</Badge>}
-        {driver.isBlocked && <Badge tone="danger">Geblokkeerd</Badge>}
-        {driver.absences.length > 0 && <Badge tone="warning">Afwezig ({driver.absences.length})</Badge>}
+        {!driver.isActive && <Badge tone="danger">{t('planningCenter.resources.inactive')}</Badge>}
+        {driver.isBlocked && <Badge tone="danger">{t('planningCenter.resources.blocked')}</Badge>}
+        {driver.absences.length > 0 && <Badge tone="warning">{t('planningCenter.resources.absent', { count: driver.absences.length })}</Badge>}
         {driver.qualificationBlocks.length > 0 && (
-          <Badge tone="danger">Kwalificatie: {driver.qualificationBlocks.join(', ')}</Badge>
+          <Badge tone="danger">{t('planningCenter.resources.qualificationBlocks', { list: driver.qualificationBlocks.join(', ') })}</Badge>
         )}
         {driver.qualificationWarnings.length > 0 && (
-          <Badge tone="warning">Verloopt: {driver.qualificationWarnings.join(', ')}</Badge>
+          <Badge tone="warning">{t('planningCenter.resources.qualificationWarnings', { list: driver.qualificationWarnings.join(', ') })}</Badge>
         )}
-        {busyDates > 0 ? <Badge tone="info">{busyDates} rit(ten)</Badge> : <Badge tone="success">Vrij</Badge>}
+        {busyDates > 0
+          ? <Badge tone="info">{t('planningCenter.resources.trips', { count: busyDates })}</Badge>
+          : <Badge tone="success">{t('planningCenter.resources.free')}</Badge>}
       </div>
     </article>
   )
 }
 
-function VehicleCard({ vehicle, pinned, onTogglePin }: {
+function VehicleCard({ vehicle, pinned, onTogglePin, t }: {
   vehicle: PlanningVehicle
   pinned: boolean
   onTogglePin: ResourcesPanelProps['onTogglePin']
+  t: TranslateFn
 }) {
   return (
     <article
@@ -167,34 +176,35 @@ function VehicleCard({ vehicle, pinned, onTogglePin }: {
     >
       <div className="pc-resource-head">
         <strong>{vehicle.internalNumber}</strong>
-        <PinButton pinned={pinned} onClick={() => onTogglePin('Vehicle', vehicle.id, vehicle.internalNumber)} />
+        <PinButton pinned={pinned} onClick={() => onTogglePin('Vehicle', vehicle.id, vehicle.internalNumber)} t={t} />
       </div>
       <p className="pc-resource-meta">
         <span>{vehicle.licensePlate}</span>
-        {vehicle.payloadKg !== null && <span>{vehicle.payloadKg.toLocaleString('nl-BE')} kg</span>}
-        {vehicle.fixedDriverName && <span>Vast: {vehicle.fixedDriverName}</span>}
+        {vehicle.payloadKg !== null && <span>{formatInteger(vehicle.payloadKg)} kg</span>}
+        {vehicle.fixedDriverName && <span>{t('planningCenter.resources.fixed', { label: vehicle.fixedDriverName })}</span>}
       </p>
       <div className="pc-resource-badges">
-        {!vehicle.isActive && <Badge tone="danger">Inactief</Badge>}
+        {!vehicle.isActive && <Badge tone="danger">{t('planningCenter.resources.inactive')}</Badge>}
         {vehicle.operationalStatus !== 'Available' && <Badge tone="warning">{vehicle.operationalStatus}</Badge>}
         {vehicle.adrSuitable && <Badge tone="info">ADR</Badge>}
-        {vehicle.hasCrane && <Badge tone="info">Kraan</Badge>}
-        {vehicle.hasTailLift && <Badge tone="info">Laadklep</Badge>}
-        {vehicle.hasRefrigeration && <Badge tone="info">Koeling</Badge>}
-        {vehicle.overdueMaintenanceCount > 0 && <Badge tone="danger">Onderhoud over tijd</Badge>}
-        {vehicle.overdueInspectionCount > 0 && <Badge tone="danger">Keuring over tijd</Badge>}
+        {vehicle.hasCrane && <Badge tone="info">{t('planningCenter.resources.crane')}</Badge>}
+        {vehicle.hasTailLift && <Badge tone="info">{t('planningCenter.resources.tailLift')}</Badge>}
+        {vehicle.hasRefrigeration && <Badge tone="info">{t('planningCenter.resources.refrigeration')}</Badge>}
+        {vehicle.overdueMaintenanceCount > 0 && <Badge tone="danger">{t('planningCenter.resources.maintenanceOverdue')}</Badge>}
+        {vehicle.overdueInspectionCount > 0 && <Badge tone="danger">{t('planningCenter.resources.inspectionOverdue')}</Badge>}
         {vehicle.assignments.length > 0
-          ? <Badge tone="info">{vehicle.assignments.length} rit(ten)</Badge>
-          : <Badge tone="success">Vrij</Badge>}
+          ? <Badge tone="info">{t('planningCenter.resources.trips', { count: vehicle.assignments.length })}</Badge>
+          : <Badge tone="success">{t('planningCenter.resources.free')}</Badge>}
       </div>
     </article>
   )
 }
 
-function TrailerCard({ trailer, pinned, onTogglePin }: {
+function TrailerCard({ trailer, pinned, onTogglePin, t }: {
   trailer: PlanningTrailer
   pinned: boolean
   onTogglePin: ResourcesPanelProps['onTogglePin']
+  t: TranslateFn
 }) {
   return (
     <article
@@ -208,22 +218,22 @@ function TrailerCard({ trailer, pinned, onTogglePin }: {
     >
       <div className="pc-resource-head">
         <strong>{trailer.internalNumber}</strong>
-        <PinButton pinned={pinned} onClick={() => onTogglePin('Trailer', trailer.id, trailer.internalNumber)} />
+        <PinButton pinned={pinned} onClick={() => onTogglePin('Trailer', trailer.id, trailer.internalNumber)} t={t} />
       </div>
       <p className="pc-resource-meta">
         <span>{trailer.licensePlate}</span>
-        {trailer.capacityKg !== null && <span>{trailer.capacityKg.toLocaleString('nl-BE')} kg</span>}
+        {trailer.capacityKg !== null && <span>{formatInteger(trailer.capacityKg)} kg</span>}
       </p>
       <div className="pc-resource-badges">
-        {!trailer.isActive && <Badge tone="danger">Inactief</Badge>}
+        {!trailer.isActive && <Badge tone="danger">{t('planningCenter.resources.inactive')}</Badge>}
         {trailer.operationalStatus !== 'Available' && <Badge tone="warning">{trailer.operationalStatus}</Badge>}
         {trailer.adrSuitable && <Badge tone="info">ADR</Badge>}
-        {trailer.hasRefrigeration && <Badge tone="info">Koeling</Badge>}
-        {trailer.overdueMaintenanceCount > 0 && <Badge tone="danger">Onderhoud over tijd</Badge>}
-        {trailer.overdueInspectionCount > 0 && <Badge tone="danger">Keuring over tijd</Badge>}
+        {trailer.hasRefrigeration && <Badge tone="info">{t('planningCenter.resources.refrigeration')}</Badge>}
+        {trailer.overdueMaintenanceCount > 0 && <Badge tone="danger">{t('planningCenter.resources.maintenanceOverdue')}</Badge>}
+        {trailer.overdueInspectionCount > 0 && <Badge tone="danger">{t('planningCenter.resources.inspectionOverdue')}</Badge>}
         {trailer.assignments.length > 0
-          ? <Badge tone="info">{trailer.assignments.length} rit(ten)</Badge>
-          : <Badge tone="success">Vrij</Badge>}
+          ? <Badge tone="info">{t('planningCenter.resources.trips', { count: trailer.assignments.length })}</Badge>
+          : <Badge tone="success">{t('planningCenter.resources.free')}</Badge>}
       </div>
     </article>
   )

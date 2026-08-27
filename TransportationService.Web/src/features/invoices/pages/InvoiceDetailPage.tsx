@@ -10,7 +10,8 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { describeApiError, getFieldError, localizeApiError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { changeInvoiceStatus, completeInvoiceLedgerSnapshots, deleteInvoice, getInvoice, overrideInvoiceNumber, updateInvoice } from '../api/invoicesApi'
 import {
@@ -49,11 +50,13 @@ let lineKey = 0
 export function InvoiceDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission, hasAnyPermission } = useAuth()
 
   const [invoice, setInvoice] = useState<InvoiceDetail | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const [editing, setEditing] = useState(false)
@@ -82,10 +85,10 @@ export function InvoiceDetailPage() {
       .then((data) => {
         if (!mounted) return
         setInvoice(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('De factuur kon niet worden geladen.')
+        if (mounted) setLoadErrorKey('invoices.detail.loadError')
       })
     return () => {
       mounted = false
@@ -124,7 +127,7 @@ export function InvoiceDetailPage() {
   async function handleSave() {
     if (!invoice) return
     if (lines.length === 0) {
-      showError('Een factuur heeft minstens één lijn nodig.')
+      showError(t('invoices.internalDetail.needsLine'))
       return
     }
     const period = monthInputToPeriod(periodInput)
@@ -148,9 +151,9 @@ export function InvoiceDetailPage() {
       })
       setInvoice(updated)
       setEditing(false)
-      showSuccess('Factuur bijgewerkt.')
+      showSuccess(t('invoices.internalDetail.updated'))
     } catch {
-      showError('De factuur kon niet worden opgeslagen.')
+      showError(t('invoices.internalDetail.saveError'))
     } finally {
       setBusy(false)
     }
@@ -162,9 +165,9 @@ export function InvoiceDetailPage() {
     try {
       const updated = await changeInvoiceStatus(invoice.id, target)
       setInvoice(updated)
-      showSuccess(`Factuur is nu: ${INVOICE_STATUS_LABELS[target]}.`)
+      showSuccess(t('invoices.internalDetail.statusChanged', { status: t(INVOICE_STATUS_LABELS[target]) }))
     } catch {
-      showError('De status kon niet worden gewijzigd.')
+      showError(t('invoices.internalDetail.statusError'))
     } finally {
       setBusy(false)
       setConfirmTransition(null)
@@ -185,7 +188,7 @@ export function InvoiceDetailPage() {
     const number = overrideNumber.trim()
     const reason = overrideReason.trim()
     if (!number || !reason) {
-      setOverrideError('Vul een nieuw factuurnummer en een reden in.')
+      setOverrideError(t('invoices.override.missingFields'))
       return
     }
     setBusy(true)
@@ -193,10 +196,10 @@ export function InvoiceDetailPage() {
       const updated = await overrideInvoiceNumber(invoice.id, { invoiceNumber: number, reason })
       setInvoice(updated)
       setOverrideOpen(false)
-      showSuccess(`Factuurnummer aangepast naar ${updated.invoiceNumber}.`)
+      showSuccess(t('invoices.override.success', { number: updated.invoiceNumber }))
     } catch (err) {
-      const { message, fieldErrors } = describeApiError(err, 'Het factuurnummer kon niet worden aangepast.')
-      setOverrideError(message)
+      const { fieldErrors } = describeApiError(err, '')
+      setOverrideError(localizeApiError(t, err, t('invoices.override.error')))
       setOverrideFieldErrors(fieldErrors)
     } finally {
       setBusy(false)
@@ -207,16 +210,16 @@ export function InvoiceDetailPage() {
     if (!invoice) return
     try {
       await deleteInvoice(invoice.id)
-      showSuccess('Factuur verwijderd.')
+      showSuccess(t('invoices.internalDetail.deleted'))
       navigate('/invoices')
     } catch {
-      showError('De factuur kon niet worden verwijderd.')
+      showError(t('invoices.internalDetail.deleteError'))
       setConfirmDelete(false)
     }
   }
 
-  if (loadError) return <ErrorState message={loadError} />
-  if (!invoice) return <LoadingState message="Factuur laden..." />
+  if (loadErrorKey) return <ErrorState message={t(loadErrorKey)} />
+  if (!invoice) return <LoadingState message={t('invoices.detail.loading')} />
 
   const editable = invoice.status === 'Draft' && hasPermission('invoices.edit')
   const deletable = (invoice.status === 'Draft' || invoice.status === 'Cancelled') && hasPermission('invoices.delete')
@@ -224,14 +227,14 @@ export function InvoiceDetailPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Facturen', to: '/invoices' }, { label: invoice.invoiceNumber }]} />
+      <Breadcrumbs items={[{ label: t('invoices.list.title'), to: '/invoices' }, { label: invoice.invoiceNumber }]} />
       <PageHeader
         title={`${invoice.invoiceNumber} — ${invoice.customerName}`}
-        subtitle={`Factuurdatum ${invoice.invoiceDate} · vervalt ${invoice.dueDate}${invoice.customerVatNumber ? ` · ${invoice.customerVatNumber}` : ''}`}
+        subtitle={`${t('invoices.internalDetail.subtitle', { date: invoice.invoiceDate, dueDate: invoice.dueDate })}${invoice.customerVatNumber ? ` · ${invoice.customerVatNumber}` : ''}`}
         action={
           <span className="inv-header-actions">
-            <Badge tone={INVOICE_STATUS_TONE[invoice.status]}>{INVOICE_STATUS_LABELS[invoice.status]}</Badge>
-            {invoice.numberIsManual && <Badge tone="warning">handmatig nummer</Badge>}
+            <Badge tone={INVOICE_STATUS_TONE[invoice.status]}>{t(INVOICE_STATUS_LABELS[invoice.status])}</Badge>
+            {invoice.numberIsManual && <Badge tone="warning">{t('invoices.internalDetail.manualNumber')}</Badge>}
             {hasPermission('invoices.change_status') &&
               !editing &&
               invoice.allowedTransitions.map((target) => (
@@ -241,7 +244,7 @@ export function InvoiceDetailPage() {
                   onClick={() => (target === 'Cancelled' ? setConfirmTransition(target) : void applyTransition(target))}
                   disabled={busy}
                 >
-                  {INVOICE_TRANSITION_LABELS[target]}
+                  {t(INVOICE_TRANSITION_LABELS[target])}
                 </Button>
               ))}
           </span>
@@ -249,40 +252,40 @@ export function InvoiceDetailPage() {
       />
 
       <p className="inv-meta">
-        {invoice.legalEntityName && <>Facturerende entiteit: {invoice.legalEntityName} · </>}
-        Periode: {formatPeriod(invoice.invoicePeriodYear, invoice.invoicePeriodMonth)}
-        {invoice.purchaseOrderNumber && <> · PO-nummer: {invoice.purchaseOrderNumber}</>}
+        {invoice.legalEntityName && <>{t('invoices.fields.billingEntity')}: {invoice.legalEntityName} · </>}
+        {t('invoices.internalDetail.periodLabel')}: {formatPeriod(invoice.invoicePeriodYear, invoice.invoicePeriodMonth)}
+        {invoice.purchaseOrderNumber && <> · {t('invoices.detail.poNumber', { number: invoice.purchaseOrderNumber })}</>}
       </p>
 
       {editing ? (
         <div className="inv-edit">
           <div className="inv-edit-dates">
             <label>
-              Factuurdatum
+              {t('invoices.fields.invoiceDate')}
               <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} disabled={busy} />
             </label>
             <label>
-              Vervaldag
+              {t('invoices.fields.dueDate')}
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} disabled={busy} />
             </label>
             <label>
-              Factuurperiode
+              {t('invoices.fields.period')}
               <input type="month" value={periodInput} onChange={(e) => setPeriodInput(e.target.value)} disabled={busy} />
             </label>
             <label>
-              PO-nummer
+              {t('invoices.fields.poNumber')}
               <input value={poNumber} onChange={(e) => setPoNumber(e.target.value)} disabled={busy} maxLength={100} />
             </label>
           </div>
           <table className="inv-lines-table">
             <thead>
               <tr>
-                <th>Omschrijving</th>
-                <th>Verkoopcategorie</th>
-                <th>Aantal</th>
-                <th>Prijs</th>
-                <th>Btw %</th>
-                <th aria-label="Acties" />
+                <th>{t('invoices.internalLines.columns.description')}</th>
+                <th>{t('invoices.internalLines.columns.category')}</th>
+                <th>{t('invoices.internalLines.columns.quantity')}</th>
+                <th>{t('invoices.internalLines.columns.price')}</th>
+                <th>{t('invoices.internalLines.columns.vat')}</th>
+                <th aria-label={t('invoices.internalLines.columns.actions')} />
               </tr>
             </thead>
             <tbody>
@@ -294,7 +297,7 @@ export function InvoiceDetailPage() {
                   </td>
                   <td>
                     <select
-                      aria-label={`Verkoopcategorie voor ${line.description || 'nieuwe lijn'}`}
+                      aria-label={t('invoices.internalLines.categoryFor', { name: line.description || t('invoices.internalLines.newLine') })}
                       value={line.salesCategoryId ?? ''}
                       onChange={(e) => {
                         const categoryId = e.target.value || null
@@ -308,7 +311,7 @@ export function InvoiceDetailPage() {
                       }}
                       disabled={busy}
                     >
-                      <option value="">— Geen —</option>
+                      <option value="">{t('invoices.common.none')}</option>
                       {salesCategories.map((category) => (
                         <option key={category.id} value={category.id}>
                           {category.name}
@@ -327,7 +330,7 @@ export function InvoiceDetailPage() {
                   </td>
                   <td>
                     <button type="button" className="inv-link inv-link-danger" onClick={() => setLines((rows) => rows.filter((r) => r.key !== line.key))} disabled={busy}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   </td>
                 </tr>
@@ -344,18 +347,18 @@ export function InvoiceDetailPage() {
             }
             disabled={busy}
           >
-            + Lijn toevoegen
+            {t('invoices.internalLines.addLine')}
           </Button>
           <label className="inv-notes-label">
-            Notities
+            {t('invoices.fields.notes')}
             <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} maxLength={4000} />
           </label>
           <div className="inv-edit-actions">
             <Button variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
-              Annuleren
+              {t('ui.actions.cancel')}
             </Button>
             <Button onClick={() => void handleSave()} disabled={busy}>
-              {busy ? 'Opslaan…' : 'Opslaan'}
+              {busy ? t('invoices.common.saving') : t('ui.actions.save')}
             </Button>
           </div>
         </div>
@@ -365,11 +368,11 @@ export function InvoiceDetailPage() {
             <thead>
               <tr>
                 <th>#</th>
-                <th>Omschrijving</th>
-                <th>Aantal</th>
-                <th>Prijs</th>
-                <th>Btw %</th>
-                <th>Bedrag</th>
+                <th>{t('invoices.internalLines.columns.description')}</th>
+                <th>{t('invoices.internalLines.columns.quantity')}</th>
+                <th>{t('invoices.internalLines.columns.price')}</th>
+                <th>{t('invoices.internalLines.columns.vat')}</th>
+                <th>{t('invoices.internalLines.columns.amount')}</th>
               </tr>
             </thead>
             <tbody>
@@ -404,15 +407,15 @@ export function InvoiceDetailPage() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={5}>Subtotaal</td>
+                <td colSpan={5}>{t('invoices.detail.subtotal')}</td>
                 <td>{euro(invoice.subtotal, invoice.currency)}</td>
               </tr>
               <tr>
-                <td colSpan={5}>Btw</td>
+                <td colSpan={5}>{t('invoices.internalDetail.vat')}</td>
                 <td>{euro(invoice.vatAmount, invoice.currency)}</td>
               </tr>
               <tr className="inv-total-row">
-                <td colSpan={5}>Totaal</td>
+                <td colSpan={5}>{t('invoices.detail.total')}</td>
                 <td>{euro(invoice.total, invoice.currency)}</td>
               </tr>
             </tfoot>
@@ -423,17 +426,17 @@ export function InvoiceDetailPage() {
           <div className="inv-detail-actions">
             {editable && (
               <Button variant="secondary" onClick={startEditing} disabled={busy}>
-                Bewerken
+                {t('ui.actions.edit')}
               </Button>
             )}
             {canOverrideNumber && (
               <Button variant="secondary" onClick={openOverride} disabled={busy}>
-                Nummer corrigeren
+                {t('invoices.override.open')}
               </Button>
             )}
             {deletable && (
               <Button variant="secondary" onClick={() => setConfirmDelete(true)} disabled={busy}>
-                Verwijderen
+                {t('ui.actions.delete')}
               </Button>
             )}
             {(invoice.status === 'Sent' || invoice.status === 'Paid')
@@ -446,16 +449,16 @@ export function InvoiceDetailPage() {
                     try {
                       const updated = await completeInvoiceLedgerSnapshots(invoice.id)
                       setInvoice(updated)
-                      showSuccess('Ontbrekende boekhoudsnapshots aangevuld waar een mapping bestaat.')
+                      showSuccess(t('invoices.internalDetail.ledgerCompleted'))
                     } catch (err) {
-                      showError(describeApiError(err, 'De snapshots konden niet worden aangevuld.').message)
+                      showError(localizeApiError(t, err, t('invoices.internalDetail.ledgerError')))
                     } finally {
                       setBusy(false)
                     }
                   }}
                   disabled={busy}
                 >
-                  Boekhoudsnapshot aanvullen
+                  {t('invoices.internalDetail.ledgerAction')}
                 </Button>
               )}
           </div>
@@ -476,26 +479,26 @@ export function InvoiceDetailPage() {
 
       {overrideOpen && (
         <Modal
-          title="Factuurnummer corrigeren"
+          title={t('invoices.override.title')}
           onClose={() => setOverrideOpen(false)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setOverrideOpen(false)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button
                 onClick={() => void handleOverride()}
                 disabled={busy || !overrideNumber.trim() || !overrideReason.trim()}
               >
-                {busy ? 'Bezig…' : 'Nummer aanpassen'}
+                {busy ? t('invoices.common.busy') : t('invoices.override.confirm')}
               </Button>
             </>
           }
         >
           <div className="inv-override-form">
             <FormField
-              label="Nieuw factuurnummer"
+              label={t('invoices.override.numberLabel')}
               htmlFor="inv-override-number"
               required
               error={getFieldError(overrideFieldErrors, 'invoiceNumber')}
@@ -509,7 +512,7 @@ export function InvoiceDetailPage() {
               />
             </FormField>
             <FormField
-              label="Reden"
+              label={t('invoices.common.reason')}
               htmlFor="inv-override-reason"
               required
               error={getFieldError(overrideFieldErrors, 'reason')}
@@ -534,9 +537,9 @@ export function InvoiceDetailPage() {
 
       {confirmTransition && (
         <ConfirmDialog
-          title="Factuur annuleren"
-          message={`Weet je zeker dat je factuur ${invoice.invoiceNumber} wilt annuleren? Gefactureerde opdrachten komen weer vrij.`}
-          confirmLabel="Annuleren"
+          title={t('invoices.internalDetail.cancelTitle')}
+          message={t('invoices.internalDetail.cancelMessage', { number: invoice.invoiceNumber })}
+          confirmLabel={t('ui.actions.cancel')}
           destructive
           onConfirm={() => void applyTransition(confirmTransition)}
           onCancel={() => setConfirmTransition(null)}
@@ -545,9 +548,9 @@ export function InvoiceDetailPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Factuur verwijderen"
-          message={`Weet je zeker dat je factuur ${invoice.invoiceNumber} wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('invoices.internalDetail.deleteTitle')}
+          message={t('invoices.internalDetail.deleteMessage', { number: invoice.invoiceNumber })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}
@@ -565,9 +568,11 @@ interface InvoiceAttachmentsSectionProps {
 
 /** Bijlagen van een factuur: uploaden, meesturen togglen, downloaden en (in concept) verwijderen. */
 export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: InvoiceAttachmentsSectionProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [attachments, setAttachments] = useState<InvoiceAttachment[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<InvoiceAttachment | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -576,9 +581,9 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
     listInvoiceAttachments(invoiceId)
       .then((data) => {
         setAttachments(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
-      .catch(() => setLoadError('De bijlagen konden niet worden geladen.'))
+      .catch(() => setLoadErrorKey('invoices.attachments.loadError'))
   }, [invoiceId])
 
   useEffect(() => {
@@ -587,16 +592,16 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
 
   async function handleUpload(file: File) {
     if (file.size > MAX_INVOICE_ATTACHMENT_BYTES) {
-      showError('Het bestand is te groot (maximaal 10 MB).')
+      showError(t('invoices.attachments.tooLarge'))
       return
     }
     setBusy(true)
     try {
       await uploadInvoiceAttachment(invoiceId, file)
-      showSuccess('Bijlage geüpload.')
+      showSuccess(t('invoices.attachments.uploaded'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De bijlage kon niet worden geüpload.').message)
+      showError(localizeApiError(t, err, t('invoices.attachments.uploadError')))
     } finally {
       setBusy(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -612,7 +617,7 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
       })
       setAttachments((rows) => (rows ?? []).map((row) => (row.id === updated.id ? updated : row)))
     } catch (err) {
-      showError(describeApiError(err, 'De bijlage kon niet worden bijgewerkt.').message)
+      showError(localizeApiError(t, err, t('invoices.attachments.updateError')))
     } finally {
       setBusy(false)
     }
@@ -621,7 +626,7 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
   return (
     <section className="inv-section">
       <div className="inv-manual-head">
-        <h3>Bijlagen</h3>
+        <h3>{t('invoices.detail.attachmentsTitle')}</h3>
         {canManage && (
           <span className="inv-attachment-upload">
             <input
@@ -629,7 +634,7 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
               type="file"
               accept={INVOICE_ATTACHMENT_ACCEPT}
               disabled={busy}
-              aria-label="Bijlage kiezen"
+              aria-label={t('invoices.attachments.choose')}
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (file) void handleUpload(file)
@@ -639,23 +644,23 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
         )}
       </div>
 
-      {loadError && (
+      {loadErrorKey && (
         <p className="inv-override-error" role="alert">
-          {loadError}
+          {t(loadErrorKey)}
         </p>
       )}
-      {!loadError && attachments !== null && attachments.length === 0 && (
-        <p className="placeholder-text">Nog geen bijlagen.</p>
+      {!loadErrorKey && attachments !== null && attachments.length === 0 && (
+        <p className="placeholder-text">{t('invoices.attachments.empty')}</p>
       )}
       {attachments !== null && attachments.length > 0 && (
         <table className="inv-lines-table">
           <thead>
             <tr>
-              <th>Bestand</th>
-              <th>Grootte</th>
-              <th>Geüpload op</th>
-              <th>Meesturen</th>
-              <th aria-label="Acties" />
+              <th>{t('invoices.attachments.columns.file')}</th>
+              <th>{t('invoices.attachments.columns.size')}</th>
+              <th>{t('invoices.attachments.columns.uploadedAt')}</th>
+              <th>{t('invoices.attachments.columns.include')}</th>
+              <th aria-label={t('invoices.internalLines.columns.actions')} />
             </tr>
           </thead>
           <tbody>
@@ -672,7 +677,7 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
                       onChange={() => void toggleInclude(attachment)}
                       disabled={!canManage || busy}
                     />
-                    <span>{attachment.includeWhenSending ? 'Ja' : 'Nee'}</span>
+                    <span>{attachment.includeWhenSending ? t('invoices.common.yes') : t('invoices.common.no')}</span>
                   </label>
                 </td>
                 <td>
@@ -681,15 +686,15 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
                     className="inv-link"
                     onClick={() =>
                       void downloadInvoiceAttachment(invoiceId, attachment.id, attachment.fileName).catch(() =>
-                        showError('De bijlage kon niet worden gedownload.'),
+                        showError(t('invoices.detail.attachmentError')),
                       )
                     }
                   >
-                    Download
+                    {t('invoices.attachments.download')}
                   </button>
                   {isDraft && canManage && (
                     <button type="button" className="inv-link inv-link-danger" onClick={() => setRemoveTarget(attachment)} disabled={busy}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   )}
                 </td>
@@ -701,20 +706,20 @@ export function InvoiceAttachmentsSection({ invoiceId, canManage, isDraft }: Inv
 
       {removeTarget && (
         <ConfirmDialog
-          title="Bijlage verwijderen"
-          message={`Bijlage '${removeTarget.fileName}' verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('invoices.attachments.removeTitle')}
+          message={t('invoices.attachments.removeMessage', { name: removeTarget.fileName })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={busy}
           onConfirm={async () => {
             setBusy(true)
             try {
               await deleteInvoiceAttachment(invoiceId, removeTarget.id)
-              showSuccess('Bijlage verwijderd.')
+              showSuccess(t('invoices.attachments.removed'))
               setRemoveTarget(null)
               reload()
             } catch (err) {
-              showError(describeApiError(err, 'De bijlage kon niet worden verwijderd.').message)
+              showError(localizeApiError(t, err, t('invoices.attachments.removeError')))
             } finally {
               setBusy(false)
             }

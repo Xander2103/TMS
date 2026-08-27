@@ -10,7 +10,10 @@ export function normalizeVatNumber(input: string): string | null {
   return normalized === '' ? null : normalized
 }
 
-/** Dutch validation message for the (raw) input, or null when acceptable/empty. */
+/**
+ * Validation message KEY (customers.vatValidation.*) for the (raw) input, or null when
+ * acceptable/empty. Callers render via t(key).
+ */
 export function validateVatNumber(input: string): string | null {
   const normalized = normalizeVatNumber(input)
   if (normalized === null) return null
@@ -18,21 +21,21 @@ export function validateVatNumber(input: string): string | null {
   if (normalized.startsWith('BE')) {
     const digits = normalized.slice(2)
     if (!/^\d{10}$/.test(digits)) {
-      return 'Belgisch BTW-nummer moet uit BE + 10 cijfers bestaan (bv. BE0123456749).'
+      return 'customers.vatValidation.beStructure'
     }
     if (digits[0] !== '0' && digits[0] !== '1') {
-      return 'Belgisch BTW-nummer moet met BE0 of BE1 beginnen.'
+      return 'customers.vatValidation.beStart'
     }
     const body = Number(digits.slice(0, 8))
     const check = Number(digits.slice(8))
     if (check !== 97 - (body % 97)) {
-      return 'Belgisch BTW-nummer heeft een ongeldig controlegetal.'
+      return 'customers.vatValidation.beChecksum'
     }
     return null
   }
 
   if (normalized.length < 4 || normalized.length > 20 || !/^[A-Z0-9]+$/.test(normalized)) {
-    return 'BTW-nummer heeft een ongeldig formaat.'
+    return 'customers.vatValidation.genericFormat'
   }
   return null
 }

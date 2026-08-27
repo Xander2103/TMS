@@ -1,5 +1,7 @@
 import { useState, type DragEvent } from 'react'
 import { Badge } from '../../../components/ui/Badge'
+import { useLocale } from '../../../i18n/localeContext'
+import { formatInteger } from '../../../utils/numbers'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import {
   blockPosition, formatDayHeading, formatTimeRange, gridHours, type BoardViewDays,
@@ -23,6 +25,7 @@ interface BoardTimelineProps {
 export function BoardTimeline({
   dates, days, trips, isLoading, selectedTripId, onSelectTrip, onDropOnTrip, onDropOnDay,
 }: BoardTimelineProps) {
+  const { t } = useLocale()
   const [dragOverKey, setDragOverKey] = useState<string | null>(null)
 
   function readPayload(event: DragEvent): DragPayload | null {
@@ -41,7 +44,7 @@ export function BoardTimeline({
   for (const trip of trips) byDate.get(trip.tripDate)?.push(trip)
 
   return (
-    <section className={`pc-board pc-board-${days}`} aria-label="Planbord">
+    <section className={`pc-board pc-board-${days}`} aria-label={t('planningCenter.board.label')}>
       <div className="pc-board-axis" aria-hidden="true">
         {gridHours().map((hour) => (
           <span key={hour}>{String(hour).padStart(2, '0')}:00</span>
@@ -115,7 +118,7 @@ export function BoardTimeline({
           )
         })}
       </div>
-      {isLoading && <p className="pc-muted pc-board-loading">Planbord laden…</p>}
+      {isLoading && <p className="pc-muted pc-board-loading">{t('planningCenter.board.loading')}</p>}
     </section>
   )
 }
@@ -135,6 +138,7 @@ interface TripBlockProps {
 function TripBlock({
   trip, floating, selected, dragOver, setDragOver, onSelect, onDrop, allowDrop, readPayload,
 }: TripBlockProps) {
+  const { t } = useLocale()
   const timeRange = formatTimeRange(trip.plannedStart, trip.plannedEnd)
   const overloaded =
     (trip.capacityWeightKg !== null && trip.totalWeightKg !== null && trip.totalWeightKg > trip.capacityWeightKg) ||
@@ -180,33 +184,37 @@ function TripBlock({
           onSelect(trip)
         }
       }}
-      aria-label={`Rit ${trip.tripNumber}, ${TRIP_STATUS_LABELS[trip.status]}`}
+      aria-label={t('planningCenter.board.tripAriaLabel', { tripNumber: trip.tripNumber, status: t(TRIP_STATUS_LABELS[trip.status]) })}
     >
       <div className="pc-trip-head">
         <strong>{trip.tripNumber}</strong>
-        <Badge tone={TRIP_STATUS_TONE[trip.status]}>{TRIP_STATUS_LABELS[trip.status]}</Badge>
+        <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
       </div>
       {timeRange && <p className="pc-trip-time">{timeRange}</p>}
-      <p className="pc-trip-line">{trip.driverName ?? 'Geen chauffeur'}</p>
+      <p className="pc-trip-line">{trip.driverName ?? t('planningCenter.board.noDriver')}</p>
       <p className="pc-trip-line">
-        {trip.vehicleNumber ?? 'Geen voertuig'}
+        {trip.vehicleNumber ?? t('planningCenter.board.noVehicle')}
         {trip.trailerNumber ? ` + ${trip.trailerNumber}` : ''}
       </p>
       {trip.routeSummary && <p className="pc-trip-line pc-trip-route">{trip.routeSummary}</p>}
       <p className="pc-trip-line pc-trip-meta">
-        <span>{trip.orderCount} opdr.</span>
-        <span>{trip.stopCount} stops</span>
+        <span>{t('planningCenter.board.orders', { count: trip.orderCount })}</span>
+        <span>{t('planningCenter.board.stops', { count: trip.stopCount })}</span>
         {trip.totalWeightKg !== null && (
           <span className={overloaded ? 'pc-overloaded' : undefined}>
-            {trip.totalWeightKg.toLocaleString('nl-BE')}
-            {trip.capacityWeightKg !== null ? `/${trip.capacityWeightKg.toLocaleString('nl-BE')}` : ''} kg
+            {formatInteger(trip.totalWeightKg)}
+            {trip.capacityWeightKg !== null ? `/${formatInteger(trip.capacityWeightKg)}` : ''} kg
           </span>
         )}
       </p>
       {(trip.blockingConflictCount > 0 || trip.warningConflictCount > 0) && (
         <div className="pc-trip-conflicts">
-          {trip.blockingConflictCount > 0 && <Badge tone="danger">{trip.blockingConflictCount} blokkerend</Badge>}
-          {trip.warningConflictCount > 0 && <Badge tone="warning">{trip.warningConflictCount} waarschuwing</Badge>}
+          {trip.blockingConflictCount > 0 && (
+            <Badge tone="danger">{t('planningCenter.board.blocking', { count: trip.blockingConflictCount })}</Badge>
+          )}
+          {trip.warningConflictCount > 0 && (
+            <Badge tone="warning">{t('planningCenter.board.warnings', { count: trip.warningConflictCount })}</Badge>
+          )}
         </div>
       )}
     </article>

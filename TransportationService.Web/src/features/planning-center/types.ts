@@ -55,12 +55,13 @@ export interface UnplannedOrder {
   attentionBadges: string[]
 }
 
+/** Vertaalsleutels (i18n-wave): render via t(ATTENTION_BADGE_LABELS[badge] ?? badge). */
 export const ATTENTION_BADGE_LABELS: Record<string, string> = {
-  SubmittedReview: 'Te beoordelen',
-  NoStops: 'Geen stops',
-  MissingWeight: 'Gewicht ontbreekt',
-  MissingVolume: 'Volume ontbreekt',
-  AppointmentRequired: 'Afspraak vereist',
+  SubmittedReview: 'planningCenter.attentionBadge.SubmittedReview',
+  NoStops: 'planningCenter.attentionBadge.NoStops',
+  MissingWeight: 'planningCenter.attentionBadge.MissingWeight',
+  MissingVolume: 'planningCenter.attentionBadge.MissingVolume',
+  AppointmentRequired: 'planningCenter.attentionBadge.AppointmentRequired',
 }
 
 export interface ResourceAssignment {

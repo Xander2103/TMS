@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
+import { useLocale } from '../../../i18n/localeContext'
 import { getDriver } from '../api/driversApi'
 
 /**
@@ -11,6 +12,7 @@ import { getDriver } from '../api/driversApi'
  */
 export function DriverDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
+  const { t } = useLocale()
   const [employeeId, setEmployeeId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -22,14 +24,14 @@ export function DriverDetailPage() {
         if (mounted) setEmployeeId(driver.employeeId)
       })
       .catch(() => {
-        if (mounted) setError('Chauffeur kon niet worden geladen.')
+        if (mounted) setError(t('driversAdmin.panel.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, t])
 
   if (error) return <ErrorState message={error} />
-  if (!employeeId) return <LoadingState message="Chauffeursprofiel openen…" />
+  if (!employeeId) return <LoadingState message={t('driversAdmin.redirect.opening')} />
   return <Navigate to={`/employees/${employeeId}?section=chauffeursgegevens`} replace />
 }

@@ -7,9 +7,10 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchLocations, setLocationActive, setLocationDefaults } from '../../locations/api/locationsApi'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
-import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationListItem, type LocationType } from '../../locations/types'
+import { LOCATION_TYPE_LABEL_KEYS, LOCATION_TYPES, type LocationListItem, type LocationType } from '../../locations/types'
 
 interface CustomerLocationsPanelProps {
   customerId: string
@@ -22,6 +23,7 @@ interface CustomerLocationsPanelProps {
  */
 export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelProps) {
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canEdit = hasPermission('locations.edit')
   const canCreate = hasPermission('locations.create')
@@ -58,13 +60,13 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
       })
       .catch(() => {
         if (!mounted) return
-        setError('Locaties konden niet worden geladen.')
+        setError(t('customers.locations.loadFailed'))
         setLoadedKey(requestKey)
       })
     return () => {
       mounted = false
     }
-  }, [customerId, search, typeFilter, showInactive, reloadToken, requestKey])
+  }, [customerId, search, typeFilter, showInactive, reloadToken, requestKey, t])
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), [])
 
@@ -75,7 +77,7 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
       toast.showSuccess(successMessage)
       reload()
     } catch (err) {
-      toast.showError(describeApiError(err, 'De actie kon niet worden uitgevoerd.').message)
+      toast.showError(describeApiError(err, t('customers.locations.actionFailed')).message)
     } finally {
       setBusyId(null)
     }
@@ -84,7 +86,7 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
   const columns: Column<LocationListItem>[] = [
     {
       key: 'name',
-      header: 'Locatie',
+      header: t('customers.locations.columnLocation'),
       render: (row) => (
         <>
           <Link to={`/locations/${row.id}`}>{row.name}</Link>{' '}
@@ -92,26 +94,30 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
         </>
       ),
     },
-    { key: 'type', header: 'Type', render: (row) => LOCATION_TYPE_LABELS[row.type] },
-    { key: 'city', header: 'Plaats', render: (row) => row.city ?? '—' },
+    { key: 'type', header: t('customers.locations.columnType'), render: (row) => t(LOCATION_TYPE_LABEL_KEYS[row.type]) },
+    { key: 'city', header: t('customers.locations.columnCity'), render: (row) => row.city ?? '—' },
     {
       key: 'status',
-      header: 'Status',
+      header: t('customers.locations.columnStatus'),
       render: (row) => (
         <span className="customer-locations-badges">
-          {row.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>}
-          {row.isDefaultLoadingLocation && <Badge tone="info">Standaard laden</Badge>}
-          {row.isDefaultUnloadingLocation && <Badge tone="info">Standaard lossen</Badge>}
-          {row.isDefaultBillingLocation && <Badge tone="info">Standaard facturatie</Badge>}
+          {row.isActive ? (
+            <Badge tone="success">{t('ui.statusBadges.active')}</Badge>
+          ) : (
+            <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>
+          )}
+          {row.isDefaultLoadingLocation && <Badge tone="info">{t('customers.locations.defaultLoadingBadge')}</Badge>}
+          {row.isDefaultUnloadingLocation && <Badge tone="info">{t('customers.locations.defaultUnloadingBadge')}</Badge>}
+          {row.isDefaultBillingLocation && <Badge tone="info">{t('customers.locations.defaultBillingBadge')}</Badge>}
         </span>
       ),
     },
     {
       key: 'actions',
-      header: 'Acties',
+      header: t('customers.locations.columnActions'),
       render: (row: LocationListItem) => (
         <span className="customer-locations-actions">
-          <Link to={`/locations/${row.id}`}>Volledig bewerken</Link>
+          <Link to={`/locations/${row.id}`}>{t('customers.locations.fullEdit')}</Link>
           {canEdit && (
             <>
               {!row.isDefaultLoadingLocation && row.isActive && (
@@ -127,11 +133,11 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
                             isDefaultUnloadingLocation: row.isDefaultUnloadingLocation,
                             isDefaultBillingLocation: row.isDefaultBillingLocation,
                           }),
-                        'Standaard laadlocatie ingesteld.',
+                        t('customers.locations.defaultLoadingSet'),
                       )
                     }
                   >
-                    Maak standaard laden
+                    {t('customers.locations.makeDefaultLoading')}
                   </Button>
                 )}
                 {!row.isDefaultUnloadingLocation && row.isActive && (
@@ -147,11 +153,11 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
                             isDefaultUnloadingLocation: true,
                             isDefaultBillingLocation: row.isDefaultBillingLocation,
                           }),
-                        'Standaard loslocatie ingesteld.',
+                        t('customers.locations.defaultUnloadingSet'),
                       )
                     }
                   >
-                    Maak standaard lossen
+                    {t('customers.locations.makeDefaultUnloading')}
                   </Button>
                 )}
                 {!row.isDefaultBillingLocation && row.isActive && (
@@ -167,24 +173,26 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
                             isDefaultUnloadingLocation: row.isDefaultUnloadingLocation,
                             isDefaultBillingLocation: true,
                           }),
-                        'Standaard facturatieadres ingesteld.',
+                        t('customers.locations.defaultBillingSet'),
                       )
                     }
                   >
-                    Maak standaard facturatie
+                    {t('customers.locations.makeDefaultBilling')}
                   </Button>
                 )}
                 {row.isActive ? (
                   <Button variant="ghost" disabled={busyId === row.id} onClick={() => setConfirmDeactivate(row)}>
-                    Deactiveren
+                    {t('customers.locations.deactivate')}
                   </Button>
                 ) : (
                   <Button
                     variant="ghost"
                     disabled={busyId === row.id}
-                    onClick={() => runRowAction(row, () => setLocationActive(row.id, true), 'Locatie geheractiveerd.')}
+                    onClick={() =>
+                      runRowAction(row, () => setLocationActive(row.id, true), t('customers.locations.reactivated'))
+                    }
                   >
-                    Heractiveren
+                    {t('customers.locations.reactivate')}
                   </Button>
                 )}
             </>
@@ -201,30 +209,30 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Zoeken op naam, code of plaats…"
-          aria-label="Locaties zoeken"
+          placeholder={t('customers.locations.searchPlaceholder')}
+          aria-label={t('customers.locations.searchAria')}
         />
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value as LocationType | '')}
-          aria-label="Filter op type"
+          aria-label={t('customers.locations.typeFilterAria')}
         >
-          <option value="">Alle types</option>
+          <option value="">{t('customers.locations.allTypes')}</option>
           {LOCATION_TYPES.map((type) => (
             <option key={type} value={type}>
-              {LOCATION_TYPE_LABELS[type]}
+              {t(LOCATION_TYPE_LABEL_KEYS[type])}
             </option>
           ))}
         </select>
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
-          Toon inactieve
+          {t('customers.locations.showInactive')}
         </label>
         {canCreate && (
           <span className="customer-locations-new">
-            <Button onClick={() => setShowQuickCreate(true)}>+ Adres toevoegen</Button>
+            <Button onClick={() => setShowQuickCreate(true)}>{t('customers.locations.addAddress')}</Button>
             {/* Full form (all sections) with this customer preselected via the query param. */}
-            <Link to={`/locations/new?customerId=${customerId}`}>Nieuwe locatie voor deze klant</Link>
+            <Link to={`/locations/new?customerId=${customerId}`}>{t('customers.locations.newForCustomer')}</Link>
           </span>
         )}
       </div>
@@ -235,8 +243,8 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Deze klant heeft nog geen locaties."
-        loadingMessage="Locaties laden..."
+        emptyMessage={t('customers.locations.empty')}
+        loadingMessage={t('customers.locations.loading')}
       />
 
       {showQuickCreate && (
@@ -245,7 +253,7 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
           onClose={(created) => {
             setShowQuickCreate(false)
             if (created) {
-              toast.showSuccess(`Locatie '${created.name}' aangemaakt.`)
+              toast.showSuccess(t('customers.locations.created', { name: created.name }))
               reload()
             }
           }}
@@ -254,13 +262,13 @@ export function CustomerLocationsPanel({ customerId }: CustomerLocationsPanelPro
 
       {confirmDeactivate && (
         <ConfirmDialog
-          title="Locatie deactiveren"
-          message={`'${confirmDeactivate.name}' deactiveren? De locatie blijft behouden voor bestaande opdrachten, maar is niet meer kiesbaar voor nieuwe.`}
-          confirmLabel="Deactiveren"
+          title={t('customers.locations.deactivateTitle')}
+          message={t('customers.locations.deactivateMessage', { name: confirmDeactivate.name })}
+          confirmLabel={t('customers.locations.deactivate')}
           busy={busyId === confirmDeactivate.id}
           onConfirm={async () => {
             const row = confirmDeactivate
-            await runRowAction(row, () => setLocationActive(row.id, false), 'Locatie gedeactiveerd.')
+            await runRowAction(row, () => setLocationActive(row.id, false), t('customers.locations.deactivated'))
             setConfirmDeactivate(null)
           }}
           onCancel={() => setConfirmDeactivate(null)}

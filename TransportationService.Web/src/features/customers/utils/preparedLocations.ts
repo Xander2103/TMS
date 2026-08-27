@@ -81,22 +81,29 @@ function describe(err: unknown, fallback: string): string {
 /**
  * Creates each staged location for a freshly-created customer, sequentially; never throws —
  * returns a per-row result so the caller can offer retry for the `!ok` rows.
+ *
+ * i18n: dit is geen React-code, dus de aanroeper geeft de vertaalde fallbackteksten mee
+ * (customers.staged.fallbackLabel / customers.staged.createFailed); de Nederlandse defaults
+ * blijven het pre-i18n-gedrag voor aanroepers zonder locale-context.
  */
 export async function createPreparedLocations(
   customerId: string,
   rows: PreparedLocation[],
+  fallbacks?: { label?: string; error?: string },
 ): Promise<LocationFollowUpResult[]> {
+  const fallbackLabel = fallbacks?.label ?? 'Locatie'
+  const fallbackError = fallbacks?.error ?? 'De locatie kon niet worden aangemaakt.'
   const results: LocationFollowUpResult[] = []
   for (const row of rows) {
     try {
       await createLocation(preparedLocationToInput(row, customerId))
-      results.push({ key: row.key, label: row.name || 'Locatie', ok: true })
+      results.push({ key: row.key, label: row.name || fallbackLabel, ok: true })
     } catch (err) {
       results.push({
         key: row.key,
-        label: row.name || 'Locatie',
+        label: row.name || fallbackLabel,
         ok: false,
-        error: describe(err, 'De locatie kon niet worden aangemaakt.'),
+        error: describe(err, fallbackError),
       })
     }
   }

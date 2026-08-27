@@ -12,6 +12,7 @@ import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
 import { ApiError } from '../../../api/apiClient'
+import { useLocale } from '../../../i18n/localeContext'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { FleetDocumentsPanel } from '../../fleet-documents/components/FleetDocumentsPanel'
 import { MaintenancePanel } from '../../maintenance/components/MaintenancePanel'
@@ -37,6 +38,7 @@ type TabId = (typeof TAB_IDS)[number]
 export function TrailerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -62,12 +64,12 @@ export function TrailerDetailPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Oplegger kon niet worden geladen.')
+        if (mounted) setLoadError(t('trailers.detail.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, t])
 
   const loading = trailer === null && loadError === null
   const canEdit = hasPermission('trailers.edit')
@@ -112,9 +114,9 @@ export function TrailerDetailPage() {
       const updated = await updateTrailer(id, values)
       setTrailer(updated)
       setEditing(false)
-      showSuccess('Oplegger bijgewerkt.')
+      showSuccess(t('trailers.detail.updated'))
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'Wijzigingen konden niet worden opgeslagen.')
+      showError(err instanceof ApiError ? err.message : t('fleet.common.saveChangesFailed'))
     } finally {
       setSaving(false)
     }
@@ -124,34 +126,34 @@ export function TrailerDetailPage() {
     if (!id) return
     try {
       await deleteTrailer(id)
-      showSuccess('Oplegger verwijderd.')
+      showSuccess(t('trailers.detail.deleted'))
       navigate('/trailers')
     } catch {
-      showError('Oplegger kon niet worden verwijderd.')
+      showError(t('trailers.detail.deleteFailed'))
       setConfirmDelete(false)
     }
   }
 
-  if (loading) return <p className="placeholder-text">Oplegger laden…</p>
-  if (loadError || !trailer) return <p className="placeholder-text">{loadError ?? 'Niet gevonden.'}</p>
+  if (loading) return <p className="placeholder-text">{t('trailers.detail.loading')}</p>
+  if (loadError || !trailer) return <p className="placeholder-text">{loadError ?? t('fleet.common.notFound')}</p>
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Opleggers', to: '/trailers' }, { label: trailer.internalNumber }]} />
-      <BackButton to="/trailers" label="Terug naar opleggers" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.trailers'), to: '/trailers' }, { label: trailer.internalNumber }]} />
+      <BackButton to="/trailers" label={t('trailers.detail.back')} />
       <PageHeader
         title={`${trailer.brand ?? ''} ${trailer.model ?? ''}`.trim() || trailer.internalNumber}
         subtitle={`${trailer.internalNumber} · ${trailer.licensePlate}`}
         action={
           <div className="trailer-detail-actions">
-            {canEdit && !editing && <Button variant="secondary" onClick={startEdit}>Bewerken</Button>}
+            {canEdit && !editing && <Button variant="secondary" onClick={startEdit}>{t('ui.actions.edit')}</Button>}
             {canEdit && !editing && (
               <Button variant="secondary" onClick={() => setConfirmActive(trailer.isActive ? 'deactivate' : 'activate')}>
-                {trailer.isActive ? 'Deactiveren' : 'Heractiveren'}
+                {trailer.isActive ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate')}
               </Button>
             )}
             {hasPermission('trailers.delete') && !editing && (
-              <Button variant="danger" onClick={() => setConfirmDelete(true)}>Verwijderen</Button>
+              <Button variant="danger" onClick={() => setConfirmDelete(true)}>{t('ui.actions.delete')}</Button>
             )}
           </div>
         }
@@ -161,13 +163,13 @@ export function TrailerDetailPage() {
         <StatusBadges
           active={trailer.isActive}
           operational={{
-            label: TRAILER_STATUS_LABELS[trailer.operationalStatus],
+            label: t(TRAILER_STATUS_LABELS[trailer.operationalStatus]),
             tone: TRAILER_STATUS_TONES[trailer.operationalStatus],
             reason: trailer.statusReason,
           }}
         />
-        {trailer.adrSuitable && <Badge tone="warning">ADR</Badge>}
-        {trailer.hasRefrigeration && <Badge tone="info">Koeling</Badge>}
+        {trailer.adrSuitable && <Badge tone="warning">{t('fleet.common.equipment.adrShort')}</Badge>}
+        {trailer.hasRefrigeration && <Badge tone="info">{t('fleet.common.equipment.refrigeration')}</Badge>}
       </div>
 
       {editing && form ? (
@@ -184,15 +186,15 @@ export function TrailerDetailPage() {
         <>
           <Tabs
             tabs={[
-              { id: 'overzicht', label: 'Overzicht' },
-              { id: 'techniek', label: 'Techniek' },
-              { id: 'documenten', label: 'Documenten' },
-              { id: 'leasing', label: 'Leasing' },
-              { id: 'onderhoud', label: 'Onderhoud' },
-              { id: 'keuringen', label: 'Keuringen' },
-              { id: 'schade', label: 'Schade' },
-              { id: 'kpi', label: 'KPI' },
-              { id: 'historiek', label: 'Historiek' },
+              { id: 'overzicht', label: t('fleet.tabs.overview') },
+              { id: 'techniek', label: t('fleet.tabs.technical') },
+              { id: 'documenten', label: t('fleet.tabs.documents') },
+              { id: 'leasing', label: t('fleet.tabs.leasing') },
+              { id: 'onderhoud', label: t('fleet.tabs.maintenance') },
+              { id: 'keuringen', label: t('fleet.tabs.inspections') },
+              { id: 'schade', label: t('fleet.tabs.damage') },
+              { id: 'kpi', label: t('fleet.tabs.kpi') },
+              { id: 'historiek', label: t('fleet.tabs.history') },
             ]}
             activeId={tab}
             onChange={setTab}
@@ -201,13 +203,13 @@ export function TrailerDetailPage() {
           {tab === 'overzicht' && (
             <TabPanel tabId="overzicht">
               <div className="trailer-detail-grid">
-                <FormField label="Kenteken"><span>{trailer.licensePlate}</span></FormField>
-                <FormField label="VIN"><span>{trailer.vin ?? '—'}</span></FormField>
-                <FormField label="Categorie"><span>{trailer.categoryName ?? '—'}</span></FormField>
-                <FormField label="Bouwjaar"><span>{trailer.year ?? '—'}</span></FormField>
-                <FormField label="Eerste inschrijving"><span>{trailer.firstRegistrationDate ?? '—'}</span></FormField>
-                <FormField label="Eigendomsvorm"><span>{TRAILER_OWNERSHIP_LABELS[trailer.ownershipType]}</span></FormField>
-                <FormField label="Notities" className="trailer-detail-full"><span>{trailer.notes ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.plate')}><span>{trailer.licensePlate}</span></FormField>
+                <FormField label={t('vehicles.detail.vin')}><span>{trailer.vin ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.category')}><span>{trailer.categoryName ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.year')}><span>{trailer.year ?? '—'}</span></FormField>
+                <FormField label={t('vehicles.form.firstRegistration')}><span>{trailer.firstRegistrationDate ?? '—'}</span></FormField>
+                <FormField label={t('fleet.form.ownership')}><span>{t(TRAILER_OWNERSHIP_LABELS[trailer.ownershipType])}</span></FormField>
+                <FormField label={t('fleet.sections.notes')} className="trailer-detail-full"><span>{trailer.notes ?? '—'}</span></FormField>
               </div>
             </TabPanel>
           )}
@@ -215,20 +217,20 @@ export function TrailerDetailPage() {
           {tab === 'techniek' && (
             <TabPanel tabId="techniek">
               <div className="trailer-detail-grid">
-                <FormField label="Aantal assen" hint="Voor Maut/tolberekening."><span>{trailer.axleCount || '—'}</span></FormField>
-                <FormField label="Laadmeters"><span>{trailer.loadingMeters ? `${trailer.loadingMeters} ldm` : '—'}</span></FormField>
-                <FormField label="Laadvermogen"><span>{trailer.capacityKg !== null ? `${trailer.capacityKg} kg` : '—'}</span></FormField>
-                <FormField label="Afmetingen (L×B×H)">
+                <FormField label={t('fleet.form.axles')} hint={t('fleet.form.axlesHint')}><span>{trailer.axleCount || '—'}</span></FormField>
+                <FormField label={t('fleet.form.loadingMeters')}><span>{trailer.loadingMeters ? `${trailer.loadingMeters} ldm` : '—'}</span></FormField>
+                <FormField label={t('trailers.detail.payload')}><span>{trailer.capacityKg !== null ? `${trailer.capacityKg} kg` : '—'}</span></FormField>
+                <FormField label={t('vehicles.detail.dimensions')}>
                   <span>
                     {trailer.lengthMeters ?? '—'} × {trailer.widthMeters ?? '—'} × {trailer.heightMeters ?? '—'} m
                   </span>
                 </FormField>
-                <FormField label="Volume"><span>{trailer.volumeM3 !== null ? `${trailer.volumeM3} m³` : '—'}</span></FormField>
-                <FormField label="Uitrusting" className="trailer-detail-full">
+                <FormField label={t('vehicles.detail.volume')}><span>{trailer.volumeM3 !== null ? `${trailer.volumeM3} m³` : '—'}</span></FormField>
+                <FormField label={t('vehicles.detail.equipment')} className="trailer-detail-full">
                   <span>
-                    {[trailer.hasRefrigeration ? 'Koeling' : null, trailer.adrSuitable ? 'ADR' : null]
+                    {[trailer.hasRefrigeration ? t('fleet.common.equipment.refrigeration') : null, trailer.adrSuitable ? t('fleet.common.equipment.adrShort') : null]
                       .filter(Boolean)
-                      .join(' · ') || 'Geen bijzondere uitrusting'}
+                      .join(' · ') || t('vehicles.detail.noEquipment')}
                   </span>
                 </FormField>
               </div>
@@ -276,9 +278,9 @@ export function TrailerDetailPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Oplegger verwijderen"
-          message={`Weet je zeker dat je oplegger ${trailer.internalNumber} wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('trailers.detail.confirmDeleteTitle')}
+          message={t('trailers.detail.confirmDeleteMessage', { number: trailer.internalNumber })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}
@@ -287,23 +289,23 @@ export function TrailerDetailPage() {
 
       {confirmActive && (
         <ConfirmDialog
-          title={confirmActive === 'deactivate' ? 'Oplegger deactiveren' : 'Oplegger heractiveren'}
+          title={confirmActive === 'deactivate' ? t('trailers.detail.deactivateTitle') : t('trailers.detail.reactivateTitle')}
           message={
             confirmActive === 'deactivate'
-              ? `${trailer.internalNumber} deactiveren? Historiek blijft behouden, maar de oplegger is niet meer inzetbaar voor nieuwe ritten.`
-              : `${trailer.internalNumber} heractiveren? De oplegger is daarna weer inzetbaar.`
+              ? t('trailers.detail.deactivateMessage', { number: trailer.internalNumber })
+              : t('trailers.detail.reactivateMessage', { number: trailer.internalNumber })
           }
-          confirmLabel={confirmActive === 'deactivate' ? 'Deactiveren' : 'Heractiveren'}
+          confirmLabel={confirmActive === 'deactivate' ? t('vehicles.detail.deactivate') : t('vehicles.detail.reactivate')}
           onConfirm={async () => {
             if (!id) return
             try {
               await setTrailerActive(id, confirmActive === 'activate')
-              showSuccess(confirmActive === 'activate' ? 'Oplegger geheractiveerd.' : 'Oplegger gedeactiveerd.')
+              showSuccess(confirmActive === 'activate' ? t('trailers.detail.reactivated') : t('trailers.detail.deactivated'))
               setConfirmActive(null)
               const refreshed = await getTrailer(id)
               setTrailer(refreshed)
             } catch (err) {
-              showError(err instanceof ApiError ? err.message : 'De actie kon niet worden uitgevoerd.')
+              showError(err instanceof ApiError ? err.message : t('fleet.common.actionFailed'))
               setConfirmActive(null)
             }
           }}

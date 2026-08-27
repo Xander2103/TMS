@@ -8,6 +8,7 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   createPortalAnnouncement,
@@ -33,6 +34,7 @@ function fromDateTimeLocal(value: string): string | null {
 /** Admin CRUD for customer-portal broadcast announcements (Beheer → Klantportaal mededelingen). */
 export function PortalAnnouncementsSettingsPage() {
   const toast = useToast()
+  const { t } = useLocale()
   const [announcements, setAnnouncements] = useState<PortalAnnouncement[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -51,7 +53,7 @@ export function PortalAnnouncementsSettingsPage() {
         setError(null)
       })
       .catch(() => {
-        setError('De mededelingen konden niet worden geladen.')
+        setError('portalAnnouncements.loadFailed')
         setLoaded(true)
       })
   }
@@ -77,16 +79,16 @@ export function PortalAnnouncementsSettingsPage() {
     try {
       if (editing) {
         await updatePortalAnnouncement(editing.id, form)
-        toast.showSuccess('Mededeling bijgewerkt.')
+        toast.showSuccess(t('portalAnnouncements.updated'))
       } else {
         await createPortalAnnouncement(form)
-        toast.showSuccess('Mededeling aangemaakt.')
+        toast.showSuccess(t('portalAnnouncements.created'))
       }
       setEditing(null)
       setCreating(false)
       load()
     } catch (err) {
-      setFormError(describeApiError(err, 'De mededeling kon niet worden opgeslagen.').message)
+      setFormError(describeApiError(err, t('portalAnnouncements.saveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -97,26 +99,50 @@ export function PortalAnnouncementsSettingsPage() {
     setBusy(true)
     try {
       await deletePortalAnnouncement(deleteTarget.id)
-      toast.showSuccess('Mededeling verwijderd.')
+      toast.showSuccess(t('portalAnnouncements.deleted'))
       setDeleteTarget(null)
       load()
     } catch {
-      toast.showError('De mededeling kon niet worden verwijderd.')
+      toast.showError(t('portalAnnouncements.deleteFailed'))
     } finally {
       setBusy(false)
     }
   }
 
   const columns: Column<PortalAnnouncement>[] = [
-    { key: 'title', header: 'Titel', render: (row) => <button type="button" className="link-button" onClick={() => openEdit(row)}>{row.title}</button> },
-    { key: 'window', header: 'Periode', render: (row) => `${row.activeFrom ? toDateTimeLocal(row.activeFrom) : '—'} t/m ${row.activeUntil ? toDateTimeLocal(row.activeUntil) : '—'}` },
-    { key: 'status', header: 'Status', render: (row) => <Badge tone={row.isActive ? 'success' : 'neutral'}>{row.isActive ? 'Actief' : 'Inactief'}</Badge> },
+    {
+      key: 'title',
+      header: t('portalAnnouncements.columnTitle'),
+      render: (row) => (
+        <button type="button" className="link-button" onClick={() => openEdit(row)}>
+          {row.title}
+        </button>
+      ),
+    },
+    {
+      key: 'window',
+      header: t('portalAnnouncements.columnWindow'),
+      render: (row) =>
+        t('portalAnnouncements.windowRange', {
+          from: row.activeFrom ? toDateTimeLocal(row.activeFrom) : '—',
+          until: row.activeUntil ? toDateTimeLocal(row.activeUntil) : '—',
+        }),
+    },
+    {
+      key: 'status',
+      header: t('portalAnnouncements.columnStatus'),
+      render: (row) => (
+        <Badge tone={row.isActive ? 'success' : 'neutral'}>
+          {row.isActive ? t('ui.statusBadges.active') : t('ui.statusBadges.inactive')}
+        </Badge>
+      ),
+    },
     {
       key: 'actions',
       header: '',
       render: (row) => (
         <Button variant="secondary" onClick={() => setDeleteTarget(row)}>
-          Verwijderen
+          {t('ui.actions.delete')}
         </Button>
       ),
     },
@@ -126,25 +152,27 @@ export function PortalAnnouncementsSettingsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Beheer' }, { label: 'Klantportaal mededelingen' }]} />
+      <Breadcrumbs
+        items={[{ label: t('portalAnnouncements.breadcrumbAdmin') }, { label: t('navigation.menu.portalAnnouncements') }]}
+      />
       <PageHeader
-        title="Klantportaal mededelingen"
-        subtitle="Mededelingen zichtbaar in het klantportaal binnen hun actieve periode."
-        action={<Button onClick={openCreate}>Nieuwe mededeling</Button>}
+        title={t('navigation.menu.portalAnnouncements')}
+        subtitle={t('portalAnnouncements.subtitle')}
+        action={<Button onClick={openCreate}>{t('portalAnnouncements.newAnnouncement')}</Button>}
       />
       <DataTable
         columns={columns}
         rows={announcements}
         rowKey={(row) => row.id}
         isLoading={!loaded}
-        error={error}
-        emptyMessage="Nog geen mededelingen."
-        loadingMessage="Mededelingen laden..."
+        error={error ? t(error) : null}
+        emptyMessage={t('portalAnnouncements.empty')}
+        loadingMessage={t('portalAnnouncements.loading')}
       />
 
       {formOpen && (
         <Modal
-          title={editing ? 'Mededeling bewerken' : 'Nieuwe mededeling'}
+          title={editing ? t('portalAnnouncements.editTitle') : t('portalAnnouncements.newAnnouncement')}
           onClose={() => {
             setEditing(null)
             setCreating(false)
@@ -160,17 +188,17 @@ export function PortalAnnouncementsSettingsPage() {
                   setCreating(false)
                 }}
               >
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="portal-announcement-form" disabled={busy}>
-                {busy ? 'Bezig...' : 'Opslaan'}
+                {busy ? t('ui.actions.busy') : t('ui.actions.save')}
               </Button>
             </>
           }
         >
           <form id="portal-announcement-form" onSubmit={(e) => void handleSubmit(e)}>
             {formError && <p className="placeholder-text" role="alert">{formError}</p>}
-            <FormField label="Titel" htmlFor="pa-title" required>
+            <FormField label={t('portalAnnouncements.titleField')} htmlFor="pa-title" required>
               <input
                 id="pa-title"
                 value={form.title}
@@ -179,7 +207,7 @@ export function PortalAnnouncementsSettingsPage() {
                 required
               />
             </FormField>
-            <FormField label="Inhoud" htmlFor="pa-body" required>
+            <FormField label={t('portalAnnouncements.bodyField')} htmlFor="pa-body" required>
               <textarea
                 id="pa-body"
                 value={form.body}
@@ -189,7 +217,7 @@ export function PortalAnnouncementsSettingsPage() {
                 required
               />
             </FormField>
-            <FormField label="Actief vanaf" htmlFor="pa-from" hint="Leeg = direct zichtbaar">
+            <FormField label={t('portalAnnouncements.activeFromField')} htmlFor="pa-from" hint={t('portalAnnouncements.activeFromHint')}>
               <input
                 id="pa-from"
                 type="datetime-local"
@@ -197,7 +225,7 @@ export function PortalAnnouncementsSettingsPage() {
                 onChange={(e) => setForm({ ...form, activeFrom: fromDateTimeLocal(e.target.value) })}
               />
             </FormField>
-            <FormField label="Actief tot" htmlFor="pa-until" hint="Leeg = geen einddatum">
+            <FormField label={t('portalAnnouncements.activeUntilField')} htmlFor="pa-until" hint={t('portalAnnouncements.activeUntilHint')}>
               <input
                 id="pa-until"
                 type="datetime-local"
@@ -205,7 +233,7 @@ export function PortalAnnouncementsSettingsPage() {
                 onChange={(e) => setForm({ ...form, activeUntil: fromDateTimeLocal(e.target.value) })}
               />
             </FormField>
-            <FormField label="Status" htmlFor="pa-active">
+            <FormField label={t('portalAnnouncements.columnStatus')} htmlFor="pa-active">
               <label>
                 <input
                   id="pa-active"
@@ -213,7 +241,7 @@ export function PortalAnnouncementsSettingsPage() {
                   checked={form.isActive}
                   onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
                 />{' '}
-                Actief
+                {t('ui.statusBadges.active')}
               </label>
             </FormField>
           </form>
@@ -222,8 +250,8 @@ export function PortalAnnouncementsSettingsPage() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Mededeling verwijderen"
-          message={`Weet u zeker dat u "${deleteTarget.title}" wilt verwijderen?`}
+          title={t('portalAnnouncements.deleteTitle')}
+          message={t('portalAnnouncements.deleteMessage', { title: deleteTarget.title })}
           destructive
           busy={busy}
           onConfirm={() => void handleDelete()}

@@ -19,18 +19,22 @@ export type CustomerContactType =
   | 'Operationeel'
   | 'Overig'
 
-/** Dutch labels equal the enum names — the backend stores the enum as string. */
-export const CUSTOMER_CONTACT_TYPE_LABELS: Record<CustomerContactType, string> = {
-  Algemeen: 'Algemeen',
-  Planning: 'Planning',
-  Facturatie: 'Facturatie',
-  Magazijn: 'Magazijn',
-  Directie: 'Directie',
-  Operationeel: 'Operationeel',
-  Overig: 'Overig',
+/**
+ * Vertaalsleutels per contacttype — renderen als t(CUSTOMER_CONTACT_TYPE_LABEL_KEYS[type]).
+ * De backend slaat de (Nederlandse) enumnaam als string op; de NL-vertaling is gelijk aan de
+ * enumnaam, FR/EN vertalen bij render. Nooit logica op het vertaalde label baseren.
+ */
+export const CUSTOMER_CONTACT_TYPE_LABEL_KEYS: Record<CustomerContactType, string> = {
+  Algemeen: 'customers.contactType.Algemeen',
+  Planning: 'customers.contactType.Planning',
+  Facturatie: 'customers.contactType.Facturatie',
+  Magazijn: 'customers.contactType.Magazijn',
+  Directie: 'customers.contactType.Directie',
+  Operationeel: 'customers.contactType.Operationeel',
+  Overig: 'customers.contactType.Overig',
 }
 
-export const CUSTOMER_CONTACT_TYPES = Object.keys(CUSTOMER_CONTACT_TYPE_LABELS) as CustomerContactType[]
+export const CUSTOMER_CONTACT_TYPES = Object.keys(CUSTOMER_CONTACT_TYPE_LABEL_KEYS) as CustomerContactType[]
 
 export interface CustomerContact {
   id: string
@@ -58,13 +62,18 @@ export type VatTreatment =
   | 'VatExempt'
   | 'Other'
 
-export const VAT_TREATMENT_LABELS: Record<VatTreatment, string> = {
-  DomesticVat: 'Binnenlandse BTW',
-  ReverseCharge: 'BTW verlegd',
-  IntraCommunitySupply: 'Intracommunautaire levering',
-  ExportOutsideEu: 'Uitvoer buiten de EU',
-  VatExempt: 'Vrijgesteld van BTW',
-  Other: 'Afwijkende regeling',
+/**
+ * Vertaalsleutels als FALLBACK-labels — renderen als t(VAT_TREATMENT_LABEL_KEYS[treatment]).
+ * De backendcatalogus (GET /api/customers/vat-treatments) blijft de bron voor labels zodra
+ * die geladen is; deze keys dekken enkel de laad-/foutfase af.
+ */
+export const VAT_TREATMENT_LABEL_KEYS: Record<VatTreatment, string> = {
+  DomesticVat: 'customers.vatTreatment.DomesticVat',
+  ReverseCharge: 'customers.vatTreatment.ReverseCharge',
+  IntraCommunitySupply: 'customers.vatTreatment.IntraCommunitySupply',
+  ExportOutsideEu: 'customers.vatTreatment.ExportOutsideEu',
+  VatExempt: 'customers.vatTreatment.VatExempt',
+  Other: 'customers.vatTreatment.Other',
 }
 
 /** One VAT-treatment catalog entry from GET /api/customers/vat-treatments (backend is authoritative). */
@@ -101,10 +110,11 @@ export interface RegistryLookupResponse {
 /** Documentstrategie: wie het transportdocument (leveringsbon/CMR) aanlevert. */
 export type CustomerDocumentStrategy = 'GenerateOwn' | 'CustomerDocument' | 'PerOrder'
 
-export const CUSTOMER_DOCUMENT_STRATEGY_LABELS: Record<CustomerDocumentStrategy, string> = {
-  GenerateOwn: 'Wij genereren het document',
-  CustomerDocument: 'Klant levert het document aan',
-  PerOrder: 'Per opdracht beslissen',
+/** Vertaalsleutels — renderen als t(CUSTOMER_DOCUMENT_STRATEGY_LABEL_KEYS[strategy]). */
+export const CUSTOMER_DOCUMENT_STRATEGY_LABEL_KEYS: Record<CustomerDocumentStrategy, string> = {
+  GenerateOwn: 'customers.documentStrategy.GenerateOwn',
+  CustomerDocument: 'customers.documentStrategy.CustomerDocument',
+  PerOrder: 'customers.documentStrategy.PerOrder',
 }
 
 /** Provenance of the grouped Peppol control's current value, shown as a status chip. */
@@ -113,9 +123,10 @@ export type PeppolStatus = 'auto' | 'manual' | 'not-found' | 'not-validated'
 /** Bezorgvoorkeur voor uitgaande facturen wanneer Peppol is ingeschakeld. */
 export type PeppolDeliveryPreference = 'Peppol' | 'EmailFallback'
 
-export const PEPPOL_DELIVERY_PREFERENCE_LABELS: Record<PeppolDeliveryPreference, string> = {
-  Peppol: 'Peppol',
-  EmailFallback: 'E-mail (terugval)',
+/** Vertaalsleutels — renderen als t(PEPPOL_DELIVERY_PREFERENCE_LABEL_KEYS[preference]). */
+export const PEPPOL_DELIVERY_PREFERENCE_LABEL_KEYS: Record<PeppolDeliveryPreference, string> = {
+  Peppol: 'customers.peppolDelivery.Peppol',
+  EmailFallback: 'customers.peppolDelivery.EmailFallback',
 }
 
 /** Persisted outcome of the provider directory check (read-only; updated via verify). */
@@ -168,25 +179,33 @@ export type CustomerCommunicationType =
   | 'Claims'
   | 'Other'
 
-export const COMMUNICATION_TYPE_LABELS: Record<CustomerCommunicationType, string> = {
-  PlanningAlert: 'Planningsmeldingen',
-  DeliveryChange: 'Leveringswijzigingen',
-  DelayNotification: 'Vertragingsmeldingen',
-  EtaUpdate: 'ETA-updates',
-  OrderConfirmation: 'Orderbevestiging',
-  Invoice: 'Factuur',
-  InvoiceReminder: 'Factuurherinnering',
-  GeneralReminder: 'Algemene herinnering',
-  Claims: 'Claims',
-  Other: 'Andere',
+/** Vertaalsleutels — renderen als t(COMMUNICATION_TYPE_LABEL_KEYS[type]). */
+export const COMMUNICATION_TYPE_LABEL_KEYS: Record<CustomerCommunicationType, string> = {
+  PlanningAlert: 'customers.communicationType.PlanningAlert',
+  DeliveryChange: 'customers.communicationType.DeliveryChange',
+  DelayNotification: 'customers.communicationType.DelayNotification',
+  EtaUpdate: 'customers.communicationType.EtaUpdate',
+  OrderConfirmation: 'customers.communicationType.OrderConfirmation',
+  Invoice: 'customers.communicationType.Invoice',
+  InvoiceReminder: 'customers.communicationType.InvoiceReminder',
+  GeneralReminder: 'customers.communicationType.GeneralReminder',
+  Claims: 'customers.communicationType.Claims',
+  Other: 'customers.communicationType.Other',
 }
 
-export const COMMUNICATION_TYPES = Object.keys(COMMUNICATION_TYPE_LABELS) as CustomerCommunicationType[]
+export const COMMUNICATION_TYPES = Object.keys(COMMUNICATION_TYPE_LABEL_KEYS) as CustomerCommunicationType[]
 
 /** Display label for a rule type; 'Other' shows the customer-specific label. */
-export function communicationTypeLabel(type: CustomerCommunicationType, customTypeLabel: string | null): string {
-  if (type === 'Other' && customTypeLabel?.trim()) return `Andere: ${customTypeLabel.trim()}`
-  return COMMUNICATION_TYPE_LABELS[type] ?? type
+export function communicationTypeLabel(
+  t: (key: string, params?: Record<string, string | number>) => string,
+  type: CustomerCommunicationType,
+  customTypeLabel: string | null,
+): string {
+  if (type === 'Other' && customTypeLabel?.trim()) {
+    return t('customers.communicationType.otherWithLabel', { label: customTypeLabel.trim() })
+  }
+  const key = COMMUNICATION_TYPE_LABEL_KEYS[type]
+  return key ? t(key) : type
 }
 
 export interface CustomerCommunicationRule {
@@ -219,25 +238,26 @@ export type DieselSurchargePresentation = 'PerOrderLine' | 'AggregatedLine'
 export type DieselSurchargeRounding = 'NearestCent' | 'RoundUpCent'
 export type PurchaseOrderPolicy = 'None' | 'Optional' | 'Required'
 
-export const DIESEL_BASIS_LABELS: Record<DieselSurchargeBasis, string> = {
-  OrderAmount: 'Per opdracht',
-  InvoiceSubtotal: 'Op factuursubtotaal',
+/** Vertaalsleutels — renderen als t(DIESEL_BASIS_LABEL_KEYS[basis]). */
+export const DIESEL_BASIS_LABEL_KEYS: Record<DieselSurchargeBasis, string> = {
+  OrderAmount: 'customers.dieselBasis.OrderAmount',
+  InvoiceSubtotal: 'customers.dieselBasis.InvoiceSubtotal',
 }
 
-export const DIESEL_PRESENTATION_LABELS: Record<DieselSurchargePresentation, string> = {
-  PerOrderLine: 'Lijn per opdracht',
-  AggregatedLine: 'Eén samengevoegde lijn',
+export const DIESEL_PRESENTATION_LABEL_KEYS: Record<DieselSurchargePresentation, string> = {
+  PerOrderLine: 'customers.dieselPresentation.PerOrderLine',
+  AggregatedLine: 'customers.dieselPresentation.AggregatedLine',
 }
 
-export const DIESEL_ROUNDING_LABELS: Record<DieselSurchargeRounding, string> = {
-  NearestCent: 'Normaal (per cent)',
-  RoundUpCent: 'Naar boven (per cent)',
+export const DIESEL_ROUNDING_LABEL_KEYS: Record<DieselSurchargeRounding, string> = {
+  NearestCent: 'customers.dieselRounding.NearestCent',
+  RoundUpCent: 'customers.dieselRounding.RoundUpCent',
 }
 
-export const PO_POLICY_LABELS: Record<PurchaseOrderPolicy, string> = {
-  None: 'Geen',
-  Optional: 'Vrij (optioneel)',
-  Required: 'Verplicht',
+export const PO_POLICY_LABEL_KEYS: Record<PurchaseOrderPolicy, string> = {
+  None: 'customers.poPolicy.None',
+  Optional: 'customers.poPolicy.Optional',
+  Required: 'customers.poPolicy.Required',
 }
 
 export interface CustomerDieselSurcharge {

@@ -10,6 +10,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { ApiError } from '../../../api/apiClient'
 import { correctPod, fetchPodPhotoUrl, fetchPodSignatureUrl, getPod } from '../api/podApi'
 import { SignaturePad } from '../components/SignaturePad'
@@ -36,6 +37,7 @@ export function PodDetailPage() {
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
 
   const [pod, setPod] = useState<PodDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -64,12 +66,12 @@ export function PodDetailPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('De POD kon niet worden geladen.')
+        if (mounted) setLoadError(t('pod.detail.loadError'))
       })
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, t])
 
   useEffect(() => {
     if (!pod) return
@@ -106,11 +108,11 @@ export function PodDetailPage() {
   async function handleCorrect(event: FormEvent) {
     event.preventDefault()
     if (!reason.trim()) {
-      showError('Een reden is verplicht bij een correctie.')
+      showError(t('pod.detail.reasonRequired'))
       return
     }
     if (!recipientName.trim()) {
-      showError('De naam van de ontvanger is verplicht.')
+      showError(t('pod.dialog.recipientRequired'))
       return
     }
     setBusy(true)
@@ -127,21 +129,21 @@ export function PodDetailPage() {
         longitude: null,
         reason: reason.trim(),
       })
-      showSuccess(`Correctie vastgelegd als versie ${corrected.version}.`)
+      showSuccess(t('pod.detail.corrected', { version: corrected.version }))
       setCorrecting(false)
       navigate(`/pods/${corrected.id}`, { replace: true })
       setPod(corrected)
       setPhotoUrls({})
       setSignatureUrl(null)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De correctie kon niet worden vastgelegd.')
+      showError(err instanceof ApiError ? err.message : t('pod.detail.correctFailed'))
     } finally {
       setBusy(false)
     }
   }
 
   if (loadError) return <ErrorState message={loadError} />
-  if (!pod) return <LoadingState message="POD laden..." />
+  if (!pod) return <LoadingState message={t('pod.detail.loading')} />
 
   const photosByCategory = (['Delivery', 'Package', 'Document'] as const)
     .map((category) => ({ category, photos: pod.photos.filter((p) => p.category === category) }))
@@ -150,19 +152,19 @@ export function PodDetailPage() {
   return (
     <div className="pod-detail">
       <div className="pod-no-print">
-        <Breadcrumbs items={[{ label: 'Afleverbewijs' }, { label: `${pod.tripNumber} · v${pod.version}` }]} />
+        <Breadcrumbs items={[{ label: t('pod.detail.breadcrumb') }, { label: `${pod.tripNumber} · v${pod.version}` }]} />
       </div>
       <PageHeader
-        title={`Afleverbewijs ${pod.orderNumber ?? ''} — ${pod.stopLabel ?? pod.tripNumber}`}
-        subtitle={`Versie ${pod.version}${pod.isCurrent ? ' (actueel)' : ' (vervangen)'} · geleverd ${formatDateTime(pod.deliveredAt)}`}
+        title={`${t('pod.detail.titlePrefix')} ${pod.orderNumber ?? ''} — ${pod.stopLabel ?? pod.tripNumber}`}
+        subtitle={`${t('pod.detail.version', { version: pod.version })} ${pod.isCurrent ? t('pod.detail.currentSuffix') : t('pod.detail.supersededSuffix')} · ${t('pod.detail.deliveredAt', { date: formatDateTime(pod.deliveredAt) })}`}
         action={
           <span className="pod-header-actions">
             <Badge tone={POD_OUTCOME_TONE[pod.outcome]}>
-              {POD_OUTCOME_ICONS[pod.outcome]} {POD_OUTCOME_LABELS[pod.outcome]}
+              {POD_OUTCOME_ICONS[pod.outcome]} {t(POD_OUTCOME_LABELS[pod.outcome])}
             </Badge>
             <span className="pod-no-print">
               <Button variant="secondary" onClick={() => window.print()}>
-                🖨 Afdrukken
+                🖨 {t('pod.detail.print')}
               </Button>
               {canCorrect && pod.isCurrent && (
                 <Button
@@ -180,7 +182,7 @@ export function PodDetailPage() {
                   }}
                   disabled={busy}
                 >
-                  Corrigeren
+                  {t('pod.detail.correct')}
                 </Button>
               )}
             </span>
@@ -190,77 +192,77 @@ export function PodDetailPage() {
 
       {!pod.isCurrent && (
         <p className="pod-superseded" role="note">
-          ⚠ Deze versie is vervangen door een correctie. De actuele versie staat in de versiehistoriek hieronder.
+          ⚠ {t('pod.detail.supersededNote')}
         </p>
       )}
 
       <section className="to-section">
-        <h2>Levering</h2>
+        <h2>{t('pod.detail.deliveryTitle')}</h2>
         <dl className="to-facts">
           <div>
-            <dt>Ontvanger</dt>
+            <dt>{t('pod.detail.recipient')}</dt>
             <dd>
               {pod.recipientName}
               {pod.recipientRole && ` (${pod.recipientRole})`}
             </dd>
           </div>
           <div>
-            <dt>Klant</dt>
+            <dt>{t('pod.detail.customer')}</dt>
             <dd>{pod.customerName ?? '—'}</dd>
           </div>
           <div>
-            <dt>Opdracht</dt>
+            <dt>{t('pod.detail.order')}</dt>
             <dd>
               <Link to={`/transport-orders/${pod.transportOrderId}`}>{pod.orderNumber ?? '—'}</Link>
             </dd>
           </div>
           <div>
-            <dt>Rit</dt>
+            <dt>{t('pod.detail.trip')}</dt>
             <dd>
               <Link to={`/planning/${pod.tripId}`}>{pod.tripNumber}</Link>
             </dd>
           </div>
           <div>
-            <dt>Chauffeur</dt>
+            <dt>{t('pod.detail.driver')}</dt>
             <dd>{pod.driverName ?? '—'}</dd>
           </div>
           <div>
-            <dt>Vastgelegd door</dt>
+            <dt>{t('pod.detail.finalisedBy')}</dt>
             <dd>{pod.finalisedByName ?? '—'}</dd>
           </div>
           <div>
-            <dt>Schade</dt>
-            <dd>{pod.damageReported ? '⚠ Ja' : 'Nee'}</dd>
+            <dt>{t('pod.detail.damage')}</dt>
+            <dd>{pod.damageReported ? `⚠ ${t('pod.detail.yes')}` : t('pod.detail.no')}</dd>
           </div>
           <div>
-            <dt>Ontbrekende colli</dt>
-            <dd>{pod.missingReported ? '⚠ Ja' : 'Nee'}</dd>
+            <dt>{t('pod.detail.missingPackages')}</dt>
+            <dd>{pod.missingReported ? `⚠ ${t('pod.detail.yes')}` : t('pod.detail.no')}</dd>
           </div>
           <div>
-            <dt>GPS</dt>
+            <dt>{t('pod.detail.gps')}</dt>
             <dd>{pod.latitude !== null && pod.longitude !== null ? `${pod.latitude}, ${pod.longitude}` : '—'}</dd>
           </div>
         </dl>
         {pod.notes && <p className="to-notes">{pod.notes}</p>}
         {pod.correctionReason && (
           <p className="pod-correction-reason" role="note">
-            Correctie t.o.v. vorige versie: {pod.correctionReason}
+            {t('pod.detail.correctionReason', { reason: pod.correctionReason })}
           </p>
         )}
       </section>
 
       {pod.scannedSummary.length > 0 && (
         <section className="to-section">
-          <h2>Gescande goederen (bevroren bij afronding)</h2>
+          <h2>{t('pod.detail.scannedTitle')}</h2>
           <table className="to-stops-table">
             <thead>
               <tr>
-                <th>Omschrijving</th>
-                <th>Barcode</th>
-                <th>Verwacht</th>
-                <th>Gescand</th>
-                <th>Schade</th>
-                <th>Status</th>
+                <th>{t('pod.detail.colDescription')}</th>
+                <th>{t('pod.detail.colBarcode')}</th>
+                <th>{t('pod.detail.colExpected')}</th>
+                <th>{t('pod.detail.colScanned')}</th>
+                <th>{t('pod.detail.colDamage')}</th>
+                <th>{t('pod.detail.colStatus')}</th>
               </tr>
             </thead>
             <tbody>
@@ -281,20 +283,20 @@ export function PodDetailPage() {
 
       {pod.packageSummary.length > 0 && (
         <section className="to-section">
-          <h2>Colli (bevroren bij afronding)</h2>
+          <h2>{t('pod.detail.packagesTitle')}</h2>
           <p className="pod-ack-line">
             {pod.packagesAcknowledged
-              ? '✓ De ontvanger heeft de collilijst bevestigd.'
-              : 'De collilijst is niet expliciet bevestigd.'}
+              ? `✓ ${t('pod.detail.ackYes')}`
+              : t('pod.detail.ackNo')}
           </p>
           <table className="to-stops-table">
             <thead>
               <tr>
-                <th>Collinummer</th>
-                <th>Omschrijving</th>
-                <th>Aantal</th>
-                <th>Uitkomst</th>
-                <th>Melding</th>
+                <th>{t('pod.detail.colPackageNumber')}</th>
+                <th>{t('pod.detail.colDescription')}</th>
+                <th>{t('pod.detail.colQuantity')}</th>
+                <th>{t('pod.detail.colOutcome')}</th>
+                <th>{t('pod.detail.colException')}</th>
               </tr>
             </thead>
             <tbody>
@@ -306,7 +308,7 @@ export function PodDetailPage() {
                     {line.quantity} {line.unitType}
                   </td>
                   <td>{line.outcome}</td>
-                  <td>{line.exceptionOpen ? 'Open melding' : '—'}</td>
+                  <td>{line.exceptionOpen ? t('pod.detail.exceptionOpen') : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -316,11 +318,11 @@ export function PodDetailPage() {
 
       {(signatureUrl || pod.hasSignature) && (
         <section className="to-section">
-          <h2>Handtekening</h2>
+          <h2>{t('pod.detail.signatureTitle')}</h2>
           {signatureUrl ? (
-            <img className="pod-signature-image" src={signatureUrl} alt={`Handtekening van ${pod.recipientName}`} />
+            <img className="pod-signature-image" src={signatureUrl} alt={t('pod.detail.signatureAlt', { name: pod.recipientName })} />
           ) : (
-            <p>Handtekening aanwezig (kon niet worden geladen).</p>
+            <p>{t('pod.detail.signaturePresent')}</p>
           )}
         </section>
       )}
@@ -328,7 +330,7 @@ export function PodDetailPage() {
       {photosByCategory.map((group) => (
         <section className="to-section" key={group.category}>
           <h2>
-            Foto's — {POD_PHOTO_CATEGORY_LABELS[group.category]} ({group.photos.length})
+            {t('pod.detail.photosTitle', { category: t(POD_PHOTO_CATEGORY_LABELS[group.category]), count: group.photos.length })}
           </h2>
           <div className="exc-photos">
             {group.photos.map((photo) => (
@@ -348,15 +350,15 @@ export function PodDetailPage() {
       ))}
 
       <section className="to-section pod-no-print">
-        <h2>Versiehistoriek</h2>
+        <h2>{t('pod.detail.versionsTitle')}</h2>
         <ul className="pod-versions">
           {pod.versions.map((version) => (
             <li key={version.id}>
               <Link to={`/pods/${version.id}`} className={version.id === pod.id ? 'pod-version-current-link' : ''}>
-                Versie {version.version}
+                {t('pod.detail.versionItem', { version: version.version })}
               </Link>{' '}
-              · {formatDateTime(version.deliveredAt)} · {POD_OUTCOME_LABELS[version.outcome]}
-              {version.isCurrent && <Badge tone="success">actueel</Badge>}
+              · {formatDateTime(version.deliveredAt)} · {t(POD_OUTCOME_LABELS[version.outcome])}
+              {version.isCurrent && <Badge tone="success">{t('pod.detail.currentBadge')}</Badge>}
               {version.correctionReason && ` · ${version.correctionReason}`}
             </li>
           ))}
@@ -365,35 +367,35 @@ export function PodDetailPage() {
 
       {correcting && (
         <Modal
-          title="POD corrigeren (nieuwe versie)"
+          title={t('pod.detail.correctTitle')}
           onClose={() => setCorrecting(false)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setCorrecting(false)} disabled={busy}>
-                Annuleren
+                {t('pod.detail.cancel')}
               </Button>
               <Button type="submit" form="pod-correct-form" disabled={busy}>
-                {busy ? 'Bezig…' : 'Correctie vastleggen'}
+                {busy ? t('pod.detail.busy') : t('pod.detail.correctSubmit')}
               </Button>
             </>
           }
         >
           <form id="pod-correct-form" className="pod-form" onSubmit={handleCorrect} noValidate>
-            <FormField label="Reden van de correctie" htmlFor="pod-corr-reason" required hint="De originele versie blijft zichtbaar in de historiek.">
+            <FormField label={t('pod.detail.correctReasonLabel')} htmlFor="pod-corr-reason" required hint={t('pod.detail.correctReasonHint')}>
               <input id="pod-corr-reason" value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy} maxLength={500} autoFocus />
             </FormField>
-            <FormField label="Naam ontvanger" htmlFor="pod-corr-recipient" required>
+            <FormField label={t('pod.detail.recipientLabel')} htmlFor="pod-corr-recipient" required>
               <input id="pod-corr-recipient" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} disabled={busy} maxLength={200} />
             </FormField>
-            <FormField label="Functie/rol" htmlFor="pod-corr-role">
+            <FormField label={t('pod.detail.roleLabel')} htmlFor="pod-corr-role">
               <input id="pod-corr-role" value={recipientRole} onChange={(e) => setRecipientRole(e.target.value)} disabled={busy} maxLength={100} />
             </FormField>
-            <FormField label="Resultaat" htmlFor="pod-corr-outcome">
+            <FormField label={t('pod.detail.outcomeLabel')} htmlFor="pod-corr-outcome">
               <select id="pod-corr-outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as PodOutcome)} disabled={busy}>
                 {OUTCOMES.map((option) => (
                   <option key={option} value={option}>
-                    {POD_OUTCOME_LABELS[option]}
+                    {t(POD_OUTCOME_LABELS[option])}
                   </option>
                 ))}
               </select>
@@ -401,17 +403,17 @@ export function PodDetailPage() {
             <div className="pod-flags">
               <label className="tof-checkbox">
                 <input type="checkbox" checked={damageReported} onChange={(e) => setDamageReported(e.target.checked)} disabled={busy} />
-                Schade vastgesteld
+                {t('pod.detail.damageFlag')}
               </label>
               <label className="tof-checkbox">
                 <input type="checkbox" checked={missingReported} onChange={(e) => setMissingReported(e.target.checked)} disabled={busy} />
-                Ontbrekende colli
+                {t('pod.detail.missingFlag')}
               </label>
             </div>
-            <FormField label="Opmerkingen" htmlFor="pod-corr-notes">
+            <FormField label={t('pod.detail.notesLabel')} htmlFor="pod-corr-notes">
               <textarea id="pod-corr-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} maxLength={2000} />
             </FormField>
-            <FormField label="Nieuwe handtekening (optioneel)" htmlFor="pod-corr-signature" hint="Zonder nieuwe handtekening blijft de originele behouden.">
+            <FormField label={t('pod.detail.newSignatureLabel')} htmlFor="pod-corr-signature" hint={t('pod.detail.newSignatureHint')}>
               <SignaturePad disabled={busy} onChange={setSignature} />
             </FormField>
           </form>

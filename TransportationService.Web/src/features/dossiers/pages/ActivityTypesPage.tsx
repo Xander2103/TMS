@@ -8,6 +8,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { describeApiError } from '../../../api/problemDetails'
 import {
@@ -85,6 +86,7 @@ function draftOf(type: ActivityType): Draft {
  * matches on the code — so a tenant reshapes its activity model here without source changes.
  */
 export function ActivityTypesPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('activity_types.manage')
@@ -104,14 +106,15 @@ export function ActivityTypesPage() {
         setTypes(data)
         setLoadError(null)
       })
-      .catch(() => setLoadError('De activiteitstypes konden niet worden geladen.'))
+      .catch(() => setLoadError(t('dossiers.activityTypes.loadFailed')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canView])
 
   useEffect(() => {
     reload()
   }, [reload])
 
-  if (!canView) return <p className="placeholder-text">Je hebt geen rechten om activiteitstypes te bekijken.</p>
+  if (!canView) return <p className="placeholder-text">{t('dossiers.activityTypes.noPermission')}</p>
 
   const patch = (changes: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...changes } : d))
 
@@ -139,15 +142,15 @@ export function ActivityTypesPage() {
       }
       if (draft.type) {
         await updateActivityType(draft.type.id, input)
-        showSuccess('Activiteitstype bijgewerkt.')
+        showSuccess(t('dossiers.activityTypes.updated'))
       } else {
         await createActivityType(input)
-        showSuccess('Activiteitstype toegevoegd.')
+        showSuccess(t('dossiers.activityTypes.added'))
       }
       setDraft(null)
       reload()
     } catch (err) {
-      setDraftError(describeApiError(err, 'Het activiteitstype kon niet worden opgeslagen.').message)
+      setDraftError(describeApiError(err, t('dossiers.activityTypes.saveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -156,7 +159,7 @@ export function ActivityTypesPage() {
   const columns: Column<ActivityType>[] = [
     {
       key: 'name',
-      header: 'Naam',
+      header: t('dossiers.activityTypes.columns.name'),
       render: (type) => {
         const Icon = activityTypeIcon(type.icon)
         return (
@@ -165,37 +168,40 @@ export function ActivityTypesPage() {
             <span>
               {type.name}
               {type.isSystemDefaultTransport && (
-                <span className="activity-type-default"> <Badge tone="info">Standaard transport</Badge></span>
+                <span className="activity-type-default"> <Badge tone="info">{t('dossiers.activityTypes.defaultTransport')}</Badge></span>
               )}
             </span>
           </span>
         )
       },
     },
-    { key: 'code', header: 'Code', render: (type) => <code className="activity-type-code">{type.code}</code> },
+    { key: 'code', header: t('dossiers.activityTypes.columns.code'), render: (type) => <code className="activity-type-code">{type.code}</code> },
     {
       key: 'capabilities',
-      header: 'Mogelijkheden',
+      header: t('dossiers.activityTypes.columns.capabilities'),
       render: (type) => (
         <span className="activity-type-caps">
-          {type.hasStops && <Badge tone="neutral">Transportopdracht</Badge>}
-          {type.supportsGoods && <Badge tone="neutral">Goederen</Badge>}
-          {type.planningRelevant && <Badge tone="neutral">Planning</Badge>}
-          {type.warehouseRelevant && <Badge tone="neutral">Magazijn</Badge>}
-          {type.allowsDuration && <Badge tone="neutral">Duur</Badge>}
+          {type.hasStops && <Badge tone="neutral">{t('dossiers.activityTypes.capTransportOrder')}</Badge>}
+          {type.supportsGoods && <Badge tone="neutral">{t('dossiers.activityTypes.capGoods')}</Badge>}
+          {type.planningRelevant && <Badge tone="neutral">{t('dossiers.activityTypes.capPlanning')}</Badge>}
+          {type.warehouseRelevant && <Badge tone="neutral">{t('dossiers.activityTypes.capWarehouse')}</Badge>}
+          {type.allowsDuration && <Badge tone="neutral">{t('dossiers.activityTypes.capDuration')}</Badge>}
         </span>
       ),
     },
     {
       key: 'quickstart',
-      header: 'Snelstart',
-      render: (type) => (type.isQuickStart ? <Badge tone="success">{`Tegel ${type.quickStartOrder}`}</Badge> : '—'),
+      header: t('dossiers.activityTypes.columns.quickStart'),
+      render: (type) =>
+        type.isQuickStart ? <Badge tone="success">{t('dossiers.activityTypes.tile', { order: type.quickStartOrder })}</Badge> : '—',
     },
     {
       key: 'active',
-      header: 'Actief',
+      header: t('dossiers.activityTypes.columns.active'),
       render: (type) => (
-        <Badge tone={type.isActive ? 'success' : 'neutral'}>{type.isActive ? 'Actief' : 'Inactief'}</Badge>
+        <Badge tone={type.isActive ? 'success' : 'neutral'}>
+          {type.isActive ? t('ui.statusBadges.active') : t('ui.statusBadges.inactive')}
+        </Badge>
       ),
     },
     ...(canManage
@@ -214,14 +220,14 @@ export function ActivityTypesPage() {
                     setDraft(draftOf(type))
                   }}
                 >
-                  Bewerken
+                  {t('ui.actions.edit')}
                 </button>
                 <button
                   type="button"
                   className="issued-items-link issued-items-link-danger"
                   onClick={() => setDeleteTarget(type)}
                 >
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </button>
               </span>
             ),
@@ -232,10 +238,10 @@ export function ActivityTypesPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Activiteitstypes' }]} />
+      <Breadcrumbs items={[{ label: t('navigation.menu.settings'), to: '/settings' }, { label: t('navigation.menu.activityTypes') }]} />
       <PageHeader
-        title="Activiteitstypes"
-        subtitle="De soorten werk die in een dossier kunnen voorkomen (transport, kraanwerk, opslag, …). De vinkjes bepalen het gedrag — pas ze aan aan jouw activiteiten."
+        title={t('navigation.menu.activityTypes')}
+        subtitle={t('dossiers.activityTypes.subtitle')}
         action={
           canManage ? (
             <Button
@@ -244,7 +250,7 @@ export function ActivityTypesPage() {
                 setDraft(emptyDraft())
               }}
             >
-              Nieuw activiteitstype
+              {t('dossiers.activityTypes.new')}
             </Button>
           ) : undefined
         }
@@ -256,22 +262,26 @@ export function ActivityTypesPage() {
         rowKey={(type) => type.id}
         isLoading={types === null && loadError === null}
         error={loadError}
-        emptyMessage="Nog geen activiteitstypes."
+        emptyMessage={t('dossiers.activityTypes.empty')}
         rowClassName={(type) => (type.isActive ? undefined : 'activity-type-row-inactive')}
       />
 
       {draft && (
         <Modal
-          title={draft.type ? `Activiteitstype bewerken — ${draft.type.name}` : 'Nieuw activiteitstype'}
+          title={
+            draft.type
+              ? t('dossiers.activityTypes.editTitle', { name: draft.type.name })
+              : t('dossiers.activityTypes.new')
+          }
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="activity-type-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -283,10 +293,10 @@ export function ActivityTypesPage() {
               </div>
             )}
             <FormField
-              label="Code"
+              label={t('dossiers.activityTypes.codeField')}
               htmlFor="at-code"
               required
-              hint={draft.type ? 'De code is vast na aanmaak.' : 'bv. KRAANWERK — vast na aanmaak.'}
+              hint={draft.type ? t('dossiers.activityTypes.codeLockedHint') : t('dossiers.activityTypes.codeNewHint')}
             >
               <input
                 id="at-code"
@@ -296,23 +306,23 @@ export function ActivityTypesPage() {
                 onChange={(e) => patch({ code: e.target.value.toUpperCase() })}
               />
             </FormField>
-            <FormField label="Naam" htmlFor="at-name" required hint="bv. Kraanwerk ter plaatse">
+            <FormField label={t('dossiers.activityTypes.nameField')} htmlFor="at-name" required hint={t('dossiers.activityTypes.nameHint')}>
               <input id="at-name" value={draft.name} maxLength={100} onChange={(e) => patch({ name: e.target.value })} />
             </FormField>
-            <FormField label="Icoon" htmlFor="at-icon">
+            <FormField label={t('dossiers.activityTypes.iconField')} htmlFor="at-icon">
               <select id="at-icon" value={draft.icon} onChange={(e) => patch({ icon: e.target.value })}>
-                <option value="">Standaard</option>
-                {Object.entries(ACTIVITY_TYPE_ICONS).map(([key, { label }]) => (
+                <option value="">{t('dossiers.activityTypes.iconDefault')}</option>
+                {Object.entries(ACTIVITY_TYPE_ICONS).map(([key, { labelKey }]) => (
                   <option key={key} value={key}>
-                    {label}
+                    {t(labelKey)}
                   </option>
                 ))}
               </select>
             </FormField>
             <FormField
-              label="KPI-categorie"
+              label={t('dossiers.activityTypes.kpiField')}
               htmlFor="at-kpi"
-              hint="Vrij groeperingslabel voor rapportage, bv. Kraan"
+              hint={t('dossiers.activityTypes.kpiHint')}
             >
               <input
                 id="at-kpi"
@@ -321,7 +331,7 @@ export function ActivityTypesPage() {
                 onChange={(e) => patch({ kpiCategory: e.target.value })}
               />
             </FormField>
-            <FormField label="Sorteervolgorde" htmlFor="at-sort">
+            <FormField label={t('dossiers.activityTypes.sortField')} htmlFor="at-sort">
               <input
                 id="at-sort"
                 type="number"
@@ -331,13 +341,13 @@ export function ActivityTypesPage() {
             </FormField>
 
             <fieldset className="activity-type-flags">
-              <legend>Mogelijkheden</legend>
+              <legend>{t('dossiers.activityTypes.flagsLegend')}</legend>
               <label className="tof-checkbox">
                 <input type="checkbox" checked={draft.hasStops} onChange={(e) => patch({ hasStops: e.target.checked })} />
                 <span>
-                  Transportopdracht
+                  {t('dossiers.activityTypes.capTransportOrder')}
                   <span className="activity-type-flag-hint">
-                    Wordt uitgevoerd via een transportopdracht (stops, goederen, planning)
+                    {t('dossiers.activityTypes.flagTransportHint')}
                   </span>
                 </span>
               </label>
@@ -348,8 +358,8 @@ export function ActivityTypesPage() {
                   onChange={(e) => patch({ supportsGoods: e.target.checked })}
                 />
                 <span>
-                  Goederen
-                  <span className="activity-type-flag-hint">Het dossier toont de goederensectie bij deze activiteit</span>
+                  {t('dossiers.activityTypes.capGoods')}
+                  <span className="activity-type-flag-hint">{t('dossiers.activityTypes.flagGoodsHint')}</span>
                 </span>
               </label>
               <label className="tof-checkbox">
@@ -359,8 +369,8 @@ export function ActivityTypesPage() {
                   onChange={(e) => patch({ planningRelevant: e.target.checked })}
                 />
                 <span>
-                  Planningsrelevant
-                  <span className="activity-type-flag-hint">Telt mee voor planning en capaciteit</span>
+                  {t('dossiers.activityTypes.flagPlanning')}
+                  <span className="activity-type-flag-hint">{t('dossiers.activityTypes.flagPlanningHint')}</span>
                 </span>
               </label>
               <label className="tof-checkbox">
@@ -370,8 +380,8 @@ export function ActivityTypesPage() {
                   onChange={(e) => patch({ warehouseRelevant: e.target.checked })}
                 />
                 <span>
-                  Magazijnrelevant
-                  <span className="activity-type-flag-hint">Zichtbaar voor de magazijnwerking</span>
+                  {t('dossiers.activityTypes.flagWarehouse')}
+                  <span className="activity-type-flag-hint">{t('dossiers.activityTypes.flagWarehouseHint')}</span>
                 </span>
               </label>
               <label className="tof-checkbox">
@@ -381,14 +391,14 @@ export function ActivityTypesPage() {
                   onChange={(e) => patch({ allowsDuration: e.target.checked })}
                 />
                 <span>
-                  Duur registreerbaar
-                  <span className="activity-type-flag-hint">Uren invulbaar op de activiteit (bv. kraanuren)</span>
+                  {t('dossiers.activityTypes.flagDuration')}
+                  <span className="activity-type-flag-hint">{t('dossiers.activityTypes.flagDurationHint')}</span>
                 </span>
               </label>
             </fieldset>
 
             <fieldset className="activity-type-flags">
-              <legend>Snelstart & standaard</legend>
+              <legend>{t('dossiers.activityTypes.quickLegend')}</legend>
               <label className="tof-checkbox">
                 <input
                   type="checkbox"
@@ -396,12 +406,12 @@ export function ActivityTypesPage() {
                   onChange={(e) => patch({ isQuickStart: e.target.checked })}
                 />
                 <span>
-                  Snelstart-tegel
-                  <span className="activity-type-flag-hint">Verschijnt als sjabloontegel op het scherm “Nieuw dossier”</span>
+                  {t('dossiers.activityTypes.flagQuickStart')}
+                  <span className="activity-type-flag-hint">{t('dossiers.activityTypes.flagQuickStartHint')}</span>
                 </span>
               </label>
               {draft.isQuickStart && (
-                <FormField label="Volgorde snelstart" htmlFor="at-quickstart-order">
+                <FormField label={t('dossiers.activityTypes.quickStartOrderField')} htmlFor="at-quickstart-order">
                   <input
                     id="at-quickstart-order"
                     type="number"
@@ -417,10 +427,9 @@ export function ActivityTypesPage() {
                   onChange={(e) => patch({ isSystemDefaultTransport: e.target.checked })}
                 />
                 <span>
-                  Standaard transporttype
+                  {t('dossiers.activityTypes.flagDefaultTransport')}
                   <span className="activity-type-flag-hint">
-                    Gebruikt voor opdrachten die zonder dossier binnenkomen (EDI, klantportaal). Er is er altijd precies
-                    één actief; aanvinken verplaatst de vlag.
+                    {t('dossiers.activityTypes.flagDefaultTransportHint')}
                   </span>
                 </span>
               </label>
@@ -431,8 +440,8 @@ export function ActivityTypesPage() {
                   onChange={(e) => patch({ isActive: e.target.checked })}
                 />
                 <span>
-                  Actief
-                  <span className="activity-type-flag-hint">Inactieve types zijn niet meer kiesbaar bij nieuwe activiteiten</span>
+                  {t('dossiers.activityTypes.flagActive')}
+                  <span className="activity-type-flag-hint">{t('dossiers.activityTypes.flagActiveHint')}</span>
                 </span>
               </label>
             </fieldset>
@@ -442,19 +451,19 @@ export function ActivityTypesPage() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Activiteitstype verwijderen"
-          message={`Weet je zeker dat je '${deleteTarget.name}' wilt verwijderen? Een type dat in gebruik is, kan alleen gedeactiveerd worden.`}
-          confirmLabel="Verwijderen"
+          title={t('dossiers.activityTypes.deleteTitle')}
+          message={t('dossiers.activityTypes.deleteMessage', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={async () => {
             const target = deleteTarget
             setDeleteTarget(null)
             try {
               await removeActivityType(target.id)
-              showSuccess('Activiteitstype verwijderd.')
+              showSuccess(t('dossiers.activityTypes.deleted'))
               reload()
             } catch (err) {
-              showError(describeApiError(err, 'Het activiteitstype kon niet worden verwijderd.').message)
+              showError(describeApiError(err, t('dossiers.activityTypes.deleteFailed')).message)
             }
           }}
           onCancel={() => setDeleteTarget(null)}

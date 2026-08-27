@@ -5,8 +5,10 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { formatDate } from '../../../utils/dates'
+import { formatCurrency, formatInteger } from '../../../utils/numbers'
 import {
   completeMaintenance,
   createMaintenance,
@@ -53,6 +55,7 @@ interface MaintenancePanelProps {
 
 /** Maintenance section for a vehicle or trailer detail page: plan, edit, complete, delete. */
 export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
 
@@ -79,12 +82,12 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Onderhoud kon niet worden geladen.')
+        if (mounted) setLoadError(t('maintenance.panel.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [ownerType, ownerId, reloadToken])
+  }, [ownerType, ownerId, reloadToken, t])
 
   function set<K extends keyof MaintenanceInput>(key: K, value: MaintenanceInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -130,26 +133,26 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
     event.preventDefault()
     setFormError(null)
     if (!form.description.trim()) {
-      setFormError('Een omschrijving is verplicht.')
+      setFormError(t('maintenance.panel.descriptionRequired'))
       return
     }
     if (form.maintenanceType === 'Other' && !form.customTypeName?.trim()) {
-      setFormError('Geef een naam op voor het aangepaste onderhoudstype.')
+      setFormError(t('maintenance.panel.customNameRequired'))
       return
     }
     setSaving(true)
     try {
       if (editing) {
         await updateMaintenance(editing.id, { ...form, status: editing.status })
-        showSuccess('Onderhoud bijgewerkt.')
+        showSuccess(t('maintenance.panel.updated'))
       } else {
         await createMaintenance(ownerType, ownerId, form)
-        showSuccess('Onderhoud gepland.')
+        showSuccess(t('maintenance.panel.planned'))
       }
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      setFormError('Het onderhoud kon niet worden opgeslagen.')
+      setFormError(t('maintenance.panel.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -163,14 +166,16 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
       const result = await completeMaintenance(completeTarget.id, completeForm)
       showSuccess(
         result.followUp
-          ? `Onderhoud afgerond — vervolgonderhoud gepland op ${result.followUp.scheduledDate ?? 'kilometertrigger'}.`
-          : 'Onderhoud afgerond.',
+          ? t('maintenance.panel.completedWithFollowUp', {
+              date: result.followUp.scheduledDate ?? t('maintenance.panel.kmTriggerFallback'),
+            })
+          : t('maintenance.panel.completed'),
       )
       setCompleteTarget(null)
       setCompleteForm(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het onderhoud kon niet worden afgerond.')
+      showError(t('maintenance.panel.completeFailed'))
     } finally {
       setSaving(false)
     }
@@ -180,11 +185,11 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
     if (!deleteTarget) return
     try {
       await deleteMaintenance(deleteTarget.id)
-      showSuccess('Onderhoud verwijderd.')
+      showSuccess(t('maintenance.panel.deleted'))
       setDeleteTarget(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het onderhoud kon niet worden verwijderd.')
+      showError(t('maintenance.panel.deleteFailed'))
       setDeleteTarget(null)
     }
   }
@@ -194,63 +199,63 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
   return (
     <section className="maint">
       <div className="maint-header">
-        <h2>Onderhoud</h2>
+        <h2>{t('maintenance.panel.title')}</h2>
         {hasPermission('maintenance.create') && (
           <Button variant="secondary" onClick={openCreate}>
-            Onderhoud plannen
+            {t('maintenance.panel.plan')}
           </Button>
         )}
       </div>
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && records === null && <p className="placeholder-text">Onderhoud laden…</p>}
+      {!loadError && records === null && <p className="placeholder-text">{t('maintenance.panel.loading')}</p>}
       {!loadError && records !== null && records.length === 0 && (
-        <p className="placeholder-text">Nog geen onderhoud geregistreerd.</p>
+        <p className="placeholder-text">{t('maintenance.panel.empty')}</p>
       )}
 
       {!loadError && records !== null && records.length > 0 && (
         <table className="maint-table">
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Omschrijving</th>
-              <th>Gepland</th>
-              <th>Status</th>
-              <th>Afgerond</th>
-              <th>Kosten</th>
-              <th aria-label="Acties" />
+              <th>{t('maintenance.panel.colType')}</th>
+              <th>{t('maintenance.panel.colDescription')}</th>
+              <th>{t('maintenance.panel.colPlanned')}</th>
+              <th>{t('maintenance.panel.colStatus')}</th>
+              <th>{t('maintenance.panel.colCompleted')}</th>
+              <th>{t('maintenance.panel.colCost')}</th>
+              <th aria-label={t('fleet.common.actions')} />
             </tr>
           </thead>
           <tbody>
             {records.map((record) => (
               <tr key={record.id}>
-                <td>{maintenanceDisplayName(record)}</td>
+                <td>{t(maintenanceDisplayName(record))}</td>
                 <td className="maint-description">{record.description}</td>
                 <td>
-                  {formatDate(record.scheduledDate) || (record.odometerTriggerKm != null ? `${record.odometerTriggerKm.toLocaleString('nl-BE')} km` : '—')}
+                  {formatDate(record.scheduledDate) || (record.odometerTriggerKm != null ? `${formatInteger(record.odometerTriggerKm)} km` : '—')}
                 </td>
                 <td>
                   <span className="maint-badges">
-                    <Badge tone={STATUS_TONE[record.status]}>{MAINTENANCE_STATUS_LABELS[record.status]}</Badge>
-                    {record.isOverdue && <Badge tone="danger">Te laat</Badge>}
+                    <Badge tone={STATUS_TONE[record.status]}>{t(MAINTENANCE_STATUS_LABELS[record.status])}</Badge>
+                    {record.isOverdue && <Badge tone="danger">{t('maintenance.overdue')}</Badge>}
                   </span>
                 </td>
                 <td>{formatDate(record.completedDate) || '—'}</td>
-                <td>{record.cost != null ? `€ ${record.cost.toLocaleString('nl-BE')}` : '—'}</td>
+                <td>{record.cost != null ? formatCurrency(record.cost) : '—'}</td>
                 <td className="maint-actions">
                   {canEdit && (record.status === 'Planned' || record.status === 'InProgress') && (
                     <>
                       <button type="button" className="maint-link" onClick={() => openComplete(record)}>
-                        Afronden
+                        {t('maintenance.panel.complete')}
                       </button>
                       <button type="button" className="maint-link" onClick={() => openEdit(record)}>
-                        Bewerken
+                        {t('ui.actions.edit')}
                       </button>
                     </>
                   )}
                   {hasPermission('maintenance.delete') && (
                     <button type="button" className="maint-link maint-link-danger" onClick={() => setDeleteTarget(record)}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   )}
                 </td>
@@ -262,16 +267,16 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
 
       {editorOpen && (
         <Modal
-          title={editing ? 'Onderhoud bewerken' : 'Onderhoud plannen'}
+          title={editing ? t('maintenance.panel.editTitle') : t('maintenance.panel.planTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="maint-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('fleet.common.saving') : t('ui.actions.save')}
               </Button>
             </>
           }
@@ -282,7 +287,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 {formError}
               </div>
             )}
-            <FormField label="Type" htmlFor="mt-type" required>
+            <FormField label={t('maintenance.panel.type')} htmlFor="mt-type" required>
               <select
                 id="mt-type"
                 value={form.maintenanceType}
@@ -291,13 +296,13 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
               >
                 {MAINTENANCE_TYPES.map((type) => (
                   <option key={type} value={type}>
-                    {MAINTENANCE_TYPE_LABELS[type]}
+                    {t(MAINTENANCE_TYPE_LABELS[type])}
                   </option>
                 ))}
               </select>
             </FormField>
             {form.maintenanceType === 'Other' && (
-              <FormField label="Naam onderhoudstype" htmlFor="mt-custom" required>
+              <FormField label={t('maintenance.panel.customName')} htmlFor="mt-custom" required>
                 <input
                   id="mt-custom"
                   value={form.customTypeName ?? ''}
@@ -307,7 +312,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 />
               </FormField>
             )}
-            <FormField label="Omschrijving" htmlFor="mt-desc" required>
+            <FormField label={t('maintenance.panel.description')} htmlFor="mt-desc" required>
               <input
                 id="mt-desc"
                 value={form.description}
@@ -317,7 +322,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
               />
             </FormField>
             <div className="maint-form-row">
-              <FormField label="Geplande datum" htmlFor="mt-scheduled">
+              <FormField label={t('maintenance.panel.scheduledDate')} htmlFor="mt-scheduled">
                 <input
                   id="mt-scheduled"
                   type="date"
@@ -327,7 +332,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 />
               </FormField>
               {ownerType === 'vehicle' && (
-                <FormField label="Kilometertrigger" htmlFor="mt-odo">
+                <FormField label={t('maintenance.panel.odometerTrigger')} htmlFor="mt-odo">
                   <input
                     id="mt-odo"
                     type="number"
@@ -339,7 +344,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 </FormField>
               )}
             </div>
-            <FormField label="Leverancier / garage" htmlFor="mt-provider">
+            <FormField label={t('maintenance.panel.provider')} htmlFor="mt-provider">
               <input
                 id="mt-provider"
                 value={form.provider ?? ''}
@@ -349,7 +354,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
               />
             </FormField>
             <div className="maint-form-row">
-              <FormField label="Herhaal elke (maanden)" htmlFor="mt-interval-m" hint="Leeg = eenmalig">
+              <FormField label={t('maintenance.panel.repeatMonths')} htmlFor="mt-interval-m" hint={t('maintenance.panel.repeatMonthsHint')}>
                 <input
                   id="mt-interval-m"
                   type="number"
@@ -361,7 +366,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 />
               </FormField>
               {ownerType === 'vehicle' && (
-                <FormField label="Herhaal elke (km)" htmlFor="mt-interval-km">
+                <FormField label={t('maintenance.panel.repeatKm')} htmlFor="mt-interval-km">
                   <input
                     id="mt-interval-km"
                     type="number"
@@ -373,7 +378,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 </FormField>
               )}
             </div>
-            <FormField label="Notities" htmlFor="mt-notes">
+            <FormField label={t('maintenance.panel.notes')} htmlFor="mt-notes">
               <textarea
                 id="mt-notes"
                 rows={2}
@@ -388,22 +393,22 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
 
       {completeTarget && completeForm && (
         <Modal
-          title="Onderhoud afronden"
+          title={t('maintenance.panel.completeTitle')}
           onClose={() => setCompleteTarget(null)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setCompleteTarget(null)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="maint-complete-form" disabled={saving}>
-                {saving ? 'Bezig…' : 'Afronden'}
+                {saving ? t('fleet.common.busy') : t('maintenance.panel.complete')}
               </Button>
             </>
           }
         >
           <form id="maint-complete-form" className="maint-form" onSubmit={handleComplete} noValidate>
-            <FormField label="Datum afgerond" htmlFor="mc-date" required>
+            <FormField label={t('maintenance.panel.completedDate')} htmlFor="mc-date" required>
               <input
                 id="mc-date"
                 type="date"
@@ -413,7 +418,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
               />
             </FormField>
             {ownerType === 'vehicle' && (
-              <FormField label="Kilometerstand bij afronding" htmlFor="mc-odo">
+              <FormField label={t('maintenance.panel.completedOdometer')} htmlFor="mc-odo">
                 <input
                   id="mc-odo"
                   type="number"
@@ -426,7 +431,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                 />
               </FormField>
             )}
-            <FormField label="Uitgevoerde werkzaamheden" htmlFor="mc-work">
+            <FormField label={t('maintenance.panel.workPerformed')} htmlFor="mc-work">
               <textarea
                 id="mc-work"
                 rows={2}
@@ -436,7 +441,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
               />
             </FormField>
             <div className="maint-form-row">
-              <FormField label="Leverancier / garage" htmlFor="mc-provider">
+              <FormField label={t('maintenance.panel.provider')} htmlFor="mc-provider">
                 <input
                   id="mc-provider"
                   value={completeForm.provider ?? ''}
@@ -444,7 +449,7 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
                   disabled={saving}
                 />
               </FormField>
-              <FormField label="Kosten (€)" htmlFor="mc-cost">
+              <FormField label={t('maintenance.panel.cost')} htmlFor="mc-cost">
                 <input
                   id="mc-cost"
                   type="number"
@@ -462,9 +467,9 @@ export function MaintenancePanel({ ownerType, ownerId }: MaintenancePanelProps) 
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Onderhoud verwijderen"
-          message={`Weet je zeker dat je "${maintenanceDisplayName(deleteTarget)} — ${deleteTarget.description}" wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('maintenance.panel.deleteTitle')}
+          message={t('maintenance.panel.deleteMessage', { name: t(maintenanceDisplayName(deleteTarget)), description: deleteTarget.description })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

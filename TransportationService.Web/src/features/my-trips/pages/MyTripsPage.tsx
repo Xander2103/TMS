@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Badge } from '../../../components/ui/Badge'
+import { useLocale } from '../../../i18n/localeContext'
 import { TRIP_STATUS_LABELS, TRIP_STATUS_TONE } from '../../planning/types'
 import { listMyTrips } from '../api/myTripsApi'
 import type { MyTrip } from '../types'
@@ -11,6 +12,7 @@ import './my-trips.css'
 /** Driver view: own upcoming trips (planned + in progress + recently completed). */
 export function MyTripsPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const [trips, setTrips] = useState<MyTrip[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -23,24 +25,22 @@ export function MyTripsPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Je ritten konden niet worden geladen.')
+        if (mounted) setLoadError(t('myTrips.list.loadError'))
       })
     return () => {
       mounted = false
     }
-  }, [])
+  }, [t])
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Mijn ritten' }]} />
-      <PageHeader title="Mijn ritten" subtitle="Jouw geplande ritten voor de komende week." />
+      <Breadcrumbs items={[{ label: t('myTrips.list.title') }]} />
+      <PageHeader title={t('myTrips.list.title')} subtitle={t('myTrips.list.subtitle')} />
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && trips === null && <p className="placeholder-text">Ritten laden…</p>}
+      {!loadError && trips === null && <p className="placeholder-text">{t('myTrips.list.loading')}</p>}
       {!loadError && trips !== null && trips.length === 0 && (
-        <p className="placeholder-text">
-          Geen ritten gepland. Ritten verschijnen hier zodra de planner ze aan jou toewijst.
-        </p>
+        <p className="placeholder-text">{t('myTrips.list.empty')}</p>
       )}
 
       {!loadError && trips !== null && trips.length > 0 && (
@@ -49,15 +49,16 @@ export function MyTripsPage() {
             <button key={trip.id} type="button" className="mt-card" onClick={() => navigate(`/my-trips/${trip.id}`)}>
               <div className="mt-card-head">
                 <code>{trip.tripNumber}</code>
-                <Badge tone={TRIP_STATUS_TONE[trip.status]}>{TRIP_STATUS_LABELS[trip.status]}</Badge>
+                <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
               </div>
               <div className="mt-card-date">{trip.tripDate}</div>
               <div className="mt-card-meta">
-                {trip.vehicleNumber ? `${trip.vehicleNumber} (${trip.vehicleLicensePlate})` : 'Geen voertuig'}
+                {trip.vehicleNumber ? `${trip.vehicleNumber} (${trip.vehicleLicensePlate})` : t('myTrips.list.noVehicle')}
                 {trip.trailerNumber ? ` + ${trip.trailerNumber}` : ''}
               </div>
               <div className="mt-card-progress">
-                {trip.orderCount} opdracht(en) · {trip.completedStopCount}/{trip.stopCount} stops afgehandeld
+                {t('myTrips.list.orders', { count: trip.orderCount })} ·{' '}
+                {t('myTrips.list.stopsHandled', { completed: trip.completedStopCount, total: trip.stopCount })}
               </div>
             </button>
           ))}

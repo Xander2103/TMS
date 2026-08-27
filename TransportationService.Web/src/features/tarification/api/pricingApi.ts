@@ -222,6 +222,10 @@ export type PriceRuleBasis =
   | 'PerVolume'
   | 'PerStop'
 
+/**
+ * Legacy Dutch labels — nog rechtstreeks gerenderd door features/customers (andere migratiescope).
+ * Nieuwe/gemigreerde code gebruikt PRICE_RULE_BASIS_KEYS + t().
+ */
 export const PRICE_RULE_BASIS_LABELS: Record<PriceRuleBasis, string> = {
   PerUnit: 'Per eenheid (prijs per stuk)',
   QuantityBracket: 'Per eenheid (staffel op aantal)',
@@ -234,6 +238,21 @@ export const PRICE_RULE_BASIS_LABELS: Record<PriceRuleBasis, string> = {
   Fixed: 'Forfait / vaste prijs',
   PerPallet: 'Per pallet (order)',
   PerTon: 'Per ton (order)',
+}
+
+/** Vertaalsleutels — renderen als t(PRICE_RULE_BASIS_KEYS[basis]). */
+export const PRICE_RULE_BASIS_KEYS: Record<PriceRuleBasis, string> = {
+  PerUnit: 'tarification.basis.PerUnit',
+  QuantityBracket: 'tarification.basis.QuantityBracket',
+  WeightBracket: 'tarification.basis.WeightBracket',
+  Hourly: 'tarification.basis.Hourly',
+  PerKm: 'tarification.basis.PerKm',
+  PerLoadingMeter: 'tarification.basis.PerLoadingMeter',
+  PerVolume: 'tarification.basis.PerVolume',
+  PerStop: 'tarification.basis.PerStop',
+  Fixed: 'tarification.basis.Fixed',
+  PerPallet: 'tarification.basis.PerPallet',
+  PerTon: 'tarification.basis.PerTon',
 }
 
 /** The primary pricing bases offered in the rule editor (spec §10) — an OR choice. */
@@ -416,12 +435,13 @@ export const deletePriceRule = (id: string): Promise<void> => apiClient.deleteRe
 /** P7: waar de factureerbare hoeveelheid van een dienst vandaan komt. */
 export type ServiceQuantitySource = 'Ordered' | 'ScannedIn' | 'ScannedOut' | 'Picked' | 'PalletDays'
 
+/** Vertaalsleutels — renderen als t(SERVICE_QUANTITY_SOURCE_LABELS[source]). */
 export const SERVICE_QUANTITY_SOURCE_LABELS: Record<ServiceQuantitySource, string> = {
-  Ordered: 'Bestelde aantallen (standaard)',
-  ScannedIn: 'Gescand IN (magazijn)',
-  ScannedOut: 'Gescand UIT',
-  Picked: 'Gepickt (klaargezet)',
-  PalletDays: 'Pallet-dagen (opslagklok)',
+  Ordered: 'tarification.quantitySource.Ordered',
+  ScannedIn: 'tarification.quantitySource.ScannedIn',
+  ScannedOut: 'tarification.quantitySource.ScannedOut',
+  Picked: 'tarification.quantitySource.Picked',
+  PalletDays: 'tarification.quantitySource.PalletDays',
 }
 
 /** Scan-gebaseerde bronnen tellen fysieke pakketten — een beheerde eenheid is daar optioneel. */
@@ -598,22 +618,24 @@ export type UnitCategory =
 
 export type UnitDimensionBehavior = 'Variable' | 'DefaultButOverridable' | 'Fixed'
 
+/** Vertaalsleutels — renderen als t(UNIT_CATEGORY_LABELS[category]). */
 export const UNIT_CATEGORY_LABELS: Record<UnitCategory, string> = {
-  Packaging: 'Verpakking',
-  Weight: 'Gewicht',
-  Volume: 'Volume',
-  Capacity: 'Capaciteit',
-  Time: 'Tijd',
-  Distance: 'Afstand',
-  Commercial: 'Commercieel',
-  Inventory: 'Voorraad',
-  Other: 'Overig',
+  Packaging: 'tarification.unitCategory.Packaging',
+  Weight: 'tarification.unitCategory.Weight',
+  Volume: 'tarification.unitCategory.Volume',
+  Capacity: 'tarification.unitCategory.Capacity',
+  Time: 'tarification.unitCategory.Time',
+  Distance: 'tarification.unitCategory.Distance',
+  Commercial: 'tarification.unitCategory.Commercial',
+  Inventory: 'tarification.unitCategory.Inventory',
+  Other: 'tarification.unitCategory.Other',
 }
 
+/** Vertaalsleutels — renderen als t(DIMENSION_BEHAVIOR_LABELS[behavior]). */
 export const DIMENSION_BEHAVIOR_LABELS: Record<UnitDimensionBehavior, string> = {
-  Variable: 'Variabel',
-  DefaultButOverridable: 'Standaard, aanpasbaar',
-  Fixed: 'Vast',
+  Variable: 'tarification.dimensionBehavior.Variable',
+  DefaultButOverridable: 'tarification.dimensionBehavior.DefaultButOverridable',
+  Fixed: 'tarification.dimensionBehavior.Fixed',
 }
 
 export interface UnitTypeMaster {
@@ -806,6 +828,15 @@ export interface PriceAdjustmentRulePreview {
 /** Comma-joined basis names used to restrict a bulk adjustment (v2); null/undefined = every basis. */
 export type AdjustmentBasisFilter = string | null
 
+export type ScheduledPriceAdjustmentStatus = 'Planned' | 'Active' | 'Cancelled'
+
+/** Vertaalsleutels — renderen als t(ADJUSTMENT_STATUS_LABELS[adjustment.statusCode]). */
+export const ADJUSTMENT_STATUS_LABELS: Record<ScheduledPriceAdjustmentStatus, string> = {
+  Planned: 'tarification.adjustmentStatus.Planned',
+  Active: 'tarification.adjustmentStatus.Active',
+  Cancelled: 'tarification.adjustmentStatus.Cancelled',
+}
+
 export interface ScheduledPriceAdjustment {
   id: string
   /** Customer-scoped adjustment; exactly one of customerId/agreementId is set. */
@@ -820,7 +851,10 @@ export interface ScheduledPriceAdjustment {
   roundingStep: number | null
   basisFilter: AdjustmentBasisFilter
   unitTypeIdFilter: string | null
+  /** Legacy Nederlands weergaveveld; logica en weergave gebruiken statusCode (§82). */
   status: 'Gepland' | 'Actief' | 'Geannuleerd'
+  /** Stabiele statuscode — de bron voor vergelijkingen en key-map-weergave. */
+  statusCode: ScheduledPriceAdjustmentStatus
   reason: string | null
   ruleCount: number
   createdAt: string
@@ -857,10 +891,11 @@ export const cancelPriceAdjustment = (customerId: string, id: string): Promise<S
 
 export type DegressionScope = 'Order' | 'DeliveryAddress' | 'Stop'
 
+/** Vertaalsleutels — renderen als t(DEGRESSION_SCOPE_LABELS[scope]). */
 export const DEGRESSION_SCOPE_LABELS: Record<DegressionScope, string> = {
-  Order: 'Hele order',
-  DeliveryAddress: 'Per leveradres',
-  Stop: 'Per stop',
+  Order: 'tarification.degressionScope.Order',
+  DeliveryAddress: 'tarification.degressionScope.DeliveryAddress',
+  Stop: 'tarification.degressionScope.Stop',
 }
 
 export interface CombinedUnitDiscountUnit {

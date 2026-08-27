@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useLocale } from '../../../i18n/localeContext'
 import type { Role } from '../types/role'
 import './RolesTable.css'
 
@@ -7,17 +8,18 @@ interface RolesTableProps {
 }
 
 export function RolesTable({ roles }: RolesTableProps) {
+  const { t } = useLocale()
   if (roles.length === 0) {
-    return <p>Er zijn nog geen rollen.</p>
+    return <p>{t('usersRoles.roles.table.empty')}</p>
   }
 
   return (
     <table className="roles-table">
       <thead>
         <tr>
-          <th scope="col">Naam</th>
-          <th scope="col">Omschrijving</th>
-          <th scope="col">Status</th>
+          <th scope="col">{t('usersRoles.roles.table.name')}</th>
+          <th scope="col">{t('usersRoles.roles.table.description')}</th>
+          <th scope="col">{t('usersRoles.roles.table.status')}</th>
         </tr>
       </thead>
       <tbody>
@@ -25,12 +27,12 @@ export function RolesTable({ roles }: RolesTableProps) {
           <tr key={role.id}>
             <td>
               <Link to={`/roles/${role.id}`}>{role.name}</Link>
-              {role.isSystemRole && <span className="badge">Systeemrol</span>}
+              {role.isSystemRole && <span className="badge">{t('usersRoles.roles.table.systemRole')}</span>}
             </td>
-            <td>{role.description ?? <span className="muted-text">Geen omschrijving</span>}</td>
+            <td>{role.description ?? <span className="muted-text">{t('usersRoles.roles.table.noDescription')}</span>}</td>
             <td>
               <span className={role.isActive ? 'status-text status-active' : 'status-text status-inactive'}>
-                {role.isActive ? 'Actief' : 'Inactief'}
+                {role.isActive ? t('usersRoles.roles.table.active') : t('usersRoles.roles.table.inactive')}
               </span>
             </td>
           </tr>

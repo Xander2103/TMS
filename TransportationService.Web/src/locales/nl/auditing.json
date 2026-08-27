@@ -1,0 +1,27 @@
+{
+  "action": {
+    "Created": "Aangemaakt",
+    "Updated": "Bijgewerkt",
+    "Deleted": "Verwijderd",
+    "Deactivated": "Gedeactiveerd",
+    "Reactivated": "Geheractiveerd",
+    "Blocked": "Geblokkeerd",
+    "Unblocked": "Gedeblokkeerd",
+    "Cancelled": "Geannuleerd",
+    "StatusChanged": "Status gewijzigd",
+    "AssignmentChanged": "Toewijzing gewijzigd"
+  },
+  "panel": {
+    "loadFailed": "Historiek kon niet worden geladen.",
+    "noPermission": "Je hebt geen rechten om de historiek te bekijken.",
+    "columns": {
+      "timestamp": "Tijdstip",
+      "action": "Actie",
+      "changes": "Wijziging"
+    },
+    "before": "Voor:",
+    "after": "Na:",
+    "empty": "Nog geen historiek voor dit item.",
+    "loading": "Historiek laden…"
+  }
+}

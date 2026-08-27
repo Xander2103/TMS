@@ -1,6 +1,7 @@
 import { Badge } from '../../../../components/ui/Badge'
 import { Button } from '../../../../components/ui/Button'
 import { FormField } from '../../../../components/ui/FormField'
+import { useLocale } from '../../../../i18n/localeContext'
 import { LocationSelect } from '../../../locations/components/LocationSelect'
 import { CountryCombobox } from '../../../reference/components/CountryCombobox'
 import type { LocationOpeningInterval, LocationOption } from '../../../locations/types'
@@ -40,16 +41,17 @@ export function RouteSection({
   onRequestRefresh,
   onQuickCreate,
 }: RouteSectionProps) {
+  const { t } = useLocale()
   return (
     <>
       <div className="tof-stops-header">
-        <h3>Stops</h3>
+        <h3>{t('transportOrders.route.stopsTitle')}</h3>
         <div className="tof-stops-actions">
           <Button variant="secondary" onClick={() => onAddStop('Loading')} disabled={saving}>
-            + Laadstop
+            {t('transportOrders.route.addLoading')}
           </Button>
           <Button variant="secondary" onClick={() => onAddStop('Unloading')} disabled={saving}>
-            + Losstop
+            {t('transportOrders.route.addUnloading')}
           </Button>
         </div>
       </div>
@@ -107,6 +109,7 @@ function StopRow({
   onRequestRefresh,
   onQuickCreate,
 }: StopRowProps) {
+  const { t } = useLocale()
   const isUnloading = stop.stopType === 'Unloading'
   const requirementBadge = timeRequirementBadge(stop)
   // Phase 7: immediate advisory hint when a planned time falls outside the selected
@@ -120,8 +123,8 @@ function StopRow({
               locationHours[stop.locationId],
               stop.date,
               time,
-              isUnloading ? 'lostijd' : 'laadtijd',
-              stop.snapshotName || 'deze locatie',
+              isUnloading ? 'unloading' : 'loading',
+              stop.snapshotName || t('transportOrders.openingHours.thisLocation'),
             ),
           )
           .find((warning) => warning !== null) ?? null)
@@ -130,7 +133,7 @@ function StopRow({
   return (
     <fieldset className="tof-stop">
       <legend>
-        {index + 1}. {STOP_TYPE_LABELS[stop.stopType]}
+        {index + 1}. {t(STOP_TYPE_LABELS[stop.stopType])}
         {requirementBadge && (
           <>
             {' '}
@@ -140,14 +143,14 @@ function StopRow({
         {stop.appointmentRequired && (
           <>
             {' '}
-            <Badge tone="warning">Afspraak</Badge>
+            <Badge tone="warning">{t('transportOrders.badges.appointment')}</Badge>
           </>
         )}
       </legend>
       <div className="tof-stop-toolbar">
         {/* Wave 1 §12: the stop type is set by the +Laadstop/+Losstop button — a static chip
             replaces the old select (the type still round-trips in the payload). */}
-        <Badge tone={isUnloading ? 'neutral' : 'info'}>{STOP_TYPE_LABELS[stop.stopType]}</Badge>
+        <Badge tone={isUnloading ? 'neutral' : 'info'}>{t(STOP_TYPE_LABELS[stop.stopType])}</Badge>
         <button type="button" className="tof-link" onClick={() => moveStop(index, -1)} disabled={saving || index === 0}>
           ↑
         </button>
@@ -165,7 +168,7 @@ function StopRow({
           onClick={() => setStop(stop.key, { collapsed: !stop.collapsed })}
           disabled={saving}
         >
-          {stop.collapsed ? 'Uitklappen' : 'Inklappen'}
+          {stop.collapsed ? t('transportOrders.route.expand') : t('transportOrders.route.collapse')}
         </button>
         <button
           type="button"
@@ -173,14 +176,14 @@ function StopRow({
           onClick={() => onRemoveStop(stop.key)}
           disabled={saving}
         >
-          Verwijderen
+          {t('ui.actions.delete')}
         </button>
       </div>
       {stop.collapsed ? (
         <p className="tof-stop-summary">
           {stop.locationId
-            ? `${stop.snapshotName || 'Locatie uit stamgegevens'}${stop.snapshotAddress ? ` — ${stop.snapshotAddress}` : ''}`
-            : stop.city || stop.locationName || 'Nog geen adres'}
+            ? `${stop.snapshotName || t('transportOrders.route.masterLocationFallback')}${stop.snapshotAddress ? ` — ${stop.snapshotAddress}` : ''}`
+            : stop.city || stop.locationName || t('transportOrders.route.noAddress')}
           {stop.date ? ` · ${stop.date}` : ''}
           {stop.fromTime || stop.toTime
             ? ` ${stop.fromTime || '…'}${stop.toTime ? ` – ${stop.toTime}` : ''}`
@@ -189,7 +192,7 @@ function StopRow({
       ) : (
         <>
           <div className="tof-row">
-            <FormField label="Locatie (stamgegevens)" htmlFor={`st-loc-${stop.key}`}>
+            <FormField label={t('transportOrders.route.location')} htmlFor={`st-loc-${stop.key}`}>
               <LocationSelect
                 id={`st-loc-${stop.key}`}
                 value={stop.locationId}
@@ -200,11 +203,11 @@ function StopRow({
                 }
                 customerId={customerId || undefined}
                 disabled={saving}
-                placeholder="Geen — adres hieronder"
+                placeholder={t('transportOrders.route.locationPlaceholder')}
                 onCreateNew={onQuickCreate}
               />
             </FormField>
-            <FormField label="Naam (vrij adres)" htmlFor={`st-name-${stop.key}`}>
+            <FormField label={t('transportOrders.route.freeName')} htmlFor={`st-name-${stop.key}`}>
               <input
                 id={`st-name-${stop.key}`}
                 value={stop.locationName}
@@ -216,25 +219,25 @@ function StopRow({
           </div>
           {stop.locationId !== '' && (
             <div className="tof-snapshot-row">
-              <Badge tone="info">Overgenomen van klantlocatie</Badge>
+              <Badge tone="info">{t('transportOrders.route.snapshotBadge')}</Badge>
               {stop.snapshotName && (
                 <span className="tof-snapshot-line">
                   {stop.snapshotName}
                   {stop.snapshotAddress ? ` — ${stop.snapshotAddress}` : ''}
                 </span>
               )}
-              {stop.refreshSnapshot && <Badge tone="warning">Wordt opnieuw overgenomen bij opslaan</Badge>}
+              {stop.refreshSnapshot && <Badge tone="warning">{t('transportOrders.route.snapshotRefreshBadge')}</Badge>}
             </div>
           )}
           {stop.locationId === '' && (
             <div className="tof-row tof-row-4">
-              <FormField label="Adres" htmlFor={`st-addr-${stop.key}`}>
+              <FormField label={t('transportOrders.route.address')} htmlFor={`st-addr-${stop.key}`}>
                 <input id={`st-addr-${stop.key}`} value={stop.address} onChange={(e) => setStop(stop.key, { address: e.target.value })} disabled={saving} maxLength={300} />
               </FormField>
-              <FormField label="Postcode" htmlFor={`st-pc-${stop.key}`}>
+              <FormField label={t('transportOrders.route.postalCode')} htmlFor={`st-pc-${stop.key}`}>
                 <input id={`st-pc-${stop.key}`} value={stop.postalCode} onChange={(e) => setStop(stop.key, { postalCode: e.target.value })} disabled={saving} maxLength={20} />
               </FormField>
-              <FormField label="Plaats" htmlFor={`st-city-${stop.key}`} required error={errors[`stops[${index}].city`]}>
+              <FormField label={t('transportOrders.route.city')} htmlFor={`st-city-${stop.key}`} required error={errors[`stops[${index}].city`]}>
                 <input
                   id={`st-city-${stop.key}`}
                   value={stop.city}
@@ -244,7 +247,7 @@ function StopRow({
                   aria-invalid={errors[`stops[${index}].city`] ? true : undefined}
                 />
               </FormField>
-              <FormField label="Land" htmlFor={`st-cc-${stop.key}`}>
+              <FormField label={t('transportOrders.route.country')} htmlFor={`st-cc-${stop.key}`}>
                 <CountryCombobox
                   id={`st-cc-${stop.key}`}
                   value={stop.countryCode || null}
@@ -255,16 +258,19 @@ function StopRow({
             </div>
           )}
           <div className="tof-row tof-row-4">
-            <FormField label={stop.stopType === 'Loading' ? 'Laaddatum' : 'Losdatum'} htmlFor={`st-date-${stop.key}`}>
+            <FormField
+              label={stop.stopType === 'Loading' ? t('transportOrders.route.loadDate') : t('transportOrders.route.unloadDate')}
+              htmlFor={`st-date-${stop.key}`}
+            >
               <input id={`st-date-${stop.key}`} type="date" value={stop.date} onChange={(e) => setStop(stop.key, { date: e.target.value })} disabled={saving} />
             </FormField>
-            <FormField label="Van" htmlFor={`st-fromtime-${stop.key}`} hint="Optioneel.">
+            <FormField label={t('transportOrders.route.from')} htmlFor={`st-fromtime-${stop.key}`} hint={t('transportOrders.route.optional')}>
               <input id={`st-fromtime-${stop.key}`} type="time" value={stop.fromTime} onChange={(e) => setStop(stop.key, { fromTime: e.target.value })} disabled={saving} />
             </FormField>
-            <FormField label="Tot" htmlFor={`st-totime-${stop.key}`} hint="Optioneel.">
+            <FormField label={t('transportOrders.route.to')} htmlFor={`st-totime-${stop.key}`} hint={t('transportOrders.route.optional')}>
               <input id={`st-totime-${stop.key}`} type="time" value={stop.toTime} onChange={(e) => setStop(stop.key, { toTime: e.target.value })} disabled={saving} />
             </FormField>
-            <FormField label="Referentie" htmlFor={`st-ref-${stop.key}`}>
+            <FormField label={t('transportOrders.route.reference')} htmlFor={`st-ref-${stop.key}`}>
               <input id={`st-ref-${stop.key}`} value={stop.reference} onChange={(e) => setStop(stop.key, { reference: e.target.value })} disabled={saving} maxLength={100} />
             </FormField>
           </div>
@@ -274,22 +280,28 @@ function StopRow({
             </p>
           )}
           <div className="tof-row tof-row-4">
-            <FormField label="Tijdseis" htmlFor={`st-timereq-${stop.key}`}>
+            <FormField label={t('transportOrders.route.timeReq')} htmlFor={`st-timereq-${stop.key}`}>
               <select
                 id={`st-timereq-${stop.key}`}
                 value={stop.timeRequirement}
                 onChange={(e) => setStop(stop.key, { timeRequirement: e.target.value as StopFormRow['timeRequirement'] })}
                 disabled={saving}
               >
-                <option value="">Geen specifieke eis</option>
-                <option value="Before">{isUnloading ? 'Leveren vóór' : 'Laden vóór'}</option>
-                <option value="After">{isUnloading ? 'Niet leveren vóór' : 'Niet laden vóór'}</option>
-                <option value="Window">{isUnloading ? 'Exact levervenster' : 'Exact laadvenster'}</option>
+                <option value="">{t('transportOrders.route.noTimeReq')}</option>
+                <option value="Before">
+                  {isUnloading ? t('transportOrders.route.deliverBefore') : t('transportOrders.route.loadBefore')}
+                </option>
+                <option value="After">
+                  {isUnloading ? t('transportOrders.route.notDeliverBefore') : t('transportOrders.route.notLoadBefore')}
+                </option>
+                <option value="Window">
+                  {isUnloading ? t('transportOrders.route.exactDeliveryWindow') : t('transportOrders.route.exactLoadingWindow')}
+                </option>
               </select>
             </FormField>
             {(stop.timeRequirement === 'After' || stop.timeRequirement === 'Window') && (
               <FormField
-                label={stop.timeRequirement === 'Window' ? 'Venster van' : 'Niet vóór'}
+                label={stop.timeRequirement === 'Window' ? t('transportOrders.route.windowFrom') : t('transportOrders.route.notBefore')}
                 htmlFor={`st-timereqfrom-${stop.key}`}
                 error={errors[`stops[${index}].timeReqFrom`]}
               >
@@ -305,7 +317,7 @@ function StopRow({
             )}
             {(stop.timeRequirement === 'Before' || stop.timeRequirement === 'Window') && (
               <FormField
-                label={stop.timeRequirement === 'Window' ? 'Venster tot' : 'Vóór'}
+                label={stop.timeRequirement === 'Window' ? t('transportOrders.route.windowTo') : t('transportOrders.route.before')}
                 htmlFor={`st-timereqto-${stop.key}`}
                 error={errors[`stops[${index}].timeReqTo`]}
               >
@@ -321,7 +333,7 @@ function StopRow({
             )}
           </div>
           <div className="tof-row">
-            <FormField label="Instructies" htmlFor={`st-instr-${stop.key}`}>
+            <FormField label={t('transportOrders.route.instructions')} htmlFor={`st-instr-${stop.key}`}>
               <input id={`st-instr-${stop.key}`} value={stop.instructions} onChange={(e) => setStop(stop.key, { instructions: e.target.value })} disabled={saving} maxLength={2000} />
             </FormField>
           </div>
@@ -338,32 +350,32 @@ function StopRow({
               stop.accessInstructions || stop.loadingInstructions || stop.unloadingInstructions,
             )}
           >
-            <summary>Geavanceerd</summary>
+            <summary>{t('transportOrders.route.advanced')}</summary>
             <div className="tof-row tof-row-4">
-              <FormField label="Gevraagd van" htmlFor={`st-reqfrom-${stop.key}`} hint="Venster gevraagd door de klant">
+              <FormField label={t('transportOrders.route.requestedFrom')} htmlFor={`st-reqfrom-${stop.key}`} hint={t('transportOrders.route.requestedFromHint')}>
                 <input id={`st-reqfrom-${stop.key}`} type="datetime-local" value={stop.requestedFrom} onChange={(e) => setStop(stop.key, { requestedFrom: e.target.value })} disabled={saving} />
               </FormField>
-              <FormField label="Gevraagd tot" htmlFor={`st-reqto-${stop.key}`}>
+              <FormField label={t('transportOrders.route.requestedTo')} htmlFor={`st-reqto-${stop.key}`}>
                 <input id={`st-reqto-${stop.key}`} type="datetime-local" value={stop.requestedTo} onChange={(e) => setStop(stop.key, { requestedTo: e.target.value })} disabled={saving} />
               </FormField>
-              <FormField label="Bevestigd van" htmlFor={`st-conffrom-${stop.key}`} hint="Venster bevestigd aan de klant">
+              <FormField label={t('transportOrders.route.confirmedFrom')} htmlFor={`st-conffrom-${stop.key}`} hint={t('transportOrders.route.confirmedFromHint')}>
                 <input id={`st-conffrom-${stop.key}`} type="datetime-local" value={stop.confirmedFrom} onChange={(e) => setStop(stop.key, { confirmedFrom: e.target.value })} disabled={saving} />
               </FormField>
-              <FormField label="Bevestigd tot" htmlFor={`st-confto-${stop.key}`}>
+              <FormField label={t('transportOrders.route.confirmedTo')} htmlFor={`st-confto-${stop.key}`}>
                 <input id={`st-confto-${stop.key}`} type="datetime-local" value={stop.confirmedTo} onChange={(e) => setStop(stop.key, { confirmedTo: e.target.value })} disabled={saving} />
               </FormField>
             </div>
             <div className="tof-row tof-row-4">
-              <FormField label="Vroegst toegelaten" htmlFor={`st-earliest-${stop.key}`}>
+              <FormField label={t('transportOrders.route.earliest')} htmlFor={`st-earliest-${stop.key}`}>
                 <input id={`st-earliest-${stop.key}`} type="datetime-local" value={stop.earliestAllowed} onChange={(e) => setStop(stop.key, { earliestAllowed: e.target.value })} disabled={saving} />
               </FormField>
-              <FormField label="Uiterste tijdstip" htmlFor={`st-latest-${stop.key}`} hint="Na dit tijdstip is een reden voor late aankomst verplicht">
+              <FormField label={t('transportOrders.route.latest')} htmlFor={`st-latest-${stop.key}`} hint={t('transportOrders.route.latestHint')}>
                 <input id={`st-latest-${stop.key}`} type="datetime-local" value={stop.latestAllowed} onChange={(e) => setStop(stop.key, { latestAllowed: e.target.value })} disabled={saving} />
               </FormField>
               <FormField
-                label="Inbegrepen tijd (minuten)"
+                label={t('transportOrders.route.includedTime')}
                 htmlFor={`st-inclmin-${stop.key}`}
-                hint="Afwijking voor deze stop; gaat vóór de orderafwijking en de contractwaarde."
+                hint={t('transportOrders.route.includedTimeHint')}
               >
                 <input id={`st-inclmin-${stop.key}`} type="number" min={0} value={stop.includedTimeMinutesOverride} onChange={(e) => setStop(stop.key, { includedTimeMinutesOverride: e.target.value })} disabled={saving} />
               </FormField>
@@ -371,22 +383,22 @@ function StopRow({
             <div className="tof-row">
               <label className="tof-checkbox">
                 <input type="checkbox" checked={stop.appointmentRequired} onChange={(e) => setStop(stop.key, { appointmentRequired: e.target.checked })} disabled={saving} />
-                Afspraak verplicht
+                {t('transportOrders.route.appointmentRequired')}
               </label>
-              <FormField label="Afspraakreferentie" htmlFor={`st-appref-${stop.key}`}>
-                <input id={`st-appref-${stop.key}`} value={stop.appointmentReference} onChange={(e) => setStop(stop.key, { appointmentReference: e.target.value })} disabled={saving} maxLength={100} placeholder="bv. slotnummer" />
+              <FormField label={t('transportOrders.route.appointmentRef')} htmlFor={`st-appref-${stop.key}`}>
+                <input id={`st-appref-${stop.key}`} value={stop.appointmentReference} onChange={(e) => setStop(stop.key, { appointmentReference: e.target.value })} disabled={saving} maxLength={100} placeholder={t('transportOrders.route.appointmentPlaceholder')} />
               </FormField>
             </div>
             <div className="tof-row">
-              <FormField label="Toegangsinstructies" htmlFor={`st-access-${stop.key}`}>
+              <FormField label={t('transportOrders.route.accessInstr')} htmlFor={`st-access-${stop.key}`}>
                 <input id={`st-access-${stop.key}`} value={stop.accessInstructions} onChange={(e) => setStop(stop.key, { accessInstructions: e.target.value })} disabled={saving} maxLength={2000} />
               </FormField>
               {stop.stopType === 'Loading' ? (
-                <FormField label="Laadinstructies" htmlFor={`st-loadinstr-${stop.key}`}>
+                <FormField label={t('transportOrders.route.loadInstr')} htmlFor={`st-loadinstr-${stop.key}`}>
                   <input id={`st-loadinstr-${stop.key}`} value={stop.loadingInstructions} onChange={(e) => setStop(stop.key, { loadingInstructions: e.target.value })} disabled={saving} maxLength={2000} />
                 </FormField>
               ) : (
-                <FormField label="Losinstructies" htmlFor={`st-unloadinstr-${stop.key}`}>
+                <FormField label={t('transportOrders.route.unloadInstr')} htmlFor={`st-unloadinstr-${stop.key}`}>
                   <input id={`st-unloadinstr-${stop.key}`} value={stop.unloadingInstructions} onChange={(e) => setStop(stop.key, { unloadingInstructions: e.target.value })} disabled={saving} maxLength={2000} />
                 </FormField>
               )}
@@ -399,7 +411,7 @@ function StopRow({
                   onClick={() => onRequestRefresh(stop.key)}
                   disabled={saving}
                 >
-                  Opnieuw overnemen van locatie
+                  {t('transportOrders.route.refreshFromLocation')}
                 </button>
               </div>
             )}

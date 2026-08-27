@@ -1,4 +1,5 @@
 import { Button } from '../../../components/ui/Button'
+import { useLocale } from '../../../i18n/localeContext'
 import type { DossierActivity } from '../types'
 import { ActivityCard } from './ActivityCard'
 
@@ -11,10 +12,11 @@ interface ActivityListProps {
 
 /** §11 Activiteiten section body: ordered cards + the one add action. */
 export function ActivityList({ activities, canManage, onOpen, onAdd }: ActivityListProps) {
+  const { t } = useLocale()
   const ordered = [...activities].sort((a, b) => a.sequence - b.sequence)
   return (
     <>
-      {ordered.length === 0 && <p className="placeholder-text">Nog geen activiteit.</p>}
+      {ordered.length === 0 && <p className="placeholder-text">{t('dossiers.activities.empty')}</p>}
       {ordered.length > 0 && (
         <ul className="dossier-activity-list">
           {ordered.map((activity) => (
@@ -25,7 +27,7 @@ export function ActivityList({ activities, canManage, onOpen, onAdd }: ActivityL
       {canManage && (
         <p>
           <Button variant="secondary" onClick={onAdd}>
-            + Activiteit toevoegen
+            {t('dossiers.activities.add')}
           </Button>
         </p>
       )}

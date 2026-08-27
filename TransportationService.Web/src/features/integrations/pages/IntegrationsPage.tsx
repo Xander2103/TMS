@@ -7,6 +7,7 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { useToast } from '../../../components/ui/toastContext'
 import { apiClient, ApiError } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
+import { useLocale } from '../../../i18n/localeContext'
 import { formatDateTime } from '../../../utils/dates'
 
 type SyncStatus = 'Pending' | 'Synced' | 'Failed' | 'Cancelled'
@@ -35,22 +36,25 @@ const STATUS_TONE: Record<SyncStatus, 'neutral' | 'success' | 'warning' | 'dange
   Cancelled: 'neutral',
 }
 
+/** Translation keys per sync status; render via t(STATUS_LABELS[status]). */
 const STATUS_LABELS: Record<SyncStatus, string> = {
-  Pending: 'In wachtrij',
-  Synced: 'Gesynchroniseerd',
-  Failed: 'Mislukt',
-  Cancelled: 'Geannuleerd',
+  Pending: 'integrations.status.Pending',
+  Synced: 'integrations.status.Synced',
+  Failed: 'integrations.status.Failed',
+  Cancelled: 'integrations.status.Cancelled',
 }
 
+/** Translation keys per event type; unknown types render their raw code. */
 const EVENT_LABELS: Record<string, string> = {
-  leave_approved: 'Goedgekeurd verlof',
-  shift_confirmed: 'Bevestigde shift',
+  leave_approved: 'integrations.event.leave_approved',
+  shift_confirmed: 'integrations.event.shift_confirmed',
 }
 
 const PAGE_SIZE = 25
 
 /** Outlook/Exchange sync queue: what the TMS wants mirrored to external calendars. */
 export function IntegrationsPage() {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
 
   const [statusFilter, setStatusFilter] = useState<SyncStatus | ''>('')
@@ -69,7 +73,7 @@ export function IntegrationsPage() {
         if (mounted) setItems(data)
       })
       .catch(() => {
-        if (mounted) showError('De synchronisatiewachtrij kon niet worden geladen.')
+        if (mounted) showError(t('integrations.page.loadFailed'))
       })
     return () => {
       mounted = false
@@ -81,10 +85,10 @@ export function IntegrationsPage() {
     setBusy(true)
     try {
       await apiClient.postJson(`/api/integrations/calendar-sync/${id}/retry`, {})
-      showSuccess('Item opnieuw aangeboden — de volgende verwerking pakt het op.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('integrations.page.retried'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'Opnieuw aanbieden mislukte.')
+      showError(err instanceof ApiError ? err.message : t('integrations.page.retryFailed'))
     } finally {
       setBusy(false)
     }
@@ -92,11 +96,8 @@ export function IntegrationsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Integraties' }]} />
-      <PageHeader
-        title="Integraties"
-        subtitle="Outlook/Exchange-agendasynchronisatie — goedgekeurd verlof en bevestigde shifts. In ontwikkeling draait een fake provider; echte Microsoft-koppeling volgt zodra er referenties zijn."
-      />
+      <Breadcrumbs items={[{ label: t('integrations.page.title') }]} />
+      <PageHeader title={t('integrations.page.title')} subtitle={t('integrations.page.subtitle')} />
 
       <div className="edi-filters">
         <select
@@ -105,12 +106,12 @@ export function IntegrationsPage() {
             setStatusFilter(e.target.value as SyncStatus | '')
             setPage(1)
           }}
-          aria-label="Status"
+          aria-label={t('integrations.page.statusAria')}
         >
-          <option value="">Alle statussen</option>
+          <option value="">{t('integrations.page.allStatuses')}</option>
           {(Object.keys(STATUS_LABELS) as SyncStatus[]).map((status) => (
             <option key={status} value={status}>
-              {STATUS_LABELS[status]}
+              {t(STATUS_LABELS[status])}
             </option>
           ))}
         </select>
@@ -119,15 +120,15 @@ export function IntegrationsPage() {
       <table className="to-stops-table">
         <thead>
           <tr>
-            <th>Aangemaakt</th>
-            <th>Soort</th>
-            <th>Medewerker</th>
-            <th>Periode</th>
-            <th>Titel</th>
-            <th>Status</th>
-            <th>Extern event</th>
-            <th>Fout</th>
-            <th aria-label="Acties" />
+            <th>{t('integrations.columns.created')}</th>
+            <th>{t('integrations.columns.kind')}</th>
+            <th>{t('integrations.columns.employee')}</th>
+            <th>{t('integrations.columns.period')}</th>
+            <th>{t('integrations.columns.title')}</th>
+            <th>{t('integrations.columns.status')}</th>
+            <th>{t('integrations.columns.externalEvent')}</th>
+            <th>{t('integrations.columns.error')}</th>
+            <th aria-label={t('integrations.columns.actionsAria')} />
           </tr>
         </thead>
         <tbody>
@@ -135,8 +136,8 @@ export function IntegrationsPage() {
             <tr key={row.id}>
               <td>{formatDateTime(row.createdAt)}</td>
               <td>
-                {EVENT_LABELS[row.eventType] ?? row.eventType}
-                {row.operation === 'Cancel' && ' (annulering)'}
+                {EVENT_LABELS[row.eventType] ? t(EVENT_LABELS[row.eventType]) : row.eventType}
+                {row.operation === 'Cancel' && ` ${t('integrations.page.cancellationSuffix')}`}
               </td>
               <td>{row.employeeName}</td>
               <td>
@@ -144,7 +145,7 @@ export function IntegrationsPage() {
               </td>
               <td>{row.title}</td>
               <td>
-                <Badge tone={STATUS_TONE[row.status]}>{STATUS_LABELS[row.status]}</Badge>
+                <Badge tone={STATUS_TONE[row.status]}>{t(STATUS_LABELS[row.status])}</Badge>
                 {row.attemptCount > 1 && ` (${row.attemptCount}×)`}
               </td>
               <td>{row.externalEventId ? <code>{row.externalEventId}</code> : '—'}</td>
@@ -152,7 +153,7 @@ export function IntegrationsPage() {
               <td>
                 {row.status === 'Failed' && (
                   <Button variant="ghost" onClick={() => void retry(row.id)} disabled={busy}>
-                    Opnieuw
+                    {t('integrations.page.retry')}
                   </Button>
                 )}
               </td>
@@ -160,7 +161,7 @@ export function IntegrationsPage() {
           ))}
           {items !== null && items.items.length === 0 && (
             <tr>
-              <td colSpan={9}>Nog geen synchronisatie-items.</td>
+              <td colSpan={9}>{t('integrations.page.empty')}</td>
             </tr>
           )}
         </tbody>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { translate } from '../../../i18n/translations'
 import { REVENUE_SOURCE_LABELS, formatEuro, marginTone } from '../types'
 
 describe('marginTone', () => {
@@ -13,9 +14,10 @@ describe('marginTone', () => {
 
 describe('revenue source labels', () => {
   it('keeps revenue natures distinguishable (never one ambiguous value)', () => {
-    expect(REVENUE_SOURCE_LABELS.Invoiced).toBe('Gefactureerd')
-    expect(REVENUE_SOURCE_LABELS.Agreed).toBe('Afgesproken')
-    expect(REVENUE_SOURCE_LABELS.None).toBe('Geen omzet')
+    // Key-map + NL-vertaling: logica keyt op de code, weergave via t().
+    expect(translate('nl', REVENUE_SOURCE_LABELS.Invoiced)).toBe('Gefactureerd')
+    expect(translate('nl', REVENUE_SOURCE_LABELS.Agreed)).toBe('Afgesproken')
+    expect(translate('nl', REVENUE_SOURCE_LABELS.None)).toBe('Geen omzet')
   })
 })
 

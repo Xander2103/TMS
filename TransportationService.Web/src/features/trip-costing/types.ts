@@ -17,27 +17,29 @@ export type TripCostType =
   | 'Manual'
   | 'Correction'
 
+/** Vertaalsleutels — renderen als t(COST_TYPE_LABELS[type]). */
 export const COST_TYPE_LABELS: Record<TripCostType, string> = {
-  Fuel: 'Brandstof',
-  Toll: 'Tol/Maut',
-  DriverLabour: 'Chauffeur',
-  Overtime: 'Overuren',
-  WaitingTime: 'Wachttijd',
-  VehicleDistance: 'Voertuig per km',
-  VehicleTime: 'Voertuig per uur',
-  Maintenance: 'Onderhoud',
-  Depreciation: 'Afschrijving',
-  Trailer: 'Oplegger',
-  Equipment: 'Uitrusting',
-  Subcontractor: 'Onderaannemer',
-  FerryTunnelParking: 'Ferry/tunnel/parking',
-  Manual: 'Handmatig',
-  Correction: 'Correctie/credit',
+  Fuel: 'tripCosting.costType.Fuel',
+  Toll: 'tripCosting.costType.Toll',
+  DriverLabour: 'tripCosting.costType.DriverLabour',
+  Overtime: 'tripCosting.costType.Overtime',
+  WaitingTime: 'tripCosting.costType.WaitingTime',
+  VehicleDistance: 'tripCosting.costType.VehicleDistance',
+  VehicleTime: 'tripCosting.costType.VehicleTime',
+  Maintenance: 'tripCosting.costType.Maintenance',
+  Depreciation: 'tripCosting.costType.Depreciation',
+  Trailer: 'tripCosting.costType.Trailer',
+  Equipment: 'tripCosting.costType.Equipment',
+  Subcontractor: 'tripCosting.costType.Subcontractor',
+  FerryTunnelParking: 'tripCosting.costType.FerryTunnelParking',
+  Manual: 'tripCosting.costType.Manual',
+  Correction: 'tripCosting.costType.Correction',
 }
 
+/** Vertaalsleutels — renderen als t(COST_PHASE_LABELS[phase]). */
 export const COST_PHASE_LABELS: Record<TripCostPhase, string> = {
-  Estimated: 'Geschat',
-  Actual: 'Werkelijk',
+  Estimated: 'tripCosting.phase.Estimated',
+  Actual: 'tripCosting.phase.Actual',
 }
 
 /** Manual line entry offers the operational/expense types, not the calculated ones. */

@@ -4,7 +4,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import {
   createPriceRule,
@@ -39,21 +40,21 @@ type TemplateId =
 
 interface TemplateCard {
   id: TemplateId
-  label: string
-  description: string
+  labelKey: string
+  descriptionKey: string
 }
 
 const TEMPLATE_CARDS: TemplateCard[] = [
-  { id: 'hourly', label: 'Uurtarief', description: 'Eén uurtarief; pas nadien het bedrag aan.' },
-  { id: 'pallet-bracket', label: 'Palletstaffel', description: 'Staffel op aantal pallets (1 / 2 / 3 / 4+).' },
-  { id: 'weight-bracket', label: 'Gewichtsstaffel', description: 'Staffel op ordergewicht (0-100 / 101-500 / 501-1000 kg).' },
-  { id: 'loading-meter', label: 'Laadmeter', description: 'Staffel op laadmeters.' },
-  { id: 'zone-table', label: 'Zone-tabel', description: 'Eén staffelregel per leveringszone (max. 10).' },
-  { id: 'distance', label: 'Afstand (km)', description: 'Prijs per kilometer, ordergewijs.' },
-  { id: 'fixed', label: 'Vaste prijs', description: 'Eén vast bedrag per order.' },
-  { id: 'combined', label: 'Gecombineerd', description: 'Meerdere berekeningswijzen door elkaar; regels zelf toevoegen.' },
-  { id: 'blank', label: 'Leeg starten', description: 'Geen regels; zelf opbouwen.' },
-  { id: 'excel-import', label: 'Excel-import', description: 'Maak een lege tabel aan en importeer de regels meteen uit een Excel-bestand.' },
+  { id: 'hourly', labelKey: 'tarification.wizard.templates.hourly.label', descriptionKey: 'tarification.wizard.templates.hourly.description' },
+  { id: 'pallet-bracket', labelKey: 'tarification.wizard.templates.palletBracket.label', descriptionKey: 'tarification.wizard.templates.palletBracket.description' },
+  { id: 'weight-bracket', labelKey: 'tarification.wizard.templates.weightBracket.label', descriptionKey: 'tarification.wizard.templates.weightBracket.description' },
+  { id: 'loading-meter', labelKey: 'tarification.wizard.templates.loadingMeter.label', descriptionKey: 'tarification.wizard.templates.loadingMeter.description' },
+  { id: 'zone-table', labelKey: 'tarification.wizard.templates.zoneTable.label', descriptionKey: 'tarification.wizard.templates.zoneTable.description' },
+  { id: 'distance', labelKey: 'tarification.wizard.templates.distance.label', descriptionKey: 'tarification.wizard.templates.distance.description' },
+  { id: 'fixed', labelKey: 'tarification.wizard.templates.fixed.label', descriptionKey: 'tarification.wizard.templates.fixed.description' },
+  { id: 'combined', labelKey: 'tarification.wizard.templates.combined.label', descriptionKey: 'tarification.wizard.templates.combined.description' },
+  { id: 'blank', labelKey: 'tarification.wizard.templates.blank.label', descriptionKey: 'tarification.wizard.templates.blank.description' },
+  { id: 'excel-import', labelKey: 'tarification.wizard.templates.excelImport.label', descriptionKey: 'tarification.wizard.templates.excelImport.description' },
 ]
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -84,6 +85,7 @@ function findUnit(units: UnitTypeMaster[], codeIncludes: string[], category?: Un
  * Creates the skeleton price rule(s) for the chosen template on a freshly created agreement.
  * Templates needing a unit that cannot be resolved skip rule creation and report why via
  * `showWarning` — the agreement itself is still created, just without that starter rule.
+ * Skeleton rule names are seeded in the creator's UI language (they are ordinary editable data).
  */
 async function createSkeletonRules(
   agreementId: string,
@@ -93,6 +95,7 @@ async function createSkeletonRules(
   units: UnitTypeMaster[],
   zones: PricingZone[],
   showWarning: (message: string) => void,
+  t: TranslateFn,
 ): Promise<void> {
   const base = (overrides: Partial<PriceRuleInput> & Pick<PriceRuleInput, 'basis' | 'name'>): PriceRuleInput => ({
     customerId: agreementCustomerId,
@@ -112,25 +115,25 @@ async function createSkeletonRules(
     case 'hourly': {
       const unit = findUnit(units, ['UUR', 'HOUR'], 'Time')
       if (!unit) {
-        showWarning('Voeg een uurregel toe: er is geen tijd-eenheid (bv. Uur) beschikbaar.')
+        showWarning(t('tarification.wizard.noTimeUnit'))
         return
       }
-      await createPriceRule(base({ basis: 'Hourly', name: 'Uurtarief', unitTypeId: unit.id, unitPrice: 0 }))
+      await createPriceRule(base({ basis: 'Hourly', name: t('tarification.wizard.ruleNameHourly'), unitTypeId: unit.id, unitPrice: 0 }))
       return
     }
     case 'pallet-bracket': {
       const unit = findUnit(units, ['PALLET'], 'Packaging')
       if (!unit) {
-        showWarning('Voeg een verpakkingseenheid toe (bv. Pallet) om de palletstaffel te gebruiken.')
+        showWarning(t('tarification.wizard.noPackagingUnitPallet'))
         return
       }
-      await createPriceRule(base({ basis: 'QuantityBracket', name: 'Palletstaffel', unitTypeId: unit.id, brackets: quantityBrackets() }))
+      await createPriceRule(base({ basis: 'QuantityBracket', name: t('tarification.wizard.ruleNamePalletBracket'), unitTypeId: unit.id, brackets: quantityBrackets() }))
       return
     }
     case 'weight-bracket': {
       await createPriceRule(base({
         basis: 'WeightBracket',
-        name: 'Gewichtsstaffel',
+        name: t('tarification.wizard.ruleNameWeightBracket'),
         brackets: [bracket(0, 100), bracket(101, 500), bracket(501, 1000)],
       }))
       return
@@ -138,32 +141,32 @@ async function createSkeletonRules(
     case 'loading-meter': {
       const unit = findUnit(units, ['LOADINGMETER'])
       if (!unit) {
-        showWarning('Voeg een eenheid met code LOADINGMETER toe om de laadmeterstaffel te gebruiken.')
+        showWarning(t('tarification.wizard.noLoadingMeterUnit'))
         return
       }
-      await createPriceRule(base({ basis: 'QuantityBracket', name: 'Laadmeter', unitTypeId: unit.id, brackets: quantityBrackets() }))
+      await createPriceRule(base({ basis: 'QuantityBracket', name: t('tarification.wizard.ruleNameLoadingMeter'), unitTypeId: unit.id, brackets: quantityBrackets() }))
       return
     }
     case 'zone-table': {
       const unit = findUnit(units, ['PALLET'], 'Packaging')
       if (!unit) {
-        showWarning('Voeg een verpakkingseenheid toe (bv. Pallet) om de zone-tabel te gebruiken.')
+        showWarning(t('tarification.wizard.noPackagingUnitZone'))
         return
       }
       const activeZones = zones.filter((z) => z.isActive).slice(0, 10)
       for (const zone of activeZones) {
         // Rules are created sequentially (one POST each) rather than in parallel.
         await createPriceRule(base({
-          basis: 'QuantityBracket', name: `Zone ${zone.code}`, unitTypeId: unit.id, zoneId: zone.id, brackets: quantityBrackets(),
+          basis: 'QuantityBracket', name: t('tarification.wizard.ruleNameZone', { code: zone.code }), unitTypeId: unit.id, zoneId: zone.id, brackets: quantityBrackets(),
         }))
       }
       return
     }
     case 'distance':
-      await createPriceRule(base({ basis: 'PerKm', name: 'Afstand', unitPrice: 0 }))
+      await createPriceRule(base({ basis: 'PerKm', name: t('tarification.wizard.ruleNameDistance'), unitPrice: 0 }))
       return
     case 'fixed':
-      await createPriceRule(base({ basis: 'Fixed', name: 'Vaste prijs', unitPrice: 0 }))
+      await createPriceRule(base({ basis: 'Fixed', name: t('tarification.wizard.ruleNameFixed'), unitPrice: 0 }))
       return
     case 'combined':
     case 'blank':
@@ -181,6 +184,7 @@ async function createSkeletonRules(
  * navigates to the new table's detail page.
  */
 export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardProps) {
+  const { t } = useLocale()
   const { showError } = useToast()
   const [step, setStep] = useState<1 | 2>(1)
   const [template, setTemplate] = useState<TemplateId | null>(null)
@@ -204,14 +208,14 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
 
   function selectTemplate(id: TemplateId) {
     setTemplate(id)
-    setName((current) => current || TEMPLATE_CARDS.find((c) => c.id === id)!.label)
+    setName((current) => current || t(TEMPLATE_CARDS.find((c) => c.id === id)!.labelKey))
     setStep(2)
   }
 
   async function submit() {
     if (!template) return
     if (!name.trim()) {
-      setError('De naam is verplicht.')
+      setError(t('tarification.common.nameRequired'))
       return
     }
 
@@ -230,10 +234,10 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
         isShared,
       })
 
-      await createSkeletonRules(agreement.id, agreement.customerId, template, effectiveFrom, units, zones, showError)
+      await createSkeletonRules(agreement.id, agreement.customerId, template, effectiveFrom, units, zones, showError, t)
       onCreated(agreement.id, template === 'excel-import')
     } catch (err) {
-      setError(describeApiError(err, 'De tarieventabel kon niet worden aangemaakt.').message)
+      setError(localizeApiError(t, err, t('tarification.wizard.createError')))
     } finally {
       setBusy(false)
     }
@@ -241,21 +245,21 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
 
   return (
     <Modal
-      title="Nieuwe tarieventabel"
+      title={t('tarification.wizard.title')}
       onClose={onClose}
       busy={busy}
       footer={
         step === 1 ? (
           <Button variant="secondary" onClick={onClose}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
         ) : (
           <>
             <Button variant="secondary" onClick={() => setStep(1)} disabled={busy}>
-              Terug
+              {t('ui.actions.back')}
             </Button>
             <Button onClick={() => void submit()} disabled={busy}>
-              {busy ? 'Bezig...' : 'Aanmaken'}
+              {busy ? t('ui.actions.busy') : t('tarification.common.create')}
             </Button>
           </>
         )
@@ -263,7 +267,7 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
     >
       {step === 1 && (
         <>
-          <p className="customer-form-muted">Hoe wil je de prijs berekenen?</p>
+          <p className="customer-form-muted">{t('tarification.wizard.question')}</p>
           <div className="pricing-wizard-cards">
             {TEMPLATE_CARDS.map((card) => (
               <button
@@ -272,8 +276,8 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
                 className="pricing-wizard-card"
                 onClick={() => selectTemplate(card.id)}
               >
-                <strong>{card.label}</strong>
-                <span>{card.description}</span>
+                <strong>{t(card.labelKey)}</strong>
+                <span>{t(card.descriptionKey)}</span>
               </button>
             ))}
           </div>
@@ -295,11 +299,11 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
               {error}
             </div>
           )}
-          <FormField label="Naam" htmlFor="wizard-name" required>
+          <FormField label={t('tarification.common.name')} htmlFor="wizard-name" required>
             <input id="wizard-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} />
           </FormField>
           <div className="issued-items-form-row">
-            <FormField label="Geldig vanaf" htmlFor="wizard-from" required>
+            <FormField label={t('tarification.wizard.validFrom')} htmlFor="wizard-from" required>
               <input
                 id="wizard-from"
                 type="date"
@@ -317,20 +321,20 @@ export function PricingTableWizard({ onClose, onCreated }: PricingTableWizardPro
                 if (e.target.checked) setCustomerId(null)
               }}
             />
-            Herbruikbare tabel (koppelbaar aan meerdere klanten via klantkoppelingen)
+            {t('tarification.wizard.sharedCheckbox')}
           </label>
           {!isShared && (
             <FormField
-              label="Klant"
+              label={t('tarification.common.customer')}
               htmlFor="wizard-customer"
-              hint="Optioneel: leeg laten maakt dit de algemene (bedrijfsbrede) standaardtabel."
+              hint={t('tarification.wizard.customerHint')}
             >
               <SearchableSelect
                 id="wizard-customer"
                 value={customerId}
                 onChange={setCustomerId}
                 options={customerOptions}
-                placeholder="— Algemene standaardtabel —"
+                placeholder={t('tarification.wizard.customerPlaceholder')}
               />
             </FormField>
           )}

@@ -67,16 +67,17 @@ export type DockAppointmentStatus =
   | 'Cancelled'
   | 'NoShow'
 
+/** Vertaalsleutels — renderen als t(DOCK_STATUS_LABELS[status]). */
 export const DOCK_STATUS_LABELS: Record<DockAppointmentStatus, string> = {
-  Planned: 'Gepland',
-  Expected: 'Verwacht',
-  Arrived: 'Aangekomen',
-  Waiting: 'Wachtrij',
-  AssignedToDock: 'Aan dock',
-  InProgress: 'Bezig',
-  Completed: 'Afgerond',
-  Cancelled: 'Geannuleerd',
-  NoShow: 'Niet komen opdagen',
+  Planned: 'warehousing.dockStatus.Planned',
+  Expected: 'warehousing.dockStatus.Expected',
+  Arrived: 'warehousing.dockStatus.Arrived',
+  Waiting: 'warehousing.dockStatus.Waiting',
+  AssignedToDock: 'warehousing.dockStatus.AssignedToDock',
+  InProgress: 'warehousing.dockStatus.InProgress',
+  Completed: 'warehousing.dockStatus.Completed',
+  Cancelled: 'warehousing.dockStatus.Cancelled',
+  NoShow: 'warehousing.dockStatus.NoShow',
 }
 
 export const DOCK_STATUS_TONE: Record<DockAppointmentStatus, 'neutral' | 'info' | 'warning' | 'success' | 'danger'> = {
@@ -91,9 +92,10 @@ export const DOCK_STATUS_TONE: Record<DockAppointmentStatus, 'neutral' | 'info' 
   NoShow: 'danger',
 }
 
+/** Vertaalsleutels — renderen als t(OPERATION_LABELS[type]). */
 export const OPERATION_LABELS: Record<DockOperationType, string> = {
-  Loading: 'Laden',
-  Unloading: 'Lossen',
+  Loading: 'warehousing.operation.Loading',
+  Unloading: 'warehousing.operation.Unloading',
 }
 
 export interface DockConflict {

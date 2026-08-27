@@ -1,0 +1,27 @@
+{
+  "action": {
+    "Created": "Créé",
+    "Updated": "Mis à jour",
+    "Deleted": "Supprimé",
+    "Deactivated": "Désactivé",
+    "Reactivated": "Réactivé",
+    "Blocked": "Bloqué",
+    "Unblocked": "Débloqué",
+    "Cancelled": "Annulé",
+    "StatusChanged": "Statut modifié",
+    "AssignmentChanged": "Attribution modifiée"
+  },
+  "panel": {
+    "loadFailed": "L'historique n'a pas pu être chargé.",
+    "noPermission": "Vous n'avez pas les droits pour consulter l'historique.",
+    "columns": {
+      "timestamp": "Horodatage",
+      "action": "Action",
+      "changes": "Modification"
+    },
+    "before": "Avant :",
+    "after": "Après :",
+    "empty": "Pas encore d'historique pour cet élément.",
+    "loading": "Chargement de l'historique…"
+  }
+}

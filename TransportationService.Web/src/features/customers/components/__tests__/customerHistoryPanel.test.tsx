@@ -20,6 +20,7 @@ function page(): CustomerHistoryPage {
         action: 'Updated',
         actionLabel: 'Gewijzigd',
         category: 'Klant',
+        categoryCode: 'customer',
         summary: 'Naam gewijzigd.',
         changes: [{ field: 'Naam', before: 'Acme', after: 'Acme BV' }],
       },
@@ -30,6 +31,7 @@ function page(): CustomerHistoryPage {
         action: 'ContactAdded',
         actionLabel: 'Contactpersoon toegevoegd',
         category: 'Contactpersonen',
+        categoryCode: 'contacts',
         summary: 'Contactpersoon Jan Claes toegevoegd.',
         changes: [],
       },
@@ -63,13 +65,13 @@ describe('CustomerHistoryPanel', () => {
     expect(screen.getByText('Acme BV')).toBeInTheDocument()
   })
 
-  it('refetches with the chosen category when a chip is clicked', async () => {
+  it('refetches with the chosen category CODE when a chip is clicked', async () => {
     render(<CustomerHistoryPanel customerId="c1" />)
     await screen.findByText('Naam gewijzigd.')
     expect(getHistorySpy).toHaveBeenCalledWith('c1', 1, 25, null)
 
     await userEvent.click(screen.getByRole('button', { name: 'Contactpersonen' }))
-    await waitFor(() => expect(getHistorySpy).toHaveBeenCalledWith('c1', 1, 25, 'Contactpersonen'))
+    await waitFor(() => expect(getHistorySpy).toHaveBeenCalledWith('c1', 1, 25, 'contacts'))
 
     await userEvent.click(screen.getByRole('button', { name: 'Alles' }))
     await waitFor(() => expect(getHistorySpy).toHaveBeenLastCalledWith('c1', 1, 25, null))

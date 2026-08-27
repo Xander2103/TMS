@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useLocale } from '../../../i18n/localeContext'
 import { RECIPIENT_TYPE_LABELS } from '../types'
 
 /**
@@ -7,41 +8,39 @@ import { RECIPIENT_TYPE_LABELS } from '../types'
  * routing logic is documented here, not duplicated.
  */
 export function RecipientsInfoTab() {
+  const { t } = useLocale()
   return (
     <div className="notification-admin-info">
-      <h3>Hoe ontvangers worden bepaald</h3>
+      <h3>{t('notificationAdmin.recipientsInfo.heading')}</h3>
       <p>
-        Elke gebeurtenis in het tabblad <strong>Gebeurtenissen</strong> heeft één of meer ontvangertypes. Bij het
-        versturen wordt elk type opgelost naar concrete e-mailadressen of in-app-meldingen:
+        {t('notificationAdmin.recipientsInfo.intro1')} <strong>{t('notificationAdmin.recipientsInfo.introStrong')}</strong>{' '}
+        {t('notificationAdmin.recipientsInfo.intro2')}
       </p>
       <dl className="notification-admin-recipient-glossary">
-        <dt>{RECIPIENT_TYPE_LABELS.CustomerPrimaryContact}</dt>
-        <dd>Het actieve hoofdcontact van de klant op de order/factuur; zonder hoofdcontact valt dit terug op het algemene e-mailadres van de klant.</dd>
+        <dt>{t(RECIPIENT_TYPE_LABELS.CustomerPrimaryContact)}</dt>
+        <dd>{t('notificationAdmin.recipientsInfo.descPrimaryContact')}</dd>
 
-        <dt>{RECIPIENT_TYPE_LABELS.CustomerCommunicationRule}</dt>
-        <dd>
-          Gebruikt de communicatieregels die per klant zijn ingesteld (welk contact welk type bericht krijgt). Beheer
-          je op de klantfiche zelf — zie de link hieronder.
-        </dd>
+        <dt>{t(RECIPIENT_TYPE_LABELS.CustomerCommunicationRule)}</dt>
+        <dd>{t('notificationAdmin.recipientsInfo.descCommunicationRule')}</dd>
 
-        <dt>{RECIPIENT_TYPE_LABELS.InternalPermission}</dt>
-        <dd>Elke actieve gebruiker die het gekozen recht heeft, ongeacht in welke rol dat recht zit.</dd>
+        <dt>{t(RECIPIENT_TYPE_LABELS.InternalPermission)}</dt>
+        <dd>{t('notificationAdmin.recipientsInfo.descPermission')}</dd>
 
-        <dt>{RECIPIENT_TYPE_LABELS.InternalRole}</dt>
-        <dd>Elke actieve gebruiker in een rol met de opgegeven sjabloon-rolcode.</dd>
+        <dt>{t(RECIPIENT_TYPE_LABELS.InternalRole)}</dt>
+        <dd>{t('notificationAdmin.recipientsInfo.descRole')}</dd>
 
-        <dt>{RECIPIENT_TYPE_LABELS.ExplicitEmail}</dt>
-        <dd>Eén vast e-mailadres, los van gebruikers of klanten (bv. een gedeelde mailbox).</dd>
+        <dt>{t(RECIPIENT_TYPE_LABELS.ExplicitEmail)}</dt>
+        <dd>{t('notificationAdmin.recipientsInfo.descEmail')}</dd>
 
-        <dt>{RECIPIENT_TYPE_LABELS.Driver}</dt>
-        <dd>De chauffeur van de opdracht, of — bij HR-gebeurtenissen — de betrokken medewerker zelf.</dd>
+        <dt>{t(RECIPIENT_TYPE_LABELS.Driver)}</dt>
+        <dd>{t('notificationAdmin.recipientsInfo.descDriver')}</dd>
       </dl>
       <p>
-        Per-klant communicatieregels (welk klantcontact welk type e-mail krijgt) beheer je op de klantfiche, tabblad{' '}
-        <em>Communicatie</em>.
+        {t('notificationAdmin.recipientsInfo.outro1')} <em>{t('notificationAdmin.recipientsInfo.outroEm')}</em>
+        {t('notificationAdmin.recipientsInfo.outro2')}
       </p>
       <Link to="/customers" className="notification-admin-link-button">
-        Naar klanten →
+        {t('notificationAdmin.recipientsInfo.toCustomers')}
       </Link>
     </div>
   )

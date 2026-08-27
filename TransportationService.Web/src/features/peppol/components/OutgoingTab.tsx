@@ -6,14 +6,15 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { euro } from '../../invoices/types'
 import {
   cancelPeppolTransmission,
   listPeppolTransmissions,
   retryPeppolTransmission,
-  PEPPOL_KIND_LABELS,
-  PEPPOL_STATUS_LABELS,
+  PEPPOL_KIND_LABEL_KEYS,
+  PEPPOL_STATUS_LABEL_KEYS,
   peppolStatusLabel,
   peppolStatusTone,
   type PeppolTransmissionRow,
@@ -31,17 +32,19 @@ interface OutgoingTabProps {
 
 /** "Uitgaand": de Peppol-outbox met status/zoekfilter, retry en annulering. */
 export function OutgoingTab({ canRetry, canCancel }: OutgoingTabProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [status, setStatus] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [reloadToken, setReloadToken] = useState(0)
+  // Foutstates als vertaalsleutel; vertaling gebeurt pas bij render.
   const [result, setResult] = useState<{
     items: PeppolTransmissionRow[]
     totalCount: number
-    error: string | null
+    errorKey: string | null
     loadedKey: string
-  }>({ items: [], totalCount: 0, error: null, loadedKey: '' })
+  }>({ items: [], totalCount: 0, errorKey: null, loadedKey: '' })
   const [busyId, setBusyId] = useState<string | null>(null)
   const [cancelTarget, setCancelTarget] = useState<PeppolTransmissionRow | null>(null)
 
@@ -57,13 +60,13 @@ export function OutgoingTab({ canRetry, canCancel }: OutgoingTabProps) {
     })
       .then((data) => {
         if (!mounted) return
-        setResult({ items: data.items, totalCount: data.totalCount, error: null, loadedKey: requestKey })
+        setResult({ items: data.items, totalCount: data.totalCount, errorKey: null, loadedKey: requestKey })
       })
       .catch(() => {
         if (!mounted) return
         setResult((current) => ({
           ...current,
-          error: 'De Peppol-transmissies konden niet worden geladen.',
+          errorKey: 'peppol.outgoing.loadFailed',
           loadedKey: requestKey,
         }))
       })
@@ -73,17 +76,17 @@ export function OutgoingTab({ canRetry, canCancel }: OutgoingTabProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey])
 
-  const { items, totalCount, error: loadError } = result
+  const { items, totalCount, errorKey: loadErrorKey } = result
   const isLoading = result.loadedKey !== requestKey
 
   async function retry(id: string) {
     setBusyId(id)
     try {
       await retryPeppolTransmission(id)
-      showSuccess('Transmissie opnieuw in de wachtrij gezet.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('peppol.outgoing.retryQueued'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De transmissie kon niet opnieuw worden aangeboden.').message)
+      showError(localizeApiError(t, err, t('peppol.outgoing.retryFailed')))
     } finally {
       setBusyId(null)
     }
@@ -93,10 +96,10 @@ export function OutgoingTab({ canRetry, canCancel }: OutgoingTabProps) {
     setBusyId(row.id)
     try {
       await cancelPeppolTransmission(row.id)
-      showSuccess('Transmissie geannuleerd.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('peppol.outgoing.cancelled'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De transmissie kon niet worden geannuleerd.').message)
+      showError(localizeApiError(t, err, t('peppol.outgoing.cancelFailed')))
     } finally {
       setBusyId(null)
       setCancelTarget(null)
@@ -104,25 +107,29 @@ export function OutgoingTab({ canRetry, canCancel }: OutgoingTabProps) {
   }
 
   const columns: Column<PeppolTransmissionRow>[] = [
-    { key: 'invoice', header: 'Factuur', render: (r) => r.invoiceNumber },
-    { key: 'kind', header: 'Type', render: (r) => PEPPOL_KIND_LABELS[r.documentKind] ?? r.documentKind },
-    { key: 'customer', header: 'Klant', render: (r) => r.customerName },
-    { key: 'total', header: 'Bedrag', align: 'right', render: (r) => euro(r.total, r.currency) },
-    { key: 'date', header: 'Datum', render: (r) => r.invoiceDate },
-    { key: 'environment', header: 'Omgeving', render: (r) => r.environment },
+    { key: 'invoice', header: t('peppol.outgoing.colInvoice'), render: (r) => r.invoiceNumber },
+    {
+      key: 'kind',
+      header: t('peppol.outgoing.colKind'),
+      render: (r) => (PEPPOL_KIND_LABEL_KEYS[r.documentKind] ? t(PEPPOL_KIND_LABEL_KEYS[r.documentKind]) : r.documentKind),
+    },
+    { key: 'customer', header: t('peppol.outgoing.colCustomer'), render: (r) => r.customerName },
+    { key: 'total', header: t('peppol.outgoing.colAmount'), align: 'right', render: (r) => euro(r.total, r.currency) },
+    { key: 'date', header: t('peppol.outgoing.colDate'), render: (r) => r.invoiceDate },
+    { key: 'environment', header: t('peppol.outgoing.colEnvironment'), render: (r) => r.environment },
     {
       key: 'status',
-      header: 'Status',
-      render: (r) => <Badge tone={peppolStatusTone(r.status)}>{peppolStatusLabel(r.status)}</Badge>,
+      header: t('peppol.outgoing.colStatus'),
+      render: (r) => <Badge tone={peppolStatusTone(r.status)}>{peppolStatusLabel(t, r.status)}</Badge>,
     },
     {
       key: 'providerMessageId',
-      header: 'Provider-referentie',
+      header: t('peppol.outgoing.colProviderRef'),
       render: (r) => (r.providerMessageId ? <code>{r.providerMessageId}</code> : '—'),
     },
     {
       key: 'error',
-      header: 'Fout',
+      header: t('peppol.outgoing.colError'),
       render: (r) => (
         <span className="edi-error" title={r.errorDetail ?? undefined}>
           {r.errorDetail ?? '—'}
@@ -131,22 +138,22 @@ export function OutgoingTab({ canRetry, canCancel }: OutgoingTabProps) {
     },
     {
       key: 'attempts',
-      header: 'Poging/versie',
+      header: t('peppol.outgoing.colAttempts'),
       render: (r) => `${r.retryCount + 1}× / v${r.payloadVersion}`,
     },
     {
       key: 'actions',
-      header: 'Acties',
+      header: t('peppol.outgoing.colActions'),
       render: (r) => (
         <span className="edi-row-actions">
           {canRetry && (r.status === 'Failed' || r.status === 'Rejected') && (
             <Button variant="ghost" disabled={busyId === r.id} onClick={() => void retry(r.id)}>
-              Opnieuw
+              {t('peppol.outgoing.retry')}
             </Button>
           )}
           {canCancel && r.status === 'Queued' && (
             <Button variant="ghost" disabled={busyId === r.id} onClick={() => setCancelTarget(r)}>
-              Annuleren
+              {t('ui.actions.cancel')}
             </Button>
           )}
         </span>
@@ -162,24 +169,24 @@ export function OutgoingTab({ canRetry, canCancel }: OutgoingTabProps) {
           setSearch(value)
           setPage(1)
         }}
-        searchPlaceholder="Zoeken op factuurnummer of klant..."
+        searchPlaceholder={t('peppol.outgoing.searchPlaceholder')}
       >
         <select
           className="ui-filter-select"
-          aria-label="Status"
+          aria-label={t('peppol.outgoing.statusFilterLabel')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value)
             setPage(1)
           }}
         >
-          <option value="">Alle statussen</option>
+          <option value="">{t('ui.filter.allStatuses')}</option>
           {/* Transmissies ontstaan als Queued; Draft/Validated bestaan alleen als enum-waarden. */}
-          {(Object.keys(PEPPOL_STATUS_LABELS) as PeppolTransmissionStatus[])
+          {(Object.keys(PEPPOL_STATUS_LABEL_KEYS) as PeppolTransmissionStatus[])
             .filter((s) => s !== 'Draft' && s !== 'Validated')
             .map((s) => (
               <option key={s} value={s}>
-                {PEPPOL_STATUS_LABELS[s]}
+                {t(PEPPOL_STATUS_LABEL_KEYS[s])}
               </option>
             ))}
         </select>
@@ -190,16 +197,16 @@ export function OutgoingTab({ canRetry, canCancel }: OutgoingTabProps) {
         rows={items}
         rowKey={(r) => r.id}
         isLoading={isLoading}
-        error={loadError}
-        emptyMessage="Geen Peppol-transmissies gevonden."
+        error={loadErrorKey ? t(loadErrorKey) : null}
+        emptyMessage={t('peppol.outgoing.empty')}
       />
       <Pagination page={page} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={setPage} />
 
       {cancelTarget && (
         <ConfirmDialog
-          title="Transmissie annuleren"
-          message={`Weet je zeker dat je de Peppol-verzending van factuur ${cancelTarget.invoiceNumber} wilt annuleren?`}
-          confirmLabel="Annuleren"
+          title={t('peppol.outgoing.cancelTitle')}
+          message={t('peppol.outgoing.cancelMessage', { invoiceNumber: cancelTarget.invoiceNumber })}
+          confirmLabel={t('ui.actions.cancel')}
           destructive
           busy={busyId === cancelTarget.id}
           onConfirm={() => void cancel(cancelTarget)}

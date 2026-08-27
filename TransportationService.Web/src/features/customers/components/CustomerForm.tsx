@@ -22,6 +22,7 @@ import { formatDateTime } from '../../../utils/dates'
 import { PeppolFieldGroup } from './PeppolFieldGroup'
 import { combinePeppolValue, peppolFormatError } from '../utils/peppolValue'
 import { CUSTOMER_SECTION_FIELD_KEYS, isKlantgegevensFieldKey } from './customerSections'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   addContactRow,
   contactRowsToPayload,
@@ -33,11 +34,11 @@ import {
   type ContactRow,
 } from '../utils/contactRows'
 import {
-  CUSTOMER_CONTACT_TYPE_LABELS,
+  CUSTOMER_CONTACT_TYPE_LABEL_KEYS,
   CUSTOMER_CONTACT_TYPES,
-  CUSTOMER_DOCUMENT_STRATEGY_LABELS,
-  PEPPOL_DELIVERY_PREFERENCE_LABELS,
-  VAT_TREATMENT_LABELS,
+  CUSTOMER_DOCUMENT_STRATEGY_LABEL_KEYS,
+  PEPPOL_DELIVERY_PREFERENCE_LABEL_KEYS,
+  VAT_TREATMENT_LABEL_KEYS,
   type CompanyRegistryResult,
   type CustomerContactType,
   type CustomerDetail,
@@ -88,29 +89,27 @@ interface CustomerFormProps {
   stagedLocationsSlot?: ReactNode
 }
 
-/** User-facing labels for backend field paths, for the validation summary. */
-const FIELD_LABELS: Record<string, string> = {
-  name: 'Naam',
-  nickname: 'Roepnaam',
-  customerNumber: 'Klantnummer',
-  companyNumber: 'Ondernemingsnummer',
-  vatNumber: 'BTW-nummer',
-  countryCode: 'Land',
-  vatCountryCode: 'BTW-land',
-  defaultVatRatePercent: 'Standaard BTW-tarief',
-  currencyCode: 'Valuta',
-  iban: 'IBAN',
-  bic: 'BIC',
-  bankAccountNumber: 'Rekeningnummer',
-  notes: 'Interne klantmemo',
-  peppolId: 'Peppol-ID',
-  peppolScheme: 'Peppol-schema',
-  peppolEnabled: 'Facturen via Peppol versturen',
-  peppolDeliveryPreference: 'Bezorgvoorkeur',
-  buyerReference: 'Kopersreferentie',
+/** Vertaalsleutels per backend-veldpad, voor de validatiesamenvatting (render via t). */
+const FIELD_LABEL_KEYS: Record<string, string> = {
+  name: 'customers.fields.name',
+  nickname: 'customers.fields.nickname',
+  customerNumber: 'customers.fields.customerNumber',
+  companyNumber: 'customers.fields.companyNumber',
+  vatNumber: 'customers.fields.vatNumber',
+  countryCode: 'customers.fields.countryCode',
+  vatCountryCode: 'customers.fields.vatCountryCode',
+  defaultVatRatePercent: 'customers.fields.defaultVatRatePercent',
+  currencyCode: 'customers.fields.currencyCode',
+  iban: 'customers.fields.iban',
+  bic: 'customers.fields.bic',
+  bankAccountNumber: 'customers.fields.bankAccountNumber',
+  notes: 'customers.fields.notes',
+  peppolId: 'customers.fields.peppolId',
+  peppolScheme: 'customers.fields.peppolScheme',
+  peppolEnabled: 'customers.fields.peppolEnabled',
+  peppolDeliveryPreference: 'customers.fields.peppolDeliveryPreference',
+  buyerReference: 'customers.fields.buyerReference',
 }
-
-const FISCAL_PERMISSION_HINT = 'Vereist recht: fiscale gegevens beheren.'
 
 function nullable(value: string): string | null {
   const trimmed = value.trim()
@@ -138,11 +137,12 @@ type PeppolVerifyState =
   | { kind: 'result'; result: CustomerPeppolVerifyResult }
 
 export function CustomerForm({ mode, initial, isSubmitting, submitError, serverFieldErrors, onSubmit, onCancel, editPanels, stagedLocationsSlot }: CustomerFormProps) {
+  const { t } = useLocale()
   const languages = useLookupOptions('/api/languages')
   const { hasPermission } = useAuth()
   const canManageFiscal = hasPermission('customers.manage_fiscal')
   const canValidatePeppol = hasPermission('peppol.validate')
-  const fiscalHint = canManageFiscal ? undefined : FISCAL_PERMISSION_HINT
+  const fiscalHint = canManageFiscal ? undefined : t('customers.form.fiscalPermissionHint')
 
   // VAT-treatment catalog: the backend owns labels, rates and legal texts. On load failure
   // we fall back to the static labels so the form stays usable.
@@ -298,7 +298,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   async function handleRegistryLookup() {
     const number = vatNumber.trim() || companyNumber.trim()
     if (!number) {
-      setLookup({ kind: 'error', message: 'Vul eerst een BTW-nummer of ondernemingsnummer in.' })
+      setLookup({ kind: 'error', message: t('customers.form.lookupNumberFirst') })
       return
     }
     setLookup({ kind: 'busy' })
@@ -308,7 +308,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       else if (!response.result) setLookup({ kind: 'no-result' })
       else setLookup({ kind: 'result', result: response.result })
     } catch {
-      setLookup({ kind: 'error', message: 'Het opzoeken is mislukt. Probeer het later opnieuw.' })
+      setLookup({ kind: 'error', message: t('customers.form.lookupFailed') })
     }
   }
 
@@ -321,14 +321,14 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
    */
   function applyRegistryResult(result: CompanyRegistryResult) {
     const fields: { label: string; value: string | null; current: string; set: (v: string) => void; fiscal?: boolean }[] = [
-      { label: 'Officiële naam', value: result.legalName, current: legalName, set: setLegalName },
-      { label: 'Ondernemingsnummer', value: result.companyNumber, current: companyNumber, set: setCompanyNumber, fiscal: true },
-      { label: 'BTW-nummer', value: result.vatNumber, current: vatNumber, set: setVatNumber, fiscal: true },
-      { label: 'Straat', value: result.street, current: street, set: setStreet },
-      { label: 'Nummer', value: result.houseNumber, current: houseNumber, set: setHouseNumber },
-      { label: 'Postcode', value: result.postalCode, current: postalCode, set: setPostalCode },
-      { label: 'Plaats', value: result.city, current: city, set: setCity },
-      { label: 'Land', value: result.countryCode, current: countryCode ?? '', set: (v) => setCountryCode(v) },
+      { label: t('customers.form.registry.legalName'), value: result.legalName, current: legalName, set: setLegalName },
+      { label: t('customers.form.registry.companyNumber'), value: result.companyNumber, current: companyNumber, set: setCompanyNumber, fiscal: true },
+      { label: t('customers.form.registry.vatNumber'), value: result.vatNumber, current: vatNumber, set: setVatNumber, fiscal: true },
+      { label: t('customers.form.registry.street'), value: result.street, current: street, set: setStreet },
+      { label: t('customers.form.registry.houseNumber'), value: result.houseNumber, current: houseNumber, set: setHouseNumber },
+      { label: t('customers.form.registry.postalCode'), value: result.postalCode, current: postalCode, set: setPostalCode },
+      { label: t('customers.form.registry.city'), value: result.city, current: city, set: setCity },
+      { label: t('customers.form.registry.country'), value: result.countryCode, current: countryCode ?? '', set: (v) => setCountryCode(v) },
     ]
     const candidates = fields.filter((f) => f.value !== null && f.value.trim() !== '' && (canManageFiscal || !f.fiscal))
     const conflicts: { label: string; current: string; next: string }[] = candidates
@@ -344,15 +344,17 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     const nextPeppol = combinePeppolValue(providerPeppol.scheme, providerPeppol.id)
     const peppolCandidate = canManageFiscal && providerHasPeppol && currentPeppol !== nextPeppol
     if (peppolCandidate && currentPeppol !== '') {
-      conflicts.push({ label: 'Peppol-ID', current: currentPeppol, next: nextPeppol })
+      conflicts.push({ label: t('customers.fields.peppolId'), current: currentPeppol, next: nextPeppol })
     }
 
     let overwrite = false
     if (conflicts.length > 0) {
       overwrite = window.confirm(
-        'Deze velden zijn al ingevuld en wijken af van het register:\n\n' +
+        t('customers.form.registry.conflictIntro') +
+          '\n\n' +
           conflicts.map((c) => `• ${c.label}: "${c.current}" → "${c.next}"`).join('\n') +
-          '\n\nOverschrijven met de registerwaarden?',
+          '\n\n' +
+          t('customers.form.registry.conflictQuestion'),
       )
     }
     for (const f of candidates) {
@@ -390,7 +392,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     } catch (error) {
       setPeppolVerify({
         kind: 'error',
-        message: describeApiError(error, 'De Peppol-controle is mislukt. Probeer het later opnieuw.').message,
+        message: describeApiError(error, t('customers.form.peppolVerifyFailed')).message,
       })
     }
   }
@@ -425,7 +427,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
       {contactRows.map((row, rowIndex) => (
         <div key={row.key} className="customer-contact-repeater-row">
           <FormField
-            label="Voornaam"
+            label={t('customers.contacts.firstName')}
             htmlFor={`c-ct-first-${row.key}`}
             required
             error={contactError(row.key, 'firstName')}
@@ -439,7 +441,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
             />
           </FormField>
           <FormField
-            label="Achternaam"
+            label={t('customers.contacts.lastName')}
             htmlFor={`c-ct-last-${row.key}`}
             required
             error={contactError(row.key, 'lastName')}
@@ -452,7 +454,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               maxLength={100}
             />
           </FormField>
-          <FormField label="Functie" htmlFor={`c-ct-role-${row.key}`}>
+          <FormField label={t('customers.contacts.role')} htmlFor={`c-ct-role-${row.key}`}>
             <input
               id={`c-ct-role-${row.key}`}
               value={row.role}
@@ -460,7 +462,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               maxLength={100}
             />
           </FormField>
-          <FormField label="Type" htmlFor={`c-ct-type-${row.key}`} error={contactError(row.key, 'contactType')}>
+          <FormField label={t('customers.contacts.type')} htmlFor={`c-ct-type-${row.key}`} error={contactError(row.key, 'contactType')}>
             <select
               id={`c-ct-type-${row.key}`}
               value={row.contactType}
@@ -468,12 +470,12 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
             >
               {CUSTOMER_CONTACT_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {CUSTOMER_CONTACT_TYPE_LABELS[type]}
+                  {t(CUSTOMER_CONTACT_TYPE_LABEL_KEYS[type])}
                 </option>
               ))}
             </select>
           </FormField>
-          <FormField label="E-mail" htmlFor={`c-ct-email-${row.key}`}>
+          <FormField label={t('customers.contacts.email')} htmlFor={`c-ct-email-${row.key}`}>
             <input
               id={`c-ct-email-${row.key}`}
               type="email"
@@ -482,7 +484,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               maxLength={250}
             />
           </FormField>
-          <FormField label="Telefoon" htmlFor={`c-ct-phone-${row.key}`}>
+          <FormField label={t('customers.contacts.phone')} htmlFor={`c-ct-phone-${row.key}`}>
             <input
               id={`c-ct-phone-${row.key}`}
               value={row.phoneNumber}
@@ -490,7 +492,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               maxLength={30}
             />
           </FormField>
-          <FormField label="GSM" htmlFor={`c-ct-mobile-${row.key}`}>
+          <FormField label={t('customers.contacts.mobile')} htmlFor={`c-ct-mobile-${row.key}`}>
             <input
               id={`c-ct-mobile-${row.key}`}
               value={row.mobilePhone}
@@ -506,7 +508,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 onChange={(e) => patchContactRow(row.key, { isPrimary: e.target.checked })}
                 aria-invalid={contactError(row.key, 'isPrimary') ? 'true' : undefined}
               />
-              Primair voor dit type
+              {t('customers.contacts.primaryForType')}
             </label>
             <Button
               variant="ghost"
@@ -514,9 +516,9 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 setContactRows((rows) => removeContactRow(rows, row.key))
                 touch()
               }}
-              aria-label={`Contactpersoon ${rowIndex + 1} verwijderen`}
+              aria-label={t('customers.contacts.removeRowAria', { index: rowIndex + 1 })}
             >
-              Verwijderen
+              {t('ui.actions.delete')}
             </Button>
           </div>
           {contactError(row.key, 'isPrimary') && (
@@ -533,7 +535,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
           touch()
         }}
       >
-        + Contactpersoon toevoegen
+        {t('customers.contacts.addRow')}
       </Button>
     </>
   )
@@ -541,22 +543,22 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   const sections: SectionDef[] = [
     {
       id: 'klantgegevens',
-      label: 'Klantgegevens',
+      label: t('customers.form.sections.klantgegevens'),
       hasError: sectionHasError('klantgegevens'),
       render: () => (
         <>
-          <FormSection title="Bedrijfsgegevens" columns={2}>
-            <FormField label="Naam" htmlFor="c-name" error={nameError ?? getFieldError(serverFieldErrors, 'name')} required>
+          <FormSection title={t('customers.form.companyData')} columns={2}>
+            <FormField label={t('customers.fields.name')} htmlFor="c-name" error={nameError ?? getFieldError(serverFieldErrors, 'name')} required>
               <input id="c-name" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={nameError ? 'true' : undefined} maxLength={200} />
             </FormField>
-            <FormField label="Roepnaam" htmlFor="c-nickname" hint="Korte interne naam, bv. voor planning en zoeken." error={getFieldError(serverFieldErrors, 'nickname')}>
+            <FormField label={t('customers.fields.nickname')} htmlFor="c-nickname" hint={t('customers.form.nicknameHint')} error={getFieldError(serverFieldErrors, 'nickname')}>
               <input id="c-nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={100} />
             </FormField>
             {mode === 'create' && (
               <FormField
-                label="Klantnummer"
+                label={t('customers.fields.customerNumber')}
                 htmlFor="c-number"
-                hint="Leeg laten voor automatische nummering."
+                hint={t('customers.form.customerNumberHint')}
                 error={getFieldError(serverFieldErrors, 'customerNumber')}
               >
                 <input
@@ -568,46 +570,46 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 />
               </FormField>
             )}
-            <FormField label="Officiële naam" htmlFor="c-legal">
+            <FormField label={t('customers.form.legalName')} htmlFor="c-legal">
               <input id="c-legal" value={legalName} onChange={(e) => setLegalName(e.target.value)} maxLength={200} />
             </FormField>
-            <FormField label="Categorie" htmlFor="c-category" hint="Commerciële classificatie van deze klant.">
+            <FormField label={t('customers.form.category')} htmlFor="c-category" hint={t('customers.form.categoryHint')}>
               <LookupSelect
                 id="c-category"
                 basePath="/api/customer-categories"
                 managePermission="customer_categories.manage"
-                singular="klantcategorie"
+                singular="masterData.singular.customer-categories"
                 value={categoryId}
                 onChange={(v) => {
                   setCategoryId(v)
                   touch()
                 }}
-                placeholder="— Geen categorie —"
+                placeholder={t('customers.form.noCategory')}
               />
             </FormField>
             {isEdit && (
               <div className="customer-form-requirements">
                 <label className="customer-form-checkbox">
                   <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-                  Actief
+                  {t('ui.statusBadges.active')}
                 </label>
               </div>
             )}
           </FormSection>
 
-          <FormSection title="Algemene contactgegevens" columns={2}>
-            <FormField label="Algemeen e-mailadres" htmlFor="c-email">
+          <FormSection title={t('customers.form.generalContact')} columns={2}>
+            <FormField label={t('customers.form.generalEmail')} htmlFor="c-email">
               <input id="c-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} />
             </FormField>
-            <FormField label="Algemeen telefoonnummer" htmlFor="c-phone">
+            <FormField label={t('customers.form.generalPhone')} htmlFor="c-phone">
               <input id="c-phone" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} maxLength={30} />
             </FormField>
-            <FormField label="Website" htmlFor="c-website">
+            <FormField label={t('customers.form.website')} htmlFor="c-website">
               <input id="c-website" value={website} onChange={(e) => setWebsite(e.target.value)} maxLength={200} />
             </FormField>
-            <FormField label="Voorkeurstaal" htmlFor="c-lang" hint="Taal voor algemene communicatie.">
+            <FormField label={t('customers.form.preferredLanguage')} htmlFor="c-lang" hint={t('customers.form.preferredLanguageHint')}>
               <select id="c-lang" value={defaultLanguageCode} onChange={(e) => setDefaultLanguageCode(e.target.value)}>
-                <option value="">— Geen —</option>
+                <option value="">{t('customers.form.noneOption')}</option>
                 {languages.options.map((option) => (
                   <option key={option.id} value={option.code}>
                     {option.name}
@@ -616,9 +618,9 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               </select>
             </FormField>
             <FormField
-              label="Interne klantmemo"
+              label={t('customers.fields.notes')}
               htmlFor="c-notes"
-              hint="Alleen zichtbaar voor interne gebruikers."
+              hint={t('customers.form.notesHint')}
               className="form-span-all"
               error={getFieldError(serverFieldErrors, 'notes')}
             >
@@ -627,31 +629,27 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
           </FormSection>
 
           <FormSection
-            title="Contactpersonen"
+            title={t('customers.form.contactsSection')}
             columns={1}
-            description={
-              isEdit
-                ? undefined
-                : 'Voeg meteen één of meer contactpersonen toe; volledig lege rijen worden overgeslagen.'
-            }
+            description={isEdit ? undefined : t('customers.form.contactsDescription')}
           >
             <div className="form-span-all">{isEdit ? (editPanels?.contactpersonen ?? null) : contactRepeater}</div>
           </FormSection>
 
-          <FormSection title="Locaties & adressen" columns={3} description="Hoofdzetel / algemeen adres">
-            <FormField label="Straat" htmlFor="c-street">
+          <FormSection title={t('customers.form.locationsSection')} columns={3} description={t('customers.form.locationsDescription')}>
+            <FormField label={t('customers.form.street')} htmlFor="c-street">
               <input id="c-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} />
             </FormField>
-            <FormField label="Nummer" htmlFor="c-houseno">
+            <FormField label={t('customers.form.houseNumber')} htmlFor="c-houseno">
               <input id="c-houseno" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} maxLength={20} />
             </FormField>
-            <FormField label="Postcode" htmlFor="c-postal">
+            <FormField label={t('customers.form.postalCode')} htmlFor="c-postal">
               <input id="c-postal" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} maxLength={20} />
             </FormField>
-            <FormField label="Gemeente" htmlFor="c-city">
+            <FormField label={t('customers.form.city')} htmlFor="c-city">
               <input id="c-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} />
             </FormField>
-            <FormField label="Land" htmlFor="c-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
+            <FormField label={t('customers.fields.countryCode')} htmlFor="c-country" error={getFieldError(serverFieldErrors, 'countryCode')}>
               <CountryCombobox
                 id="c-country"
                 value={countryCode}
@@ -665,9 +663,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               {isEdit
                 ? editPanels?.adressen
                 : (stagedLocationsSlot ?? (
-                    <p className="customer-form-muted">
-                      Bijkomende adressen (laden, leveren, facturatie) beheer je na het aanmaken.
-                    </p>
+                    <p className="customer-form-muted">{t('customers.form.addressesAfterCreate')}</p>
                   ))}
             </div>
           </FormSection>
@@ -676,21 +672,18 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     },
     {
       id: 'fiscaal',
-      label: 'Fiscaal & Peppol',
+      label: t('customers.form.sections.fiscaal'),
       hasError: sectionHasError('fiscaal'),
       render: () => (
         <FormSection
-          title="Fiscaal & Peppol"
+          title={t('customers.form.sections.fiscaal')}
           columns={3}
-          description={
-            fiscalHint ??
-            'BTW-regime, ondernemingsnummer en e-facturatiegegevens. De BTW-behandeling bepaalt hóe gefactureerd wordt; het tarief bepaalt het percentage.'
-          }
+          description={fiscalHint ?? t('customers.form.fiscalDescription')}
         >
           <FormField
-            label="BTW-nummer"
+            label={t('customers.fields.vatNumber')}
             htmlFor="c-vat"
-            hint="Belgische nummers worden gecontroleerd (BE + 10 cijfers)."
+            hint={t('customers.form.vatNumberHint')}
             error={vatError ?? getFieldError(serverFieldErrors, 'vatNumber')}
           >
             <>
@@ -698,22 +691,25 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 id="c-vat"
                 value={vatNumber}
                 onChange={(e) => setVatNumber(e.target.value)}
-                onBlur={() => setVatError(validateVatNumber(vatNumber) ?? undefined)}
+                onBlur={() => {
+                  const key = validateVatNumber(vatNumber)
+                  setVatError(key ? t(key) : undefined)
+                }}
                 aria-invalid={vatError || getFieldError(serverFieldErrors, 'vatNumber') ? 'true' : undefined}
                 maxLength={30}
                 disabled={!canManageFiscal}
               />
               {vatNumberMissing && (
                 <p className="customer-form-warning" role="status">
-                  BTW-nummer vereist voor deze btw-regeling (blokkeert verzending van facturen).
+                  {t('customers.form.vatNumberMissingWarning')}
                 </p>
               )}
             </>
           </FormField>
           <FormField
-            label="Ondernemingsnummer"
+            label={t('customers.fields.companyNumber')}
             htmlFor="c-company-number"
-            hint="KBO-nummer, bv. 0123.456.749."
+            hint={t('customers.form.companyNumberHint')}
             error={getFieldError(serverFieldErrors, 'companyNumber')}
           >
             <input
@@ -727,14 +723,12 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
           <div className="customer-form-lookup form-span-all">
             <div className="customer-form-lookup-row">
               <Button variant="secondary" onClick={handleRegistryLookup} disabled={lookup.kind === 'busy' || isSubmitting}>
-                {lookup.kind === 'busy' ? 'Opzoeken…' : 'Gegevens opzoeken'}
+                {lookup.kind === 'busy' ? t('customers.form.lookupBusy') : t('customers.form.lookupAction')}
               </Button>
               {lookup.kind === 'not-configured' && (
-                <span className="customer-form-muted">
-                  Geen officiële registerkoppeling geconfigureerd — vul de gegevens handmatig in.
-                </span>
+                <span className="customer-form-muted">{t('customers.form.lookupNotConfigured')}</span>
               )}
-              {lookup.kind === 'no-result' && <span className="customer-form-muted">Geen gegevens gevonden voor dit nummer.</span>}
+              {lookup.kind === 'no-result' && <span className="customer-form-muted">{t('customers.form.lookupNoResult')}</span>}
               {lookup.kind === 'error' && (
                 <span className="ui-form-field-error" role="alert">
                   {lookup.message}
@@ -743,19 +737,19 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
             </div>
             {lookup.kind === 'result' && (
               <div className="customer-form-lookup-panel">
-                <h4>Gevonden in het register</h4>
+                <h4>{t('customers.form.registry.foundTitle')}</h4>
                 <dl>
                   {(
                     [
-                      ['Officiële naam', lookup.result.legalName],
-                      ['Ondernemingsnummer', lookup.result.companyNumber],
-                      ['BTW-nummer', lookup.result.vatNumber],
-                      ['Straat', lookup.result.street],
-                      ['Nummer', lookup.result.houseNumber],
-                      ['Postcode', lookup.result.postalCode],
-                      ['Plaats', lookup.result.city],
-                      ['Land', lookup.result.countryCode],
-                      ['Peppol-ID', combinePeppolValue(lookup.result.peppolScheme ?? '', lookup.result.peppolId ?? '') || null],
+                      [t('customers.form.registry.legalName'), lookup.result.legalName],
+                      [t('customers.form.registry.companyNumber'), lookup.result.companyNumber],
+                      [t('customers.form.registry.vatNumber'), lookup.result.vatNumber],
+                      [t('customers.form.registry.street'), lookup.result.street],
+                      [t('customers.form.registry.houseNumber'), lookup.result.houseNumber],
+                      [t('customers.form.registry.postalCode'), lookup.result.postalCode],
+                      [t('customers.form.registry.city'), lookup.result.city],
+                      [t('customers.form.registry.country'), lookup.result.countryCode],
+                      [t('customers.fields.peppolId'), combinePeppolValue(lookup.result.peppolScheme ?? '', lookup.result.peppolId ?? '') || null],
                     ] as const
                   )
                     .filter(([, value]) => value)
@@ -767,16 +761,16 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                     ))}
                 </dl>
                 <div className="customer-form-lookup-actions">
-                  <Button onClick={() => applyRegistryResult(lookup.result)}>Overnemen</Button>
+                  <Button onClick={() => applyRegistryResult(lookup.result)}>{t('customers.form.registry.apply')}</Button>
                   <Button variant="ghost" onClick={() => setLookup({ kind: 'idle' })}>
-                    Sluiten
+                    {t('ui.actions.close')}
                   </Button>
                 </div>
-                <p className="customer-form-muted">Lege velden worden ingevuld; afwijkende velden pas na bevestiging overschreven.</p>
+                <p className="customer-form-muted">{t('customers.form.registry.applyExplanation')}</p>
               </div>
             )}
           </div>
-          <FormField label="BTW-behandeling" htmlFor="c-vat-treatment">
+          <FormField label={t('customers.form.vatTreatment')} htmlFor="c-vat-treatment">
             <select
               id="c-vat-treatment"
               value={vatTreatment}
@@ -789,44 +783,44 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                       {info.label}
                     </option>
                   ))
-                : Object.entries(VAT_TREATMENT_LABELS).map(([value, label]) => (
+                : Object.entries(VAT_TREATMENT_LABEL_KEYS).map(([value, labelKey]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(labelKey)}
                     </option>
                   ))}
             </select>
           </FormField>
           {rateControl.mode === 'locked' ? (
             <FormField
-              label="Standaard BTW-tarief"
+              label={t('customers.fields.defaultVatRatePercent')}
               htmlFor="c-vat-rate-locked"
-              hint={treatmentInfo?.invoiceLegalText ?? 'Dit tarief ligt vast voor deze btw-regeling.'}
+              hint={treatmentInfo?.invoiceLegalText ?? t('customers.form.vatRateLockedHint')}
             >
               <input
                 id="c-vat-rate-locked"
-                value={rateControl.lockedRate !== null ? `${rateControl.lockedRate}%` : 'Bedrijfsstandaard'}
+                value={rateControl.lockedRate !== null ? `${rateControl.lockedRate}%` : t('customers.form.companyDefault')}
                 readOnly
                 disabled
               />
             </FormField>
           ) : (
-            <FormField label="Standaard BTW-tarief" htmlFor="c-vat-rate" error={vatRateError} hint="Leeg = bedrijfsstandaard.">
+            <FormField label={t('customers.fields.defaultVatRatePercent')} htmlFor="c-vat-rate" error={vatRateError} hint={t('customers.form.vatRateHint')}>
               <div className="customer-form-rate">
                 <select id="c-vat-rate" value={vatRateChoice} onChange={(e) => setVatRateChoice(e.target.value)} disabled={!canManageFiscal}>
-                  <option value="">Bedrijfsstandaard</option>
+                  <option value="">{t('customers.form.companyDefault')}</option>
                   {rateSelectOptions.map((rate) => (
                     <option key={rate} value={rate}>
                       {rate}%
                     </option>
                   ))}
-                  {showCustomOption && <option value="custom">Aangepast…</option>}
+                  {showCustomOption && <option value="custom">{t('customers.form.customRateOption')}</option>}
                 </select>
                 {vatRateChoice === 'custom' && (
                   <input
-                    aria-label="Aangepast BTW-tarief"
+                    aria-label={t('customers.form.customRateAria')}
                     value={customVatRate}
                     onChange={(e) => setCustomVatRate(e.target.value)}
-                    placeholder="bv. 9,5"
+                    placeholder={t('customers.form.customRatePlaceholder')}
                     inputMode="decimal"
                     disabled={!canManageFiscal}
                   />
@@ -835,9 +829,9 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
             </FormField>
           )}
           <FormField
-            label="BTW-land"
+            label={t('customers.fields.vatCountryCode')}
             htmlFor="c-vat-country"
-            hint="Alleen invullen als dit afwijkt van het adresland."
+            hint={t('customers.form.vatCountryHint')}
             error={getFieldError(serverFieldErrors, 'vatCountryCode')}
           >
             <CountryCombobox
@@ -847,7 +841,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 setVatCountryCode(code)
                 touch()
               }}
-              placeholder="— Zelfde als adresland —"
+              placeholder={t('customers.form.vatCountryPlaceholder')}
               disabled={!canManageFiscal}
             />
           </FormField>
@@ -870,13 +864,13 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                 disabled={!canManageFiscal}
                 onChange={(e) => setPeppolEnabled(e.target.checked)}
               />
-              Facturen via Peppol versturen
+              {t('customers.fields.peppolEnabled')}
             </label>
           </div>
           <FormField
-            label="Bezorgvoorkeur"
+            label={t('customers.fields.peppolDeliveryPreference')}
             htmlFor="c-peppol-delivery"
-            hint="Hoe uitgaande facturen bezorgd worden zolang Peppol is ingeschakeld."
+            hint={t('customers.form.peppolDeliveryHint')}
             error={getFieldError(serverFieldErrors, 'peppolDeliveryPreference')}
           >
             <select
@@ -885,19 +879,19 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               disabled={!canManageFiscal || !peppolEnabled}
               onChange={(e) => setPeppolDeliveryPreference(e.target.value as PeppolDeliveryPreference)}
             >
-              {(Object.entries(PEPPOL_DELIVERY_PREFERENCE_LABELS) as [PeppolDeliveryPreference, string][]).map(
-                ([value, label]) => (
+              {(Object.entries(PEPPOL_DELIVERY_PREFERENCE_LABEL_KEYS) as [PeppolDeliveryPreference, string][]).map(
+                ([value, labelKey]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(labelKey)}
                   </option>
                 ),
               )}
             </select>
           </FormField>
           <FormField
-            label="Kopersreferentie (buyer reference)"
+            label={t('customers.form.buyerReferenceLabel')}
             htmlFor="c-buyer-reference"
-            hint="Wordt als kopersreferentie op uitgaande Peppol-facturen gezet, bv. een kostenplaats."
+            hint={t('customers.form.buyerReferenceHint')}
             error={getFieldError(serverFieldErrors, 'buyerReference')}
           >
             <input
@@ -917,12 +911,10 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                     onClick={() => void handlePeppolVerify()}
                     disabled={peppolVerify.kind === 'busy' || isSubmitting || peppolIdentityDirty}
                   >
-                    {peppolVerify.kind === 'busy' ? 'Controleren…' : 'Peppol-gegevens controleren'}
+                    {peppolVerify.kind === 'busy' ? t('customers.form.peppolVerifyBusy') : t('customers.form.peppolVerifyAction')}
                   </Button>
                   {peppolIdentityDirty && (
-                    <span className="customer-form-muted">
-                      Sla de gewijzigde Peppol-gegevens eerst op voordat je ze controleert.
-                    </span>
+                    <span className="customer-form-muted">{t('customers.form.peppolVerifyDirtyHint')}</span>
                   )}
                   {peppolVerify.kind === 'error' && (
                     <span className="ui-form-field-error" role="alert">
@@ -936,58 +928,64 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
                   {peppolVerify.result.found ? (
                     <>
                       <div>
-                        <Badge tone="success">Gevonden in het Peppol-netwerk</Badge>
+                        <Badge tone="success">{t('customers.form.peppolFoundBadge')}</Badge>
                       </div>
                       {peppolVerify.result.supportedDocumentTypes.length > 0 && (
                         <p className="customer-form-muted">
-                          Ondersteunde documenttypes: {peppolVerify.result.supportedDocumentTypes.join(', ')}
+                          {t('customers.form.peppolSupportedTypes', {
+                            types: peppolVerify.result.supportedDocumentTypes.join(', '),
+                          })}
                         </p>
                       )}
                       <p className="customer-form-muted">
-                        Laatst gecontroleerd: {formatDateTime(peppolVerify.result.lastCheckedAt)}
+                        {t('customers.form.peppolLastChecked', { when: formatDateTime(peppolVerify.result.lastCheckedAt) })}
                       </p>
                       {peppolVerify.result.reference && (
-                        <p className="customer-form-muted">Referentie: {peppolVerify.result.reference}</p>
+                        <p className="customer-form-muted">
+                          {t('customers.form.peppolReference', { reference: peppolVerify.result.reference })}
+                        </p>
                       )}
                     </>
                   ) : (
                     <>
                       <div>
-                        <Badge tone="danger">Niet gevonden in het Peppol-netwerk</Badge>
+                        <Badge tone="danger">{t('customers.form.peppolNotFoundBadge')}</Badge>
                       </div>
                       <p className="customer-form-muted">
-                        Laatst gecontroleerd: {formatDateTime(peppolVerify.result.lastCheckedAt)}
+                        {t('customers.form.peppolLastChecked', { when: formatDateTime(peppolVerify.result.lastCheckedAt) })}
                       </p>
                     </>
                   )}
                 </div>
               ) : initial.peppolValidationStatus === 'Found' ? (
                 <div className="customer-form-lookup-row">
-                  <Badge tone="success">Gevonden in het Peppol-netwerk</Badge>
+                  <Badge tone="success">{t('customers.form.peppolFoundBadge')}</Badge>
                   {initial.peppolValidatedAt && (
                     <span className="customer-form-muted">
-                      Laatst gecontroleerd: {formatDateTime(initial.peppolValidatedAt)}
+                      {t('customers.form.peppolLastChecked', { when: formatDateTime(initial.peppolValidatedAt) })}
                     </span>
                   )}
                   {initial.peppolValidationReference && (
-                    <span className="customer-form-muted">Referentie: {initial.peppolValidationReference}</span>
+                    <span className="customer-form-muted">
+                      {t('customers.form.peppolReference', { reference: initial.peppolValidationReference })}
+                    </span>
                   )}
                 </div>
               ) : initial.peppolValidationStatus === 'NotFound' ? (
                 <div className="customer-form-lookup-row">
-                  <Badge tone="danger">Niet gevonden in het Peppol-netwerk</Badge>
+                  <Badge tone="danger">{t('customers.form.peppolNotFoundBadge')}</Badge>
                   {initial.peppolValidatedAt && (
                     <span className="customer-form-muted">
-                      Laatst gecontroleerd: {formatDateTime(initial.peppolValidatedAt)}
+                      {t('customers.form.peppolLastChecked', { when: formatDateTime(initial.peppolValidatedAt) })}
                     </span>
                   )}
                 </div>
               ) : (
-                <p className="customer-form-muted">Nog niet gecontroleerd.</p>
+                <p className="customer-form-muted">{t('customers.form.peppolNotCheckedYet')}</p>
               )}
             </div>
           )}
-          <FormField label="BTW-notities" htmlFor="c-vat-notes" className="form-span-all">
+          <FormField label={t('customers.form.vatNotes')} htmlFor="c-vat-notes" className="form-span-all">
             <textarea id="c-vat-notes" value={vatNotes} onChange={(e) => setVatNotes(e.target.value)} rows={2} maxLength={1000} disabled={!canManageFiscal} />
           </FormField>
         </FormSection>
@@ -995,28 +993,28 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     },
     {
       id: 'bank',
-      label: 'Bank',
+      label: t('customers.form.sections.bank'),
       optional: true,
       hasError: sectionHasError('bank'),
       render: () => (
         <FormSection
-          title="Bank"
+          title={t('customers.form.sections.bank')}
           columns={3}
-          description={fiscalHint ?? 'Bankrekening en valuta voor facturatie en betalingen.'}
+          description={fiscalHint ?? t('customers.form.bankDescription')}
         >
-          <FormField label="IBAN" htmlFor="c-iban" error={getFieldError(serverFieldErrors, 'iban')}>
+          <FormField label={t('customers.fields.iban')} htmlFor="c-iban" error={getFieldError(serverFieldErrors, 'iban')}>
             <input id="c-iban" value={iban} onChange={(e) => setIban(e.target.value)} maxLength={40} disabled={!canManageFiscal} />
           </FormField>
-          <FormField label="BIC" htmlFor="c-bic" error={getFieldError(serverFieldErrors, 'bic')}>
+          <FormField label={t('customers.fields.bic')} htmlFor="c-bic" error={getFieldError(serverFieldErrors, 'bic')}>
             <input id="c-bic" value={bic} onChange={(e) => setBic(e.target.value)} maxLength={11} disabled={!canManageFiscal} />
           </FormField>
-          <FormField label="Banknaam" htmlFor="c-bank-name">
+          <FormField label={t('customers.form.bankName')} htmlFor="c-bank-name">
             <input id="c-bank-name" value={bankName} onChange={(e) => setBankName(e.target.value)} maxLength={100} disabled={!canManageFiscal} />
           </FormField>
           <FormField
-            label="Rekeningnummer (niet-SEPA)"
+            label={t('customers.form.bankAccountLabel')}
             htmlFor="c-bank-account"
-            hint="Alleen voor rekeningen zonder IBAN."
+            hint={t('customers.form.bankAccountHint')}
             error={getFieldError(serverFieldErrors, 'bankAccountNumber')}
           >
             <input
@@ -1027,7 +1025,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               disabled={!canManageFiscal}
             />
           </FormField>
-          <FormField label="Valuta" htmlFor="c-currency" hint="3-letterige ISO-code, standaard EUR." error={getFieldError(serverFieldErrors, 'currencyCode')}>
+          <FormField label={t('customers.fields.currencyCode')} htmlFor="c-currency" hint={t('customers.form.currencyHint')} error={getFieldError(serverFieldErrors, 'currencyCode')}>
             <input
               id="c-currency"
               value={currencyCode}
@@ -1041,44 +1039,44 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     },
     {
       id: 'facturatie',
-      label: 'Facturatie',
+      label: t('customers.form.sections.facturatie'),
       hasError: sectionHasError('facturatie'),
       render: () => (
-        <FormSection title="Facturatie & vereisten" columns={3}>
-          <FormField label="Facturatie-e-mail" htmlFor="c-invoice-email">
+        <FormSection title={t('customers.form.billingSectionTitle')} columns={3}>
+          <FormField label={t('customers.form.invoiceEmail')} htmlFor="c-invoice-email">
             <input id="c-invoice-email" type="email" value={invoiceEmail} onChange={(e) => setInvoiceEmail(e.target.value)} maxLength={250} />
           </FormField>
           <FormField
-            label="Factuurgroepering"
+            label={t('customers.form.invoiceGrouping')}
             htmlFor="c-invoice-grouping"
-            hint="Hoe deze klant facturen verwacht. Handmatig = vandaag; automatische voorstellen volgen later."
+            hint={t('customers.form.invoiceGroupingHint')}
           >
             <select id="c-invoice-grouping" value={invoiceGrouping} onChange={(e) => setInvoiceGrouping(e.target.value)}>
-              <option value="Manual">Handmatig (standaard)</option>
-              <option value="PerDossier">Eén factuur per dossier</option>
-              <option value="Weekly">Wekelijks verzamelen</option>
-              <option value="Monthly">Maandelijks verzamelen</option>
-              <option value="ByReference">Per klantreferentie</option>
+              <option value="Manual">{t('customers.invoiceGrouping.Manual')}</option>
+              <option value="PerDossier">{t('customers.invoiceGrouping.PerDossier')}</option>
+              <option value="Weekly">{t('customers.invoiceGrouping.Weekly')}</option>
+              <option value="Monthly">{t('customers.invoiceGrouping.Monthly')}</option>
+              <option value="ByReference">{t('customers.invoiceGrouping.ByReference')}</option>
             </select>
           </FormField>
           <FormField
-            label="Transportdocumenten"
+            label={t('customers.form.documentStrategy')}
             htmlFor="c-document-strategy"
-            hint="Bepaalt wie de leveringsbon/CMR aanlevert; per opdracht blijft een afwijkende keuze mogelijk."
+            hint={t('customers.form.documentStrategyHint')}
           >
             <select id="c-document-strategy" value={documentStrategy} onChange={(e) => setDocumentStrategy(e.target.value)}>
-              {(Object.entries(CUSTOMER_DOCUMENT_STRATEGY_LABELS) as [CustomerDocumentStrategy, string][]).map(
-                ([value, label]) => (
+              {(Object.entries(CUSTOMER_DOCUMENT_STRATEGY_LABEL_KEYS) as [CustomerDocumentStrategy, string][]).map(
+                ([value, labelKey]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(labelKey)}
                   </option>
                 ),
               )}
             </select>
           </FormField>
-          <FormField label="Factuurtaal" htmlFor="c-invoice-lang" hint="Leeg = voorkeurstaal.">
+          <FormField label={t('customers.form.invoiceLanguage')} htmlFor="c-invoice-lang" hint={t('customers.form.invoiceLanguageHint')}>
             <select id="c-invoice-lang" value={invoiceLanguageCode} onChange={(e) => setInvoiceLanguageCode(e.target.value)}>
-              <option value="">— Zelfde als voorkeurstaal —</option>
+              <option value="">{t('customers.form.sameAsPreferredLanguage')}</option>
               {languages.options.map((option) => (
                 <option key={option.id} value={option.code}>
                   {option.name}
@@ -1086,29 +1084,29 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               ))}
             </select>
           </FormField>
-          <FormField label="Betaaltermijn (dagen)" htmlFor="c-payterm">
+          <FormField label={t('customers.form.paymentTermDays')} htmlFor="c-payterm">
             <input id="c-payterm" type="number" min={0} value={paymentTermDays} onChange={(e) => setPaymentTermDays(e.target.value)} />
           </FormField>
           <FormField
-            label="Standaard facturerende entiteit"
+            label={t('customers.form.defaultLegalEntity')}
             htmlFor="c-legal-entity"
-            hint="Wordt voorgesteld op facturen voor deze klant. Leeg = de tenant-standaard."
+            hint={t('customers.form.defaultLegalEntityHint')}
           >
             <select id="c-legal-entity" value={defaultLegalEntityId} onChange={(e) => setDefaultLegalEntityId(e.target.value)}>
-              <option value="">— Tenant-standaard —</option>
+              <option value="">{t('customers.form.tenantDefaultOption')}</option>
               {legalEntities.map((entity) => (
                 <option key={entity.id} value={entity.id}>
                   {entity.displayName}
-                  {entity.isDefault ? ' (standaard)' : ''}
-                  {!entity.isActive ? ' — inactief' : ''}
+                  {entity.isDefault ? ` ${t('customers.form.defaultSuffix')}` : ''}
+                  {!entity.isActive ? ` ${t('customers.form.inactiveSuffix')}` : ''}
                 </option>
               ))}
             </select>
           </FormField>
           <FormField
-            label="Toegestane facturerende entiteiten"
+            label={t('customers.form.allowedLegalEntities')}
             htmlFor="c-allowed-entities"
-            hint="Niets aangevinkt = alle actieve entiteiten toegestaan. Bij een selectie moet de standaardentiteit erin zitten; dossiers/orders/facturen buiten de lijst worden geweigerd."
+            hint={t('customers.form.allowedLegalEntitiesHint')}
           >
             <div id="c-allowed-entities" className="customer-form-requirements">
               {legalEntities.filter((entity) => entity.isActive).map((entity) => (
@@ -1130,15 +1128,15 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
           <div className="customer-form-requirements form-span-all">
             <label className="customer-form-checkbox">
               <input type="checkbox" checked={customerReferenceRequired} onChange={(e) => setCustomerReferenceRequired(e.target.checked)} />
-              Klantreferentie verplicht bij elke opdracht
+              {t('customers.form.customerReferenceRequired')}
             </label>
             <label className="customer-form-checkbox">
               <input type="checkbox" checked={purchaseOrderRequired} onChange={(e) => setPurchaseOrderRequired(e.target.checked)} />
-              Bestelbon (PO) vereist
+              {t('customers.form.purchaseOrderRequired')}
             </label>
             <label className="customer-form-checkbox">
               <input type="checkbox" checked={signedDeliveryNoteRequired} onChange={(e) => setSignedDeliveryNoteRequired(e.target.checked)} />
-              Getekende leverbon (CMR) vereist
+              {t('customers.form.signedDeliveryNoteRequired')}
             </label>
           </div>
         </FormSection>
@@ -1146,38 +1144,38 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     },
     {
       id: 'communicatie',
-      label: 'Communicatie',
+      label: t('customers.form.sections.communicatie'),
       optional: true,
       panel: true,
       render: () =>
         isEdit ? (
           editPanels?.communicatie ?? null
         ) : (
-          <p className="placeholder-text">Communicatieregels zijn beschikbaar na het aanmaken van de klant.</p>
+          <p className="placeholder-text">{t('customers.form.communicationAfterCreate')}</p>
         ),
     },
     {
       id: 'tarieven',
-      label: 'Tarieven & toeslagen',
+      label: t('customers.form.sections.tarieven'),
       optional: true,
       panel: true,
       render: () =>
         isEdit ? (
           editPanels?.tarieven ?? null
         ) : (
-          <p className="placeholder-text">Tarieven en toeslagen zijn beschikbaar na het aanmaken van de klant.</p>
+          <p className="placeholder-text">{t('customers.form.tariffsAfterCreate')}</p>
         ),
     },
     {
       id: 'historiek',
-      label: 'Historiek',
+      label: t('customers.form.sections.historiek'),
       optional: true,
       panel: true,
       render: () =>
         isEdit ? (
           editPanels?.historiek ?? null
         ) : (
-          <p className="placeholder-text">De historiek is beschikbaar na het aanmaken van de klant.</p>
+          <p className="placeholder-text">{t('customers.form.historyAfterCreate')}</p>
         ),
     },
   ]
@@ -1195,14 +1193,17 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     let valid = true
     const errorKeys: Record<string, string> = {}
     if (!name.trim()) {
-      setNameError('Naam is verplicht.')
-      errorKeys.name = 'Naam is verplicht.'
+      const nameRequired = t('customers.form.nameRequired')
+      setNameError(nameRequired)
+      errorKeys.name = nameRequired
       valid = false
     } else {
       setNameError(undefined)
     }
 
-    const vatMessage = canManageFiscal ? (validateVatNumber(vatNumber) ?? undefined) : undefined
+    // validateVatNumber levert een vertaalsleutel; hier vertaald zodat state/summary tekst tonen.
+    const vatMessageKey = canManageFiscal ? (validateVatNumber(vatNumber) ?? undefined) : undefined
+    const vatMessage = vatMessageKey ? t(vatMessageKey) : undefined
     setVatError(vatMessage)
     if (vatMessage) {
       errorKeys.vatNumber = vatMessage
@@ -1210,21 +1211,24 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     }
 
     if (canManageFiscal && peppolProblem) {
-      errorKeys.peppolId = peppolProblem
+      errorKeys.peppolId = t(peppolProblem)
       valid = false
     }
 
     const rate = resolveVatRate()
     if (!rate.ok) {
-      setVatRateError('Geef een tarief tussen 0 en 100 op.')
-      errorKeys.defaultVatRatePercent = 'Geef een tarief tussen 0 en 100 op.'
+      const rateMessage = t('customers.form.vatRateRange')
+      setVatRateError(rateMessage)
+      errorKeys.defaultVatRatePercent = rateMessage
       valid = false
     } else {
       setVatRateError(undefined)
     }
 
     // Contact rows are optional; filled rows need names, and per type at most one primary.
-    const rowErrors = mode === 'create' ? validateContactRows(contactRows) : {}
+    // validateContactRows levert vertaalsleutels per veldpad; hier vertaald voor weergave.
+    const rowErrorKeys = mode === 'create' ? validateContactRows(contactRows) : {}
+    const rowErrors = Object.fromEntries(Object.entries(rowErrorKeys).map(([key, messageKey]) => [key, t(messageKey)]))
     setContactRowErrors(rowErrors)
     for (const [key, message] of Object.entries(rowErrors)) {
       errorKeys[key] = message
@@ -1328,7 +1332,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   const actionBar = (position: 'top' | 'bottom') => (
     <FormActions dirty={dirty} position={position}>
       <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
-        Annuleren
+        {t('ui.actions.cancel')}
       </Button>
       {mode === 'create' && (
         <Button
@@ -1339,7 +1343,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
             submitIntentRef.current = 'saveAndNew'
           }}
         >
-          Opslaan en nieuwe klant
+          {t('customers.form.saveAndNew')}
         </Button>
       )}
       <Button
@@ -1349,7 +1353,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
           submitIntentRef.current = 'save'
         }}
       >
-        {isSubmitting ? 'Opslaan...' : 'Opslaan'}
+        {isSubmitting ? t('customers.common.saving') : t('ui.actions.save')}
       </Button>
     </FormActions>
   )
@@ -1357,7 +1361,11 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   return (
     <form onSubmit={handleSubmit} className="customer-form" onChange={touch}>
       <UnsavedChangesGuard when={dirty && !isSubmitting} />
-      <ValidationSummary message={submitError} fieldErrors={serverFieldErrors} fieldLabels={FIELD_LABELS} />
+      <ValidationSummary
+        message={submitError}
+        fieldErrors={serverFieldErrors}
+        fieldLabels={Object.fromEntries(Object.entries(FIELD_LABEL_KEYS).map(([path, key]) => [path, t(key)]))}
+      />
 
       {/* SectionedForm renders `actions` only at the bottom; mirror its panel check here so the
           top bar also disappears on self-saving panel sections. */}

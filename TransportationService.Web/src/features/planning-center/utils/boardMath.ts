@@ -1,5 +1,13 @@
 /** Pure date/time math behind the planning board timeline. */
 
+import { getActiveLocale } from '../../../i18n/activeLocale'
+
+const LOCALE_TAGS = { nl: 'nl-BE', fr: 'fr-BE', en: 'en-GB' } as const
+
+function localeTag(): string {
+  return LOCALE_TAGS[getActiveLocale()]
+}
+
 export type BoardViewDays = 1 | 3 | 7
 
 export const DAY_START_HOUR = 5
@@ -59,15 +67,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
+/** Day-column heading in the active UI language (e.g. "ma 20 jul" / "lun 20 juil" / "Mon 20 Jul"). */
 export function formatDayHeading(iso: string): string {
   const date = new Date(`${iso}T00:00:00`)
-  return date.toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })
+  return date.toLocaleDateString(localeTag(), { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 export function formatTimeRange(plannedStart: string | null, plannedEnd: string | null): string | null {
   if (!plannedStart) return null
   const fmt = (value: string) =>
-    new Date(value).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })
+    new Date(value).toLocaleTimeString(localeTag(), { hour: '2-digit', minute: '2-digit' })
   return plannedEnd ? `${fmt(plannedStart)}–${fmt(plannedEnd)}` : fmt(plannedStart)
 }
 

@@ -4,6 +4,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { describeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { createOrderForActivity, deleteDossierActivity, updateDossierActivity } from '../api/dossiersApi'
 import type { DossierActivity, DossierDetail } from '../types'
 import { SectionDrawer } from './SectionDrawer'
@@ -24,6 +25,7 @@ interface ActivityDrawerProps {
  * activiteiten, plus "Transportopdracht aanmaken" voor transportactiviteiten zonder opdracht.
  */
 export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdated, onConflict }: ActivityDrawerProps) {
+  const { t } = useLocale()
   const [label, setLabel] = useState(activity.label ?? '')
   const [plannedDate, setPlannedDate] = useState(activity.plannedDate ?? '')
   const [durationHours, setDurationHours] = useState(activity.durationHours == null ? '' : String(activity.durationHours))
@@ -63,7 +65,7 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
   function save() {
     const parsedDuration = durationHours.trim() === '' ? null : Number(durationHours.replace(',', '.'))
     if (parsedDuration !== null && (!Number.isFinite(parsedDuration) || parsedDuration < 0)) {
-      setError('De duur moet een getal van minstens 0 zijn.')
+      setError(t('dossiers.drawer.durationInvalid'))
       return
     }
     void run(
@@ -77,7 +79,7 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
           notes: notes.trim() || null,
           version: dossier.version,
         }),
-      'De activiteit kon niet worden opgeslagen.',
+      t('dossiers.drawer.saveFailed'),
     )
   }
 
@@ -91,7 +93,7 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
       footerExtra={
         canManage ? (
           <Button variant="danger" onClick={() => setConfirmDelete(true)} disabled={busy}>
-            Verwijderen
+            {t('ui.actions.delete')}
           </Button>
         ) : undefined
       }
@@ -100,22 +102,22 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
 
       {needsOrder && canManage && (
         <div className="dossier-activity-order-cta">
-          <p>Deze transportactiviteit heeft nog geen opdracht. Maak de opdracht aan om route en goederen in te vullen.</p>
+          <p>{t('dossiers.drawer.needsOrder')}</p>
           <Button
             onClick={() =>
               void run(
                 () => createOrderForActivity(dossier.id, activity.id, dossier.version),
-                'De transportopdracht kon niet aangemaakt worden.',
+                t('dossiers.drawer.createOrderFailed'),
               )
             }
             disabled={busy}
           >
-            Transportopdracht aanmaken
+            {t('dossiers.drawer.createOrder')}
           </Button>
         </div>
       )}
 
-      <FormField label="Label" htmlFor="ad-label">
+      <FormField label={t('dossiers.drawer.label')} htmlFor="ad-label">
         <input
           id="ad-label"
           value={label}
@@ -125,7 +127,7 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
         />
       </FormField>
       {!activity.hasStops && (
-        <FormField label="Geplande datum" htmlFor="ad-date" hint="Transportactiviteiten plannen via de opdracht.">
+        <FormField label={t('dossiers.drawer.plannedDate')} htmlFor="ad-date" hint={t('dossiers.drawer.plannedDateHint')}>
           <input
             id="ad-date"
             type="date"
@@ -136,7 +138,7 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
         </FormField>
       )}
       {activity.allowsDuration && (
-        <FormField label="Duur (uren)" htmlFor="ad-duration">
+        <FormField label={t('dossiers.drawer.duration')} htmlFor="ad-duration">
           <input
             id="ad-duration"
             type="number"
@@ -150,9 +152,9 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
       )}
       {others.length > 0 && (
         <FormField
-          label="Begeleidt activiteit"
+          label={t('dossiers.drawer.linked')}
           htmlFor="ad-linked"
-          hint="Operationele koppeling, bv. plateau dat een kraantransport begeleidt."
+          hint={t('dossiers.drawer.linkedHint')}
         >
           <select
             id="ad-linked"
@@ -160,7 +162,7 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
             onChange={(event) => touch(setLinkedActivityId)(event.target.value)}
             disabled={busy || !canManage}
           >
-            <option value="">— Geen —</option>
+            <option value="">{t('dossiers.drawer.none')}</option>
             {others.map((other) => (
               <option key={other.id} value={other.id}>
                 {other.label ? `${other.activityTypeName} — ${other.label}` : other.activityTypeName}
@@ -169,7 +171,7 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
           </select>
         </FormField>
       )}
-      <FormField label="Notities" htmlFor="ad-notes">
+      <FormField label={t('dossiers.drawer.notes')} htmlFor="ad-notes">
         <textarea
           id="ad-notes"
           rows={3}
@@ -182,16 +184,16 @@ export function ActivityDrawer({ dossier, activity, canManage, onClose, onUpdate
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Activiteit verwijderen"
-          message="Weet je zeker dat je deze activiteit wil verwijderen? Een gekoppelde actieve opdracht blokkeert het verwijderen."
-          confirmLabel="Verwijderen"
+          title={t('dossiers.drawer.deleteTitle')}
+          message={t('dossiers.drawer.deleteMessage')}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={busy}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() =>
             void run(
               () => deleteDossierActivity(dossier.id, activity.id, dossier.version),
-              'De activiteit kon niet worden verwijderd.',
+              t('dossiers.drawer.deleteFailed'),
             )
           }
         />

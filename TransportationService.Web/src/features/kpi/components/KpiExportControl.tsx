@@ -2,25 +2,28 @@ import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import { kpiExportUrl } from '../api/kpiApi'
 import type { KpiFilterState } from '../types'
 
+/** Vertaalsleutels per rapportcode — renderen als t(label). */
 const REPORTS: Array<{ key: string; label: string }> = [
-  { key: 'trip-profitability', label: 'Ritrendement' },
-  { key: 'customer-profitability', label: 'Klantrendement' },
-  { key: 'vehicle-utilisation', label: 'Voertuigbezetting' },
-  { key: 'driver-hours', label: 'Chauffeurs km/uren' },
-  { key: 'empty-km', label: 'Lege kilometers' },
-  { key: 'fuel', label: 'Brandstofverbruik' },
-  { key: 'co2', label: 'CO₂' },
-  { key: 'eta-performance', label: 'ETA-prestaties' },
-  { key: 'delivery-reliability', label: 'Leverbetrouwbaarheid' },
+  { key: 'trip-profitability', label: 'kpiReports.export.tripProfitability' },
+  { key: 'customer-profitability', label: 'kpiReports.export.customerProfitability' },
+  { key: 'vehicle-utilisation', label: 'kpiReports.export.vehicleUtilisation' },
+  { key: 'driver-hours', label: 'kpiReports.export.driverHours' },
+  { key: 'empty-km', label: 'kpiReports.export.emptyKm' },
+  { key: 'fuel', label: 'kpiReports.export.fuel' },
+  { key: 'co2', label: 'kpiReports.export.co2' },
+  { key: 'eta-performance', label: 'kpiReports.export.etaPerformance' },
+  { key: 'delivery-reliability', label: 'kpiReports.export.deliveryReliability' },
 ]
 
 /** XLSX download for the nine KPI reports (kpi.export); filename comes from the server. */
 export function KpiExportControl({ filter }: { filter: KpiFilterState }) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showError } = useToast()
   const [report, setReport] = useState(REPORTS[0].key)
@@ -45,7 +48,7 @@ export function KpiExportControl({ filter }: { filter: KpiFilterState }) {
       anchor.click()
       URL.revokeObjectURL(url)
     } catch {
-      showError('De export is mislukt.')
+      showError(t('kpiReports.export.failed'))
     } finally {
       setBusy(false)
     }
@@ -53,15 +56,15 @@ export function KpiExportControl({ filter }: { filter: KpiFilterState }) {
 
   return (
     <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-      <select value={report} onChange={(e) => setReport(e.target.value)} disabled={busy} aria-label="Rapport">
+      <select value={report} onChange={(e) => setReport(e.target.value)} disabled={busy} aria-label={t('kpiReports.export.reportAria')}>
         {REPORTS.map((item) => (
           <option key={item.key} value={item.key}>
-            {item.label}
+            {t(item.label)}
           </option>
         ))}
       </select>
       <Button variant="secondary" onClick={() => void download()} disabled={busy}>
-        {busy ? 'Exporteren…' : 'Exporteren (Excel)'}
+        {busy ? t('kpiReports.export.busy') : t('kpiReports.export.button')}
       </Button>
     </span>
   )

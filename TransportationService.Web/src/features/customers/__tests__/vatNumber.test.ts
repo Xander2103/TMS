@@ -19,19 +19,19 @@ describe('validateVatNumber', () => {
     expect(validateVatNumber('be 0123.456.749')).toBeNull()
   })
 
-  it('rejects a wrong checksum with a specific message', () => {
-    expect(validateVatNumber('BE0123456750')).toBe('Belgisch BTW-nummer heeft een ongeldig controlegetal.')
+  it('rejects a wrong checksum with a specific message key', () => {
+    expect(validateVatNumber('BE0123456750')).toBe('customers.vatValidation.beChecksum')
   })
 
   it('rejects wrong length and wrong leading digit', () => {
-    expect(validateVatNumber('BE123456749')).toMatch(/BE \+ 10 cijfers/)
-    expect(validateVatNumber('BE9123456749')).toMatch(/BE0 of BE1/)
+    expect(validateVatNumber('BE123456749')).toBe('customers.vatValidation.beStructure')
+    expect(validateVatNumber('BE9123456749')).toBe('customers.vatValidation.beStart')
   })
 
   it('is loose for foreign numbers', () => {
     expect(validateVatNumber('NL123456789B01')).toBeNull()
     expect(validateVatNumber('DE 129 273 398')).toBeNull()
-    expect(validateVatNumber('A/B')).toBe('BTW-nummer heeft een ongeldig formaat.')
+    expect(validateVatNumber('A/B')).toBe('customers.vatValidation.genericFormat')
   })
 
   it('accepts empty input (VAT is optional)', () => {

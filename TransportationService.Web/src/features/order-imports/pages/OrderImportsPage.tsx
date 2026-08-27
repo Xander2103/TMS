@@ -9,6 +9,7 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { useToast } from '../../../components/ui/toastContext'
 import { ApiError } from '../../../api/apiClient'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
@@ -30,9 +31,9 @@ import './order-imports.css'
 const PAGE_SIZE = 25
 
 const BATCH_STATUS_LABELS: Record<OrderImportBatchStatus, string> = {
-  Validated: 'Gevalideerd',
-  Processed: 'Verwerkt',
-  Failed: 'Mislukt',
+  Validated: 'orderImports.batchStatus.Validated',
+  Processed: 'orderImports.batchStatus.Processed',
+  Failed: 'orderImports.batchStatus.Failed',
 }
 
 const BATCH_STATUS_TONE: Record<OrderImportBatchStatus, BadgeTone> = {
@@ -42,9 +43,9 @@ const BATCH_STATUS_TONE: Record<OrderImportBatchStatus, BadgeTone> = {
 }
 
 const ROW_STATUS_LABELS: Record<OrderImportRowStatus, string> = {
-  Created: 'Aangemaakt',
-  Skipped: 'Overgeslagen',
-  Error: 'Fout',
+  Created: 'orderImports.rowStatus.Created',
+  Skipped: 'orderImports.rowStatus.Skipped',
+  Error: 'orderImports.rowStatus.Error',
 }
 
 const ROW_STATUS_TONE: Record<OrderImportRowStatus, BadgeTone> = {
@@ -56,6 +57,7 @@ const ROW_STATUS_TONE: Record<OrderImportRowStatus, BadgeTone> = {
 /** P13: automated Excel order import — upload with dry run, batch history, per-row outcome. */
 export function OrderImportsPage() {
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
 
   const canView = hasPermission('orders.view') || hasPermission('orders.manage')
@@ -73,7 +75,7 @@ export function OrderImportsPage() {
       canView
         ? listOrderImportBatches(args.page, args.pageSize)
         : Promise.resolve({ items: [], totalCount: 0, page: 1, pageSize: PAGE_SIZE }),
-    { search: '', page, pageSize: PAGE_SIZE, errorMessage: 'De importgeschiedenis kon niet worden geladen.' },
+    { search: '', page, pageSize: PAGE_SIZE, errorMessage: t('orderImports.historyError') },
   )
 
   // ---------------------------------------------------------------- upload form
@@ -127,7 +129,7 @@ export function OrderImportsPage() {
     try {
       setDetail(await getOrderImportBatch(batch.id))
     } catch {
-      showError('De batchdetails konden niet worden geladen.')
+      showError(t('orderImports.detailError'))
     } finally {
       setDetailLoading(false)
     }
@@ -137,15 +139,15 @@ export function OrderImportsPage() {
     event.preventDefault()
     setFormError(null)
     if (!profileId) {
-      setFormError('Kies een importprofiel.')
+      setFormError(t('orderImports.form.chooseProfile'))
       return
     }
     if (!customerId) {
-      setFormError('Kies een klant.')
+      setFormError(t('orderImports.form.chooseCustomerError'))
       return
     }
     if (!file) {
-      setFormError('Kies een Excel-bestand (.xlsx).')
+      setFormError(t('orderImports.form.chooseFile'))
       return
     }
     setUploading(true)
@@ -154,43 +156,52 @@ export function OrderImportsPage() {
       setDetail(result)
       showSuccess(
         dryRun
-          ? `Gevalideerd: ${result.batch.successCount} van ${result.batch.rowCount} rijen zijn in orde.`
-          : `Verwerkt: ${result.batch.successCount} opdracht(en) aangemaakt, ${result.batch.failureCount} fout(en).`,
+          ? t('orderImports.form.validatedToast', {
+              success: result.batch.successCount,
+              total: result.batch.rowCount,
+            })
+          : t('orderImports.form.processedToast', {
+              orders: t('orderImports.form.processedOrders', { count: result.batch.successCount }),
+              failures: t('orderImports.form.processedFailures', { count: result.batch.failureCount }),
+            }),
       )
       setFile(null)
       setFileInputKey((key) => key + 1)
       setPage(1)
       reload()
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : 'De import is mislukt.')
+      setFormError(err instanceof ApiError ? err.message : t('orderImports.form.uploadFailed'))
     } finally {
       setUploading(false)
     }
   }
 
   const columns: Column<OrderImportBatch>[] = [
-    { key: 'fileName', header: 'Bestand', render: (row) => row.fileName },
-    { key: 'customer', header: 'Klant', render: (row) => row.customerName },
-    { key: 'profile', header: 'Profiel', width: '140px', render: (row) => row.profileName },
+    { key: 'fileName', header: t('orderImports.columns.file'), render: (row) => row.fileName },
+    { key: 'customer', header: t('orderImports.columns.customer'), render: (row) => row.customerName },
+    { key: 'profile', header: t('orderImports.columns.profile'), width: '140px', render: (row) => row.profileName },
     {
       key: 'status',
-      header: 'Status',
+      header: t('orderImports.columns.status'),
       width: '140px',
       render: (row) => (
         <Badge tone={BATCH_STATUS_TONE[row.status]}>
-          {row.dryRun ? `${BATCH_STATUS_LABELS[row.status]} (proef)` : BATCH_STATUS_LABELS[row.status]}
+          {row.dryRun
+            ? t('orderImports.batchStatusDryRun', { status: t(BATCH_STATUS_LABELS[row.status]) })
+            : t(BATCH_STATUS_LABELS[row.status])}
         </Badge>
       ),
     },
     {
       key: 'counts',
-      header: 'Rijen',
+      header: t('orderImports.columns.rows'),
       width: '160px',
-      render: (row) => `${row.successCount} ok / ${row.failureCount} fout / ${row.rowCount} totaal`,
+      render: (row) =>
+        t('orderImports.counts', { success: row.successCount, failure: row.failureCount, total: row.rowCount }),
     },
     {
       key: 'createdAt',
-      header: 'Geüpload',
+      header: t('orderImports.columns.uploaded'),
       width: '160px',
       render: (row) => formatDateTime(row.createdAt),
     },
@@ -200,24 +211,29 @@ export function OrderImportsPage() {
       width: '90px',
       render: (row) => (
         <button type="button" className="oi-link" onClick={() => openDetail(row)}>
-          Details
+          {t('orderImports.details')}
         </button>
       ),
     },
   ]
 
   const rowColumns: Column<OrderImportRow>[] = [
-    { key: 'rowNumber', header: 'Rij', width: '70px', render: (row) => String(row.rowNumber) },
-    { key: 'reference', header: 'Referentie', width: '160px', render: (row) => row.externalReference ?? '—' },
+    { key: 'rowNumber', header: t('orderImports.columns.row'), width: '70px', render: (row) => String(row.rowNumber) },
+    {
+      key: 'reference',
+      header: t('orderImports.columns.reference'),
+      width: '160px',
+      render: (row) => row.externalReference ?? '—',
+    },
     {
       key: 'status',
-      header: 'Status',
+      header: t('orderImports.columns.status'),
       width: '140px',
-      render: (row) => <Badge tone={ROW_STATUS_TONE[row.status]}>{ROW_STATUS_LABELS[row.status]}</Badge>,
+      render: (row) => <Badge tone={ROW_STATUS_TONE[row.status]}>{t(ROW_STATUS_LABELS[row.status])}</Badge>,
     },
     {
       key: 'error',
-      header: 'Melding',
+      header: t('orderImports.columns.message'),
       render: (row) => (row.error ? <span className="oi-row-error">{row.error}</span> : '—'),
     },
   ]
@@ -225,29 +241,29 @@ export function OrderImportsPage() {
   if (!canView && !canUpload) {
     return (
       <div>
-        <Breadcrumbs items={[{ label: 'Excel-import' }]} />
-        <PageHeader title="Excel-import" />
-        <p>Je hebt geen rechten om opdrachtimporten te bekijken.</p>
+        <Breadcrumbs items={[{ label: t('navigation.menu.excelImport') }]} />
+        <PageHeader title={t('navigation.menu.excelImport')} />
+        <p>{t('orderImports.noPermission')}</p>
       </div>
     )
   }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Excel-import' }]} />
-      <PageHeader title="Excel-import" subtitle="Opdrachten automatisch aanmaken vanuit een Excel-bestand" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.excelImport') }]} />
+      <PageHeader title={t('navigation.menu.excelImport')} subtitle={t('orderImports.subtitle')} />
 
       {canUpload && (
-        <section className="oi-upload-card" aria-label="Nieuw bestand importeren">
+        <section className="oi-upload-card" aria-label={t('orderImports.uploadSection')}>
           <form className="oi-upload-form" onSubmit={handleSubmit} noValidate>
-            <FormField label="Importprofiel" htmlFor="oi-profile" required>
+            <FormField label={t('orderImports.form.profile')} htmlFor="oi-profile" required>
               <select
                 id="oi-profile"
                 value={profileId}
                 onChange={(e) => setProfileId(e.target.value)}
                 disabled={uploading}
               >
-                {profiles.length === 0 && <option value="">Geen profielen</option>}
+                {profiles.length === 0 && <option value="">{t('orderImports.form.noProfiles')}</option>}
                 {profiles.map((profile) => (
                   <option key={profile.id} value={profile.id}>
                     {profile.name}
@@ -255,23 +271,23 @@ export function OrderImportsPage() {
                 ))}
               </select>
             </FormField>
-            <FormField label="Klant zoeken" htmlFor="oi-customer-search">
+            <FormField label={t('orderImports.form.customerSearch')} htmlFor="oi-customer-search">
               <input
                 id="oi-customer-search"
                 value={customerSearch}
                 onChange={(e) => setCustomerSearch(e.target.value)}
-                placeholder="Zoek op naam of nummer..."
+                placeholder={t('orderImports.form.customerSearchPlaceholder')}
                 disabled={uploading}
               />
             </FormField>
-            <FormField label="Klant" htmlFor="oi-customer" required>
+            <FormField label={t('orderImports.form.customer')} htmlFor="oi-customer" required>
               <select
                 id="oi-customer"
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
                 disabled={uploading}
               >
-                <option value="">Kies een klant</option>
+                <option value="">{t('orderImports.form.chooseCustomer')}</option>
                 {customers.map((customer) => (
                   <option key={customer.id} value={customer.id}>
                     {customer.name} ({customer.customerNumber})
@@ -279,7 +295,7 @@ export function OrderImportsPage() {
                 ))}
               </select>
             </FormField>
-            <FormField label="Bestand (.xlsx)" htmlFor="oi-file" required>
+            <FormField label={t('orderImports.form.file')} htmlFor="oi-file" required>
               <input
                 key={fileInputKey}
                 id="oi-file"
@@ -296,10 +312,14 @@ export function OrderImportsPage() {
                 onChange={(e) => setDryRun(e.target.checked)}
                 disabled={uploading}
               />
-              Enkel valideren (proefdraaien)
+              {t('orderImports.form.dryRun')}
             </label>
             <Button type="submit" disabled={uploading}>
-              {uploading ? 'Bezig…' : dryRun ? 'Valideren' : 'Importeren'}
+              {uploading
+                ? t('orderImports.form.busy')
+                : dryRun
+                  ? t('orderImports.form.validate')
+                  : t('orderImports.form.import')}
             </Button>
           </form>
           {formError && (
@@ -316,26 +336,26 @@ export function OrderImportsPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={listError}
-        emptyMessage="Nog geen importen."
-        loadingMessage="Importen laden..."
+        emptyMessage={t('orderImports.empty')}
+        loadingMessage={t('orderImports.loading')}
       />
       <Pagination page={page} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={setPage} />
 
       {(detail || detailLoading) && (
-        <section className="oi-detail" aria-label="Batchdetails">
+        <section className="oi-detail" aria-label={t('orderImports.detailSection')}>
           {detailLoading || !detail ? (
-            <p>Details laden...</p>
+            <p>{t('orderImports.detailLoading')}</p>
           ) : (
             <>
               <h3>
                 {detail.batch.fileName} — {detail.batch.customerName}
-                {detail.batch.dryRun ? ' (proefdraaien)' : ''}
+                {detail.batch.dryRun ? ` ${t('orderImports.dryRunTitleSuffix')}` : ''}
               </h3>
               <DataTable
                 columns={rowColumns}
                 rows={detail.rows}
                 rowKey={(row) => String(row.rowNumber)}
-                emptyMessage="Geen rijen in deze batch."
+                emptyMessage={t('orderImports.emptyRows')}
               />
             </>
           )}

@@ -55,7 +55,7 @@ export function EmployeeTripsTab({ driverId }: { driverId: string }) {
             <td>{trip.tripNumber}</td>
             <td>{trip.tripDate}</td>
             <td>
-              <Badge tone={TRIP_STATUS_TONE[trip.status]}>{TRIP_STATUS_LABELS[trip.status]}</Badge>
+              <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
             </td>
             <td>{trip.vehicleNumber ? `${trip.vehicleNumber} · ${trip.vehicleLicensePlate ?? ''}` : '—'}</td>
             <td>{trip.orderCount}</td>

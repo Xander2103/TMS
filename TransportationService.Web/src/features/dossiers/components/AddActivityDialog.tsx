@@ -4,6 +4,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { describeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
+import type { TranslateFn } from '../../../i18n/localeContext'
 import { listActivityTypes, type ActivityType } from '../api/activityTypesApi'
 import { activityTypeIcon } from '../activityTypeIcons'
 import { addDossierActivity } from '../api/dossiersApi'
@@ -20,16 +22,17 @@ interface AddActivityDialogProps {
 }
 
 /** Capability hint under a type name in the picker. */
-function capabilityHint(type: ActivityType): string {
+function capabilityHint(t: TranslateFn, type: ActivityType): string {
   const parts: string[] = []
-  if (type.hasStops) parts.push('transportopdracht')
-  if (type.supportsGoods) parts.push('goederen')
-  if (type.allowsDuration) parts.push('duur')
-  return parts.length > 0 ? parts.join(' · ') : 'omschrijvend'
+  if (type.hasStops) parts.push(t('dossiers.addActivity.capTransportOrder'))
+  if (type.supportsGoods) parts.push(t('dossiers.addActivity.capGoods'))
+  if (type.allowsDuration) parts.push(t('dossiers.addActivity.capDuration'))
+  return parts.length > 0 ? parts.join(' · ') : t('dossiers.addActivity.capDescriptive')
 }
 
 /** §11 [+ Activiteit]: type picker (active types), optional label, createLinkedOrder default ON. */
 export function AddActivityDialog({ dossier, onClose, onAdded, onConflict }: AddActivityDialogProps) {
+  const { t } = useLocale()
   const [types, setTypes] = useState<ActivityType[]>([])
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null)
   const [label, setLabel] = useState('')
@@ -47,7 +50,7 @@ export function AddActivityDialog({ dossier, onClose, onAdded, onConflict }: Add
 
   async function submit() {
     if (!selectedType) {
-      setError('Kies een activiteitstype.')
+      setError(t('dossiers.addActivity.chooseType'))
       return
     }
     setBusy(true)
@@ -66,7 +69,7 @@ export function AddActivityDialog({ dossier, onClose, onAdded, onConflict }: Add
         onClose()
         return
       }
-      setError(describeApiError(err, 'De activiteit kon niet worden toegevoegd.').message)
+      setError(describeApiError(err, t('dossiers.addActivity.addFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -74,22 +77,22 @@ export function AddActivityDialog({ dossier, onClose, onAdded, onConflict }: Add
 
   return (
     <Modal
-      title="Activiteit toevoegen"
+      title={t('dossiers.addActivity.title')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={busy || !selectedType}>
-            Toevoegen
+            {t('ui.actions.add')}
           </Button>
         </>
       }
     >
       <ValidationSummary message={error} />
-      <div className="dossier-type-picker" role="radiogroup" aria-label="Activiteitstype">
+      <div className="dossier-type-picker" role="radiogroup" aria-label={t('dossiers.addActivity.typePicker')}>
         {types.map((type) => {
           const Icon = activityTypeIcon(type.icon)
           const selected = type.id === selectedTypeId
@@ -106,14 +109,14 @@ export function AddActivityDialog({ dossier, onClose, onAdded, onConflict }: Add
               <Icon size={20} aria-hidden="true" />
               <span>
                 {type.name}
-                <span className="dossier-type-hint">{capabilityHint(type)}</span>
+                <span className="dossier-type-hint">{capabilityHint(t, type)}</span>
               </span>
             </button>
           )
         })}
-        {types.length === 0 && <p className="placeholder-text">Geen actieve activiteitstypes gevonden.</p>}
+        {types.length === 0 && <p className="placeholder-text">{t('dossiers.addActivity.noTypes')}</p>}
       </div>
-      <FormField label="Label" htmlFor="aa-label" hint="Optioneel, bv. “Kraan Nexans site B”.">
+      <FormField label={t('dossiers.drawer.label')} htmlFor="aa-label" hint={t('dossiers.addActivity.labelHint')}>
         <input id="aa-label" value={label} onChange={(event) => setLabel(event.target.value)} maxLength={200} disabled={busy} />
       </FormField>
       {selectedType?.hasStops && (
@@ -124,7 +127,7 @@ export function AddActivityDialog({ dossier, onClose, onAdded, onConflict }: Add
             onChange={(event) => setCreateLinkedOrder(event.target.checked)}
             disabled={busy}
           />
-          Meteen transportopdracht aanmaken
+          {t('dossiers.addActivity.createOrderNow')}
         </label>
       )}
     </Modal>

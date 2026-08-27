@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { useLocale } from '../../../i18n/localeContext'
 import type { LookupOption } from '../../master-data/types'
 import {
   TASK_PRIORITY_LABELS,
@@ -47,6 +48,7 @@ function emptyItem(): DraftItem {
  * is the sortOrder (moving an item up/down rewrites the order on save).
  */
 export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onClose }: TemplateEditorDialogProps) {
+  const { t } = useLocale()
   const [name, setName] = useState(initial?.name ?? '')
   const [description, setDescription] = useState(initial?.description ?? '')
   const [isActive, setIsActive] = useState(initial?.isActive ?? true)
@@ -85,12 +87,12 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
 
   function submit() {
     if (name.trim().length === 0) {
-      setError('Een naam is verplicht.')
+      setError(t('tasks.templateEditor.nameRequired'))
       return
     }
     const validItems = items.filter((item) => item.title.trim().length > 0)
     if (validItems.length === 0) {
-      setError('Voeg minstens één taak met een titel toe.')
+      setError(t('tasks.templateEditor.itemsRequired'))
       return
     }
     onSubmit({
@@ -113,21 +115,21 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
 
   return (
     <Modal
-      title={initial ? 'Sjabloon bewerken' : 'Nieuw sjabloon'}
+      title={initial ? t('tasks.templateEditor.editTitle') : t('tasks.templateEditor.newTitle')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button onClick={submit} disabled={busy}>
-            {busy ? 'Bezig...' : 'Opslaan'}
+            {busy ? t('ui.actions.busy') : t('ui.actions.save')}
           </Button>
         </>
       }
     >
-      <FormField label="Naam" htmlFor="template-name" required error={error}>
+      <FormField label={t('tasks.templateEditor.name')} htmlFor="template-name" required error={error}>
         <input
           id="template-name"
           type="text"
@@ -139,7 +141,7 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
           disabled={busy}
         />
       </FormField>
-      <FormField label="Beschrijving" htmlFor="template-description">
+      <FormField label={t('tasks.templateEditor.description')} htmlFor="template-description">
         <textarea
           id="template-description"
           rows={2}
@@ -150,23 +152,28 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
       </FormField>
       <label className="task-check-label">
         <input type="checkbox" checked={isActive} onChange={(event) => setIsActive(event.target.checked)} disabled={busy} />
-        Actief
+        {t('tasks.templateEditor.active')}
       </label>
 
       <div className="task-template-items">
         {items.map((item, index) => (
           <div key={item.key} className="task-template-item">
             <div className="task-template-item-head">
-              <strong>Taak {index + 1}</strong>
+              <strong>{t('tasks.templateEditor.itemHeading', { number: index + 1 })}</strong>
               <div className="task-template-item-actions">
-                <Button variant="ghost" onClick={() => moveItem(index, -1)} disabled={busy || index === 0} aria-label={`Taak ${index + 1} omhoog`}>
+                <Button
+                  variant="ghost"
+                  onClick={() => moveItem(index, -1)}
+                  disabled={busy || index === 0}
+                  aria-label={t('tasks.templateEditor.moveUp', { number: index + 1 })}
+                >
                   ↑
                 </Button>
                 <Button
                   variant="ghost"
                   onClick={() => moveItem(index, 1)}
                   disabled={busy || index === items.length - 1}
-                  aria-label={`Taak ${index + 1} omlaag`}
+                  aria-label={t('tasks.templateEditor.moveDown', { number: index + 1 })}
                 >
                   ↓
                 </Button>
@@ -174,14 +181,14 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
                   variant="ghost"
                   onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
                   disabled={busy || items.length === 1}
-                  aria-label={`Taak ${index + 1} verwijderen`}
+                  aria-label={t('tasks.templateEditor.removeItem', { number: index + 1 })}
                 >
                   ✕
                 </Button>
               </div>
             </div>
             <div className="task-template-item-grid">
-              <FormField label="Titel" htmlFor={`item-title-${item.key}`} required>
+              <FormField label={t('tasks.templateEditor.itemTitle')} htmlFor={`item-title-${item.key}`} required>
                 <input
                   id={`item-title-${item.key}`}
                   type="text"
@@ -190,14 +197,14 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
                   disabled={busy}
                 />
               </FormField>
-              <FormField label="Categorie" htmlFor={`item-category-${item.key}`}>
+              <FormField label={t('tasks.templateEditor.category')} htmlFor={`item-category-${item.key}`}>
                 <select
                   id={`item-category-${item.key}`}
                   value={item.categoryId ?? ''}
                   onChange={(event) => patchItem(index, { categoryId: event.target.value || null })}
                   disabled={busy}
                 >
-                  <option value="">— Geen —</option>
+                  <option value="">{t('tasks.templateEditor.noneOption')}</option>
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -205,7 +212,7 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
                   ))}
                 </select>
               </FormField>
-              <FormField label="Prioriteit" htmlFor={`item-priority-${item.key}`}>
+              <FormField label={t('tasks.templateEditor.priority')} htmlFor={`item-priority-${item.key}`}>
                 <select
                   id={`item-priority-${item.key}`}
                   value={item.priority}
@@ -214,12 +221,12 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
                 >
                   {Object.entries(TASK_PRIORITY_LABELS).map(([value, label]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(label)}
                     </option>
                   ))}
                 </select>
               </FormField>
-              <FormField label="Deadline (dagen na start)" htmlFor={`item-due-${item.key}`}>
+              <FormField label={t('tasks.templateEditor.dueInDays')} htmlFor={`item-due-${item.key}`}>
                 <input
                   id={`item-due-${item.key}`}
                   type="number"
@@ -232,7 +239,7 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
                 />
               </FormField>
             </div>
-            <FormField label="Beschrijving" htmlFor={`item-description-${item.key}`}>
+            <FormField label={t('tasks.templateEditor.description')} htmlFor={`item-description-${item.key}`}>
               <textarea
                 id={`item-description-${item.key}`}
                 rows={2}
@@ -249,7 +256,7 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
                   onChange={(event) => patchItem(index, { requiresReview: event.target.checked })}
                   disabled={busy}
                 />
-                Controle vereist
+                {t('tasks.templateEditor.requiresReview')}
               </label>
               <label className="task-check-label">
                 <input
@@ -258,7 +265,7 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
                   onChange={(event) => patchItem(index, { requiresCompletionNote: event.target.checked })}
                   disabled={busy}
                 />
-                Notitie verplicht
+                {t('tasks.templateEditor.requiresNote')}
               </label>
               <label className="task-check-label">
                 <input
@@ -267,14 +274,14 @@ export function TemplateEditorDialog({ initial, categories, busy, onSubmit, onCl
                   onChange={(event) => patchItem(index, { requiresEvidence: event.target.checked })}
                   disabled={busy}
                 />
-                Bewijs vereist
+                {t('tasks.templateEditor.requiresEvidence')}
               </label>
             </div>
           </div>
         ))}
       </div>
       <Button variant="secondary" onClick={() => setItems((current) => [...current, emptyItem()])} disabled={busy}>
-        + Taak toevoegen
+        {t('tasks.templateEditor.addItem')}
       </Button>
     </Modal>
   )

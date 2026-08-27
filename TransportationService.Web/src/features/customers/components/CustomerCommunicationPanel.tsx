@@ -8,6 +8,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   createCommunicationRule,
   deleteCommunicationRule,
@@ -16,7 +17,7 @@ import {
 } from '../api/customerCommunicationApi'
 import {
   COMMUNICATION_TYPES,
-  COMMUNICATION_TYPE_LABELS,
+  COMMUNICATION_TYPE_LABEL_KEYS,
   communicationTypeLabel,
   type CustomerCommunicationRule,
   type CustomerCommunicationType,
@@ -38,6 +39,7 @@ function contactName(contact: CustomerContact): string {
 /** Communicatieregels: welk type melding naar welke contactpersonen gaat (mutaties customers.manage_communication). */
 export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCommunicationPanelProps) {
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('customers.manage_communication')
 
@@ -55,8 +57,8 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
         setRules(data)
         setLoadError(null)
       })
-      .catch(() => setLoadError('De communicatieregels konden niet worden geladen.'))
-  }, [customerId])
+      .catch(() => setLoadError(t('customers.communication.loadFailed')))
+  }, [customerId, t])
 
   useEffect(() => {
     reload()
@@ -75,30 +77,34 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
   const columns: Column<CustomerCommunicationRule>[] = [
     {
       key: 'type',
-      header: 'Type',
-      render: (rule) => communicationTypeLabel(rule.type, rule.customTypeLabel),
+      header: t('customers.communication.columnType'),
+      render: (rule) => communicationTypeLabel(t, rule.type, rule.customTypeLabel),
     },
-    { key: 'contacts', header: 'Contactpersonen', render: (rule) => describeContacts(rule) },
-    { key: 'cc', header: 'CC', render: (rule) => rule.ccEmail ?? '—' },
-    { key: 'language', header: 'Taal', render: (rule) => rule.languageCode ?? '—' },
+    { key: 'contacts', header: t('customers.communication.columnContacts'), render: (rule) => describeContacts(rule) },
+    { key: 'cc', header: t('customers.communication.columnCc'), render: (rule) => rule.ccEmail ?? '—' },
+    { key: 'language', header: t('customers.communication.columnLanguage'), render: (rule) => rule.languageCode ?? '—' },
     {
       key: 'active',
-      header: 'Status',
+      header: t('customers.communication.columnStatus'),
       render: (rule) =>
-        rule.isActive ? <Badge tone="success">Actief</Badge> : <Badge tone="neutral">Inactief</Badge>,
+        rule.isActive ? (
+          <Badge tone="success">{t('ui.statusBadges.active')}</Badge>
+        ) : (
+          <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>
+        ),
     },
     ...(canManage
       ? [
           {
             key: 'actions',
-            header: 'Acties',
+            header: t('customers.communication.columnActions'),
             render: (rule: CustomerCommunicationRule) => (
               <span className="customer-contact-actions">
                 <Button variant="ghost" onClick={() => setDialog({ mode: 'edit', rule })}>
-                  Bewerken
+                  {t('ui.actions.edit')}
                 </Button>
                 <Button variant="ghost" onClick={() => setRemoveTarget(rule)}>
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </Button>
               </span>
             ),
@@ -113,16 +119,16 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
     try {
       if (dialog.mode === 'edit') {
         await updateCommunicationRule(customerId, dialog.rule.id, input)
-        toast.showSuccess('Communicatieregel bijgewerkt.')
+        toast.showSuccess(t('customers.communication.updated'))
       } else {
         await createCommunicationRule(customerId, input)
-        toast.showSuccess('Communicatieregel toegevoegd.')
+        toast.showSuccess(t('customers.communication.added'))
       }
       setDialog(null)
       reload()
       return { ok: true }
     } catch (err) {
-      const described = describeApiError(err, 'De communicatieregel kon niet worden opgeslagen.')
+      const described = describeApiError(err, t('customers.communication.saveFailed'))
       return { ok: false, error: described.message, fieldErrors: described.fieldErrors }
     } finally {
       setBusy(false)
@@ -132,10 +138,10 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
   return (
     <div className="customer-contacts">
       <div className="page-header">
-        <h3 style={{ margin: 0 }}>Communicatieregels</h3>
+        <h3 style={{ margin: 0 }}>{t('customers.communication.title')}</h3>
         {canManage && (
           <Button variant="secondary" onClick={() => setDialog({ mode: 'create' })}>
-            + Regel toevoegen
+            {t('customers.communication.addRule')}
           </Button>
         )}
       </div>
@@ -146,7 +152,7 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
         rowKey={(rule) => rule.id}
         isLoading={rules === null && loadError === null}
         error={loadError}
-        emptyMessage="Nog geen communicatieregels. Zonder regels worden er geen meldingen naar deze klant gestuurd."
+        emptyMessage={t('customers.communication.empty')}
       />
 
       {dialog && (
@@ -161,20 +167,22 @@ export function CustomerCommunicationPanel({ customerId, contacts }: CustomerCom
 
       {removeTarget && (
         <ConfirmDialog
-          title="Communicatieregel verwijderen"
-          message={`Regel '${communicationTypeLabel(removeTarget.type, removeTarget.customTypeLabel)}' verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('customers.communication.removeTitle')}
+          message={t('customers.communication.removeMessage', {
+            label: communicationTypeLabel(t, removeTarget.type, removeTarget.customTypeLabel),
+          })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={busy}
           onConfirm={async () => {
             setBusy(true)
             try {
               await deleteCommunicationRule(customerId, removeTarget.id)
-              toast.showSuccess('Communicatieregel verwijderd.')
+              toast.showSuccess(t('customers.communication.removed'))
               setRemoveTarget(null)
               reload()
             } catch (err) {
-              toast.showError(describeApiError(err, 'De communicatieregel kon niet worden verwijderd.').message)
+              toast.showError(describeApiError(err, t('customers.communication.removeFailed')).message)
             } finally {
               setBusy(false)
             }
@@ -199,6 +207,7 @@ function CommunicationRuleDialog({
   onSubmit: (input: SaveCommunicationRuleInput) => Promise<{ ok: boolean; error?: string; fieldErrors?: FieldErrors }>
   onClose: () => void
 }) {
+  const { t } = useLocale()
   const [type, setType] = useState<CustomerCommunicationType>(rule?.type ?? 'PlanningAlert')
   const [customTypeLabel, setCustomTypeLabel] = useState(rule?.customTypeLabel ?? '')
   const [contactIds, setContactIds] = useState<string[]>(rule?.contactIds ?? [])
@@ -221,9 +230,9 @@ function CommunicationRuleDialog({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     const next: { contactIds?: string; customTypeLabel?: string; ccEmail?: string } = {}
-    if (contactIds.length === 0) next.contactIds = 'Koppel minstens één contactpersoon aan deze regel.'
-    if (type === 'Other' && !customTypeLabel.trim()) next.customTypeLabel = "Geef een omschrijving voor het type 'Andere'."
-    if (ccEmail.trim() && !ccEmail.includes('@')) next.ccEmail = 'Het CC-adres is geen geldig e-mailadres.'
+    if (contactIds.length === 0) next.contactIds = t('customers.communication.contactsRequired')
+    if (type === 'Other' && !customTypeLabel.trim()) next.customTypeLabel = t('customers.communication.customLabelRequired')
+    if (ccEmail.trim() && !ccEmail.includes('@')) next.ccEmail = t('customers.communication.ccInvalid')
     setLocalErrors(next)
     if (next.contactIds || next.customTypeLabel || next.ccEmail) return
 
@@ -246,16 +255,16 @@ function CommunicationRuleDialog({
 
   return (
     <Modal
-      title={rule ? 'Communicatieregel bewerken' : 'Nieuwe communicatieregel'}
+      title={rule ? t('customers.communication.editTitle') : t('customers.communication.newTitle')}
       onClose={onClose}
       busy={isSubmitting}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="communication-rule-form" disabled={isSubmitting}>
-            {isSubmitting ? 'Opslaan...' : 'Opslaan'}
+            {isSubmitting ? t('customers.common.saving') : t('ui.actions.save')}
           </Button>
         </>
       }
@@ -266,18 +275,18 @@ function CommunicationRuleDialog({
             {serverError}
           </p>
         )}
-        <FormField label="Type" htmlFor="comm-type" required>
+        <FormField label={t('customers.communication.columnType')} htmlFor="comm-type" required>
           <select id="comm-type" value={type} onChange={(e) => setType(e.target.value as CustomerCommunicationType)}>
             {COMMUNICATION_TYPES.map((value) => (
               <option key={value} value={value}>
-                {COMMUNICATION_TYPE_LABELS[value]}
+                {t(COMMUNICATION_TYPE_LABEL_KEYS[value])}
               </option>
             ))}
           </select>
         </FormField>
         {type === 'Other' && (
           <FormField
-            label="Omschrijving type"
+            label={t('customers.communication.customLabelField')}
             htmlFor="comm-custom-label"
             required
             error={localErrors.customTypeLabel ?? getFieldError(serverFieldErrors, 'customTypeLabel')}
@@ -292,15 +301,20 @@ function CommunicationRuleDialog({
           </FormField>
         )}
         <FormField
-          label="Contactpersonen"
+          label={t('customers.communication.columnContacts')}
           htmlFor="comm-contacts"
           required
-          hint="De actieve gekoppelde contactpersonen ontvangen dit type melding."
+          hint={t('customers.communication.contactsHint')}
           error={localErrors.contactIds ?? getFieldError(serverFieldErrors, 'contactIds')}
         >
-          <div id="comm-contacts" className="customer-comm-contact-list" role="group" aria-label="Contactpersonen">
+          <div
+            id="comm-contacts"
+            className="customer-comm-contact-list"
+            role="group"
+            aria-label={t('customers.communication.columnContacts')}
+          >
             {selectable.length === 0 && (
-              <p className="customer-form-muted">Deze klant heeft nog geen contactpersonen.</p>
+              <p className="customer-form-muted">{t('customers.communication.noContacts')}</p>
             )}
             {selectable.map((contact) => (
               <label key={contact.id} className="customer-form-checkbox">
@@ -311,15 +325,15 @@ function CommunicationRuleDialog({
                 />
                 {contactName(contact)}
                 {contact.email ? ` (${contact.email})` : ''}
-                {!contact.isActive ? ' — inactief' : ''}
+                {!contact.isActive ? ` ${t('customers.communication.inactiveSuffix')}` : ''}
               </label>
             ))}
           </div>
         </FormField>
         <FormField
-          label="CC-e-mail"
+          label={t('customers.communication.ccField')}
           htmlFor="comm-cc"
-          hint="Optioneel extra adres dat elke melding in CC krijgt."
+          hint={t('customers.communication.ccHint')}
           error={localErrors.ccEmail ?? getFieldError(serverFieldErrors, 'ccEmail')}
         >
           <input
@@ -331,16 +345,16 @@ function CommunicationRuleDialog({
             aria-invalid={localErrors.ccEmail ? 'true' : undefined}
           />
         </FormField>
-        <FormField label="Taal" htmlFor="comm-language" hint="Taalcode, bv. nl, fr of en. Leeg = voorkeurstaal van de contactpersoon.">
+        <FormField label={t('customers.communication.columnLanguage')} htmlFor="comm-language" hint={t('customers.communication.languageHint')}>
           <input id="comm-language" value={languageCode} onChange={(e) => setLanguageCode(e.target.value)} maxLength={10} />
         </FormField>
         <FormField
-          label="Fallback-contactpersoon"
+          label={t('customers.communication.fallbackField')}
           htmlFor="comm-fallback"
-          hint="Ontvangt de melding wanneer geen enkele gekoppelde contactpersoon bruikbaar is."
+          hint={t('customers.communication.fallbackHint')}
         >
           <select id="comm-fallback" value={fallbackContactId} onChange={(e) => setFallbackContactId(e.target.value)}>
-            <option value="">— Geen —</option>
+            <option value="">{t('customers.form.noneOption')}</option>
             {contacts
               .filter((contact) => contact.isActive)
               .map((contact) => (
@@ -352,7 +366,7 @@ function CommunicationRuleDialog({
         </FormField>
         <label className="customer-form-checkbox">
           <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-          Actief
+          {t('ui.statusBadges.active')}
         </label>
       </form>
     </Modal>

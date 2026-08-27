@@ -1,0 +1,35 @@
+{
+  "kind": {
+    "NegativeStockUnresolved": "Negative stock unresolved",
+    "CriticalStockUnhandled": "Critical stock unhandled",
+    "TaskOverdue": "Task overdue",
+    "AcknowledgementMissing": "Acknowledgement missing",
+    "ReturnOverdue": "Return overdue"
+  },
+  "page": {
+    "title": "Escalation rules",
+    "subtitle": "Who is notified after how many hours when a signal remains unhandled.",
+    "noPermission": "You do not have permission to manage escalation rules.",
+    "loadFailed": "The escalation rules could not be loaded.",
+    "empty": "No escalation rules found."
+  },
+  "columns": {
+    "kind": "Kind",
+    "active": "Active",
+    "delay": "Delay (hours)",
+    "target": "Target permission",
+    "actionsAria": "Actions"
+  },
+  "aria": {
+    "active": "Active: {kind}",
+    "delay": "Delay in hours: {kind}",
+    "target": "Target permission: {kind}"
+  },
+  "form": {
+    "invalidDelay": "Enter a valid delay in hours (whole number, 0 or more).",
+    "targetRequired": "Choose a target permission.",
+    "saved": "Escalation rule \"{kind}\" saved.",
+    "saveFailed": "The escalation rule could not be saved.",
+    "saving": "Saving…"
+  }
+}

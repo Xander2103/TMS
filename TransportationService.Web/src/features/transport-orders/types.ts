@@ -3,15 +3,16 @@ import type { PackageUnitType } from '../packages/types'
 export type TransportOrderStatus = 'Draft' | 'Submitted' | 'Confirmed' | 'Planned' | 'InProgress' | 'Completed' | 'Invoiced' | 'Cancelled'
 export type StopType = 'Loading' | 'Unloading'
 
+/** Vertaalsleutels per status — renderen als t(ORDER_STATUS_LABELS[status]). */
 export const ORDER_STATUS_LABELS: Record<TransportOrderStatus, string> = {
-  Draft: 'Concept',
-  Submitted: 'Ingediend',
-  Confirmed: 'Bevestigd',
-  Planned: 'Gepland',
-  InProgress: 'In uitvoering',
-  Completed: 'Afgerond',
-  Invoiced: 'Gefactureerd',
-  Cancelled: 'Geannuleerd',
+  Draft: 'transportOrders.status.Draft',
+  Submitted: 'transportOrders.status.Submitted',
+  Confirmed: 'transportOrders.status.Confirmed',
+  Planned: 'transportOrders.status.Planned',
+  InProgress: 'transportOrders.status.InProgress',
+  Completed: 'transportOrders.status.Completed',
+  Invoiced: 'transportOrders.status.Invoiced',
+  Cancelled: 'transportOrders.status.Cancelled',
 }
 
 export const ORDER_STATUSES: TransportOrderStatus[] = ['Draft', 'Submitted', 'Confirmed', 'Planned', 'InProgress', 'Completed', 'Invoiced', 'Cancelled']
@@ -27,32 +28,34 @@ export const ORDER_STATUS_TONE: Record<TransportOrderStatus, 'neutral' | 'succes
   Cancelled: 'danger',
 }
 
-/** Action labels for the guarded transitions offered by the backend. */
+/** Action label KEYS for the guarded transitions offered by the backend — render via t(). */
 export const ORDER_TRANSITION_LABELS: Record<TransportOrderStatus, string> = {
-  Draft: 'Terug naar concept',
-  Submitted: 'Indienen',
-  Confirmed: 'Bevestigen',
-  Planned: 'Plannen',
-  Invoiced: 'Factureren',
-  InProgress: 'Start uitvoering',
-  Completed: 'Afronden',
-  Cancelled: 'Annuleren',
+  Draft: 'transportOrders.transition.Draft',
+  Submitted: 'transportOrders.transition.Submitted',
+  Confirmed: 'transportOrders.transition.Confirmed',
+  Planned: 'transportOrders.transition.Planned',
+  Invoiced: 'transportOrders.transition.Invoiced',
+  InProgress: 'transportOrders.transition.InProgress',
+  Completed: 'transportOrders.transition.Completed',
+  Cancelled: 'transportOrders.transition.Cancelled',
 }
 
+/** Vertaalsleutels per stoptype — renderen als t(STOP_TYPE_LABELS[type]). */
 export const STOP_TYPE_LABELS: Record<StopType, string> = {
-  Loading: 'Laden',
-  Unloading: 'Lossen',
+  Loading: 'transportOrders.stopType.Loading',
+  Unloading: 'transportOrders.stopType.Unloading',
 }
 
 export type OrderPriority = 'Low' | 'Normal' | 'High' | 'Urgent'
 
 export const ORDER_PRIORITIES: OrderPriority[] = ['Low', 'Normal', 'High', 'Urgent']
 
+/** Vertaalsleutels per prioriteit — renderen als t(ORDER_PRIORITY_LABELS[priority]). */
 export const ORDER_PRIORITY_LABELS: Record<OrderPriority, string> = {
-  Low: 'Laag',
-  Normal: 'Normaal',
-  High: 'Hoog',
-  Urgent: 'Dringend',
+  Low: 'transportOrders.priority.Low',
+  Normal: 'transportOrders.priority.Normal',
+  High: 'transportOrders.priority.High',
+  Urgent: 'transportOrders.priority.Urgent',
 }
 
 export const ORDER_PRIORITY_TONE: Record<OrderPriority, 'neutral' | 'info' | 'warning' | 'danger'> = {
@@ -265,11 +268,12 @@ export interface TransportOrderDetail {
 /** Manual-editing lifecycle of a pricing line (spec ch. 24-26). */
 export type OrderPriceLineKind = 'Auto' | 'AutoAdjusted' | 'Manual' | 'Proposed'
 
+/** Vertaalsleutels per lijnsoort — renderen als t(ORDER_PRICE_LINE_KIND_LABELS[kind]). */
 export const ORDER_PRICE_LINE_KIND_LABELS: Record<OrderPriceLineKind, string> = {
-  Auto: 'AUTO',
-  AutoAdjusted: 'OVERRIDE',
-  Manual: 'MANUEEL',
-  Proposed: 'VOORSTEL',
+  Auto: 'transportOrders.lineKind.Auto',
+  AutoAdjusted: 'transportOrders.lineKind.AutoAdjusted',
+  Manual: 'transportOrders.lineKind.Manual',
+  Proposed: 'transportOrders.lineKind.Proposed',
 }
 
 export const ORDER_PRICE_LINE_KIND_TONE: Record<OrderPriceLineKind, 'neutral' | 'warning' | 'info' | 'success' | 'danger'> = {
@@ -287,10 +291,10 @@ export type OrderPricingStatus = 'Draft' | 'Reviewed' | 'Locked' | 'Invoiced'
  * Draft/Reviewed/Locked lifecycle stays underneath but is never shown to normal users.
  */
 export const ORDER_PRICING_STATUS_LABELS: Record<OrderPricingStatus, string> = {
-  Draft: 'Nog te bevestigen',
-  Reviewed: 'Nog te bevestigen',
-  Locked: 'Bevestigd',
-  Invoiced: 'Gefactureerd',
+  Draft: 'transportOrders.pricingStatus.Draft',
+  Reviewed: 'transportOrders.pricingStatus.Reviewed',
+  Locked: 'transportOrders.pricingStatus.Locked',
+  Invoiced: 'transportOrders.pricingStatus.Invoiced',
 }
 
 export const ORDER_PRICING_STATUS_TONE: Record<OrderPricingStatus, 'neutral' | 'info' | 'warning' | 'success'> = {
@@ -303,15 +307,16 @@ export const ORDER_PRICING_STATUS_TONE: Record<OrderPricingStatus, 'neutral' | '
 /**
  * Visible price status (wave 2026-08-04 §9): Bevestigd (green) / Gefactureerd / Onvolledig
  * (red, unconfirmed with unpriced goods) / Nog te bevestigen (orange).
+ * `labelKey` is a translation key — render via t().
  */
 export function priceStatusDisplay(
   status: OrderPricingStatus | undefined,
   hasUnpricedGoods: boolean,
-): { label: string; tone: 'neutral' | 'warning' | 'success' | 'danger' } {
-  if (status === 'Invoiced') return { label: 'Gefactureerd', tone: 'success' }
-  if (status === 'Locked') return { label: 'Bevestigd', tone: 'success' }
-  if (hasUnpricedGoods) return { label: 'Onvolledig', tone: 'danger' }
-  return { label: 'Nog te bevestigen', tone: 'warning' }
+): { labelKey: string; tone: 'neutral' | 'warning' | 'success' | 'danger' } {
+  if (status === 'Invoiced') return { labelKey: 'transportOrders.priceStatus.invoiced', tone: 'success' }
+  if (status === 'Locked') return { labelKey: 'transportOrders.priceStatus.confirmed', tone: 'success' }
+  if (hasUnpricedGoods) return { labelKey: 'transportOrders.priceStatus.incomplete', tone: 'danger' }
+  return { labelKey: 'transportOrders.priceStatus.toConfirm', tone: 'warning' }
 }
 
 export interface OrderPricingLine {
@@ -342,9 +347,11 @@ export interface OrderPricingLine {
   serviceOptionId?: string | null
 }
 
-/** Badge text for a pricing line: an Auto line tied to a service option reads as DIENST rather than AUTO. */
+/** Badge KEY for a pricing line: an Auto line tied to a service option reads as DIENST rather than AUTO. */
 export function lineBadge(line: Pick<OrderPricingLine, 'kind' | 'serviceOptionId'>): string {
-  return line.kind === 'Auto' && line.serviceOptionId ? 'DIENST' : ORDER_PRICE_LINE_KIND_LABELS[line.kind]
+  return line.kind === 'Auto' && line.serviceOptionId
+    ? 'transportOrders.lineKindService'
+    : ORDER_PRICE_LINE_KIND_LABELS[line.kind]
 }
 
 /** Pricing coverage of one commercial goods line/unit (wave 2026-08-04 §7). */
@@ -361,10 +368,11 @@ export interface OrderPricingCoverage {
   reason: string | null
 }
 
+/** Vertaalsleutels per dekkingsstatus — renderen als t(PRICING_COVERAGE_LABELS[status]). */
 export const PRICING_COVERAGE_LABELS: Record<PricingCoverageStatus, string> = {
-  Full: 'Volledig geprijsd',
-  Partial: 'Gedeeltelijk geprijsd',
-  None: 'Niet geprijsd',
+  Full: 'transportOrders.coverage.Full',
+  Partial: 'transportOrders.coverage.Partial',
+  None: 'transportOrders.coverage.None',
 }
 
 export const PRICING_COVERAGE_TONE: Record<PricingCoverageStatus, 'success' | 'warning' | 'danger'> = {

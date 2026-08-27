@@ -7,6 +7,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { formatServiceValue } from '../../tarification/serviceValueFormat'
 import type { SurchargeKind } from '../../tarification/types'
@@ -110,7 +111,7 @@ interface AssignedSharedAgreement {
   assignment: PricingAssignment
 }
 
-function assignmentAdjustmentLabel(assignment: PricingAssignment): string {
+function assignmentAdjustmentLabel(t: TranslateFn, assignment: PricingAssignment): string {
   const parts: string[] = []
   if (assignment.percentAdjustment !== null) {
     parts.push(`${assignment.percentAdjustment > 0 ? '+' : ''}${assignment.percentAdjustment}%`)
@@ -118,7 +119,7 @@ function assignmentAdjustmentLabel(assignment: PricingAssignment): string {
   if (assignment.fixedAdjustment !== null) {
     parts.push(`${assignment.fixedAdjustment > 0 ? '+' : ''}€ ${assignment.fixedAdjustment.toFixed(2)}`)
   }
-  return parts.length > 0 ? parts.join(', ') : 'geen aanpassing'
+  return parts.length > 0 ? parts.join(', ') : t('customers.pricing.noAdjustment')
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -132,12 +133,12 @@ function moveItem<T>(list: T[], from: number, to: number): T[] {
   return next
 }
 
-function ruleValueSummary(rule: PriceRule): string {
-  if (rule.brackets.length > 0) return `${rule.brackets.length} staffels`
+function ruleValueSummary(t: TranslateFn, rule: PriceRule): string {
+  if (rule.brackets.length > 0) return t('customers.pricing.bracketCount', { count: rule.brackets.length })
   const parts: string[] = []
-  if (rule.baseAmount !== null) parts.push(`basis € ${rule.baseAmount.toFixed(2)}`)
+  if (rule.baseAmount !== null) parts.push(t('customers.pricing.baseAmountSummary', { amount: rule.baseAmount.toFixed(2) }))
   if (rule.unitPrice !== null) parts.push(`€ ${rule.unitPrice.toFixed(2)}`)
-  if (rule.minimumAmount !== null) parts.push(`min € ${rule.minimumAmount.toFixed(2)}`)
+  if (rule.minimumAmount !== null) parts.push(t('customers.pricing.minAmountSummary', { amount: rule.minimumAmount.toFixed(2) }))
   return parts.join(', ') || '—'
 }
 
@@ -148,6 +149,7 @@ function ruleValueSummary(rule: PriceRule): string {
  */
 export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPanelProps) {
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const canView = hasPermission('tariffs.view') || hasPermission('tariffs.manage')
   const canManage = hasPermission('tariffs.manage')
@@ -202,8 +204,8 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             .filter((x): x is AssignedSharedAgreement => x !== null),
         )
       })
-      .catch(() => setLoadError('De prijsafspraken konden niet worden geladen.'))
-  }, [customerId, canView])
+      .catch(() => setLoadError(t('customers.pricing.loadFailed')))
+  }, [customerId, canView, t])
 
   useEffect(() => {
     reload()
@@ -211,7 +213,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
 
   if (!canView) return null
   if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (!config) return <p className="placeholder-text">Prijsafspraken laden…</p>
+  if (!config) return <p className="placeholder-text">{t('customers.pricing.loading')}</p>
 
   const now = today()
   const currentRules = rules.filter(
@@ -274,9 +276,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         }),
       })
       setConfig(saved)
-      showSuccess(reset ? 'Algemene waarde wordt opnieuw gebruikt.' : 'Klantoverride opgeslagen.')
+      showSuccess(reset ? t('customers.pricing.overrideReset') : t('customers.pricing.overrideSaved'))
     } catch (err) {
-      showError(describeApiError(err, 'De klantoverride kon niet worden opgeslagen.').message)
+      showError(describeApiError(err, t('customers.pricing.overrideSaveFailed')).message)
     }
   }
 
@@ -386,15 +388,15 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
       }
       if (draft.rule) {
         await updatePriceRule(draft.rule.id, input)
-        showSuccess('Prijsregel bijgewerkt.')
+        showSuccess(t('customers.pricing.ruleUpdated'))
       } else {
         await createPriceRule(input)
-        showSuccess('Prijsregel toegevoegd.')
+        showSuccess(t('customers.pricing.ruleAdded'))
       }
       setDraft(null)
       reload()
     } catch (err) {
-      setDraftError(describeApiError(err, 'De prijsregel kon niet worden opgeslagen.').message)
+      setDraftError(describeApiError(err, t('customers.pricing.ruleSaveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -406,10 +408,10 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     setDeleteTarget(null)
     try {
       await deletePriceRule(target.id)
-      showSuccess('Prijsregel verwijderd.')
+      showSuccess(t('customers.pricing.ruleRemoved'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De prijsregel kon niet worden verwijderd.').message)
+      showError(describeApiError(err, t('customers.pricing.ruleRemoveFailed')).message)
     }
   }
 
@@ -487,15 +489,15 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
       }
       if (agreementDraft.agreement) {
         await updatePricingAgreement(agreementDraft.agreement.id, input)
-        showSuccess('Prijsafspraak bijgewerkt.')
+        showSuccess(t('customers.pricing.agreementUpdated'))
       } else {
         await createPricingAgreement(input)
-        showSuccess('Prijsafspraak toegevoegd.')
+        showSuccess(t('customers.pricing.agreementAdded'))
       }
       setAgreementDraft(null)
       reload()
     } catch (err) {
-      setAgreementError(describeApiError(err, 'De prijsafspraak kon niet worden opgeslagen.').message)
+      setAgreementError(describeApiError(err, t('customers.pricing.agreementSaveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -507,10 +509,10 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     setDeleteAgreementTarget(null)
     try {
       await deletePricingAgreement(target.id)
-      showSuccess('Prijsafspraak verwijderd.')
+      showSuccess(t('customers.pricing.agreementRemoved'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De prijsafspraak kon niet worden verwijderd.').message)
+      showError(describeApiError(err, t('customers.pricing.agreementRemoveFailed')).message)
     }
   }
 
@@ -522,29 +524,29 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
     (draft?.brackets.some((b) => b.weightToKg.trim() !== '' || b.volumeToM3.trim() !== '' || b.loadingMetersTo.trim() !== '') ?? false)
   const pricingUnits = units.filter((u) => u.isActive && u.allowForPricing)
   const priceLabelByBasis: Partial<Record<PriceRuleBasis, string>> = {
-    PerUnit: 'Prijs per eenheid (€)',
-    Hourly: 'Uurtarief (€)',
-    Fixed: 'Vaste prijs (€)',
-    PerKm: 'Prijs per km (€)',
-    PerLoadingMeter: 'Prijs per laadmeter (€)',
-    PerVolume: 'Prijs per m³ (€)',
-    PerStop: 'Prijs per stop (€) — leeg bij staffels',
-    PerPallet: 'Prijs per pallet (€)',
-    PerTon: 'Prijs per ton (€)',
+    PerUnit: t('customers.pricing.priceLabel.PerUnit'),
+    Hourly: t('customers.pricing.priceLabel.Hourly'),
+    Fixed: t('customers.pricing.priceLabel.Fixed'),
+    PerKm: t('customers.pricing.priceLabel.PerKm'),
+    PerLoadingMeter: t('customers.pricing.priceLabel.PerLoadingMeter'),
+    PerVolume: t('customers.pricing.priceLabel.PerVolume'),
+    PerStop: t('customers.pricing.priceLabel.PerStop'),
+    PerPallet: t('customers.pricing.priceLabel.PerPallet'),
+    PerTon: t('customers.pricing.priceLabel.PerTon'),
   }
 
   const rulesTable = (list: PriceRule[]) => (
     <table className="issued-items-table">
       <thead>
         <tr>
-          <th>Naam</th>
-          <th>Eenheid</th>
-          <th>Berekeningswijze</th>
-          <th>Zone</th>
-          <th>Waarde</th>
-          <th>Prijsafspraak</th>
-          <th>Geldig</th>
-          {canManage && <th aria-label="Acties" />}
+          <th>{t('customers.pricing.columnName')}</th>
+          <th>{t('customers.pricing.columnUnit')}</th>
+          <th>{t('customers.pricing.columnBasis')}</th>
+          <th>{t('customers.pricing.columnZone')}</th>
+          <th>{t('customers.pricing.columnValue')}</th>
+          <th>{t('customers.pricing.columnAgreement')}</th>
+          <th>{t('customers.pricing.columnValidity')}</th>
+          {canManage && <th aria-label={t('customers.pricing.actionsAria')} />}
         </tr>
       </thead>
       <tbody>
@@ -553,21 +555,21 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             <td>{rule.name}</td>
             <td>{rule.unitTypeName ?? '—'}</td>
             <td>{PRICE_RULE_BASIS_LABELS[rule.basis]}</td>
-            <td>{rule.zoneName ?? 'Alle'}</td>
-            <td>{ruleValueSummary(rule)}</td>
+            <td>{rule.zoneName ?? t('customers.pricing.allZones')}</td>
+            <td>{ruleValueSummary(t, rule)}</td>
             <td>{rule.agreementName ?? '—'}</td>
             <td>
               {rule.effectiveFrom}
               {rule.effectiveUntil ? ` – ${rule.effectiveUntil}` : ' →'}
-              {!rule.isActive && <Badge tone="neutral">Inactief</Badge>}
+              {!rule.isActive && <Badge tone="neutral">{t('ui.statusBadges.inactive')}</Badge>}
             </td>
             {canManage && (
               <td className="issued-items-row-actions">
                 <button type="button" className="issued-items-link" onClick={() => openDraft(rule)}>
-                  Bewerken
+                  {t('ui.actions.edit')}
                 </button>
                 <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteTarget(rule)}>
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </button>
               </td>
             )}
@@ -580,22 +582,22 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Prijsafspraken (tarievenkaarten)</h3>
-        {canManage && <Button variant="secondary" onClick={() => openAgreementDraft(null)}>+ Prijsafspraak</Button>}
+        <h3>{t('customers.pricing.agreementsTitle')}</h3>
+        {canManage && <Button variant="secondary" onClick={() => openAgreementDraft(null)}>{t('customers.pricing.addAgreement')}</Button>}
       </div>
       {agreements.length === 0 && sharedAssigned.length === 0 && (
-        <p className="placeholder-text">Nog geen prijsafspraken; losse prijsregels blijven mogelijk.</p>
+        <p className="placeholder-text">{t('customers.pricing.agreementsEmpty')}</p>
       )}
       {(agreements.length > 0 || sharedAssigned.length > 0) && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Naam</th>
-              <th>Geldig</th>
-              <th>Minimum</th>
-              <th>Toeslagen</th>
-              <th>Notities</th>
-              {canManage && <th aria-label="Acties" />}
+              <th>{t('customers.pricing.columnName')}</th>
+              <th>{t('customers.pricing.columnValidity')}</th>
+              <th>{t('customers.pricing.columnMinimum')}</th>
+              <th>{t('customers.pricing.columnSurcharges')}</th>
+              <th>{t('customers.pricing.columnNotes')}</th>
+              {canManage && <th aria-label={t('customers.pricing.actionsAria')} />}
             </tr>
           </thead>
           <tbody>
@@ -605,14 +607,14 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                   <Link to={`/pricing/tables/${agreement.id}`} className="issued-items-link">
                     {agreement.name}
                   </Link>{' '}
-                  <Badge tone="info">Gedeelde tabel</Badge>
+                  <Badge tone="info">{t('customers.pricing.sharedTableBadge')}</Badge>
                 </td>
                 <td>
                   {agreement.effectiveFrom}
                   {agreement.effectiveUntil ? ` – ${agreement.effectiveUntil}` : ' →'}
                 </td>
                 <td>{agreement.minimumAmount !== null ? `€ ${agreement.minimumAmount.toFixed(2)}` : '—'}</td>
-                <td>{assignmentAdjustmentLabel(assignment)}</td>
+                <td>{assignmentAdjustmentLabel(t, assignment)}</td>
                 <td>{agreement.notes ?? '—'}</td>
                 {canManage && <td className="issued-items-row-actions">—</td>}
               </tr>
@@ -624,7 +626,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                     {agreement.name}
                   </Link>
                   {agreement.baseAgreementId && (
-                    <Badge tone="info">Afgeleid van {agreement.baseAgreementName ?? '—'}</Badge>
+                    <Badge tone="info">{t('customers.pricing.derivedFromBadge', { name: agreement.baseAgreementName ?? '—' })}</Badge>
                   )}
                 </td>
                 <td>
@@ -643,14 +645,14 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                 {canManage && (
                   <td className="issued-items-row-actions">
                     <button type="button" className="issued-items-link" onClick={() => openAgreementDraft(agreement)}>
-                      Bewerken
+                      {t('ui.actions.edit')}
                     </button>
                     <button
                       type="button"
                       className="issued-items-link issued-items-link-danger"
                       onClick={() => setDeleteAgreementTarget(agreement)}
                     >
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   </td>
                 )}
@@ -661,41 +663,39 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
       )}
 
       <div className="customer-panel-header">
-        <h3>Actuele prijzen</h3>
-        {canManage && <Button onClick={() => openDraft(null)}>+ Prijsregel</Button>}
+        <h3>{t('customers.pricing.currentPricesTitle')}</h3>
+        {canManage && <Button onClick={() => openDraft(null)}>{t('customers.pricing.addRule')}</Button>}
       </div>
-      {currentRules.length === 0 && <p className="placeholder-text">Geen actuele prijsregels voor deze klant.</p>}
+      {currentRules.length === 0 && <p className="placeholder-text">{t('customers.pricing.noCurrentRules')}</p>}
       {currentRules.length > 0 && rulesTable(currentRules)}
 
       {futureRules.length > 0 && (
         <>
-          <h4>Toekomstige prijzen</h4>
+          <h4>{t('customers.pricing.futurePricesTitle')}</h4>
           {rulesTable(futureRules)}
         </>
       )}
 
       {historyRules.length > 0 && (
         <details>
-          <summary>Prijshistoriek ({historyRules.length})</summary>
+          <summary>{t('customers.pricing.historyTitle', { count: historyRules.length })}</summary>
           {rulesTable(historyRules)}
         </details>
       )}
 
-      <h4>Diensten & toeslagen</h4>
-      <p className="customer-form-muted">
-        Let op: wanneer u hier een waarde invult, wordt de algemene standaardregel voor deze klant overschreven.
-      </p>
+      <h4>{t('customers.pricing.servicesTitle')}</h4>
+      <p className="customer-form-muted">{t('customers.pricing.servicesOverrideWarning')}</p>
       <table className="issued-items-table">
         <thead>
           <tr>
-            <th>Dienst</th>
-            <th>Algemene prijs</th>
-            <th>Klantoverride</th>
-            <th>Geldig</th>
-            <th>Effectieve prijs</th>
-            <th>Bron</th>
-            <th>Automatisch toepassen</th>
-            {canManage && <th aria-label="Acties" />}
+            <th>{t('customers.pricing.columnService')}</th>
+            <th>{t('customers.pricing.columnGeneralPrice')}</th>
+            <th>{t('customers.pricing.columnCustomerOverride')}</th>
+            <th>{t('customers.pricing.columnValidity')}</th>
+            <th>{t('customers.pricing.columnEffectivePrice')}</th>
+            <th>{t('customers.pricing.columnSource')}</th>
+            <th>{t('customers.pricing.columnAutoApply')}</th>
+            {canManage && <th aria-label={t('customers.pricing.actionsAria')} />}
           </tr>
         </thead>
         <tbody>
@@ -708,25 +708,29 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                   {option.name}
                   {option.customerValue !== null && !option.disabled && (
                     <div className="customer-form-muted" role="note">
-                      Let op: deze klantprijs overschrijft
-                      {option.effectiveFrom ? ' vanaf de ingestelde datum' : ''} de algemene prijs van{' '}
-                      {formatServiceValue(option.kind, option.defaultValue)}.
+                      {option.effectiveFrom
+                        ? t('customers.pricing.overrideNoteFromDate', {
+                            value: formatServiceValue(option.kind, option.defaultValue),
+                          })
+                        : t('customers.pricing.overrideNote', {
+                            value: formatServiceValue(option.kind, option.defaultValue),
+                          })}
                     </div>
                   )}
                   {option.disabled && (
                     <div className="customer-form-muted" role="note">
-                      Let op: deze service is algemeen beschikbaar, maar wordt voor deze klant uitgeschakeld.
+                      {t('customers.pricing.serviceDisabledNote')}
                     </div>
                   )}
                 </td>
                 <td>{formatServiceValue(option.kind, option.defaultValue)}</td>
                 <td>
                   <input
-                    aria-label={`Klantoverride voor ${option.name}`}
+                    aria-label={t('customers.pricing.overrideAria', { name: option.name })}
                     type="number"
                     step="0.01"
                     defaultValue={option.customerValue ?? ''}
-                    placeholder="geen override"
+                    placeholder={t('customers.pricing.noOverridePlaceholder')}
                     disabled={!canManage || option.disabled}
                     onBlur={(e) => {
                       const raw = e.target.value
@@ -743,13 +747,13 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                         checked={option.disabled}
                         onChange={(e) => void saveServiceOverride(option.serviceOptionId, { disabled: e.target.checked })}
                       />
-                      Uitschakelen voor deze klant
+                      {t('customers.pricing.disableForCustomer')}
                     </label>
                   )}
                 </td>
                 <td>
                   <input
-                    aria-label={`Override geldig vanaf voor ${option.name}`}
+                    aria-label={t('customers.pricing.overrideFromAria', { name: option.name })}
                     type="date"
                     defaultValue={option.effectiveFrom ?? ''}
                     disabled={!canManage || !hasOverride}
@@ -759,7 +763,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                     }}
                   />
                   <input
-                    aria-label={`Override geldig tot voor ${option.name}`}
+                    aria-label={t('customers.pricing.overrideUntilAria', { name: option.name })}
                     type="date"
                     defaultValue={option.effectiveUntil ?? ''}
                     disabled={!canManage || !hasOverride}
@@ -769,11 +773,11 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                     }}
                   />
                 </td>
-                <td>{option.disabled ? 'Uitgeschakeld' : formatServiceValue(option.kind, option.effectiveValue)}</td>
+                <td>{option.disabled ? t('customers.pricing.disabledValue') : formatServiceValue(option.kind, option.effectiveValue)}</td>
                 <td>{option.source}</td>
                 <td>
                   <select
-                    aria-label={`Automatisch toepassen voor ${option.name}`}
+                    aria-label={t('customers.pricing.autoApplyAria', { name: option.name })}
                     value={option.autoApplyOverride === null ? 'inherit' : option.autoApplyOverride ? 'on' : 'off'}
                     disabled={!canManage}
                     onChange={(e) => {
@@ -783,9 +787,13 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                       })
                     }}
                   >
-                    <option value="inherit">Standaard ({option.effectiveAutoApply ? 'aan' : 'uit'})</option>
-                    <option value="on">Aan</option>
-                    <option value="off">Uit</option>
+                    <option value="inherit">
+                      {t('customers.pricing.autoApplyDefault', {
+                        state: option.effectiveAutoApply ? t('customers.pricing.autoApplyOnShort') : t('customers.pricing.autoApplyOffShort'),
+                      })}
+                    </option>
+                    <option value="on">{t('customers.pricing.autoApplyOn')}</option>
+                    <option value="off">{t('customers.pricing.autoApplyOff')}</option>
                   </select>
                 </td>
                 {canManage && (
@@ -796,7 +804,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                         className="issued-items-link"
                         onClick={() => void saveServiceOverride(option.serviceOptionId, {}, true)}
                       >
-                        Algemene waarde opnieuw gebruiken
+                        {t('customers.pricing.useGeneralValueAgain')}
                       </button>
                     )}
                   </td>
@@ -809,16 +817,16 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
 
       {draft && (
         <Modal
-          title={draft.rule ? `Prijsregel bewerken — ${draft.rule.name}` : 'Prijsregel toevoegen'}
+          title={draft.rule ? t('customers.pricing.editRuleTitle', { name: draft.rule.name }) : t('customers.pricing.newRuleTitle')}
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="price-rule-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -830,10 +838,10 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               </div>
             )}
             <div className="issued-items-form-row">
-              <FormField label="Naam" htmlFor="pr-name" required>
+              <FormField label={t('customers.pricing.columnName')} htmlFor="pr-name" required>
                 <input id="pr-name" value={draft.name} onChange={(e) => setDraft((d) => (d ? { ...d, name: e.target.value } : d))} maxLength={200} />
               </FormField>
-              <FormField label="Prijsbasis" htmlFor="pr-basis" hint="Eén primaire berekeningsbasis; toeslagen komen apart.">
+              <FormField label={t('customers.pricing.priceBasisField')} htmlFor="pr-basis" hint={t('customers.pricing.priceBasisHint')}>
                 <select
                   id="pr-basis"
                   value={toPrimarySelectValue(draft.basis)}
@@ -855,14 +863,14 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             </div>
             {(draft.basis === 'PerUnit' || draft.basis === 'QuantityBracket') && (
               <div className="issued-items-form-row">
-                <FormField label="Berekeningswijze" htmlFor="pr-method">
+                <FormField label={t('customers.pricing.methodField')} htmlFor="pr-method">
                   <select
                     id="pr-method"
                     value={draft.basis}
                     onChange={(e) => setDraft((d) => (d ? { ...d, basis: e.target.value as PriceRuleBasis } : d))}
                   >
-                    <option value="QuantityBracket">Vaste prijs per aantal (staffel)</option>
-                    <option value="PerUnit">Prijs per eenheid</option>
+                    <option value="QuantityBracket">{t('customers.pricing.methodQuantityBracket')}</option>
+                    <option value="PerUnit">{t('customers.pricing.methodPerUnit')}</option>
                   </select>
                 </FormField>
               </div>
@@ -870,12 +878,12 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             <div className="issued-items-form-row">
               {(draft.basis === 'PerUnit' || draft.basis === 'QuantityBracket' || draft.basis === 'Hourly') && (
                 <FormField
-                  label="Eenheid"
+                  label={t('customers.pricing.columnUnit')}
                   htmlFor="pr-unit"
-                  hint={draft.basis === 'Hourly' ? 'Kies de tijd-eenheid (bv. Uur).' : 'De eenheid waarop deze prijs geldt.'}
+                  hint={draft.basis === 'Hourly' ? t('customers.pricing.unitHintHourly') : t('customers.pricing.unitHint')}
                 >
                   <select id="pr-unit" value={draft.unitTypeId} onChange={(e) => setDraft((d) => (d ? { ...d, unitTypeId: e.target.value } : d))}>
-                    <option value="">— Kies eenheid —</option>
+                    <option value="">{t('customers.pricing.chooseUnitOption')}</option>
                     {pricingUnits.map((unit) => (
                       <option key={unit.id} value={unit.id}>
                         {unit.name}
@@ -884,9 +892,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                   </select>
                 </FormField>
               )}
-              <FormField label="Zone" htmlFor="pr-zone" hint="Leeg = alle bestemmingen.">
+              <FormField label={t('customers.pricing.columnZone')} htmlFor="pr-zone" hint={t('customers.pricing.zoneHint')}>
                 <select id="pr-zone" value={draft.zoneId} onChange={(e) => setDraft((d) => (d ? { ...d, zoneId: e.target.value } : d))}>
-                  <option value="">— Alle —</option>
+                  <option value="">{t('customers.pricing.allOption')}</option>
                   {zones.map((zone) => (
                     <option key={zone.id} value={zone.id}>
                       {zone.code} — {zone.name}
@@ -897,12 +905,12 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
             </div>
             <div className="issued-items-form-row">
               <FormField
-                label="Prijsafspraak"
+                label={t('customers.pricing.columnAgreement')}
                 htmlFor="pr-agreement"
-                hint="Optioneel: groepeer onder een tarievenkaart. Afgeleide tabellen kunnen geen eigen regels hebben."
+                hint={t('customers.pricing.agreementFieldHint')}
               >
                 <select id="pr-agreement" value={draft.agreementId} onChange={(e) => setDraft((d) => (d ? { ...d, agreementId: e.target.value } : d))}>
-                  <option value="">— Losse regel —</option>
+                  <option value="">{t('customers.pricing.looseRuleOption')}</option>
                   {agreements.filter((agreement) => !agreement.baseAgreementId).map((agreement) => (
                     <option key={agreement.id} value={agreement.id}>
                       {agreement.name}
@@ -910,48 +918,48 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                   ))}
                 </select>
               </FormField>
-              <FormField label="Prioriteit" htmlFor="pr-priority" hint="Hoger wint bij gelijke specificiteit.">
+              <FormField label={t('customers.pricing.priorityField')} htmlFor="pr-priority" hint={t('customers.pricing.priorityHint')}>
                 <input id="pr-priority" type="number" value={draft.priority} onChange={(e) => setDraft((d) => (d ? { ...d, priority: e.target.value } : d))} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Geldig vanaf" htmlFor="pr-from" required>
+              <FormField label={t('customers.pricing.validFromField')} htmlFor="pr-from" required>
                 <input id="pr-from" type="date" value={draft.effectiveFrom} onChange={(e) => setDraft((d) => (d ? { ...d, effectiveFrom: e.target.value } : d))} />
               </FormField>
-              <FormField label="Geldig tot" htmlFor="pr-until" hint="Leeg = onbeperkt.">
+              <FormField label={t('customers.pricing.validUntilField')} htmlFor="pr-until" hint={t('customers.pricing.validUntilHint')}>
                 <input id="pr-until" type="date" value={draft.effectiveUntil} onChange={(e) => setDraft((d) => (d ? { ...d, effectiveUntil: e.target.value } : d))} />
               </FormField>
             </div>
             {(!usesBrackets || draft.basis === 'PerStop') && (
               <div className="issued-items-form-row">
                 <FormField
-                  label={priceLabelByBasis[draft.basis] ?? 'Prijs per eenheid (€)'}
+                  label={priceLabelByBasis[draft.basis] ?? t('customers.pricing.priceLabel.PerUnit')}
                   htmlFor="pr-price"
                   required={draft.basis !== 'PerStop'}
                 >
                   <input id="pr-price" type="number" step="0.01" value={draft.unitPrice} onChange={(e) => setDraft((d) => (d ? { ...d, unitPrice: e.target.value } : d))} />
                 </FormField>
-                <FormField label="Minimumbedrag (€)" htmlFor="pr-min">
+                <FormField label={t('customers.pricing.minAmountField')} htmlFor="pr-min">
                   <input id="pr-min" type="number" step="0.01" value={draft.minimumAmount} onChange={(e) => setDraft((d) => (d ? { ...d, minimumAmount: e.target.value } : d))} />
                 </FormField>
-                <FormField label="Maximumtarief (€)" htmlFor="pr-max" hint="Optioneel: bovengrens na het minimum.">
+                <FormField label={t('customers.pricing.maxAmountField')} htmlFor="pr-max" hint={t('customers.pricing.maxAmountHint')}>
                   <input id="pr-max" type="number" step="0.01" value={draft.maximumAmount} onChange={(e) => setDraft((d) => (d ? { ...d, maximumAmount: e.target.value } : d))} />
                 </FormField>
               </div>
             )}
             {draft.basis === 'Hourly' && (
               <div className="issued-items-form-row">
-                <FormField label="Minimum aantal uur" htmlFor="pr-minq" hint="Bv. 3: minder wordt als 3 uur gefactureerd.">
+                <FormField label={t('customers.pricing.minHoursField')} htmlFor="pr-minq" hint={t('customers.pricing.minHoursHint')}>
                   <input id="pr-minq" type="number" step="0.25" value={draft.minimumQuantity} onChange={(e) => setDraft((d) => (d ? { ...d, minimumQuantity: e.target.value } : d))} />
                 </FormField>
-                <FormField label="Afrondingsstap (uur)" htmlFor="pr-step" hint="Bv. 0,25 = per begonnen kwartier.">
+                <FormField label={t('customers.pricing.roundingStepField')} htmlFor="pr-step" hint={t('customers.pricing.roundingStepHint')}>
                   <input id="pr-step" type="number" step="0.05" value={draft.quantityRoundingStep} onChange={(e) => setDraft((d) => (d ? { ...d, quantityRoundingStep: e.target.value } : d))} />
                 </FormField>
               </div>
             )}
             {(draft.basis === 'PerKm' || draft.basis === 'PerLoadingMeter' || draft.basis === 'PerVolume' || draft.basis === 'PerStop') && (
               <div className="issued-items-form-row">
-                <FormField label="Basisbedrag (€)" htmlFor="pr-base-inline" hint="Vaste basiskost vóór de variabele prijs.">
+                <FormField label={t('customers.pricing.baseAmountField')} htmlFor="pr-base-inline" hint={t('customers.pricing.baseAmountInlineHint')}>
                   <input id="pr-base-inline" type="number" step="0.01" value={draft.baseAmount} onChange={(e) => setDraft((d) => (d ? { ...d, baseAmount: e.target.value } : d))} />
                 </FormField>
               </div>
@@ -960,16 +968,16 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               <fieldset className="issued-items-generate-dimension">
                 <legend>
                   {draft.basis === 'WeightBracket'
-                    ? 'Staffels (kg)'
+                    ? t('customers.pricing.bracketsWeightLegend')
                     : draft.basis === 'PerStop'
-                      ? 'Progressieve stops (optioneel: 1e/2e/volgende stop)'
-                      : 'Staffels (aantal)'}
+                      ? t('customers.pricing.bracketsStopsLegend')
+                      : t('customers.pricing.bracketsQuantityLegend')}
                 </legend>
                 {draft.basis === 'QuantityBracket' && (
                   <FormField
-                    label="Berekeningswijze staffel"
+                    label={t('customers.pricing.bracketModeField')}
                     htmlFor="pr-bracket-mode"
-                    hint="Per volgende eenheid telt de staffelprijs van elk stuk apart op (progressief)."
+                    hint={t('customers.pricing.bracketModeHint')}
                   >
                     <select
                       id="pr-bracket-mode"
@@ -990,30 +998,30 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                     checked={showBracketDimensions}
                     onChange={(e) => setDraft((d) => (d ? { ...d, showBracketDimensions: e.target.checked } : d))}
                   />
-                  Extra dimensies (gewicht/volume/ldm per staffel)
+                  {t('customers.pricing.extraDimensionsToggle')}
                 </label>
                 {draft.brackets.map((bracket, index) => (
                   <div key={index} className="issued-items-form-row customer-rule-bracket">
-                    <input aria-label={`Staffel ${index + 1} van`} type="number" step="0.01" placeholder="van" value={bracket.from}
+                    <input aria-label={t('customers.pricing.bracketFromAria', { index: index + 1 })} type="number" step="0.01" placeholder={t('customers.pricing.bracketFromPlaceholder')} value={bracket.from}
                       onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, from: e.target.value } : b)) } : d))} />
-                    <input aria-label={`Staffel ${index + 1} tot`} type="number" step="0.01" placeholder="tot (leeg = open)" value={bracket.to}
+                    <input aria-label={t('customers.pricing.bracketToAria', { index: index + 1 })} type="number" step="0.01" placeholder={t('customers.pricing.bracketToPlaceholder')} value={bracket.to}
                       onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, to: e.target.value } : b)) } : d))} />
-                    <input aria-label={`Staffel ${index + 1} prijs`} type="number" step="0.01" placeholder="prijs €" value={bracket.price}
+                    <input aria-label={t('customers.pricing.bracketPriceAria', { index: index + 1 })} type="number" step="0.01" placeholder={t('customers.pricing.bracketPricePlaceholder')} value={bracket.price}
                       onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, price: e.target.value } : b)) } : d))} />
-                    <input aria-label={`Staffel ${index + 1} extra per eenheid`} type="number" step="0.01" placeholder="€/extra (open staffel)" value={bracket.extra}
+                    <input aria-label={t('customers.pricing.bracketExtraAria', { index: index + 1 })} type="number" step="0.01" placeholder={t('customers.pricing.bracketExtraPlaceholder')} value={bracket.extra}
                       onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, extra: e.target.value } : b)) } : d))} />
                     {showBracketDimensions && (
                       <>
-                        <input aria-label={`Staffel ${index + 1} gewicht tot (kg)`} type="number" step="0.01" placeholder="gewicht tot (kg)" value={bracket.weightToKg}
+                        <input aria-label={t('customers.pricing.bracketWeightAria', { index: index + 1 })} type="number" step="0.01" placeholder={t('customers.pricing.bracketWeightPlaceholder')} value={bracket.weightToKg}
                           onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, weightToKg: e.target.value } : b)) } : d))} />
-                        <input aria-label={`Staffel ${index + 1} volume tot (m³)`} type="number" step="0.01" placeholder="volume tot (m³)" value={bracket.volumeToM3}
+                        <input aria-label={t('customers.pricing.bracketVolumeAria', { index: index + 1 })} type="number" step="0.01" placeholder={t('customers.pricing.bracketVolumePlaceholder')} value={bracket.volumeToM3}
                           onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, volumeToM3: e.target.value } : b)) } : d))} />
-                        <input aria-label={`Staffel ${index + 1} ldm tot`} type="number" step="0.01" placeholder="ldm tot" value={bracket.loadingMetersTo}
+                        <input aria-label={t('customers.pricing.bracketLdmAria', { index: index + 1 })} type="number" step="0.01" placeholder={t('customers.pricing.bracketLdmPlaceholder')} value={bracket.loadingMetersTo}
                           onChange={(e) => setDraft((d) => (d ? { ...d, brackets: d.brackets.map((b, i) => (i === index ? { ...b, loadingMetersTo: e.target.value } : b)) } : d))} />
                       </>
                     )}
                     <Button variant="ghost" onClick={() => setDraft((d) => (d ? { ...d, brackets: d.brackets.filter((_, i) => i !== index) } : d))}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </Button>
                   </div>
                 ))}
@@ -1033,26 +1041,26 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                     )
                   }
                 >
-                  + Staffel
+                  {t('customers.pricing.addBracket')}
                 </Button>
               </fieldset>
             )}
             {(draft.basis === 'PerUnit' || draft.basis === 'QuantityBracket') && (
             <details>
-              <summary>Geavanceerd (basisbedrag & buitenmaat)</summary>
+              <summary>{t('customers.pricing.advancedSummary')}</summary>
               <div className="issued-items-form-row">
-                <FormField label="Basisbedrag (€)" htmlFor="pr-base" hint="Wordt bij het berekende bedrag geteld.">
+                <FormField label={t('customers.pricing.baseAmountField')} htmlFor="pr-base" hint={t('customers.pricing.baseAmountHint')}>
                   <input id="pr-base" type="number" step="0.01" value={draft.baseAmount} onChange={(e) => setDraft((d) => (d ? { ...d, baseAmount: e.target.value } : d))} />
                 </FormField>
               </div>
               <div className="issued-items-form-row">
-                <FormField label="Buitenmaat vanaf lengte (cm)" htmlFor="pr-ovl">
+                <FormField label={t('customers.pricing.oversizeLengthField')} htmlFor="pr-ovl">
                   <input id="pr-ovl" type="number" step="0.01" value={draft.oversizeLengthCm} onChange={(e) => setDraft((d) => (d ? { ...d, oversizeLengthCm: e.target.value } : d))} />
                 </FormField>
-                <FormField label="Buitenmaat vanaf breedte (cm)" htmlFor="pr-ovw">
+                <FormField label={t('customers.pricing.oversizeWidthField')} htmlFor="pr-ovw">
                   <input id="pr-ovw" type="number" step="0.01" value={draft.oversizeWidthCm} onChange={(e) => setDraft((d) => (d ? { ...d, oversizeWidthCm: e.target.value } : d))} />
                 </FormField>
-                <FormField label="Telt als (factureerbare eenheden)" htmlFor="pr-ovf" hint="Bv. 2: een buitenmaat-pallet telt als 2 palletplaatsen.">
+                <FormField label={t('customers.pricing.oversizeFactorField')} htmlFor="pr-ovf" hint={t('customers.pricing.oversizeFactorHint')}>
                   <input id="pr-ovf" type="number" step="0.5" value={draft.oversizeBillableFactor} onChange={(e) => setDraft((d) => (d ? { ...d, oversizeBillableFactor: e.target.value } : d))} />
                 </FormField>
               </div>
@@ -1064,16 +1072,20 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
 
       {agreementDraft && (
         <Modal
-          title={agreementDraft.agreement ? `Prijsafspraak bewerken — ${agreementDraft.agreement.name}` : 'Prijsafspraak toevoegen'}
+          title={
+            agreementDraft.agreement
+              ? t('customers.pricing.editAgreementTitle', { name: agreementDraft.agreement.name })
+              : t('customers.pricing.newAgreementTitle')
+          }
           onClose={() => setAgreementDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setAgreementDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="pricing-agreement-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -1085,21 +1097,21 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               </div>
             )}
             <div className="issued-items-form-row">
-              <FormField label="Naam" htmlFor="pa-name" required hint='Bv. "Distributie België 2026-Q4".'>
+              <FormField label={t('customers.pricing.columnName')} htmlFor="pa-name" required hint={t('customers.pricing.agreementNameHint')}>
                 <input id="pa-name" value={agreementDraft.name} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, name: e.target.value } : d))} maxLength={200} />
               </FormField>
-              <FormField label="Minimum per order (€)" htmlFor="pa-min">
+              <FormField label={t('customers.pricing.minPerOrderField')} htmlFor="pa-min">
                 <input id="pa-min" type="number" step="0.01" value={agreementDraft.minimumAmount} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, minimumAmount: e.target.value } : d))} />
               </FormField>
-              <FormField label="Maximumtarief per order (€)" htmlFor="pa-max" hint="Optioneel: bovengrens na het minimum.">
+              <FormField label={t('customers.pricing.maxPerOrderField')} htmlFor="pa-max" hint={t('customers.pricing.maxAmountHint')}>
                 <input id="pa-max" type="number" step="0.01" value={agreementDraft.maximumAmount} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, maximumAmount: e.target.value } : d))} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Geldig vanaf" htmlFor="pa-from" required>
+              <FormField label={t('customers.pricing.validFromField')} htmlFor="pa-from" required>
                 <input id="pa-from" type="date" value={agreementDraft.effectiveFrom} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, effectiveFrom: e.target.value } : d))} />
               </FormField>
-              <FormField label="Geldig tot" htmlFor="pa-until" hint="Leeg = onbeperkt.">
+              <FormField label={t('customers.pricing.validUntilField')} htmlFor="pa-until" hint={t('customers.pricing.validUntilHint')}>
                 <input id="pa-until" type="date" value={agreementDraft.effectiveUntil} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, effectiveUntil: e.target.value } : d))} />
               </FormField>
             </div>
@@ -1110,25 +1122,25 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                   checked={agreementDraft.isShared}
                   onChange={(e) => setAgreementDraft((d) => (d ? { ...d, isShared: e.target.checked } : d))}
                 />
-                Herbruikbare tabel (koppelbaar aan meerdere klanten) — niet gekoppeld aan deze klant; koppel klanten nadien via klantkoppelingen.
+                {t('customers.pricing.reusableTableToggle')}
               </label>
             )}
-            <FormField label="Interne notities" htmlFor="pa-notes" hint="Bv. commerciële achtergrond van de afspraak.">
+            <FormField label={t('customers.pricing.internalNotesField')} htmlFor="pa-notes" hint={t('customers.pricing.internalNotesHint')}>
               <input id="pa-notes" value={agreementDraft.notes} onChange={(e) => setAgreementDraft((d) => (d ? { ...d, notes: e.target.value } : d))} maxLength={2000} />
             </FormField>
             <fieldset className="issued-items-generate-dimension">
-              <legend>Afgeleid van</legend>
+              <legend>{t('customers.pricing.derivedFromLegend')}</legend>
               <FormField
-                label="Basistabel"
+                label={t('customers.pricing.baseTableField')}
                 htmlFor="pa-base"
-                hint="Optioneel: hergebruik de prijsregels van een gedeelde of algemene tabel, met eigen aanpassingen (bv. Nederland +30%)."
+                hint={t('customers.pricing.baseTableHint')}
               >
                 <select
                   id="pa-base"
                   value={agreementDraft.baseAgreementId}
                   onChange={(e) => setAgreementDraft((d) => (d ? { ...d, baseAgreementId: e.target.value } : d))}
                 >
-                  <option value="">— Geen (eigen prijsregels) —</option>
+                  <option value="">{t('customers.pricing.noBaseTableOption')}</option>
                   {baseTableOptions
                     .filter((a) => a.id !== agreementDraft.agreement?.id)
                     .map((a) => (
@@ -1141,15 +1153,15 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
               {agreementDraft.baseAgreementId && (
                 <>
                   <p className="customer-form-muted" role="note">
-                    Deze tabel gebruikt de prijsregels van{' '}
-                    {baseTableOptions.find((a) => a.id === agreementDraft.baseAgreementId)?.name ?? '—'}; eigen regels zijn
-                    uitgeschakeld.
+                    {t('customers.pricing.derivedTableNote', {
+                      name: baseTableOptions.find((a) => a.id === agreementDraft.baseAgreementId)?.name ?? '—',
+                    })}
                   </p>
                   {agreementDraft.modifiers.map((modifier, index) => (
                     <div key={index} className="issued-items-form-row customer-rule-bracket">
                       <input
-                        aria-label={`Aanpassing ${index + 1} naam`}
-                        placeholder="naam (bv. Nederland +30%)"
+                        aria-label={t('customers.pricing.modifierNameAria', { index: index + 1 })}
+                        placeholder={t('customers.pricing.modifierNamePlaceholder')}
                         value={modifier.name}
                         onChange={(e) =>
                           setAgreementDraft((d) =>
@@ -1158,8 +1170,8 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                         }
                       />
                       <input
-                        aria-label={`Aanpassing ${index + 1} land`}
-                        placeholder="land (bv. NL)"
+                        aria-label={t('customers.pricing.modifierCountryAria', { index: index + 1 })}
+                        placeholder={t('customers.pricing.modifierCountryPlaceholder')}
                         maxLength={2}
                         value={modifier.countryCode}
                         onChange={(e) =>
@@ -1176,7 +1188,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                         }
                       />
                       <select
-                        aria-label={`Aanpassing ${index + 1} zone`}
+                        aria-label={t('customers.pricing.modifierZoneAria', { index: index + 1 })}
                         value={modifier.zoneId}
                         onChange={(e) =>
                           setAgreementDraft((d) =>
@@ -1184,7 +1196,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                           )
                         }
                       >
-                        <option value="">— Alle zones —</option>
+                        <option value="">{t('customers.pricing.allZonesOption')}</option>
                         {zones.map((zone) => (
                           <option key={zone.id} value={zone.id}>
                             {zone.code} — {zone.name}
@@ -1192,7 +1204,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                         ))}
                       </select>
                       <select
-                        aria-label={`Aanpassing ${index + 1} soort`}
+                        aria-label={t('customers.pricing.modifierKindAria', { index: index + 1 })}
                         value={modifier.mode}
                         onChange={(e) =>
                           setAgreementDraft((d) =>
@@ -1207,14 +1219,14 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                           )
                         }
                       >
-                        <option value="Percent">Percentage</option>
-                        <option value="Fixed">Vast bedrag</option>
+                        <option value="Percent">{t('customers.pricing.kindPercent')}</option>
+                        <option value="Fixed">{t('customers.pricing.kindFixed')}</option>
                       </select>
                       <input
-                        aria-label={`Aanpassing ${index + 1} waarde`}
+                        aria-label={t('customers.pricing.modifierValueAria', { index: index + 1 })}
                         type="number"
                         step="0.01"
-                        placeholder="waarde"
+                        placeholder={t('customers.pricing.valuePlaceholder')}
                         value={modifier.value}
                         onChange={(e) =>
                           setAgreementDraft((d) =>
@@ -1224,7 +1236,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                       />
                       <Button
                         variant="ghost"
-                        aria-label={`Aanpassing ${index + 1} omhoog`}
+                        aria-label={t('customers.pricing.modifierUpAria', { index: index + 1 })}
                         disabled={index === 0}
                         onClick={() => setAgreementDraft((d) => (d ? { ...d, modifiers: moveItem(d.modifiers, index, index - 1) } : d))}
                       >
@@ -1232,7 +1244,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                       </Button>
                       <Button
                         variant="ghost"
-                        aria-label={`Aanpassing ${index + 1} omlaag`}
+                        aria-label={t('customers.pricing.modifierDownAria', { index: index + 1 })}
                         disabled={index === agreementDraft.modifiers.length - 1}
                         onClick={() => setAgreementDraft((d) => (d ? { ...d, modifiers: moveItem(d.modifiers, index, index + 1) } : d))}
                       >
@@ -1242,7 +1254,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                         variant="ghost"
                         onClick={() => setAgreementDraft((d) => (d ? { ...d, modifiers: d.modifiers.filter((_, i) => i !== index) } : d))}
                       >
-                        Verwijderen
+                        {t('ui.actions.delete')}
                       </Button>
                     </div>
                   ))}
@@ -1256,31 +1268,31 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                       )
                     }
                   >
-                    + Aanpassing
+                    {t('customers.pricing.addModifier')}
                   </Button>
                 </>
               )}
             </fieldset>
             <fieldset className="issued-items-generate-dimension">
-              <legend>Automatische toeslagen</legend>
+              <legend>{t('customers.pricing.autoSurchargesLegend')}</legend>
               {agreementDraft.surcharges.map((surcharge, index) => (
                 <div key={index} className="issued-items-form-row customer-rule-bracket">
-                  <input aria-label={`Toeslag ${index + 1} naam`} placeholder="naam" value={surcharge.name}
+                  <input aria-label={t('customers.pricing.surchargeNameAria', { index: index + 1 })} placeholder={t('customers.pricing.namePlaceholder')} value={surcharge.name}
                     onChange={(e) => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.map((s, i) => (i === index ? { ...s, name: e.target.value } : s)) } : d))} />
-                  <select aria-label={`Toeslag ${index + 1} soort`} value={surcharge.kind}
+                  <select aria-label={t('customers.pricing.surchargeKindAria', { index: index + 1 })} value={surcharge.kind}
                     onChange={(e) => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.map((s, i) => (i === index ? { ...s, kind: e.target.value as 'Percent' | 'Fixed' } : s)) } : d))}>
-                    <option value="Percent">Percentage</option>
-                    <option value="Fixed">Vast bedrag</option>
+                    <option value="Percent">{t('customers.pricing.kindPercent')}</option>
+                    <option value="Fixed">{t('customers.pricing.kindFixed')}</option>
                   </select>
-                  <input aria-label={`Toeslag ${index + 1} waarde`} type="number" step="0.01" placeholder="waarde" value={surcharge.value}
+                  <input aria-label={t('customers.pricing.surchargeValueAria', { index: index + 1 })} type="number" step="0.01" placeholder={t('customers.pricing.valuePlaceholder')} value={surcharge.value}
                     onChange={(e) => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.map((s, i) => (i === index ? { ...s, value: e.target.value } : s)) } : d))} />
                   <Button variant="ghost" onClick={() => setAgreementDraft((d) => (d ? { ...d, surcharges: d.surcharges.filter((_, i) => i !== index) } : d))}>
-                    Verwijderen
+                    {t('ui.actions.delete')}
                   </Button>
                 </div>
               ))}
               <Button variant="secondary" onClick={() => setAgreementDraft((d) => (d ? { ...d, surcharges: [...d.surcharges, { name: '', kind: 'Percent', value: '' }] } : d))}>
-                + Toeslag
+                {t('customers.pricing.addSurcharge')}
               </Button>
             </fieldset>
           </form>
@@ -1289,9 +1301,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Prijsregel verwijderen"
-          message={`Weet je zeker dat je "${deleteTarget.name}" wilt verwijderen? Bestaande orders behouden hun prijssnapshot.`}
-          confirmLabel="Verwijderen"
+          title={t('customers.pricing.deleteRuleTitle')}
+          message={t('customers.pricing.deleteRuleMessage', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
@@ -1300,9 +1312,9 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
 
       {deleteAgreementTarget && (
         <ConfirmDialog
-          title="Prijsafspraak verwijderen"
-          message={`Weet je zeker dat je "${deleteAgreementTarget.name}" wilt verwijderen? Dit kan alleen als er geen tariefregels meer aan hangen.`}
-          confirmLabel="Verwijderen"
+          title={t('customers.pricing.deleteAgreementTitle')}
+          message={t('customers.pricing.deleteAgreementMessage', { name: deleteAgreementTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDeleteAgreement}
           onCancel={() => setDeleteAgreementTarget(null)}

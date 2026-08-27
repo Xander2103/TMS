@@ -13,17 +13,18 @@ export type StopExecutionStatus =
   | 'Failed'
   | 'Skipped'
 
+/** Vertaalsleutels (i18n-wave): render via t(STOP_EXECUTION_LABELS[status]). */
 export const STOP_EXECUTION_LABELS: Record<StopExecutionStatus, string> = {
-  Planned: 'Gepland',
-  EnRoute: 'Onderweg',
-  Arrived: 'Aangekomen',
-  Loading: 'Aan het laden',
-  Loaded: 'Geladen',
-  Unloading: 'Aan het lossen',
-  Completed: 'Afgerond',
-  PartiallyCompleted: 'Deels afgerond',
-  Failed: 'Mislukt',
-  Skipped: 'Overgeslagen',
+  Planned: 'myTrips.stopStatus.Planned',
+  EnRoute: 'myTrips.stopStatus.EnRoute',
+  Arrived: 'myTrips.stopStatus.Arrived',
+  Loading: 'myTrips.stopStatus.Loading',
+  Loaded: 'myTrips.stopStatus.Loaded',
+  Unloading: 'myTrips.stopStatus.Unloading',
+  Completed: 'myTrips.stopStatus.Completed',
+  PartiallyCompleted: 'myTrips.stopStatus.PartiallyCompleted',
+  Failed: 'myTrips.stopStatus.Failed',
+  Skipped: 'myTrips.stopStatus.Skipped',
 }
 
 export const STOP_EXECUTION_TONE: Record<StopExecutionStatus, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -53,18 +54,18 @@ export const STOP_EXECUTION_ICONS: Record<StopExecutionStatus, string> = {
   Skipped: '↷',
 }
 
-/** Action verb on the transition buttons in the driver workflow. */
+/** Action verb on the transition buttons in the driver workflow (vertaalsleutels, render via t()). */
 export const STOP_TRANSITION_ACTION_LABELS: Record<StopExecutionStatus, string> = {
-  Planned: 'Gepland',
-  EnRoute: 'Vertrokken naar stop',
-  Arrived: 'Aangekomen',
-  Loading: 'Start laden',
-  Loaded: 'Laden klaar',
-  Unloading: 'Start lossen',
-  Completed: 'Afronden',
-  PartiallyCompleted: 'Deels afgerond',
-  Failed: 'Mislukt',
-  Skipped: 'Overslaan',
+  Planned: 'myTrips.stopAction.Planned',
+  EnRoute: 'myTrips.stopAction.EnRoute',
+  Arrived: 'myTrips.stopAction.Arrived',
+  Loading: 'myTrips.stopAction.Loading',
+  Loaded: 'myTrips.stopAction.Loaded',
+  Unloading: 'myTrips.stopAction.Unloading',
+  Completed: 'myTrips.stopAction.Completed',
+  PartiallyCompleted: 'myTrips.stopAction.PartiallyCompleted',
+  Failed: 'myTrips.stopAction.Failed',
+  Skipped: 'myTrips.stopAction.Skipped',
 }
 
 /** The natural forward chain; the first allowed transition in this order is the primary action. */

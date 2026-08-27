@@ -6,6 +6,7 @@ import { ErrorState } from '../../../components/feedback/ErrorState'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { ScanPanel } from '../../scanning/components/ScanPanel'
 import { PackageReportsControl } from '../components/PackageReportsControl'
 import { getWarehouseTrips, searchWarehousePackages } from '../api/packagesApi'
@@ -29,6 +30,7 @@ function isoDate(offsetDays: number): string {
  * have no surface here.
  */
 export function WarehousePage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [dayOffset, setDayOffset] = useState(0)
   const [state, setState] = useState<{ trips: WarehouseTrip[]; loadedOffset: number | null }>({
@@ -49,7 +51,8 @@ export function WarehousePage() {
         setState({ trips: data, loadedOffset: dayOffset })
         setLoadError(null)
       })
-      .catch(() => setLoadError('De laadlijst kon niet worden geladen.'))
+      .catch(() => setLoadError(t('packages.warehouse.loadListFailed')))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dayOffset])
 
   useEffect(() => {
@@ -77,15 +80,15 @@ export function WarehousePage() {
   return (
     <div>
       <PageHeader
-        title="Magazijn"
-        subtitle="Laadlijsten en colli"
+        title={t('packages.warehouse.title')}
+        subtitle={t('packages.warehouse.subtitle')}
         action={
-          <span className="wh-day-toggle" role="radiogroup" aria-label="Dag">
+          <span className="wh-day-toggle" role="radiogroup" aria-label={t('packages.warehouse.dayAria')}>
             <Button variant={dayOffset === 0 ? 'primary' : 'secondary'} onClick={() => setDayOffset(0)}>
-              Vandaag
+              {t('packages.warehouse.today')}
             </Button>
             <Button variant={dayOffset === 1 ? 'primary' : 'secondary'} onClick={() => setDayOffset(1)}>
-              Morgen
+              {t('packages.warehouse.tomorrow')}
             </Button>
           </span>
         }
@@ -98,25 +101,25 @@ export function WarehousePage() {
       )}
 
       <section className="to-section">
-        <h2>Colli zoeken</h2>
+        <h2>{t('packages.warehouse.searchTitle')}</h2>
         <input
           className="wh-search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Zoek op collinummer, barcode of omschrijving…"
-          aria-label="Colli zoeken"
+          placeholder={t('packages.warehouse.searchPlaceholder')}
+          aria-label={t('packages.warehouse.searchAria')}
         />
         {results && (
           <ul className="wh-results">
-            {results.length === 0 && <li className="wh-empty">Geen colli gevonden.</li>}
+            {results.length === 0 && <li className="wh-empty">{t('packages.warehouse.noResults')}</li>}
             {results.map((row) => (
               <li key={row.packageId}>
                 <Link to={`/packages/${row.packageId}`}>
                   <code>{row.packageNumber}</code>
                 </Link>
                 <span className="wh-result-desc">{row.description}</span>
-                <Badge tone={PACKAGE_STATUS_TONE[row.status]}>{PACKAGE_STATUS_LABELS[row.status]}</Badge>
-                {row.exceptionState === 'Open' && <Badge tone="danger">Melding</Badge>}
+                <Badge tone={PACKAGE_STATUS_TONE[row.status]}>{t(PACKAGE_STATUS_LABELS[row.status])}</Badge>
+                {row.exceptionState === 'Open' && <Badge tone="danger">{t('packages.warehouse.exception')}</Badge>}
                 <span className="wh-result-meta">
                   {row.orderNumber}
                   {row.tripNumber ? ` · ${row.tripNumber}` : ''}
@@ -128,10 +131,10 @@ export function WarehousePage() {
       </section>
 
       {!trips ? (
-        <LoadingState message="Laadlijst laden..." />
+        <LoadingState message={t('packages.warehouse.loadingList')} />
       ) : trips.length === 0 ? (
         <section className="to-section">
-          <p>Geen te laden ritten op deze dag.</p>
+          <p>{t('packages.warehouse.noTrips')}</p>
         </section>
       ) : (
         trips.map((trip) => (
@@ -140,30 +143,32 @@ export function WarehousePage() {
               <h2>
                 {canOpenTrip ? <Link to={`/planning/${trip.tripId}`}>{trip.tripNumber}</Link> : trip.tripNumber}
               </h2>
-              <Badge tone={trip.status === 'InProgress' ? 'info' : 'neutral'}>{trip.status === 'InProgress' ? 'Onderweg' : 'Gepland'}</Badge>
+              <Badge tone={trip.status === 'InProgress' ? 'info' : 'neutral'}>
+                {trip.status === 'InProgress' ? t('packages.warehouse.statusInProgress') : t('packages.warehouse.statusPlanned')}
+              </Badge>
               {trip.isComplete ? (
-                <Badge tone="success">✓ Volledig geladen</Badge>
+                <Badge tone="success">{t('packages.warehouse.complete')}</Badge>
               ) : (
                 <Badge tone="warning">
-                  {trip.loadedCount}/{trip.mandatoryPackages} geladen
+                  {t('packages.warehouse.loadedProgress', { loaded: trip.loadedCount, total: trip.mandatoryPackages })}
                 </Badge>
               )}
-              {trip.missingCount > 0 && <Badge tone="danger">{trip.missingCount} vermist</Badge>}
-              {trip.damagedCount > 0 && <Badge tone="danger">{trip.damagedCount} beschadigd</Badge>}
-              {trip.openExceptionCount > 0 && <Badge tone="warning">{trip.openExceptionCount} melding(en)</Badge>}
+              {trip.missingCount > 0 && <Badge tone="danger">{t('packages.warehouse.missing', { count: trip.missingCount })}</Badge>}
+              {trip.damagedCount > 0 && <Badge tone="danger">{t('packages.warehouse.damaged', { count: trip.damagedCount })}</Badge>}
+              {trip.openExceptionCount > 0 && <Badge tone="warning">{t('packages.warehouse.exceptions', { count: trip.openExceptionCount })}</Badge>}
             </div>
             <p className="wh-trip-meta">
-              {[trip.driverName ?? 'Geen chauffeur', trip.vehicleNumber ?? 'Geen voertuig',
-                `${trip.orderCount} opdracht(en)`, `${trip.totalPackages} colli`].join(' · ')}
+              {[trip.driverName ?? t('packages.warehouse.noDriver'), trip.vehicleNumber ?? t('packages.warehouse.noVehicle'),
+                t('packages.warehouse.orders', { count: trip.orderCount }), t('packages.warehouse.colli', { count: trip.totalPackages })].join(' · ')}
             </p>
             <ul className="wh-stops">
               {trip.loadingStops.map((stop) => (
                 <li key={stop.stopId}>
                   <span className="wh-stop-label">
-                    {stop.locationName ?? stop.city ?? 'Laadstop'}
+                    {stop.locationName ?? stop.city ?? t('packages.warehouse.loadingStop')}
                     {stop.city && stop.locationName ? ` (${stop.city})` : ''}
                   </span>
-                  <span className="wh-stop-count">{stop.expectedPackages} colli</span>
+                  <span className="wh-stop-count">{t('packages.warehouse.colli', { count: stop.expectedPackages })}</span>
                   {canScan && (
                     <Button
                       variant="secondary"
@@ -171,11 +176,11 @@ export function WarehousePage() {
                         setScanTarget({
                           tripId: trip.tripId,
                           stopId: stop.stopId,
-                          label: `${trip.tripNumber} — ${stop.locationName ?? stop.city ?? 'laadstop'}`,
+                          label: `${trip.tripNumber} — ${stop.locationName ?? stop.city ?? t('packages.warehouse.loadingStopLower')}`,
                         })
                       }
                     >
-                      Scannen
+                      {t('packages.warehouse.scan')}
                     </Button>
                   )}
                 </li>

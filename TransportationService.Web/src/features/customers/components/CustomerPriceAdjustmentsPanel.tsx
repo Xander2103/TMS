@@ -6,6 +6,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import { adjustmentSummary, formatEuro } from '../../tarification/adjustmentFormat'
 import {
@@ -17,6 +18,7 @@ import {
   type PriceAdjustmentRulePreview,
   type PriceRule,
   type ScheduledPriceAdjustment,
+  ADJUSTMENT_STATUS_LABELS,
 } from '../../tarification/api/pricingApi'
 
 interface CustomerPriceAdjustmentsPanelProps {
@@ -39,6 +41,7 @@ interface WizardState {
  */
 export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjustmentsPanelProps) {
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const canView = hasPermission('tariffs.view') || hasPermission('tariffs.manage')
   const canManage = hasPermission('tariffs.manage')
@@ -94,7 +97,7 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
       const preview = await previewPriceAdjustment(customerId, wizardInput(wizard))
       setWizard((w) => (w ? { ...w, preview } : w))
     } catch (err) {
-      setWizardError(describeApiError(err, 'De preview kon niet worden berekend.').message)
+      setWizardError(describeApiError(err, t('customers.priceAdjustments.previewFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -105,11 +108,11 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
     setBusy(true)
     try {
       await createPriceAdjustment(customerId, { ...wizardInput(wizard), reason: wizard.reason.trim() || null })
-      showSuccess('Prijsaanpassing ingepland.')
+      showSuccess(t('customers.priceAdjustments.scheduled'))
       setWizard(null)
       reload()
     } catch (err) {
-      setWizardError(describeApiError(err, 'De prijsaanpassing kon niet worden ingepland.').message)
+      setWizardError(describeApiError(err, t('customers.priceAdjustments.scheduleFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -121,37 +124,37 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
     setCancelTarget(null)
     try {
       await cancelPriceAdjustment(customerId, target.id)
-      showSuccess('Prijsaanpassing geannuleerd.')
+      showSuccess(t('customers.priceAdjustments.cancelled'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De prijsaanpassing kon niet worden geannuleerd.').message)
+      showError(describeApiError(err, t('customers.priceAdjustments.cancelFailed')).message)
     }
   }
 
-  const statusTone = (status: ScheduledPriceAdjustment['status']) =>
-    status === 'Gepland' ? 'info' : status === 'Actief' ? 'success' : 'neutral'
+  const statusTone = (status: ScheduledPriceAdjustment['statusCode']) =>
+    status === 'Planned' ? 'info' : status === 'Active' ? 'success' : 'neutral'
 
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Geplande prijswijzigingen</h3>
-        {canManage && <Button onClick={openWizard}>+ Nieuwe prijsaanpassing</Button>}
+        <h3>{t('customers.priceAdjustments.title')}</h3>
+        {canManage && <Button onClick={openWizard}>{t('customers.priceAdjustments.newAdjustment')}</Button>}
       </div>
 
-      {adjustments === null && <p className="placeholder-text">Prijswijzigingen laden…</p>}
+      {adjustments === null && <p className="placeholder-text">{t('customers.priceAdjustments.loading')}</p>}
       {adjustments !== null && adjustments.length === 0 && (
-        <p className="placeholder-text">Geen geplande prijswijzigingen voor deze klant.</p>
+        <p className="placeholder-text">{t('customers.priceAdjustments.empty')}</p>
       )}
       {adjustments !== null && adjustments.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Ingangsdatum</th>
-              <th>Aanpassing</th>
-              <th>Regels</th>
-              <th>Reden</th>
-              <th>Status</th>
-              {canManage && <th aria-label="Acties" />}
+              <th>{t('customers.priceAdjustments.columnEffectiveDate')}</th>
+              <th>{t('customers.priceAdjustments.columnAdjustment')}</th>
+              <th>{t('customers.priceAdjustments.columnRules')}</th>
+              <th>{t('customers.priceAdjustments.columnReason')}</th>
+              <th>{t('customers.priceAdjustments.columnStatus')}</th>
+              {canManage && <th aria-label={t('customers.pricing.actionsAria')} />}
             </tr>
           </thead>
           <tbody>
@@ -162,17 +165,20 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
                 <td>{adjustment.ruleCount}</td>
                 <td>{adjustment.reason ?? '—'}</td>
                 <td>
-                  <Badge tone={statusTone(adjustment.status)}>{adjustment.status}</Badge>
+                  {/* statusCode is de stabiele bron; `status` blijft enkel legacy weergaveveld. */}
+                  <Badge tone={statusTone(adjustment.statusCode)}>
+                    {t(ADJUSTMENT_STATUS_LABELS[adjustment.statusCode])}
+                  </Badge>
                 </td>
                 {canManage && (
                   <td className="issued-items-row-actions">
-                    {adjustment.status === 'Gepland' && (
+                    {adjustment.statusCode === 'Planned' && (
                       <button
                         type="button"
                         className="issued-items-link issued-items-link-danger"
                         onClick={() => setCancelTarget(adjustment)}
                       >
-                        Annuleren
+                        {t('ui.actions.cancel')}
                       </button>
                     )}
                   </td>
@@ -185,22 +191,22 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
 
       {wizard && (
         <Modal
-          title="Nieuwe prijsaanpassing"
+          title={t('customers.priceAdjustments.wizardTitle')}
           onClose={() => setWizard(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setWizard(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               {wizard.preview === null && (
                 <Button onClick={() => void loadPreview()} disabled={busy || !wizard.effectiveDate || !wizard.percent}>
-                  Preview
+                  {t('customers.priceAdjustments.previewAction')}
                 </Button>
               )}
               {wizard.preview !== null && (
                 <Button onClick={() => void confirm()} disabled={busy || wizard.preview.length === 0}>
-                  Bevestigen
+                  {t('ui.actions.confirm')}
                 </Button>
               )}
             </>
@@ -213,7 +219,7 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
               </div>
             )}
             <div className="issued-items-form-row">
-              <FormField label="Ingangsdatum" htmlFor="adj-date" required hint="Moet in de toekomst liggen.">
+              <FormField label={t('customers.priceAdjustments.columnEffectiveDate')} htmlFor="adj-date" required hint={t('customers.priceAdjustments.effectiveDateHint')}>
                 <input
                   id="adj-date"
                   type="date"
@@ -221,7 +227,7 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
                   onChange={(e) => setWizard((w) => (w ? { ...w, effectiveDate: e.target.value, preview: null } : w))}
                 />
               </FormField>
-              <FormField label="Aanpassing (%)" htmlFor="adj-percent" required hint="Bv. 4 of -2,5.">
+              <FormField label={t('customers.priceAdjustments.percentField')} htmlFor="adj-percent" required hint={t('customers.priceAdjustments.percentHint')}>
                 <input
                   id="adj-percent"
                   type="number"
@@ -231,14 +237,14 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
                 />
               </FormField>
             </div>
-            <FormField label="Toepassen op" htmlFor="adj-scope">
+            <FormField label={t('customers.priceAdjustments.scopeField')} htmlFor="adj-scope">
               <select
                 id="adj-scope"
                 value={wizard.scope}
                 onChange={(e) => setWizard((w) => (w ? { ...w, scope: e.target.value as 'all' | 'selection', preview: null } : w))}
               >
-                <option value="all">Alle actieve klanttarieven</option>
-                <option value="selection">Geselecteerde tariefregels</option>
+                <option value="all">{t('customers.priceAdjustments.scopeAll')}</option>
+                <option value="selection">{t('customers.priceAdjustments.scopeSelection')}</option>
               </select>
             </FormField>
             {wizard.scope === 'selection' && (
@@ -261,10 +267,10 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
                     {rule.name}
                   </label>
                 ))}
-                {rules.length === 0 && <p className="placeholder-text">Geen tariefregels voor deze klant.</p>}
+                {rules.length === 0 && <p className="placeholder-text">{t('customers.priceAdjustments.noRules')}</p>}
               </div>
             )}
-            <FormField label="Reden (intern)" htmlFor="adj-reason">
+            <FormField label={t('customers.priceAdjustments.reasonField')} htmlFor="adj-reason">
               <input
                 id="adj-reason"
                 value={wizard.reason}
@@ -275,9 +281,9 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
 
             {wizard.preview !== null && (
               <>
-                <h4>Preview</h4>
+                <h4>{t('customers.priceAdjustments.previewAction')}</h4>
                 {wizard.preview.length === 0 && (
-                  <p className="placeholder-text">Geen aanpasbare tariefregels binnen deze selectie.</p>
+                  <p className="placeholder-text">{t('customers.priceAdjustments.previewEmpty')}</p>
                 )}
                 {wizard.preview.map((rule) => (
                   <div key={rule.priceRuleId}>
@@ -304,9 +310,12 @@ export function CustomerPriceAdjustmentsPanel({ customerId }: CustomerPriceAdjus
 
       {cancelTarget && (
         <ConfirmDialog
-          title="Prijsaanpassing annuleren"
-          message={`De geplande aanpassing van ${adjustmentSummary(cancelTarget)} per ${cancelTarget.effectiveDate} wordt geannuleerd; de huidige tarieven blijven gelden.`}
-          confirmLabel="Annuleren bevestigen"
+          title={t('customers.priceAdjustments.cancelTitle')}
+          message={t('customers.priceAdjustments.cancelMessage', {
+            summary: adjustmentSummary(cancelTarget),
+            date: cancelTarget.effectiveDate,
+          })}
+          confirmLabel={t('customers.priceAdjustments.cancelConfirmLabel')}
           destructive
           onConfirm={handleCancel}
           onCancel={() => setCancelTarget(null)}

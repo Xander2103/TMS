@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
+import { useLocale } from '../../../i18n/localeContext'
 import { getEmployeeOpenTaskSummary, listEmployeeTasks } from '../api/tasksApi'
 import type { EmployeeTask, TaskOpenSummary } from '../api/types'
 import { TaskDetailPanel } from './TaskDetailPanel'
@@ -13,6 +14,7 @@ interface EmployeeTasksTabProps {
 
 /** "Taken" tab on the personnel dossier: open-summary badges + the employee's task list. */
 export function EmployeeTasksTab({ employeeId }: EmployeeTasksTabProps) {
+  const { t } = useLocale()
   const [summary, setSummary] = useState<TaskOpenSummary | null>(null)
   const [tasks, setTasks] = useState<EmployeeTask[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -28,10 +30,10 @@ export function EmployeeTasksTab({ employeeId }: EmployeeTasksTabProps) {
         setIsLoading(false)
       })
       .catch(() => {
-        setError('De taken konden niet worden geladen.')
+        setError(t('tasks.page.loadFailed'))
         setIsLoading(false)
       })
-  }, [employeeId])
+  }, [employeeId, t])
 
   useEffect(() => {
     reload()
@@ -40,7 +42,7 @@ export function EmployeeTasksTab({ employeeId }: EmployeeTasksTabProps) {
   const columns: Column<EmployeeTask>[] = [
     {
       key: 'title',
-      header: 'Titel',
+      header: t('tasks.columns.title'),
       render: (row) => (
         <span className="task-title-cell">
           {row.title}
@@ -48,20 +50,20 @@ export function EmployeeTasksTab({ employeeId }: EmployeeTasksTabProps) {
         </span>
       ),
     },
-    { key: 'priority', header: 'Prioriteit', render: (row) => <TaskPriorityBadge priority={row.priority} /> },
-    { key: 'due', header: 'Deadline', render: (row) => <TaskDueCell task={row} /> },
-    { key: 'status', header: 'Status', render: (row) => <TaskStatusBadge status={row.status} /> },
+    { key: 'priority', header: t('tasks.columns.priority'), render: (row) => <TaskPriorityBadge priority={row.priority} /> },
+    { key: 'due', header: t('tasks.columns.due'), render: (row) => <TaskDueCell task={row} /> },
+    { key: 'status', header: t('tasks.columns.status'), render: (row) => <TaskStatusBadge status={row.status} /> },
   ]
 
   return (
     <div>
       {summary && (
         <div className="task-summary-badges">
-          <Badge>Te doen: {summary.todo}</Badge>
-          <Badge tone="info">In uitvoering: {summary.inProgress}</Badge>
-          <Badge tone="danger">Geblokkeerd: {summary.blocked}</Badge>
-          <Badge tone="warning">Wacht op controle: {summary.waitingForReview}</Badge>
-          <Badge tone="danger">Achterstallig: {summary.overdue}</Badge>
+          <Badge>{t('tasks.summary.todo', { count: summary.todo })}</Badge>
+          <Badge tone="info">{t('tasks.summary.inProgress', { count: summary.inProgress })}</Badge>
+          <Badge tone="danger">{t('tasks.summary.blocked', { count: summary.blocked })}</Badge>
+          <Badge tone="warning">{t('tasks.summary.waitingForReview', { count: summary.waitingForReview })}</Badge>
+          <Badge tone="danger">{t('tasks.summary.overdue', { count: summary.overdue })}</Badge>
         </div>
       )}
 
@@ -71,7 +73,7 @@ export function EmployeeTasksTab({ employeeId }: EmployeeTasksTabProps) {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Geen taken voor deze medewerker."
+        emptyMessage={t('tasks.employeeTab.empty')}
         onRowClick={(row) => setOpenTaskId(row.id)}
       />
 

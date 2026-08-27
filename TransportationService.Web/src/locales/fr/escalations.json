@@ -1,0 +1,35 @@
+{
+  "kind": {
+    "NegativeStockUnresolved": "Stock négatif non résolu",
+    "CriticalStockUnhandled": "Stock critique non traité",
+    "TaskOverdue": "Tâche en retard",
+    "AcknowledgementMissing": "Confirmation manquante",
+    "ReturnOverdue": "Retour en retard"
+  },
+  "page": {
+    "title": "Règles d'escalade",
+    "subtitle": "Qui est averti après combien d'heures lorsqu'un signal reste sans suite.",
+    "noPermission": "Vous n'avez pas les droits pour gérer les règles d'escalade.",
+    "loadFailed": "Les règles d'escalade n'ont pas pu être chargées.",
+    "empty": "Aucune règle d'escalade trouvée."
+  },
+  "columns": {
+    "kind": "Type",
+    "active": "Active",
+    "delay": "Délai (heures)",
+    "target": "Droit cible",
+    "actionsAria": "Actions"
+  },
+  "aria": {
+    "active": "Active : {kind}",
+    "delay": "Délai en heures : {kind}",
+    "target": "Droit cible : {kind}"
+  },
+  "form": {
+    "invalidDelay": "Indiquez un délai valide en heures (nombre entier, 0 ou plus).",
+    "targetRequired": "Choisissez un droit cible.",
+    "saved": "Règle d'escalade « {kind} » enregistrée.",
+    "saveFailed": "La règle d'escalade n'a pas pu être enregistrée.",
+    "saving": "Enregistrement…"
+  }
+}

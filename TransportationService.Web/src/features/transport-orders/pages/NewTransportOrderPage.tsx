@@ -5,6 +5,7 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { BackButton } from '../../../components/ui/BackButton'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { createTransportOrder, getTransportOrder } from '../api/transportOrdersApi'
 import { TransportOrderForm } from '../components/TransportOrderForm'
 import { PreparedOrderDocumentsEditor } from '../components/PreparedOrderDocumentsEditor'
@@ -13,6 +14,7 @@ import type { TransportOrderDetail } from '../types'
 
 export function NewTransportOrderPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [searchParams] = useSearchParams()
   const templateId = searchParams.get('template')
@@ -34,7 +36,7 @@ export function NewTransportOrderPage() {
       })
       .catch(() => {
         if (!mounted) return
-        showError('De sjabloonopdracht kon niet worden geladen; het formulier start leeg.')
+        showError(t('transportOrders.new.templateLoadFailed'))
         setLoadedTemplate({ id: templateId, order: null })
       })
     return () => {
@@ -44,25 +46,30 @@ export function NewTransportOrderPage() {
   }, [templateId])
 
   if (templateLoading) {
-    return <LoadingState message="Sjabloon laden..." />
+    return <LoadingState message={t('transportOrders.new.templateLoading')} />
   }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Transportopdrachten', to: '/transport-orders' }, { label: 'Nieuwe opdracht' }]} />
-      <BackButton to="/transport-orders" label="Terug naar opdrachten" />
+      <Breadcrumbs
+        items={[
+          { label: t('transportOrders.list.title'), to: '/transport-orders' },
+          { label: t('transportOrders.new.breadcrumb') },
+        ]}
+      />
+      <BackButton to="/transport-orders" label={t('transportOrders.new.back')} />
       <PageHeader
-        title="Nieuwe transportopdracht"
+        title={t('transportOrders.new.title')}
         subtitle={
           template
-            ? `Vooraf ingevuld op basis van ${template.orderNumber}; pas aan waar nodig.`
-            : 'De opdracht start als concept en kan daarna worden bevestigd.'
+            ? t('transportOrders.new.subtitleTemplate', { orderNumber: template.orderNumber })
+            : t('transportOrders.new.subtitleNew')
         }
       />
       <TransportOrderForm
         key={template?.id ?? 'blank'}
         order={template ?? undefined}
-        submitLabel="Opdracht aanmaken"
+        submitLabel={t('transportOrders.new.submit')}
         onCancel={() => navigate('/transport-orders')}
         documentsSection={<PreparedOrderDocumentsEditor value={preparedDocs} onChange={setPreparedDocs} />}
         onSubmit={async (input) => {
@@ -72,10 +79,10 @@ export function NewTransportOrderPage() {
             const results = await uploadPreparedOrderDocuments(created.id, preparedDocs)
             const failed = results.filter((r) => !r.ok)
             if (failed.length > 0) {
-              showError(`Opdracht aangemaakt, maar ${failed.length} document(en) konden niet worden geüpload. Voeg ze toe via het tabblad Documenten.`)
+              showError(t('transportOrders.new.docsFailed', { count: failed.length }))
             }
           }
-          showSuccess(`Opdracht ${created.orderNumber} aangemaakt.`)
+          showSuccess(t('transportOrders.new.created', { orderNumber: created.orderNumber }))
           navigate(`/transport-orders/${created.id}`)
         }}
       />

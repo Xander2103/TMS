@@ -46,9 +46,9 @@ describe('parsePeppolValue / combinePeppolValue', () => {
     })
   })
 
-  it('flags invalid combined formats and accepts valid ones', () => {
-    expect(peppolFormatError('abcd:123')).toMatch(/ongeldig/i)
-    expect(peppolFormatError('0208:12:34')).toMatch(/ongeldig/i)
+  it('flags invalid combined formats (as a translation key) and accepts valid ones', () => {
+    expect(peppolFormatError('abcd:123')).toBe('customers.vatValidation.peppolFormat')
+    expect(peppolFormatError('0208:12:34')).toBe('customers.vatValidation.peppolFormat')
     expect(peppolFormatError('0208:0123456789')).toBeNull()
     expect(peppolFormatError('0123456789')).toBeNull()
     expect(peppolFormatError('')).toBeNull()

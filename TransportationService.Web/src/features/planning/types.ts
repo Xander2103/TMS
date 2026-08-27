@@ -2,12 +2,13 @@ import type { TransportOrderStatus } from '../transport-orders/types'
 
 export type TripStatus = 'Draft' | 'Planned' | 'InProgress' | 'Completed' | 'Cancelled'
 
+/** Vertaalsleutels (i18n-wave): render altijd via t(TRIP_STATUS_LABELS[status]). */
 export const TRIP_STATUS_LABELS: Record<TripStatus, string> = {
-  Draft: 'Concept',
-  Planned: 'Gepland',
-  InProgress: 'Onderweg',
-  Completed: 'Afgerond',
-  Cancelled: 'Geannuleerd',
+  Draft: 'planning.tripStatus.Draft',
+  Planned: 'planning.tripStatus.Planned',
+  InProgress: 'planning.tripStatus.InProgress',
+  Completed: 'planning.tripStatus.Completed',
+  Cancelled: 'planning.tripStatus.Cancelled',
 }
 
 export const TRIP_STATUSES: TripStatus[] = ['Draft', 'Planned', 'InProgress', 'Completed', 'Cancelled']
@@ -21,11 +22,11 @@ export const TRIP_STATUS_TONE: Record<TripStatus, 'neutral' | 'success' | 'warni
 }
 
 export const TRIP_TRANSITION_LABELS: Record<TripStatus, string> = {
-  Draft: 'Terug naar concept',
-  Planned: 'Inplannen',
-  InProgress: 'Start rit',
-  Completed: 'Afronden',
-  Cancelled: 'Annuleren',
+  Draft: 'planning.tripTransition.Draft',
+  Planned: 'planning.tripTransition.Planned',
+  InProgress: 'planning.tripTransition.InProgress',
+  Completed: 'planning.tripTransition.Completed',
+  Cancelled: 'planning.tripTransition.Cancelled',
 }
 
 export type PlanningConflictCode =
@@ -56,9 +57,9 @@ export const CONFLICT_SEVERITY_META: Record<
   PlanningConflictSeverity,
   { label: string; tone: 'danger' | 'warning' | 'info' }
 > = {
-  Blocking: { label: 'Blokkerend', tone: 'danger' },
-  Warning: { label: 'Waarschuwing', tone: 'warning' },
-  Information: { label: 'Ter info', tone: 'info' },
+  Blocking: { label: 'planning.conflictSeverity.Blocking', tone: 'danger' },
+  Warning: { label: 'planning.conflictSeverity.Warning', tone: 'warning' },
+  Information: { label: 'planning.conflictSeverity.Information', tone: 'info' },
 }
 
 export type ConflictCategory =
@@ -72,14 +73,14 @@ export type ConflictCategory =
   | 'Data'
 
 export const CONFLICT_CATEGORY_LABELS: Record<ConflictCategory, string> = {
-  Resource: 'Middel',
-  Availability: 'Beschikbaarheid',
-  Qualification: 'Kwalificatie',
-  Capacity: 'Capaciteit',
-  Timing: 'Timing',
-  Equipment: 'Uitrusting',
-  Document: 'Document',
-  Data: 'Ontbrekende gegevens',
+  Resource: 'planning.conflictCategory.Resource',
+  Availability: 'planning.conflictCategory.Availability',
+  Qualification: 'planning.conflictCategory.Qualification',
+  Capacity: 'planning.conflictCategory.Capacity',
+  Timing: 'planning.conflictCategory.Timing',
+  Equipment: 'planning.conflictCategory.Equipment',
+  Document: 'planning.conflictCategory.Document',
+  Data: 'planning.conflictCategory.Data',
 }
 
 export interface PlanningConflict {

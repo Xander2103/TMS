@@ -3,8 +3,9 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { createTasks } from '../api/tasksApi'
 import { TASK_PRIORITY_LABELS, type TaskPriority } from '../api/types'
@@ -21,6 +22,7 @@ interface NewTaskDialogProps {
  * without it the task is always assigned to the signed-in user's own employee.
  */
 export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
+  const { t } = useLocale()
   const { user, hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canAssign = hasPermission('tasks.assign')
@@ -43,14 +45,12 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
   async function submit() {
     let valid = true
     if (title.trim().length === 0) {
-      setTitleError('Een titel is verplicht.')
+      setTitleError(t('tasks.new.titleRequired'))
       valid = false
     }
     const assignedEmployeeIds = canAssign ? employeeIds : user?.employeeId ? [user.employeeId] : []
     if (assignedEmployeeIds.length === 0) {
-      setEmployeeError(
-        canAssign ? 'Kies minstens één medewerker.' : 'Je account is niet gekoppeld aan een medewerker.',
-      )
+      setEmployeeError(canAssign ? t('tasks.new.chooseEmployees') : t('tasks.new.noEmployeeLinked'))
       valid = false
     }
     if (!valid) return
@@ -69,10 +69,10 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
         requiresCompletionNote,
         requiresEvidence,
       })
-      showSuccess(created.length === 1 ? 'Taak aangemaakt.' : `${created.length} taken aangemaakt.`)
+      showSuccess(t('tasks.new.created', { count: created.length }))
       onCreated()
     } catch (err) {
-      showError(describeApiError(err, 'De taak kon niet worden aangemaakt.').message)
+      showError(localizeApiError(t, err, t('tasks.new.createFailed')))
     } finally {
       setBusy(false)
     }
@@ -80,21 +80,21 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
 
   return (
     <Modal
-      title="Nieuwe taak"
+      title={t('tasks.new.title')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={busy}>
-            {busy ? 'Bezig...' : 'Taak aanmaken'}
+            {busy ? t('ui.actions.busy') : t('tasks.new.create')}
           </Button>
         </>
       }
     >
-      <FormField label="Titel" htmlFor="task-title" required error={titleError}>
+      <FormField label={t('tasks.new.titleLabel')} htmlFor="task-title" required error={titleError}>
         <input
           id="task-title"
           type="text"
@@ -107,7 +107,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
         />
       </FormField>
 
-      <FormField label="Beschrijving" htmlFor="task-description">
+      <FormField label={t('tasks.new.description')} htmlFor="task-description">
         <textarea
           id="task-description"
           rows={3}
@@ -118,7 +118,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
       </FormField>
 
       {canAssign ? (
-        <FormField label="Medewerker(s)" required error={employeeError}>
+        <FormField label={t('tasks.new.employees')} required error={employeeError}>
           <EmployeeMultiSelect
             value={employeeIds}
             onChange={(next) => {
@@ -129,20 +129,20 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
           />
         </FormField>
       ) : (
-        <FormField label="Toegewezen aan" error={employeeError}>
-          <p className="placeholder-text">Mijzelf</p>
+        <FormField label={t('tasks.new.assignedTo')} error={employeeError}>
+          <p className="placeholder-text">{t('tasks.new.myself')}</p>
         </FormField>
       )}
 
       <div className="task-form-row">
-        <FormField label="Categorie" htmlFor="task-category">
+        <FormField label={t('tasks.new.category')} htmlFor="task-category">
           <select
             id="task-category"
             value={categoryId}
             onChange={(event) => setCategoryId(event.target.value)}
             disabled={busy}
           >
-            <option value="">— Geen categorie —</option>
+            <option value="">{t('tasks.new.noCategory')}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -151,7 +151,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
           </select>
         </FormField>
 
-        <FormField label="Prioriteit" htmlFor="task-priority">
+        <FormField label={t('tasks.new.priority')} htmlFor="task-priority">
           <select
             id="task-priority"
             value={priority}
@@ -160,7 +160,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
           >
             {Object.entries(TASK_PRIORITY_LABELS).map(([value, label]) => (
               <option key={value} value={value}>
-                {label}
+                {t(label)}
               </option>
             ))}
           </select>
@@ -168,7 +168,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
       </div>
 
       <div className="task-form-row">
-        <FormField label="Start" htmlFor="task-start">
+        <FormField label={t('tasks.new.start')} htmlFor="task-start">
           <input
             id="task-start"
             type="datetime-local"
@@ -178,7 +178,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
           />
         </FormField>
 
-        <FormField label="Deadline" htmlFor="task-due">
+        <FormField label={t('tasks.new.due')} htmlFor="task-due">
           <input
             id="task-due"
             type="datetime-local"
@@ -197,7 +197,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
             onChange={(event) => setRequiresReview(event.target.checked)}
             disabled={busy}
           />
-          Controle vereist
+          {t('tasks.new.requiresReview')}
         </label>
         <label className="task-check-label">
           <input
@@ -206,7 +206,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
             onChange={(event) => setRequiresCompletionNote(event.target.checked)}
             disabled={busy}
           />
-          Notitie bij voltooien verplicht
+          {t('tasks.new.requiresNote')}
         </label>
         <label className="task-check-label">
           <input
@@ -215,7 +215,7 @@ export function NewTaskDialog({ onClose, onCreated }: NewTaskDialogProps) {
             onChange={(event) => setRequiresEvidence(event.target.checked)}
             disabled={busy}
           />
-          Bewijs (bijlage) vereist
+          {t('tasks.new.requiresEvidence')}
         </label>
       </div>
     </Modal>

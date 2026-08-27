@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import type { CustomerPreferredUnit } from '../../tarification/api/pricingApi'
 
 export interface UnitOptionItem {
@@ -22,6 +23,7 @@ interface UnitSelectProps {
  * the customer units — "Andere eenheden tonen" reveals the full list.
  */
 export function UnitSelect({ id, value, onChange, units, preferredUnits, disabled }: UnitSelectProps) {
+  const { t } = useLocale()
   const [showAll, setShowAll] = useState(false)
   const preferredCodes = new Set(preferredUnits.map((u) => u.code))
   const otherUnits = units.filter((u) => !preferredCodes.has(u.code))
@@ -31,9 +33,9 @@ export function UnitSelect({ id, value, onChange, units, preferredUnits, disable
   return (
     <>
       <select id={id} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)} disabled={disabled}>
-        <option value="">— Eenheid —</option>
+        <option value="">{t('transportOrders.unitSelect.placeholder')}</option>
         {preferredUnits.length > 0 && (
-          <optgroup label="Eenheden van deze klant">
+          <optgroup label={t('transportOrders.unitSelect.customerGroup')}>
             {preferredUnits.map((unit) => (
               <option key={unit.unitTypeId} value={unit.code}>
                 {unit.isFavourite ? '★ ' : ''}
@@ -44,7 +46,7 @@ export function UnitSelect({ id, value, onChange, units, preferredUnits, disable
         )}
         {showOthers &&
           (preferredUnits.length > 0 ? (
-            <optgroup label="Andere eenheden">
+            <optgroup label={t('transportOrders.unitSelect.otherGroup')}>
               {otherUnits.map((unit) => (
                 <option key={unit.id} value={unit.code}>
                   {unit.name}
@@ -61,7 +63,7 @@ export function UnitSelect({ id, value, onChange, units, preferredUnits, disable
       </select>
       {preferredUnits.length > 0 && !showAll && (
         <button type="button" className="tof-link" onClick={() => setShowAll(true)}>
-          Andere eenheden tonen
+          {t('transportOrders.unitSelect.showOthers')}
         </button>
       )}
     </>

@@ -1,0 +1,47 @@
+{
+  "ownership": {
+    "Owned": "En propriété",
+    "Rented": "Location",
+    "Leased": "Leasing"
+  },
+  "status": {
+    "Available": "Disponible",
+    "InUse": "En service",
+    "InMaintenance": "En entretien",
+    "OutOfService": "Hors service"
+  },
+  "list": {
+    "new": "Nouvelle semi-remorque",
+    "loadFailed": "Les semi-remorques n'ont pas pu être chargées.",
+    "empty": "Aucune semi-remorque pour l'instant.",
+    "loading": "Chargement des semi-remorques..."
+  },
+  "form": {
+    "firstRegistration": "Première immatriculation",
+    "maintenanceInfo": "Après la création, l'entretien et les contrôles sont planifiés automatiquement selon la politique d'entretien en vigueur (règle de la semi-remorque → règle de catégorie → standard de l'entreprise).",
+    "create": "Créer la semi-remorque"
+  },
+  "new": {
+    "created": "Semi-remorque {number} créée.",
+    "followUpLabel": "Semi-remorque {number}",
+    "duplicate": "Une semi-remorque avec cette plaque d'immatriculation existe déjà.",
+    "createFailed": "La semi-remorque n'a pas pu être créée."
+  },
+  "detail": {
+    "loading": "Chargement de la semi-remorque…",
+    "loadFailed": "La semi-remorque n'a pas pu être chargée.",
+    "back": "Retour aux semi-remorques",
+    "updated": "Semi-remorque mise à jour.",
+    "deleted": "Semi-remorque supprimée.",
+    "deleteFailed": "La semi-remorque n'a pas pu être supprimée.",
+    "payload": "Charge utile",
+    "confirmDeleteTitle": "Supprimer la semi-remorque",
+    "confirmDeleteMessage": "Voulez-vous vraiment supprimer la semi-remorque {number} ?",
+    "deactivateTitle": "Désactiver la semi-remorque",
+    "reactivateTitle": "Réactiver la semi-remorque",
+    "deactivateMessage": "Désactiver {number} ? L'historique est conservé, mais la semi-remorque ne peut plus être affectée à de nouvelles tournées.",
+    "reactivateMessage": "Réactiver {number} ? La semi-remorque sera de nouveau disponible.",
+    "deactivated": "Semi-remorque désactivée.",
+    "reactivated": "Semi-remorque réactivée."
+  }
+}

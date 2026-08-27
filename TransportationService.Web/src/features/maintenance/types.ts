@@ -1,22 +1,24 @@
 export type MaintenanceType = 'PeriodicService' | 'Repair' | 'TireService' | 'BrakeService' | 'Revision' | 'Other'
 export type MaintenanceStatus = 'Planned' | 'InProgress' | 'Completed' | 'Cancelled'
 
+/** i18n-keys (maintenance.type.*) — render via t(MAINTENANCE_TYPE_LABELS[x]). */
 export const MAINTENANCE_TYPE_LABELS: Record<MaintenanceType, string> = {
-  PeriodicService: 'Periodiek onderhoud',
-  Repair: 'Herstelling',
-  TireService: 'Bandenservice',
-  BrakeService: 'Remmenservice',
-  Revision: 'Revisie',
-  Other: 'Overig',
+  PeriodicService: 'maintenance.type.PeriodicService',
+  Repair: 'maintenance.type.Repair',
+  TireService: 'maintenance.type.TireService',
+  BrakeService: 'maintenance.type.BrakeService',
+  Revision: 'maintenance.type.Revision',
+  Other: 'maintenance.type.Other',
 }
 
 export const MAINTENANCE_TYPES = Object.keys(MAINTENANCE_TYPE_LABELS) as MaintenanceType[]
 
+/** i18n-keys (maintenance.status.*) — render via t(MAINTENANCE_STATUS_LABELS[x]). */
 export const MAINTENANCE_STATUS_LABELS: Record<MaintenanceStatus, string> = {
-  Planned: 'Gepland',
-  InProgress: 'In uitvoering',
-  Completed: 'Afgerond',
-  Cancelled: 'Geannuleerd',
+  Planned: 'maintenance.status.Planned',
+  InProgress: 'maintenance.status.InProgress',
+  Completed: 'maintenance.status.Completed',
+  Cancelled: 'maintenance.status.Cancelled',
 }
 
 export interface MaintenanceRecord {
@@ -64,6 +66,10 @@ export interface CompleteMaintenanceInput {
   notes: string | null
 }
 
+/**
+ * Display name: either the custom name (data) or a translation KEY. Callers render via
+ * t(maintenanceDisplayName(record)) — t() echoes unknown keys, so custom names pass through.
+ */
 export function maintenanceDisplayName(record: Pick<MaintenanceRecord, 'maintenanceType' | 'customTypeName'>): string {
   return record.maintenanceType === 'Other' && record.customTypeName
     ? record.customTypeName

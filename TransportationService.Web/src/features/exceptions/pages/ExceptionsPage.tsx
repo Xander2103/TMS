@@ -6,6 +6,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { Pagination } from '../../../components/ui/Pagination'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchExceptions } from '../api/exceptionsApi'
 import {
   EXCEPTION_SEVERITIES,
@@ -31,6 +32,7 @@ const PAGE_SIZE = 25
 export function ExceptionsPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { t } = useLocale()
 
   const [page, setPage] = useState(1)
   const [statusFilter, setStatusFilter] = useState<ExecutionExceptionStatus | ''>('Open')
@@ -66,7 +68,7 @@ export function ExceptionsPage() {
       })
       .catch(() => {
         if (!mounted) return
-        setState((current) => ({ ...current, error: 'De afwijkingen konden niet worden geladen.', loadedKey: requestKey }))
+        setState((current) => ({ ...current, error: t('exceptions.list.loadError'), loadedKey: requestKey }))
       })
     return () => {
       mounted = false
@@ -80,36 +82,36 @@ export function ExceptionsPage() {
   const columns: Column<ExceptionListItem>[] = [
     {
       key: 'occurredAt',
-      header: 'Gemeld',
+      header: t('exceptions.list.colReported'),
       width: '140px',
       render: (r) => formatDateTime(r.occurredAt),
     },
     {
       key: 'type',
-      header: 'Type',
-      render: (r) => EXCEPTION_TYPE_LABELS[r.type],
+      header: t('exceptions.list.colType'),
+      render: (r) => t(EXCEPTION_TYPE_LABELS[r.type]),
     },
     {
       key: 'severity',
-      header: 'Ernst',
+      header: t('exceptions.list.colSeverity'),
       render: (r) => (
         <Badge tone={EXCEPTION_SEVERITY_TONE[r.severity]}>
-          {EXCEPTION_SEVERITY_ICONS[r.severity]} {EXCEPTION_SEVERITY_LABELS[r.severity]}
+          {EXCEPTION_SEVERITY_ICONS[r.severity]} {t(EXCEPTION_SEVERITY_LABELS[r.severity])}
         </Badge>
       ),
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('exceptions.list.colStatus'),
       render: (r) => (
         <Badge tone={EXCEPTION_STATUS_TONE[r.status]}>
-          {EXCEPTION_STATUS_ICONS[r.status]} {EXCEPTION_STATUS_LABELS[r.status]}
+          {EXCEPTION_STATUS_ICONS[r.status]} {t(EXCEPTION_STATUS_LABELS[r.status])}
         </Badge>
       ),
     },
     {
       key: 'context',
-      header: 'Rit / opdracht',
+      header: t('exceptions.list.colContext'),
       render: (r) => (
         <span>
           <code>{r.tripNumber}</code>
@@ -131,22 +133,22 @@ export function ExceptionsPage() {
     },
     {
       key: 'description',
-      header: 'Omschrijving',
+      header: t('exceptions.list.colDescription'),
       render: (r) => <span className="exc-description-cell">{r.description}</span>,
     },
     {
       key: 'assignee',
-      header: 'Toegewezen',
+      header: t('exceptions.list.colAssignee'),
       render: (r) => <span>{r.assignedToName ?? '—'}</span>,
     },
     {
       key: 'meta',
-      header: 'Info',
+      header: t('exceptions.list.colInfo'),
       render: (r) => (
         <span className="exc-meta-cell">
           {r.reportedByName ?? '—'}
           {r.photoCount > 0 && ` · 📷 ${r.photoCount}`}
-          {r.customerVisible && ' · 👁 klant'}
+          {r.customerVisible && ` · 👁 ${t('exceptions.list.customerVisibleShort')}`}
         </span>
       ),
     },
@@ -154,15 +156,15 @@ export function ExceptionsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Afwijkingen' }]} />
+      <Breadcrumbs items={[{ label: t('exceptions.list.title') }]} />
       <PageHeader
-        title="Afwijkingen"
-        subtitle="Gemelde problemen uit de uitvoering — onderzoek en handel af."
+        title={t('exceptions.list.title')}
+        subtitle={t('exceptions.list.subtitle')}
       />
 
       <div className="exc-filters">
         <label>
-          Status{' '}
+          {t('exceptions.list.filterStatus')}{' '}
           <select
             value={statusFilter}
             onChange={(e) => {
@@ -170,16 +172,16 @@ export function ExceptionsPage() {
               setPage(1)
             }}
           >
-            <option value="">Alle</option>
+            <option value="">{t('exceptions.list.all')}</option>
             {EXCEPTION_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {EXCEPTION_STATUS_LABELS[s]}
+                {t(EXCEPTION_STATUS_LABELS[s])}
               </option>
             ))}
           </select>
         </label>
         <label>
-          Type{' '}
+          {t('exceptions.list.filterType')}{' '}
           <select
             value={typeFilter}
             onChange={(e) => {
@@ -187,16 +189,16 @@ export function ExceptionsPage() {
               setPage(1)
             }}
           >
-            <option value="">Alle</option>
-            {EXCEPTION_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {EXCEPTION_TYPE_LABELS[t]}
+            <option value="">{t('exceptions.list.all')}</option>
+            {EXCEPTION_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {t(EXCEPTION_TYPE_LABELS[type])}
               </option>
             ))}
           </select>
         </label>
         <label>
-          Ernst{' '}
+          {t('exceptions.list.filterSeverity')}{' '}
           <select
             value={severityFilter}
             onChange={(e) => {
@@ -204,10 +206,10 @@ export function ExceptionsPage() {
               setPage(1)
             }}
           >
-            <option value="">Alle</option>
+            <option value="">{t('exceptions.list.all')}</option>
             {EXCEPTION_SEVERITIES.map((s) => (
               <option key={s} value={s}>
-                {EXCEPTION_SEVERITY_LABELS[s]}
+                {t(EXCEPTION_SEVERITY_LABELS[s])}
               </option>
             ))}
           </select>
@@ -221,7 +223,7 @@ export function ExceptionsPage() {
               setPage(1)
             }}
           />
-          Alleen colli
+          {t('exceptions.list.packagesOnly')}
         </label>
         <label className="exc-filter-check">
           <input
@@ -232,7 +234,7 @@ export function ExceptionsPage() {
               setPage(1)
             }}
           />
-          Aan mij toegewezen
+          {t('exceptions.list.mineOnly')}
         </label>
       </div>
 
@@ -242,7 +244,7 @@ export function ExceptionsPage() {
         rowKey={(r) => r.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Geen afwijkingen gevonden."
+        emptyMessage={t('exceptions.list.empty')}
         onRowClick={(r) => navigate(`/exceptions/${r.id}`)}
       />
       <Pagination page={page} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={setPage} />

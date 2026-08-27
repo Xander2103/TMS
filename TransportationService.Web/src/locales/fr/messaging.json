@@ -1,0 +1,58 @@
+{
+  "status": {
+    "Pending": "En file d'attente",
+    "Sent": "Envoyé",
+    "Failed": "En échec",
+    "Suppressed": "Supprimé"
+  },
+  "page": {
+    "title": "Messages",
+    "subtitle": "Outbox e-mail/SMS avec statut de remise — les fournisseurs ne seront raccordés qu'une fois les identifiants disponibles (actuellement : sink de développement).",
+    "editTemplate": "Modifier le modèle",
+    "statusAria": "Statut",
+    "allStatuses": "Tous les statuts",
+    "loadFailed": "L'outbox n'a pas pu être chargée.",
+    "empty": "Aucun message trouvé."
+  },
+  "columns": {
+    "created": "Créé",
+    "channel": "Canal",
+    "kind": "Type",
+    "recipient": "Destinataire",
+    "status": "Statut",
+    "attempts": "Tentatives",
+    "detail": "Détail",
+    "actionsAria": "Actions"
+  },
+  "outbox": {
+    "fallback": "fallback",
+    "sentAtTime": "envoyé {time}",
+    "retry": "Réessayer",
+    "retried": "Message remis dans la file d'attente.",
+    "retryFailed": "Le renvoi a échoué."
+  },
+  "templates": {
+    "heading": "Modèles propres",
+    "inactive": "inactif",
+    "edit": "modifier",
+    "delete": "supprimer",
+    "deleted": "Modèle supprimé — le modèle intégré s'applique à nouveau.",
+    "deleteFailed": "Le modèle n'a pas pu être supprimé.",
+    "bodyRequired": "Le contenu du modèle est obligatoire.",
+    "saved": "Modèle enregistré.",
+    "saveFailed": "Le modèle n'a pas pu être enregistré.",
+    "previewFailed": "L'aperçu n'a pas pu être chargé.",
+    "modalTitle": "Modèle de message",
+    "preview": "Aperçu",
+    "form": {
+      "kind": "Type",
+      "channel": "Canal",
+      "channelEmail": "E-mail",
+      "channelSms": "SMS",
+      "language": "Langue",
+      "subject": "Objet",
+      "subjectHint": "Les tokens comme {{orderNumber}} sont remplis automatiquement.",
+      "body": "Contenu"
+    }
+  }
+}

@@ -3,7 +3,8 @@ import { Button } from '../../../components/ui/Button'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { agreementToInput } from '../agreementInputHelpers'
 import {
   listPricingAgreements,
@@ -52,6 +53,7 @@ const toModifierDrafts = (agreement: PricingAgreement): ModifierDraft[] =>
  * Read-only summary when the caller cannot manage tariffs.
  */
 export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: AgreementDerivationPanelProps) {
+  const { t } = useLocale()
   const { showSuccess } = useToast()
   const [baseAgreementId, setBaseAgreementId] = useState(agreement.baseAgreementId ?? '')
   const [modifiers, setModifiers] = useState<ModifierDraft[]>(() => toModifierDrafts(agreement))
@@ -97,9 +99,9 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
           : null,
       })
       onUpdated(updated)
-      showSuccess('Afleiding opgeslagen.')
+      showSuccess(t('tarification.derivation.saved'))
     } catch (err) {
-      setError(describeApiError(err, 'De afleiding kon niet worden opgeslagen.').message)
+      setError(localizeApiError(t, err, t('tarification.derivation.saveError')))
     } finally {
       setBusy(false)
     }
@@ -107,13 +109,13 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
 
   if (!canManage) {
     if (!agreement.baseAgreementId) {
-      return <EmptyState message="Deze tabel is niet afgeleid van een andere tabel." />
+      return <EmptyState message={t('tarification.derivation.notDerived')} />
     }
     return (
       <section className="customer-panel">
-        <h3>Afleiding</h3>
+        <h3>{t('tarification.derivation.title')}</h3>
         <p>
-          Deze tabel gebruikt de prijsregels van <strong>{agreement.baseAgreementName ?? '—'}</strong>.
+          {t('tarification.derivation.usesRulesPrefix')} <strong>{agreement.baseAgreementName ?? '—'}</strong>.
         </p>
         <ul>
           {agreement.modifiers.map((m) => (
@@ -130,7 +132,7 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Afleiding</h3>
+        <h3>{t('tarification.derivation.title')}</h3>
       </div>
       {error && (
         <div className="issued-items-form-error" role="alert">
@@ -138,12 +140,12 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
         </div>
       )}
       <FormField
-        label="Basistabel"
+        label={t('tarification.derivation.baseLabel')}
         htmlFor="derivation-base"
-        hint="Optioneel: hergebruik de prijsregels van een gedeelde of algemene tabel, met eigen aanpassingen (bv. Nederland +30%)."
+        hint={t('tarification.derivation.baseHint')}
       >
         <select id="derivation-base" value={baseAgreementId} onChange={(e) => setBaseAgreementId(e.target.value)}>
-          <option value="">— Geen (eigen prijsregels) —</option>
+          <option value="">{t('tarification.derivation.baseNone')}</option>
           {baseOptions
             .filter((a) => a.id !== agreement.id)
             .map((a) => (
@@ -158,14 +160,14 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
           {modifiers.map((modifier, index) => (
             <div key={index} className="issued-items-form-row customer-rule-bracket">
               <input
-                aria-label={`Aanpassing ${index + 1} naam`}
-                placeholder="naam (bv. Nederland +30%)"
+                aria-label={t('tarification.derivation.ariaName', { index: index + 1 })}
+                placeholder={t('tarification.derivation.namePlaceholder')}
                 value={modifier.name}
                 onChange={(e) => setModifiers((m) => m.map((x, i) => (i === index ? { ...x, name: e.target.value } : x)))}
               />
               <input
-                aria-label={`Aanpassing ${index + 1} land`}
-                placeholder="land (bv. NL)"
+                aria-label={t('tarification.derivation.ariaCountry', { index: index + 1 })}
+                placeholder={t('tarification.derivation.countryPlaceholder')}
                 maxLength={2}
                 value={modifier.countryCode}
                 onChange={(e) =>
@@ -173,11 +175,11 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
                 }
               />
               <select
-                aria-label={`Aanpassing ${index + 1} zone`}
+                aria-label={t('tarification.derivation.ariaZone', { index: index + 1 })}
                 value={modifier.zoneId}
                 onChange={(e) => setModifiers((m) => m.map((x, i) => (i === index ? { ...x, zoneId: e.target.value } : x)))}
               >
-                <option value="">— Alle zones —</option>
+                <option value="">{t('tarification.derivation.allZones')}</option>
                 {zones.map((zone) => (
                   <option key={zone.id} value={zone.id}>
                     {zone.code} — {zone.name}
@@ -185,26 +187,26 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
                 ))}
               </select>
               <select
-                aria-label={`Aanpassing ${index + 1} soort`}
+                aria-label={t('tarification.derivation.ariaKind', { index: index + 1 })}
                 value={modifier.mode}
                 onChange={(e) =>
                   setModifiers((m) => m.map((x, i) => (i === index ? { ...x, mode: e.target.value as 'Percent' | 'Fixed' } : x)))
                 }
               >
-                <option value="Percent">Percentage</option>
-                <option value="Fixed">Vast bedrag</option>
+                <option value="Percent">{t('tarification.common.percentage')}</option>
+                <option value="Fixed">{t('tarification.common.fixedAmount')}</option>
               </select>
               <input
-                aria-label={`Aanpassing ${index + 1} waarde`}
+                aria-label={t('tarification.derivation.ariaValue', { index: index + 1 })}
                 type="number"
                 step="0.01"
-                placeholder="waarde"
+                placeholder={t('tarification.derivation.valuePlaceholder')}
                 value={modifier.value}
                 onChange={(e) => setModifiers((m) => m.map((x, i) => (i === index ? { ...x, value: e.target.value } : x)))}
               />
               <Button
                 variant="ghost"
-                aria-label={`Aanpassing ${index + 1} omhoog`}
+                aria-label={t('tarification.derivation.ariaUp', { index: index + 1 })}
                 disabled={index === 0}
                 onClick={() => setModifiers((m) => moveItem(m, index, index - 1))}
               >
@@ -212,14 +214,14 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
               </Button>
               <Button
                 variant="ghost"
-                aria-label={`Aanpassing ${index + 1} omlaag`}
+                aria-label={t('tarification.derivation.ariaDown', { index: index + 1 })}
                 disabled={index === modifiers.length - 1}
                 onClick={() => setModifiers((m) => moveItem(m, index, index + 1))}
               >
                 ↓
               </Button>
               <Button variant="ghost" onClick={() => setModifiers((m) => m.filter((_, i) => i !== index))}>
-                Verwijderen
+                {t('ui.actions.delete')}
               </Button>
             </div>
           ))}
@@ -227,13 +229,13 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
             variant="secondary"
             onClick={() => setModifiers((m) => [...m, { name: '', countryCode: '', zoneId: '', mode: 'Percent', value: '' }])}
           >
-            + Aanpassing
+            {t('tarification.derivation.addModifier')}
           </Button>
         </>
       )}
       <div className="customer-panel-header">
         <Button onClick={() => void save()} disabled={busy}>
-          {busy ? 'Bezig...' : 'Opslaan'}
+          {busy ? t('ui.actions.busy') : t('ui.actions.save')}
         </Button>
       </div>
     </section>

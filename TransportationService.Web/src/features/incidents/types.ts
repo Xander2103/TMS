@@ -103,39 +103,40 @@ export interface IncidentInput {
   responsibilityNotes?: string | null
 }
 
+/** Vertaalsleutels (i18n-wave): render via t(...LABELS[code] ?? code). */
 export const RESPONSIBLE_PARTY_LABELS: Record<string, string> = {
-  Unknown: 'Onbekend',
-  Customer: 'Klant',
-  Own: 'Eigen organisatie',
-  Driver: 'Chauffeur',
-  Supplier: 'Leverancier',
+  Unknown: 'incidents.responsibleParty.Unknown',
+  Customer: 'incidents.responsibleParty.Customer',
+  Own: 'incidents.responsibleParty.Own',
+  Driver: 'incidents.responsibleParty.Driver',
+  Supplier: 'incidents.responsibleParty.Supplier',
 }
 
 export const CHARGE_DECISION_LABELS: Record<string, string> = {
-  None: 'Geen doorrekening',
-  Proposed: 'Voorgesteld',
-  Approved: 'Goedgekeurd',
-  Rejected: 'Afgekeurd',
+  None: 'incidents.chargeDecision.None',
+  Proposed: 'incidents.chargeDecision.Proposed',
+  Approved: 'incidents.chargeDecision.Approved',
+  Rejected: 'incidents.chargeDecision.Rejected',
 }
 
 export const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
-  Damage: 'Schade',
-  Delay: 'Vertraging',
-  Theft: 'Diefstal',
-  Accident: 'Ongeval',
-  WrongDelivery: 'Foutieve levering',
-  MissingGoods: 'Ontbrekende goederen',
-  CustomerComplaint: 'Klachtenmelding klant',
-  VehicleBreakdown: 'Voertuigpech',
-  Administrative: 'Administratief',
-  Other: 'Overig',
+  Damage: 'incidents.type.Damage',
+  Delay: 'incidents.type.Delay',
+  Theft: 'incidents.type.Theft',
+  Accident: 'incidents.type.Accident',
+  WrongDelivery: 'incidents.type.WrongDelivery',
+  MissingGoods: 'incidents.type.MissingGoods',
+  CustomerComplaint: 'incidents.type.CustomerComplaint',
+  VehicleBreakdown: 'incidents.type.VehicleBreakdown',
+  Administrative: 'incidents.type.Administrative',
+  Other: 'incidents.type.Other',
 }
 
 export const INCIDENT_STATUS_LABELS: Record<IncidentStatus, string> = {
-  New: 'Nieuw',
-  InProgress: 'In behandeling',
-  Resolved: 'Afgehandeld',
-  Cancelled: 'Geannuleerd',
+  New: 'incidents.status.New',
+  InProgress: 'incidents.status.InProgress',
+  Resolved: 'incidents.status.Resolved',
+  Cancelled: 'incidents.status.Cancelled',
 }
 
 export const INCIDENT_STATUS_TONE: Record<IncidentStatus, BadgeTone> = {
@@ -146,10 +147,10 @@ export const INCIDENT_STATUS_TONE: Record<IncidentStatus, BadgeTone> = {
 }
 
 export const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> = {
-  Low: 'Laag',
-  Medium: 'Middel',
-  High: 'Hoog',
-  Critical: 'Kritiek',
+  Low: 'incidents.severity.Low',
+  Medium: 'incidents.severity.Medium',
+  High: 'incidents.severity.High',
+  Critical: 'incidents.severity.Critical',
 }
 
 export const INCIDENT_SEVERITY_TONE: Record<IncidentSeverity, BadgeTone> = {
@@ -159,8 +160,15 @@ export const INCIDENT_SEVERITY_TONE: Record<IncidentSeverity, BadgeTone> = {
   Critical: 'danger',
 }
 
-export function incidentTypeLabel(incident: { incidentType: IncidentType; customTypeName: string | null }): string {
+/**
+ * Weergavelabel voor het incidenttype: de vrije typenaam (data, nooit vertalen) bij
+ * 'Other', anders het via `t` vertaalde standaardtype.
+ */
+export function incidentTypeLabel(
+  incident: { incidentType: IncidentType; customTypeName: string | null },
+  t: (key: string) => string,
+): string {
   return incident.incidentType === 'Other' && incident.customTypeName
     ? incident.customTypeName
-    : INCIDENT_TYPE_LABELS[incident.incidentType]
+    : t(INCIDENT_TYPE_LABELS[incident.incidentType])
 }

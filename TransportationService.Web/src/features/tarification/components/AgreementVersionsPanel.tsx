@@ -3,7 +3,8 @@ import { Button } from '../../../components/ui/Button'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { duplicateAgreement, type PricingAgreement } from '../api/pricingApi'
 
 interface AgreementVersionsPanelProps {
@@ -31,6 +32,7 @@ const nextYearName = (name: string) => `${name} ${new Date().getFullYear() + 1}`
  * linked explicitly on the Klanten tab.
  */
 export function AgreementVersionsPanel({ agreement, canManage, onDuplicated }: AgreementVersionsPanelProps) {
+  const { t } = useLocale()
   const [draft, setDraft] = useState<DuplicateDraft | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,11 +46,11 @@ export function AgreementVersionsPanel({ agreement, canManage, onDuplicated }: A
     event.preventDefault()
     if (!draft) return
     if (!draft.name.trim()) {
-      setError('De naam is verplicht.')
+      setError(t('tarification.common.nameRequired'))
       return
     }
     if (!draft.effectiveFrom) {
-      setError('Kies een ingangsdatum.')
+      setError(t('tarification.common.chooseDate'))
       return
     }
 
@@ -65,39 +67,36 @@ export function AgreementVersionsPanel({ agreement, canManage, onDuplicated }: A
       })
       onDuplicated(duplicated.id)
     } catch (err) {
-      setError(describeApiError(err, 'De nieuwe versie kon niet worden aangemaakt.').message)
+      setError(localizeApiError(t, err, t('tarification.versions.createError')))
     } finally {
       setBusy(false)
     }
   }
 
   if (!canManage) {
-    return <EmptyState message="Je hebt geen rechten om een nieuwe versie van deze tabel te maken." />
+    return <EmptyState message={t('tarification.versions.noPermission')} />
   }
 
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>Nieuwe versie</h3>
+        <h3>{t('tarification.versions.title')}</h3>
       </div>
-      <p className="customer-form-muted">
-        Maak een nieuwe versie van deze tabel met een eigen ingangsdatum. Klantkoppelingen worden niet
-        overgenomen — koppel klanten aan de nieuwe versie via het tabblad Klanten.
-      </p>
-      <Button onClick={open}>+ Dupliceren als nieuwe versie</Button>
+      <p className="customer-form-muted">{t('tarification.versions.hint')}</p>
+      <Button onClick={open}>{t('tarification.versions.duplicate')}</Button>
 
       {draft && (
         <Modal
-          title="Nieuwe versie aanmaken"
+          title={t('tarification.versions.modalTitle')}
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="duplicate-form" disabled={busy}>
-                {busy ? 'Bezig...' : 'Aanmaken'}
+                {busy ? t('ui.actions.busy') : t('tarification.common.create')}
               </Button>
             </>
           }
@@ -108,7 +107,7 @@ export function AgreementVersionsPanel({ agreement, canManage, onDuplicated }: A
                 {error}
               </div>
             )}
-            <FormField label="Naam" htmlFor="dup-name" required>
+            <FormField label={t('tarification.common.name')} htmlFor="dup-name" required>
               <input
                 id="dup-name"
                 value={draft.name}
@@ -116,7 +115,7 @@ export function AgreementVersionsPanel({ agreement, canManage, onDuplicated }: A
                 maxLength={200}
               />
             </FormField>
-            <FormField label="Ingangsdatum" htmlFor="dup-from" required>
+            <FormField label={t('tarification.common.effectiveDate')} htmlFor="dup-from" required>
               <input
                 id="dup-from"
                 type="date"
@@ -130,22 +129,22 @@ export function AgreementVersionsPanel({ agreement, canManage, onDuplicated }: A
                 checked={draft.closeSource}
                 onChange={(e) => setDraft((d) => (d ? { ...d, closeSource: e.target.checked } : d))}
               />
-              Sluit huidige versie af (geldig tot ingangsdatum nieuwe versie min 1 dag)
+              {t('tarification.versions.closeSource')}
             </label>
             <div className="issued-items-form-row">
-              <FormField label="Aanpassing" htmlFor="dup-mode">
+              <FormField label={t('tarification.common.adjustment')} htmlFor="dup-mode">
                 <select
                   id="dup-mode"
                   value={draft.mode}
                   onChange={(e) => setDraft((d) => (d ? { ...d, mode: e.target.value as DuplicateDraft['mode'] } : d))}
                 >
-                  <option value="none">Geen</option>
-                  <option value="percent">Percentage</option>
-                  <option value="fixed">Vast bedrag</option>
+                  <option value="none">{t('tarification.common.none')}</option>
+                  <option value="percent">{t('tarification.common.percentage')}</option>
+                  <option value="fixed">{t('tarification.common.fixedAmount')}</option>
                 </select>
               </FormField>
               {draft.mode !== 'none' && (
-                <FormField label="Waarde" htmlFor="dup-value">
+                <FormField label={t('tarification.common.value')} htmlFor="dup-value">
                   <input
                     id="dup-value"
                     type="number"
@@ -157,13 +156,13 @@ export function AgreementVersionsPanel({ agreement, canManage, onDuplicated }: A
               )}
             </div>
             {draft.mode !== 'none' && (
-              <FormField label="Afronding" htmlFor="dup-rounding">
+              <FormField label={t('tarification.common.rounding')} htmlFor="dup-rounding">
                 <select
                   id="dup-rounding"
                   value={draft.roundingStep}
                   onChange={(e) => setDraft((d) => (d ? { ...d, roundingStep: e.target.value as RoundingChoice } : d))}
                 >
-                  <option value="">Geen</option>
+                  <option value="">{t('tarification.common.none')}</option>
                   <option value="0.01">€ 0,01</option>
                   <option value="0.05">€ 0,05</option>
                   <option value="0.10">€ 0,10</option>

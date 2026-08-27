@@ -6,6 +6,7 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { listTasks } from '../api/tasksApi'
 import {
@@ -29,6 +30,7 @@ const PAGE_SIZE = 25
  * `?status=` (dashboardtegels) pre-activate the matching filters.
  */
 export function TasksPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const canCreate = hasPermission('tasks.manage_own') || hasPermission('tasks.assign')
@@ -75,10 +77,10 @@ export function TasksPage() {
         setIsLoading(false)
       })
       .catch(() => {
-        setError('De taken konden niet worden geladen.')
+        setError(t('tasks.page.loadFailed'))
         setIsLoading(false)
       })
-  }, [search, status, priority, categoryId, mine, createdByMe, overdueOnly, waitingForReviewOnly, page])
+  }, [search, status, priority, categoryId, mine, createdByMe, overdueOnly, waitingForReviewOnly, page, t])
 
   useEffect(() => {
     const timer = window.setTimeout(reload, 250)
@@ -100,7 +102,7 @@ export function TasksPage() {
   const columns: Column<EmployeeTask>[] = [
     {
       key: 'title',
-      header: 'Titel',
+      header: t('tasks.columns.title'),
       render: (row) => (
         <span className="task-title-cell">
           {row.title}
@@ -108,11 +110,11 @@ export function TasksPage() {
         </span>
       ),
     },
-    { key: 'assignee', header: 'Toegewezen aan', render: (row) => row.assignedEmployeeName },
-    { key: 'priority', header: 'Prioriteit', render: (row) => <TaskPriorityBadge priority={row.priority} /> },
-    { key: 'due', header: 'Deadline', render: (row) => <TaskDueCell task={row} /> },
-    { key: 'status', header: 'Status', render: (row) => <TaskStatusBadge status={row.status} /> },
-    { key: 'updated', header: 'Laatste update', render: (row) => formatTaskDateTime(row.updatedAt) },
+    { key: 'assignee', header: t('tasks.columns.assignee'), render: (row) => row.assignedEmployeeName },
+    { key: 'priority', header: t('tasks.columns.priority'), render: (row) => <TaskPriorityBadge priority={row.priority} /> },
+    { key: 'due', header: t('tasks.columns.due'), render: (row) => <TaskDueCell task={row} /> },
+    { key: 'status', header: t('tasks.columns.status'), render: (row) => <TaskStatusBadge status={row.status} /> },
+    { key: 'updated', header: t('tasks.columns.updated'), render: (row) => formatTaskDateTime(row.updatedAt) },
   ]
 
   function toggle(setter: (value: boolean) => void) {
@@ -125,9 +127,9 @@ export function TasksPage() {
   return (
     <div>
       <PageHeader
-        title="Taken"
-        subtitle="Toegewezen taken opvolgen, uitvoeren en controleren."
-        action={canCreate ? <Button onClick={() => setShowNewDialog(true)}>Nieuwe taak</Button> : undefined}
+        title={t('tasks.page.title')}
+        subtitle={t('tasks.page.subtitle')}
+        action={canCreate ? <Button onClick={() => setShowNewDialog(true)}>{t('tasks.page.newTask')}</Button> : undefined}
       />
 
       <FilterBar
@@ -136,7 +138,7 @@ export function TasksPage() {
           setSearch(value)
           setPage(1)
         }}
-        searchPlaceholder="Zoek op titel of beschrijving..."
+        searchPlaceholder={t('tasks.page.searchPlaceholder')}
       >
         <select
           value={status}
@@ -144,12 +146,12 @@ export function TasksPage() {
             setStatus(event.target.value as '' | TaskStatus)
             setPage(1)
           }}
-          aria-label="Status"
+          aria-label={t('tasks.page.statusFilter')}
         >
-          <option value="">Alle statussen</option>
+          <option value="">{t('tasks.page.allStatuses')}</option>
           {Object.entries(TASK_STATUS_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
-              {label}
+              {t(label)}
             </option>
           ))}
         </select>
@@ -159,12 +161,12 @@ export function TasksPage() {
             setPriority(event.target.value as '' | TaskPriority)
             setPage(1)
           }}
-          aria-label="Prioriteit"
+          aria-label={t('tasks.page.priorityFilter')}
         >
-          <option value="">Alle prioriteiten</option>
+          <option value="">{t('tasks.page.allPriorities')}</option>
           {Object.entries(TASK_PRIORITY_LABELS).map(([value, label]) => (
             <option key={value} value={value}>
-              {label}
+              {t(label)}
             </option>
           ))}
         </select>
@@ -174,9 +176,9 @@ export function TasksPage() {
             setCategoryId(event.target.value)
             setPage(1)
           }}
-          aria-label="Categorie"
+          aria-label={t('tasks.page.categoryFilter')}
         >
-          <option value="">Alle categorieën</option>
+          <option value="">{t('tasks.page.allCategories')}</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
               {category.name}
@@ -186,7 +188,7 @@ export function TasksPage() {
         <div className="task-filter-toggles">
           <label className="task-filter-toggle">
             <input type="checkbox" checked={mine} onChange={(event) => toggle(setMine)(event.target.checked)} />
-            Mijn taken
+            {t('tasks.page.filterMine')}
           </label>
           <label className="task-filter-toggle">
             <input
@@ -194,7 +196,7 @@ export function TasksPage() {
               checked={createdByMe}
               onChange={(event) => toggle(setCreatedByMe)(event.target.checked)}
             />
-            Door mij toegewezen
+            {t('tasks.page.filterCreatedByMe')}
           </label>
           <label className="task-filter-toggle">
             <input
@@ -202,7 +204,7 @@ export function TasksPage() {
               checked={overdueOnly}
               onChange={(event) => toggle(setOverdueOnly)(event.target.checked)}
             />
-            Achterstallig
+            {t('tasks.page.filterOverdue')}
           </label>
           <label className="task-filter-toggle">
             <input
@@ -210,7 +212,7 @@ export function TasksPage() {
               checked={waitingForReviewOnly}
               onChange={(event) => toggle(setWaitingForReviewOnly)(event.target.checked)}
             />
-            Wacht op controle
+            {t('tasks.page.filterReview')}
           </label>
         </div>
       </FilterBar>
@@ -221,7 +223,7 @@ export function TasksPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Geen taken gevonden."
+        emptyMessage={t('tasks.page.empty')}
         onRowClick={(row) => openDetail(row.id)}
       />
       <Pagination page={page} pageSize={PAGE_SIZE} totalCount={total} onPageChange={setPage} />

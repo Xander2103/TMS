@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import {
   createFleetDocument,
@@ -53,6 +54,7 @@ interface FleetDocumentsPanelProps {
 
 /** Documents section for a vehicle or trailer detail page: list, add, edit, delete. */
 export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
 
@@ -76,12 +78,12 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Documenten konden niet worden geladen.')
+        if (mounted) setLoadError(t('fleet.docs.loadFailed'))
       })
     return () => {
       mounted = false
     }
-  }, [ownerType, ownerId, reloadToken])
+  }, [ownerType, ownerId, reloadToken, t])
 
   function set<K extends keyof FleetDocumentInput>(key: K, value: FleetDocumentInput[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -114,22 +116,22 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
     event.preventDefault()
     setFormError(null)
     if (form.documentType === 'Other' && !form.customTypeName?.trim()) {
-      setFormError('Geef een naam op voor het aangepaste documenttype.')
+      setFormError(t('fleet.docs.customNameRequired'))
       return
     }
     setSaving(true)
     try {
       if (editingId) {
         await updateFleetDocument(editingId, form)
-        showSuccess('Document bijgewerkt.')
+        showSuccess(t('fleet.docs.updated'))
       } else {
         await createFleetDocument(ownerType, ownerId, form)
-        showSuccess('Document toegevoegd.')
+        showSuccess(t('fleet.docs.created'))
       }
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      setFormError('Het document kon niet worden opgeslagen.')
+      setFormError(t('fleet.docs.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -139,11 +141,11 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
     if (!deleteTarget) return
     try {
       await deleteFleetDocument(deleteTarget.id)
-      showSuccess('Document verwijderd.')
+      showSuccess(t('fleet.docs.deleted'))
       setDeleteTarget(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het document kon niet worden verwijderd.')
+      showError(t('fleet.docs.deleteFailed'))
       setDeleteTarget(null)
     }
   }
@@ -167,10 +169,10 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
     setUploadingId(docId)
     try {
       await uploadFleetDocumentFile(docId, file)
-      showSuccess('Bestand geüpload.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('fleet.docs.fileUploaded'))
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het bestand kon niet worden geüpload (max. 10 MB, pdf/jpg/png).')
+      showError(t('fleet.docs.fileUploadFailed'))
     } finally {
       setUploadingId(null)
     }
@@ -180,80 +182,80 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
     try {
       await downloadFleetDocumentFile(doc.id, doc.fileName ?? 'document')
     } catch {
-      showError('Het bestand kon niet worden gedownload.')
+      showError(t('fleet.docs.fileDownloadFailed'))
     }
   }
 
   async function handleRemoveFile(doc: FleetDocument) {
     try {
       await deleteFleetDocumentFile(doc.id)
-      showSuccess('Bestand verwijderd.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('fleet.docs.fileDeleted'))
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('Het bestand kon niet worden verwijderd.')
+      showError(t('fleet.docs.fileDeleteFailed'))
     }
   }
 
   return (
     <section className="fleet-docs">
       <div className="fleet-docs-header">
-        <h2>Documenten</h2>
+        <h2>{t('fleet.docs.title')}</h2>
         {hasPermission('fleet_documents.create') && (
           <Button variant="secondary" onClick={openCreate}>
-            Document toevoegen
+            {t('fleet.docs.add')}
           </Button>
         )}
       </div>
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && documents === null && <p className="placeholder-text">Documenten laden…</p>}
+      {!loadError && documents === null && <p className="placeholder-text">{t('fleet.docs.loading')}</p>}
       {!loadError && documents !== null && documents.length === 0 && (
-        <p className="placeholder-text">Nog geen documenten geregistreerd.</p>
+        <p className="placeholder-text">{t('fleet.docs.empty')}</p>
       )}
 
       {!loadError && documents !== null && documents.length > 0 && (
         <table className="fleet-docs-table">
           <thead>
             <tr>
-              <th>Document</th>
-              <th>Nummer</th>
-              <th>Uitgifte</th>
-              <th>Vervaldatum</th>
-              <th>Status</th>
-              <th>Bestand</th>
-              <th aria-label="Acties" />
+              <th>{t('fleet.docs.colDocument')}</th>
+              <th>{t('fleet.docs.colNumber')}</th>
+              <th>{t('fleet.docs.colIssue')}</th>
+              <th>{t('fleet.docs.colExpiry')}</th>
+              <th>{t('fleet.docs.colStatus')}</th>
+              <th>{t('fleet.docs.colFile')}</th>
+              <th aria-label={t('fleet.common.actions')} />
             </tr>
           </thead>
           <tbody>
             {documents.map((doc) => (
               <tr key={doc.id}>
-                <td>{fleetDocumentDisplayName(doc)}</td>
+                <td>{t(fleetDocumentDisplayName(doc))}</td>
                 <td>{doc.documentNumber ?? '—'}</td>
                 <td>{doc.issueDate ?? '—'}</td>
                 <td>{doc.expiryDate ?? '—'}</td>
                 <td>
-                  <Badge tone={STATUS_TONE[doc.status]}>{FLEET_DOCUMENT_STATUS_LABELS[doc.status]}</Badge>
+                  <Badge tone={STATUS_TONE[doc.status]}>{t(FLEET_DOCUMENT_STATUS_LABELS[doc.status])}</Badge>
                 </td>
                 <td className="fleet-docs-file">
                   {doc.hasAttachment ? (
                     <>
                       <button type="button" className="fleet-docs-link" onClick={() => handleDownload(doc)}>
-                        Downloaden
+                        {t('fleet.common.download')}
                       </button>
                       {hasPermission('fleet_documents.edit') && (
                         <button type="button" className="fleet-docs-link" onClick={() => pickFile(doc.id)} disabled={uploadingId === doc.id}>
-                          {uploadingId === doc.id ? 'Bezig…' : 'Vervangen'}
+                          {uploadingId === doc.id ? t('fleet.common.busy') : t('fleet.common.replace')}
                         </button>
                       )}
                       {hasPermission('fleet_documents.edit') && (
                         <button type="button" className="fleet-docs-link fleet-docs-link-danger" onClick={() => handleRemoveFile(doc)}>
-                          Wissen
+                          {t('fleet.docs.clear')}
                         </button>
                       )}
                     </>
                   ) : hasPermission('fleet_documents.edit') ? (
                     <button type="button" className="fleet-docs-link" onClick={() => pickFile(doc.id)} disabled={uploadingId === doc.id}>
-                      {uploadingId === doc.id ? 'Bezig…' : 'Uploaden'}
+                      {uploadingId === doc.id ? t('fleet.common.busy') : t('fleet.common.upload')}
                     </button>
                   ) : (
                     '—'
@@ -262,12 +264,12 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
                 <td className="fleet-docs-actions">
                   {hasPermission('fleet_documents.edit') && (
                     <button type="button" className="fleet-docs-link" onClick={() => openEdit(doc)}>
-                      Bewerken
+                      {t('ui.actions.edit')}
                     </button>
                   )}
                   {hasPermission('fleet_documents.delete') && (
                     <button type="button" className="fleet-docs-link fleet-docs-link-danger" onClick={() => setDeleteTarget(doc)}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   )}
                 </td>
@@ -279,16 +281,16 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
 
       {editorOpen && (
         <Modal
-          title={editingId ? 'Document bewerken' : 'Document toevoegen'}
+          title={editingId ? t('fleet.docs.editTitle') : t('fleet.docs.addTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="fleet-doc-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('fleet.common.saving') : t('ui.actions.save')}
               </Button>
             </>
           }
@@ -299,7 +301,7 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
                 {formError}
               </div>
             )}
-            <FormField label="Documenttype" htmlFor="fd-type" required>
+            <FormField label={t('fleet.docs.typeField')} htmlFor="fd-type" required>
               <select
                 id="fd-type"
                 value={form.documentType}
@@ -308,13 +310,13 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
               >
                 {FLEET_DOCUMENT_TYPES.map((type) => (
                   <option key={type} value={type}>
-                    {FLEET_DOCUMENT_TYPE_LABELS[type]}
+                    {t(FLEET_DOCUMENT_TYPE_LABELS[type])}
                   </option>
                 ))}
               </select>
             </FormField>
             {form.documentType === 'Other' && (
-              <FormField label="Naam documenttype" htmlFor="fd-custom" required>
+              <FormField label={t('fleet.docs.customName')} htmlFor="fd-custom" required>
                 <input
                   id="fd-custom"
                   value={form.customTypeName ?? ''}
@@ -324,7 +326,7 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
                 />
               </FormField>
             )}
-            <FormField label="Documentnummer" htmlFor="fd-number">
+            <FormField label={t('fleet.docs.number')} htmlFor="fd-number">
               <input
                 id="fd-number"
                 value={form.documentNumber ?? ''}
@@ -333,7 +335,7 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
                 maxLength={100}
               />
             </FormField>
-            <FormField label="Uitgevende instantie" htmlFor="fd-authority">
+            <FormField label={t('fleet.docs.authority')} htmlFor="fd-authority">
               <input
                 id="fd-authority"
                 value={form.issuingAuthority ?? ''}
@@ -343,7 +345,7 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
               />
             </FormField>
             <div className="fleet-docs-form-row">
-              <FormField label="Uitgiftedatum" htmlFor="fd-issue">
+              <FormField label={t('fleet.docs.issueDate')} htmlFor="fd-issue">
                 <input
                   id="fd-issue"
                   type="date"
@@ -352,7 +354,7 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
                   disabled={saving}
                 />
               </FormField>
-              <FormField label="Vervaldatum" htmlFor="fd-expiry">
+              <FormField label={t('fleet.docs.expiryDate')} htmlFor="fd-expiry">
                 <input
                   id="fd-expiry"
                   type="date"
@@ -363,9 +365,9 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
               </FormField>
             </div>
             <FormField
-              label="Waarschuwing (dagen vóór verval)"
+              label={t('fleet.docs.warningDays')}
               htmlFor="fd-warning"
-              hint="Leeg = standaard 60 dagen"
+              hint={t('fleet.docs.warningHint')}
             >
               <input
                 id="fd-warning"
@@ -377,7 +379,7 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
                 disabled={saving}
               />
             </FormField>
-            <FormField label="Notities" htmlFor="fd-notes">
+            <FormField label={t('fleet.docs.notes')} htmlFor="fd-notes">
               <textarea
                 id="fd-notes"
                 rows={2}
@@ -392,9 +394,9 @@ export function FleetDocumentsPanel({ ownerType, ownerId }: FleetDocumentsPanelP
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Document verwijderen"
-          message={`Weet je zeker dat je "${fleetDocumentDisplayName(deleteTarget)}" wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('fleet.docs.deleteTitle')}
+          message={t('fleet.docs.deleteMessage', { name: t(fleetDocumentDisplayName(deleteTarget)) })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

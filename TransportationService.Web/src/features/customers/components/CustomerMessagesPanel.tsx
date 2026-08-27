@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   listCustomerMessages,
   markCustomerMessagesRead,
@@ -22,6 +23,7 @@ interface CustomerMessagesPanelProps {
 /** Staff/customer messaging thread — customer detail "Berichten" tab and the order-detail panel. */
 export function CustomerMessagesPanel({ customerId, orderId, onMarkedRead }: CustomerMessagesPanelProps) {
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const canSend = hasPermission('customer_messages.send')
   const [messages, setMessages] = useState<CustomerMessage[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -37,7 +39,7 @@ export function CustomerMessagesPanel({ customerId, orderId, onMarkedRead }: Cus
         setError(null)
       })
       .catch(() => {
-        setError('De berichten konden niet worden geladen.')
+        setError('customers.messages.loadFailed')
         setLoaded(true)
       })
   }
@@ -59,18 +61,18 @@ export function CustomerMessagesPanel({ customerId, orderId, onMarkedRead }: Cus
       setBody('')
       load()
     } catch {
-      setError('Het bericht kon niet worden verstuurd.')
+      setError('customers.messages.sendFailed')
     } finally {
       setSending(false)
     }
   }
 
-  if (!loaded) return <LoadingState message="Berichten laden..." />
+  if (!loaded) return <LoadingState message={t('customers.messages.loading')} />
 
   return (
     <div className="cmp-panel">
-      <div className="cmp-thread" role="log" aria-label="Berichtenoverzicht">
-        {messages.length === 0 && <p className="placeholder-text">Nog geen berichten in dit gesprek.</p>}
+      <div className="cmp-thread" role="log" aria-label={t('customers.messages.threadAria')}>
+        {messages.length === 0 && <p className="placeholder-text">{t('customers.messages.empty')}</p>}
         {messages.map((m) => (
           <div key={m.id} className={m.authorIsStaff ? 'cmp-message cmp-message-staff' : 'cmp-message'}>
             <span className="cmp-message-meta">
@@ -81,20 +83,20 @@ export function CustomerMessagesPanel({ customerId, orderId, onMarkedRead }: Cus
         ))}
       </div>
 
-      {error && <p className="placeholder-text" role="alert">{error}</p>}
+      {error && <p className="placeholder-text" role="alert">{t(error)}</p>}
 
       {canSend && (
         <form className="cmp-compose" onSubmit={(e) => void handleSend(e)}>
           <textarea
-            aria-label="Nieuw bericht"
+            aria-label={t('customers.messages.newMessageAria')}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Typ uw antwoord..."
+            placeholder={t('customers.messages.composePlaceholder')}
             maxLength={4000}
             disabled={sending}
           />
           <Button type="submit" disabled={sending || !body.trim()}>
-            Versturen
+            {t('customers.messages.send')}
           </Button>
         </form>
       )}

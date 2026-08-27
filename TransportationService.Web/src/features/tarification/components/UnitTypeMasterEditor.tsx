@@ -5,7 +5,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   DIMENSION_BEHAVIOR_LABELS,
   UNIT_CATEGORY_LABELS,
@@ -54,6 +55,7 @@ const dims = (unit: UnitTypeMaster): string => {
  * configuration, never code — admins add company-specific units here without development.
  */
 export function UnitTypeMasterEditor() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess } = useToast()
   const canView =
@@ -62,7 +64,7 @@ export function UnitTypeMasterEditor() {
   const canManage = hasPermission('unit_types.manage') || hasPermission('tariffs.manage')
 
   const [units, setUnits] = useState<UnitTypeMaster[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [draft, setDraft] = useState<UnitDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -72,18 +74,18 @@ export function UnitTypeMasterEditor() {
     listUnitTypeMaster()
       .then((data) => {
         setUnits(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
-      .catch(() => setLoadError('De eenheden konden niet worden geladen.'))
+      .catch(() => setLoadErrorKey('tarification.unitMaster.loadError'))
   }, [canView])
 
   useEffect(() => {
     reload()
   }, [reload])
 
-  if (!canView) return <p className="placeholder-text">Je hebt geen rechten om eenheden te bekijken.</p>
-  if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (units === null) return <p className="placeholder-text">Eenheden laden…</p>
+  if (!canView) return <p className="placeholder-text">{t('tarification.unitMaster.noViewPermission')}</p>
+  if (loadErrorKey) return <p className="placeholder-text">{t(loadErrorKey)}</p>
+  if (units === null) return <p className="placeholder-text">{t('tarification.unitMaster.loading')}</p>
 
   function openDraft(unit: UnitTypeMaster | null) {
     setDraftError(null)
@@ -168,15 +170,15 @@ export function UnitTypeMasterEditor() {
       }
       if (draft.unit) {
         await updateUnitTypeMaster(draft.unit.id, input)
-        showSuccess('Eenheid bijgewerkt.')
+        showSuccess(t('tarification.unitMaster.updated'))
       } else {
         await createUnitTypeMaster(input)
-        showSuccess('Eenheid toegevoegd.')
+        showSuccess(t('tarification.unitMaster.added'))
       }
       setDraft(null)
       reload()
     } catch (err) {
-      setDraftError(describeApiError(err, 'De eenheid kon niet worden opgeslagen.').message)
+      setDraftError(localizeApiError(t, err, t('tarification.unitMaster.saveError')))
     } finally {
       setBusy(false)
     }
@@ -185,25 +187,22 @@ export function UnitTypeMasterEditor() {
   return (
     <section>
       <div className="customer-panel-header">
-        <h3>Eenheden</h3>
-        {canManage && <Button onClick={() => openDraft(null)}>+ Eenheid</Button>}
+        <h3>{t('tarification.unitMaster.title')}</h3>
+        {canManage && <Button onClick={() => openDraft(null)}>{t('tarification.unitMaster.addUnit')}</Button>}
       </div>
-      <p className="customer-form-muted">
-        Eenheden zijn volledig configureerbaar: code, categorie, afmetingsgedrag en fysieke standaardwaarden komen uit
-        deze stamgegevens — nooit uit vaste waardes in de software.
-      </p>
+      <p className="customer-form-muted">{t('tarification.unitMaster.intro')}</p>
       <table className="issued-items-table">
         <thead>
           <tr>
-            <th>Code</th>
-            <th>Naam</th>
-            <th>Categorie</th>
-            <th>Afmetingen</th>
-            <th>Gedrag</th>
-            <th>Order</th>
-            <th>Tarief</th>
-            <th>Actief</th>
-            {canManage && <th aria-label="Acties" />}
+            <th>{t('tarification.unitMaster.colCode')}</th>
+            <th>{t('tarification.common.name')}</th>
+            <th>{t('tarification.unitMaster.colCategory')}</th>
+            <th>{t('tarification.unitMaster.colDimensions')}</th>
+            <th>{t('tarification.unitMaster.colBehavior')}</th>
+            <th>{t('tarification.unitMaster.colOrder')}</th>
+            <th>{t('tarification.unitMaster.colTariff')}</th>
+            <th>{t('tarification.common.active')}</th>
+            {canManage && <th aria-label={t('tarification.common.actions')} />}
           </tr>
         </thead>
         <tbody>
@@ -214,16 +213,16 @@ export function UnitTypeMasterEditor() {
                 {unit.name}
                 {unit.symbol && <span className="customer-form-muted"> ({unit.symbol})</span>}
               </td>
-              <td>{UNIT_CATEGORY_LABELS[unit.category]}</td>
+              <td>{t(UNIT_CATEGORY_LABELS[unit.category])}</td>
               <td>{dims(unit)}</td>
-              <td>{DIMENSION_BEHAVIOR_LABELS[unit.dimensionBehavior]}</td>
-              <td>{unit.allowForOrderEntry ? 'Ja' : 'Nee'}</td>
-              <td>{unit.allowForPricing ? 'Ja' : 'Nee'}</td>
-              <td>{unit.isActive ? 'Ja' : <Badge tone="neutral">Inactief</Badge>}</td>
+              <td>{t(DIMENSION_BEHAVIOR_LABELS[unit.dimensionBehavior])}</td>
+              <td>{unit.allowForOrderEntry ? t('tarification.common.yes') : t('tarification.common.no')}</td>
+              <td>{unit.allowForPricing ? t('tarification.common.yes') : t('tarification.common.no')}</td>
+              <td>{unit.isActive ? t('tarification.common.yes') : <Badge tone="neutral">{t('tarification.common.inactive')}</Badge>}</td>
               {canManage && (
                 <td className="issued-items-row-actions">
                   <button type="button" className="issued-items-link" onClick={() => openDraft(unit)}>
-                    Bewerken
+                    {t('ui.actions.edit')}
                   </button>
                 </td>
               )}
@@ -234,16 +233,16 @@ export function UnitTypeMasterEditor() {
 
       {draft && (
         <Modal
-          title={draft.unit ? `Eenheid bewerken — ${draft.unit.name}` : 'Eenheid toevoegen'}
+          title={draft.unit ? t('tarification.unitMaster.editTitle', { name: draft.unit.name }) : t('tarification.unitMaster.addTitle')}
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="unit-master-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -255,7 +254,7 @@ export function UnitTypeMasterEditor() {
               </div>
             )}
             <div className="issued-items-form-row">
-              <FormField label="Naam" htmlFor="um-name" required>
+              <FormField label={t('tarification.common.name')} htmlFor="um-name" required>
                 <input
                   id="um-name"
                   value={draft.name}
@@ -274,7 +273,7 @@ export function UnitTypeMasterEditor() {
                   }
                 />
               </FormField>
-              <FormField label="Code" htmlFor="um-code" required hint="Voorstel is aanpasbaar (bv. eigen boekhoud- of EDI-code).">
+              <FormField label={t('tarification.unitMaster.codeLabel')} htmlFor="um-code" required hint={t('tarification.unitMaster.codeHint')}>
                 <input
                   id="um-code"
                   value={draft.code}
@@ -284,86 +283,86 @@ export function UnitTypeMasterEditor() {
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Categorie" htmlFor="um-category">
+              <FormField label={t('tarification.unitMaster.colCategory')} htmlFor="um-category">
                 <select id="um-category" value={draft.category} onChange={(e) => setDraft((d) => (d ? { ...d, category: e.target.value as UnitCategory } : d))}>
-                  {Object.entries(UNIT_CATEGORY_LABELS).map(([value, label]) => (
+                  {Object.entries(UNIT_CATEGORY_LABELS).map(([value, labelKey]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(labelKey)}
                     </option>
                   ))}
                 </select>
               </FormField>
-              <FormField label="Symbool" htmlFor="um-symbol" hint="Bv. kg, ldm.">
+              <FormField label={t('tarification.unitMaster.symbolLabel')} htmlFor="um-symbol" hint={t('tarification.unitMaster.symbolHint')}>
                 <input id="um-symbol" value={draft.symbol} maxLength={20} onChange={(e) => setDraft((d) => (d ? { ...d, symbol: e.target.value } : d))} />
               </FormField>
-              <FormField label="Decimalen" htmlFor="um-decimals">
+              <FormField label={t('tarification.unitMaster.decimalsLabel')} htmlFor="um-decimals">
                 <input id="um-decimals" type="number" min={0} max={4} value={draft.decimals} onChange={(e) => setDraft((d) => (d ? { ...d, decimals: e.target.value } : d))} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Afmetingsgedrag" htmlFor="um-behavior" hint="Vast = niet aanpasbaar per order; standaard = vooraf ingevuld.">
+              <FormField label={t('tarification.unitMaster.behaviorLabel')} htmlFor="um-behavior" hint={t('tarification.unitMaster.behaviorHint')}>
                 <select
                   id="um-behavior"
                   value={draft.dimensionBehavior}
                   onChange={(e) => setDraft((d) => (d ? { ...d, dimensionBehavior: e.target.value as UnitDimensionBehavior } : d))}
                 >
-                  {Object.entries(DIMENSION_BEHAVIOR_LABELS).map(([value, label]) => (
+                  {Object.entries(DIMENSION_BEHAVIOR_LABELS).map(([value, labelKey]) => (
                     <option key={value} value={value}>
-                      {label}
+                      {t(labelKey)}
                     </option>
                   ))}
                 </select>
               </FormField>
-              <FormField label="Sorteervolgorde" htmlFor="um-sort">
+              <FormField label={t('tarification.unitMaster.sortLabel')} htmlFor="um-sort">
                 <input id="um-sort" type="number" value={draft.sortOrder} onChange={(e) => setDraft((d) => (d ? { ...d, sortOrder: e.target.value } : d))} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Lengte (cm)" htmlFor="um-length">
+              <FormField label={t('tarification.unitMaster.lengthLabel')} htmlFor="um-length">
                 <input id="um-length" type="number" step="0.1" value={draft.defaultLengthCm} onChange={(e) => setDraft((d) => (d ? { ...d, defaultLengthCm: e.target.value } : d))} />
               </FormField>
-              <FormField label="Breedte (cm)" htmlFor="um-width">
+              <FormField label={t('tarification.unitMaster.widthLabel')} htmlFor="um-width">
                 <input id="um-width" type="number" step="0.1" value={draft.defaultWidthCm} onChange={(e) => setDraft((d) => (d ? { ...d, defaultWidthCm: e.target.value } : d))} />
               </FormField>
-              <FormField label="Hoogte (cm)" htmlFor="um-height">
+              <FormField label={t('tarification.unitMaster.heightLabel')} htmlFor="um-height">
                 <input id="um-height" type="number" step="0.1" value={draft.defaultHeightCm} onChange={(e) => setDraft((d) => (d ? { ...d, defaultHeightCm: e.target.value } : d))} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Standaardgewicht (kg)" htmlFor="um-weight">
+              <FormField label={t('tarification.unitMaster.weightLabel')} htmlFor="um-weight">
                 <input id="um-weight" type="number" step="0.1" value={draft.defaultWeightKg} onChange={(e) => setDraft((d) => (d ? { ...d, defaultWeightKg: e.target.value } : d))} />
               </FormField>
-              <FormField label="Max. gewicht (kg)" htmlFor="um-maxweight">
+              <FormField label={t('tarification.unitMaster.maxWeightLabel')} htmlFor="um-maxweight">
                 <input id="um-maxweight" type="number" step="0.1" value={draft.maxWeightKg} onChange={(e) => setDraft((d) => (d ? { ...d, maxWeightKg: e.target.value } : d))} />
               </FormField>
-              <FormField label="Volume (m³)" htmlFor="um-volume">
+              <FormField label={t('tarification.unitMaster.volumeLabel')} htmlFor="um-volume">
                 <input id="um-volume" type="number" step="0.001" value={draft.defaultVolumeM3} onChange={(e) => setDraft((d) => (d ? { ...d, defaultVolumeM3: e.target.value } : d))} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
-              <FormField label="Laadmeters" htmlFor="um-ldm">
+              <FormField label={t('tarification.unitMaster.ldmLabel')} htmlFor="um-ldm">
                 <input id="um-ldm" type="number" step="0.01" value={draft.defaultLoadingMeters} onChange={(e) => setDraft((d) => (d ? { ...d, defaultLoadingMeters: e.target.value } : d))} />
               </FormField>
-              <FormField label="Palletplaatsen" htmlFor="um-places">
+              <FormField label={t('tarification.unitMaster.placesLabel')} htmlFor="um-places">
                 <input id="um-places" type="number" step="0.5" value={draft.defaultPalletPlaces} onChange={(e) => setDraft((d) => (d ? { ...d, defaultPalletPlaces: e.target.value } : d))} />
               </FormField>
             </div>
             <div className="issued-items-form-row">
               <label className="tof-checkbox">
                 <input type="checkbox" checked={draft.allowForOrderEntry} onChange={(e) => setDraft((d) => (d ? { ...d, allowForOrderEntry: e.target.checked } : d))} />
-                Bruikbaar bij orderinvoer
+                {t('tarification.unitMaster.allowOrder')}
               </label>
               <label className="tof-checkbox">
                 <input type="checkbox" checked={draft.allowForPricing} onChange={(e) => setDraft((d) => (d ? { ...d, allowForPricing: e.target.checked } : d))} />
-                Bruikbaar als tariefeenheid
+                {t('tarification.unitMaster.allowPricing')}
               </label>
               <label className="tof-checkbox">
                 <input type="checkbox" checked={draft.allowForInventory} onChange={(e) => setDraft((d) => (d ? { ...d, allowForInventory: e.target.checked } : d))} />
-                Bruikbaar als voorraadeenheid
+                {t('tarification.unitMaster.allowInventory')}
               </label>
               <label className="tof-checkbox">
                 <input type="checkbox" checked={draft.isActive} onChange={(e) => setDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />
-                Actief
+                {t('tarification.common.active')}
               </label>
             </div>
           </form>

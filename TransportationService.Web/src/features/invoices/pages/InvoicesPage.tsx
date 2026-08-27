@@ -11,8 +11,9 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { usePagedQuery } from '../../../hooks/usePagedQuery'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { downloadAccountingExport } from '../../accounting/api/accountingApi'
 import { searchInvoices } from '../api/invoicesApi'
 import {
@@ -27,6 +28,7 @@ import './invoices.css'
 
 export function InvoicesPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { hasPermission, hasAnyPermission } = useAuth()
   const { showError, showSuccess } = useToast()
   const [search, setSearch] = useState('')
@@ -39,7 +41,7 @@ export function InvoicesPage() {
 
   const { items, totalCount, pageSize, isLoading, error, reload } = usePagedQuery<InvoiceListItem>(
     (args) => searchInvoices({ ...args, status: statusFilter || undefined }),
-    { search, page, errorMessage: 'Facturen konden niet worden geladen.' },
+    { search, page, errorMessage: t('invoices.internalList.loadError') },
   )
 
   // The status filter isn't part of usePagedQuery's own dependency key, so trigger a reload
@@ -50,33 +52,33 @@ export function InvoicesPage() {
   }, [statusFilter])
 
   const columns: Column<InvoiceListItem>[] = [
-    { key: 'number', header: 'Nummer', width: '110px', render: (row) => <code>{row.invoiceNumber}</code> },
-    { key: 'date', header: 'Datum', width: '110px', render: (row) => row.invoiceDate },
-    { key: 'due', header: 'Vervaldag', width: '110px', render: (row) => row.dueDate },
-    { key: 'customer', header: 'Klant', render: (row) => row.customerName },
-    { key: 'total', header: 'Totaal (incl. btw)', width: '150px', render: (row) => euro(row.total, row.currency) },
+    { key: 'number', header: t('invoices.internalList.columns.number'), width: '110px', render: (row) => <code>{row.invoiceNumber}</code> },
+    { key: 'date', header: t('invoices.internalList.columns.date'), width: '110px', render: (row) => row.invoiceDate },
+    { key: 'due', header: t('invoices.internalList.columns.due'), width: '110px', render: (row) => row.dueDate },
+    { key: 'customer', header: t('invoices.internalList.columns.customer'), render: (row) => row.customerName },
+    { key: 'total', header: t('invoices.internalList.columns.total'), width: '150px', render: (row) => euro(row.total, row.currency) },
     {
       key: 'status',
-      header: 'Status',
+      header: t('invoices.internalList.columns.status'),
       width: '130px',
-      render: (row) => <Badge tone={INVOICE_STATUS_TONE[row.status]}>{INVOICE_STATUS_LABELS[row.status]}</Badge>,
+      render: (row) => <Badge tone={INVOICE_STATUS_TONE[row.status]}>{t(INVOICE_STATUS_LABELS[row.status])}</Badge>,
     },
   ]
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Facturen' }]} />
+      <Breadcrumbs items={[{ label: t('invoices.list.title') }]} />
       <PageHeader
-        title="Facturen"
+        title={t('invoices.list.title')}
         action={
           <>
             {hasAnyPermission(['accounting.view', 'accounting.manage']) && (
               <Button variant="secondary" onClick={() => setExportOpen(true)}>
-                Boekhoudexport
+                {t('invoices.export.title')}
               </Button>
             )}
             {hasPermission('invoices.create') && (
-              <Button onClick={() => navigate('/invoices/new')}>Nieuwe factuur</Button>
+              <Button onClick={() => navigate('/invoices/new')}>{t('invoices.internalList.newInvoice')}</Button>
             )}
           </>
         }
@@ -88,7 +90,7 @@ export function InvoicesPage() {
             setSearch(value)
             setPage(1)
           }}
-          searchPlaceholder="Zoeken op nummer of klant..."
+          searchPlaceholder={t('invoices.internalList.searchPlaceholder')}
         />
         <select
           value={statusFilter}
@@ -97,12 +99,12 @@ export function InvoicesPage() {
             setPage(1)
           }}
           className="inv-status-filter"
-          aria-label="Statusfilter"
+          aria-label={t('ui.filter.statusLabel')}
         >
-          <option value="">Alle statussen</option>
+          <option value="">{t('ui.filter.allStatuses')}</option>
           {INVOICE_STATUSES.map((status) => (
             <option key={status} value={status}>
-              {INVOICE_STATUS_LABELS[status]}
+              {t(INVOICE_STATUS_LABELS[status])}
             </option>
           ))}
         </select>
@@ -113,54 +115,51 @@ export function InvoicesPage() {
         rowKey={(row) => row.id}
         isLoading={isLoading}
         error={error}
-        emptyMessage="Nog geen facturen."
-        loadingMessage="Facturen laden..."
+        emptyMessage={t('invoices.internalList.empty')}
+        loadingMessage={t('invoices.list.loading')}
         onRowClick={(row) => navigate(`/invoices/${row.id}`)}
       />
       <Pagination page={page} pageSize={pageSize} totalCount={totalCount} onPageChange={setPage} />
 
       {exportOpen && (
         <Modal
-          title="Boekhoudexport"
+          title={t('invoices.export.title')}
           onClose={() => setExportOpen(false)}
           busy={exportBusy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setExportOpen(false)} disabled={exportBusy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button
                 onClick={async () => {
                   if (!exportFrom || !exportTo) {
-                    showError('Kies een begin- en einddatum.')
+                    showError(t('invoices.export.missingDates'))
                     return
                   }
                   setExportBusy(true)
                   try {
                     await downloadAccountingExport(exportFrom, exportTo)
-                    showSuccess('Boekhoudexport gedownload.')
+                    showSuccess(t('invoices.export.success'))
                     setExportOpen(false)
                   } catch (err) {
-                    showError(describeApiError(err, 'De boekhoudexport kon niet worden gemaakt.').message)
+                    showError(localizeApiError(t, err, t('invoices.export.error')))
                   } finally {
                     setExportBusy(false)
                   }
                 }}
                 disabled={exportBusy}
               >
-                {exportBusy ? 'Bezig…' : 'Exporteren'}
+                {exportBusy ? t('invoices.common.busy') : t('invoices.export.action')}
               </Button>
             </>
           }
         >
-          <p className="placeholder-text">
-            Exporteert alle verzonden en betaalde factuurlijnen (factuurdatum in de periode) met hun vastgelegde
-            grootboekrekening. Ontbreekt er een rekening, dan wordt de export geblokkeerd met de betrokken facturen.
-          </p>
-          <FormField label="Van (factuurdatum)" htmlFor="exp-from" required>
+          <p className="placeholder-text">{t('invoices.export.description')}</p>
+          <FormField label={t('invoices.export.from')} htmlFor="exp-from" required>
             <input id="exp-from" type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
           </FormField>
-          <FormField label="Tot en met" htmlFor="exp-to" required>
+          <FormField label={t('invoices.export.to')} htmlFor="exp-to" required>
             <input id="exp-to" type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
           </FormField>
         </Modal>

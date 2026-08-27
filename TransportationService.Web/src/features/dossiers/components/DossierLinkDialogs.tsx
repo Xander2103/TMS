@@ -5,6 +5,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { describeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchTransportOrders } from '../../transport-orders/api/transportOrdersApi'
 import { addDossierRelation, linkDossierOrder, listDossiers } from '../api/dossiersApi'
 import { DOSSIER_RELATION_LABELS, type DossierDetail, type DossierRelationType } from '../types'
@@ -17,6 +18,7 @@ interface DialogProps {
 
 /** Compat: bestaande opdracht handmatig aan het dossier koppelen (Meer ▾). */
 export function LinkOrderDialog({ dossier, onClose, onUpdated }: DialogProps) {
+  const { t } = useLocale()
   const [options, setOptions] = useState<SearchableSelectOption[]>([])
   const [orderId, setOrderId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -43,7 +45,7 @@ export function LinkOrderDialog({ dossier, onClose, onUpdated }: DialogProps) {
       onUpdated(await linkDossierOrder(dossier.id, orderId))
       onClose()
     } catch (err) {
-      setError(describeApiError(err, 'De opdracht kon niet gekoppeld worden.').message)
+      setError(describeApiError(err, t('dossiers.link.orderFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -51,37 +53,38 @@ export function LinkOrderDialog({ dossier, onClose, onUpdated }: DialogProps) {
 
   return (
     <Modal
-      title="Opdracht koppelen"
+      title={t('dossiers.link.orderTitle')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button disabled={busy || !orderId} onClick={() => void submit()}>
-            Koppelen
+            {t('dossiers.link.link')}
           </Button>
         </>
       }
     >
       <ValidationSummary message={error} />
-      <FormField label="Transportopdracht" htmlFor="link-order" required>
+      <FormField label={t('dossiers.link.order')} htmlFor="link-order" required>
         <SearchableSelect
           id="link-order"
           value={orderId}
           onChange={setOrderId}
           options={options}
-          emptyMessage="Geen (verdere) opdrachten gevonden"
+          emptyMessage={t('dossiers.link.noOrders')}
         />
       </FormField>
-      {dossier.customerId && <p className="placeholder-text">Gefilterd op de klant van dit dossier.</p>}
+      {dossier.customerId && <p className="placeholder-text">{t('dossiers.link.customerFiltered')}</p>}
     </Modal>
   )
 }
 
 /** Compat: dossierrelatie toevoegen (Meer ▾). */
 export function AddRelationDialog({ dossier, onClose, onUpdated }: DialogProps) {
+  const { t } = useLocale()
   const [options, setOptions] = useState<SearchableSelectOption[]>([])
   const [target, setTarget] = useState<string | null>(null)
   const [relationType, setRelationType] = useState<DossierRelationType>('FollowUp')
@@ -107,7 +110,7 @@ export function AddRelationDialog({ dossier, onClose, onUpdated }: DialogProps) 
       onUpdated(await addDossierRelation(dossier.id, { targetDossierId: target, relationType, notes: notes || null }))
       onClose()
     } catch (err) {
-      setError(describeApiError(err, 'De relatie kon niet toegevoegd worden.').message)
+      setError(describeApiError(err, t('dossiers.link.relationFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -115,38 +118,38 @@ export function AddRelationDialog({ dossier, onClose, onUpdated }: DialogProps) 
 
   return (
     <Modal
-      title="Dossierrelatie toevoegen"
+      title={t('dossiers.link.relationTitle')}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button disabled={busy || !target} onClick={() => void submit()}>
-            Toevoegen
+            {t('ui.actions.add')}
           </Button>
         </>
       }
     >
       <ValidationSummary message={error} />
-      <FormField label="Dossier" htmlFor="relation-target" required>
+      <FormField label={t('dossiers.link.dossier')} htmlFor="relation-target" required>
         <SearchableSelect id="relation-target" value={target} onChange={setTarget} options={options} />
       </FormField>
-      <FormField label="Relatietype" htmlFor="relation-type" required>
+      <FormField label={t('dossiers.link.relationType')} htmlFor="relation-type" required>
         <select
           id="relation-type"
           value={relationType}
           onChange={(event) => setRelationType(event.target.value as DossierRelationType)}
         >
-          {Object.entries(DOSSIER_RELATION_LABELS).map(([value, label]) => (
+          {Object.entries(DOSSIER_RELATION_LABELS).map(([value, labelKey]) => (
             <option key={value} value={value}>
-              {label}
+              {t(labelKey)}
             </option>
           ))}
         </select>
       </FormField>
-      <FormField label="Notitie" htmlFor="relation-notes">
+      <FormField label={t('dossiers.link.note')} htmlFor="relation-notes">
         <input id="relation-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} />
       </FormField>
     </Modal>

@@ -4,7 +4,8 @@ import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { localizeApiError, describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   createPriceRule,
   deleteBracketOverride,
@@ -14,7 +15,7 @@ import {
   listPricingZones,
   listUnitTypeSettings,
   updatePriceRule,
-  PRICE_RULE_BASIS_LABELS,
+  PRICE_RULE_BASIS_KEYS,
   type PriceRule,
   type PriceRuleBasis,
   type PriceRuleBracket,
@@ -95,13 +96,14 @@ function bracketRangeLabel(bracket: PriceRuleBracket): string {
  * outline on the offending cell; permission gating disables every input without tariffs.manage.
  */
 export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: RuleGridEditorProps) {
+  const { t } = useLocale()
   const { showError, showSuccess } = useToast()
   const [rules, setRules] = useState<PriceRule[] | null>(null)
   const [units, setUnits] = useState<UnitTypeSettings[]>([])
   const [zones, setZones] = useState<PricingZone[]>([])
   const [salesCategories, setSalesCategories] = useState<SalesCategory[]>([])
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [rowErrors, setRowErrors] = useState<Record<string, FieldErrors>>({})
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<PriceRule | null>(null)
@@ -120,7 +122,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
         setRules(ruleData)
         setUnits(unitData)
         setZones(zoneData)
-        setLoadError(null)
+        setLoadErrorKey(null)
         // Row-level customer overrides only exist on shared/company bracket rules.
         const bracketRules = ruleData.filter((r) => BRACKET_BASES.includes(r.basis) && r.customerId === null)
         const loaded = await Promise.all(
@@ -128,7 +130,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
         )
         setOverridesByRule(Object.fromEntries(bracketRules.map((r, i) => [r.id, loaded[i]])))
       })
-      .catch(() => setLoadError('De prijsregels konden niet worden geladen.'))
+      .catch(() => setLoadErrorKey('tarification.grid.loadError'))
     // Sales codes feed the optional verkoopcategorie column; unavailable is fine.
     listSalesCategories()
       .then(setSalesCategories)
@@ -149,9 +151,8 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
       setRules((rs) => (rs ? rs.map((r) => (r.id === rule.id ? updated : r)) : rs))
       setRowErrors((e) => ({ ...e, [rule.id]: {} }))
     } catch (err) {
-      const described = describeApiError(err, 'De prijsregel kon niet worden opgeslagen.')
-      showError(described.message)
-      setRowErrors((e) => ({ ...e, [rule.id]: described.fieldErrors }))
+      showError(localizeApiError(t, err, t('tarification.grid.saveError')))
+      setRowErrors((e) => ({ ...e, [rule.id]: describeApiError(err, '').fieldErrors }))
     }
   }
 
@@ -177,7 +178,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
   function removeBracket(rule: PriceRule, index: number) {
     const brackets = rule.brackets.map(bracketToInput).filter((_, i) => i !== index)
     if (brackets.length === 0) {
-      showError('Een staffelregel heeft minstens één staffel nodig.')
+      showError(t('tarification.grid.minBracket'))
       return
     }
     void saveRule(rule, { brackets })
@@ -196,10 +197,10 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
     setOverrideDeleteTarget(null)
     try {
       await deleteBracketOverride(target.id)
-      showSuccess('Klantafwijking verwijderd — de rij volgt weer de gedeelde prijs.')
+      showSuccess(t('tarification.grid.overrideDeleted'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De klantafwijking kon niet worden verwijderd.').message)
+      showError(localizeApiError(t, err, t('tarification.grid.overrideDeleteError')))
     }
   }
 
@@ -223,7 +224,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
         unitTypeId: null,
         basis: 'Fixed',
         zoneId: null,
-        name: 'Nieuwe regel',
+        name: t('tarification.grid.newRuleName'),
         effectiveFrom: today(),
         effectiveUntil: null,
         isActive: true,
@@ -235,17 +236,17 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
       })
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De prijsregel kon niet worden toegevoegd.').message)
+      showError(localizeApiError(t, err, t('tarification.grid.addError')))
     }
   }
 
   async function duplicateRule(rule: PriceRule) {
     try {
-      await createPriceRule({ ...ruleToInput(rule), name: `${rule.name} (kopie)` })
-      showSuccess('Prijsregel gedupliceerd.')
+      await createPriceRule({ ...ruleToInput(rule), name: t('tarification.grid.copyName', { name: rule.name }) })
+      showSuccess(t('tarification.grid.duplicated'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De prijsregel kon niet worden gedupliceerd.').message)
+      showError(localizeApiError(t, err, t('tarification.grid.duplicateError')))
     }
   }
 
@@ -255,10 +256,10 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
     setDeleteTarget(null)
     try {
       await deletePriceRule(target.id)
-      showSuccess('Prijsregel verwijderd.')
+      showSuccess(t('tarification.grid.deleted'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De prijsregel kon niet worden verwijderd.').message)
+      showError(localizeApiError(t, err, t('tarification.grid.deleteError')))
     }
   }
 
@@ -271,8 +272,8 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
     })
   }
 
-  if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (rules === null) return <p className="placeholder-text">Prijsregels laden…</p>
+  if (loadErrorKey) return <p className="placeholder-text">{t(loadErrorKey)}</p>
+  if (rules === null) return <p className="placeholder-text">{t('tarification.grid.loading')}</p>
 
   const pricingUnits = units.filter((u) => u.isActive && u.allowForPricing)
 
@@ -280,38 +281,38 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
     <div>
       {canManage && (
         <div className="tof-documents-toolbar">
-          <Button onClick={() => void addRule()}>+ Regel</Button>
+          <Button onClick={() => void addRule()}>{t('tarification.grid.addRule')}</Button>
         </div>
       )}
-      {rules.length === 0 && <EmptyState message="Nog geen prijsregels in deze tarieventabel." />}
+      {rules.length === 0 && <EmptyState message={t('tarification.grid.empty')} />}
       {rules.length > 0 && (
         <div className="rule-grid-scroll">
           <table className="rule-grid-table">
             <thead>
               <tr>
-                <th>Naam</th>
-                <th>Basis</th>
-                <th>Eenheid</th>
-                <th>Zone</th>
-                <th title="Herkomstzone: de regel geldt alleen als de eerste laadstop in deze zone valt; leeg = elke herkomst">Van zone</th>
-                <th title="Activiteitstype: de regel geldt alleen voor orders van dit dossieractiviteitstype; leeg = elke activiteit">Activiteitstype</th>
-                <th>Prioriteit</th>
-                <th>Prijs / staffelprijs</th>
-                <th>Extra / eenheid</th>
-                <th>Basisbedrag</th>
-                <th>Min</th>
-                <th>Max</th>
-                <th title="Minimum aantal te factureren uren (alleen bij basis Per uur)">Min. aantal</th>
-                <th title="Uren worden naar boven afgerond per stap, bv. 0,25 (alleen bij basis Per uur)">Afrondingsstap</th>
-                <th>Van</th>
-                <th>Tot</th>
-                <th>Gewicht tot (kg)</th>
-                <th>Volume tot (m³)</th>
-                <th>Ldm tot</th>
-                <th>Geldig van</th>
-                <th>Geldig tot</th>
-                <th title="Verkoopcode op factuurlijnen uit deze regel; leeg = code van de tabel, anders standaardrol Transport">Verkoopcategorie</th>
-                {canManage && <th aria-label="Acties" />}
+                <th>{t('tarification.common.name')}</th>
+                <th>{t('tarification.grid.colBasis')}</th>
+                <th>{t('tarification.common.unit')}</th>
+                <th>{t('tarification.grid.colZone')}</th>
+                <th title={t('tarification.grid.fromZoneTitle')}>{t('tarification.grid.colFromZone')}</th>
+                <th title={t('tarification.grid.activityTypeTitle')}>{t('tarification.grid.colActivityType')}</th>
+                <th>{t('tarification.grid.colPriority')}</th>
+                <th>{t('tarification.grid.colPrice')}</th>
+                <th>{t('tarification.grid.colExtraPerUnit')}</th>
+                <th>{t('tarification.grid.colBaseAmount')}</th>
+                <th>{t('tarification.grid.colMin')}</th>
+                <th>{t('tarification.grid.colMax')}</th>
+                <th title={t('tarification.grid.minQuantityTitle')}>{t('tarification.grid.colMinQuantity')}</th>
+                <th title={t('tarification.grid.roundingStepTitle')}>{t('tarification.grid.colRoundingStep')}</th>
+                <th>{t('tarification.grid.colFrom')}</th>
+                <th>{t('tarification.grid.colTo')}</th>
+                <th>{t('tarification.grid.colWeightTo')}</th>
+                <th>{t('tarification.grid.colVolumeTo')}</th>
+                <th>{t('tarification.grid.colLdmTo')}</th>
+                <th>{t('tarification.common.validFrom')}</th>
+                <th>{t('tarification.common.validUntil')}</th>
+                <th title={t('tarification.grid.salesCategoryTitle')}>{t('tarification.grid.colSalesCategory')}</th>
+                {canManage && <th aria-label={t('tarification.common.actions')} />}
               </tr>
             </thead>
             <tbody>
@@ -327,14 +328,14 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           <button
                             type="button"
                             className="rule-grid-toggle"
-                            aria-label={expanded ? `${rule.name} inklappen` : `${rule.name} uitklappen`}
+                            aria-label={expanded ? t('tarification.grid.collapse', { name: rule.name }) : t('tarification.grid.expand', { name: rule.name })}
                             onClick={() => toggleCollapsed(rule.id)}
                           >
                             {expanded ? '▾' : '▸'}
                           </button>
                         )}
                         <input
-                          aria-label={`Naam voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaNameFor', { name: rule.name })}
                           defaultValue={rule.name}
                           disabled={!canManage}
                           className={fieldError(rule.id, 'name') ? 'rule-grid-cell-invalid' : undefined}
@@ -345,14 +346,14 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       </td>
                       <td>
                         <select
-                          aria-label={`Basis voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaBasisFor', { name: rule.name })}
                           value={rule.basis}
                           disabled={!canManage}
                           onChange={(e) => void saveRule(rule, { basis: e.target.value as PriceRuleBasis })}
                         >
-                          {Object.entries(PRICE_RULE_BASIS_LABELS).map(([value, label]) => (
+                          {Object.entries(PRICE_RULE_BASIS_KEYS).map(([value, labelKey]) => (
                             <option key={value} value={value}>
-                              {label}
+                              {t(labelKey)}
                             </option>
                           ))}
                         </select>
@@ -360,13 +361,13 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       <td>
                         {isUnitBound ? (
                           <select
-                            aria-label={`Eenheid voor ${rule.name}`}
+                            aria-label={t('tarification.grid.ariaUnitFor', { name: rule.name })}
                             value={rule.unitTypeId ?? ''}
                             disabled={!canManage}
                             className={fieldError(rule.id, 'unitTypeId') ? 'rule-grid-cell-invalid' : undefined}
                             onChange={(e) => void saveRule(rule, { unitTypeId: e.target.value || null })}
                           >
-                            <option value="">— Kies eenheid —</option>
+                            <option value="">{t('tarification.grid.chooseUnit')}</option>
                             {pricingUnits.map((unit) => (
                               <option key={unit.id} value={unit.id}>
                                 {unit.name}
@@ -379,12 +380,12 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       </td>
                       <td>
                         <select
-                          aria-label={`Zone voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaZoneFor', { name: rule.name })}
                           value={rule.zoneId ?? ''}
                           disabled={!canManage}
                           onChange={(e) => void saveRule(rule, { zoneId: e.target.value || null })}
                         >
-                          <option value="">— Alle —</option>
+                          <option value="">{t('tarification.grid.allOption')}</option>
                           {zones.map((zone) => (
                             <option key={zone.id} value={zone.id}>
                               {zone.code}
@@ -394,12 +395,12 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       </td>
                       <td>
                         <select
-                          aria-label={`Herkomstzone voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaOriginZoneFor', { name: rule.name })}
                           value={rule.originZoneId ?? ''}
                           disabled={!canManage}
                           onChange={(e) => void saveRule(rule, { originZoneId: e.target.value || null })}
                         >
-                          <option value="">— Alle —</option>
+                          <option value="">{t('tarification.grid.allOption')}</option>
                           {zones.map((zone) => (
                             <option key={zone.id} value={zone.id}>
                               {zone.code}
@@ -409,12 +410,12 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       </td>
                       <td>
                         <select
-                          aria-label={`Activiteitstype voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaActivityFor', { name: rule.name })}
                           value={rule.activityTypeId ?? ''}
                           disabled={!canManage}
                           onChange={(e) => void saveRule(rule, { activityTypeId: e.target.value || null })}
                         >
-                          <option value="">— Alle —</option>
+                          <option value="">{t('tarification.grid.allOption')}</option>
                           {activityTypes.map((type) => (
                             <option key={type.id} value={type.id}>
                               {type.name}
@@ -424,7 +425,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       </td>
                       <td>
                         <input
-                          aria-label={`Prioriteit voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaPriorityFor', { name: rule.name })}
                           type="number"
                           defaultValue={rule.priority}
                           disabled={!canManage}
@@ -440,7 +441,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           '—'
                         ) : (
                           <input
-                            aria-label={`Prijs voor ${rule.name}`}
+                            aria-label={t('tarification.grid.ariaPriceFor', { name: rule.name })}
                             type="number"
                             step="0.01"
                             defaultValue={rule.unitPrice ?? ''}
@@ -456,7 +457,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       <td>—</td>
                       <td>
                         <input
-                          aria-label={`Basisbedrag voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaBaseAmountFor', { name: rule.name })}
                           type="number"
                           step="0.01"
                           defaultValue={rule.baseAmount ?? ''}
@@ -470,7 +471,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       </td>
                       <td>
                         <input
-                          aria-label={`Minimum voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaMinFor', { name: rule.name })}
                           type="number"
                           step="0.01"
                           defaultValue={rule.minimumAmount ?? ''}
@@ -483,7 +484,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       </td>
                       <td>
                         <input
-                          aria-label={`Maximum voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaMaxFor', { name: rule.name })}
                           type="number"
                           step="0.01"
                           defaultValue={rule.maximumAmount ?? ''}
@@ -498,7 +499,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       <td>
                         {rule.basis === 'Hourly' ? (
                           <input
-                            aria-label={`Minimum aantal uren voor ${rule.name}`}
+                            aria-label={t('tarification.grid.ariaMinHoursFor', { name: rule.name })}
                             type="number"
                             step="0.01"
                             min="0"
@@ -508,7 +509,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                             onBlur={(e) => {
                               const value = e.target.value.trim() === '' ? null : Number(e.target.value)
                               if (value !== null && (Number.isNaN(value) || value < 0)) {
-                                showError('Min. aantal moet 0 of hoger zijn.')
+                                showError(t('tarification.grid.minQtyError'))
                                 return
                               }
                               if (value !== rule.minimumQuantity) void saveRule(rule, { minimumQuantity: value })
@@ -521,18 +522,18 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       <td>
                         {rule.basis === 'Hourly' ? (
                           <input
-                            aria-label={`Afrondingsstap voor ${rule.name}`}
+                            aria-label={t('tarification.grid.ariaRoundingFor', { name: rule.name })}
                             type="number"
                             step="0.01"
                             min="0"
-                            placeholder="bv. 0,25"
+                            placeholder={t('tarification.grid.roundingPlaceholder')}
                             defaultValue={rule.quantityRoundingStep ?? ''}
                             disabled={!canManage}
                             className={fieldError(rule.id, 'quantityRoundingStep') ? 'rule-grid-cell-invalid' : undefined}
                             onBlur={(e) => {
                               const value = e.target.value.trim() === '' ? null : Number(e.target.value)
                               if (value !== null && (Number.isNaN(value) || value < 0)) {
-                                showError('Afrondingsstap moet 0 of hoger zijn.')
+                                showError(t('tarification.grid.roundingError'))
                                 return
                               }
                               if (value !== rule.quantityRoundingStep) void saveRule(rule, { quantityRoundingStep: value })
@@ -545,7 +546,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       <td colSpan={5}>—</td>
                       <td>
                         <input
-                          aria-label={`Geldig van voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaValidFromFor', { name: rule.name })}
                           type="date"
                           defaultValue={rule.effectiveFrom}
                           disabled={!canManage}
@@ -556,7 +557,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       </td>
                       <td>
                         <input
-                          aria-label={`Geldig tot voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaValidUntilFor', { name: rule.name })}
                           type="date"
                           defaultValue={rule.effectiveUntil ?? ''}
                           disabled={!canManage}
@@ -568,12 +569,12 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       </td>
                       <td>
                         <select
-                          aria-label={`Verkoopcategorie voor ${rule.name}`}
+                          aria-label={t('tarification.grid.ariaSalesCatFor', { name: rule.name })}
                           value={rule.salesCategoryId ?? ''}
                           disabled={!canManage}
                           onChange={(e) => void saveRule(rule, { salesCategoryId: e.target.value || null })}
                         >
-                          <option value="">— Van tabel —</option>
+                          <option value="">{t('tarification.grid.fromTable')}</option>
                           {salesCategories.map((category) => (
                             <option key={category.id} value={category.id}>
                               {category.name}
@@ -584,14 +585,14 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       {canManage && (
                         <td className="issued-items-row-actions">
                           <button type="button" className="issued-items-link" onClick={() => void duplicateRule(rule)}>
-                            Dupliceren
+                            {t('tarification.grid.duplicateAction')}
                           </button>
                           <button
                             type="button"
                             className="issued-items-link issued-items-link-danger"
                             onClick={() => setDeleteTarget(rule)}
                           >
-                            Verwijderen
+                            {t('ui.actions.delete')}
                           </button>
                         </td>
                       )}
@@ -602,11 +603,11 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         // the key stable/unique even for a not-yet-persisted or id-less bracket.
                         <Fragment key={bracket.id ?? `${rule.id}-bracket-${index}`}>
                         <tr className="rule-grid-bracket-row">
-                          <td>↳ Staffel {bracketRangeLabel(bracket)}</td>
+                          <td>↳ {t('tarification.grid.bracketRowLabel', { range: bracketRangeLabel(bracket) })}</td>
                           <td colSpan={6}>—</td>
                           <td>
                             <input
-                              aria-label={`Staffel ${index + 1} van ${rule.name} prijs`}
+                              aria-label={t('tarification.grid.ariaBracketPrice', { index: index + 1, name: rule.name })}
                               type="number"
                               step="0.01"
                               defaultValue={bracket.price}
@@ -619,7 +620,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           </td>
                           <td>
                             <input
-                              aria-label={`Staffel ${index + 1} van ${rule.name} prijs per extra eenheid`}
+                              aria-label={t('tarification.grid.ariaBracketExtra', { index: index + 1, name: rule.name })}
                               type="number"
                               step="0.01"
                               defaultValue={bracket.pricePerExtraUnit ?? ''}
@@ -633,7 +634,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           <td colSpan={5}>—</td>
                           <td>
                             <input
-                              aria-label={`Staffel ${index + 1} van ${rule.name} van`}
+                              aria-label={t('tarification.grid.ariaBracketFrom', { index: index + 1, name: rule.name })}
                               type="number"
                               step="0.01"
                               defaultValue={bracket.fromQuantity}
@@ -646,10 +647,10 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           </td>
                           <td>
                             <input
-                              aria-label={`Staffel ${index + 1} van ${rule.name} tot`}
+                              aria-label={t('tarification.grid.ariaBracketTo', { index: index + 1, name: rule.name })}
                               type="number"
                               step="0.01"
-                              placeholder="open"
+                              placeholder={t('tarification.grid.openPlaceholder')}
                               defaultValue={bracket.toQuantity ?? ''}
                               disabled={!canManage}
                               onBlur={(e) => {
@@ -660,7 +661,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           </td>
                           <td>
                             <input
-                              aria-label={`Staffel ${index + 1} van ${rule.name} gewicht tot (kg)`}
+                              aria-label={t('tarification.grid.ariaBracketWeight', { index: index + 1, name: rule.name })}
                               type="number"
                               step="0.01"
                               defaultValue={bracket.weightToKg ?? ''}
@@ -673,7 +674,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           </td>
                           <td>
                             <input
-                              aria-label={`Staffel ${index + 1} van ${rule.name} volume tot (m³)`}
+                              aria-label={t('tarification.grid.ariaBracketVolume', { index: index + 1, name: rule.name })}
                               type="number"
                               step="0.01"
                               defaultValue={bracket.volumeToM3 ?? ''}
@@ -686,7 +687,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                           </td>
                           <td>
                             <input
-                              aria-label={`Staffel ${index + 1} van ${rule.name} ldm tot`}
+                              aria-label={t('tarification.grid.ariaBracketLdm', { index: index + 1, name: rule.name })}
                               type="number"
                               step="0.01"
                               defaultValue={bracket.loadingMetersTo ?? ''}
@@ -706,7 +707,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                                   className="issued-items-link"
                                   onClick={() => setOverrideDialog({ rule, bracket })}
                                 >
-                                  Klantafwijking…
+                                  {t('tarification.grid.overrideAction')}
                                 </button>
                               )}
                               <button
@@ -714,7 +715,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                                 className="issued-items-link issued-items-link-danger"
                                 onClick={() => setBracketDeleteTarget({ rule, index })}
                               >
-                                Verwijderen
+                                {t('ui.actions.delete')}
                               </button>
                             </td>
                           )}
@@ -722,7 +723,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         {overridesForBracket(rule, bracket).map((override) => (
                           <tr key={override.id} className="rule-grid-bracket-row rule-grid-override-row">
                             <td>
-                              ↳ <Badge tone="info">Klantafwijking</Badge> <span>{override.customerName}</span>
+                              ↳ <Badge tone="info">{t('tarification.grid.overrideBadge')}</Badge> <span>{override.customerName}</span>
                             </td>
                             <td colSpan={6}>—</td>
                             <td>€ {override.price.toFixed(2)}</td>
@@ -739,7 +740,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                                   className="issued-items-link issued-items-link-danger"
                                   onClick={() => setOverrideDeleteTarget(override)}
                                 >
-                                  Verwijderen
+                                  {t('ui.actions.delete')}
                                 </button>
                               </td>
                             )}
@@ -753,9 +754,10 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                         .map((override) => (
                           <tr key={override.id} className="rule-grid-bracket-row rule-grid-override-row">
                             <td colSpan={22}>
-                              ⚠ Klantafwijking van {override.customerName} (staffel {override.fromQuantity}–
-                              {override.toQuantity ?? 'open'}) verwijst naar een rij die niet meer bestaat en wordt niet
-                              toegepast.
+                              ⚠ {t('tarification.grid.orphanedOverride', {
+                                name: override.customerName,
+                                range: `${override.fromQuantity}–${override.toQuantity ?? t('tarification.grid.openPlaceholder')}`,
+                              })}
                             </td>
                             {canManage && (
                               <td className="issued-items-row-actions">
@@ -764,7 +766,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                                   className="issued-items-link issued-items-link-danger"
                                   onClick={() => setOverrideDeleteTarget(override)}
                                 >
-                                  Verwijderen
+                                  {t('ui.actions.delete')}
                                 </button>
                               </td>
                             )}
@@ -774,7 +776,7 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                       <tr className="rule-grid-bracket-row">
                         <td colSpan={23}>
                           <button type="button" className="issued-items-link" onClick={() => addBracket(rule)}>
-                            + Staffelrij
+                            {t('tarification.grid.addBracketRow')}
                           </button>
                         </td>
                       </tr>
@@ -789,9 +791,9 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Prijsregel verwijderen"
-          message={`Weet je zeker dat je "${deleteTarget.name}" wilt verwijderen? Bestaande orders behouden hun prijssnapshot.`}
-          confirmLabel="Verwijderen"
+          title={t('tarification.grid.deleteRuleTitle')}
+          message={t('tarification.grid.deleteRuleMessage', { name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}
@@ -800,9 +802,12 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
 
       {bracketDeleteTarget && (
         <ConfirmDialog
-          title="Staffelrij verwijderen"
-          message={`Weet je zeker dat je staffel ${bracketDeleteTarget.index + 1} van "${bracketDeleteTarget.rule.name}" wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('tarification.grid.deleteBracketTitle')}
+          message={t('tarification.grid.deleteBracketMessage', {
+            index: bracketDeleteTarget.index + 1,
+            name: bracketDeleteTarget.rule.name,
+          })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={handleConfirmRemoveBracket}
           onCancel={() => setBracketDeleteTarget(null)}
@@ -811,9 +816,9 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
 
       {overrideDeleteTarget && (
         <ConfirmDialog
-          title="Klantafwijking verwijderen"
-          message={`Weet je zeker dat je de klantafwijking van ${overrideDeleteTarget.customerName} wilt verwijderen? De rij volgt daarna weer de gedeelde prijs.`}
-          confirmLabel="Verwijderen"
+          title={t('tarification.grid.deleteOverrideTitle')}
+          message={t('tarification.grid.deleteOverrideMessage', { name: overrideDeleteTarget.customerName })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={() => void handleConfirmRemoveOverride()}
           onCancel={() => setOverrideDeleteTarget(null)}

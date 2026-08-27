@@ -1,0 +1,140 @@
+{
+  "users": {
+    "page": {
+      "title": "Gebruikers",
+      "newUser": "Nieuwe gebruiker",
+      "loading": "Gebruikers laden...",
+      "loadFailed": "Gebruikers konden niet worden geladen."
+    },
+    "table": {
+      "empty": "Er zijn nog geen gebruikers.",
+      "name": "Naam",
+      "email": "E-mail",
+      "roles": "Rollen",
+      "status": "Status",
+      "noRoles": "Geen rollen",
+      "active": "Actief",
+      "inactive": "Inactief",
+      "blocked": "Geblokkeerd"
+    },
+    "form": {
+      "email": "E-mail",
+      "firstName": "Voornaam",
+      "lastName": "Achternaam",
+      "employeeId": "Gekoppelde medewerker (id)",
+      "customerId": "Gekoppelde klant (id)",
+      "saving": "Opslaan...",
+      "saveChanges": "Wijzigingen opslaan",
+      "create": "Gebruiker aanmaken"
+    },
+    "validation": {
+      "emailRequired": "E-mail is verplicht.",
+      "emailMax": "E-mail mag maximaal {max} tekens bevatten.",
+      "emailInvalid": "Ongeldig e-mailadres.",
+      "firstNameRequired": "Voornaam is verplicht.",
+      "firstNameMax": "Voornaam mag maximaal {max} tekens bevatten.",
+      "lastNameRequired": "Achternaam is verplicht.",
+      "lastNameMax": "Achternaam mag maximaal {max} tekens bevatten."
+    },
+    "mutations": {
+      "submitFailed": "De actie kon niet worden uitgevoerd. Probeer het opnieuw.",
+      "lastAdmin": "Dit is de laatste actieve beheerder en kan niet worden gewijzigd."
+    },
+    "detail": {
+      "loading": "Gebruiker laden...",
+      "loadFailed": "Gebruiker kon niet worden geladen.",
+      "notFound": "Gebruiker niet gevonden.",
+      "confirmDeactivate": "Weet u zeker dat u {name} wilt deactiveren?",
+      "confirmBlock": "Weet u zeker dat u {name} wilt blokkeren?",
+      "sectionData": "Gegevens",
+      "sectionStatus": "Status",
+      "sectionRoles": "Rollen",
+      "deactivate": "Deactiveren",
+      "activate": "Activeren",
+      "unblock": "Deblokkeren",
+      "block": "Blokkeren"
+    },
+    "rolesPanel": {
+      "loading": "Rollen laden...",
+      "systemRole": "Systeemrol",
+      "saving": "Opslaan...",
+      "save": "Rollen opslaan"
+    }
+  },
+  "roles": {
+    "page": {
+      "title": "Rollen en rechten",
+      "newRole": "Nieuwe rol",
+      "name": "Naam",
+      "description": "Omschrijving",
+      "nameRequired": "Naam is verplicht.",
+      "nameMax": "Naam mag maximaal {max} tekens bevatten.",
+      "creating": "Aanmaken...",
+      "create": "Rol aanmaken",
+      "loading": "Rollen laden...",
+      "loadFailed": "Rollen konden niet worden geladen."
+    },
+    "table": {
+      "empty": "Er zijn nog geen rollen.",
+      "name": "Naam",
+      "description": "Omschrijving",
+      "status": "Status",
+      "systemRole": "Systeemrol",
+      "noDescription": "Geen omschrijving",
+      "active": "Actief",
+      "inactive": "Inactief"
+    },
+    "detail": {
+      "loading": "Rol laden...",
+      "loadFailed": "Rol kon niet worden geladen.",
+      "notFound": "Rol niet gevonden.",
+      "sectionData": "Gegevens",
+      "sectionPermissions": "Rechten",
+      "sectionDeactivate": "Deactiveren",
+      "systemRoleRenameHint": "Systeemrollen kunnen niet worden hernoemd.",
+      "saveChanges": "Wijzigingen opslaan",
+      "saving": "Opslaan...",
+      "confirmDeactivate": "Weet u zeker dat u deze rol wilt deactiveren?",
+      "alreadyInactive": "Deze rol is al inactief.",
+      "deactivateRole": "Rol deactiveren",
+      "systemRoleDeactivateHint": "Systeemrollen kunnen niet worden gedeactiveerd."
+    },
+    "matrix": {
+      "loading": "Rechten laden...",
+      "loadFailed": "Rechten konden niet worden geladen.",
+      "saving": "Opslaan...",
+      "save": "Rechten opslaan"
+    },
+    "mutations": {
+      "submitFailed": "De actie kon niet worden uitgevoerd. Probeer het opnieuw.",
+      "systemRoleConflict": "Deze actie is niet toegestaan voor een systeemrol."
+    },
+    "mappings": {
+      "breadcrumbRoles": "Rollen",
+      "title": "Functie→rol-koppelingen",
+      "subtitle": "Bij het aanmaken van een account uit een medewerker worden deze rollen voorgesteld; de beheerder bevestigt altijd.",
+      "newMapping": "Nieuwe koppeling",
+      "loadFailed": "Koppelingen konden niet worden geladen.",
+      "loading": "Koppelingen laden...",
+      "empty": "Nog geen koppelingen — accounts krijgen dan geen voorgestelde rollen.",
+      "columnFunction": "Functie",
+      "columnRole": "Voorgestelde rol",
+      "columnActions": "Acties",
+      "added": "Koppeling toegevoegd.",
+      "deleteTitle": "Koppeling verwijderen",
+      "deleteMessage": "Koppeling '{functionName} → {roleName}' verwijderen? Bestaande accounts behouden hun rollen.",
+      "deleted": "Koppeling verwijderd.",
+      "deleteFailed": "De koppeling kon niet worden verwijderd.",
+      "dialogTitle": "Nieuwe functie→rol-koppeling",
+      "adding": "Toevoegen…",
+      "add": "Toevoegen",
+      "rolesLoadFailed": "Rollen konden niet worden geladen.",
+      "chooseBoth": "Kies zowel een functie als een rol.",
+      "addFailed": "De koppeling kon niet worden toegevoegd.",
+      "function": "Functie",
+      "chooseFunction": "— Kies functie —",
+      "role": "Rol",
+      "chooseRole": "— Kies rol —"
+    }
+  }
+}

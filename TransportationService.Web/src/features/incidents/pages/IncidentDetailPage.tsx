@@ -15,6 +15,7 @@ import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { searchTransportOrders } from '../../transport-orders/api/transportOrdersApi'
 import { getUsers } from '../../users/api/usersApi'
@@ -136,6 +137,7 @@ export function IncidentDetailPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const canManage = hasPermission('incidents.manage')
   const isNew = id === undefined
 
@@ -164,8 +166,8 @@ export function IncidentDetailPage() {
         setForm(toForm(data))
         setLoadError(null)
       })
-      .catch(() => setLoadError('Het incident kon niet worden geladen.'))
-  }, [id])
+      .catch(() => setLoadError(t('incidents.detail.loadError')))
+  }, [id, t])
 
   useEffect(() => {
     load()
@@ -197,7 +199,7 @@ export function IncidentDetailPage() {
   }, [])
 
   if (loadError) return <ErrorState message={loadError} />
-  if (!isNew && !incident) return <LoadingState message="Incident laden..." />
+  if (!isNew && !incident) return <LoadingState message={t('incidents.detail.loading')} />
 
   const editable = canManage && (isNew || incident!.status !== 'Cancelled')
 
@@ -213,16 +215,16 @@ export function IncidentDetailPage() {
     try {
       if (isNew) {
         const created = await createIncident(toInput(form))
-        toast.showSuccess('Incident geregistreerd.')
+        toast.showSuccess(t('incidents.detail.created'))
         navigate(`/incidents/${created.id}`, { replace: true })
       } else {
         const updated = await updateIncident(id!, toInput(form))
         setIncident(updated)
         setForm(toForm(updated))
-        toast.showSuccess('Incident bijgewerkt.')
+        toast.showSuccess(t('incidents.detail.updated'))
       }
     } catch (err) {
-      const described = describeApiError(err, 'Het incident kon niet worden opgeslagen.')
+      const described = describeApiError(err, t('incidents.detail.saveFailed'))
       setFormError(described.message)
       setFieldErrors(described.fieldErrors)
     } finally {
@@ -238,9 +240,9 @@ export function IncidentDetailPage() {
       setIncident(updated)
       setForm(toForm(updated))
       setResolveDialog(false)
-      toast.showSuccess(`Status gewijzigd naar ${INCIDENT_STATUS_LABELS[status]}.`)
+      toast.showSuccess(t('incidents.detail.statusChanged', { status: t(INCIDENT_STATUS_LABELS[status]) }))
     } catch (err) {
-      const described = describeApiError(err, 'De status kon niet worden gewijzigd.')
+      const described = describeApiError(err, t('incidents.detail.statusChangeFailed'))
       if (resolutionText !== undefined) {
         setResolveError(described.message)
       } else {
@@ -267,29 +269,31 @@ export function IncidentDetailPage() {
             }
           }}
         >
-          {status === 'Resolved' ? 'Afhandelen...' : `Naar ${INCIDENT_STATUS_LABELS[status].toLowerCase()}`}
+          {status === 'Resolved'
+            ? t('incidents.detail.resolveAction')
+            : t('incidents.detail.toStatus', { status: t(INCIDENT_STATUS_LABELS[status]).toLowerCase() })}
         </Button>
       ))
     : null
 
   return (
     <div>
-      <BackButton to="/incidents" label="Terug naar incidenten" />
+      <BackButton to="/incidents" label={t('incidents.detail.back')} />
       <PageHeader
-        title={isNew ? 'Nieuw incident' : incident!.title}
-        subtitle={isNew ? 'Registreer een schade, vertraging of andere melding.' : undefined}
+        title={isNew ? t('incidents.detail.newTitle') : incident!.title}
+        subtitle={isNew ? t('incidents.detail.newSubtitle') : undefined}
         action={statusActions ? <span style={{ display: 'inline-flex', gap: '0.5rem' }}>{statusActions}</span> : undefined}
       />
 
       {!isNew && (
         <p>
-          <Badge tone={INCIDENT_STATUS_TONE[incident!.status]}>{INCIDENT_STATUS_LABELS[incident!.status]}</Badge>{' '}
-          Gemeld op {formatDate(incident!.createdAt)}
-          {incident!.resolvedAt && <> · Afgehandeld op {formatDate(incident!.resolvedAt)}</>}
+          <Badge tone={INCIDENT_STATUS_TONE[incident!.status]}>{t(INCIDENT_STATUS_LABELS[incident!.status])}</Badge>{' '}
+          {t('incidents.detail.reportedOn', { date: formatDate(incident!.createdAt) })}
+          {incident!.resolvedAt && <> · {t('incidents.detail.resolvedOn', { date: formatDate(incident!.resolvedAt) })}</>}
         </p>
       )}
       {!isNew && incident!.resolution && (
-        <FormSection title="Oplossing">
+        <FormSection title={t('incidents.detail.resolutionTitle')}>
           <p>{incident!.resolution}</p>
         </FormSection>
       )}
@@ -298,8 +302,8 @@ export function IncidentDetailPage() {
       <form onSubmit={(event) => void submit(event)}>
         <ValidationSummary message={formError} fieldErrors={fieldErrors} />
 
-        <FormSection title="Melding">
-          <FormField label="Titel" htmlFor="inc-title" required error={getFieldError(fieldErrors, 'title')}>
+        <FormSection title={t('incidents.detail.sectionReport')}>
+          <FormField label={t('incidents.detail.titleLabel')} htmlFor="inc-title" required error={getFieldError(fieldErrors, 'title')}>
             <input
               id="inc-title"
               value={form.title}
@@ -308,7 +312,7 @@ export function IncidentDetailPage() {
               disabled={!editable}
             />
           </FormField>
-          <FormField label="Omschrijving" htmlFor="inc-description" required error={getFieldError(fieldErrors, 'description')}>
+          <FormField label={t('incidents.detail.descriptionLabel')} htmlFor="inc-description" required error={getFieldError(fieldErrors, 'description')}>
             <textarea
               id="inc-description"
               value={form.description}
@@ -318,23 +322,23 @@ export function IncidentDetailPage() {
               disabled={!editable}
             />
           </FormField>
-          <FormField label="Type" htmlFor="inc-type" required error={getFieldError(fieldErrors, 'incidentType')}>
+          <FormField label={t('incidents.detail.typeLabel')} htmlFor="inc-type" required error={getFieldError(fieldErrors, 'incidentType')}>
             <select
               id="inc-type"
               value={form.incidentType}
               onChange={(event) => set('incidentType', event.target.value as IncidentType)}
               disabled={!editable}
             >
-              {Object.entries(INCIDENT_TYPE_LABELS).map(([value, label]) => (
+              {Object.entries(INCIDENT_TYPE_LABELS).map(([value, labelKey]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(labelKey)}
                 </option>
               ))}
             </select>
           </FormField>
           {form.incidentType === 'Other' && (
             <FormField
-              label="Typenaam"
+              label={t('incidents.detail.customTypeLabel')}
               htmlFor="inc-custom-type"
               required
               error={getFieldError(fieldErrors, 'customTypeName')}
@@ -348,24 +352,24 @@ export function IncidentDetailPage() {
               />
             </FormField>
           )}
-          <FormField label="Ernst" htmlFor="inc-severity" required error={getFieldError(fieldErrors, 'severity')}>
+          <FormField label={t('incidents.detail.severityLabel')} htmlFor="inc-severity" required error={getFieldError(fieldErrors, 'severity')}>
             <select
               id="inc-severity"
               value={form.severity}
               onChange={(event) => set('severity', event.target.value as IncidentSeverity)}
               disabled={!editable}
             >
-              {Object.entries(INCIDENT_SEVERITY_LABELS).map(([value, label]) => (
+              {Object.entries(INCIDENT_SEVERITY_LABELS).map(([value, labelKey]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(labelKey)}
                 </option>
               ))}
             </select>
           </FormField>
           <FormField
-            label="Verantwoordelijke partij"
+            label={t('incidents.detail.responsiblePartyLabel')}
             htmlFor="inc-responsible-party"
-            hint="Alleen 'Klant' kan worden doorgerekend; interne kosten blijven intern."
+            hint={t('incidents.detail.responsiblePartyHint')}
           >
             <select
               id="inc-responsible-party"
@@ -373,14 +377,14 @@ export function IncidentDetailPage() {
               onChange={(event) => set('responsibleParty', event.target.value)}
               disabled={!editable}
             >
-              {Object.entries(RESPONSIBLE_PARTY_LABELS).map(([value, label]) => (
+              {Object.entries(RESPONSIBLE_PARTY_LABELS).map(([value, labelKey]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(labelKey)}
                 </option>
               ))}
             </select>
           </FormField>
-          <FormField label="Toelichting verantwoordelijkheid" htmlFor="inc-responsibility-notes">
+          <FormField label={t('incidents.detail.responsibilityNotesLabel')} htmlFor="inc-responsibility-notes">
             <input
               id="inc-responsibility-notes"
               value={form.responsibilityNotes}
@@ -389,7 +393,7 @@ export function IncidentDetailPage() {
               disabled={!editable}
             />
           </FormField>
-          <FormField label="Oorzaak" htmlFor="inc-cause" error={getFieldError(fieldErrors, 'cause')}>
+          <FormField label={t('incidents.detail.causeLabel')} htmlFor="inc-cause" error={getFieldError(fieldErrors, 'cause')}>
             <textarea
               id="inc-cause"
               value={form.cause}
@@ -399,7 +403,7 @@ export function IncidentDetailPage() {
               disabled={!editable}
             />
           </FormField>
-          <FormField label="Deadline" htmlFor="inc-due" error={getFieldError(fieldErrors, 'dueDate')}>
+          <FormField label={t('incidents.detail.dueLabel')} htmlFor="inc-due" error={getFieldError(fieldErrors, 'dueDate')}>
             <input
               id="inc-due"
               type="date"
@@ -409,7 +413,7 @@ export function IncidentDetailPage() {
             />
           </FormField>
           <FormField
-            label="Verantwoordelijke"
+            label={t('incidents.detail.responsibleLabel')}
             htmlFor="inc-responsible"
             error={getFieldError(fieldErrors, 'responsibleUserId')}
           >
@@ -423,8 +427,8 @@ export function IncidentDetailPage() {
           </FormField>
         </FormSection>
 
-        <FormSection title="Koppelingen" collapsible defaultOpen={isNew}>
-          <FormField label="Klant" htmlFor="inc-customer" error={getFieldError(fieldErrors, 'customerId')}>
+        <FormSection title={t('incidents.detail.sectionLinks')} collapsible defaultOpen={isNew}>
+          <FormField label={t('incidents.detail.customerLabel')} htmlFor="inc-customer" error={getFieldError(fieldErrors, 'customerId')}>
             <SearchableSelect
               id="inc-customer"
               value={form.customerId}
@@ -433,7 +437,7 @@ export function IncidentDetailPage() {
               disabled={!editable}
             />
           </FormField>
-          <FormField label="Dossier" htmlFor="inc-dossier" error={getFieldError(fieldErrors, 'dossierId')}>
+          <FormField label={t('incidents.detail.dossierLabel')} htmlFor="inc-dossier" error={getFieldError(fieldErrors, 'dossierId')}>
             <SearchableSelect
               id="inc-dossier"
               value={form.dossierId}
@@ -443,7 +447,7 @@ export function IncidentDetailPage() {
             />
           </FormField>
           <FormField
-            label="Transportopdracht"
+            label={t('incidents.detail.orderLabel')}
             htmlFor="inc-order"
             error={getFieldError(fieldErrors, 'transportOrderId')}
           >
@@ -455,7 +459,7 @@ export function IncidentDetailPage() {
               disabled={!editable}
             />
           </FormField>
-          <FormField label="Voertuig" htmlFor="inc-vehicle" error={getFieldError(fieldErrors, 'vehicleId')}>
+          <FormField label={t('incidents.detail.vehicleLabel')} htmlFor="inc-vehicle" error={getFieldError(fieldErrors, 'vehicleId')}>
             <SearchableSelect
               id="inc-vehicle"
               value={form.vehicleId}
@@ -464,12 +468,12 @@ export function IncidentDetailPage() {
               disabled={!editable}
             />
           </FormField>
-          {!isNew && incident!.driverName && <p className="placeholder-text">Chauffeur: {incident!.driverName}</p>}
-          {!isNew && incident!.tripNumber && <p className="placeholder-text">Rit: {incident!.tripNumber}</p>}
+          {!isNew && incident!.driverName && <p className="placeholder-text">{t('incidents.detail.driverLine', { name: incident!.driverName })}</p>}
+          {!isNew && incident!.tripNumber && <p className="placeholder-text">{t('incidents.detail.tripLine', { tripNumber: incident!.tripNumber })}</p>}
         </FormSection>
 
-        <FormSection title="Impact en kosten" collapsible defaultOpen={false}>
-          <FormField label="Impact op de klant" htmlFor="inc-customer-impact" error={getFieldError(fieldErrors, 'customerImpact')}>
+        <FormSection title={t('incidents.detail.sectionImpact')} collapsible defaultOpen={false}>
+          <FormField label={t('incidents.detail.customerImpactLabel')} htmlFor="inc-customer-impact" error={getFieldError(fieldErrors, 'customerImpact')}>
             <textarea
               id="inc-customer-impact"
               value={form.customerImpact}
@@ -480,7 +484,7 @@ export function IncidentDetailPage() {
             />
           </FormField>
           <FormField
-            label="Operationele impact"
+            label={t('incidents.detail.operationalImpactLabel')}
             htmlFor="inc-operational-impact"
             error={getFieldError(fieldErrors, 'operationalImpact')}
           >
@@ -494,7 +498,7 @@ export function IncidentDetailPage() {
             />
           </FormField>
           <FormField
-            label="Financiële impact"
+            label={t('incidents.detail.financialImpactLabel')}
             htmlFor="inc-financial-impact"
             error={getFieldError(fieldErrors, 'financialImpact')}
           >
@@ -507,7 +511,7 @@ export function IncidentDetailPage() {
               disabled={!editable}
             />
           </FormField>
-          <FormField label="Geschatte kost (€)" htmlFor="inc-estimated" error={getFieldError(fieldErrors, 'estimatedCost')}>
+          <FormField label={t('incidents.detail.estimatedCostLabel')} htmlFor="inc-estimated" error={getFieldError(fieldErrors, 'estimatedCost')}>
             <input
               id="inc-estimated"
               type="number"
@@ -518,7 +522,7 @@ export function IncidentDetailPage() {
               disabled={!editable}
             />
           </FormField>
-          <FormField label="Werkelijke kost (€)" htmlFor="inc-actual" error={getFieldError(fieldErrors, 'actualCost')}>
+          <FormField label={t('incidents.detail.actualCostLabel')} htmlFor="inc-actual" error={getFieldError(fieldErrors, 'actualCost')}>
             <input
               id="inc-actual"
               type="number"
@@ -534,7 +538,7 @@ export function IncidentDetailPage() {
         {editable && (
           <FormActions>
             <Button type="submit" disabled={busy}>
-              {isNew ? 'Incident registreren' : 'Wijzigingen opslaan'}
+              {isNew ? t('incidents.detail.register') : t('incidents.detail.saveChanges')}
             </Button>
           </FormActions>
         )}
@@ -542,22 +546,22 @@ export function IncidentDetailPage() {
 
       {resolveDialog && (
         <Modal
-          title="Incident afhandelen"
+          title={t('incidents.detail.resolveTitle')}
           onClose={() => setResolveDialog(false)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setResolveDialog(false)} disabled={busy}>
-                Annuleren
+                {t('incidents.detail.cancel')}
               </Button>
               <Button disabled={busy} onClick={() => void changeStatus('Resolved', resolution)}>
-                Afhandelen
+                {t('incidents.detail.resolve')}
               </Button>
             </>
           }
         >
           <ValidationSummary message={resolveError} />
-          <FormField label="Oplossing" htmlFor="inc-resolution" required>
+          <FormField label={t('incidents.detail.resolutionLabel')} htmlFor="inc-resolution" required>
             <textarea
               id="inc-resolution"
               value={resolution}

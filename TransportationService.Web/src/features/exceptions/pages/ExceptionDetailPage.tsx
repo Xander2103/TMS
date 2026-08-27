@@ -10,6 +10,7 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { ApiError } from '../../../api/apiClient'
 import { AuditHistoryPanel } from '../../auditing/components/AuditHistoryPanel'
 import { resolvePackageIncident } from '../../packages/api/packagesApi'
@@ -55,6 +56,7 @@ const PACKAGE_DISPOSITIONS: Record<string, PackageIncidentAction[]> = {
 }
 
 export function ExceptionDetailPage() {
+  const { t } = useLocale()
   const { id = '' } = useParams<{ id: string }>()
   const { showSuccess, showError } = useToast()
   const { hasPermission, user } = useAuth()
@@ -87,12 +89,12 @@ export function ExceptionDetailPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('De afwijking kon niet worden geladen.')
+        if (mounted) setLoadError(t('exceptions.detail.loadError'))
       })
     return () => {
       mounted = false
     }
-  }, [id])
+  }, [id, t])
 
   // Photos need the bearer token, so they load as object URLs (revoked on unmount).
   useEffect(() => {
@@ -122,7 +124,7 @@ export function ExceptionDetailPage() {
     if (!statusTarget) return
     const isTerminal = statusTarget === 'Resolved' || statusTarget === 'Rejected'
     if (isTerminal && !statusNote.trim()) {
-      showError('Een afhandelingsnotitie is verplicht bij het afsluiten.')
+      showError(t('exceptions.detail.noteRequired'))
       return
     }
     setBusy(true)
@@ -131,9 +133,9 @@ export function ExceptionDetailPage() {
       setDetail(updated)
       setStatusTarget(null)
       setStatusNote('')
-      showSuccess(`Status gewijzigd naar ${EXCEPTION_STATUS_LABELS[statusTarget]}.`)
+      showSuccess(t('exceptions.detail.statusChanged', { status: t(EXCEPTION_STATUS_LABELS[statusTarget]) }))
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De status kon niet worden gewijzigd.')
+      showError(err instanceof ApiError ? err.message : t('exceptions.detail.statusChangeFailed'))
     } finally {
       setBusy(false)
     }
@@ -146,9 +148,9 @@ export function ExceptionDetailPage() {
       const isMine = detail.assignedToUserId === user?.id
       const updated = await assignException(id, isMine ? null : (user?.id ?? null))
       setDetail(updated)
-      showSuccess(isMine ? 'Toewijzing opgeheven.' : 'Aan jou toegewezen.')
+      showSuccess(isMine ? t('exceptions.detail.unassigned') : t('exceptions.detail.assignedToYou'))
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De toewijzing kon niet worden gewijzigd.')
+      showError(err instanceof ApiError ? err.message : t('exceptions.detail.assignFailed'))
     } finally {
       setBusy(false)
     }
@@ -159,12 +161,12 @@ export function ExceptionDetailPage() {
     setBusy(true)
     try {
       await resolvePackageIncident(detail.packageId, dispositionAction, dispositionNote.trim())
-      showSuccess(`Vervolgactie '${PACKAGE_INCIDENT_ACTION_LABELS[dispositionAction]}' uitgevoerd.`)
+      showSuccess(t('exceptions.detail.dispositionDone', { action: t(PACKAGE_INCIDENT_ACTION_LABELS[dispositionAction]) }))
       setDispositionAction(null)
       setDispositionNote('')
       setDetail(await getException(id))
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De vervolgactie kon niet worden uitgevoerd.')
+      showError(err instanceof ApiError ? err.message : t('exceptions.detail.dispositionFailed'))
     } finally {
       setBusy(false)
     }
@@ -180,9 +182,9 @@ export function ExceptionDetailPage() {
       })
       setDetail(updated)
       setEditing(false)
-      showSuccess('Afwijking bijgewerkt.')
+      showSuccess(t('exceptions.detail.updated'))
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De afwijking kon niet worden bijgewerkt.')
+      showError(err instanceof ApiError ? err.message : t('exceptions.detail.updateFailed'))
     } finally {
       setBusy(false)
     }
@@ -192,30 +194,32 @@ export function ExceptionDetailPage() {
     setBusy(true)
     try {
       setDetail(await deleteExceptionPhoto(id, photoId))
-      showSuccess('Foto verwijderd.')
+      showSuccess(t('exceptions.detail.photoDeleted'))
     } catch {
-      showError('De foto kon niet worden verwijderd.')
+      showError(t('exceptions.detail.photoDeleteFailed'))
     } finally {
       setBusy(false)
     }
   }
 
   if (loadError) return <ErrorState message={loadError} />
-  if (!detail) return <LoadingState message="Afwijking laden..." />
+  if (!detail) return <LoadingState message={t('exceptions.detail.loading')} />
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Afwijkingen', to: '/exceptions' }, { label: EXCEPTION_TYPE_LABELS[detail.type] }]} />
+      <Breadcrumbs items={[{ label: t('exceptions.detail.breadcrumb'), to: '/exceptions' }, { label: t(EXCEPTION_TYPE_LABELS[detail.type]) }]} />
       <PageHeader
-        title={`${EXCEPTION_TYPE_LABELS[detail.type]} — ${detail.tripNumber}`}
-        subtitle={`Gemeld ${formatDateTime(detail.occurredAt)}${detail.reportedByName ? ` door ${detail.reportedByName}` : ''}`}
+        title={`${t(EXCEPTION_TYPE_LABELS[detail.type])} — ${detail.tripNumber}`}
+        subtitle={detail.reportedByName
+          ? t('exceptions.detail.subtitleReportedBy', { date: formatDateTime(detail.occurredAt), name: detail.reportedByName })
+          : t('exceptions.detail.subtitleReported', { date: formatDateTime(detail.occurredAt) })}
         action={
           <span className="exc-header-badges">
             <Badge tone={EXCEPTION_SEVERITY_TONE[detail.severity]}>
-              {EXCEPTION_SEVERITY_ICONS[detail.severity]} {EXCEPTION_SEVERITY_LABELS[detail.severity]}
+              {EXCEPTION_SEVERITY_ICONS[detail.severity]} {t(EXCEPTION_SEVERITY_LABELS[detail.severity])}
             </Badge>
             <Badge tone={EXCEPTION_STATUS_TONE[detail.status]}>
-              {EXCEPTION_STATUS_ICONS[detail.status]} {EXCEPTION_STATUS_LABELS[detail.status]}
+              {EXCEPTION_STATUS_ICONS[detail.status]} {t(EXCEPTION_STATUS_LABELS[detail.status])}
             </Badge>
           </span>
         }
@@ -224,7 +228,7 @@ export function ExceptionDetailPage() {
       {canDisposition && detail.packageId && detail.packageStatus
         && (PACKAGE_DISPOSITIONS[detail.packageStatus]?.length ?? 0) > 0 && (
         <section className="to-section">
-          <h2>Vervolgactie colli {detail.packageNumber}</h2>
+          <h2>{t('exceptions.detail.dispositionTitle', { packageNumber: detail.packageNumber ?? '' })}</h2>
           <div className="exc-actions">
             {PACKAGE_DISPOSITIONS[detail.packageStatus].map((action) => (
               <Button
@@ -236,7 +240,7 @@ export function ExceptionDetailPage() {
                 }}
                 disabled={busy}
               >
-                {PACKAGE_INCIDENT_ACTION_LABELS[action]}
+                {t(PACKAGE_INCIDENT_ACTION_LABELS[action])}
               </Button>
             ))}
           </div>
@@ -246,10 +250,10 @@ export function ExceptionDetailPage() {
       {canResolve && (
         <div className="exc-actions">
           <Button variant="secondary" onClick={() => void toggleAssignment()} disabled={busy}>
-            {detail.assignedToUserId === user?.id ? 'Toewijzing opheffen' : 'Aan mij toewijzen'}
+            {detail.assignedToUserId === user?.id ? t('exceptions.detail.unassign') : t('exceptions.detail.assignToMe')}
           </Button>
           {detail.assignedToName && detail.assignedToUserId !== user?.id && (
-            <span className="exc-assignee">Toegewezen aan {detail.assignedToName}</span>
+            <span className="exc-assignee">{t('exceptions.detail.assignedTo', { name: detail.assignedToName })}</span>
           )}
         </div>
       )}
@@ -266,27 +270,27 @@ export function ExceptionDetailPage() {
               }}
               disabled={busy}
             >
-              {EXCEPTION_STATUS_ICONS[target]} {EXCEPTION_STATUS_LABELS[target]}
+              {EXCEPTION_STATUS_ICONS[target]} {t(EXCEPTION_STATUS_LABELS[target])}
             </Button>
           ))}
         </div>
       )}
 
       <section className="to-section">
-        <h2>Melding</h2>
+        <h2>{t('exceptions.detail.reportTitle')}</h2>
         <dl className="to-facts">
           <div>
-            <dt>Omschrijving</dt>
+            <dt>{t('exceptions.detail.description')}</dt>
             <dd>{detail.description}</dd>
           </div>
           <div>
-            <dt>Rit</dt>
+            <dt>{t('exceptions.detail.trip')}</dt>
             <dd>
               <Link to={`/planning/${detail.tripId}`}>{detail.tripNumber}</Link>
             </dd>
           </div>
           <div>
-            <dt>Opdracht</dt>
+            <dt>{t('exceptions.detail.order')}</dt>
             <dd>
               {detail.transportOrderId ? (
                 <Link to={`/transport-orders/${detail.transportOrderId}`}>{detail.orderNumber}</Link>
@@ -296,15 +300,15 @@ export function ExceptionDetailPage() {
             </dd>
           </div>
           <div>
-            <dt>Stop</dt>
+            <dt>{t('exceptions.detail.stop')}</dt>
             <dd>{detail.stopLabel ?? '—'}</dd>
           </div>
           <div>
-            <dt>Goederenlijn</dt>
+            <dt>{t('exceptions.detail.cargoLine')}</dt>
             <dd>{detail.cargoDescription ?? '—'}</dd>
           </div>
           <div>
-            <dt>Colli</dt>
+            <dt>{t('exceptions.detail.package')}</dt>
             <dd>
               {detail.packageNumber ? (
                 <>
@@ -317,46 +321,46 @@ export function ExceptionDetailPage() {
             </dd>
           </div>
           <div>
-            <dt>Aantal</dt>
+            <dt>{t('exceptions.detail.quantity')}</dt>
             <dd>{detail.quantity ?? '—'}</dd>
           </div>
           <div>
-            <dt>Chauffeur</dt>
+            <dt>{t('exceptions.detail.driver')}</dt>
             <dd>{detail.driverName ?? '—'}</dd>
           </div>
           <div>
-            <dt>Locatie (GPS)</dt>
+            <dt>{t('exceptions.detail.gps')}</dt>
             <dd>{detail.latitude !== null && detail.longitude !== null ? `${detail.latitude}, ${detail.longitude}` : '—'}</dd>
           </div>
         </dl>
       </section>
 
       <section className="to-section">
-        <h2>Afhandeling</h2>
+        <h2>{t('exceptions.detail.handlingTitle')}</h2>
         {editing ? (
           <div className="exc-edit">
-            <FormField label="Ernst" htmlFor="exc-edit-severity">
+            <FormField label={t('exceptions.detail.severityLabel')} htmlFor="exc-edit-severity">
               <select id="exc-edit-severity" value={severity} onChange={(e) => setSeverity(e.target.value as ExceptionSeverity)} disabled={busy}>
                 {EXCEPTION_SEVERITIES.map((s) => (
                   <option key={s} value={s}>
-                    {EXCEPTION_SEVERITY_LABELS[s]}
+                    {t(EXCEPTION_SEVERITY_LABELS[s])}
                   </option>
                 ))}
               </select>
             </FormField>
-            <FormField label="Dispatchernotities" htmlFor="exc-edit-notes">
+            <FormField label={t('exceptions.detail.dispatcherNotes')} htmlFor="exc-edit-notes">
               <textarea id="exc-edit-notes" rows={3} value={dispatcherNotes} onChange={(e) => setDispatcherNotes(e.target.value)} disabled={busy} maxLength={4000} />
             </FormField>
             <label className="tof-checkbox">
               <input type="checkbox" checked={customerVisible} onChange={(e) => setCustomerVisible(e.target.checked)} disabled={busy} />
-              Zichtbaar voor klant
+              {t('exceptions.detail.customerVisible')}
             </label>
             <div className="exc-edit-actions">
               <Button variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
-                Annuleren
+                {t('exceptions.detail.cancel')}
               </Button>
               <Button onClick={() => void handleEditSave()} disabled={busy}>
-                Opslaan
+                {t('exceptions.detail.save')}
               </Button>
             </div>
           </div>
@@ -364,19 +368,19 @@ export function ExceptionDetailPage() {
           <>
             <dl className="to-facts">
               <div>
-                <dt>Dispatchernotities</dt>
+                <dt>{t('exceptions.detail.dispatcherNotes')}</dt>
                 <dd className="exc-multiline">{detail.dispatcherNotes ?? '—'}</dd>
               </div>
               <div>
-                <dt>Zichtbaar voor klant</dt>
-                <dd>{detail.customerVisible ? 'Ja' : 'Nee'}</dd>
+                <dt>{t('exceptions.detail.customerVisible')}</dt>
+                <dd>{detail.customerVisible ? t('exceptions.detail.yes') : t('exceptions.detail.no')}</dd>
               </div>
               <div>
-                <dt>Afhandelingsnotitie</dt>
+                <dt>{t('exceptions.detail.resolutionNote')}</dt>
                 <dd className="exc-multiline">{detail.resolutionNote ?? '—'}</dd>
               </div>
               <div>
-                <dt>Afgehandeld door</dt>
+                <dt>{t('exceptions.detail.resolvedBy')}</dt>
                 <dd>
                   {detail.resolvedByName ?? '—'}
                   {detail.resolvedAt && ` · ${formatDateTime(detail.resolvedAt)}`}
@@ -394,7 +398,7 @@ export function ExceptionDetailPage() {
                 }}
                 disabled={busy}
               >
-                Bewerken
+                {t('exceptions.detail.edit')}
               </Button>
             )}
           </>
@@ -403,7 +407,7 @@ export function ExceptionDetailPage() {
 
       {detail.photos.length > 0 && (
         <section className="to-section">
-          <h2>Foto's ({detail.photos.length})</h2>
+          <h2>{t('exceptions.detail.photosTitle', { count: detail.photos.length })}</h2>
           <div className="exc-photos">
             {detail.photos.map((photo) => (
               <figure key={photo.id} className="exc-photo">
@@ -418,7 +422,7 @@ export function ExceptionDetailPage() {
                   {photo.fileName}
                   {canResolve && (
                     <button type="button" className="exc-photo-delete" onClick={() => void handleDeletePhoto(photo.id)} disabled={busy}>
-                      Verwijderen
+                      {t('exceptions.detail.deletePhoto')}
                     </button>
                   )}
                 </figcaption>
@@ -429,30 +433,30 @@ export function ExceptionDetailPage() {
       )}
 
       <section className="to-section">
-        <h2>Historiek</h2>
+        <h2>{t('exceptions.detail.historyTitle')}</h2>
         <AuditHistoryPanel entityType="ExecutionException" entityId={detail.id} />
       </section>
 
       {dispositionAction && (
         <Modal
-          title={`Colli ${detail.packageNumber}: ${PACKAGE_INCIDENT_ACTION_LABELS[dispositionAction]}`}
+          title={t('exceptions.detail.dispositionModalTitle', { packageNumber: detail.packageNumber ?? '', action: t(PACKAGE_INCIDENT_ACTION_LABELS[dispositionAction]) })}
           onClose={() => setDispositionAction(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDispositionAction(null)} disabled={busy}>
-                Annuleren
+                {t('exceptions.detail.cancel')}
               </Button>
               <Button
                 onClick={() => void submitDisposition()}
                 disabled={busy || !dispositionNote.trim()}
               >
-                Bevestigen
+                {t('exceptions.detail.confirm')}
               </Button>
             </>
           }
         >
-          <FormField label="Toelichting" htmlFor="disposition-note" required>
+          <FormField label={t('exceptions.detail.noteLabel')} htmlFor="disposition-note" required>
             <input
               id="disposition-note"
               value={dispositionNote}
@@ -467,25 +471,25 @@ export function ExceptionDetailPage() {
 
       {statusTarget && (
         <Modal
-          title={`Status wijzigen naar: ${EXCEPTION_STATUS_LABELS[statusTarget]}`}
+          title={t('exceptions.detail.statusModalTitle', { status: t(EXCEPTION_STATUS_LABELS[statusTarget]) })}
           onClose={() => setStatusTarget(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setStatusTarget(null)} disabled={busy}>
-                Annuleren
+                {t('exceptions.detail.cancel')}
               </Button>
               <Button onClick={() => void handleStatusSubmit()} disabled={busy}>
-                {busy ? 'Bezig…' : 'Bevestigen'}
+                {busy ? t('exceptions.detail.busy') : t('exceptions.detail.confirm')}
               </Button>
             </>
           }
         >
           <FormField
-            label={statusTarget === 'Resolved' || statusTarget === 'Rejected' ? 'Afhandelingsnotitie' : 'Notitie (optioneel)'}
+            label={statusTarget === 'Resolved' || statusTarget === 'Rejected' ? t('exceptions.detail.resolutionNoteLabel') : t('exceptions.detail.optionalNoteLabel')}
             htmlFor="exc-status-note"
             required={statusTarget === 'Resolved' || statusTarget === 'Rejected'}
-            hint="De melder ontvangt deze beslissing als notificatie."
+            hint={t('exceptions.detail.statusNoteHint')}
           >
             <textarea
               id="exc-status-note"

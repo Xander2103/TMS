@@ -1,0 +1,35 @@
+{
+  "status": {
+    "Pending": "Queued",
+    "Synced": "Synchronised",
+    "Failed": "Failed",
+    "Cancelled": "Cancelled"
+  },
+  "event": {
+    "leave_approved": "Approved leave",
+    "shift_confirmed": "Confirmed shift"
+  },
+  "page": {
+    "title": "Integrations",
+    "subtitle": "Outlook/Exchange calendar synchronisation — approved leave and confirmed shifts. In development a fake provider runs; the real Microsoft connection follows once credentials are available.",
+    "loadFailed": "The synchronisation queue could not be loaded.",
+    "statusAria": "Status",
+    "allStatuses": "All statuses",
+    "retried": "Item offered again — the next run will pick it up.",
+    "retryFailed": "Re-offering failed.",
+    "retry": "Retry",
+    "cancellationSuffix": "(cancellation)",
+    "empty": "No synchronisation items yet."
+  },
+  "columns": {
+    "created": "Created",
+    "kind": "Kind",
+    "employee": "Employee",
+    "period": "Period",
+    "title": "Title",
+    "status": "Status",
+    "externalEvent": "External event",
+    "error": "Error",
+    "actionsAria": "Actions"
+  }
+}

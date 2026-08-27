@@ -3,6 +3,7 @@ import { createSearchParams, useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { euro } from '../../invoices/types'
 import { getKpiDashboard } from '../api/kpiApi'
 import { KpiCard } from '../components/KpiCard'
@@ -20,6 +21,7 @@ import '../components/kpi.css'
  */
 export function KpiDashboardPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canSeeProfitability = hasPermission('profitability.view')
 
@@ -42,7 +44,7 @@ export function KpiDashboardPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('De KPI-cijfers konden niet worden geladen.')
+        if (mounted) setLoadError(t('kpiReports.kpi.loadFailed'))
       })
     return () => {
       mounted = false
@@ -61,10 +63,10 @@ export function KpiDashboardPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: "KPI's" }]} />
+      <Breadcrumbs items={[{ label: t('kpiReports.kpi.breadcrumb') }]} />
       <PageHeader
-        title="KPI-dashboard"
-        subtitle="Managementcijfers voor de gekozen periode. Klik op een kaart voor het detailrapport."
+        title={t('kpiReports.kpi.title')}
+        subtitle={t('kpiReports.kpi.subtitle')}
         action={
           <span className="kpi-export-actions">
             <KpiExportControl filter={filter} />
@@ -76,23 +78,30 @@ export function KpiDashboardPage() {
       <KpiFilterBar filter={filter} onChange={setFilter} />
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && !data && <p className="placeholder-text">KPI's laden…</p>}
+      {!loadError && !data && <p className="placeholder-text">{t('kpiReports.kpi.loading')}</p>}
       {data && (
         <>
           {canSeeProfitability && (
             <section className="kpi-section">
-              <h2>Financieel</h2>
+              <h2>{t('kpiReports.kpi.financialSection')}</h2>
               <div className="kpi-grid">
-                <KpiCard label="Omzet vandaag" value={euro(data.revenueToday)} to={profitLink} />
-                <KpiCard label="Omzet periode" value={euro(data.revenuePeriod)} to={profitLink} />
-                <KpiCard label="Winst vandaag" value={euro(data.profitToday)} to={profitLink} />
-                <KpiCard label="Winst periode" value={euro(data.profitPeriod)} to={profitLink} />
-                <KpiCard label="Gemiddelde marge" value={pct(data.averageMarginPct)} to={profitLink} />
-                <KpiCard label="Winst per rit" value={data.profitPerTrip !== null ? euro(data.profitPerTrip) : '—'} hint={`${data.tripCount} ritten`} to={profitLink} />
+                <KpiCard label={t('kpiReports.kpi.revenueToday')} value={euro(data.revenueToday)} to={profitLink} />
+                <KpiCard label={t('kpiReports.kpi.revenuePeriod')} value={euro(data.revenuePeriod)} to={profitLink} />
+                <KpiCard label={t('kpiReports.kpi.profitToday')} value={euro(data.profitToday)} to={profitLink} />
+                <KpiCard label={t('kpiReports.kpi.profitPeriod')} value={euro(data.profitPeriod)} to={profitLink} />
+                <KpiCard label={t('kpiReports.kpi.averageMargin')} value={pct(data.averageMarginPct)} to={profitLink} />
                 <KpiCard
-                  label="Kostenoverschrijdingen"
+                  label={t('kpiReports.kpi.profitPerTrip')}
+                  value={data.profitPerTrip !== null ? euro(data.profitPerTrip) : '—'}
+                  hint={t('kpiReports.kpi.trips', { count: data.tripCount })}
+                  to={profitLink}
+                />
+                <KpiCard
+                  label={t('kpiReports.kpi.costOverruns')}
                   value={num(data.costOverrunTripCount)}
-                  hint={data.avgCostOverrunPct !== null ? `gem. afwijking ${pct(data.avgCostOverrunPct)}` : 'definitieve vs. geschatte kost'}
+                  hint={data.avgCostOverrunPct !== null
+                    ? t('kpiReports.kpi.costOverrunHint', { pct: pct(data.avgCostOverrunPct) })
+                    : t('kpiReports.kpi.costOverrunHintNone')}
                   to={profitLink}
                   tone={data.costOverrunTripCount > 0 ? 'warning' : undefined}
                 />
@@ -101,16 +110,16 @@ export function KpiDashboardPage() {
           )}
 
           <section className="kpi-section">
-            <h2>Vloot &amp; kilometers</h2>
+            <h2>{t('kpiReports.kpi.fleetSection')}</h2>
             <div className="kpi-grid">
-              <KpiCard label="Voertuigbezetting" value={pct(data.vehicleUtilisationPct)} hint="actieve uren / beschikbare uren" to={profitLink} />
-              <KpiCard label="Totale kilometers" value={`${num(data.totalKm)} km`} to={profitLink} />
-              <KpiCard label="Lege kilometers" value={`${num(data.emptyKm)} km`} hint={pct(data.emptyKmPct)} to={profitLink} />
-              <KpiCard label="Brandstofverbruik" value={`${num(data.fuelLitres)} l`} to="/tank-cards" />
-              <KpiCard label="Brandstofkosten" value={euro(data.fuelCost)} to="/tank-cards" />
-              <KpiCard label="CO₂-raming" value={`${num(data.co2Kg)} kg`} hint="op basis van getankte liters" />
+              <KpiCard label={t('kpiReports.kpi.vehicleUtilisation')} value={pct(data.vehicleUtilisationPct)} hint={t('kpiReports.kpi.vehicleUtilisationHint')} to={profitLink} />
+              <KpiCard label={t('kpiReports.kpi.totalKm')} value={t('kpiReports.kpi.kmValue', { value: num(data.totalKm) })} to={profitLink} />
+              <KpiCard label={t('kpiReports.kpi.emptyKm')} value={t('kpiReports.kpi.kmValue', { value: num(data.emptyKm) })} hint={pct(data.emptyKmPct)} to={profitLink} />
+              <KpiCard label={t('kpiReports.kpi.fuelUsage')} value={t('kpiReports.kpi.litresValue', { value: num(data.fuelLitres) })} to="/tank-cards" />
+              <KpiCard label={t('kpiReports.kpi.fuelCost')} value={euro(data.fuelCost)} to="/tank-cards" />
+              <KpiCard label={t('kpiReports.kpi.co2')} value={t('kpiReports.kpi.kgValue', { value: num(data.co2Kg) })} hint={t('kpiReports.kpi.co2Hint')} />
               <KpiCard
-                label="Open schadegevallen"
+                label={t('kpiReports.kpi.openDamage')}
                 value={num(data.openDamageCount)}
                 to="/fleet"
                 tone={data.openDamageCount > 0 ? 'warning' : undefined}
@@ -119,24 +128,24 @@ export function KpiDashboardPage() {
           </section>
 
           <section className="kpi-section">
-            <h2>Uitvoering</h2>
+            <h2>{t('kpiReports.kpi.executionSection')}</h2>
             <div className="kpi-grid">
-              <KpiCard label="Leverbetrouwbaarheid" value={pct(data.deliveryReliabilityPct)} hint="succesvolle losstops / gepland" to={profitLink} />
-              <KpiCard label="Stiptheid aankomst" value={pct(data.onTimeArrivalPct)} hint="binnen het afgesproken venster" to={profitLink} />
+              <KpiCard label={t('kpiReports.kpi.deliveryReliability')} value={pct(data.deliveryReliabilityPct)} hint={t('kpiReports.kpi.deliveryReliabilityHint')} to={profitLink} />
+              <KpiCard label={t('kpiReports.kpi.onTimeArrival')} value={pct(data.onTimeArrivalPct)} hint={t('kpiReports.kpi.onTimeArrivalHint')} to={profitLink} />
               <KpiCard
-                label="Gem. ETA-afwijking"
-                value={data.avgEtaDeviationMinutes !== null ? `${num(data.avgEtaDeviationMinutes, 1)} min` : '—'}
-                hint="aankomst t.o.v. laatste ETA"
+                label={t('kpiReports.kpi.etaDeviation')}
+                value={data.avgEtaDeviationMinutes !== null ? t('kpiReports.kpi.minutesValue', { value: num(data.avgEtaDeviationMinutes, 1) }) : '—'}
+                hint={t('kpiReports.kpi.etaDeviationHint')}
               />
               <KpiCard
-                label="Mislukte leveringen"
+                label={t('kpiReports.kpi.failedDeliveries')}
                 value={num(data.failedDeliveries)}
                 tone={data.failedDeliveries > 0 ? 'danger' : undefined}
                 to={profitLink}
               />
-              <KpiCard label="Deelleveringen" value={num(data.partialDeliveries)} to={profitLink} />
+              <KpiCard label={t('kpiReports.kpi.partialDeliveries')} value={num(data.partialDeliveries)} to={profitLink} />
               <KpiCard
-                label="Open afwijkingen"
+                label={t('kpiReports.kpi.openExceptions')}
                 value={num(data.openExceptions)}
                 to="/exceptions"
                 tone={data.openExceptions > 0 ? 'warning' : undefined}
@@ -148,15 +157,15 @@ export function KpiDashboardPage() {
             <section className="kpi-section kpi-tables">
               {canSeeProfitability && data.topCustomers.length > 0 && (
                 <div className="kpi-table-panel">
-                  <h3>Top klanten (omzet, winst per klant)</h3>
+                  <h3>{t('kpiReports.kpi.topCustomers')}</h3>
                   <table className="kpi-table">
                     <thead>
                       <tr>
-                        <th>Klant</th>
-                        <th className="kpi-num">Omzet</th>
-                        <th className="kpi-num">Toegerekende kost</th>
-                        <th className="kpi-num">Winst</th>
-                        <th className="kpi-num">Marge</th>
+                        <th>{t('kpiReports.kpi.customerHeader')}</th>
+                        <th className="kpi-num">{t('kpiReports.kpi.revenueHeader')}</th>
+                        <th className="kpi-num">{t('kpiReports.kpi.allocatedCostHeader')}</th>
+                        <th className="kpi-num">{t('kpiReports.kpi.profitHeader')}</th>
+                        <th className="kpi-num">{t('kpiReports.kpi.marginHeader')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -179,21 +188,21 @@ export function KpiDashboardPage() {
               )}
               {data.kmPerDriver.length > 0 && (
                 <div className="kpi-table-panel">
-                  <h3>Kilometers per chauffeur</h3>
+                  <h3>{t('kpiReports.kpi.kmPerDriver')}</h3>
                   <table className="kpi-table">
                     <thead>
                       <tr>
-                        <th>Chauffeur</th>
-                        <th className="kpi-num">Kilometers</th>
-                        <th className="kpi-num">Uren</th>
+                        <th>{t('kpiReports.kpi.driverHeader')}</th>
+                        <th className="kpi-num">{t('kpiReports.kpi.kmHeader')}</th>
+                        <th className="kpi-num">{t('kpiReports.kpi.hoursHeader')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.kmPerDriver.map((driver) => (
                         <tr key={driver.driverId}>
                           <td>{driver.driverName}</td>
-                          <td className="kpi-num">{num(driver.km)} km</td>
-                          <td className="kpi-num">{num(driver.hours, 1)} u</td>
+                          <td className="kpi-num">{t('kpiReports.kpi.kmValue', { value: num(driver.km) })}</td>
+                          <td className="kpi-num">{t('kpiReports.kpi.hoursValue', { value: num(driver.hours, 1) })}</td>
                         </tr>
                       ))}
                     </tbody>

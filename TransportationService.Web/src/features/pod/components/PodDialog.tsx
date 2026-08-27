@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { getTripPackageChecklist } from '../../packages/api/packagesApi'
 import {
   PACKAGE_STATUS_LABELS,
@@ -31,6 +32,7 @@ const OUTCOMES: PodOutcome[] = ['Complete', 'Partial', 'Refused']
  * The proof finalises immutably server-side; photos upload afterwards (additive evidence).
  */
 export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: PodDialogProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
 
   const [recipientName, setRecipientName] = useState('')
@@ -64,11 +66,11 @@ export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: P
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     if (!recipientName.trim()) {
-      showError('De naam van de ontvanger is verplicht.')
+      showError(t('pod.dialog.recipientRequired'))
       return
     }
     if (packages.length > 0 && !packagesAcknowledged) {
-      showError('Bevestig de collilijst met de ontvanger voordat je de POD afrondt.')
+      showError(t('pod.dialog.acknowledgeRequired'))
       return
     }
     setBusy(true)
@@ -102,14 +104,14 @@ export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: P
       }
 
       if (photoFailures > 0) {
-        showError(`POD afgerond, maar ${photoFailures} foto('s) konden niet worden geüpload.`)
+        showError(t('pod.dialog.photosFailed', { count: photoFailures }))
       } else {
-        showSuccess('POD afgerond en vastgelegd.')
+        showSuccess(t('pod.dialog.finalized'))
       }
       onFinalized()
       onClose()
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De POD kon niet worden afgerond.')
+      showError(err instanceof ApiError ? err.message : t('pod.dialog.finalizeFailed'))
     } finally {
       setBusy(false)
     }
@@ -117,22 +119,22 @@ export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: P
 
   return (
     <Modal
-      title={`POD opnemen — ${stopLabel}`}
+      title={t('pod.dialog.title', { stop: stopLabel })}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('pod.dialog.cancel')}
           </Button>
           <Button type="submit" form="pod-form" disabled={busy}>
-            {busy ? 'Bezig…' : 'POD afronden'}
+            {busy ? t('pod.dialog.busy') : t('pod.dialog.finalize')}
           </Button>
         </>
       }
     >
       <form id="pod-form" className="pod-form" onSubmit={handleSubmit} noValidate>
-        <div className="pod-outcomes" role="radiogroup" aria-label="Resultaat van de levering">
+        <div className="pod-outcomes" role="radiogroup" aria-label={t('pod.dialog.outcomeLabel')}>
           {OUTCOMES.map((option) => (
             <label key={option} className={`pod-outcome ${outcome === option ? 'pod-outcome-active' : ''}`}>
               <input
@@ -146,42 +148,42 @@ export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: P
               <span className="pod-outcome-icon" aria-hidden="true">
                 {POD_OUTCOME_ICONS[option]}
               </span>
-              {POD_OUTCOME_LABELS[option]}
+              {t(POD_OUTCOME_LABELS[option])}
             </label>
           ))}
         </div>
 
-        <FormField label="Naam ontvanger" htmlFor="pod-recipient" required>
+        <FormField label={t('pod.dialog.recipientLabel')} htmlFor="pod-recipient" required>
           <input id="pod-recipient" value={recipientName} onChange={(e) => setRecipientName(e.target.value)} disabled={busy} maxLength={200} autoFocus />
         </FormField>
-        <FormField label="Functie/rol" htmlFor="pod-role">
-          <input id="pod-role" value={recipientRole} onChange={(e) => setRecipientRole(e.target.value)} disabled={busy} maxLength={100} placeholder="bv. magazijnier" />
+        <FormField label={t('pod.dialog.roleLabel')} htmlFor="pod-role">
+          <input id="pod-role" value={recipientRole} onChange={(e) => setRecipientRole(e.target.value)} disabled={busy} maxLength={100} placeholder={t('pod.dialog.rolePlaceholder')} />
         </FormField>
 
         <div className="pod-flags">
           <label className="tof-checkbox">
             <input type="checkbox" checked={damageReported} onChange={(e) => setDamageReported(e.target.checked)} disabled={busy} />
-            Schade vastgesteld
+            {t('pod.dialog.damageFlag')}
           </label>
           <label className="tof-checkbox">
             <input type="checkbox" checked={missingReported} onChange={(e) => setMissingReported(e.target.checked)} disabled={busy} />
-            Ontbrekende colli
+            {t('pod.dialog.missingFlag')}
           </label>
         </div>
 
-        <FormField label="Opmerkingen" htmlFor="pod-notes">
+        <FormField label={t('pod.dialog.notesLabel')} htmlFor="pod-notes">
           <textarea id="pod-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} disabled={busy} maxLength={2000} />
         </FormField>
 
         {packages.length > 0 && (
           <div className="pod-packages">
-            <h3>Colli op deze stop</h3>
+            <h3>{t('pod.dialog.packagesTitle')}</h3>
             <ul>
               {packages.map((item) => (
                 <li key={item.packageId}>
                   <span className="pod-package-number">{item.packageNumber}</span>
                   <span className="pod-package-desc">{item.description}</span>
-                  <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{PACKAGE_STATUS_LABELS[item.status]}</Badge>
+                  <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{t(PACKAGE_STATUS_LABELS[item.status])}</Badge>
                 </li>
               ))}
             </ul>
@@ -192,16 +194,16 @@ export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: P
                 onChange={(e) => setPackagesAcknowledged(e.target.checked)}
                 disabled={busy}
               />
-              De ontvanger heeft de collilijst en uitkomsten bevestigd
+              {t('pod.dialog.acknowledgeLabel')}
             </label>
           </div>
         )}
 
-        <FormField label="Handtekening ontvanger" htmlFor="pod-signature">
+        <FormField label={t('pod.dialog.signatureLabel')} htmlFor="pod-signature">
           <SignaturePad disabled={busy} onChange={setSignature} />
         </FormField>
 
-        <FormField label="Foto's levering" htmlFor="pod-photos-delivery" hint="Afgeleverde goederen, losplaats…">
+        <FormField label={t('pod.dialog.photosDeliveryLabel')} htmlFor="pod-photos-delivery" hint={t('pod.dialog.photosDeliveryHint')}>
           <input
             id="pod-photos-delivery"
             type="file"
@@ -212,7 +214,7 @@ export function PodDialog({ tripId, stopId, stopLabel, onClose, onFinalized }: P
             disabled={busy}
           />
         </FormField>
-        <FormField label="Foto's documenten" htmlFor="pod-photos-documents" hint="Getekende CMR, leverbon…">
+        <FormField label={t('pod.dialog.photosDocumentsLabel')} htmlFor="pod-photos-documents" hint={t('pod.dialog.photosDocumentsHint')}>
           <input
             id="pod-photos-documents"
             type="file"

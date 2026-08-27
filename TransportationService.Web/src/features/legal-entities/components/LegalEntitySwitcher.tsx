@@ -1,6 +1,7 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { getActiveLegalEntity, getLegalEntityOptions, setActiveLegalEntity } from '../api/legalEntitiesApi'
 import type { LegalEntityOption } from '../types'
 import './LegalEntitySwitcher.css'
@@ -13,6 +14,7 @@ const NEW_ENTITY_VALUE = '__new'
  */
 export function LegalEntitySwitcher() {
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const canManage = hasPermission('legal_entities.manage')
   const navigate = useNavigate()
 
@@ -61,16 +63,16 @@ export function LegalEntitySwitcher() {
   return (
     <div className="le-switcher">
       <label className="le-switcher-label" htmlFor="le-switcher-select">
-        Actief bedrijf
+        {t('legalEntities.switcher.label')}
       </label>
       <select id="le-switcher-select" className="le-switcher-select" value={selectedId} onChange={handleChange}>
         {options.map((option) => (
           <option key={option.id} value={option.id}>
             {option.displayName}
-            {option.isDefault ? ' (standaard)' : ''}
+            {option.isDefault ? ` ${t('legalEntities.switcher.defaultSuffix')}` : ''}
           </option>
         ))}
-        {canManage && <option value={NEW_ENTITY_VALUE}>+ Nieuw bedrijf…</option>}
+        {canManage && <option value={NEW_ENTITY_VALUE}>{t('legalEntities.switcher.newEntity')}</option>}
       </select>
     </div>
   )

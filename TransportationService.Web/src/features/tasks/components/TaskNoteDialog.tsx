@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
+import { useLocale } from '../../../i18n/localeContext'
 
 interface TaskNoteDialogProps {
   title: string
@@ -30,12 +31,13 @@ export function TaskNoteDialog({
   onSubmit,
   onClose,
 }: TaskNoteDialogProps) {
+  const { t } = useLocale()
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | undefined>()
 
   function submit() {
     if (requireNote && note.trim().length === 0) {
-      setError('Dit veld is verplicht.')
+      setError(t('tasks.noteDialog.requiredField'))
       return
     }
     onSubmit(note.trim())
@@ -49,10 +51,10 @@ export function TaskNoteDialog({
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button variant={destructive ? 'danger' : 'primary'} onClick={submit} disabled={busy}>
-            {busy ? 'Bezig...' : confirmLabel}
+            {busy ? t('ui.actions.busy') : confirmLabel}
           </Button>
         </>
       }

@@ -3,6 +3,7 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { LoadingState } from '../../../components/feedback/LoadingState'
 import { ErrorState } from '../../../components/feedback/ErrorState'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { RolesTable } from '../components/RolesTable'
 import { useRoles } from '../hooks/useRoles'
 import { useRoleMutations } from '../hooks/useRoleMutations'
@@ -10,6 +11,7 @@ import { useRoleMutations } from '../hooks/useRoleMutations'
 const NAME_MAX_LENGTH = 150
 
 export function RolesPage() {
+  const { t } = useLocale()
   const { roles, isLoading, error, reload } = useRoles()
   const { hasPermission } = useAuth()
   const [isCreating, setIsCreating] = useState(false)
@@ -28,11 +30,11 @@ export function RolesPage() {
 
     const trimmedName = name.trim()
     if (!trimmedName) {
-      setValidationError('Naam is verplicht.')
+      setValidationError(t('usersRoles.roles.page.nameRequired'))
       return
     }
     if (trimmedName.length > NAME_MAX_LENGTH) {
-      setValidationError(`Naam mag maximaal ${NAME_MAX_LENGTH} tekens bevatten.`)
+      setValidationError(t('usersRoles.roles.page.nameMax', { max: NAME_MAX_LENGTH }))
       return
     }
 
@@ -48,11 +50,11 @@ export function RolesPage() {
   return (
     <>
       <PageHeader
-        title="Rollen en rechten"
+        title={t('usersRoles.roles.page.title')}
         action={
           hasPermission('roles.create') && (
             <button type="button" className="primary-button" onClick={() => setIsCreating((value) => !value)}>
-              {isCreating ? 'Annuleren' : 'Nieuwe rol'}
+              {isCreating ? t('ui.actions.cancel') : t('usersRoles.roles.page.newRole')}
             </button>
           )
         }
@@ -61,7 +63,7 @@ export function RolesPage() {
       {isCreating && (
         <form className="user-form" onSubmit={handleCreate} noValidate>
           <div className="form-field">
-            <label htmlFor="roleName">Naam</label>
+            <label htmlFor="roleName">{t('usersRoles.roles.page.name')}</label>
             <input
               id="roleName"
               name="roleName"
@@ -80,7 +82,7 @@ export function RolesPage() {
             )}
           </div>
           <div className="form-field">
-            <label htmlFor="roleDescription">Omschrijving</label>
+            <label htmlFor="roleDescription">{t('usersRoles.roles.page.description')}</label>
             <input
               id="roleDescription"
               name="roleDescription"
@@ -98,13 +100,13 @@ export function RolesPage() {
           )}
           <div className="form-actions">
             <button type="submit" className="primary-button" disabled={isSubmitting}>
-              {isSubmitting ? 'Aanmaken...' : 'Rol aanmaken'}
+              {isSubmitting ? t('usersRoles.roles.page.creating') : t('usersRoles.roles.page.create')}
             </button>
           </div>
         </form>
       )}
 
-      {isLoading && <LoadingState message="Rollen laden..." />}
+      {isLoading && <LoadingState message={t('usersRoles.roles.page.loading')} />}
       {error && <ErrorState message={error} />}
       {!isLoading && !error && <RolesTable roles={roles} />}
     </>

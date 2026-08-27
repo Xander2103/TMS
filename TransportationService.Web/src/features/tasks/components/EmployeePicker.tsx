@@ -1,4 +1,5 @@
 import { SearchableSelect } from '../../../components/ui/SearchableSelect'
+import { useLocale } from '../../../i18n/localeContext'
 import { useEmployeeOptions } from './useEmployeeOptions'
 
 interface EmployeeSelectProps {
@@ -11,6 +12,7 @@ interface EmployeeSelectProps {
 
 /** Single-employee combobox used by redistribute/apply/recurrence dialogs. */
 export function EmployeeSelect({ id, value, onChange, disabled, ariaLabel }: EmployeeSelectProps) {
+  const { t } = useLocale()
   const { options, isLoading } = useEmployeeOptions()
   return (
     <SearchableSelect
@@ -20,9 +22,9 @@ export function EmployeeSelect({ id, value, onChange, disabled, ariaLabel }: Emp
       options={options}
       isLoading={isLoading}
       disabled={disabled}
-      ariaLabel={ariaLabel ?? 'Medewerker'}
-      placeholder="Zoek een medewerker..."
-      emptyMessage="Geen medewerkers gevonden"
+      ariaLabel={ariaLabel ?? t('tasks.picker.employee')}
+      placeholder={t('tasks.picker.searchPlaceholder')}
+      emptyMessage={t('tasks.picker.empty')}
     />
   )
 }
@@ -36,6 +38,7 @@ interface EmployeeMultiSelectProps {
 
 /** Multi-employee picker: combobox to add, chips with remove. */
 export function EmployeeMultiSelect({ id, value, onChange, disabled }: EmployeeMultiSelectProps) {
+  const { t } = useLocale()
   const { options, isLoading } = useEmployeeOptions()
   const selectable = options.filter((option) => !value.includes(option.value))
   const labelFor = (employeeId: string) => options.find((option) => option.value === employeeId)?.label ?? employeeId
@@ -52,9 +55,9 @@ export function EmployeeMultiSelect({ id, value, onChange, disabled }: EmployeeM
         isLoading={isLoading}
         disabled={disabled}
         clearable={false}
-        ariaLabel="Medewerker toevoegen"
-        placeholder="Zoek en voeg medewerkers toe..."
-        emptyMessage="Geen medewerkers gevonden"
+        ariaLabel={t('tasks.picker.addEmployee')}
+        placeholder={t('tasks.picker.addPlaceholder')}
+        emptyMessage={t('tasks.picker.empty')}
       />
       {value.length > 0 && (
         <ul className="task-employee-chips">
@@ -64,7 +67,7 @@ export function EmployeeMultiSelect({ id, value, onChange, disabled }: EmployeeM
               {!disabled && (
                 <button
                   type="button"
-                  aria-label={`${labelFor(employeeId)} verwijderen`}
+                  aria-label={t('tasks.picker.removeAria', { name: labelFor(employeeId) })}
                   onClick={() => onChange(value.filter((entry) => entry !== employeeId))}
                 >
                   ×

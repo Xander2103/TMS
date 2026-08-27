@@ -123,7 +123,8 @@ export async function downloadCustomerDayDocuments(
   const response = await fetch(`${apiBaseUrl}/api/customers/${id}/documents/${kind}?date=${date}`, {
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
-  if (!response.ok) throw new Error('De documenten konden niet worden gegenereerd.')
+  // Bewust zonder message: de aanroepende component toont zijn eigen vertaalde foutmelding.
+  if (!response.ok) throw new Error()
   const blob = await response.blob()
   const disposition = response.headers.get('content-disposition')
   const fileName = disposition?.match(/filename="?([^";]+)"?/)?.[1] ?? `${kind}-${date}.pdf`

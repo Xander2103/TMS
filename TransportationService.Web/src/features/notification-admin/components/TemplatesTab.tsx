@@ -6,7 +6,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { describeApiError, getFieldError, localizeApiError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import type { CustomerListItem } from '../../customers/types'
 import {
@@ -21,10 +22,11 @@ import {
 } from '../api/notificationAdminApi'
 import { kindLabel, type CustomerMessageTemplate, type MessageChannel, type MessageTemplate } from '../types'
 
+/** Template languages; labels are translation keys rendered via t(). */
 const LANGUAGES = [
-  { value: 'nl', label: 'Nederlands' },
-  { value: 'fr', label: 'Frans' },
-  { value: 'en', label: 'Engels' },
+  { value: 'nl', labelKey: 'notificationAdmin.templates.languages.nl' },
+  { value: 'fr', labelKey: 'notificationAdmin.templates.languages.fr' },
+  { value: 'en', labelKey: 'notificationAdmin.templates.languages.en' },
 ]
 
 type ActiveField = 'subject' | 'body' | 'bodyHtml'
@@ -53,10 +55,11 @@ interface DeleteTarget {
   successMessage: string
 }
 
+/** Translation keys per draft mode; render via t(DRAFT_TITLES[mode]). */
 const DRAFT_TITLES: Record<DraftMode, string> = {
-  create: 'Sjabloon toevoegen',
-  override: 'Klantspecifiek sjabloon aanmaken',
-  edit: 'Sjabloon bewerken',
+  create: 'notificationAdmin.templates.draftTitles.create',
+  override: 'notificationAdmin.templates.draftTitles.override',
+  edit: 'notificationAdmin.templates.draftTitles.edit',
 }
 
 function insertTokenAt(
@@ -90,6 +93,7 @@ interface TemplatesTabProps {
  * inherited. The editor's optional customer field creates the override; this tab is where you
  * find, re-edit and remove it afterwards. */
 export function TemplatesTab({ canManage }: TemplatesTabProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [templates, setTemplates] = useState<MessageTemplate[] | null>(null)
   const [customerTemplates, setCustomerTemplates] = useState<CustomerMessageTemplate[] | null>(null)
@@ -119,16 +123,16 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
           setCustomerTemplates(data)
           setLoadError(null)
         })
-        .catch(() => setLoadError('De klantsjablonen konden niet worden geladen.'))
+        .catch(() => setLoadError(t('notificationAdmin.templates.loadCustomerFailed')))
     } else {
       listMessageTemplates()
         .then((data) => {
           setTemplates(data)
           setLoadError(null)
         })
-        .catch(() => setLoadError('De sjablonen konden niet worden geladen.'))
+        .catch(() => setLoadError(t('notificationAdmin.templates.loadFailed')))
     }
-  }, [canManage, scopeCustomerId])
+  }, [canManage, scopeCustomerId, t])
 
   useEffect(() => {
     reload()
@@ -222,7 +226,7 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
     try {
       setPreview(await previewTemplate({ kind: draft.kind, channel: draft.channel, language: draft.language, tokens: null }))
     } catch {
-      showError('De preview kon niet worden geladen.')
+      showError(t('notificationAdmin.templates.previewFailed'))
     } finally {
       setBusy(false)
     }
@@ -232,7 +236,7 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
     event.preventDefault()
     if (!draft) return
     if (!draft.body.trim()) {
-      setDraftError('De inhoud van het sjabloon is verplicht.')
+      setDraftError(t('notificationAdmin.templates.bodyRequired'))
       return
     }
     setBusy(true)
@@ -249,12 +253,14 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
         isActive: draft.isActive,
         customerId: draft.customerId,
       })
-      showSuccess(draft.customerId ? 'Klantspecifiek sjabloon opgeslagen.' : 'Sjabloon opgeslagen.')
+      showSuccess(
+        draft.customerId ? t('notificationAdmin.templates.savedCustomer') : t('notificationAdmin.templates.saved'),
+      )
       setDraft(null)
       reload()
     } catch (err) {
-      const described = describeApiError(err, 'Het sjabloon kon niet worden opgeslagen.')
-      setDraftError(described.message)
+      const described = describeApiError(err, t('notificationAdmin.templates.saveFailed'))
+      setDraftError(localizeApiError(t, err, t('notificationAdmin.templates.saveFailed')))
       setFieldErrors(described.fieldErrors)
     } finally {
       setBusy(false)
@@ -270,7 +276,7 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
       showSuccess(target.successMessage)
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'Het sjabloon kon niet worden verwijderd.').message)
+      showError(localizeApiError(t, err, t('notificationAdmin.templates.deleteFailed')))
     }
   }
 
@@ -282,45 +288,53 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
       <div className="notification-admin-toolbar">
         <div className="notification-admin-customer-picker">
           <SearchableSelect
-            ariaLabel="Klantweergave"
+            ariaLabel={t('notificationAdmin.templates.scopeAria')}
             value={scopeCustomerId}
             onChange={setScopeCustomerId}
             options={customerOptions}
-            placeholder="Standaard (alle klanten) — kies een klant voor klantspecifieke sjablonen"
+            placeholder={t('notificationAdmin.templates.scopePlaceholder')}
           />
         </div>
-        <Button onClick={openNew}>{scopeCustomerId ? '+ Klantspecifiek sjabloon' : '+ Sjabloon'}</Button>
+        <Button onClick={openNew}>
+          {scopeCustomerId ? t('notificationAdmin.templates.newCustomerTemplate') : t('notificationAdmin.templates.newTemplate')}
+        </Button>
       </div>
 
-      {!scopeCustomerId && templates === null && <p className="placeholder-text">Sjablonen laden…</p>}
+      {!scopeCustomerId && templates === null && (
+        <p className="placeholder-text">{t('notificationAdmin.templates.loading')}</p>
+      )}
       {!scopeCustomerId && templates !== null && templates.length === 0 && (
-        <p className="placeholder-text">Nog geen eigen sjablonen — ingebouwde standaardteksten worden gebruikt.</p>
+        <p className="placeholder-text">{t('notificationAdmin.templates.empty')}</p>
       )}
       {!scopeCustomerId && templates !== null && templates.length > 0 && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Kanaal</th>
-              <th>Taal</th>
-              <th>Bereik</th>
-              <th>Status</th>
-              <th aria-label="Acties" />
+              <th>{t('notificationAdmin.templates.columns.type')}</th>
+              <th>{t('notificationAdmin.templates.columns.channel')}</th>
+              <th>{t('notificationAdmin.templates.columns.language')}</th>
+              <th>{t('notificationAdmin.templates.columns.scope')}</th>
+              <th>{t('notificationAdmin.templates.columns.status')}</th>
+              <th aria-label={t('notificationAdmin.templates.columns.actionsAria')} />
             </tr>
           </thead>
           <tbody>
             {templates.map((template) => (
               <tr key={template.id}>
-                <td>{kindLabel(template.kind)}</td>
-                <td>{template.channel === 'Email' ? 'E-mail' : 'SMS'}</td>
+                <td>{kindLabel(t, template.kind)}</td>
+                <td>
+                  {template.channel === 'Email'
+                    ? t('notificationAdmin.templates.form.channelEmail')
+                    : t('notificationAdmin.templates.form.channelSms')}
+                </td>
                 <td>{template.language}</td>
                 <td>
-                  <Badge tone="neutral">Standaard</Badge>
+                  <Badge tone="neutral">{t('notificationAdmin.templates.badgeDefault')}</Badge>
                 </td>
-                <td>{!template.isActive && <Badge tone="neutral">inactief</Badge>}</td>
+                <td>{!template.isActive && <Badge tone="neutral">{t('notificationAdmin.templates.badgeInactive')}</Badge>}</td>
                 <td className="issued-items-row-actions">
                   <button type="button" className="issued-items-link" onClick={() => openEdit(template)}>
-                    Bewerken
+                    {t('ui.actions.edit')}
                   </button>
                   <button
                     type="button"
@@ -328,12 +342,12 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
                     onClick={() =>
                       setDeleteTarget({
                         id: template.id,
-                        label: kindLabel(template.kind),
-                        successMessage: 'Sjabloon verwijderd — het ingebouwde sjabloon geldt weer.',
+                        label: kindLabel(t, template.kind),
+                        successMessage: t('notificationAdmin.templates.deletedDefault'),
                       })
                     }
                   >
-                    Verwijderen
+                    {t('ui.actions.delete')}
                   </button>
                 </td>
               </tr>
@@ -342,36 +356,42 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
         </table>
       )}
 
-      {scopeCustomerId && customerTemplates === null && <p className="placeholder-text">Klantsjablonen laden…</p>}
+      {scopeCustomerId && customerTemplates === null && (
+        <p className="placeholder-text">{t('notificationAdmin.templates.loadingCustomer')}</p>
+      )}
       {scopeCustomerId && customerTemplates !== null && (
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Kanaal</th>
-              <th>Taal</th>
-              <th>Bereik</th>
-              <th>Status</th>
-              <th aria-label="Acties" />
+              <th>{t('notificationAdmin.templates.columns.type')}</th>
+              <th>{t('notificationAdmin.templates.columns.channel')}</th>
+              <th>{t('notificationAdmin.templates.columns.language')}</th>
+              <th>{t('notificationAdmin.templates.columns.scope')}</th>
+              <th>{t('notificationAdmin.templates.columns.status')}</th>
+              <th aria-label={t('notificationAdmin.templates.columns.actionsAria')} />
             </tr>
           </thead>
           <tbody>
             {customerTemplates.map((row) => (
               <tr key={`${row.kind}:${row.channel}:${row.language}`}>
-                <td>{kindLabel(row.kind)}</td>
-                <td>{row.channel === 'Email' ? 'E-mail' : 'SMS'}</td>
+                <td>{kindLabel(t, row.kind)}</td>
+                <td>
+                  {row.channel === 'Email'
+                    ? t('notificationAdmin.templates.form.channelEmail')
+                    : t('notificationAdmin.templates.form.channelSms')}
+                </td>
                 <td>{row.language}</td>
                 <td>
                   {row.isOverridden ? (
-                    <Badge tone="info">Klantspecifiek: {scopeCustomerName}</Badge>
+                    <Badge tone="info">{t('notificationAdmin.templates.badgeCustomer', { name: scopeCustomerName })}</Badge>
                   ) : (
-                    <Badge tone="neutral">Standaard</Badge>
+                    <Badge tone="neutral">{t('notificationAdmin.templates.badgeDefault')}</Badge>
                   )}
                 </td>
-                <td>{!row.isActive && <Badge tone="neutral">inactief</Badge>}</td>
+                <td>{!row.isActive && <Badge tone="neutral">{t('notificationAdmin.templates.badgeInactive')}</Badge>}</td>
                 <td className="issued-items-row-actions">
                   <button type="button" className="issued-items-link" onClick={() => openCustomerRow(row)}>
-                    Bewerken
+                    {t('ui.actions.edit')}
                   </button>
                   {row.isOverridden && row.id && (
                     <button
@@ -380,12 +400,12 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
                       onClick={() =>
                         setDeleteTarget({
                           id: row.id!,
-                          label: kindLabel(row.kind),
-                          successMessage: `Klantspecifiek sjabloon verwijderd — standaard geldt weer voor ${scopeCustomerName}.`,
+                          label: kindLabel(t, row.kind),
+                          successMessage: t('notificationAdmin.templates.deletedCustomer', { name: scopeCustomerName }),
                         })
                       }
                     >
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   )}
                 </td>
@@ -397,16 +417,16 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
 
       {draft && (
         <Modal
-          title={DRAFT_TITLES[draft.mode]}
+          title={t(DRAFT_TITLES[draft.mode])}
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => void loadPreview()} disabled={busy}>
-                Voorbeeld
+                {t('notificationAdmin.templates.preview')}
               </Button>
               <Button type="submit" form="notification-admin-template-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -418,7 +438,7 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
               </div>
             )}
             <div className="notification-admin-form-row">
-              <FormField label="Type" htmlFor="nat-kind">
+              <FormField label={t('notificationAdmin.templates.form.kind')} htmlFor="nat-kind">
                 <select
                   id="nat-kind"
                   value={draft.kind}
@@ -427,23 +447,23 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
                 >
                   {kinds.map((kind) => (
                     <option key={kind} value={kind}>
-                      {kindLabel(kind)}
+                      {kindLabel(t, kind)}
                     </option>
                   ))}
                 </select>
               </FormField>
-              <FormField label="Kanaal" htmlFor="nat-channel">
+              <FormField label={t('notificationAdmin.templates.form.channel')} htmlFor="nat-channel">
                 <select
                   id="nat-channel"
                   value={draft.channel}
                   disabled={busy}
                   onChange={(e) => setDraft({ ...draft, channel: e.target.value as MessageChannel })}
                 >
-                  <option value="Email">E-mail</option>
-                  <option value="Sms">SMS</option>
+                  <option value="Email">{t('notificationAdmin.templates.form.channelEmail')}</option>
+                  <option value="Sms">{t('notificationAdmin.templates.form.channelSms')}</option>
                 </select>
               </FormField>
-              <FormField label="Taal" htmlFor="nat-language">
+              <FormField label={t('notificationAdmin.templates.form.language')} htmlFor="nat-language">
                 <select
                   id="nat-language"
                   value={draft.language}
@@ -452,26 +472,30 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
                 >
                   {LANGUAGES.map((l) => (
                     <option key={l.value} value={l.value}>
-                      {l.label}
+                      {t(l.labelKey)}
                     </option>
                   ))}
                 </select>
               </FormField>
             </div>
 
-            <FormField label="Klant (optioneel)" htmlFor="nat-customer" hint="Leeg = standaardsjabloon voor alle klanten; kies een klant voor een afwijkend sjabloon.">
+            <FormField
+              label={t('notificationAdmin.templates.form.customer')}
+              htmlFor="nat-customer"
+              hint={t('notificationAdmin.templates.form.customerHint')}
+            >
               <SearchableSelect
                 id="nat-customer"
                 value={draft.customerId}
                 onChange={(value) => setDraft({ ...draft, customerId: value })}
                 options={customerOptions}
-                placeholder="Geen — standaardsjabloon"
+                placeholder={t('notificationAdmin.templates.form.customerPlaceholder')}
               />
             </FormField>
 
             {placeholders.length > 0 && (
               <div className="notification-admin-placeholder-chips">
-                <span className="notification-admin-muted">Beschikbare velden (klik om in te voegen in het laatst gebruikte veld):</span>
+                <span className="notification-admin-muted">{t('notificationAdmin.templates.form.placeholdersLabel')}</span>
                 <div className="notification-admin-chip-row">
                   {placeholders.map((token) => (
                     <button key={token} type="button" className="notification-admin-chip" onClick={() => insertToken(token)}>
@@ -483,7 +507,7 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
             )}
 
             {draft.channel === 'Email' && (
-              <FormField label="Onderwerp" htmlFor="nat-subject" error={getFieldError(fieldErrors, 'subject')}>
+              <FormField label={t('notificationAdmin.templates.form.subject')} htmlFor="nat-subject" error={getFieldError(fieldErrors, 'subject')}>
                 <input
                   id="nat-subject"
                   ref={subjectRef}
@@ -496,7 +520,7 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
               </FormField>
             )}
 
-            <FormField label="Inhoud" htmlFor="nat-body" required error={getFieldError(fieldErrors, 'body')}>
+            <FormField label={t('notificationAdmin.templates.form.body')} htmlFor="nat-body" required error={getFieldError(fieldErrors, 'body')}>
               <textarea
                 id="nat-body"
                 ref={bodyRef}
@@ -510,9 +534,9 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
             </FormField>
 
             <FormField
-              label="Opgemaakte inhoud (HTML, optioneel)"
+              label={t('notificationAdmin.templates.form.bodyHtml')}
               htmlFor="nat-body-html"
-              hint="Toegestane tags: p, br, strong, em, ul, ol, li, a (href), h1–h3. Andere tags/attributen worden verwijderd bij opslaan."
+              hint={t('notificationAdmin.templates.form.bodyHtmlHint')}
               error={getFieldError(fieldErrors, 'bodyHtml')}
             >
               <textarea
@@ -529,12 +553,12 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
 
             <label className="notification-admin-checkbox">
               <input type="checkbox" checked={draft.isActive} disabled={busy} onChange={(e) => setDraft({ ...draft, isActive: e.target.checked })} />
-              Actief
+              {t('notificationAdmin.templates.form.active')}
             </label>
 
             {preview && (
               <div className="notification-admin-preview">
-                <h3>Voorbeeld</h3>
+                <h3>{t('notificationAdmin.templates.preview')}</h3>
                 {preview.subject && <p className="notification-admin-preview-subject">{preview.subject}</p>}
                 <pre>{preview.body}</pre>
               </div>
@@ -545,9 +569,9 @@ export function TemplatesTab({ canManage }: TemplatesTabProps) {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Sjabloon verwijderen"
-          message={`Weet je zeker dat je het sjabloon voor '${deleteTarget.label}' wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('notificationAdmin.templates.deleteTitle')}
+          message={t('notificationAdmin.templates.deleteConfirm', { label: deleteTarget.label })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={() => void confirmDelete()}
           onCancel={() => setDeleteTarget(null)}

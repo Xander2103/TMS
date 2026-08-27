@@ -1,0 +1,47 @@
+{
+  "ownership": {
+    "Owned": "Owned",
+    "Rented": "Rented",
+    "Leased": "Leased"
+  },
+  "status": {
+    "Available": "Available",
+    "InUse": "In use",
+    "InMaintenance": "In maintenance",
+    "OutOfService": "Out of service"
+  },
+  "list": {
+    "new": "New trailer",
+    "loadFailed": "Trailers could not be loaded.",
+    "empty": "No trailers yet.",
+    "loading": "Loading trailers..."
+  },
+  "form": {
+    "firstRegistration": "First registration",
+    "maintenanceInfo": "After creation, maintenance and inspections are scheduled automatically according to the applicable maintenance policy (trailer rule → category rule → company default).",
+    "create": "Create trailer"
+  },
+  "new": {
+    "created": "Trailer {number} created.",
+    "followUpLabel": "Trailer {number}",
+    "duplicate": "A trailer with this licence plate already exists.",
+    "createFailed": "The trailer could not be created."
+  },
+  "detail": {
+    "loading": "Loading trailer…",
+    "loadFailed": "The trailer could not be loaded.",
+    "back": "Back to trailers",
+    "updated": "Trailer updated.",
+    "deleted": "Trailer deleted.",
+    "deleteFailed": "The trailer could not be deleted.",
+    "payload": "Payload",
+    "confirmDeleteTitle": "Delete trailer",
+    "confirmDeleteMessage": "Are you sure you want to delete trailer {number}?",
+    "deactivateTitle": "Deactivate trailer",
+    "reactivateTitle": "Reactivate trailer",
+    "deactivateMessage": "Deactivate {number}? History is kept, but the trailer can no longer be used for new trips.",
+    "reactivateMessage": "Reactivate {number}? The trailer will be available again.",
+    "deactivated": "Trailer deactivated.",
+    "reactivated": "Trailer reactivated."
+  }
+}

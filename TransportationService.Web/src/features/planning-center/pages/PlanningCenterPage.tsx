@@ -5,6 +5,7 @@ import {
   deleteResourceLink, listResourceLinks, touchResourceLink, type ResourceLink,
 } from '../../../api/resourceLinksApi'
 import { useToast } from '../../../components/ui/toastContext'
+import { useLocale } from '../../../i18n/localeContext'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { getTrip } from '../../planning/api/planningApi'
@@ -62,6 +63,7 @@ function loadStoredFilters(): UnplannedFilters {
 /** The dispatcher workspace: unplanned pool, drag-and-drop board and resource panel. */
 export function PlanningCenterPage() {
   const { showError, showSuccess } = useToast()
+  const { t } = useLocale()
 
   const [anchor, setAnchor] = useState(() => toIsoDate(new Date()))
   const [days, setDays] = useState<BoardViewDays>(3)
@@ -123,7 +125,7 @@ export function PlanningCenterPage() {
           setBoardLoadedKey(boardKey)
         }
       })
-      .catch((error: unknown) => showError(describeApiError(error, 'Planbord laden mislukt.').message))
+      .catch((error: unknown) => showError(describeApiError(error, t('planningCenter.page.boardLoadFailed')).message))
     return () => {
       cancelled = true
     }
@@ -148,7 +150,7 @@ export function PlanningCenterPage() {
             setUnplannedLoadedKey(unplannedKey)
           }
         })
-        .catch((error: unknown) => showError(describeApiError(error, 'Ongeplande opdrachten laden mislukt.').message))
+        .catch((error: unknown) => showError(describeApiError(error, t('planningCenter.page.unplannedLoadFailed')).message))
     }, 300)
     return () => {
       cancelled = true
@@ -166,7 +168,7 @@ export function PlanningCenterPage() {
           setResourcesLoadedKey(resourcesKey)
         }
       })
-      .catch((error: unknown) => showError(describeApiError(error, 'Middelen laden mislukt.').message))
+      .catch((error: unknown) => showError(describeApiError(error, t('planningCenter.page.resourcesLoadFailed')).message))
     return () => {
       cancelled = true
     }
@@ -222,46 +224,46 @@ export function PlanningCenterPage() {
       if (error instanceof ApiError && error.status === 409) {
         const body = (error.body ?? {}) as PlanningRejection
         if (body.staleVersion) {
-          showError('De rit is intussen door iemand anders gewijzigd; het bord is ververst.')
+          showError(t('planningCenter.page.staleVersion'))
           reloadBoard()
         } else if (body.conflicts && body.conflicts.length > 0) {
           setConflictState({
-            message: body.message ?? 'De actie is geweigerd door conflicten.',
+            message: body.message ?? t('planningCenter.page.rejectedByConflicts'),
             conflicts: body.conflicts,
             retryFactory: options.overrideRetry ?? null,
             retryOptions: { ...options, overrideRetry: undefined },
           })
         } else {
-          showError(describeApiError(error, 'De actie is geweigerd.').message)
+          showError(describeApiError(error, t('planningCenter.page.rejected')).message)
           reloadBoard()
         }
       } else {
-        showError(describeApiError(error, 'De actie is mislukt.').message)
+        showError(describeApiError(error, t('planningCenter.page.actionFailed')).message)
       }
     } finally {
       setBusy(false)
     }
-  }, [reloadBoard, reloadResources, reloadUnplanned, showError, showSuccess])
+  }, [reloadBoard, reloadResources, reloadUnplanned, showError, showSuccess, t])
 
   // --- Drag-and-drop handlers (all persist through backend commands) ---
 
   const handleDropOnTrip = useCallback((trip: PlanningBoardTrip, payload: DragPayload) => {
     if (trip.status !== 'Draft' && trip.status !== 'Planned') {
-      showError('Alleen concept- of geplande ritten kunnen worden aangepast.')
+      showError(t('planningCenter.page.onlyDraftOrPlanned'))
       return
     }
     switch (payload.kind) {
       case 'order':
         void runMutation(
           () => assignOrders(trip.id, [payload.id], trip.version),
-          { success: `${payload.label} toegevoegd aan ${trip.tripNumber}.`, reloadOrders: true },
+          { success: t('planningCenter.page.orderAdded', { label: payload.label, tripNumber: trip.tripNumber }), reloadOrders: true },
         )
         break
       case 'driver':
         void runMutation(
           () => assignDriver(trip.id, payload.id, trip.version),
           {
-            success: `${payload.label} toegewezen aan ${trip.tripNumber}.`,
+            success: t('planningCenter.page.resourceAssigned', { label: payload.label, tripNumber: trip.tripNumber }),
             reloadResources: true,
             overrideRetry: (reason) => assignDriver(trip.id, payload.id, trip.version, true, reason),
           },
@@ -271,7 +273,7 @@ export function PlanningCenterPage() {
         void runMutation(
           () => assignVehicle(trip.id, payload.id, trip.version),
           {
-            success: `${payload.label} toegewezen aan ${trip.tripNumber}.`,
+            success: t('planningCenter.page.resourceAssigned', { label: payload.label, tripNumber: trip.tripNumber }),
             reloadResources: true,
             overrideRetry: (reason) => assignVehicle(trip.id, payload.id, trip.version, true, reason),
           },
@@ -281,7 +283,7 @@ export function PlanningCenterPage() {
         void runMutation(
           () => assignTrailer(trip.id, payload.id, trip.version),
           {
-            success: `${payload.label} toegewezen aan ${trip.tripNumber}.`,
+            success: t('planningCenter.page.resourceAssigned', { label: payload.label, tripNumber: trip.tripNumber }),
             reloadResources: true,
             overrideRetry: (reason) => assignTrailer(trip.id, payload.id, trip.version, true, reason),
           },
@@ -291,27 +293,27 @@ export function PlanningCenterPage() {
         // Dropping a trip on a trip has no meaning; ignore.
         break
     }
-  }, [runMutation, showError])
+  }, [runMutation, showError, t])
 
   const handleDropOnDay = useCallback((dateIso: string, payload: DragPayload) => {
     if (payload.kind === 'order') {
       void runMutation(
         () => createTripFromOrders(dateIso, [payload.id]),
-        { success: `Nieuwe rit aangemaakt met ${payload.label}.`, reloadOrders: true },
+        { success: t('planningCenter.page.newTripWith', { label: payload.label }), reloadOrders: true },
       )
     } else if (payload.kind === 'trip') {
-      const trip = board?.trips.find((t) => t.id === payload.id)
+      const trip = board?.trips.find((entry) => entry.id === payload.id)
       if (!trip || trip.tripDate === dateIso) return
       void runMutation(
         () => rescheduleTrip(payload.id, dateIso, null, null, payload.version),
         {
-          success: `${payload.label} verplaatst naar ${formatDate(dateIso)}.`,
+          success: t('planningCenter.page.tripMoved', { label: payload.label, date: formatDate(dateIso) }),
           reloadResources: true,
           overrideRetry: (reason) => rescheduleTrip(payload.id, dateIso, null, null, payload.version, true, reason),
         },
       )
     }
-  }, [board, runMutation])
+  }, [board, runMutation, t])
 
   const handleTogglePin = useCallback((entityType: 'Driver' | 'Vehicle' | 'Trailer', id: string, label: string) => {
     const existing = pinned.find((link) => link.entityType === entityType && link.entityId === id)
@@ -340,14 +342,14 @@ export function PlanningCenterPage() {
     <div className="pc-page">
       <header className="pc-toolbar">
         <div className="pc-toolbar-left">
-          <h1>Planbord</h1>
+          <h1>{t('planningCenter.page.title')}</h1>
         </div>
-        <div className="pc-toolbar-range" role="group" aria-label="Periode">
+        <div className="pc-toolbar-range" role="group" aria-label={t('planningCenter.page.periodLabel')}>
           <Button variant="secondary" onClick={() => setAnchor(shiftAnchor(anchor, days, -1))}>‹</Button>
-          <input type="date" value={anchor} onChange={(event) => setAnchor(event.target.value || anchor)} aria-label="Startdatum" />
-          <Button variant="secondary" onClick={() => setAnchor(toIsoDate(new Date()))}>Vandaag</Button>
+          <input type="date" value={anchor} onChange={(event) => setAnchor(event.target.value || anchor)} aria-label={t('planningCenter.page.startDateLabel')} />
+          <Button variant="secondary" onClick={() => setAnchor(toIsoDate(new Date()))}>{t('planningCenter.page.today')}</Button>
           <Button variant="secondary" onClick={() => setAnchor(shiftAnchor(anchor, days, 1))}>›</Button>
-          <div className="pc-view-switch" role="group" aria-label="Weergave">
+          <div className="pc-view-switch" role="group" aria-label={t('planningCenter.page.viewLabel')}>
             {([1, 3, 7] as BoardViewDays[]).map((option) => (
               <button
                 key={option}
@@ -355,7 +357,11 @@ export function PlanningCenterPage() {
                 className={days === option ? 'pc-tab-active' : ''}
                 onClick={() => setDays(option)}
               >
-                {option === 1 ? 'Dag' : option === 3 ? '3 dagen' : 'Week'}
+                {option === 1
+                  ? t('planningCenter.page.viewDay')
+                  : option === 3
+                    ? t('planningCenter.page.viewThreeDays')
+                    : t('planningCenter.page.viewWeek')}
               </button>
             ))}
           </div>
@@ -383,7 +389,7 @@ export function PlanningCenterPage() {
               await changeOrderPriority(order.id, priority)
               reloadUnplanned()
             } catch (error) {
-              showError(describeApiError(error, 'Prioriteit wijzigen mislukt.').message)
+              showError(describeApiError(error, t('planningCenter.page.priorityChangeFailed')).message)
               throw error
             }
           }}
@@ -413,7 +419,7 @@ export function PlanningCenterPage() {
               onPlan={(trip) => void runMutation(
                 () => changeTripStatusVersioned(trip.id, 'Planned', trip.version),
                 {
-                  success: `${trip.tripNumber} ingepland.`,
+                  success: t('planningCenter.page.tripPlanned', { tripNumber: trip.tripNumber }),
                   reloadOrders: true,
                   reloadResources: true,
                   overrideRetry: (reason) => changeTripStatusVersioned(trip.id, 'Planned', trip.version, true, reason),
@@ -421,11 +427,11 @@ export function PlanningCenterPage() {
               )}
               onRevertToDraft={(trip) => void runMutation(
                 () => changeTripStatusVersioned(trip.id, 'Draft', trip.version),
-                { success: `${trip.tripNumber} terug naar concept.`, reloadOrders: true, reloadResources: true },
+                { success: t('planningCenter.page.tripBackToDraft', { tripNumber: trip.tripNumber }), reloadOrders: true, reloadResources: true },
               )}
               onRemoveOrder={(trip, orderId) => void runMutation(
                 () => removeOrder(trip.id, orderId, trip.version),
-                { success: 'Opdracht van de rit gehaald.', reloadOrders: true },
+                { success: t('planningCenter.page.orderRemoved'), reloadOrders: true },
               )}
               onMoveOrder={(trip, orderId, direction) => {
                 const ids = trip.orders.map((o) => o.transportOrderId)
@@ -458,8 +464,8 @@ export function PlanningCenterPage() {
       </div>
 
       {planPickerOrder && (
-        <Modal title={`${planPickerOrder.orderNumber} inplannen`} onClose={() => setPlanPickerOrder(null)} busy={busy}>
-          <p>Kies een rit of maak een nieuwe rit aan (toegankelijk alternatief voor slepen).</p>
+        <Modal title={t('planningCenter.page.pickerTitle', { orderNumber: planPickerOrder.orderNumber })} onClose={() => setPlanPickerOrder(null)} busy={busy}>
+          <p>{t('planningCenter.page.pickerIntro')}</p>
           <div className="pc-picker-list">
             {plannableTrips.map((trip) => (
               <button
@@ -472,18 +478,18 @@ export function PlanningCenterPage() {
                   setPlanPickerOrder(null)
                   void runMutation(
                     () => assignOrders(trip.id, [order.id], trip.version),
-                    { success: `${order.orderNumber} toegevoegd aan ${trip.tripNumber}.`, reloadOrders: true },
+                    { success: t('planningCenter.page.orderAdded', { label: order.orderNumber, tripNumber: trip.tripNumber }), reloadOrders: true },
                   )
                 }}
               >
                 <strong>{trip.tripNumber}</strong> · {formatDate(trip.tripDate)}
-                {trip.driverName ? ` · ${trip.driverName}` : ''} · {trip.orderCount} opdr.
+                {trip.driverName ? ` · ${trip.driverName}` : ''} · {t('planningCenter.page.pickerOrders', { count: trip.orderCount })}
               </button>
             ))}
-            {plannableTrips.length === 0 && <p className="pc-muted">Geen open ritten in deze periode.</p>}
+            {plannableTrips.length === 0 && <p className="pc-muted">{t('planningCenter.page.pickerEmpty')}</p>}
           </div>
           <div className="pc-picker-new">
-            <label htmlFor="pc-picker-date">Nieuwe rit op</label>
+            <label htmlFor="pc-picker-date">{t('planningCenter.page.pickerNewTripOn')}</label>
             <input id="pc-picker-date" type="date" defaultValue={anchor} onChange={(event) => setAnchor(event.target.value || anchor)} />
             <Button
               disabled={busy}
@@ -492,11 +498,11 @@ export function PlanningCenterPage() {
                 setPlanPickerOrder(null)
                 void runMutation(
                   () => createTripFromOrders(anchor, [order.id]),
-                  { success: `Nieuwe rit aangemaakt met ${order.orderNumber}.`, reloadOrders: true },
+                  { success: t('planningCenter.page.newTripWith', { label: order.orderNumber }), reloadOrders: true },
                 )
               }}
             >
-              Nieuwe rit aanmaken
+              {t('planningCenter.page.pickerCreateTrip')}
             </Button>
           </div>
         </Modal>

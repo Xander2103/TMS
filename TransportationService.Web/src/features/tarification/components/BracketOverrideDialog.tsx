@@ -4,7 +4,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { createBracketOverride, type PriceRule, type PriceRuleBracket } from '../api/pricingApi'
 
@@ -24,6 +25,7 @@ function bracketLabel(bracket: PriceRuleBracket): string {
  * All other rows keep following the shared table; the engine falls back automatically.
  */
 export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: BracketOverrideDialogProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [customers, setCustomers] = useState<SearchableSelectOption[]>([])
   const [customersLoading, setCustomersLoading] = useState(true)
@@ -65,17 +67,17 @@ export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: Brack
 
   async function submit() {
     if (!customerId) {
-      setError('Kies een klant.')
+      setError(t('tarification.common.chooseCustomer'))
       return
     }
     const parsedPrice = Number(price)
     if (price.trim() === '' || Number.isNaN(parsedPrice) || parsedPrice < 0) {
-      setError('Geef een geldige prijs op (0 of hoger).')
+      setError(t('tarification.override.invalidPrice'))
       return
     }
     const parsedExtra = pricePerExtraUnit.trim() === '' ? null : Number(pricePerExtraUnit)
     if (parsedExtra !== null && (Number.isNaN(parsedExtra) || parsedExtra < 0)) {
-      setError('De prijs per extra eenheid moet 0 of hoger zijn.')
+      setError(t('tarification.override.invalidExtra'))
       return
     }
     setBusy(true)
@@ -93,60 +95,59 @@ export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: Brack
         effectiveFrom: effectiveFrom || null,
         effectiveUntil: effectiveUntil || null,
       })
-      showSuccess('Klantafwijking toegevoegd.')
+      showSuccess(t('tarification.override.added'))
       onSaved()
     } catch (err) {
-      const described = describeApiError(err, 'De klantafwijking kon niet worden opgeslagen.')
-      showError(described.message)
-      setError(described.message)
+      const message = localizeApiError(t, err, t('tarification.override.saveError'))
+      showError(message)
+      setError(message)
       setBusy(false)
     }
   }
 
   return (
     <Modal
-      title={`Klantafwijking — staffel ${bracketLabel(bracket)} van "${rule.name}"`}
+      title={t('tarification.override.title', { range: bracketLabel(bracket), name: rule.name })}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={busy}>
-            {busy ? 'Opslaan…' : 'Opslaan'}
+            {busy ? t('tarification.override.saving') : t('ui.actions.save')}
           </Button>
         </>
       }
     >
-      <p className="placeholder-text">
-        Alleen deze staffelrij krijgt een klantprijs; alle andere rijen blijven de gedeelde tabel volgen
-        (standaard € {bracket.price.toFixed(2)}).
-      </p>
-      <FormField label="Klant" required error={!customerId && error ? error : undefined}>
+      <p className="placeholder-text">{t('tarification.override.intro', { price: bracket.price.toFixed(2) })}</p>
+      <FormField label={t('tarification.common.customer')} required error={!customerId && error ? error : undefined}>
         <SearchableSelect
           value={customerId}
           onChange={setCustomerId}
           options={customers}
           isLoading={customersLoading}
-          ariaLabel="Klant voor klantafwijking"
-          placeholder="— Kies klant —"
+          ariaLabel={t('tarification.override.customerAria')}
+          placeholder={t('tarification.override.customerPlaceholder')}
         />
       </FormField>
-      <FormField label="Prijs voor deze rij (€)" required>
+      <FormField label={t('tarification.override.priceLabel')} required>
         <input
           type="number"
           step="0.01"
           min="0"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
-          aria-label="Prijs voor klantafwijking"
+          aria-label={t('tarification.override.ariaPrice')}
         />
       </FormField>
       {bracket.toQuantity === null && (
         <FormField
-          label="Prijs per extra eenheid (€)"
-          hint={`Leeg = de gedeelde prijs per extra eenheid blijft gelden${bracket.pricePerExtraUnit !== null ? ` (€ ${bracket.pricePerExtraUnit.toFixed(2)})` : ''}.`}
+          label={t('tarification.override.extraLabel')}
+          hint={t('tarification.override.extraHint', {
+            suffix: bracket.pricePerExtraUnit !== null ? ` (€ ${bracket.pricePerExtraUnit.toFixed(2)})` : '',
+          })}
         >
           <input
             type="number"
@@ -154,15 +155,15 @@ export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: Brack
             min="0"
             value={pricePerExtraUnit}
             onChange={(e) => setPricePerExtraUnit(e.target.value)}
-            aria-label="Prijs per extra eenheid voor klantafwijking"
+            aria-label={t('tarification.override.ariaExtra')}
           />
         </FormField>
       )}
-      <FormField label="Geldig van" hint="Leeg = volgt de geldigheid van de regel.">
-        <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} aria-label="Klantafwijking geldig van" />
+      <FormField label={t('tarification.common.validFrom')} hint={t('tarification.override.fromHint')}>
+        <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} aria-label={t('tarification.override.ariaFrom')} />
       </FormField>
-      <FormField label="Geldig tot">
-        <input type="date" value={effectiveUntil} onChange={(e) => setEffectiveUntil(e.target.value)} aria-label="Klantafwijking geldig tot" />
+      <FormField label={t('tarification.common.validUntil')}>
+        <input type="date" value={effectiveUntil} onChange={(e) => setEffectiveUntil(e.target.value)} aria-label={t('tarification.override.ariaUntil')} />
       </FormField>
       {error && customerId && <p role="alert" className="placeholder-text">{error}</p>}
     </Modal>

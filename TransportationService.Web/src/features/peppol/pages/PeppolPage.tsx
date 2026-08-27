@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { TabPanel, Tabs, type TabItem } from '../../../components/ui/Tabs'
+import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
 import { OverviewTab } from '../components/OverviewTab'
 import { OutgoingTab } from '../components/OutgoingTab'
@@ -21,6 +22,7 @@ type TabId = (typeof TAB_IDS)[number]
  * e-invoicing-kanaal. De Inkomend-tab verbergt zich zonder peppol.view_incoming.
  */
 export function PeppolPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -33,14 +35,14 @@ export function PeppolPage() {
 
   const tabs: TabItem[] = useMemo(() => {
     const list: TabItem[] = [
-      { id: 'overzicht', label: 'Overzicht' },
-      { id: 'uitgaand', label: 'Uitgaand' },
+      { id: 'overzicht', label: t('peppol.page.tabs.overview') },
+      { id: 'uitgaand', label: t('peppol.page.tabs.outgoing') },
     ]
-    if (canViewIncoming) list.push({ id: 'inkomend', label: 'Inkomend' })
-    list.push({ id: 'configuratie', label: 'Configuratie' })
-    list.push({ id: 'validatie', label: 'Validatieproblemen' })
+    if (canViewIncoming) list.push({ id: 'inkomend', label: t('peppol.page.tabs.incoming') })
+    list.push({ id: 'configuratie', label: t('peppol.page.tabs.settings') })
+    list.push({ id: 'validatie', label: t('peppol.page.tabs.validation') })
     return list
-  }, [canViewIncoming])
+  }, [canViewIncoming, t])
 
   const requestedTab = searchParams.get('tab')
   const tab: TabId =
@@ -53,16 +55,13 @@ export function PeppolPage() {
   }
 
   if (!canView) {
-    return <p className="placeholder-text">Je hebt geen rechten om Peppol te bekijken.</p>
+    return <p className="placeholder-text">{t('peppol.page.noPermission')}</p>
   }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Peppol' }]} />
-      <PageHeader
-        title="Peppol"
-        subtitle="E-facturatie via het Peppol-netwerk: verzendstatus per factuur, inkomende documenten en configuratie per eigen bedrijf."
-      />
+      <Breadcrumbs items={[{ label: t('peppol.page.title') }]} />
+      <PageHeader title={t('peppol.page.title')} subtitle={t('peppol.page.subtitle')} />
 
       <Tabs tabs={tabs} activeId={tab} onChange={setTab} />
 

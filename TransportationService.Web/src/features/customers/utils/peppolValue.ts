@@ -17,14 +17,17 @@ export function parsePeppolValue(raw: string): { scheme: string; participantId: 
   return { scheme: '', participantId: raw }
 }
 
-/** Client-side check of the combined format; null when the value is acceptable. */
+/**
+ * Client-side check of the combined format; null when the value is acceptable, otherwise a
+ * translation KEY (customers.vatValidation.peppolFormat) — callers render via t(key).
+ */
 export function peppolFormatError(raw: string): string | null {
   if (!raw.includes(':')) return null
   const idx = raw.indexOf(':')
   const prefix = raw.slice(0, idx)
   const rest = raw.slice(idx + 1)
   if (!/^\d{4}$/.test(prefix) || rest.includes(':')) {
-    return 'Ongeldig Peppol-ID. Gebruik "schema:nummer", bv. 0208:0123456789.'
+    return 'customers.vatValidation.peppolFormat'
   }
   return null
 }

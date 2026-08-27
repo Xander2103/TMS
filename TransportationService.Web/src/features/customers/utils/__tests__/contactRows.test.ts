@@ -54,8 +54,8 @@ describe('contact rows', () => {
     const empty = createContactRow()
     const partial = row({ email: 'a@b.be' })
     const errors = validateContactRows([empty, partial])
-    expect(errors['contacts[0].firstName']).toBe('Voornaam van de contactpersoon is verplicht.')
-    expect(errors['contacts[0].lastName']).toBe('Achternaam van de contactpersoon is verplicht.')
+    expect(errors['contacts[0].firstName']).toBe('customers.contactValidation.firstNameRequired')
+    expect(errors['contacts[0].lastName']).toBe('customers.contactValidation.lastNameRequired')
   })
 
   it('allows one primary per type and flags the second of the same type', () => {
@@ -64,7 +64,7 @@ describe('contact rows', () => {
     const c = row({ firstName: 'Els', lastName: 'Maes', contactType: 'Algemeen', isPrimary: true })
     const errors = validateContactRows([a, b, c])
     expect(Object.keys(errors)).toEqual(['contacts[2].isPrimary'])
-    expect(errors['contacts[2].isPrimary']).toBe('Er is al een primaire contactpersoon van dit type.')
+    expect(errors['contacts[2].isPrimary']).toBe('customers.contactValidation.duplicatePrimary')
   })
 
   it('drops empty rows from the payload and trims/nullifies fields', () => {

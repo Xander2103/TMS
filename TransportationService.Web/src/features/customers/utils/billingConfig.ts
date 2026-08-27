@@ -21,15 +21,18 @@ export function parsePercent(raw: string): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-/** Same rules as SaveCustomerDieselSurchargeRequest: 0 ≤ percent ≤ 100, until ≥ from. */
+/**
+ * Same rules as SaveCustomerDieselSurchargeRequest: 0 ≤ percent ≤ 100, until ≥ from.
+ * Error values are translation KEYS (customers.billing.*); callers render via t(key).
+ */
 export function validateSurchargeForm(values: SurchargeFormValues): SurchargeFormErrors {
   const errors: SurchargeFormErrors = {}
   const percent = parsePercent(values.percent)
   if (percent === null || percent < 0 || percent > 100) {
-    errors.percent = 'Het toeslagpercentage moet tussen 0 en 100 liggen.'
+    errors.percent = 'customers.billing.percentRange'
   }
   if (values.effectiveFrom && values.effectiveUntil && values.effectiveUntil < values.effectiveFrom) {
-    errors.effectiveUntil = 'De einddatum ligt vóór de begindatum.'
+    errors.effectiveUntil = 'customers.billing.endBeforeStart'
   }
   return errors
 }

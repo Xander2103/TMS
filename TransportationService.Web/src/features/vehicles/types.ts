@@ -13,46 +13,50 @@ export type EmissionClass =
 export type VehicleOwnershipType = 'Owned' | 'Rented' | 'Leased'
 export type VehicleOperationalStatus = 'Available' | 'InUse' | 'InMaintenance' | 'OutOfService'
 
+/** i18n-keys (vehicles.fuelType.*) — render via t(FUEL_TYPE_LABELS[x]). */
 export const FUEL_TYPE_LABELS: Record<FuelType, string> = {
-  Diesel: 'Diesel',
-  Petrol: 'Benzine',
-  Electric: 'Elektrisch',
-  Hybrid: 'Hybride',
-  Lng: 'LNG',
-  Cng: 'CNG',
-  Hydrogen: 'Waterstof',
-  Other: 'Overig',
+  Diesel: 'vehicles.fuelType.Diesel',
+  Petrol: 'vehicles.fuelType.Petrol',
+  Electric: 'vehicles.fuelType.Electric',
+  Hybrid: 'vehicles.fuelType.Hybrid',
+  Lng: 'vehicles.fuelType.Lng',
+  Cng: 'vehicles.fuelType.Cng',
+  Hydrogen: 'vehicles.fuelType.Hydrogen',
+  Other: 'vehicles.fuelType.Other',
 }
 
+/** i18n-keys (vehicles.emissionClass.*) — render via t(EMISSION_CLASS_LABELS[x]). */
 export const EMISSION_CLASS_LABELS: Record<EmissionClass, string> = {
-  Euro0: 'Euro 0',
-  Euro1: 'Euro 1',
-  Euro2: 'Euro 2',
-  Euro3: 'Euro 3',
-  Euro4: 'Euro 4',
-  Euro5: 'Euro 5',
-  Euro6: 'Euro 6',
-  Euro7: 'Euro 7',
-  Electric: 'Elektrisch',
-  Other: 'Overig',
+  Euro0: 'vehicles.emissionClass.Euro0',
+  Euro1: 'vehicles.emissionClass.Euro1',
+  Euro2: 'vehicles.emissionClass.Euro2',
+  Euro3: 'vehicles.emissionClass.Euro3',
+  Euro4: 'vehicles.emissionClass.Euro4',
+  Euro5: 'vehicles.emissionClass.Euro5',
+  Euro6: 'vehicles.emissionClass.Euro6',
+  Euro7: 'vehicles.emissionClass.Euro7',
+  Electric: 'vehicles.emissionClass.Electric',
+  Other: 'vehicles.emissionClass.Other',
 }
 
 /** Belgian driving-licence codes relevant for vehicle eligibility (B < C1 < C < CE). */
 export const REQUIRED_LICENCE_CODES = ['B', 'C1', 'C', 'CE'] as const
 
+/** i18n-keys (vehicles.ownership.*) — render via t(OWNERSHIP_TYPE_LABELS[x]). */
 export const OWNERSHIP_TYPE_LABELS: Record<VehicleOwnershipType, string> = {
-  Owned: 'Eigendom',
-  Rented: 'Huur',
-  Leased: 'Lease',
+  Owned: 'vehicles.ownership.Owned',
+  Rented: 'vehicles.ownership.Rented',
+  Leased: 'vehicles.ownership.Leased',
 }
 
 // Deliberately no label "Actief" here: the administrative active flag owns that word,
 // so the two states can never render as duplicate badges.
+/** i18n-keys (vehicles.status.*) — render via t(OPERATIONAL_STATUS_LABELS[x]). */
 export const OPERATIONAL_STATUS_LABELS: Record<VehicleOperationalStatus, string> = {
-  Available: 'Beschikbaar',
-  InUse: 'In gebruik',
-  InMaintenance: 'In onderhoud',
-  OutOfService: 'Buiten dienst',
+  Available: 'vehicles.status.Available',
+  InUse: 'vehicles.status.InUse',
+  InMaintenance: 'vehicles.status.InMaintenance',
+  OutOfService: 'vehicles.status.OutOfService',
 }
 
 export const OPERATIONAL_STATUS_TONES: Record<VehicleOperationalStatus, 'success' | 'info' | 'warning' | 'danger'> = {

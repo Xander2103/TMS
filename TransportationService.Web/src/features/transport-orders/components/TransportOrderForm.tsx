@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { SectionedForm, type SectionDef } from '../../../components/ui/SectionedForm'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useSectionNavigation } from '../../../components/ui/useSectionNavigation'
+import { useLocale } from '../../../i18n/localeContext'
 import { LocationQuickCreateDialog } from '../../locations/components/LocationQuickCreateDialog'
 import type { LocationOption } from '../../locations/types'
 import { useAuth } from '../../auth/authContextValue'
@@ -59,6 +60,7 @@ const SECTION_IDS = ['algemeen', 'route', 'goederen', 'services', 'documenten', 
  * never touches the router.
  */
 export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, documentsSection, documentsSectionIsPanel }: TransportOrderFormProps) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canCreateLocations = hasPermission('locations.create')
   const canOverridePrice = hasPermission('orders.override_price')
@@ -196,9 +198,9 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   )
   const requirementHints = customerRequirements
     ? [
-        customerRequirements.customerReferenceRequired ? 'een klantreferentie is verplicht' : null,
-        customerRequirements.purchaseOrderRequired ? 'een bestelbon (PO) is vereist' : null,
-        customerRequirements.signedDeliveryNoteRequired ? 'een getekende leverbon (CMR) is vereist' : null,
+        customerRequirements.customerReferenceRequired ? t('transportOrders.form.hintReferenceRequired') : null,
+        customerRequirements.purchaseOrderRequired ? t('transportOrders.form.hintPoRequired') : null,
+        customerRequirements.signedDeliveryNoteRequired ? t('transportOrders.form.hintCmrRequired') : null,
       ].filter((hint): hint is string => hint !== null)
     : []
 
@@ -311,10 +313,10 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     } catch (err) {
       setFormError(
         err instanceof ApiError && err.status === 409
-          ? 'Deze opdracht is intussen door iemand anders gewijzigd. Herlaad de pagina en probeer opnieuw.'
+          ? t('transportOrders.form.conflict')
           : err instanceof ApiError && err.status === 400
-            ? 'De opdracht kon niet worden opgeslagen — controleer de invoer.'
-            : 'De opdracht kon niet worden opgeslagen.',
+            ? t('transportOrders.form.badRequest')
+            : t('transportOrders.form.saveFailed'),
       )
     } finally {
       setSaving(false)
@@ -322,13 +324,13 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
   }
 
   const documentenContent = documentsSection ?? (
-    <p className="placeholder-text">Documenten zijn beschikbaar na het aanmaken van de opdracht.</p>
+    <p className="placeholder-text">{t('transportOrders.form.docsAfterCreate')}</p>
   )
 
   const sections: SectionDef[] = [
     {
       id: 'algemeen',
-      label: 'Algemeen',
+      label: t('transportOrders.form.sections.algemeen'),
       render: () => (
         <GeneralSection
           {...{
@@ -343,7 +345,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     },
     {
       id: 'route',
-      label: 'Route & stops',
+      label: t('transportOrders.form.sections.route'),
       render: () => (
         <RouteSection
           {...{ stops, customerId, saving, locationHours, errors, setStop, moveStop }}
@@ -360,7 +362,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     },
     {
       id: 'goederen',
-      label: 'Goederen',
+      label: t('transportOrders.form.sections.goederen'),
       render: () => (
         <GoodsSection
           {...{
@@ -386,7 +388,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     },
     {
       id: 'services',
-      label: 'Services & toeslagen',
+      label: t('transportOrders.form.sections.services'),
       optional: true,
       render: () => (
         <ServicesSection
@@ -406,10 +408,16 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
         />
       ),
     },
-    { id: 'documenten', label: 'Documenten', optional: true, panel: documentsSectionIsPanel, render: () => documentenContent },
+    {
+      id: 'documenten',
+      label: t('transportOrders.form.sections.documenten'),
+      optional: true,
+      panel: documentsSectionIsPanel,
+      render: () => documentenContent,
+    },
     {
       id: 'prijs',
-      label: 'Prijs',
+      label: t('transportOrders.form.sections.prijs'),
       render: () => (
         <PriceSection
           {...{
@@ -427,7 +435,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     },
     {
       id: 'samenvatting',
-      label: 'Samenvatting',
+      label: t('transportOrders.form.sections.samenvatting'),
       render: () => (
         <SummarySection
           {...{
@@ -465,11 +473,11 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
           <div className="tof-actions">
             {onCancel && (
               <Button variant="secondary" onClick={onCancel} disabled={saving}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
             )}
             <Button type="submit" disabled={saving}>
-              {saving ? 'Opslaan…' : submitLabel}
+              {saving ? t('transportOrders.form.saving') : submitLabel}
             </Button>
           </div>
         }
@@ -488,9 +496,9 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
 
       {refreshTarget && (
         <ConfirmDialog
-          title="Opnieuw overnemen van locatie"
-          message="Lokale aanpassingen op deze stop worden vervangen door de actuele locatiegegevens."
-          confirmLabel="Opnieuw overnemen"
+          title={t('transportOrders.form.refreshTitle')}
+          message={t('transportOrders.form.refreshMessage')}
+          confirmLabel={t('transportOrders.form.refreshConfirm')}
           onConfirm={() => {
             setStop(refreshTarget, { refreshSnapshot: true })
             setRefreshTarget(null)

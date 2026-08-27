@@ -6,6 +6,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
+import { formatCurrency } from '../../../utils/numbers'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import type { DriverListItem } from '../../drivers/types'
 import {
@@ -68,7 +70,7 @@ const EMPTY_FORM: DamageForm = {
 
 function euro(value: number | null): string {
   if (value === null) return '—'
-  return value.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
+  return formatCurrency(value)
 }
 
 interface DamagePanelProps {
@@ -80,6 +82,7 @@ interface DamagePanelProps {
 export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
 
   const [reports, setReports] = useState<DamageReport[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -104,12 +107,12 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('Schademeldingen konden niet worden geladen.')
+        if (mounted) setLoadError(t('damage.panel.loadError'))
       })
     return () => {
       mounted = false
     }
-  }, [ownerType, ownerId, reloadToken])
+  }, [ownerType, ownerId, reloadToken, t])
 
   // Active drivers for the "betrokken chauffeur" selector; failure keeps the field usable as "Geen".
   useEffect(() => {
@@ -157,11 +160,11 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
     event.preventDefault()
     setFormError(null)
     if (!form.incidentDate) {
-      setFormError('De datum van het incident is verplicht.')
+      setFormError(t('damage.panel.dateRequired'))
       return
     }
     if (!form.description.trim()) {
-      setFormError('Een omschrijving van de schade is verplicht.')
+      setFormError(t('damage.panel.descriptionRequired'))
       return
     }
     const base = {
@@ -183,15 +186,15 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
           downtimeDays: form.downtimeDays === '' ? null : Number(form.downtimeDays),
         }
         await updateDamageReport(editing.id, input)
-        showSuccess('Schademelding bijgewerkt.')
+        showSuccess(t('damage.panel.updated'))
       } else {
         await createDamageReport(ownerType, ownerId, base)
-        showSuccess('Schade gemeld.')
+        showSuccess(t('damage.panel.reported'))
       }
       setEditorOpen(false)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      setFormError('De schademelding kon niet worden opgeslagen.')
+      setFormError(t('damage.panel.saveFailed'))
     } finally {
       setSaving(false)
     }
@@ -201,11 +204,11 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
     if (!deleteTarget) return
     try {
       await deleteDamageReport(deleteTarget.id)
-      showSuccess('Schademelding verwijderd.')
+      showSuccess(t('damage.panel.deleted'))
       setDeleteTarget(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch {
-      showError('De schademelding kon niet worden verwijderd.')
+      showError(t('damage.panel.deleteFailed'))
       setDeleteTarget(null)
     }
   }
@@ -213,31 +216,31 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
   return (
     <section className="dmg">
       <div className="dmg-header">
-        <h2>Schade</h2>
+        <h2>{t('damage.panel.title')}</h2>
         {hasPermission('damage_reports.create') && (
           <Button variant="secondary" onClick={openCreate}>
-            Schade melden
+            {t('damage.panel.report')}
           </Button>
         )}
       </div>
 
       {loadError && <p className="placeholder-text">{loadError}</p>}
-      {!loadError && reports === null && <p className="placeholder-text">Schademeldingen laden…</p>}
+      {!loadError && reports === null && <p className="placeholder-text">{t('damage.panel.loading')}</p>}
       {!loadError && reports !== null && reports.length === 0 && (
-        <p className="placeholder-text">Geen schademeldingen geregistreerd.</p>
+        <p className="placeholder-text">{t('damage.panel.empty')}</p>
       )}
 
       {!loadError && reports !== null && reports.length > 0 && (
         <table className="dmg-table">
           <thead>
             <tr>
-              <th>Datum</th>
-              <th>Omschrijving</th>
-              <th>Ernst</th>
-              <th>Status</th>
-              <th>Chauffeur</th>
-              <th>Herstelkost</th>
-              <th aria-label="Acties" />
+              <th>{t('damage.panel.colDate')}</th>
+              <th>{t('damage.panel.colDescription')}</th>
+              <th>{t('damage.panel.colSeverity')}</th>
+              <th>{t('damage.panel.colStatus')}</th>
+              <th>{t('damage.panel.colDriver')}</th>
+              <th>{t('damage.panel.colRepairCost')}</th>
+              <th aria-label={t('damage.panel.colActions')} />
             </tr>
           </thead>
           <tbody>
@@ -248,22 +251,22 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                   {report.description}
                 </td>
                 <td>
-                  <Badge tone={SEVERITY_TONE[report.severity]}>{DAMAGE_SEVERITY_LABELS[report.severity]}</Badge>
+                  <Badge tone={SEVERITY_TONE[report.severity]}>{t(DAMAGE_SEVERITY_LABELS[report.severity])}</Badge>
                 </td>
                 <td>
-                  <Badge tone={STATUS_TONE[report.status]}>{DAMAGE_STATUS_LABELS[report.status]}</Badge>
+                  <Badge tone={STATUS_TONE[report.status]}>{t(DAMAGE_STATUS_LABELS[report.status])}</Badge>
                 </td>
                 <td>{report.driverName ?? '—'}</td>
                 <td>{euro(report.repairCost)}</td>
                 <td className="dmg-actions">
                   {hasPermission('damage_reports.edit') && (
                     <button type="button" className="dmg-link" onClick={() => openEdit(report)}>
-                      Bewerken
+                      {t('damage.panel.edit')}
                     </button>
                   )}
                   {hasPermission('damage_reports.delete') && (
                     <button type="button" className="dmg-link dmg-link-danger" onClick={() => setDeleteTarget(report)}>
-                      Verwijderen
+                      {t('damage.panel.delete')}
                     </button>
                   )}
                 </td>
@@ -275,16 +278,16 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
 
       {editorOpen && (
         <Modal
-          title={editing ? 'Schademelding bewerken' : 'Schade melden'}
+          title={editing ? t('damage.panel.editTitle') : t('damage.panel.reportTitle')}
           onClose={() => setEditorOpen(false)}
           busy={saving}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={saving}>
-                Annuleren
+                {t('damage.panel.cancel')}
               </Button>
               <Button type="submit" form="dmg-form" disabled={saving}>
-                {saving ? 'Opslaan…' : 'Opslaan'}
+                {saving ? t('damage.panel.saving') : t('damage.panel.save')}
               </Button>
             </>
           }
@@ -296,7 +299,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
               </div>
             )}
             <div className="dmg-form-row">
-              <FormField label="Datum incident" htmlFor="dm-date" required>
+              <FormField label={t('damage.panel.dateLabel')} htmlFor="dm-date" required>
                 <input
                   id="dm-date"
                   type="date"
@@ -305,7 +308,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                   disabled={saving}
                 />
               </FormField>
-              <FormField label="Ernst" htmlFor="dm-severity" required>
+              <FormField label={t('damage.panel.severityLabel')} htmlFor="dm-severity" required>
                 <select
                   id="dm-severity"
                   value={form.severity}
@@ -314,13 +317,13 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                 >
                   {(Object.keys(DAMAGE_SEVERITY_LABELS) as DamageSeverity[]).map((severity) => (
                     <option key={severity} value={severity}>
-                      {DAMAGE_SEVERITY_LABELS[severity]}
+                      {t(DAMAGE_SEVERITY_LABELS[severity])}
                     </option>
                   ))}
                 </select>
               </FormField>
             </div>
-            <FormField label="Omschrijving" htmlFor="dm-description" required>
+            <FormField label={t('damage.panel.descriptionLabel')} htmlFor="dm-description" required>
               <textarea
                 id="dm-description"
                 rows={3}
@@ -331,24 +334,24 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
               />
             </FormField>
             <div className="dmg-form-row">
-              <FormField label="Locatie" htmlFor="dm-location">
+              <FormField label={t('damage.panel.locationLabel')} htmlFor="dm-location">
                 <input
                   id="dm-location"
                   value={form.location}
                   onChange={(e) => set('location', e.target.value)}
                   disabled={saving}
                   maxLength={200}
-                  placeholder="bv. E313 Antwerpen-Oost"
+                  placeholder={t('damage.panel.locationPlaceholder')}
                 />
               </FormField>
-              <FormField label="Betrokken chauffeur" htmlFor="dm-driver">
+              <FormField label={t('damage.panel.driverLabel')} htmlFor="dm-driver">
                 <select
                   id="dm-driver"
                   value={form.driverId}
                   onChange={(e) => set('driverId', e.target.value)}
                   disabled={saving}
                 >
-                  <option value="">Geen</option>
+                  <option value="">{t('damage.panel.noDriver')}</option>
                   {drivers.map((driver) => (
                     <option key={driver.id} value={driver.id}>
                       {driver.fullName} ({driver.driverNumber})
@@ -359,7 +362,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
             </div>
             {editing && (
               <div className="dmg-form-row dmg-form-row-3">
-                <FormField label="Status" htmlFor="dm-status" required>
+                <FormField label={t('damage.panel.statusLabel')} htmlFor="dm-status" required>
                   <select
                     id="dm-status"
                     value={form.status}
@@ -368,12 +371,12 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                   >
                     {(Object.keys(DAMAGE_STATUS_LABELS) as DamageStatus[]).map((status) => (
                       <option key={status} value={status}>
-                        {DAMAGE_STATUS_LABELS[status]}
+                        {t(DAMAGE_STATUS_LABELS[status])}
                       </option>
                     ))}
                   </select>
                 </FormField>
-                <FormField label="Herstelkost (€)" htmlFor="dm-cost">
+                <FormField label={t('damage.panel.repairCostLabel')} htmlFor="dm-cost">
                   <input
                     id="dm-cost"
                     type="number"
@@ -384,7 +387,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                     disabled={saving}
                   />
                 </FormField>
-                <FormField label="Stilstand (dagen)" htmlFor="dm-downtime">
+                <FormField label={t('damage.panel.downtimeLabel')} htmlFor="dm-downtime">
                   <input
                     id="dm-downtime"
                     type="number"
@@ -397,7 +400,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                 </FormField>
               </div>
             )}
-            <FormField label="Verzekeringsreferentie" htmlFor="dm-insurance">
+            <FormField label={t('damage.panel.insuranceLabel')} htmlFor="dm-insurance">
               <input
                 id="dm-insurance"
                 value={form.insuranceReference}
@@ -406,7 +409,7 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
                 maxLength={100}
               />
             </FormField>
-            <FormField label="Notities" htmlFor="dm-notes">
+            <FormField label={t('damage.panel.notesLabel')} htmlFor="dm-notes">
               <textarea
                 id="dm-notes"
                 rows={2}
@@ -421,9 +424,9 @@ export function DamagePanel({ ownerType, ownerId }: DamagePanelProps) {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Schademelding verwijderen"
-          message={`Weet je zeker dat je de schademelding van ${deleteTarget.incidentDate} wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('damage.panel.deleteTitle')}
+          message={t('damage.panel.deleteMessage', { date: deleteTarget.incidentDate })}
+          confirmLabel={t('damage.panel.deleteConfirm')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setDeleteTarget(null)}

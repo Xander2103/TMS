@@ -3,6 +3,7 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { CONFLICT_CATEGORY_LABELS, CONFLICT_SEVERITY_META, type PlanningConflict } from '../../planning/types'
 import './conflict-dialog.css'
 
@@ -23,6 +24,7 @@ interface ConflictDialogProps {
  */
 export function ConflictDialog({ title, message, conflicts, busy = false, onClose, onOverride }: ConflictDialogProps) {
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const [reason, setReason] = useState('')
 
   const blocking = conflicts.filter((c) => c.severity === 'Blocking')
@@ -32,7 +34,7 @@ export function ConflictDialog({ title, message, conflicts, busy = false, onClos
     blocking.every((c) => c.overrideAllowed && (!c.requiredPermission || hasPermission(c.requiredPermission)))
 
   return (
-    <Modal title={title ?? 'Planningsconflicten'} onClose={onClose} busy={busy}>
+    <Modal title={title ?? t('planningCenter.conflictDialog.title')} onClose={onClose} busy={busy}>
       <p className="cd-message">{message}</p>
       <ul className="cd-list">
         {conflicts.map((conflict, index) => {
@@ -40,8 +42,8 @@ export function ConflictDialog({ title, message, conflicts, busy = false, onClos
           return (
             <li key={`${conflict.code}-${index}`} className="cd-item">
               <div className="cd-item-head">
-                <Badge tone={meta.tone}>{meta.label}</Badge>
-                <span className="cd-category">{CONFLICT_CATEGORY_LABELS[conflict.category] ?? conflict.category}</span>
+                <Badge tone={meta.tone}>{t(meta.label)}</Badge>
+                <span className="cd-category">{t(CONFLICT_CATEGORY_LABELS[conflict.category] ?? conflict.category)}</span>
               </div>
               <p className="cd-description">{conflict.description}</p>
               {conflict.suggestedAction && <p className="cd-suggestion">{conflict.suggestedAction}</p>}
@@ -51,24 +53,24 @@ export function ConflictDialog({ title, message, conflicts, busy = false, onClos
       </ul>
       {canOverride && (
         <div className="cd-override">
-          <label htmlFor="cd-override-reason">Reden voor overschrijven (verplicht)</label>
+          <label htmlFor="cd-override-reason">{t('planningCenter.conflictDialog.overrideReasonLabel')}</label>
           <textarea
             id="cd-override-reason"
             rows={2}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Waarom mag deze planning toch doorgaan?"
+            placeholder={t('planningCenter.conflictDialog.overrideReasonPlaceholder')}
             disabled={busy}
           />
         </div>
       )}
       <div className="cd-actions">
         <Button variant="secondary" onClick={onClose} disabled={busy}>
-          Sluiten
+          {t('planningCenter.conflictDialog.close')}
         </Button>
         {canOverride && (
           <Button onClick={() => onOverride(reason.trim())} disabled={busy || reason.trim().length === 0}>
-            Overschrijven en doorgaan
+            {t('planningCenter.conflictDialog.overrideConfirm')}
           </Button>
         )}
       </div>

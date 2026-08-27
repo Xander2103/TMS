@@ -47,19 +47,19 @@ describe('checkOpeningHours', () => {
 
 describe('openingHoursWarning', () => {
   it('builds the Dutch outside-hours line', () => {
-    expect(openingHoursWarning(monday, '2026-07-20', '18:30', 'lostijd', 'Magazijn Antwerpen')).toBe(
+    expect(openingHoursWarning(monday, '2026-07-20', '18:30', 'unloading', 'Magazijn Antwerpen')).toBe(
       'De geplande lostijd van 18:30 valt buiten de openingsuren (08:00–12:00, 13:00–17:00) van Magazijn Antwerpen.',
     )
   })
 
   it('builds the Dutch closed-day line', () => {
-    expect(openingHoursWarning(monday, '2026-07-19', '10:00', 'laadtijd', 'Magazijn Antwerpen')).toBe(
+    expect(openingHoursWarning(monday, '2026-07-19', '10:00', 'loading', 'Magazijn Antwerpen')).toBe(
       'De geplande laadtijd op zondag valt op een sluitingsdag van Magazijn Antwerpen.',
     )
   })
 
   it('stays silent inside hours and without data', () => {
-    expect(openingHoursWarning(monday, '2026-07-20', '09:00', 'laadtijd', 'X')).toBeNull()
-    expect(openingHoursWarning([], '2026-07-20', '03:00', 'laadtijd', 'X')).toBeNull()
+    expect(openingHoursWarning(monday, '2026-07-20', '09:00', 'loading', 'X')).toBeNull()
+    expect(openingHoursWarning([], '2026-07-20', '03:00', 'loading', 'X')).toBeNull()
   })
 })

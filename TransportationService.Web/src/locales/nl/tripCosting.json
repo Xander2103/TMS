@@ -1,0 +1,173 @@
+{
+  "phase": {
+    "Estimated": "Geschat",
+    "Actual": "Werkelijk"
+  },
+  "costType": {
+    "Fuel": "Brandstof",
+    "Toll": "Tol/Maut",
+    "DriverLabour": "Chauffeur",
+    "Overtime": "Overuren",
+    "WaitingTime": "Wachttijd",
+    "VehicleDistance": "Voertuig per km",
+    "VehicleTime": "Voertuig per uur",
+    "Maintenance": "Onderhoud",
+    "Depreciation": "Afschrijving",
+    "Trailer": "Oplegger",
+    "Equipment": "Uitrusting",
+    "Subcontractor": "Onderaannemer",
+    "FerryTunnelParking": "Ferry/tunnel/parking",
+    "Manual": "Handmatig",
+    "Correction": "Correctie/credit"
+  },
+  "panel": {
+    "title": "Kosten & rendement",
+    "loading": "Kosten laden…",
+    "loadForbidden": "Je hebt geen toegang tot kostengegevens.",
+    "loadFailed": "De kosten konden niet worden geladen.",
+    "actionFailed": "De bewerking is mislukt.",
+    "totals": {
+      "projected": "Geprojecteerd",
+      "final": "Definitief",
+      "finalized": "Afgerond"
+    },
+    "profitability": {
+      "title": "Rendement",
+      "revenue": "Omzet",
+      "costs": "Kosten",
+      "profit": "Winst",
+      "margin": "Marge",
+      "revenuePerKm": "Omzet/km",
+      "costPerKm": "Kosten/km",
+      "revenuePerHour": "Omzet/uur",
+      "costPerHour": "Kosten/uur",
+      "colOrder": "Opdracht",
+      "colCustomer": "Klant",
+      "colRevenue": "Omzet",
+      "colAllocatedCost": "Toegerekende kost",
+      "colProfit": "Winst",
+      "colMargin": "Marge"
+    },
+    "phaseTablist": "Kostenfase",
+    "distances": "Gepland: {planned} km ({plannedEmpty} leeg) · Werkelijk: {actual} km ({actualEmpty} leeg)",
+    "actions": {
+      "recalcEstimate": "Herbereken schatting",
+      "recalcActual": "Herbereken werkelijk",
+      "actualKm": "Werkelijke km",
+      "addLine": "+ Kostenregel",
+      "finalize": "Afronden",
+      "reopen": "Heropenen",
+      "override": "Overschrijven"
+    },
+    "toasts": {
+      "estimateRecalculated": "Schatting herberekend.",
+      "actualRecalculated": "Werkelijke kosten herberekend.",
+      "lineAdded": "Kostenregel toegevoegd.",
+      "lineOverridden": "Kostenregel overschreven.",
+      "lineDeleted": "Kostenregel verwijderd.",
+      "actualsUpdated": "Werkelijke afstanden bijgewerkt.",
+      "finalized": "Kosten definitief afgerond.",
+      "reopened": "Kosten heropend."
+    },
+    "emptyLines": {
+      "Estimated": "Geen geschatte kostenregels.",
+      "Actual": "Geen werkelijke kostenregels."
+    },
+    "table": {
+      "colType": "Type",
+      "colDescription": "Omschrijving",
+      "colQuantity": "Aantal",
+      "colUnit": "Eenheid",
+      "colRate": "Tarief",
+      "colAmount": "Bedrag",
+      "colSource": "Bron",
+      "colActions": "Acties"
+    },
+    "overriddenNote": "· overschreven",
+    "overriddenNoteReason": "· overschreven: {reason}",
+    "lineDialog": {
+      "title": "Kostenregel toevoegen",
+      "phase": "Fase",
+      "type": "Type",
+      "description": "Omschrijving",
+      "quantity": "Aantal",
+      "unit": "Eenheid",
+      "rate": "Tarief (€)",
+      "rateHint": "Negatief alleen bij correctie/credit.",
+      "validation": "Omschrijving, aantal en tarief zijn verplicht."
+    },
+    "overrideDialog": {
+      "title": "Regel overschrijven — {type}",
+      "current": "Huidig bedrag:",
+      "newAmount": "Nieuw bedrag (€)",
+      "reason": "Reden",
+      "reasonHint": "Verplicht; wordt gelogd in de historiek.",
+      "validation": "Bedrag en reden zijn verplicht."
+    },
+    "actualsDialog": {
+      "title": "Werkelijke afstanden",
+      "distance": "Werkelijke afstand (km)",
+      "empty": "Waarvan leeg (km)",
+      "validation": "Geef geldige kilometers op."
+    }
+  },
+  "rates": {
+    "title": "Kostentarieven",
+    "subtitle": "Tarievensets met ingangsdatum voeden de ritkostencalculatie. Historische ritten behouden hun berekende snapshots.",
+    "newSet": "Nieuwe tarievenset",
+    "loading": "Tarieven laden…",
+    "loadFailed": "De tarieven konden niet worden geladen.",
+    "empty": "Nog geen tarievenset. Zonder tarieven worden er geen ritkosten berekend.",
+    "effectiveFromRequired": "Een ingangsdatum is verplicht.",
+    "saveFailed": "De tarievenset kon niet worden opgeslagen.",
+    "deleteFailed": "De tarievenset kon niet worden verwijderd.",
+    "toasts": {
+      "created": "Tarievenset aangemaakt.",
+      "updated": "Tarievenset bijgewerkt.",
+      "deleted": "Tarievenset verwijderd."
+    },
+    "table": {
+      "effectiveFrom": "Ingangsdatum",
+      "name": "Naam",
+      "fuel": "Brandstof €/l",
+      "driver": "Chauffeur €/u",
+      "vehicleKm": "Voertuig €/km",
+      "vehicleHour": "Voertuig €/u",
+      "depreciation": "Afschrijving €/dag",
+      "actions": "Acties"
+    },
+    "editor": {
+      "editTitle": "Tarievenset bewerken — vanaf {date}",
+      "busy": "Bezig…",
+      "effectiveFrom": "Ingangsdatum",
+      "effectiveFromHint": "Ritten vanaf deze datum gebruiken deze tarieven.",
+      "name": "Naam"
+    },
+    "deleteDialog": {
+      "title": "Tarievenset verwijderen",
+      "message": "Tarievenset vanaf {date} verwijderen? Reeds berekende ritkosten blijven ongewijzigd."
+    },
+    "fields": {
+      "fuelPricePerLitre": "Brandstofprijs (€/l)",
+      "defaultConsumptionLPer100Km": "Standaardverbruik (l/100km)",
+      "defaultConsumptionLPer100KmHint": "Gebruikt als het voertuig geen normverbruik heeft.",
+      "vehicleCostPerKm": "Voertuigkost (€/km)",
+      "vehicleCostPerHour": "Voertuigkost (€/uur)",
+      "driverCostPerHour": "Chauffeursloon (€/uur)",
+      "employerCostMultiplier": "Werkgeverslastenfactor",
+      "employerCostMultiplierHint": "Bijv. 1,35 = loon + 35% lasten.",
+      "maintenanceCostPerKm": "Onderhoud (€/km)",
+      "depreciationPerDay": "Afschrijving (€/dag)",
+      "trailerCostPerDay": "Oplegger (€/dag)",
+      "equipmentCostPerDay": "Uitrusting kraan/koeling (€/dag)",
+      "defaultTollPerTrip": "Standaard tol per rit (€)",
+      "overtimeThresholdMinutesPerDay": "Overurengrens (min/dag)",
+      "overtimeThresholdMinutesPerDayHint": "480 = 8 uur.",
+      "overtimeRateMultiplier": "Overurenfactor",
+      "overtimeRateMultiplierHint": "Bijv. 1,5 = 150% van het uurloon.",
+      "waitingTimeCostPerHour": "Wachttijd (€/uur)",
+      "co2KgPerLitreDiesel": "CO₂ diesel (kg/l)",
+      "co2KgPerLitreOther": "CO₂ benzine/overig (kg/l)"
+    }
+  }
+}

@@ -8,6 +8,7 @@ import {
   type OrderDocumentType,
 } from '../api/orderDocumentsApi'
 import type { PreparedOrderDocument } from '../utils/preparedOrderDocs'
+import { useLocale } from '../../../i18n/localeContext'
 
 interface PreparedOrderDocumentsEditorProps {
   value: PreparedOrderDocument[]
@@ -16,6 +17,7 @@ interface PreparedOrderDocumentsEditorProps {
 
 /** Create-mode staging for order documents; uploads run only after the order exists. */
 export function PreparedOrderDocumentsEditor({ value, onChange }: PreparedOrderDocumentsEditorProps) {
+  const { t } = useLocale()
   const addRef = useRef<HTMLInputElement>(null)
 
   function addFiles(files: FileList | null) {
@@ -51,7 +53,7 @@ export function PreparedOrderDocumentsEditor({ value, onChange }: PreparedOrderD
             <select id={`pod-type-${doc.key}`} value={doc.documentType} onChange={(e) => patch(doc.key, { documentType: e.target.value as OrderDocumentType })}>
               {ORDER_DOCUMENT_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {ORDER_DOCUMENT_TYPE_LABELS[type]}
+                  {t(ORDER_DOCUMENT_TYPE_LABELS[type])}
                 </option>
               ))}
             </select>

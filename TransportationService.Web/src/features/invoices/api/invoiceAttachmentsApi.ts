@@ -53,7 +53,9 @@ export async function uploadInvoiceAttachment(invoiceId: string, file: File): Pr
     body,
   })
   if (!response.ok) {
-    let message = 'De bijlage kon niet worden geüpload.'
+    // Lege message → describeApiError/localizeApiError vallen terug op de vertaalde fallback
+    // van de aanroeper; een server-detail (data) wint wanneer aanwezig.
+    let message = ''
     try {
       const data = (await response.json()) as { detail?: string; message?: string }
       message = data.detail ?? data.message ?? message
@@ -74,7 +76,8 @@ export async function downloadInvoiceAttachment(
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
   if (!response.ok) {
-    throw new ApiError('De bijlage kon niet worden gedownload.', response.status)
+    // Lege message: de aanroeper toont zijn eigen vertaalde fallback.
+    throw new ApiError('', response.status)
   }
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)

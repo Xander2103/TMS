@@ -4,8 +4,9 @@ import { PageHeader } from '../../../components/layout/PageHeader'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { usePermissions } from '../../roles/hooks/usePermissions'
 import { listEscalationPolicies, updateEscalationPolicy } from '../api/escalationsApi'
 import { ESCALATION_KINDS, ESCALATION_KIND_LABELS, type EscalationKind, type EscalationPolicy } from '../types'
@@ -32,6 +33,7 @@ function toDraft(policy: EscalationPolicy): PolicyDraft {
  * zichtbaar met `escalations.manage` (zelfde patroon als "Meldingen en e-mails").
  */
 export function EscalationSettingsPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const { permissions } = usePermissions()
@@ -54,11 +56,12 @@ export function EscalationSettingsPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('De escalatieregels konden niet worden geladen.')
+        if (mounted) setLoadError(t('escalations.page.loadFailed'))
       })
     return () => {
       mounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManage])
 
   const sortedPolicies = useMemo(() => {
@@ -86,11 +89,11 @@ export function EscalationSettingsPage() {
 
     const delayHours = Number(draft.delayHours)
     if (!Number.isInteger(delayHours) || delayHours < 0 || draft.delayHours.trim() === '') {
-      showError('Geef een geldige termijn in uren op (geheel getal, 0 of meer).')
+      showError(t('escalations.form.invalidDelay'))
       return
     }
     if (!draft.targetPermissionCode) {
-      showError('Kies een doel-permissie.')
+      showError(t('escalations.form.targetRequired'))
       return
     }
 
@@ -103,34 +106,34 @@ export function EscalationSettingsPage() {
       })
       setPolicies((current) => (current ?? []).map((p) => (p.kind === updated.kind ? updated : p)))
       setDrafts((current) => ({ ...current, [updated.kind]: toDraft(updated) }))
-      showSuccess(`Escalatieregel "${ESCALATION_KIND_LABELS[policy.kind]}" opgeslagen.`)
+      showSuccess(t('escalations.form.saved', { kind: t(ESCALATION_KIND_LABELS[policy.kind]) }))
     } catch (err) {
-      showError(describeApiError(err, 'De escalatieregel kon niet worden opgeslagen.').message)
+      showError(localizeApiError(t, err, t('escalations.form.saveFailed')))
     } finally {
       setSavingKind(null)
     }
   }
 
   if (!canManage) {
-    return <p className="placeholder-text">Je hebt geen rechten om escalatieregels te beheren.</p>
+    return <p className="placeholder-text">{t('escalations.page.noPermission')}</p>
   }
 
   const columns: Column<EscalationPolicy>[] = [
     {
       key: 'soort',
-      header: 'Soort',
-      render: (policy) => <strong>{ESCALATION_KIND_LABELS[policy.kind]}</strong>,
+      header: t('escalations.columns.kind'),
+      render: (policy) => <strong>{t(ESCALATION_KIND_LABELS[policy.kind])}</strong>,
     },
     {
       key: 'actief',
-      header: 'Actief',
+      header: t('escalations.columns.active'),
       render: (policy) => {
         const draft = drafts[policy.kind]
         return (
           <label className="escalations-checkbox">
             <input
               type="checkbox"
-              aria-label={`Actief: ${ESCALATION_KIND_LABELS[policy.kind]}`}
+              aria-label={t('escalations.aria.active', { kind: t(ESCALATION_KIND_LABELS[policy.kind]) })}
               checked={draft?.isActive ?? policy.isActive}
               onChange={(e) => patchDraft(policy.kind, { isActive: e.target.checked })}
             />
@@ -140,14 +143,14 @@ export function EscalationSettingsPage() {
     },
     {
       key: 'termijn',
-      header: 'Termijn (uren)',
+      header: t('escalations.columns.delay'),
       render: (policy) => (
         <input
           type="number"
           className="escalations-hours-input"
           min={0}
           step={1}
-          aria-label={`Termijn in uren: ${ESCALATION_KIND_LABELS[policy.kind]}`}
+          aria-label={t('escalations.aria.delay', { kind: t(ESCALATION_KIND_LABELS[policy.kind]) })}
           value={drafts[policy.kind]?.delayHours ?? String(policy.delayHours)}
           onChange={(e) => patchDraft(policy.kind, { delayHours: e.target.value })}
         />
@@ -155,11 +158,11 @@ export function EscalationSettingsPage() {
     },
     {
       key: 'doel',
-      header: 'Doel-permissie',
+      header: t('escalations.columns.target'),
       render: (policy) => (
         <select
           className="escalations-permission-select"
-          aria-label={`Doel-permissie: ${ESCALATION_KIND_LABELS[policy.kind]}`}
+          aria-label={t('escalations.aria.target', { kind: t(ESCALATION_KIND_LABELS[policy.kind]) })}
           value={drafts[policy.kind]?.targetPermissionCode ?? policy.targetPermissionCode}
           onChange={(e) => patchDraft(policy.kind, { targetPermissionCode: e.target.value })}
         >
@@ -173,10 +176,10 @@ export function EscalationSettingsPage() {
     },
     {
       key: 'opslaan',
-      header: <span aria-label="Acties" />,
+      header: <span aria-label={t('escalations.columns.actionsAria')} />,
       render: (policy) => (
         <Button onClick={() => void save(policy)} disabled={savingKind === policy.kind}>
-          {savingKind === policy.kind ? 'Opslaan…' : 'Opslaan'}
+          {savingKind === policy.kind ? t('escalations.form.saving') : t('ui.actions.save')}
         </Button>
       ),
     },
@@ -184,11 +187,8 @@ export function EscalationSettingsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Escalatieregels' }]} />
-      <PageHeader
-        title="Escalatieregels"
-        subtitle="Wie wordt na hoeveel uur verwittigd wanneer een signaal blijft liggen."
-      />
+      <Breadcrumbs items={[{ label: t('navigation.menu.settings'), to: '/settings' }, { label: t('escalations.page.title') }]} />
+      <PageHeader title={t('escalations.page.title')} subtitle={t('escalations.page.subtitle')} />
 
       <DataTable
         columns={columns}
@@ -196,7 +196,7 @@ export function EscalationSettingsPage() {
         rowKey={(policy) => policy.kind}
         isLoading={policies === null && !loadError}
         error={loadError}
-        emptyMessage="Geen escalatieregels gevonden."
+        emptyMessage={t('escalations.page.empty')}
       />
     </div>
   )

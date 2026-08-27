@@ -157,12 +157,13 @@ export function simulate(partnerCode: string): Promise<EdiMessageRow> {
   return apiClient.postJson('/api/edi/simulate', { partnerCode })
 }
 
+/** Vertaalsleutels — renderen als t(STATUS_LABELS[status]). */
 export const STATUS_LABELS: Record<EdiStatus, string> = {
-  Received: 'Ontvangen',
-  Processed: 'Verwerkt',
-  Failed: 'Mislukt',
-  DeadLettered: 'Dead letter',
-  Duplicate: 'Duplicaat',
+  Received: 'edi.status.Received',
+  Processed: 'edi.status.Processed',
+  Failed: 'edi.status.Failed',
+  DeadLettered: 'edi.status.DeadLettered',
+  Duplicate: 'edi.status.Duplicate',
 }
 
 export const STATUS_TONE: Record<EdiStatus, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {

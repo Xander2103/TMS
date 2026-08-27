@@ -8,6 +8,7 @@ import { SearchableSelect, type SearchableSelectOption } from '../../../componen
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { listActivityTypes, type ActivityType } from '../api/activityTypesApi'
 import { activityTypeIcon, DEFAULT_ACTIVITY_TYPE_ICON } from '../activityTypeIcons'
@@ -21,6 +22,7 @@ import './new-dossier.css'
  */
 export function NewDossierPage() {
   const navigate = useNavigate()
+  const { t } = useLocale()
   const toast = useToast()
 
   const [customerId, setCustomerId] = useState<string | null>(null)
@@ -54,7 +56,7 @@ export function NewDossierPage() {
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!customerId) {
-      setFormError('Selecteer een klant om het dossier aan te maken.')
+      setFormError(t('dossiers.new.customerRequired'))
       return
     }
     setBusy(true)
@@ -67,10 +69,10 @@ export function NewDossierPage() {
         customerReference: customerReference.trim() || null,
         activityTypeId,
       })
-      toast.showSuccess(`Dossier ${created.dossierNumber} aangemaakt.`)
+      toast.showSuccess(t('dossiers.new.created', { number: created.dossierNumber }))
       navigate(`/dossiers/${created.id}`)
     } catch (err) {
-      const described = describeApiError(err, 'Het dossier kon niet worden aangemaakt.')
+      const described = describeApiError(err, t('dossiers.new.createFailed'))
       setFormError(described.message)
       setFieldErrors(described.fieldErrors)
     } finally {
@@ -82,25 +84,25 @@ export function NewDossierPage() {
 
   return (
     <div className="new-dossier">
-      <BackButton to="/dossiers" label="Terug naar dossiers" />
-      <PageHeader title="Nieuw dossier" subtitle="Alleen de klant is verplicht; de rest vul je aan op het dossier." />
+      <BackButton to="/dossiers" label={t('dossiers.new.back')} />
+      <PageHeader title={t('dossiers.new.title')} subtitle={t('dossiers.new.subtitle')} />
 
       <form onSubmit={(event) => void submit(event)} noValidate>
         <ValidationSummary message={formError} fieldErrors={fieldErrors} />
 
-        <FormField label="Klant" htmlFor="nd-klant" required error={getFieldError(fieldErrors, 'customerId')}>
+        <FormField label={t('dossiers.new.customer')} htmlFor="nd-klant" required error={getFieldError(fieldErrors, 'customerId')}>
           <SearchableSelect
             id="nd-klant"
             value={customerId}
             onChange={setCustomerId}
             options={customerOptions}
-            placeholder="Zoek een klant…"
+            placeholder={t('dossiers.new.customerPlaceholder')}
             disabled={busy}
           />
         </FormField>
 
         <div className="new-dossier-row">
-          <FormField label="Klantreferentie" htmlFor="nd-ref" error={getFieldError(fieldErrors, 'customerReference')}>
+          <FormField label={t('dossiers.new.customerReference')} htmlFor="nd-ref" error={getFieldError(fieldErrors, 'customerReference')}>
             <input
               id="nd-ref"
               value={customerReference}
@@ -109,7 +111,7 @@ export function NewDossierPage() {
               disabled={busy}
             />
           </FormField>
-          <FormField label="Datum" htmlFor="nd-datum" error={getFieldError(fieldErrors, 'dossierDate')}>
+          <FormField label={t('dossiers.new.date')} htmlFor="nd-datum" error={getFieldError(fieldErrors, 'dossierDate')}>
             <input
               id="nd-datum"
               type="date"
@@ -121,8 +123,8 @@ export function NewDossierPage() {
         </div>
 
         <fieldset className="new-dossier-templates">
-          <legend>Sjabloon</legend>
-          <div className="new-dossier-tiles" role="radiogroup" aria-label="Sjabloon">
+          <legend>{t('dossiers.new.template')}</legend>
+          <div className="new-dossier-tiles" role="radiogroup" aria-label={t('dossiers.new.template')}>
             <button
               type="button"
               role="radio"
@@ -132,7 +134,7 @@ export function NewDossierPage() {
               disabled={busy}
             >
               <EmptyIcon size={20} aria-hidden="true" />
-              <span>Leeg dossier</span>
+              <span>{t('dossiers.new.emptyDossier')}</span>
             </button>
             {quickStartTypes.map((type) => {
               const Icon = activityTypeIcon(type.icon)
@@ -157,7 +159,7 @@ export function NewDossierPage() {
 
         <div className="new-dossier-actions">
           <Button type="submit" disabled={busy || !customerId}>
-            {busy ? 'Aanmaken…' : 'Dossier aanmaken'}
+            {busy ? t('dossiers.new.creating') : t('dossiers.new.create')}
           </Button>
         </div>
       </form>

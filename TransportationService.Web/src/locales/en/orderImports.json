@@ -1,0 +1,60 @@
+{
+  "batchStatus": {
+    "Validated": "Validated",
+    "Processed": "Processed",
+    "Failed": "Failed"
+  },
+  "batchStatusDryRun": "{status} (dry run)",
+  "rowStatus": {
+    "Created": "Created",
+    "Skipped": "Skipped",
+    "Error": "Error"
+  },
+  "subtitle": "Create orders automatically from an Excel file",
+  "noPermission": "You do not have permission to view order imports.",
+  "historyError": "The import history could not be loaded.",
+  "detailError": "The batch details could not be loaded.",
+  "uploadSection": "Import a new file",
+  "form": {
+    "profile": "Import profile",
+    "noProfiles": "No profiles",
+    "customerSearch": "Search customers",
+    "customerSearchPlaceholder": "Search by name or number...",
+    "customer": "Customer",
+    "chooseCustomer": "Choose a customer",
+    "file": "File (.xlsx)",
+    "dryRun": "Validate only (dry run)",
+    "validate": "Validate",
+    "import": "Import",
+    "busy": "Working…",
+    "chooseProfile": "Choose an import profile.",
+    "chooseCustomerError": "Choose a customer.",
+    "chooseFile": "Choose an Excel file (.xlsx).",
+    "uploadFailed": "The import failed.",
+    "validatedToast": "Validated: {success} of {total} rows are OK.",
+    "processedToast": "Processed: {orders}, {failures}.",
+    "processedOrders_one": "1 order created",
+    "processedOrders_other": "{count} orders created",
+    "processedFailures_one": "1 error",
+    "processedFailures_other": "{count} errors"
+  },
+  "columns": {
+    "file": "File",
+    "customer": "Customer",
+    "profile": "Profile",
+    "status": "Status",
+    "rows": "Rows",
+    "uploaded": "Uploaded",
+    "row": "Row",
+    "reference": "Reference",
+    "message": "Message"
+  },
+  "counts": "{success} ok / {failure} failed / {total} total",
+  "details": "Details",
+  "empty": "No imports yet.",
+  "loading": "Loading imports...",
+  "detailSection": "Batch details",
+  "detailLoading": "Loading details...",
+  "dryRunTitleSuffix": "(dry run)",
+  "emptyRows": "No rows in this batch."
+}

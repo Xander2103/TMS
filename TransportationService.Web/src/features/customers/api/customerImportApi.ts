@@ -7,7 +7,8 @@ export async function downloadCustomerImportTemplate(): Promise<void> {
   const response = await fetch(`${apiBaseUrl}/api/customers/import/template`, {
     headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
   })
-  if (!response.ok) throw new Error('Het sjabloon kon niet worden gedownload.')
+  // Bewust zonder message: de dialoog toont zijn eigen vertaalde fallback via describeApiError.
+  if (!response.ok) throw new Error()
   const blob = await response.blob()
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
@@ -27,7 +28,8 @@ async function postWorkbook<T>(path: string, file: File): Promise<T> {
   })
   const data = (await response.json().catch(() => null)) as T | { message?: string } | null
   if (!response.ok) {
-    throw new Error((data as { message?: string } | null)?.message ?? 'Import mislukt.')
+    // Servermessage wint; zonder servermessage valt de dialoog terug op zijn vertaalde fallback.
+    throw new Error((data as { message?: string } | null)?.message ?? '')
   }
 
   return data as T

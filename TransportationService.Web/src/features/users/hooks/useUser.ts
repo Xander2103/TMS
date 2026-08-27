@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocale } from '../../../i18n/localeContext'
 import { getUser } from '../api/usersApi'
 import type { User } from '../types/user'
 
@@ -9,9 +10,8 @@ interface UseUserResult {
   reload: () => void
 }
 
-const LOAD_ERROR_MESSAGE = 'Gebruiker kon niet worden geladen.'
-
 export function useUser(id: string): UseUserResult {
+  const { t } = useLocale()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -29,13 +29,14 @@ export function useUser(id: string): UseUserResult {
       })
       .catch(() => {
         if (!isMounted) return
-        setError(LOAD_ERROR_MESSAGE)
+        setError(t('usersRoles.users.detail.loadFailed'))
         setIsLoading(false)
       })
 
     return () => {
       isMounted = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, reloadToken])
 
   function reload() {

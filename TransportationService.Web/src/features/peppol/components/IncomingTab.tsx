@@ -5,13 +5,14 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { Modal } from '../../../components/ui/Modal'
 import { Pagination } from '../../../components/ui/Pagination'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { euro } from '../../invoices/types'
 import {
   listPeppolIncoming,
   rejectPeppolIncoming,
   reviewPeppolIncoming,
-  PEPPOL_INCOMING_STATUS_LABELS,
+  PEPPOL_INCOMING_STATUS_LABEL_KEYS,
   PEPPOL_INCOMING_STATUS_TONE,
   type PeppolIncomingDocument,
   type PeppolIncomingStatus,
@@ -20,10 +21,11 @@ import { formatDateTime } from '../../../utils/dates'
 
 const PAGE_SIZE = 25
 
-const KIND_LABELS: Record<string, string> = {
-  SupplierInvoice: 'Leveranciersfactuur',
-  SupplierCreditNote: 'Leverancierscreditnota',
-  StatusMessage: 'Statusbericht',
+/** Vertaalsleutels per documentKind — renderen als t(KIND_LABEL_KEYS[kind]). */
+const KIND_LABEL_KEYS: Record<string, string> = {
+  SupplierInvoice: 'peppol.incomingKind.SupplierInvoice',
+  SupplierCreditNote: 'peppol.incomingKind.SupplierCreditNote',
+  StatusMessage: 'peppol.incomingKind.StatusMessage',
 }
 
 interface DecisionState {
@@ -33,16 +35,18 @@ interface DecisionState {
 
 /** "Inkomend": via Peppol ontvangen documenten met verwerk/afwijs-acties (peppol.view_incoming). */
 export function IncomingTab() {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
   const [reloadToken, setReloadToken] = useState(0)
+  // Foutstates als vertaalsleutel; vertaling gebeurt pas bij render.
   const [result, setResult] = useState<{
     items: PeppolIncomingDocument[]
     totalCount: number
-    error: string | null
+    errorKey: string | null
     loadedKey: string
-  }>({ items: [], totalCount: 0, error: null, loadedKey: '' })
+  }>({ items: [], totalCount: 0, errorKey: null, loadedKey: '' })
   const [decision, setDecision] = useState<DecisionState | null>(null)
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -54,13 +58,13 @@ export function IncomingTab() {
     listPeppolIncoming({ status: status || undefined, page, pageSize: PAGE_SIZE })
       .then((data) => {
         if (!mounted) return
-        setResult({ items: data.items, totalCount: data.totalCount, error: null, loadedKey: requestKey })
+        setResult({ items: data.items, totalCount: data.totalCount, errorKey: null, loadedKey: requestKey })
       })
       .catch(() => {
         if (!mounted) return
         setResult((current) => ({
           ...current,
-          error: 'De inkomende Peppol-documenten konden niet worden geladen.',
+          errorKey: 'peppol.incoming.loadFailed',
           loadedKey: requestKey,
         }))
       })
@@ -70,7 +74,7 @@ export function IncomingTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey])
 
-  const { items, totalCount, error: loadError } = result
+  const { items, totalCount, errorKey: loadErrorKey } = result
   const isLoading = result.loadedKey !== requestKey
 
   function openDecision(document: PeppolIncomingDocument, action: 'review' | 'reject') {
@@ -85,15 +89,15 @@ export function IncomingTab() {
     try {
       if (decision.action === 'review') {
         await reviewPeppolIncoming(decision.document.id, trimmed)
-        showSuccess('Document gemarkeerd als verwerkt.')
+        showSuccess(t('peppol.incoming.reviewed'))
       } else {
         await rejectPeppolIncoming(decision.document.id, trimmed)
-        showSuccess('Document afgewezen.')
+        showSuccess(t('peppol.incoming.rejected'))
       }
       setDecision(null)
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'De actie kon niet worden uitgevoerd.').message)
+      showError(localizeApiError(t, err, t('peppol.incoming.actionFailed')))
     } finally {
       setBusy(false)
     }
@@ -102,40 +106,44 @@ export function IncomingTab() {
   const columns: Column<PeppolIncomingDocument>[] = [
     {
       key: 'supplier',
-      header: 'Leverancier',
+      header: t('peppol.incoming.colSupplier'),
       render: (r) => r.supplierName ?? <code>{r.supplierParticipant}</code>,
     },
-    { key: 'documentNumber', header: 'Documentnr', render: (r) => r.documentNumber },
-    { key: 'kind', header: 'Soort', render: (r) => KIND_LABELS[r.documentKind] ?? r.documentKind },
+    { key: 'documentNumber', header: t('peppol.incoming.colDocumentNumber'), render: (r) => r.documentNumber },
+    {
+      key: 'kind',
+      header: t('peppol.incoming.colKind'),
+      render: (r) => (KIND_LABEL_KEYS[r.documentKind] ? t(KIND_LABEL_KEYS[r.documentKind]) : r.documentKind),
+    },
     {
       key: 'amount',
-      header: 'Bedrag',
+      header: t('peppol.incoming.colAmount'),
       align: 'right',
       render: (r) => (r.amount != null ? euro(r.amount, r.currency ?? 'EUR') : '—'),
     },
-    { key: 'receivedAt', header: 'Ontvangen', render: (r) => formatDateTime(r.receivedAt) },
+    { key: 'receivedAt', header: t('peppol.incoming.colReceivedAt'), render: (r) => formatDateTime(r.receivedAt) },
     {
       key: 'status',
-      header: 'Status',
+      header: t('peppol.incoming.colStatus'),
       render: (r) => (
         <Badge tone={PEPPOL_INCOMING_STATUS_TONE[r.status] ?? 'neutral'}>
-          {PEPPOL_INCOMING_STATUS_LABELS[r.status] ?? r.status}
+          {PEPPOL_INCOMING_STATUS_LABEL_KEYS[r.status] ? t(PEPPOL_INCOMING_STATUS_LABEL_KEYS[r.status]) : r.status}
         </Badge>
       ),
     },
-    { key: 'note', header: 'Notitie', render: (r) => r.reviewNote ?? '—' },
+    { key: 'note', header: t('peppol.incoming.colNote'), render: (r) => r.reviewNote ?? '—' },
     {
       key: 'actions',
-      header: 'Acties',
+      header: t('peppol.incoming.colActions'),
       render: (r) => (
         <span className="edi-row-actions">
           {(r.status === 'Received' || r.status === 'NeedsReview') && (
             <>
               <Button variant="ghost" onClick={() => openDecision(r, 'review')}>
-                Markeer als verwerkt
+                {t('peppol.incoming.markReviewed')}
               </Button>
               <Button variant="ghost" onClick={() => openDecision(r, 'reject')}>
-                Afwijzen
+                {t('peppol.incoming.reject')}
               </Button>
             </>
           )}
@@ -149,17 +157,17 @@ export function IncomingTab() {
       <div className="ui-filter-bar">
         <select
           className="ui-filter-select"
-          aria-label="Status"
+          aria-label={t('peppol.incoming.statusFilterLabel')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value)
             setPage(1)
           }}
         >
-          <option value="">Alle statussen</option>
-          {(Object.keys(PEPPOL_INCOMING_STATUS_LABELS) as PeppolIncomingStatus[]).map((s) => (
+          <option value="">{t('ui.filter.allStatuses')}</option>
+          {(Object.keys(PEPPOL_INCOMING_STATUS_LABEL_KEYS) as PeppolIncomingStatus[]).map((s) => (
             <option key={s} value={s}>
-              {PEPPOL_INCOMING_STATUS_LABELS[s]}
+              {t(PEPPOL_INCOMING_STATUS_LABEL_KEYS[s])}
             </option>
           ))}
         </select>
@@ -170,38 +178,42 @@ export function IncomingTab() {
         rows={items}
         rowKey={(r) => r.id}
         isLoading={isLoading}
-        error={loadError}
-        emptyMessage="Geen inkomende Peppol-documenten gevonden."
+        error={loadErrorKey ? t(loadErrorKey) : null}
+        emptyMessage={t('peppol.incoming.empty')}
       />
       <Pagination page={page} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={setPage} />
 
       {decision && (
         <Modal
-          title={decision.action === 'review' ? 'Markeer als verwerkt' : 'Document afwijzen'}
+          title={decision.action === 'review' ? t('peppol.incoming.markReviewed') : t('peppol.incoming.rejectTitle')}
           onClose={() => setDecision(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDecision(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button
                 variant={decision.action === 'reject' ? 'danger' : 'primary'}
                 onClick={() => void confirmDecision()}
                 disabled={busy}
               >
-                {busy ? 'Bezig…' : decision.action === 'review' ? 'Markeer als verwerkt' : 'Afwijzen'}
+                {busy
+                  ? t('peppol.incoming.busy')
+                  : decision.action === 'review'
+                    ? t('peppol.incoming.markReviewed')
+                    : t('peppol.incoming.reject')}
               </Button>
             </>
           }
         >
           <p>
             {decision.action === 'review'
-              ? `Document ${decision.document.documentNumber} markeren als verwerkt?`
-              : `Document ${decision.document.documentNumber} afwijzen?`}
+              ? t('peppol.incoming.confirmReview', { documentNumber: decision.document.documentNumber })
+              : t('peppol.incoming.confirmReject', { documentNumber: decision.document.documentNumber })}
           </p>
           <label className="peppol-note-label">
-            Notitie (optioneel)
+            {t('peppol.incoming.noteLabel')}
             <textarea
               rows={3}
               value={note}

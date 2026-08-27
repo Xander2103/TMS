@@ -49,7 +49,7 @@ beforeEach(() => {
   state.units = []
   state.preview.mockResolvedValue(makePreview())
   state.create.mockResolvedValue({ id: 'adj-1' })
-  state.cancel.mockResolvedValue({ id: 'adj-1', status: 'Geannuleerd' })
+  state.cancel.mockResolvedValue({ id: 'adj-1', status: 'Geannuleerd', statusCode: 'Cancelled' })
 })
 
 describe('AgreementAdjustmentsPanel', () => {
@@ -112,6 +112,7 @@ describe('AgreementAdjustmentsPanel', () => {
         basisFilter: null,
         unitTypeIdFilter: null,
         status: 'Gepland',
+        statusCode: 'Planned',
         reason: 'Indexatie',
         ruleCount: 2,
         createdAt: '2026-08-15T10:00:00Z',

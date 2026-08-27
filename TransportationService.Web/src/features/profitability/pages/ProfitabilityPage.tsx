@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   downloadProfitabilityExport, getProfitabilityGrouped, getProfitabilityOverview, getTripExplanation,
 } from '../api/profitabilityApi'
@@ -14,6 +15,7 @@ import {
   type ProfitabilityDimension, type ProfitabilityGroup, type ProfitabilityOverview, type TripExplanation,
 } from '../types'
 import { formatDate } from '../../../utils/dates'
+import { formatDecimal } from '../../../utils/numbers'
 import './profitability.css'
 
 function isoDaysAgo(days: number): string {
@@ -28,6 +30,7 @@ function isoDaysAgo(days: number): string {
  * Corrections deliberately run through the existing trip-costing page (audited there).
  */
 export function ProfitabilityPage() {
+  const { t } = useLocale()
   const { showError } = useToast()
   const { hasPermission } = useAuth()
   const canExport = hasPermission('profitability.export')
@@ -48,7 +51,7 @@ export function ProfitabilityPage() {
       .then((data) => {
         if (!cancelled) setOverview(data)
       })
-      .catch((error: unknown) => showError(describeApiError(error, 'Rendement laden mislukt.').message))
+      .catch((error: unknown) => showError(localizeApiError(t, error, t('profitability.page.loadFailed'))))
     getProfitabilityGrouped(dimension, from, to)
       .then((data) => {
         if (!cancelled) setGroups(data)
@@ -65,18 +68,18 @@ export function ProfitabilityPage() {
   return (
     <div className="pf-page">
       <header className="pf-header">
-        <h1>Rendement</h1>
+        <h1>{t('profitability.page.title')}</h1>
         <div className="pf-filters">
-          <input type="date" value={from} onChange={(event) => setFrom(event.target.value || from)} aria-label="Vanaf" />
-          <input type="date" value={to} onChange={(event) => setTo(event.target.value || to)} aria-label="Tot" />
+          <input type="date" value={from} onChange={(event) => setFrom(event.target.value || from)} aria-label={t('profitability.page.fromAria')} />
+          <input type="date" value={to} onChange={(event) => setTo(event.target.value || to)} aria-label={t('profitability.page.toAria')} />
           {canExport && (
             <Button variant="secondary" disabled={busyExport} onClick={() => {
               setBusyExport(true)
               void downloadProfitabilityExport(from, to)
-                .catch(() => showError('Export mislukt.'))
+                .catch(() => showError(t('profitability.page.exportFailed')))
                 .finally(() => setBusyExport(false))
             }}>
-              {busyExport ? 'Exporteren…' : 'Exporteer XLSX'}
+              {busyExport ? t('profitability.page.exporting') : t('profitability.page.export')}
             </Button>
           )}
         </div>
@@ -84,34 +87,34 @@ export function ProfitabilityPage() {
 
       {summary && (
         <div className="pf-kpis">
-          <div className="pf-kpi"><span className="pf-kpi-value">{summary.tripCount}</span><span>Ritten</span></div>
-          <div className="pf-kpi"><span className="pf-kpi-value">{formatEuro(summary.revenueUsed)}</span><span>Omzet</span></div>
+          <div className="pf-kpi"><span className="pf-kpi-value">{summary.tripCount}</span><span>{t('profitability.page.kpiTrips')}</span></div>
+          <div className="pf-kpi"><span className="pf-kpi-value">{formatEuro(summary.revenueUsed)}</span><span>{t('profitability.page.kpiRevenue')}</span></div>
           <div className="pf-kpi">
             <span className="pf-kpi-value">{formatEuro(summary.projectedCost)}</span>
-            <span>Kosten (waarvan {formatEuro(summary.estimatedCost)} raming)</span>
+            <span>{t('profitability.page.kpiCosts', { amount: formatEuro(summary.estimatedCost) })}</span>
           </div>
           <div className={`pf-kpi pf-kpi-${marginTone(summary.marginPct)}`}>
             <span className="pf-kpi-value">{formatEuro(summary.margin)}</span>
-            <span>Marge{summary.marginPct !== null ? ` (${summary.marginPct}%)` : ''}</span>
+            <span>{t('profitability.page.kpiMargin')}{summary.marginPct !== null ? ` (${summary.marginPct}%)` : ''}</span>
           </div>
           <div className={`pf-kpi${summary.unprofitableTrips > 0 ? ' pf-kpi-danger' : ''}`}>
-            <span className="pf-kpi-value">{summary.unprofitableTrips}</span><span>Verlieslatend</span>
+            <span className="pf-kpi-value">{summary.unprofitableTrips}</span><span>{t('profitability.page.kpiUnprofitable')}</span>
           </div>
           <div className={`pf-kpi${summary.tripsWithMissingData > 0 ? ' pf-kpi-warning' : ''}`}>
-            <span className="pf-kpi-value">{summary.tripsWithMissingData}</span><span>Onvolledige kostdata</span>
+            <span className="pf-kpi-value">{summary.tripsWithMissingData}</span><span>{t('profitability.page.kpiIncomplete')}</span>
           </div>
         </div>
       )}
 
       <section className="pf-panel">
         <div className="pf-panel-head">
-          <h2>Ranking</h2>
+          <h2>{t('profitability.page.ranking')}</h2>
           <div className="pf-tabs" role="tablist">
             {(Object.keys(DIMENSION_LABELS) as ProfitabilityDimension[]).map((option) => (
               <button key={option} role="tab" aria-selected={dimension === option}
                       className={dimension === option ? 'pf-tab-active' : ''}
                       onClick={() => setDimension(option)}>
-                {DIMENSION_LABELS[option]}
+                {t(DIMENSION_LABELS[option])}
               </button>
             ))}
           </div>
@@ -119,7 +122,14 @@ export function ProfitabilityPage() {
         <div className="pf-table-wrap">
           <table className="pf-table">
             <thead>
-              <tr><th>{DIMENSION_LABELS[dimension]}</th><th>Ritten</th><th>Omzet</th><th>Kosten</th><th>Marge</th><th>%</th></tr>
+              <tr>
+                <th>{t(DIMENSION_LABELS[dimension])}</th>
+                <th>{t('profitability.page.tripsHeader')}</th>
+                <th>{t('profitability.page.revenueHeader')}</th>
+                <th>{t('profitability.page.costsHeader')}</th>
+                <th>{t('profitability.page.marginHeader')}</th>
+                <th>{t('profitability.page.marginPctHeader')}</th>
+              </tr>
             </thead>
             <tbody>
               {groups.map((group) => (
@@ -127,7 +137,7 @@ export function ProfitabilityPage() {
                   <td>
                     {group.label}
                     {group.containsAllocatedCosts && (
-                      <span className="pf-note" title="Kosten van gedeelde ritten zijn verdeeld over klanten (allocatie)."> ⚖</span>
+                      <span className="pf-note" title={t('profitability.page.allocatedNote')}> ⚖</span>
                     )}
                   </td>
                   <td>{group.tripCount}</td>
@@ -137,66 +147,80 @@ export function ProfitabilityPage() {
                   <td><Badge tone={marginTone(group.marginPct)}>{group.marginPct ?? '—'}%</Badge></td>
                 </tr>
               ))}
-              {groups.length === 0 && <tr><td colSpan={6} className="pf-note">Geen gegevens in deze periode.</td></tr>}
+              {groups.length === 0 && <tr><td colSpan={6} className="pf-note">{t('profitability.page.emptyPeriod')}</td></tr>}
             </tbody>
           </table>
         </div>
       </section>
 
       <section className="pf-panel">
-        <div className="pf-panel-head"><h2>Ritten</h2></div>
+        <div className="pf-panel-head"><h2>{t('profitability.page.tripsTitle')}</h2></div>
         <div className="pf-table-wrap">
           <table className="pf-table">
             <thead>
               <tr>
-                <th>Rit</th><th>Datum</th><th>Klant</th><th>Chauffeur</th>
-                <th>Omzet</th><th>Kosten</th><th>Marge</th><th>€/km</th><th>Datakwaliteit</th><th></th>
+                <th>{t('profitability.page.tripHeader')}</th>
+                <th>{t('profitability.page.dateHeader')}</th>
+                <th>{t('profitability.page.customerHeader')}</th>
+                <th>{t('profitability.page.driverHeader')}</th>
+                <th>{t('profitability.page.revenueHeader')}</th>
+                <th>{t('profitability.page.costsHeader')}</th>
+                <th>{t('profitability.page.marginHeader')}</th>
+                <th>{t('profitability.page.perKmHeader')}</th>
+                <th>{t('profitability.page.dataQualityHeader')}</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {(overview?.trips ?? []).map((trip) => (
                 <tr key={trip.tripId}>
-                  <td><strong>{trip.tripNumber}</strong>{trip.isFinalized && <span className="pf-note"> ✓ afgerond</span>}</td>
+                  <td><strong>{trip.tripNumber}</strong>{trip.isFinalized && <span className="pf-note"> {t('profitability.page.finalized')}</span>}</td>
                   <td>{formatDate(trip.tripDate)}</td>
                   <td>{trip.customerSummary ?? '—'}</td>
                   <td>{trip.driverName ?? '—'}</td>
                   <td>
                     {formatEuro(trip.revenueUsed)}
-                    <div className="pf-note">{REVENUE_SOURCE_LABELS[trip.revenueSourceUsed]}</div>
+                    <div className="pf-note">{t(REVENUE_SOURCE_LABELS[trip.revenueSourceUsed])}</div>
                   </td>
                   <td>
                     {formatEuro(trip.projectedCost)}
-                    {trip.estimatedCost > 0 && trip.actualCost === 0 && <div className="pf-note">volledig raming</div>}
-                    {trip.estimatedCost > 0 && trip.actualCost > 0 && <div className="pf-note">deels raming</div>}
+                    {trip.estimatedCost > 0 && trip.actualCost === 0 && <div className="pf-note">{t('profitability.page.fullyEstimated')}</div>}
+                    {trip.estimatedCost > 0 && trip.actualCost > 0 && <div className="pf-note">{t('profitability.page.partlyEstimated')}</div>}
                   </td>
                   <td><Badge tone={marginTone(trip.marginPct)}>{formatEuro(trip.margin)}{trip.marginPct !== null ? ` (${trip.marginPct}%)` : ''}</Badge></td>
-                  <td>{trip.costPerKm !== null ? `${trip.costPerKm.toLocaleString('nl-BE')}${trip.distanceIsActual ? '' : '*'}` : '—'}</td>
+                  <td>{trip.costPerKm !== null ? `${formatDecimal(trip.costPerKm, 2)}${trip.distanceIsActual ? '' : '*'}` : '—'}</td>
                   <td>
                     {trip.missingCostTypes.length > 0
-                      ? <Badge tone="warning">Ontbreekt: {trip.missingCostTypes.map((t) => COST_TYPE_LABELS[t] ?? t).join(', ')}</Badge>
-                      : <Badge tone="success">Volledig</Badge>}
+                      ? (
+                        <Badge tone="warning">
+                          {t('profitability.page.missingBadge', {
+                            types: trip.missingCostTypes.map((type) => (COST_TYPE_LABELS[type] ? t(COST_TYPE_LABELS[type]) : type)).join(', '),
+                          })}
+                        </Badge>
+                      )
+                      : <Badge tone="success">{t('profitability.page.complete')}</Badge>}
                   </td>
                   <td className="pf-actions">
                     <button type="button" className="pf-link" onClick={() => {
                       void getTripExplanation(trip.tripId)
                         .then(setExplanation)
-                        .catch(() => showError('Uitleg laden mislukt.'))
+                        .catch(() => showError(t('profitability.page.explainFailed')))
                     }}>
-                      Uitleg
+                      {t('profitability.page.explain')}
                     </button>
-                    {canSeeCostDetail && <Link className="pf-link" to={`/planning/${trip.tripId}`}>Kosten</Link>}
+                    {canSeeCostDetail && <Link className="pf-link" to={`/planning/${trip.tripId}`}>{t('profitability.page.costsLink')}</Link>}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="pf-note pf-legend">* geraamde afstand (geen werkelijke kilometers geregistreerd)</p>
+        <p className="pf-note pf-legend">{t('profitability.page.legend')}</p>
       </section>
 
       {explanation && (
-        <Modal title={`Berekening ${explanation.tripNumber}`} onClose={() => setExplanation(null)}>
-          <h3 className="pf-exp-title">Omzet</h3>
+        <Modal title={t('profitability.page.calcTitle', { trip: explanation.tripNumber })} onClose={() => setExplanation(null)}>
+          <h3 className="pf-exp-title">{t('profitability.page.revenueSection')}</h3>
           <ul className="pf-exp-list">
             {explanation.revenueLines.map((line, index) => (
               <li key={index}>
@@ -204,27 +228,29 @@ export function ProfitabilityPage() {
                 <strong>{formatEuro(line.amount)}</strong>
               </li>
             ))}
-            {explanation.revenueLines.length === 0 && <li className="pf-note">Geen omzetlijnen.</li>}
+            {explanation.revenueLines.length === 0 && <li className="pf-note">{t('profitability.page.noRevenueLines')}</li>}
           </ul>
-          <h3 className="pf-exp-title">Kosten</h3>
+          <h3 className="pf-exp-title">{t('profitability.page.costsSection')}</h3>
           <ul className="pf-exp-list">
             {explanation.costLines.map((line, index) => (
               <li key={index}>
                 <span>
                   {line.description}
                   <span className="pf-note">
-                    {' '}({line.phase === 'Actual' ? 'werkelijk' : 'raming'} · {line.source}
-                    {line.isManualOverride ? ' · overschreven' : ''})
+                    {' '}({line.phase === 'Actual' ? t('profitability.page.phaseActual') : t('profitability.page.phaseEstimate')} · {line.source}
+                    {line.isManualOverride ? ` · ${t('profitability.page.overridden')}` : ''})
                   </span>
                 </span>
                 <strong>{formatEuro(line.amount)}</strong>
               </li>
             ))}
-            {explanation.costLines.length === 0 && <li className="pf-note">Nog geen kostenlijnen.</li>}
+            {explanation.costLines.length === 0 && <li className="pf-note">{t('profitability.page.noCostLines')}</li>}
           </ul>
           {explanation.missingCostTypes.length > 0 && (
             <p className="pf-note">
-              Ontbrekend: {explanation.missingCostTypes.map((t) => COST_TYPE_LABELS[t] ?? t).join(', ')}
+              {t('profitability.page.missingTypes', {
+                types: explanation.missingCostTypes.map((type) => (COST_TYPE_LABELS[type] ? t(COST_TYPE_LABELS[type]) : type)).join(', '),
+              })}
             </p>
           )}
           <p className="pf-note">{explanation.calculationNote}</p>

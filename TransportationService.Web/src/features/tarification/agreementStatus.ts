@@ -1,28 +1,47 @@
 import type { BadgeTone } from '../../components/ui/Badge'
 import type { PricingAgreement } from './api/pricingApi'
 
-export type AgreementStatus = 'Actief' | 'Toekomstig' | 'Verlopen' | 'Inactief'
+/** Stabiele statuscodes (§82): logica en tone-maps vergelijken hierop, nooit op vertaalde labels. */
+export type AgreementStatus = 'Active' | 'Future' | 'Expired' | 'Inactive'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
-/** Actief = IsActive && window covers today; Toekomstig/Verlopen from the window; else Inactief. */
+/** Active = IsActive && window covers today; Future/Expired from the window; else Inactive. */
 export function agreementStatus(agreement: Pick<PricingAgreement, 'isActive' | 'effectiveFrom' | 'effectiveUntil'>): AgreementStatus {
-  if (!agreement.isActive) return 'Inactief'
+  if (!agreement.isActive) return 'Inactive'
   const now = today()
-  if (agreement.effectiveFrom > now) return 'Toekomstig'
-  if (agreement.effectiveUntil && agreement.effectiveUntil < now) return 'Verlopen'
-  return 'Actief'
+  if (agreement.effectiveFrom > now) return 'Future'
+  if (agreement.effectiveUntil && agreement.effectiveUntil < now) return 'Expired'
+  return 'Active'
+}
+
+/** Vertaalsleutels — renderen als t(AGREEMENT_STATUS_LABELS[status]). */
+export const AGREEMENT_STATUS_LABELS: Record<AgreementStatus, string> = {
+  Active: 'tarification.status.Active',
+  Future: 'tarification.status.Future',
+  Expired: 'tarification.status.Expired',
+  Inactive: 'tarification.status.Inactive',
 }
 
 export const AGREEMENT_STATUS_TONE: Record<AgreementStatus, BadgeTone> = {
-  Actief: 'success',
-  Toekomstig: 'info',
-  Verlopen: 'neutral',
-  Inactief: 'neutral',
+  Active: 'success',
+  Future: 'info',
+  Expired: 'neutral',
+  Inactive: 'neutral',
 }
 
-export function agreementSamenstelling(agreement: Pick<PricingAgreement, 'isShared' | 'customerId' | 'customerName'>): string {
-  if (agreement.isShared) return 'Gedeeld'
-  if (agreement.customerId) return `Klant: ${agreement.customerName ?? '—'}`
-  return 'Algemeen'
+export interface AgreementComposition {
+  key: string
+  params?: Record<string, string | number>
+}
+
+/** Vertaalsleutel + params voor de samenstellingsbadge — renderen als t(result.key, result.params). */
+export function agreementSamenstelling(
+  agreement: Pick<PricingAgreement, 'isShared' | 'customerId' | 'customerName'>,
+): AgreementComposition {
+  if (agreement.isShared) return { key: 'tarification.composition.shared' }
+  if (agreement.customerId) {
+    return { key: 'tarification.composition.customer', params: { name: agreement.customerName ?? '—' } }
+  }
+  return { key: 'tarification.composition.general' }
 }

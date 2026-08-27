@@ -6,13 +6,14 @@ export type NotificationRecipientType =
   | 'ExplicitEmail'
   | 'Driver'
 
+/** Translation keys per recipient type; render via t(RECIPIENT_TYPE_LABELS[type]). */
 export const RECIPIENT_TYPE_LABELS: Record<NotificationRecipientType, string> = {
-  CustomerPrimaryContact: 'Hoofdcontact van de klant',
-  CustomerCommunicationRule: 'Klant-communicatieregel',
-  InternalPermission: 'Iedereen met een bepaald recht',
-  InternalRole: 'Iedereen met een bepaalde rol',
-  ExplicitEmail: 'Specifiek e-mailadres',
-  Driver: 'Chauffeur / betrokken medewerker',
+  CustomerPrimaryContact: 'notificationAdmin.recipientType.CustomerPrimaryContact',
+  CustomerCommunicationRule: 'notificationAdmin.recipientType.CustomerCommunicationRule',
+  InternalPermission: 'notificationAdmin.recipientType.InternalPermission',
+  InternalRole: 'notificationAdmin.recipientType.InternalRole',
+  ExplicitEmail: 'notificationAdmin.recipientType.ExplicitEmail',
+  Driver: 'notificationAdmin.recipientType.Driver',
 }
 
 /** Recipient types whose Value is a free/selected identifier; the other two need none. */
@@ -109,62 +110,63 @@ export interface CustomerMessageTemplate {
   isActive: boolean
 }
 
-/** Dutch display label for a message kind — mirrors NotificationEventCatalog for the 30 event
- * kinds and adds the (unmanaged, pre-Phase-6) legacy kinds still visible in the outbox. Falls
- * back to the raw code for anything unrecognised, so a future kind never renders blank. */
-export const KIND_LABELS: Record<string, string> = {
+/** Message-kind display keys — mirrors NotificationEventCatalog for the 30 event kinds and adds
+ * the (unmanaged, pre-Phase-6) legacy kinds still visible in the outbox. The set of KNOWN kinds
+ * lives here; the display text lives in locales/<lang>/notificationAdmin.json under `kind.*`.
+ * Unknown kinds fall back to the raw code, so a future kind never renders blank. */
+export const KNOWN_KINDS: readonly string[] = [
   // Orders
-  order_created: 'Opdracht aangemaakt',
-  order_submitted_portal: 'Opdracht ingediend via klantportaal',
-  order_accepted: 'Opdracht geaccepteerd',
-  order_rejected: 'Opdracht geweigerd',
-  order_info_requested: 'Extra informatie gevraagd',
-  order_planned: 'Opdracht ingepland',
-  order_pickup_window: 'Ophaalvenster bevestigd',
-  order_delivery_window: 'Leveringsvenster bevestigd',
-  order_pickup_completed: 'Ophaling afgerond',
-  order_delivery_completed: 'Levering afgerond',
-  order_delay_detected: 'Vertraging vastgesteld',
-  order_failed_delivery: 'Levering mislukt',
-  order_damage_registered: 'Schade geregistreerd bij opdracht',
-  order_pod_available: 'Afleverbewijs beschikbaar',
+  'order_created',
+  'order_submitted_portal',
+  'order_accepted',
+  'order_rejected',
+  'order_info_requested',
+  'order_planned',
+  'order_pickup_window',
+  'order_delivery_window',
+  'order_pickup_completed',
+  'order_delivery_completed',
+  'order_delay_detected',
+  'order_failed_delivery',
+  'order_damage_registered',
+  'order_pod_available',
   // Facturatie
-  invoice_draft_ready: 'Conceptfactuur klaar',
-  invoice_sent: 'Factuur verzonden',
-  invoice_peppol_queued: 'Peppol-factuur in wachtrij',
-  invoice_peppol_delivered: 'Peppol-factuur afgeleverd',
-  invoice_peppol_failed: 'Peppol-factuur mislukt',
-  invoice_credit_note: 'Creditnota aangemaakt',
+  'invoice_draft_ready',
+  'invoice_sent',
+  'invoice_peppol_queued',
+  'invoice_peppol_delivered',
+  'invoice_peppol_failed',
+  'invoice_credit_note',
   // Personeel
-  personnel_qualification_expiry: 'Kwalificatie vervalt binnenkort',
-  personnel_medical_expiry: 'Medische keuring vervalt binnenkort',
-  personnel_document_expiry: 'Persoonsdocument vervalt binnenkort',
-  leave_requested: 'Verlofaanvraag ontvangen',
-  leave_decided: 'Verlofaanvraag beslist',
-  employee_note_pinned: 'Notitie vastgepind aan dashboard',
+  'personnel_qualification_expiry',
+  'personnel_medical_expiry',
+  'personnel_document_expiry',
+  'leave_requested',
+  'leave_decided',
+  'employee_note_pinned',
   // Vloot
-  fleet_maintenance_due: 'Onderhoud binnenkort verschuldigd',
-  fleet_inspection_due: 'Keuring binnenkort verschuldigd',
-  fleet_document_expiry: 'Vlootdocument vervalt binnenkort',
-  fleet_damage_created: 'Schadegeval geregistreerd',
+  'fleet_maintenance_due',
+  'fleet_inspection_due',
+  'fleet_document_expiry',
+  'fleet_damage_created',
   // Legacy (pre-Phase-6) kinds
-  order_confirmation: 'Orderbevestiging',
-  time_window_confirmation: 'Tijdvak bevestigd',
-  driver_en_route: 'Chauffeur onderweg',
-  eta_update: 'ETA-update',
-  delay: 'Vertraging',
-  delivery_completed: 'Levering afgerond (legacy)',
-  pod_available: 'Afleverbewijs beschikbaar (legacy)',
-  leave_submitted: 'Verlofaanvraag ingediend (legacy)',
-  leave_approved: 'Verlof goedgekeurd (legacy)',
-  leave_rejected: 'Verlof afgewezen (legacy)',
-  planning_changed: 'Planning gewijzigd',
-  qualification_expiry: 'Kwalificatie vervalt (legacy)',
-  hr_birthday: 'Verjaardag',
-  hr_seniority: 'Jubileum',
-  hr_employment_end: 'Einde dienstverband',
-}
+  'order_confirmation',
+  'time_window_confirmation',
+  'driver_en_route',
+  'eta_update',
+  'delay',
+  'delivery_completed',
+  'pod_available',
+  'leave_submitted',
+  'leave_approved',
+  'leave_rejected',
+  'planning_changed',
+  'qualification_expiry',
+  'hr_birthday',
+  'hr_seniority',
+  'hr_employment_end',
+]
 
-export function kindLabel(kind: string): string {
-  return KIND_LABELS[kind] ?? kind
+export function kindLabel(t: (key: string) => string, kind: string): string {
+  return KNOWN_KINDS.includes(kind) ? t(`notificationAdmin.kind.${kind}`) : kind
 }

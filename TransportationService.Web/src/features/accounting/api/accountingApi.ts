@@ -103,9 +103,10 @@ export async function downloadAccountingExport(from: string, to: string): Promis
   URL.revokeObjectURL(url)
 }
 
+/** Vertaalsleutels — renderen als t(SYSTEM_ROLE_LABELS[role]). */
 export const SYSTEM_ROLE_LABELS: Record<SalesCategorySystemRole, string> = {
-  None: 'Handmatig te kiezen',
-  Transport: 'Transportlijn (automatisch)',
-  Surcharge: 'Diensten & toeslagen (automatisch)',
-  Diesel: 'Dieseltoeslag (automatisch)',
+  None: 'accounting.systemRole.None',
+  Transport: 'accounting.systemRole.Transport',
+  Surcharge: 'accounting.systemRole.Surcharge',
+  Diesel: 'accounting.systemRole.Diesel',
 }

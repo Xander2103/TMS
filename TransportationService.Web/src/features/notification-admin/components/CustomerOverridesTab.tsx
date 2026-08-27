@@ -3,7 +3,8 @@ import { Badge } from '../../../components/ui/Badge'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { SearchableSelect, type SearchableSelectOption } from '../../../components/ui/SearchableSelect'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchCustomers } from '../../customers/api/customersApi'
 import { listCustomerNotificationOverrides, setCustomerNotificationOverride } from '../api/notificationAdminApi'
 import type { CustomerNotificationOverride } from '../types'
@@ -22,6 +23,7 @@ interface CustomerOverridesTabProps {
 /** "Klantafwijkingen" tab: per customer, the events the tenant rule opened up for override, each
  * shown with its effective state and an inherit/aan/uit control. */
 export function CustomerOverridesTab({ canManage }: CustomerOverridesTabProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
   const [customerId, setCustomerId] = useState<string | null>(null)
@@ -45,7 +47,7 @@ export function CustomerOverridesTab({ canManage }: CustomerOverridesTabProps) {
         setLoadError(null)
       })
       .catch(() => {
-        if (isMounted) setLoadError('De klantafwijkingen konden niet worden geladen.')
+        if (isMounted) setLoadError(t('notificationAdmin.overrides.loadFailed'))
       })
     return () => {
       isMounted = false
@@ -61,31 +63,37 @@ export function CustomerOverridesTab({ canManage }: CustomerOverridesTabProps) {
     const enabled = choice === 'inherit' ? null : choice === 'on'
     try {
       await setCustomerNotificationOverride(customerId, row.eventKey, enabled)
-      showSuccess(`Afwijking voor '${row.label}' bijgewerkt.`)
+      showSuccess(t('notificationAdmin.overrides.updated', { label: row.label }))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De afwijking kon niet worden opgeslagen.').message)
+      showError(localizeApiError(t, err, t('notificationAdmin.overrides.saveFailed')))
     }
   }
 
   const columns: Column<CustomerNotificationOverride>[] = [
-    { key: 'label', header: 'Gebeurtenis', render: (r) => r.label },
+    { key: 'label', header: t('notificationAdmin.overrides.columns.event'), render: (r) => r.label },
     {
       key: 'state',
-      header: 'Status',
+      header: t('notificationAdmin.overrides.columns.status'),
       render: (r) =>
         r.enabled === null ? (
-          <Badge tone="neutral">Overgenomen van standaard</Badge>
+          <Badge tone="neutral">{t('notificationAdmin.overrides.inherited')}</Badge>
         ) : (
-          <Badge tone={r.enabled ? 'success' : 'warning'}>Afwijkend ({r.enabled ? 'aan' : 'uit'})</Badge>
+          <Badge tone={r.enabled ? 'success' : 'warning'}>
+            {r.enabled ? t('notificationAdmin.overrides.overriddenOn') : t('notificationAdmin.overrides.overriddenOff')}
+          </Badge>
         ),
     },
     {
       key: 'control',
-      header: 'Instelling',
+      header: t('notificationAdmin.overrides.columns.control'),
       render: (r) =>
         canManage ? (
-          <div className="notification-admin-segmented" role="group" aria-label={`Afwijking voor ${r.label}`}>
+          <div
+            className="notification-admin-segmented"
+            role="group"
+            aria-label={t('notificationAdmin.overrides.groupAria', { label: r.label })}
+          >
             {(['inherit', 'on', 'off'] as OverrideChoice[]).map((choice) => (
               <button
                 key={choice}
@@ -93,7 +101,11 @@ export function CustomerOverridesTab({ canManage }: CustomerOverridesTabProps) {
                 className={choiceOf(r.enabled) === choice ? 'notification-admin-segment is-active' : 'notification-admin-segment'}
                 onClick={() => void setChoice(r, choice)}
               >
-                {choice === 'inherit' ? 'Overnemen' : choice === 'on' ? 'Aan' : 'Uit'}
+                {choice === 'inherit'
+                  ? t('notificationAdmin.overrides.inherit')
+                  : choice === 'on'
+                    ? t('notificationAdmin.overrides.on')
+                    : t('notificationAdmin.overrides.off')}
               </button>
             ))}
           </div>
@@ -107,19 +119,19 @@ export function CustomerOverridesTab({ canManage }: CustomerOverridesTabProps) {
     <div>
       <div className="notification-admin-customer-picker">
         <SearchableSelect
-          ariaLabel="Klant"
+          ariaLabel={t('notificationAdmin.overrides.customerAria')}
           value={customerId}
           onChange={setCustomerId}
           options={customerOptions}
-          placeholder="Zoek een klant..."
+          placeholder={t('notificationAdmin.overrides.customerPlaceholder')}
         />
       </div>
 
-      {!customerId && <p className="placeholder-text">Kies een klant om de afwijkingen te bekijken.</p>}
+      {!customerId && <p className="placeholder-text">{t('notificationAdmin.overrides.chooseCustomer')}</p>}
       {customerId && loadError && <p className="placeholder-text">{loadError}</p>}
-      {customerId && !loadError && rows === null && <p className="placeholder-text">Laden…</p>}
+      {customerId && !loadError && rows === null && <p className="placeholder-text">{t('notificationAdmin.overrides.loading')}</p>}
       {customerId && !loadError && rows !== null && rows.length === 0 && (
-        <p className="placeholder-text">Geen enkele gebeurtenis staat momenteel een klantafwijking toe.</p>
+        <p className="placeholder-text">{t('notificationAdmin.overrides.empty')}</p>
       )}
       {customerId && !loadError && rows !== null && rows.length > 0 && (
         <DataTable columns={columns} rows={rows} rowKey={(r) => r.eventKey} />

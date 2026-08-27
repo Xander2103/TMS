@@ -31,7 +31,8 @@ export function useCustomer(id: string | undefined): UseCustomerResult {
       })
       .catch(() => {
         if (!isMounted) return
-        setState({ customer: null, error: 'Klant kon niet worden geladen.', loadedKey: requestKey })
+        // Vertaalsleutel; de renderende pagina vertaalt via t(error).
+        setState({ customer: null, error: 'customers.detail.loadFailed', loadedKey: requestKey })
       })
     return () => {
       isMounted = false

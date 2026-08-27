@@ -1,0 +1,60 @@
+{
+  "batchStatus": {
+    "Validated": "Gevalideerd",
+    "Processed": "Verwerkt",
+    "Failed": "Mislukt"
+  },
+  "batchStatusDryRun": "{status} (proef)",
+  "rowStatus": {
+    "Created": "Aangemaakt",
+    "Skipped": "Overgeslagen",
+    "Error": "Fout"
+  },
+  "subtitle": "Opdrachten automatisch aanmaken vanuit een Excel-bestand",
+  "noPermission": "Je hebt geen rechten om opdrachtimporten te bekijken.",
+  "historyError": "De importgeschiedenis kon niet worden geladen.",
+  "detailError": "De batchdetails konden niet worden geladen.",
+  "uploadSection": "Nieuw bestand importeren",
+  "form": {
+    "profile": "Importprofiel",
+    "noProfiles": "Geen profielen",
+    "customerSearch": "Klant zoeken",
+    "customerSearchPlaceholder": "Zoek op naam of nummer...",
+    "customer": "Klant",
+    "chooseCustomer": "Kies een klant",
+    "file": "Bestand (.xlsx)",
+    "dryRun": "Enkel valideren (proefdraaien)",
+    "validate": "Valideren",
+    "import": "Importeren",
+    "busy": "Bezig…",
+    "chooseProfile": "Kies een importprofiel.",
+    "chooseCustomerError": "Kies een klant.",
+    "chooseFile": "Kies een Excel-bestand (.xlsx).",
+    "uploadFailed": "De import is mislukt.",
+    "validatedToast": "Gevalideerd: {success} van {total} rijen zijn in orde.",
+    "processedToast": "Verwerkt: {orders}, {failures}.",
+    "processedOrders_one": "1 opdracht aangemaakt",
+    "processedOrders_other": "{count} opdrachten aangemaakt",
+    "processedFailures_one": "1 fout",
+    "processedFailures_other": "{count} fouten"
+  },
+  "columns": {
+    "file": "Bestand",
+    "customer": "Klant",
+    "profile": "Profiel",
+    "status": "Status",
+    "rows": "Rijen",
+    "uploaded": "Geüpload",
+    "row": "Rij",
+    "reference": "Referentie",
+    "message": "Melding"
+  },
+  "counts": "{success} ok / {failure} fout / {total} totaal",
+  "details": "Details",
+  "empty": "Nog geen importen.",
+  "loading": "Importen laden...",
+  "detailSection": "Batchdetails",
+  "detailLoading": "Details laden...",
+  "dryRunTitleSuffix": "(proefdraaien)",
+  "emptyRows": "Geen rijen in deze batch."
+}

@@ -6,6 +6,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { updateStopExecutionPlan } from '../api/transportOrdersApi'
 import { STOP_TYPE_LABELS, type TransportOrderDetail, type TransportOrderStop } from '../types'
+import { useLocale } from '../../../i18n/localeContext'
 
 function toLocalInput(value: string | null): string {
   return value ? value.slice(0, 16) : ''
@@ -28,6 +29,7 @@ interface StopExecutionPlanDialogProps {
  * the rest of the order.
  */
 export function StopExecutionPlanDialog({ orderId, stop, onClose, onSaved }: StopExecutionPlanDialogProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
 
   const [confirmedFrom, setConfirmedFrom] = useState(toLocalInput(stop.confirmedFrom))
@@ -80,7 +82,7 @@ export function StopExecutionPlanDialog({ orderId, stop, onClose, onSaved }: Sto
 
   return (
     <Modal
-      title={`Stop ${stop.sequence} (${STOP_TYPE_LABELS[stop.stopType]}) — venster & instructies`}
+      title={`Stop ${stop.sequence} (${t(STOP_TYPE_LABELS[stop.stopType])}) — venster & instructies`}
       onClose={onClose}
       busy={busy}
       footer={

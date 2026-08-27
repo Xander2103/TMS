@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { UnsavedChangesGuard } from '../../../components/ui/UnsavedChangesGuard'
+import { useLocale } from '../../../i18n/localeContext'
 import './section-drawer.css'
 
 interface SectionDrawerProps {
@@ -23,7 +24,8 @@ interface SectionDrawerProps {
  * Opslaan/Annuleren. ESC and overlay clicks ask for confirmation while dirty; in-app
  * navigation is guarded by UnsavedChangesGuard.
  */
-export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, saveLabel = 'Opslaan', footerExtra, children }: SectionDrawerProps) {
+export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, saveLabel, footerExtra, children }: SectionDrawerProps) {
+  const { t } = useLocale()
   const [confirmClose, setConfirmClose] = useState(false)
 
   function requestClose() {
@@ -58,7 +60,13 @@ export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, sav
       >
         <header className="section-drawer-header">
           <h3>{title}</h3>
-          <button type="button" className="section-drawer-close" onClick={requestClose} disabled={busy} aria-label="Sluiten">
+          <button
+            type="button"
+            className="section-drawer-close"
+            onClick={requestClose}
+            disabled={busy}
+            aria-label={t('ui.actions.close')}
+          >
             ×
           </button>
         </header>
@@ -68,11 +76,11 @@ export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, sav
             {footerExtra && <div className="section-drawer-footer-extra">{footerExtra}</div>}
             <div className="section-drawer-footer-actions">
               <Button variant="secondary" onClick={requestClose} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               {onSave && (
                 <Button onClick={onSave} disabled={busy}>
-                  {busy ? 'Opslaan…' : saveLabel}
+                  {busy ? t('dossiers.sectionDrawer.saving') : saveLabel ?? t('ui.actions.save')}
                 </Button>
               )}
             </div>
@@ -82,10 +90,10 @@ export function SectionDrawer({ title, dirty, busy = false, onClose, onSave, sav
 
       {confirmClose && (
         <ConfirmDialog
-          title="Wijzigingen verwerpen?"
-          message="Je hebt wijzigingen die nog niet zijn opgeslagen. Sluit je zonder op te slaan?"
-          confirmLabel="Sluiten zonder opslaan"
-          cancelLabel="Blijven bewerken"
+          title={t('dossiers.sectionDrawer.confirmTitle')}
+          message={t('dossiers.sectionDrawer.confirmMessage')}
+          confirmLabel={t('dossiers.sectionDrawer.confirmLeave')}
+          cancelLabel={t('ui.unsaved.stay')}
           destructive
           onConfirm={() => {
             setConfirmClose(false)

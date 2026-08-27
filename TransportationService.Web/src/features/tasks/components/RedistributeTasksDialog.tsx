@@ -4,8 +4,9 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { getEmployeeOpenTaskSummary, redistributeTasks } from '../api/tasksApi'
 import type { TaskOpenSummary } from '../api/types'
 import { EmployeeSelect } from './EmployeePicker'
@@ -22,6 +23,7 @@ interface RedistributeTasksDialogProps {
  * Reassign needs tasks.assign (page-level gate); the cancel action additionally needs tasks.cancel.
  */
 export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: RedistributeTasksDialogProps) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canCancelAll = hasPermission('tasks.cancel')
@@ -42,7 +44,7 @@ export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: R
         if (mounted) setSummary(data)
       })
       .catch(() => {
-        if (mounted) showError('Het takenoverzicht kon niet worden geladen.')
+        if (mounted) showError(t('tasks.redistribute.summaryFailed'))
       })
     return () => {
       mounted = false
@@ -53,11 +55,11 @@ export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: R
   async function submit() {
     let valid = true
     if (reason.trim().length === 0) {
-      setReasonError('Een reden is verplicht.')
+      setReasonError(t('tasks.redistribute.reasonRequired'))
       valid = false
     }
     if (action === 'reassign' && !targetEmployeeId) {
-      setTargetError('Kies een medewerker.')
+      setTargetError(t('tasks.redistribute.chooseEmployee'))
       valid = false
     }
     if (!valid) return
@@ -73,12 +75,12 @@ export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: R
       })
       showSuccess(
         action === 'reassign'
-          ? `${result.affectedTasks} taken herverdeeld.`
-          : `${result.affectedTasks} taken geannuleerd.`,
+          ? t('tasks.redistribute.reassigned', { count: result.affectedTasks })
+          : t('tasks.redistribute.cancelled', { count: result.affectedTasks }),
       )
       onClose()
     } catch (err) {
-      showError(describeApiError(err, 'Het herverdelen is mislukt.').message)
+      showError(localizeApiError(t, err, t('tasks.redistribute.failed')))
     } finally {
       setBusy(false)
     }
@@ -86,45 +88,45 @@ export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: R
 
   return (
     <Modal
-      title={`Open taken van ${employeeName}`}
+      title={t('tasks.redistribute.title', { name: employeeName })}
       onClose={onClose}
       busy={busy}
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={busy}>
-            Sluiten
+            {t('ui.actions.close')}
           </Button>
           <Button variant={action === 'cancel' ? 'danger' : 'primary'} onClick={() => void submit()} disabled={busy}>
-            {busy ? 'Bezig...' : 'Bevestigen'}
+            {busy ? t('ui.actions.busy') : t('ui.actions.confirm')}
           </Button>
         </>
       }
     >
       {summary && (
         <div className="task-summary-badges">
-          <Badge>Te doen: {summary.todo}</Badge>
-          <Badge tone="info">In uitvoering: {summary.inProgress}</Badge>
-          <Badge tone="danger">Geblokkeerd: {summary.blocked}</Badge>
-          <Badge tone="warning">Wacht op controle: {summary.waitingForReview}</Badge>
-          <Badge tone="danger">Achterstallig: {summary.overdue}</Badge>
+          <Badge>{t('tasks.summary.todo', { count: summary.todo })}</Badge>
+          <Badge tone="info">{t('tasks.summary.inProgress', { count: summary.inProgress })}</Badge>
+          <Badge tone="danger">{t('tasks.summary.blocked', { count: summary.blocked })}</Badge>
+          <Badge tone="warning">{t('tasks.summary.waitingForReview', { count: summary.waitingForReview })}</Badge>
+          <Badge tone="danger">{t('tasks.summary.overdue', { count: summary.overdue })}</Badge>
         </div>
       )}
 
-      <FormField label="Actie" htmlFor="redistribute-action">
+      <FormField label={t('tasks.redistribute.action')} htmlFor="redistribute-action">
         <select
           id="redistribute-action"
           value={action}
           onChange={(event) => setAction(event.target.value as 'reassign' | 'cancel')}
           disabled={busy}
         >
-          <option value="reassign">Herverdelen naar een medewerker</option>
-          {canCancelAll && <option value="cancel">Alle open taken annuleren</option>}
+          <option value="reassign">{t('tasks.redistribute.actionReassign')}</option>
+          {canCancelAll && <option value="cancel">{t('tasks.redistribute.actionCancel')}</option>}
         </select>
       </FormField>
 
       {action === 'reassign' && (
         <>
-          <FormField label="Nieuwe medewerker" required error={targetError}>
+          <FormField label={t('tasks.redistribute.newEmployee')} required error={targetError}>
             <EmployeeSelect
               value={targetEmployeeId}
               onChange={(next) => {
@@ -132,10 +134,10 @@ export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: R
                 if (targetError && next) setTargetError(undefined)
               }}
               disabled={busy}
-              ariaLabel="Nieuwe medewerker"
+              ariaLabel={t('tasks.redistribute.newEmployee')}
             />
           </FormField>
-          <FormField label="Nieuwe deadline (optioneel)" htmlFor="redistribute-due">
+          <FormField label={t('tasks.redistribute.newDue')} htmlFor="redistribute-due">
             <input
               id="redistribute-due"
               type="datetime-local"
@@ -147,7 +149,7 @@ export function RedistributeTasksDialog({ employeeId, employeeName, onClose }: R
         </>
       )}
 
-      <FormField label="Reden" htmlFor="redistribute-reason" required error={reasonError}>
+      <FormField label={t('tasks.redistribute.reason')} htmlFor="redistribute-reason" required error={reasonError}>
         <textarea
           id="redistribute-reason"
           rows={3}

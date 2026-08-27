@@ -3,32 +3,36 @@ import { Badge } from '../../../components/ui/Badge'
 import { Pagination } from '../../../components/ui/Pagination'
 import { getCustomerHistory, type CustomerHistoryPage } from '../api/customerHistoryApi'
 import { formatDateTime } from '../../../utils/dates'
+import { useLocale } from '../../../i18n/localeContext'
 import './CustomerHistoryPanel.css'
 
 const PAGE_SIZE = 25
 
-/** Chip order: "Alles" (no filter) first, then every backend history category. */
-const CATEGORY_FILTERS = ['Alles', 'Klant', 'Contactpersonen', 'Locaties', 'Facturatie', 'Communicatie'] as const
+/**
+ * Chip order: "all" (no filter) first, then every backend history category. The values are the
+ * API's stable category CODES — used both as the `category` query parameter and as the
+ * translation key suffix (customers.history.categories.<code>). The endpoint also still
+ * accepts the legacy Dutch labels, but new code always sends the code.
+ */
+const CATEGORY_FILTERS = ['all', 'customer', 'contacts', 'locations', 'billing', 'communication'] as const
 
-/** Dutch category chip tones — informational only, no strict semantics. */
+/** Category chip tones (keyed by category code) — informational only, no strict semantics. */
 const CATEGORY_TONES: Record<string, 'info' | 'neutral' | 'success' | 'warning'> = {
-  Klant: 'info',
-  Contactpersonen: 'success',
-  Locaties: 'neutral',
-  Facturatie: 'warning',
-  Communicatie: 'info',
-}
-
-function formatTimestamp(iso: string): string {
-  return formatDateTime(iso)
+  customer: 'info',
+  contacts: 'success',
+  locations: 'neutral',
+  billing: 'warning',
+  communication: 'info',
 }
 
 /**
  * Readable customer history (mirrors EmployeeHistoryPanel): one card per audited change,
- * newest first, collapsed to a Dutch summary line — the actor, the category and (on demand)
- * the full Veld/Voor/Na table. Ids are resolved to names server-side; nothing raw is shown.
+ * newest first, collapsed to a summary line — the actor, the category and (on demand)
+ * the full field/before/after table. Ids are resolved to names server-side; nothing raw is
+ * shown. Category filtering and display key off the API's stable `categoryCode`.
  */
 export function CustomerHistoryPanel({ customerId }: { customerId: string }) {
+  const { t } = useLocale()
   const [data, setData] = useState<CustomerHistoryPage | null>(null)
   const [page, setPage] = useState(1)
   const [category, setCategory] = useState<string | null>(null)
@@ -41,7 +45,7 @@ export function CustomerHistoryPanel({ customerId }: { customerId: string }) {
         setData(result)
         setError(null)
       })
-      .catch(() => setError('De historiek kon niet worden geladen.'))
+      .catch(() => setError('customers.history.loadFailed'))
   }, [customerId, page, category])
 
   useEffect(() => {
@@ -49,7 +53,7 @@ export function CustomerHistoryPanel({ customerId }: { customerId: string }) {
   }, [reload])
 
   const selectCategory = (next: string) => {
-    setCategory(next === 'Alles' ? null : next)
+    setCategory(next === 'all' ? null : next)
     setPage(1)
   }
 
@@ -67,24 +71,24 @@ export function CustomerHistoryPanel({ customerId }: { customerId: string }) {
 
   return (
     <div className="customer-history">
-      <div className="customer-history-filters" role="group" aria-label="Filter op categorie">
+      <div className="customer-history-filters" role="group" aria-label={t('customers.history.filterLabel')}>
         {CATEGORY_FILTERS.map((filter) => (
           <button
             key={filter}
             type="button"
-            className={`customer-history-filter-chip${(category ?? 'Alles') === filter ? ' customer-history-filter-chip-active' : ''}`}
-            aria-pressed={(category ?? 'Alles') === filter}
+            className={`customer-history-filter-chip${(category ?? 'all') === filter ? ' customer-history-filter-chip-active' : ''}`}
+            aria-pressed={(category ?? 'all') === filter}
             onClick={() => selectCategory(filter)}
           >
-            {filter}
+            {t(`customers.history.categories.${filter}`)}
           </button>
         ))}
       </div>
 
-      {error && <p className="placeholder-text">{error}</p>}
-      {!error && data === null && <p className="placeholder-text">Historiek laden…</p>}
+      {error && <p className="placeholder-text">{t(error)}</p>}
+      {!error && data === null && <p className="placeholder-text">{t('customers.history.loading')}</p>}
       {!error && data !== null && data.items.length === 0 && (
-        <p className="placeholder-text">Nog geen historiek voor deze klant.</p>
+        <p className="placeholder-text">{t('customers.history.empty')}</p>
       )}
       {!error && data !== null && data.items.length > 0 && (
         <>
@@ -94,11 +98,16 @@ export function CustomerHistoryPanel({ customerId }: { customerId: string }) {
             return (
               <article key={entry.id} className="customer-history-entry">
                 <header className="customer-history-header">
-                  <span className="customer-history-when">{formatTimestamp(entry.timestamp)}</span>
+                  <span className="customer-history-when">{formatDateTime(entry.timestamp)}</span>
                   <span className="customer-history-actor">
-                    {entry.actionLabel} door {entry.userName ?? 'Systeem'}
+                    {t('customers.history.actorLine', {
+                      action: entry.actionLabel,
+                      name: entry.userName ?? t('customers.history.system'),
+                    })}
                   </span>
-                  <Badge tone={CATEGORY_TONES[entry.category] ?? 'neutral'}>{entry.category}</Badge>
+                  <Badge tone={CATEGORY_TONES[entry.categoryCode] ?? 'neutral'}>
+                    {t(`customers.history.categories.${entry.categoryCode}`)}
+                  </Badge>
                 </header>
                 <p className="customer-history-summary">{entry.summary}</p>
                 {canExpand && (
@@ -108,16 +117,16 @@ export function CustomerHistoryPanel({ customerId }: { customerId: string }) {
                     aria-expanded={isExpanded}
                     onClick={() => toggleExpanded(entry.id)}
                   >
-                    {isExpanded ? 'Inklappen' : 'Uitklappen'}
+                    {isExpanded ? t('customers.history.collapse') : t('customers.history.expand')}
                   </button>
                 )}
                 {canExpand && isExpanded && (
                   <table className="customer-history-table">
                     <thead>
                       <tr>
-                        <th>Veld</th>
-                        <th>Voor</th>
-                        <th>Na</th>
+                        <th>{t('customers.history.columnField')}</th>
+                        <th>{t('customers.history.columnBefore')}</th>
+                        <th>{t('customers.history.columnAfter')}</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -36,30 +36,6 @@ export const LOCATION_TYPE_LABEL_KEYS: Record<LocationType, string> = {
   Other: 'locations.type.Other',
 }
 
-/**
- * LEGACY Dutch display labels — only for feature dirs that are not yet localised
- * (customers: PreparedLocationsEditor, CustomerLocationsPanel). New/localised code uses
- * t(LOCATION_TYPE_LABEL_KEYS[type]); delete this map once those consumers are converted.
- */
-export const LOCATION_TYPE_LABELS: Record<LocationType, string> = {
-  CompanySite: 'Bedrijfssite',
-  Depot: 'Depot',
-  Warehouse: 'Magazijn',
-  CustomerLocation: 'Klantlocatie',
-  Terminal: 'Terminal',
-  LoadingLocation: 'Laadadres',
-  UnloadingLocation: 'Losadres',
-  ParkingLocation: 'Parking',
-  Office: 'Kantoor',
-  RegisteredOffice: 'Maatschappelijke zetel',
-  AdministrativeAddress: 'Administratief adres',
-  BillingAddress: 'Facturatieadres',
-  ReturnsAddress: 'Retouradres',
-  ConstructionSite: 'Werf',
-  TemporaryLocation: 'Tijdelijke locatie',
-  Other: 'Overig',
-}
-
 export const LOCATION_TYPES = Object.keys(LOCATION_TYPE_LABEL_KEYS) as LocationType[]
 
 /**

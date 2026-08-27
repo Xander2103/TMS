@@ -17,6 +17,7 @@ import {
   type OrderDocument,
   type OrderDocumentType,
 } from '../api/orderDocumentsApi'
+import { useLocale } from '../../../i18n/localeContext'
 
 interface OrderDocumentsPanelProps {
   orderId: string
@@ -24,6 +25,7 @@ interface OrderDocumentsPanelProps {
 
 /** Self-saving order documents list: upload, download, delete (customer delivery note, CMR, ...). */
 export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('orders.edit') || hasPermission('orders.create') || hasPermission('orders.manage')
@@ -93,7 +95,7 @@ export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
           <select aria-label="Documenttype" value={uploadType} onChange={(e) => setUploadType(e.target.value as OrderDocumentType)} disabled={busy}>
             {ORDER_DOCUMENT_TYPES.map((type) => (
               <option key={type} value={type}>
-                {ORDER_DOCUMENT_TYPE_LABELS[type]}
+                {t(ORDER_DOCUMENT_TYPE_LABELS[type])}
               </option>
             ))}
           </select>
@@ -129,7 +131,7 @@ export function OrderDocumentsPanel({ orderId }: OrderDocumentsPanelProps) {
               <tr key={doc.id}>
                 <td>{doc.title}</td>
                 <td>
-                  <Badge tone="info">{ORDER_DOCUMENT_TYPE_LABELS[doc.documentType]}</Badge>
+                  <Badge tone="info">{t(ORDER_DOCUMENT_TYPE_LABELS[doc.documentType])}</Badge>
                 </td>
                 <td>{doc.hasAttachment ? doc.fileName : '—'}</td>
                 <td className="issued-items-row-actions">

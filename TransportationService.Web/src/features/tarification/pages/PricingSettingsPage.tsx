@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { Button } from '../../../components/ui/Button'
@@ -8,7 +8,8 @@ import { Modal } from '../../../components/ui/Modal'
 import { TabPanel, Tabs } from '../../../components/ui/Tabs'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   createPricingZone,
   createTenantHoliday,
@@ -38,13 +39,14 @@ interface ZoneDraft {
  * on the customer's "Tarieven & toeslagen" tab.
  */
 export function PricingSettingsPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('tariffs.manage')
 
   const [tab, setTab] = useState<TabId>('zones')
   const [zones, setZones] = useState<PricingZone[]>([])
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
 
   const [zoneDraft, setZoneDraft] = useState<ZoneDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
@@ -60,9 +62,9 @@ export function PricingSettingsPage() {
     listPricingZones()
       .then((zoneData) => {
         setZones(zoneData)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
-      .catch(() => setLoadError('De prijsinstellingen konden niet worden geladen.'))
+      .catch(() => setLoadErrorKey('tarification.settings.loadError'))
     listTenantHolidays()
       .then(setHolidays)
       .catch(() => {})
@@ -74,12 +76,12 @@ export function PricingSettingsPage() {
     setBusy(true)
     try {
       await createTenantHoliday({ date: holidayDate, name: holidayName.trim() })
-      showSuccess('Feestdag toegevoegd.')
+      showSuccess(t('tarification.settings.holidayAdded'))
       setHolidayDate('')
       setHolidayName('')
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De feestdag kon niet worden toegevoegd.').message)
+      showError(localizeApiError(t, err, t('tarification.settings.holidayAddError')))
     } finally {
       setBusy(false)
     }
@@ -88,10 +90,10 @@ export function PricingSettingsPage() {
   async function removeHoliday(holiday: TenantHoliday) {
     try {
       await deleteTenantHoliday(holiday.id)
-      showSuccess('Feestdag verwijderd.')
+      showSuccess(t('tarification.settings.holidayRemoved'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De feestdag kon niet worden verwijderd.').message)
+      showError(localizeApiError(t, err, t('tarification.settings.holidayRemoveError')))
     }
   }
 
@@ -115,35 +117,35 @@ export function PricingSettingsPage() {
       }
       if (zoneDraft.zone) {
         await updatePricingZone(zoneDraft.zone.id, input)
-        showSuccess('Zone bijgewerkt.')
+        showSuccess(t('tarification.settings.zoneUpdated'))
       } else {
         await createPricingZone(input)
-        showSuccess('Zone toegevoegd.')
+        showSuccess(t('tarification.settings.zoneAdded'))
       }
       setZoneDraft(null)
       reload()
     } catch (err) {
-      setDraftError(describeApiError(err, 'De zone kon niet worden opgeslagen.').message)
+      setDraftError(localizeApiError(t, err, t('tarification.settings.zoneSaveError')))
     } finally {
       setBusy(false)
     }
   }
 
-  if (loadError) return <p className="placeholder-text">{loadError}</p>
+  if (loadErrorKey) return <p className="placeholder-text">{t(loadErrorKey)}</p>
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Prijsinstellingen' }]} />
+      <Breadcrumbs items={[{ label: t('tarification.settings.breadcrumbSettings'), to: '/settings' }, { label: t('tarification.settings.title') }]} />
       <PageHeader
-        title="Prijsinstellingen"
-        subtitle="Zones, diensten/toeslagen en eenheden voor de automatische prijsberekening. Klantspecifieke prijsregels beheer je op de klantfiche."
+        title={t('tarification.settings.title')}
+        subtitle={t('tarification.settings.subtitle')}
       />
       <Tabs
         tabs={[
-          { id: 'zones', label: 'Zones', badge: zones.length || undefined },
-          { id: 'diensten', label: 'Diensten & toeslagen' },
-          { id: 'eenheden', label: 'Eenheden' },
-          { id: 'feestdagen', label: 'Feestdagen', badge: holidays.length || undefined },
+          { id: 'zones', label: t('tarification.settings.tabZones'), badge: zones.length || undefined },
+          { id: 'diensten', label: t('tarification.settings.tabServices') },
+          { id: 'eenheden', label: t('tarification.settings.tabUnits') },
+          { id: 'feestdagen', label: t('tarification.settings.tabHolidays'), badge: holidays.length || undefined },
         ]}
         activeId={tab}
         onChange={(next) => setTab(next as TabId)}
@@ -154,19 +156,19 @@ export function PricingSettingsPage() {
           {canManage && (
             <div className="tof-documents-toolbar">
               <Button onClick={() => { setDraftError(null); setZoneDraft({ zone: null, code: '', name: '', areas: [{ countryCode: 'BE', from: '', to: '' }] }) }}>
-                + Zone
+                {t('tarification.settings.addZone')}
               </Button>
             </div>
           )}
-          {zones.length === 0 && <p className="placeholder-text">Nog geen zones. Zones koppelen postcodereeksen aan een tariefgebied.</p>}
+          {zones.length === 0 && <p className="placeholder-text">{t('tarification.settings.zonesEmpty')}</p>}
           {zones.length > 0 && (
             <table className="issued-items-table">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>Naam</th>
-                  <th>Postcodereeksen</th>
-                  {canManage && <th aria-label="Acties" />}
+                  <th>{t('tarification.unitMaster.colCode')}</th>
+                  <th>{t('tarification.common.name')}</th>
+                  <th>{t('tarification.settings.colPostal')}</th>
+                  {canManage && <th aria-label={t('tarification.common.actions')} />}
                 </tr>
               </thead>
               <tbody>
@@ -190,10 +192,10 @@ export function PricingSettingsPage() {
                             })
                           }}
                         >
-                          Bewerken
+                          {t('ui.actions.edit')}
                         </button>
                         <button type="button" className="issued-items-link issued-items-link-danger" onClick={() => setDeleteZone(zone)}>
-                          Verwijderen
+                          {t('ui.actions.delete')}
                         </button>
                       </td>
                     )}
@@ -221,38 +223,35 @@ export function PricingSettingsPage() {
 
       {tab === 'feestdagen' && (
         <TabPanel tabId="feestdagen">
-          <p className="ui-form-section-description">
-            Feestdagen sturen toeslagen met de conditie &lsquo;Feestdag&rsquo; op diensten &amp; toeslagen —
-            een stop gepland op zo&apos;n datum activeert de toeslag, net zoals de weekendconditie.
-          </p>
+          <p className="ui-form-section-description">{t('tarification.settings.holidaysIntro')}</p>
           {canManage && (
             <form className="tof-documents-toolbar" onSubmit={(e) => void addHoliday(e)}>
               <input
                 type="date"
                 value={holidayDate}
                 onChange={(e) => setHolidayDate(e.target.value)}
-                aria-label="Datum feestdag"
+                aria-label={t('tarification.settings.holidayDateAria')}
                 disabled={busy}
               />
               <input
                 value={holidayName}
                 onChange={(e) => setHolidayName(e.target.value)}
-                placeholder="Naam (bv. Wapenstilstand)"
+                placeholder={t('tarification.settings.holidayNamePlaceholder')}
                 maxLength={200}
-                aria-label="Naam feestdag"
+                aria-label={t('tarification.settings.holidayNameAria')}
                 disabled={busy}
               />
-              <Button type="submit" disabled={busy || !holidayDate || !holidayName.trim()}>+ Feestdag</Button>
+              <Button type="submit" disabled={busy || !holidayDate || !holidayName.trim()}>{t('tarification.settings.addHoliday')}</Button>
             </form>
           )}
-          {holidays.length === 0 && <p className="placeholder-text">Nog geen feestdagen geconfigureerd.</p>}
+          {holidays.length === 0 && <p className="placeholder-text">{t('tarification.settings.holidaysEmpty')}</p>}
           {holidays.length > 0 && (
             <table className="issued-items-table">
               <thead>
                 <tr>
-                  <th>Datum</th>
-                  <th>Naam</th>
-                  {canManage && <th aria-label="Acties" />}
+                  <th>{t('tarification.settings.colDate')}</th>
+                  <th>{t('tarification.common.name')}</th>
+                  {canManage && <th aria-label={t('tarification.common.actions')} />}
                 </tr>
               </thead>
               <tbody>
@@ -267,7 +266,7 @@ export function PricingSettingsPage() {
                           className="issued-items-link issued-items-link-danger"
                           onClick={() => void removeHoliday(holiday)}
                         >
-                          Verwijderen
+                          {t('ui.actions.delete')}
                         </button>
                       </td>
                     )}
@@ -281,16 +280,16 @@ export function PricingSettingsPage() {
 
       {zoneDraft && (
         <Modal
-          title={zoneDraft.zone ? `Zone bewerken — ${zoneDraft.zone.code}` : 'Zone toevoegen'}
+          title={zoneDraft.zone ? t('tarification.settings.zoneEditTitle', { code: zoneDraft.zone.code }) : t('tarification.settings.zoneAddTitle')}
           onClose={() => setZoneDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setZoneDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="zone-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -302,30 +301,30 @@ export function PricingSettingsPage() {
               </div>
             )}
             <div className="issued-items-form-row">
-              <FormField label="Code" htmlFor="zone-code" required hint="bv. Z1">
+              <FormField label={t('tarification.unitMaster.codeLabel')} htmlFor="zone-code" required hint={t('tarification.settings.zoneCodeHint')}>
                 <input id="zone-code" value={zoneDraft.code} onChange={(e) => setZoneDraft((d) => (d ? { ...d, code: e.target.value } : d))} maxLength={30} />
               </FormField>
-              <FormField label="Naam" htmlFor="zone-name" required>
+              <FormField label={t('tarification.common.name')} htmlFor="zone-name" required>
                 <input id="zone-name" value={zoneDraft.name} onChange={(e) => setZoneDraft((d) => (d ? { ...d, name: e.target.value } : d))} maxLength={150} />
               </FormField>
             </div>
             <fieldset className="issued-items-generate-dimension">
-              <legend>Postcodereeksen</legend>
+              <legend>{t('tarification.settings.postalLegend')}</legend>
               {zoneDraft.areas.map((area, index) => (
                 <div key={index} className="issued-items-form-row customer-rule-bracket">
-                  <input aria-label={`Reeks ${index + 1} land`} placeholder="BE" maxLength={2} value={area.countryCode}
+                  <input aria-label={t('tarification.settings.ariaRangeCountry', { index: index + 1 })} placeholder="BE" maxLength={2} value={area.countryCode}
                     onChange={(e) => setZoneDraft((d) => (d ? { ...d, areas: d.areas.map((a, i) => (i === index ? { ...a, countryCode: e.target.value.toUpperCase() } : a)) } : d))} />
-                  <input aria-label={`Reeks ${index + 1} van`} placeholder="van (bv. 3000)" value={area.from}
+                  <input aria-label={t('tarification.settings.ariaRangeFrom', { index: index + 1 })} placeholder={t('tarification.settings.rangeFromPlaceholder')} value={area.from}
                     onChange={(e) => setZoneDraft((d) => (d ? { ...d, areas: d.areas.map((a, i) => (i === index ? { ...a, from: e.target.value } : a)) } : d))} />
-                  <input aria-label={`Reeks ${index + 1} tot`} placeholder="tot (bv. 3999)" value={area.to}
+                  <input aria-label={t('tarification.settings.ariaRangeTo', { index: index + 1 })} placeholder={t('tarification.settings.rangeToPlaceholder')} value={area.to}
                     onChange={(e) => setZoneDraft((d) => (d ? { ...d, areas: d.areas.map((a, i) => (i === index ? { ...a, to: e.target.value } : a)) } : d))} />
                   <Button variant="ghost" onClick={() => setZoneDraft((d) => (d ? { ...d, areas: d.areas.filter((_, i) => i !== index) } : d))}>
-                    Verwijderen
+                    {t('ui.actions.delete')}
                   </Button>
                 </div>
               ))}
               <Button variant="secondary" onClick={() => setZoneDraft((d) => (d ? { ...d, areas: [...d.areas, { countryCode: 'BE', from: '', to: '' }] } : d))}>
-                + Reeks
+                {t('tarification.settings.addRange')}
               </Button>
             </fieldset>
           </form>
@@ -334,19 +333,19 @@ export function PricingSettingsPage() {
 
       {deleteZone && (
         <ConfirmDialog
-          title="Zone verwijderen"
-          message={`Weet je zeker dat je zone "${deleteZone.code}" wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('tarification.settings.zoneDeleteTitle')}
+          message={t('tarification.settings.zoneDeleteMessage', { code: deleteZone.code })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={async () => {
             const target = deleteZone
             setDeleteZone(null)
             try {
               await deletePricingZone(target.id)
-              showSuccess('Zone verwijderd.')
+              showSuccess(t('tarification.settings.zoneDeleted'))
               reload()
             } catch (err) {
-              showError(describeApiError(err, 'De zone kon niet worden verwijderd.').message)
+              showError(localizeApiError(t, err, t('tarification.settings.zoneDeleteError')))
             }
           }}
           onCancel={() => setDeleteZone(null)}

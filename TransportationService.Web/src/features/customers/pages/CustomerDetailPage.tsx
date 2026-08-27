@@ -31,13 +31,15 @@ import { CustomerUnitsPanel } from '../components/CustomerUnitsPanel'
 import { CombinedDiscountsPanel } from '../../tarification/components/CombinedDiscountsPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
-import { VAT_TREATMENT_LABELS } from '../types'
+import { useLocale } from '../../../i18n/localeContext'
+import { VAT_TREATMENT_LABEL_KEYS } from '../types'
 import './../components/customers.css'
 
 export function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission, hasAnyPermission } = useAuth()
   const { customer, isLoading, error, reload } = useCustomer(id)
   const mutations = useCustomerMutations()
@@ -85,8 +87,8 @@ export function CustomerDetailPage() {
     }
   }, [id, canViewMessages])
 
-  if (isLoading) return <LoadingState message="Klant laden..." />
-  if (error || !customer) return <ErrorState message={error ?? 'Klant niet gevonden.'} />
+  if (isLoading) return <LoadingState message={t('customers.detail.loading')} />
+  if (error || !customer) return <ErrorState message={error ? t(error) : t('customers.detail.notFound')} />
 
   function openNumberDialog() {
     setNewNumber('')
@@ -102,9 +104,9 @@ export function CustomerDetailPage() {
     if (!id) return
 
     const localErrors: { customerNumber?: string; reason?: string } = {}
-    if (!newNumber.trim()) localErrors.customerNumber = 'Nieuw klantnummer is verplicht.'
-    else if (newNumber.trim().length > 30) localErrors.customerNumber = 'Maximaal 30 tekens.'
-    if (!numberReason.trim()) localErrors.reason = 'Reden is verplicht.'
+    if (!newNumber.trim()) localErrors.customerNumber = t('customers.detail.newNumberRequired')
+    else if (newNumber.trim().length > 30) localErrors.customerNumber = t('customers.detail.numberMaxLength')
+    if (!numberReason.trim()) localErrors.reason = t('customers.detail.reasonRequired')
     setNumberLocalErrors(localErrors)
     if (localErrors.customerNumber || localErrors.reason) return
 
@@ -113,11 +115,11 @@ export function CustomerDetailPage() {
     setNumberFieldErrors({})
     try {
       await changeCustomerNumber(id, { customerNumber: newNumber.trim(), reason: numberReason.trim() })
-      toast.showSuccess('Klantnummer gewijzigd.')
+      toast.showSuccess(t('customers.detail.numberChanged'))
       setShowNumberDialog(false)
       reload()
     } catch (err) {
-      const described = describeApiError(err, 'Het klantnummer kon niet worden gewijzigd.')
+      const described = describeApiError(err, t('customers.detail.numberChangeFailed'))
       setNumberError(described.message)
       setNumberFieldErrors(described.fieldErrors)
     } finally {
@@ -136,7 +138,7 @@ export function CustomerDetailPage() {
         if (!id) return false
         const ok = await mutations.addContact(id, input)
         if (ok) {
-          toast.showSuccess('Contactpersoon toegevoegd.')
+          toast.showSuccess(t('customers.contacts.added'))
           reload()
         }
         return ok
@@ -145,7 +147,7 @@ export function CustomerDetailPage() {
         if (!id) return false
         const ok = await mutations.updateContact(id, contactId, input)
         if (ok) {
-          toast.showSuccess('Contactpersoon bijgewerkt.')
+          toast.showSuccess(t('customers.contacts.updated'))
           reload()
         }
         return ok
@@ -154,11 +156,11 @@ export function CustomerDetailPage() {
         if (!id) return false
         try {
           await removeCustomerContact(id, contactId)
-          toast.showSuccess('Contactpersoon verwijderd.')
+          toast.showSuccess(t('customers.contacts.removed'))
           reload()
           return true
         } catch (err) {
-          toast.showError(describeApiError(err, 'De contactpersoon kon niet worden verwijderd.').message)
+          toast.showError(describeApiError(err, t('customers.contacts.removeFailed')).message)
           return false
         }
       }}
@@ -170,7 +172,7 @@ export function CustomerDetailPage() {
     if (!id) return
     const ok = await mutations.setBlocked(id, true, blockReason.trim() || null)
     if (ok) {
-      toast.showSuccess('Klant geblokkeerd.')
+      toast.showSuccess(t('customers.detail.blocked'))
       setShowBlockDialog(false)
       setBlockReason('')
       reload()
@@ -179,8 +181,8 @@ export function CustomerDetailPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Klanten', to: '/customers' }, { label: customer.name }]} />
-      <BackButton to="/customers" label="Terug naar klanten" />
+      <Breadcrumbs items={[{ label: t('navigation.menu.customers'), to: '/customers' }, { label: customer.name }]} />
+      <BackButton to="/customers" label={t('customers.detail.backToCustomers')} />
       <PageHeader
         title={customer.name}
         action={
@@ -188,32 +190,32 @@ export function CustomerDetailPage() {
             <div className="customer-detail-toolbar">
               {canEdit && (
                 <Button variant="secondary" onClick={() => setIsEditing(true)}>
-                  Bewerken
+                  {t('ui.actions.edit')}
                 </Button>
               )}
               {canEdit &&
                 (customer.isBlocked ? (
                   <Button variant="secondary" onClick={() => setShowUnblockConfirm(true)}>
-                    Deblokkeren
+                    {t('customers.detail.unblock')}
                   </Button>
                 ) : (
                   <Button variant="secondary" onClick={() => setShowBlockDialog(true)}>
-                    Blokkeren
+                    {t('customers.detail.block')}
                   </Button>
                 ))}
               {canDeactivate &&
                 (customer.isActive ? (
                   <Button variant="secondary" onClick={() => setShowActiveConfirm('deactivate')}>
-                    Deactiveren
+                    {t('customers.detail.deactivate')}
                   </Button>
                 ) : (
                   <Button variant="secondary" onClick={() => setShowActiveConfirm('activate')}>
-                    Heractiveren
+                    {t('customers.detail.reactivate')}
                   </Button>
                 ))}
               {canDelete && (
                 <Button variant="danger" onClick={() => setShowDeleteConfirm(true)}>
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </Button>
               )}
             </div>
@@ -234,7 +236,7 @@ export function CustomerDetailPage() {
               canViewLocations && id ? (
                 <CustomerLocationsPanel customerId={id} />
               ) : (
-                <p className="customer-form-muted">Je hebt geen rechten om bijkomende adressen te beheren.</p>
+                <p className="customer-form-muted">{t('customers.detail.noAddressRights')}</p>
               ),
             contactpersonen: contactsPanel,
             communicatie: id ? <CustomerCommunicationPanel customerId={id} contacts={customer.contacts} /> : null,
@@ -249,14 +251,14 @@ export function CustomerDetailPage() {
                   <CustomerBillingPanel customerId={id} />
                 </>
               ) : (
-                <p className="customer-form-muted">Je hebt geen rechten om tarieven te beheren.</p>
+                <p className="customer-form-muted">{t('customers.detail.noTariffRights')}</p>
               ),
           }}
           onSubmit={async (values) => {
             if (!id) return
             const updated = await mutations.update(id, values)
             if (updated) {
-              toast.showSuccess('Klant bijgewerkt.')
+              toast.showSuccess(t('customers.detail.updated'))
               setIsEditing(false)
               reload()
             }
@@ -267,13 +269,15 @@ export function CustomerDetailPage() {
           <div className="customer-detail-tabs">
             <Tabs
               tabs={[
-                { id: 'general', label: 'Algemeen' },
-                { id: 'contacts', label: 'Contactpersonen', badge: customer.contacts.length || undefined },
-                ...(canViewLocations ? [{ id: 'locations', label: 'Locaties' }] : []),
-                { id: 'communication', label: 'Communicatie' },
-                ...(canViewBilling ? [{ id: 'billing', label: 'Tarieven & toeslagen' }] : []),
-                { id: 'history', label: 'Historiek' },
-                ...(canViewMessages ? [{ id: 'messages', label: 'Berichten', badge: unreadMessages || undefined }] : []),
+                { id: 'general', label: t('customers.detail.tabGeneral') },
+                { id: 'contacts', label: t('customers.contacts.title'), badge: customer.contacts.length || undefined },
+                ...(canViewLocations ? [{ id: 'locations', label: t('customers.detail.tabLocations') }] : []),
+                { id: 'communication', label: t('customers.form.sections.communicatie') },
+                ...(canViewBilling ? [{ id: 'billing', label: t('customers.form.sections.tarieven') }] : []),
+                { id: 'history', label: t('customers.form.sections.historiek') },
+                ...(canViewMessages
+                  ? [{ id: 'messages', label: t('customers.detail.tabMessages'), badge: unreadMessages || undefined }]
+                  : []),
               ]}
               activeId={activeTab}
               onChange={setActiveTab}
@@ -285,18 +289,18 @@ export function CustomerDetailPage() {
               <div className="customer-detail-layout">
             <div className="customer-summary">
               <dl>
-                <dt>Klantnummer</dt>
+                <dt>{t('customers.fields.customerNumber')}</dt>
                 <dd>
                   <span className="customer-number-line">
                     <code>{customer.customerNumber}</code>
                     {canOverrideNumber && (
                       <Button variant="secondary" onClick={openNumberDialog}>
-                        Nummer wijzigen
+                        {t('customers.detail.changeNumber')}
                       </Button>
                     )}
                   </span>
                 </dd>
-                <dt>Status</dt>
+                <dt>{t('customers.detail.statusLabel')}</dt>
                 <dd>
                   <StatusBadges
                     active={customer.isActive}
@@ -305,17 +309,17 @@ export function CustomerDetailPage() {
                 </dd>
                 {customer.nickname && (
                   <>
-                    <dt>Roepnaam</dt>
+                    <dt>{t('customers.fields.nickname')}</dt>
                     <dd>{customer.nickname}</dd>
                   </>
                 )}
                 {customer.categoryName && (
                   <>
-                    <dt>Categorie</dt>
+                    <dt>{t('customers.form.category')}</dt>
                     <dd>{customer.categoryName}</dd>
                   </>
                 )}
-                <dt>Adres</dt>
+                <dt>{t('customers.detail.addressLabel')}</dt>
                 <dd>
                   {[customer.street, customer.houseNumber].filter(Boolean).join(' ')}
                   {customer.city ? `, ${[customer.postalCode, customer.city].filter(Boolean).join(' ')}` : ''}
@@ -323,21 +327,21 @@ export function CustomerDetailPage() {
                 </dd>
                 {customer.email && (
                   <>
-                    <dt>E-mail</dt>
+                    <dt>{t('customers.contacts.email')}</dt>
                     <dd>{customer.email}</dd>
                   </>
                 )}
                 {customer.phoneNumber && (
                   <>
-                    <dt>Telefoon</dt>
+                    <dt>{t('customers.contacts.phone')}</dt>
                     <dd>{customer.phoneNumber}</dd>
                   </>
                 )}
-                <dt>Betaaltermijn</dt>
-                <dd>{customer.paymentTermDays} dagen</dd>
+                <dt>{t('customers.detail.paymentTermLabel')}</dt>
+                <dd>{t('customers.detail.paymentTermDays', { days: customer.paymentTermDays })}</dd>
                 {customer.notes && (
                   <>
-                    <dt>Notities</dt>
+                    <dt>{t('customers.contacts.notes')}</dt>
                     <dd>{customer.notes}</dd>
                   </>
                 )}
@@ -345,54 +349,62 @@ export function CustomerDetailPage() {
             </div>
 
             <div className="customer-summary customer-vat-summary">
-              <h3>Fiscaal & Peppol</h3>
+              <h3>{t('customers.form.sections.fiscaal')}</h3>
               <dl>
-                <dt>BTW-nummer</dt>
+                <dt>{t('customers.fields.vatNumber')}</dt>
                 <dd>{customer.vatNumber ?? '—'}</dd>
                 {customer.companyNumber && (
                   <>
-                    <dt>Ondernemingsnummer</dt>
+                    <dt>{t('customers.fields.companyNumber')}</dt>
                     <dd>{customer.companyNumber}</dd>
                   </>
                 )}
-                <dt>BTW-behandeling</dt>
-                <dd>{VAT_TREATMENT_LABELS[customer.vatTreatment]}</dd>
-                <dt>Standaard tarief</dt>
-                <dd>{customer.defaultVatRatePercent !== null ? `${customer.defaultVatRatePercent}%` : 'Bedrijfsstandaard'}</dd>
+                <dt>{t('customers.form.vatTreatment')}</dt>
+                <dd>{t(VAT_TREATMENT_LABEL_KEYS[customer.vatTreatment])}</dd>
+                <dt>{t('customers.detail.defaultRateLabel')}</dt>
+                <dd>
+                  {customer.defaultVatRatePercent !== null
+                    ? `${customer.defaultVatRatePercent}%`
+                    : t('customers.form.companyDefault')}
+                </dd>
                 {customer.vatCountryCode && (
                   <>
-                    <dt>BTW-land</dt>
+                    <dt>{t('customers.fields.vatCountryCode')}</dt>
                     <dd>{customer.vatCountryCode}</dd>
                   </>
                 )}
                 <dt>Peppol</dt>
-                <dd>{customer.peppolId ? `${customer.peppolScheme ?? '?'}:${customer.peppolId}` : 'Niet geconfigureerd'}</dd>
+                <dd>
+                  {customer.peppolId
+                    ? `${customer.peppolScheme ?? '?'}:${customer.peppolId}`
+                    : t('customers.detail.peppolNotConfigured')}
+                </dd>
                 {customer.iban && (
                   <>
-                    <dt>IBAN</dt>
+                    <dt>{t('customers.fields.iban')}</dt>
                     <dd>{customer.iban}{customer.bic ? ` (${customer.bic})` : ''}</dd>
                   </>
                 )}
                 {customer.currencyCode && customer.currencyCode !== 'EUR' && (
                   <>
-                    <dt>Valuta</dt>
+                    <dt>{t('customers.fields.currencyCode')}</dt>
                     <dd>{customer.currencyCode}</dd>
                   </>
                 )}
                 {customer.invoiceEmail && (
                   <>
-                    <dt>Facturatie-e-mail</dt>
+                    <dt>{t('customers.form.invoiceEmail')}</dt>
                     <dd>{customer.invoiceEmail}</dd>
                   </>
                 )}
                 {(customer.customerReferenceRequired || customer.purchaseOrderRequired || customer.signedDeliveryNoteRequired) && (
                   <>
-                    <dt>Vereisten</dt>
+                    <dt>{t('customers.detail.requirementsLabel')}</dt>
                     <dd>
                       {[
-                        customer.customerReferenceRequired ? 'Klantreferentie verplicht' : null,
-                        customer.purchaseOrderRequired ? 'Bestelbon vereist' : null,
-                        customer.signedDeliveryNoteRequired ? 'Getekende leverbon vereist' : null,
+                        customer.customerReferenceRequired ? t('customers.detail.requirementCustomerReference') : null,
+                        customer.purchaseOrderRequired ? t('customers.detail.requirementPurchaseOrder') : null,
+                        customer.signedDeliveryNoteRequired ? t('customers.detail.requirementSignedNote') : null,
                       ]
                         .filter(Boolean)
                         .join(' · ')}
@@ -401,7 +413,7 @@ export function CustomerDetailPage() {
                 )}
                 {customer.vatNotes && (
                   <>
-                    <dt>BTW-notities</dt>
+                    <dt>{t('customers.form.vatNotes')}</dt>
                     <dd>{customer.vatNotes}</dd>
                   </>
                 )}
@@ -452,16 +464,16 @@ export function CustomerDetailPage() {
 
       {showNumberDialog && (
         <Modal
-          title="Klantnummer wijzigen"
+          title={t('customers.detail.changeNumberTitle')}
           onClose={() => setShowNumberDialog(false)}
           busy={numberBusy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setShowNumberDialog(false)} disabled={numberBusy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="change-number-form" disabled={numberBusy}>
-                {numberBusy ? 'Opslaan...' : 'Wijzigen'}
+                {numberBusy ? t('customers.common.saving') : t('customers.detail.changeAction')}
               </Button>
             </>
           }
@@ -473,7 +485,7 @@ export function CustomerDetailPage() {
               </p>
             )}
             <FormField
-              label="Nieuw klantnummer"
+              label={t('customers.detail.newNumberField')}
               htmlFor="change-number"
               required
               error={numberLocalErrors.customerNumber ?? getFieldError(numberFieldErrors, 'customerNumber')}
@@ -491,10 +503,10 @@ export function CustomerDetailPage() {
               />
             </FormField>
             <FormField
-              label="Reden"
+              label={t('customers.detail.reasonField')}
               htmlFor="change-number-reason"
               required
-              hint="Wordt vastgelegd in de historiek."
+              hint={t('customers.detail.reasonHint')}
               error={numberLocalErrors.reason ?? getFieldError(numberFieldErrors, 'reason')}
             >
               <textarea
@@ -512,22 +524,22 @@ export function CustomerDetailPage() {
 
       {showBlockDialog && (
         <Modal
-          title="Klant blokkeren"
+          title={t('customers.detail.blockTitle')}
           onClose={() => setShowBlockDialog(false)}
           busy={mutations.isSubmitting}
           footer={
             <>
               <Button variant="secondary" onClick={() => setShowBlockDialog(false)} disabled={mutations.isSubmitting}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button variant="danger" type="submit" form="block-form" disabled={mutations.isSubmitting}>
-                Blokkeren
+                {t('customers.detail.block')}
               </Button>
             </>
           }
         >
           <form id="block-form" onSubmit={handleBlock}>
-            <FormField label="Reden" htmlFor="block-reason" hint="Optioneel, maar aanbevolen.">
+            <FormField label={t('customers.detail.reasonField')} htmlFor="block-reason" hint={t('customers.detail.blockReasonHint')}>
               <textarea id="block-reason" value={blockReason} onChange={(e) => setBlockReason(e.target.value)} rows={3} maxLength={500} />
             </FormField>
           </form>
@@ -536,15 +548,15 @@ export function CustomerDetailPage() {
 
       {showUnblockConfirm && (
         <ConfirmDialog
-          title="Klant deblokkeren"
-          message={`Blokkering voor '${customer.name}' opheffen?`}
-          confirmLabel="Deblokkeren"
+          title={t('customers.detail.unblockTitle')}
+          message={t('customers.detail.unblockMessage', { name: customer.name })}
+          confirmLabel={t('customers.detail.unblock')}
           busy={mutations.isSubmitting}
           onConfirm={async () => {
             if (!id) return
             const ok = await mutations.setBlocked(id, false, null)
             if (ok) {
-              toast.showSuccess('Klant gedeblokkeerd.')
+              toast.showSuccess(t('customers.detail.unblocked'))
               setShowUnblockConfirm(false)
               reload()
             }
@@ -555,20 +567,20 @@ export function CustomerDetailPage() {
 
       {showActiveConfirm && (
         <ConfirmDialog
-          title={showActiveConfirm === 'deactivate' ? 'Klant deactiveren' : 'Klant heractiveren'}
+          title={showActiveConfirm === 'deactivate' ? t('customers.detail.deactivateTitle') : t('customers.detail.reactivateTitle')}
           message={
             showActiveConfirm === 'deactivate'
-              ? `'${customer.name}' deactiveren? Bestaande opdrachten, facturen en historiek blijven behouden, maar er kunnen geen nieuwe opdrachten voor deze klant worden aangemaakt.`
-              : `'${customer.name}' heractiveren? De klant is daarna weer kiesbaar voor nieuwe opdrachten.`
+              ? t('customers.detail.deactivateMessage', { name: customer.name })
+              : t('customers.detail.reactivateMessage', { name: customer.name })
           }
-          confirmLabel={showActiveConfirm === 'deactivate' ? 'Deactiveren' : 'Heractiveren'}
+          confirmLabel={showActiveConfirm === 'deactivate' ? t('customers.detail.deactivate') : t('customers.detail.reactivate')}
           busy={mutations.isSubmitting}
           onConfirm={async () => {
             if (!id) return
             const activate = showActiveConfirm === 'activate'
             const ok = await mutations.setActive(id, activate)
             if (ok) {
-              toast.showSuccess(activate ? 'Klant geheractiveerd.' : 'Klant gedeactiveerd.')
+              toast.showSuccess(activate ? t('customers.detail.reactivated') : t('customers.detail.deactivated'))
               setShowActiveConfirm(null)
               reload()
             }
@@ -579,16 +591,16 @@ export function CustomerDetailPage() {
 
       {showDeleteConfirm && (
         <ConfirmDialog
-          title="Klant verwijderen"
-          message={`Weet u zeker dat u '${customer.name}' wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('customers.detail.deleteTitle')}
+          message={t('customers.detail.deleteMessage', { name: customer.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={mutations.isSubmitting}
           onConfirm={async () => {
             if (!id) return
             const ok = await mutations.remove(id)
             if (ok) {
-              toast.showSuccess('Klant verwijderd.')
+              toast.showSuccess(t('customers.detail.deleted'))
               navigate('/customers')
             }
           }}

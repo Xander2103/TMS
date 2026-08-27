@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { searchDrivers } from '../../drivers/api/driversApi'
 import type { DriverListItem } from '../../drivers/types'
 import { getVehicleOptions } from '../../vehicles/api/vehiclesApi'
@@ -44,6 +45,7 @@ export function TripDetailPage() {
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
 
   const [trip, setTrip] = useState<TripDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -118,12 +120,12 @@ export function TripDetailPage() {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('De rit kon niet worden geladen.')
+        if (mounted) setLoadError(t('planning.detail.loadError'))
       })
     return () => {
       mounted = false
     }
-  }, [id, applyTrip])
+  }, [id, applyTrip, t])
 
   // Execution snapshot (stop statuses + POD flags) for trips that left Draft.
   useEffect(() => {
@@ -180,11 +182,11 @@ export function TripDetailPage() {
         minutes: Number(delayMinutes || '0'),
         reason: delayReason.trim() || null,
       })
-      showSuccess('Vertraging geregistreerd; de ETA is herrekend.')
+      showSuccess(t('planning.detail.delayRegistered'))
       setDelayOpen(false)
-      setEtaReload((t) => t + 1)
+      setEtaReload((r) => r + 1)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De vertraging kon niet worden geregistreerd.')
+      showError(err instanceof ApiError ? err.message : t('planning.detail.delayFailed'))
     } finally {
       setBusy(false)
     }
@@ -195,7 +197,7 @@ export function TripDetailPage() {
       const pod = await getPodForStop(id, stopId)
       navigate(`/pods/${pod.id}`)
     } catch {
-      showError('De POD kon niet worden geopend.')
+      showError(t('planning.detail.podOpenFailed'))
     }
   }
 
@@ -262,12 +264,12 @@ export function TripDetailPage() {
         plannedEmptyKm: parsedEmpty !== null && Number.isNaN(parsedEmpty) ? null : parsedEmpty,
       })
       applyTrip(updated)
-      showSuccess('Rit bijgewerkt.')
+      showSuccess(t('planning.detail.saved'))
     } catch (err) {
       showError(
         err instanceof ApiError && err.status === 400
-          ? 'De rit kon niet worden opgeslagen — controleer de invoer.'
-          : 'De rit kon niet worden opgeslagen.',
+          ? t('planning.detail.saveFailedInput')
+          : t('planning.detail.saveFailed'),
       )
     } finally {
       setBusy(false)
@@ -281,7 +283,7 @@ export function TripDetailPage() {
       const updated = await changeTripStatus(
         trip.id, target, override, release, release ? releaseReason.trim() || null : null)
       applyTrip(updated)
-      showSuccess(`Rit is nu: ${TRIP_STATUS_LABELS[target]}.`)
+      showSuccess(t('planning.detail.statusChanged', { status: t(TRIP_STATUS_LABELS[target]) }))
       setOverrideTarget(null)
       setReleaseTarget(null)
       setReleaseReason('')
@@ -298,11 +300,11 @@ export function TripDetailPage() {
           conflicts: trip.conflicts.filter((c) => c.blocking).map((c) => c.description),
         })
       } else if (err instanceof ApiError && err.status === 403) {
-        showError(err.message || 'Je hebt hier geen recht voor.')
+        showError(err.message || t('planning.detail.noPermission'))
         setOverrideTarget(null)
         setReleaseTarget(null)
       } else {
-        showError('De status kon niet worden gewijzigd.')
+        showError(t('planning.detail.statusChangeFailed'))
         setOverrideTarget(null)
         setReleaseTarget(null)
       }
@@ -316,16 +318,16 @@ export function TripDetailPage() {
     if (!trip) return
     try {
       await deleteTrip(trip.id)
-      showSuccess('Rit verwijderd.')
+      showSuccess(t('planning.detail.deleted'))
       navigate('/planning')
     } catch {
-      showError('De rit kon niet worden verwijderd.')
+      showError(t('planning.detail.deleteFailed'))
       setConfirmDelete(false)
     }
   }
 
   if (loadError) return <ErrorState message={loadError} />
-  if (!trip) return <LoadingState message="Rit laden..." />
+  if (!trip) return <LoadingState message={t('planning.detail.loading')} />
 
   const attachedSummaries = orderIds.map((orderId) => {
     const onTrip = trip.orders.find((o) => o.transportOrderId === orderId)
@@ -344,28 +346,28 @@ export function TripDetailPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Planning', to: '/planning' }, { label: trip.tripNumber }]} />
+      <Breadcrumbs items={[{ label: t('planning.title'), to: '/planning' }, { label: trip.tripNumber }]} />
       <PageHeader
         title={`${trip.tripNumber} — ${trip.tripDate}`}
         action={
           <span className="pl-header-actions">
-            <Badge tone={TRIP_STATUS_TONE[trip.status]}>{TRIP_STATUS_LABELS[trip.status]}</Badge>
+            <Badge tone={TRIP_STATUS_TONE[trip.status]}>{t(TRIP_STATUS_LABELS[trip.status])}</Badge>
             {/* Wave 9: één samengevoegde PDF per rit, in routevolgorde. */}
             <Button
               variant="secondary"
               onClick={() => void downloadTripDocuments(trip.id, 'cmr', trip.tripNumber)
-                .catch(() => showError('De CMR-bundel kon niet worden gegenereerd.'))}
+                .catch(() => showError(t('planning.detail.cmrFailed')))}
               disabled={busy}
             >
-              CMR&apos;s (rit)
+              {t('planning.detail.cmrButton')}
             </Button>
             <Button
               variant="secondary"
               onClick={() => void downloadTripDocuments(trip.id, 'delivery-note', trip.tripNumber)
-                .catch(() => showError('De leveringsbonnen konden niet worden gegenereerd.'))}
+                .catch(() => showError(t('planning.detail.deliveryNotesFailed')))}
               disabled={busy}
             >
-              Leveringsbonnen (rit)
+              {t('planning.detail.deliveryNotesButton')}
             </Button>
             {hasPermission('planning.edit') &&
               trip.allowedTransitions.map((target) => (
@@ -375,19 +377,19 @@ export function TripDetailPage() {
                   onClick={() => (target === 'Cancelled' ? setCancelTarget(target) : void applyTransition(target, false))}
                   disabled={busy || dirty}
                 >
-                  {TRIP_TRANSITION_LABELS[target]}
+                  {t(TRIP_TRANSITION_LABELS[target])}
                 </Button>
               ))}
           </span>
         }
       />
 
-      {dirty && <p className="pl-dirty-hint">Er zijn niet-opgeslagen wijzigingen — sla eerst op voor je de status wijzigt.</p>}
+      {dirty && <p className="pl-dirty-hint">{t('planning.detail.dirtyHint')}</p>}
 
       <section className="pl-section">
-        <h2>Toewijzing</h2>
+        <h2>{t('planning.detail.assignmentTitle')}</h2>
         <div className="pl-assign">
-          <FormField label="Datum" htmlFor="tr-date">
+          <FormField label={t('planning.detail.date')} htmlFor="tr-date">
             <input
               id="tr-date"
               type="date"
@@ -399,7 +401,7 @@ export function TripDetailPage() {
               disabled={!editable || busy}
             />
           </FormField>
-          <FormField label="Chauffeur" htmlFor="tr-driver">
+          <FormField label={t('planning.detail.driver')} htmlFor="tr-driver">
             <select
               id="tr-driver"
               value={driverId}
@@ -409,7 +411,7 @@ export function TripDetailPage() {
               }}
               disabled={!editable || busy}
             >
-              <option value="">Geen</option>
+              <option value="">{t('planning.detail.none')}</option>
               {drivers.map((driver) => (
                 <option key={driver.id} value={driver.id}>
                   {driver.fullName} ({driver.driverNumber})
@@ -417,7 +419,7 @@ export function TripDetailPage() {
               ))}
             </select>
           </FormField>
-          <FormField label="Voertuig" htmlFor="tr-vehicle">
+          <FormField label={t('planning.detail.vehicle')} htmlFor="tr-vehicle">
             <select
               id="tr-vehicle"
               value={vehicleId}
@@ -427,7 +429,7 @@ export function TripDetailPage() {
               }}
               disabled={!editable || busy}
             >
-              <option value="">Geen</option>
+              <option value="">{t('planning.detail.none')}</option>
               {vehicles.map((vehicle) => (
                 <option key={vehicle.id} value={vehicle.id}>
                   {vehicle.internalNumber} ({vehicle.licensePlate})
@@ -435,7 +437,7 @@ export function TripDetailPage() {
               ))}
             </select>
           </FormField>
-          <FormField label="Oplegger" htmlFor="tr-trailer">
+          <FormField label={t('planning.detail.trailer')} htmlFor="tr-trailer">
             <select
               id="tr-trailer"
               value={trailerId}
@@ -445,7 +447,7 @@ export function TripDetailPage() {
               }}
               disabled={!editable || busy}
             >
-              <option value="">Geen</option>
+              <option value="">{t('planning.detail.none')}</option>
               {trailers.map((trailer) => (
                 <option key={trailer.id} value={trailer.id}>
                   {trailer.internalNumber} ({trailer.licensePlate})
@@ -453,7 +455,7 @@ export function TripDetailPage() {
               ))}
             </select>
           </FormField>
-          <FormField label="Geplande afstand (km)" htmlFor="tr-distance" hint="Totaal, inclusief lege kilometers.">
+          <FormField label={t('planning.detail.plannedDistance')} htmlFor="tr-distance" hint={t('planning.detail.plannedDistanceHint')}>
             <input
               id="tr-distance"
               inputMode="decimal"
@@ -465,7 +467,7 @@ export function TripDetailPage() {
               disabled={!editable || busy}
             />
           </FormField>
-          <FormField label="Waarvan leeg (km)" htmlFor="tr-empty">
+          <FormField label={t('planning.detail.emptyDistance')} htmlFor="tr-empty">
             <input
               id="tr-empty"
               inputMode="decimal"
@@ -478,7 +480,7 @@ export function TripDetailPage() {
             />
           </FormField>
         </div>
-        <FormField label="Notities" htmlFor="tr-notes">
+        <FormField label={t('planning.detail.notes')} htmlFor="tr-notes">
           <textarea
             id="tr-notes"
             rows={2}
@@ -494,8 +496,8 @@ export function TripDetailPage() {
       </section>
 
       <section className="pl-section">
-        <h2>Opdrachten ({orderIds.length})</h2>
-        {attachedSummaries.length === 0 && <p className="placeholder-text">Nog geen opdrachten op deze rit.</p>}
+        <h2>{t('planning.detail.ordersTitle', { count: orderIds.length })}</h2>
+        {attachedSummaries.length === 0 && <p className="placeholder-text">{t('planning.detail.ordersEmpty')}</p>}
         {attachedSummaries.length > 0 && (
           <ol className="pl-orders">
             {attachedSummaries.map((order, index) => (
@@ -523,7 +525,7 @@ export function TripDetailPage() {
                       }}
                       disabled={busy}
                     >
-                      Verwijderen
+                      {t('planning.detail.remove')}
                     </button>
                   </span>
                 )}
@@ -543,9 +545,9 @@ export function TripDetailPage() {
                 }
               }}
               disabled={busy}
-              aria-label="Opdracht toevoegen"
+              aria-label={t('planning.detail.addOrderLabel')}
             >
-              <option value="">+ Bevestigde opdracht toevoegen…</option>
+              <option value="">{t('planning.detail.addOrderOption')}</option>
               {attachable.map((order) => (
                 <option key={order.id} value={order.id}>
                   {order.orderNumber} — {order.customerName} ({order.firstLoadingCity ?? '?'} → {order.lastUnloadingCity ?? '?'})
@@ -559,13 +561,14 @@ export function TripDetailPage() {
       {execution && execution.stops.length > 0 && (
         <section className="pl-section">
           <h2>
-            Uitvoering ({execution.completedCount}/{execution.totalCount} stops afgehandeld)
+            {t('planning.detail.executionTitle', { completed: execution.completedCount, total: execution.totalCount })}
           </h2>
           {trip.status === 'InProgress' && canEditPlanning && (
             <p className="pl-eta-bar">
               {eta && eta.manualDelayMinutes > 0 && (
                 <span className="pl-execution-late">
-                  ⏱ {eta.manualDelayMinutes} min vertraging{eta.delayReason ? ` (${eta.delayReason})` : ''} ·{' '}
+                  ⏱ {t('planning.detail.delaySummary', { count: eta.manualDelayMinutes })}
+                  {eta.delayReason ? ` (${eta.delayReason})` : ''} ·{' '}
                 </span>
               )}
               <button
@@ -577,9 +580,9 @@ export function TripDetailPage() {
                   setDelayOpen(true)
                 }}
               >
-                Vertraging melden
+                {t('planning.detail.reportDelay')}
               </button>
-              <span className="pl-eta-note"> · interne raming, geen routeoptimalisatie</span>
+              <span className="pl-eta-note"> · {t('planning.detail.etaNote')}</span>
             </p>
           )}
           <ol className="pl-execution-stops">
@@ -588,25 +591,27 @@ export function TripDetailPage() {
               return (
                 <li key={stop.transportOrderStopId}>
                   <Badge tone={stop.stopType === 'Loading' ? 'info' : 'success'}>
-                    {stop.stopType === 'Loading' ? 'Laden' : 'Lossen'}
+                    {stop.stopType === 'Loading' ? t('planning.detail.stopLoading') : t('planning.detail.stopUnloading')}
                   </Badge>{' '}
                   <span className="pl-execution-location">
                     {stop.locationName}
                     {stop.city && stop.locationName !== stop.city ? ` — ${stop.city}` : ''}
                   </span>{' '}
                   <Badge tone={STOP_EXECUTION_TONE[stop.status]}>
-                    {STOP_EXECUTION_ICONS[stop.status]} {STOP_EXECUTION_LABELS[stop.status]}
+                    {STOP_EXECUTION_ICONS[stop.status]} {t(STOP_EXECUTION_LABELS[stop.status])}
                   </Badge>
                   {stopEta && (
                     <Badge tone={stopEta.status === 'Late' ? 'danger' : stopEta.status === 'AtRisk' ? 'warning' : 'success'}>
                       ⏱ ETA {stopEta.currentEta.slice(11, 16)}
-                      {stopEta.source === 'DispatcherOverride' && ' (handmatig)'}
+                      {stopEta.source === 'DispatcherOverride' && ` ${t('planning.detail.etaManual')}`}
                     </Badge>
                   )}
-                  {stop.lateArrivalReason && <span className="pl-execution-late"> · te laat: {stop.lateArrivalReason}</span>}
+                  {stop.lateArrivalReason && (
+                    <span className="pl-execution-late"> · {t('planning.detail.lateArrival', { reason: stop.lateArrivalReason })}</span>
+                  )}
                   {stop.hasPod && canOpenPod && (
                     <button type="button" className="pl-link" onClick={() => void openPod(stop.transportOrderStopId)}>
-                      ✍ POD bekijken
+                      ✍ {t('planning.detail.viewPod')}
                     </button>
                   )}
                 </li>
@@ -618,38 +623,39 @@ export function TripDetailPage() {
 
       {delayOpen && (
         <Modal
-          title="Vertraging melden"
+          title={t('planning.detail.delayModalTitle')}
           onClose={() => setDelayOpen(false)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDelayOpen(false)} disabled={busy}>
-                Annuleren
+                {t('planning.detail.cancel')}
               </Button>
               <Button onClick={() => void submitDelay()} disabled={busy}>
-                {busy ? 'Bezig…' : 'Opslaan'}
+                {busy ? t('planning.detail.busy') : t('planning.detail.save')}
               </Button>
             </>
           }
         >
-          <FormField label="Vertraging (minuten)" htmlFor="pl-delay-min" hint="0 wist de vertraging.">
+          <FormField label={t('planning.detail.delayMinutes')} htmlFor="pl-delay-min" hint={t('planning.detail.delayMinutesHint')}>
             <input id="pl-delay-min" type="number" min={0} max={1440} value={delayMinutes} onChange={(e) => setDelayMinutes(e.target.value)} disabled={busy} />
           </FormField>
-          <FormField label="Reden" htmlFor="pl-delay-reason">
-            <input id="pl-delay-reason" value={delayReason} onChange={(e) => setDelayReason(e.target.value)} disabled={busy} maxLength={500} placeholder="bv. file op de ring" />
+          <FormField label={t('planning.detail.delayReason')} htmlFor="pl-delay-reason">
+            <input id="pl-delay-reason" value={delayReason} onChange={(e) => setDelayReason(e.target.value)} disabled={busy} maxLength={500} placeholder={t('planning.detail.delayReasonPlaceholder')} />
           </FormField>
         </Modal>
       )}
 
       <section className="pl-section">
-        <h2>Conflicten</h2>
-        {trip.conflicts.length === 0 && <p className="pl-ok">✓ Geen conflicten.</p>}
+        <h2>{t('planning.detail.conflictsTitle')}</h2>
+        {trip.conflicts.length === 0 && <p className="pl-ok">✓ {t('planning.detail.noConflicts')}</p>}
         {trip.conflicts.length > 0 && (
           <ul className="pl-conflicts">
             {trip.conflicts.map((conflict, index) => (
               <li key={`${conflict.code}-${index}`}>
                 <Badge tone={CONFLICT_SEVERITY_META[conflict.severity]?.tone ?? (conflict.blocking ? 'danger' : 'warning')}>
-                  {CONFLICT_SEVERITY_META[conflict.severity]?.label ?? (conflict.blocking ? 'Blokkerend' : 'Waarschuwing')}
+                  {t(CONFLICT_SEVERITY_META[conflict.severity]?.label ??
+                    (conflict.blocking ? 'planning.conflictSeverity.Blocking' : 'planning.conflictSeverity.Warning'))}
                 </Badge>{' '}
                 {conflict.description}
               </li>
@@ -660,29 +666,34 @@ export function TripDetailPage() {
 
       {readiness && readinessRelevant && (
         <section className="pl-section">
-          <h2>Laadgereedheid</h2>
+          <h2>{t('planning.detail.readinessTitle')}</h2>
           <p className={readiness.isComplete ? 'pl-ok' : 'pl-readiness-warning'}>
             {readiness.isComplete
-              ? `✓ Alle ${readiness.mandatoryPackages} verplichte colli zijn geladen.`
-              : `⚠ ${readiness.loadedCount} van ${readiness.mandatoryPackages} verplichte colli geladen — ${readiness.notLoadedCount} ontbreken` +
-                (readiness.missingCount > 0 ? `, waarvan ${readiness.missingCount} vermist` : '') +
-                (readiness.damagedCount > 0 ? `, ${readiness.damagedCount} beschadigd` : '') +
+              ? `✓ ${t('planning.detail.readinessComplete', { count: readiness.mandatoryPackages })}`
+              : `⚠ ${t('planning.detail.readinessIncomplete', {
+                  loaded: readiness.loadedCount,
+                  mandatory: readiness.mandatoryPackages,
+                  notLoaded: readiness.notLoadedCount,
+                })}` +
+                (readiness.missingCount > 0 ? t('planning.detail.readinessMissingPart', { count: readiness.missingCount }) : '') +
+                (readiness.damagedCount > 0 ? t('planning.detail.readinessDamagedPart', { count: readiness.damagedCount }) : '') +
                 '.'}
-            {readiness.openExceptionCount > 0 && ` Er ${readiness.openExceptionCount === 1 ? 'staat 1 melding' : `staan ${readiness.openExceptionCount} meldingen`} open.`}
+            {readiness.openExceptionCount > 0 &&
+              ` ${t('planning.detail.readinessOpenExceptions', { count: readiness.openExceptionCount })}`}
           </p>
           {!readiness.isComplete && (
             <>
               <p className="pl-readiness-rule">
                 {readiness.isBlocked
-                  ? 'Vertrekregel: vertrek is geblokkeerd tot alles geladen is.'
+                  ? t('planning.detail.readinessRuleBlocked')
                   : readiness.requiresOverride
-                    ? 'Vertrekregel: vertrek vereist vrijgave door het magazijn.'
-                    : 'Vertrekregel: vertrek is toegestaan met waarschuwing.'}
+                    ? t('planning.detail.readinessRuleOverride')
+                    : t('planning.detail.readinessRuleWarning')}
               </p>
               <ul className="pl-conflicts">
                 {readiness.outstandingPackages.map((item) => (
                   <li key={item.packageId}>
-                    <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{PACKAGE_STATUS_LABELS[item.status]}</Badge>{' '}
+                    <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{t(PACKAGE_STATUS_LABELS[item.status])}</Badge>{' '}
                     {item.packageNumber} — {item.description} ({item.orderNumber})
                   </li>
                 ))}
@@ -697,21 +708,21 @@ export function TripDetailPage() {
       <div className="pl-detail-actions">
         {editable && dirty && (
           <Button onClick={() => void handleSave()} disabled={busy}>
-            {busy ? 'Opslaan…' : 'Opslaan'}
+            {busy ? t('planning.detail.saving') : t('planning.detail.save')}
           </Button>
         )}
         {(trip.status === 'Draft' || trip.status === 'Cancelled') && hasPermission('planning.edit') && (
           <Button variant="secondary" onClick={() => setConfirmDelete(true)} disabled={busy}>
-            Verwijderen
+            {t('planning.detail.remove')}
           </Button>
         )}
       </div>
 
       {overrideTarget && (
         <ConfirmDialog
-          title="Conflicten overschrijven?"
-          message={`De rit heeft blokkerende conflicten:\n\n${overrideTarget.conflicts.join('\n')}\n\nToch inplannen? Dit vereist het recht 'Planningsbeperkingen overschrijven'.`}
-          confirmLabel="Toch inplannen"
+          title={t('planning.detail.overrideTitle')}
+          message={t('planning.detail.overrideMessage', { conflicts: overrideTarget.conflicts.join('\n') })}
+          confirmLabel={t('planning.detail.overrideConfirm')}
           destructive
           onConfirm={() => void applyTransition(overrideTarget.status, true)}
           onCancel={() => setOverrideTarget(null)}
@@ -719,17 +730,20 @@ export function TripDetailPage() {
       )}
 
       {releaseTarget && (
-        <Modal title="Niet alle colli geladen" onClose={() => setReleaseTarget(null)} busy={busy}>
+        <Modal title={t('planning.detail.releaseTitle')} onClose={() => setReleaseTarget(null)} busy={busy}>
           <p>
-            {releaseTarget.readiness.loadedCount} van {releaseTarget.readiness.mandatoryPackages} verplichte colli zijn
-            geladen. {releaseTarget.readiness.isBlocked
-              ? 'De vertrekregel blokkeert vertrek tot alles geladen is.'
-              : 'Vertrek vereist een vrijgave met toelichting.'}
+            {t('planning.detail.releaseLoaded', {
+              loaded: releaseTarget.readiness.loadedCount,
+              mandatory: releaseTarget.readiness.mandatoryPackages,
+            })}{' '}
+            {releaseTarget.readiness.isBlocked
+              ? t('planning.detail.releaseBlockedRule')
+              : t('planning.detail.releaseOverrideRule')}
           </p>
           <ul className="pl-conflicts">
             {releaseTarget.readiness.outstandingPackages.map((item) => (
               <li key={item.packageId}>
-                <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{PACKAGE_STATUS_LABELS[item.status]}</Badge>{' '}
+                <Badge tone={PACKAGE_STATUS_TONE[item.status]}>{t(PACKAGE_STATUS_LABELS[item.status])}</Badge>{' '}
                 {item.packageNumber} — {item.description}
               </li>
             ))}
@@ -738,31 +752,31 @@ export function TripDetailPage() {
             <>
               {!canReleaseTrip && (
                 <p className="pl-readiness-warning">
-                  Je hebt het recht 'Rit vrijgeven' niet; vraag het magazijn of een beheerder om vrijgave.
+                  {t('planning.detail.releaseNoRight')}
                 </p>
               )}
-              <FormField label="Toelichting vrijgave" htmlFor="release-reason" required>
+              <FormField label={t('planning.detail.releaseReasonLabel')} htmlFor="release-reason" required>
                 <input
                   id="release-reason"
                   value={releaseReason}
                   onChange={(e) => setReleaseReason(e.target.value)}
                   disabled={busy || !canReleaseTrip}
                   maxLength={500}
-                  placeholder="bv. nalevering volgt morgen"
+                  placeholder={t('planning.detail.releaseReasonPlaceholder')}
                 />
               </FormField>
             </>
           )}
           <div className="pl-detail-actions">
             <Button variant="secondary" onClick={() => setReleaseTarget(null)} disabled={busy}>
-              Sluiten
+              {t('planning.detail.close')}
             </Button>
             {!releaseTarget.readiness.isBlocked && canReleaseTrip && (
               <Button
                 onClick={() => void applyTransition(releaseTarget.status, false, true)}
                 disabled={busy || !releaseReason.trim()}
               >
-                Vrijgeven en vertrekken
+                {t('planning.detail.releaseConfirm')}
               </Button>
             )}
           </div>
@@ -771,9 +785,9 @@ export function TripDetailPage() {
 
       {cancelTarget && (
         <ConfirmDialog
-          title="Rit annuleren"
-          message={`Weet je zeker dat je rit ${trip.tripNumber} wilt annuleren? Gekoppelde opdrachten komen weer vrij voor planning.`}
-          confirmLabel="Annuleren"
+          title={t('planning.detail.cancelTitle')}
+          message={t('planning.detail.cancelMessage', { tripNumber: trip.tripNumber })}
+          confirmLabel={t('planning.detail.cancelConfirm')}
           destructive
           onConfirm={() => void applyTransition(cancelTarget, false)}
           onCancel={() => setCancelTarget(null)}
@@ -782,9 +796,9 @@ export function TripDetailPage() {
 
       {confirmDelete && (
         <ConfirmDialog
-          title="Rit verwijderen"
-          message={`Weet je zeker dat je rit ${trip.tripNumber} wilt verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('planning.detail.deleteTitle')}
+          message={t('planning.detail.deleteMessage', { tripNumber: trip.tripNumber })}
+          confirmLabel={t('planning.detail.deleteConfirm')}
           destructive
           onConfirm={handleDelete}
           onCancel={() => setConfirmDelete(false)}

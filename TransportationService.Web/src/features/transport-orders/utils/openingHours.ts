@@ -1,3 +1,5 @@
+import { getActiveLocale } from '../../../i18n/activeLocale'
+import { translate } from '../../../i18n/translations'
 import type { LocationOpeningInterval } from '../../locations/types'
 
 /**
@@ -59,27 +61,51 @@ export function checkOpeningHours(
   return { verdict: inside ? 'inside' : 'outside', dayHours }
 }
 
-const DUTCH_DAY_NAMES = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag']
+/** Vertaalsleutels voor voluit geschreven dagnamen, index = ISO-dag - 1 (1 = maandag .. 7 = zondag). */
+const DAY_NAME_KEYS = [
+  'transportOrders.openingHours.days.mon',
+  'transportOrders.openingHours.days.tue',
+  'transportOrders.openingHours.days.wed',
+  'transportOrders.openingHours.days.thu',
+  'transportOrders.openingHours.days.fri',
+  'transportOrders.openingHours.days.sat',
+  'transportOrders.openingHours.days.sun',
+] as const
 
 /**
- * Dutch advisory line for the order form, or null when nothing is wrong (or nothing can be
- * concluded). `activity` reads "laadtijd" / "lostijd"; `time` is "HH:mm".
+ * Locale-aware advisory line for the order form, or null when nothing is wrong (or nothing
+ * can be concluded). Runs outside React — translated via the module-level active locale.
+ * `activity` is the stable code 'loading' | 'unloading'; `time` is "HH:mm".
  */
 export function openingHoursWarning(
   intervals: LocationOpeningInterval[] | null | undefined,
   date: string,
   time: string,
-  activity: 'laadtijd' | 'lostijd',
+  activity: 'loading' | 'unloading',
   locationName: string,
 ): string | null {
   const day = isoDayOfWeek(date)
   if (day === null) return null
   const check = checkOpeningHours(intervals, day, time)
+  const locale = getActiveLocale()
+  const activityLabel = translate(
+    locale,
+    activity === 'unloading' ? 'transportOrders.openingHours.activityUnloading' : 'transportOrders.openingHours.activityLoading',
+  )
   switch (check.verdict) {
     case 'outside':
-      return `De geplande ${activity} van ${time} valt buiten de openingsuren (${check.dayHours}) van ${locationName}.`
+      return translate(locale, 'transportOrders.openingHours.outside', {
+        activity: activityLabel,
+        time,
+        hours: check.dayHours,
+        locationName,
+      })
     case 'closedDay':
-      return `De geplande ${activity} op ${DUTCH_DAY_NAMES[day - 1]} valt op een sluitingsdag van ${locationName}.`
+      return translate(locale, 'transportOrders.openingHours.closedDay', {
+        activity: activityLabel,
+        day: translate(locale, DAY_NAME_KEYS[day - 1]),
+        locationName,
+      })
     default:
       return null
   }

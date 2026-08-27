@@ -13,14 +13,15 @@ export type ScanFeedbackLevel = 'Success' | 'Warning'
 
 export type CargoScanState = 'Missing' | 'Partial' | 'Complete' | 'Over'
 
+/** Vertaalsleutels (i18n-wave): render via t(SCAN_RESULT_LABELS[result]). */
 export const SCAN_RESULT_LABELS: Record<ScanResult, string> = {
-  Expected: 'Verwacht item',
-  UnexpectedItem: 'Onbekend item',
-  WrongItem: 'Verkeerd item',
-  DuplicateScan: 'Duplicaat',
-  OverDelivery: 'Meer dan verwacht',
-  DamagedItem: 'Schade',
-  ManualCorrection: 'Correctie',
+  Expected: 'scanning.scanResult.Expected',
+  UnexpectedItem: 'scanning.scanResult.UnexpectedItem',
+  WrongItem: 'scanning.scanResult.WrongItem',
+  DuplicateScan: 'scanning.scanResult.DuplicateScan',
+  OverDelivery: 'scanning.scanResult.OverDelivery',
+  DamagedItem: 'scanning.scanResult.DamagedItem',
+  ManualCorrection: 'scanning.scanResult.ManualCorrection',
 }
 
 export const SCAN_RESULT_ICONS: Record<ScanResult, string> = {
@@ -34,10 +35,10 @@ export const SCAN_RESULT_ICONS: Record<ScanResult, string> = {
 }
 
 export const SCAN_STATE_LABELS: Record<CargoScanState, string> = {
-  Missing: 'Niet gescand',
-  Partial: 'Gedeeltelijk',
-  Complete: 'Volledig',
-  Over: 'Te veel',
+  Missing: 'scanning.scanState.Missing',
+  Partial: 'scanning.scanState.Partial',
+  Complete: 'scanning.scanState.Complete',
+  Over: 'scanning.scanState.Over',
 }
 
 export const SCAN_STATE_TONE: Record<CargoScanState, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -94,23 +95,23 @@ export type PackageScanOutcome =
   | 'GroupProcessed'
 
 export const PACKAGE_SCAN_OUTCOME_LABELS: Record<PackageScanOutcome, string> = {
-  Success: 'Geladen',
-  Delivered: 'Afgeleverd',
-  ReplacedBarcode: 'Vervangen barcode',
-  WrongTrip: 'Verkeerde rit',
-  WrongOrder: 'Andere opdracht',
-  WrongLoadingStop: 'Verkeerde laadstop',
-  WrongDeliveryStop: 'Verkeerde losstop',
-  AlreadyLoaded: 'Al geladen',
-  AlreadyDelivered: 'Al afgeleverd',
-  NotLoaded: 'Niet geladen',
-  CancelledPackage: 'Geannuleerd colli',
-  MissingPackage: 'Vermist colli',
-  DamagedPackage: 'Schade',
-  Refused: 'Geweigerd',
-  PartialDelivery: 'Gedeeltelijk geleverd',
-  NotScannable: 'Niet scanbaar',
-  GroupProcessed: 'Groep verwerkt',
+  Success: 'scanning.packageOutcome.Success',
+  Delivered: 'scanning.packageOutcome.Delivered',
+  ReplacedBarcode: 'scanning.packageOutcome.ReplacedBarcode',
+  WrongTrip: 'scanning.packageOutcome.WrongTrip',
+  WrongOrder: 'scanning.packageOutcome.WrongOrder',
+  WrongLoadingStop: 'scanning.packageOutcome.WrongLoadingStop',
+  WrongDeliveryStop: 'scanning.packageOutcome.WrongDeliveryStop',
+  AlreadyLoaded: 'scanning.packageOutcome.AlreadyLoaded',
+  AlreadyDelivered: 'scanning.packageOutcome.AlreadyDelivered',
+  NotLoaded: 'scanning.packageOutcome.NotLoaded',
+  CancelledPackage: 'scanning.packageOutcome.CancelledPackage',
+  MissingPackage: 'scanning.packageOutcome.MissingPackage',
+  DamagedPackage: 'scanning.packageOutcome.DamagedPackage',
+  Refused: 'scanning.packageOutcome.Refused',
+  PartialDelivery: 'scanning.packageOutcome.PartialDelivery',
+  NotScannable: 'scanning.packageOutcome.NotScannable',
+  GroupProcessed: 'scanning.packageOutcome.GroupProcessed',
 }
 
 export interface PackageChildScanResult {

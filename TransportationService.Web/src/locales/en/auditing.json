@@ -1,0 +1,27 @@
+{
+  "action": {
+    "Created": "Created",
+    "Updated": "Updated",
+    "Deleted": "Deleted",
+    "Deactivated": "Deactivated",
+    "Reactivated": "Reactivated",
+    "Blocked": "Blocked",
+    "Unblocked": "Unblocked",
+    "Cancelled": "Cancelled",
+    "StatusChanged": "Status changed",
+    "AssignmentChanged": "Assignment changed"
+  },
+  "panel": {
+    "loadFailed": "The history could not be loaded.",
+    "noPermission": "You do not have permission to view the history.",
+    "columns": {
+      "timestamp": "Timestamp",
+      "action": "Action",
+      "changes": "Change"
+    },
+    "before": "Before:",
+    "after": "After:",
+    "empty": "No history for this item yet.",
+    "loading": "Loading history…"
+  }
+}

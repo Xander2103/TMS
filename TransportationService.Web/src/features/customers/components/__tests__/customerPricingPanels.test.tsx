@@ -599,6 +599,7 @@ describe('CustomerPriceAdjustmentsPanel', () => {
         basisFilter: null,
         unitTypeIdFilter: null,
         status: 'Gepland',
+        statusCode: 'Planned' as const,
         reason: 'Indexatie',
         ruleCount: 3,
         createdAt: '2026-08-15T10:00:00Z',
@@ -617,7 +618,7 @@ describe('CustomerPriceAdjustmentsPanel', () => {
       },
     ])
     state.createAdjustment.mockResolvedValue(state.adjustments[0])
-    state.cancelAdjustment.mockResolvedValue({ ...state.adjustments[0], status: 'Geannuleerd' })
+    state.cancelAdjustment.mockResolvedValue({ ...state.adjustments[0], status: 'Geannuleerd', statusCode: 'Cancelled' as const })
   })
 
   it('lists scheduled adjustments with status and cancel action', async () => {

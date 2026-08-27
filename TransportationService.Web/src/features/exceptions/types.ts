@@ -15,18 +15,19 @@ export type ExceptionSeverity = 'Low' | 'Medium' | 'High' | 'Critical'
 
 export type ExecutionExceptionStatus = 'Open' | 'Investigating' | 'Resolved' | 'Rejected' | 'CustomerActionRequired'
 
+/** Vertaalsleutels (i18n-wave): render via t(EXCEPTION_TYPE_LABELS[type]). */
 export const EXCEPTION_TYPE_LABELS: Record<ExecutionExceptionType, string> = {
-  MissingPackage: 'Ontbrekend collo',
-  WrongPackage: 'Verkeerd collo',
-  DamagedPackage: 'Beschadigd collo',
-  RejectedDelivery: 'Levering geweigerd',
-  PartialDelivery: 'Gedeeltelijke levering',
-  AddressIssue: 'Adresprobleem',
-  CustomerUnavailable: 'Klant niet aanwezig',
-  AccessDenied: 'Geen toegang',
-  VehicleIssue: 'Voertuigprobleem',
-  Delay: 'Vertraging',
-  Other: 'Andere',
+  MissingPackage: 'exceptions.type.MissingPackage',
+  WrongPackage: 'exceptions.type.WrongPackage',
+  DamagedPackage: 'exceptions.type.DamagedPackage',
+  RejectedDelivery: 'exceptions.type.RejectedDelivery',
+  PartialDelivery: 'exceptions.type.PartialDelivery',
+  AddressIssue: 'exceptions.type.AddressIssue',
+  CustomerUnavailable: 'exceptions.type.CustomerUnavailable',
+  AccessDenied: 'exceptions.type.AccessDenied',
+  VehicleIssue: 'exceptions.type.VehicleIssue',
+  Delay: 'exceptions.type.Delay',
+  Other: 'exceptions.type.Other',
 }
 
 export const EXCEPTION_TYPES: ExecutionExceptionType[] = [
@@ -44,10 +45,10 @@ export const EXCEPTION_TYPES: ExecutionExceptionType[] = [
 ]
 
 export const EXCEPTION_SEVERITY_LABELS: Record<ExceptionSeverity, string> = {
-  Low: 'Laag',
-  Medium: 'Middel',
-  High: 'Hoog',
-  Critical: 'Kritiek',
+  Low: 'exceptions.severity.Low',
+  Medium: 'exceptions.severity.Medium',
+  High: 'exceptions.severity.High',
+  Critical: 'exceptions.severity.Critical',
 }
 
 export const EXCEPTION_SEVERITY_TONE: Record<ExceptionSeverity, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
@@ -67,11 +68,11 @@ export const EXCEPTION_SEVERITY_ICONS: Record<ExceptionSeverity, string> = {
 export const EXCEPTION_SEVERITIES: ExceptionSeverity[] = ['Low', 'Medium', 'High', 'Critical']
 
 export const EXCEPTION_STATUS_LABELS: Record<ExecutionExceptionStatus, string> = {
-  Open: 'Open',
-  Investigating: 'In onderzoek',
-  Resolved: 'Opgelost',
-  Rejected: 'Afgewezen',
-  CustomerActionRequired: 'Actie klant vereist',
+  Open: 'exceptions.status.Open',
+  Investigating: 'exceptions.status.Investigating',
+  Resolved: 'exceptions.status.Resolved',
+  Rejected: 'exceptions.status.Rejected',
+  CustomerActionRequired: 'exceptions.status.CustomerActionRequired',
 }
 
 export const EXCEPTION_STATUS_TONE: Record<ExecutionExceptionStatus, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {

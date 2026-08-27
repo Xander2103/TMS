@@ -4,6 +4,7 @@ import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { TabPanel, Tabs, type TabItem } from '../../../components/ui/Tabs'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { DashboardTab } from '../components/DashboardTab'
 import { MessagesTab } from '../components/MessagesTab'
 import { PartnersTab } from '../components/PartnersTab'
@@ -22,6 +23,7 @@ type TabId = (typeof TAB_IDS)[number]
  * caller lacks the permission its endpoints need.
  */
 export function EdiPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -31,18 +33,21 @@ export function EdiPage() {
   const canRetry = hasPermission('edi.retry') || canManage
 
   const tabs: TabItem[] = useMemo(() => {
-    const list: TabItem[] = [{ id: 'dashboard', label: 'Dashboard' }, { id: 'berichten', label: 'Berichten' }]
+    const list: TabItem[] = [
+      { id: 'dashboard', label: t('edi.page.tabDashboard') },
+      { id: 'berichten', label: t('edi.page.tabMessages') },
+    ]
     if (canManage) {
-      list.push({ id: 'handelspartners', label: 'Handelspartners' })
-      list.push({ id: 'mappings', label: 'Mappings' })
+      list.push({ id: 'handelspartners', label: t('edi.page.tabPartners') })
+      list.push({ id: 'mappings', label: t('edi.page.tabMappings') })
     }
-    if (canTest) list.push({ id: 'testen', label: 'Testen' })
+    if (canTest) list.push({ id: 'testen', label: t('edi.page.tabTest') })
     return list
-  }, [canManage, canTest])
+  }, [canManage, canTest, t])
 
   const requestedTab = searchParams.get('tab')
   const tab: TabId =
-    TAB_IDS.includes(requestedTab as TabId) && tabs.some((t) => t.id === requestedTab)
+    TAB_IDS.includes(requestedTab as TabId) && tabs.some((item) => item.id === requestedTab)
       ? (requestedTab as TabId)
       : 'dashboard'
 
@@ -51,15 +56,15 @@ export function EdiPage() {
   }
 
   if (!canView) {
-    return <p className="placeholder-text">Je hebt geen rechten om EDI te bekijken.</p>
+    return <p className="placeholder-text">{t('edi.page.noAccess')}</p>
   }
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'EDI' }]} />
+      <Breadcrumbs items={[{ label: t('edi.page.title') }]} />
       <PageHeader
-        title="EDI"
-        subtitle="Inkomende orders en uitgaande statussen per handelspartner — generiek JSON-profiel; partnerformaten volgen zodra er een specificatie is."
+        title={t('edi.page.title')}
+        subtitle={t('edi.page.subtitle')}
       />
 
       <Tabs tabs={tabs} activeId={tab} onChange={setTab} />

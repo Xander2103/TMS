@@ -2,26 +2,29 @@ export type InspectionType = 'VehicleInspection' | 'TrailerInspection' | 'CraneI
 export type InspectionResult = 'Passed' | 'PassedWithRemarks' | 'Failed'
 export type InspectionUrgency = 'Ok' | 'DueSoon' | 'Overdue' | 'Completed'
 
+/** i18n-keys (maintenance.insp.type.*) — render via t(INSPECTION_TYPE_LABELS[x]). */
 export const INSPECTION_TYPE_LABELS: Record<InspectionType, string> = {
-  VehicleInspection: 'Technische keuring (voertuig)',
-  TrailerInspection: 'Keuring oplegger',
-  CraneInspection: 'Kraankeuring',
-  Other: 'Overig',
+  VehicleInspection: 'maintenance.insp.type.VehicleInspection',
+  TrailerInspection: 'maintenance.insp.type.TrailerInspection',
+  CraneInspection: 'maintenance.insp.type.CraneInspection',
+  Other: 'maintenance.insp.type.Other',
 }
 
 export const INSPECTION_TYPES = Object.keys(INSPECTION_TYPE_LABELS) as InspectionType[]
 
+/** i18n-keys (maintenance.insp.result.*) — render via t(INSPECTION_RESULT_LABELS[x]). */
 export const INSPECTION_RESULT_LABELS: Record<InspectionResult, string> = {
-  Passed: 'Goedgekeurd',
-  PassedWithRemarks: 'Goedgekeurd met opmerkingen',
-  Failed: 'Afgekeurd',
+  Passed: 'maintenance.insp.result.Passed',
+  PassedWithRemarks: 'maintenance.insp.result.PassedWithRemarks',
+  Failed: 'maintenance.insp.result.Failed',
 }
 
+/** i18n-keys (maintenance.insp.urgency.*) — render via t(INSPECTION_URGENCY_LABELS[x]). */
 export const INSPECTION_URGENCY_LABELS: Record<InspectionUrgency, string> = {
-  Ok: 'Gepland',
-  DueSoon: 'Binnenkort',
-  Overdue: 'Te laat',
-  Completed: 'Uitgevoerd',
+  Ok: 'maintenance.insp.urgency.Ok',
+  DueSoon: 'maintenance.insp.urgency.DueSoon',
+  Overdue: 'maintenance.insp.urgency.Overdue',
+  Completed: 'maintenance.insp.urgency.Completed',
 }
 
 export interface Inspection {
@@ -55,6 +58,10 @@ export interface CompleteInspectionInput {
   notes: string | null
 }
 
+/**
+ * Display name: either the custom name (data) or a translation KEY. Callers render via
+ * t(inspectionDisplayName(inspection)) — t() echoes unknown keys, so custom names pass through.
+ */
 export function inspectionDisplayName(inspection: Pick<Inspection, 'inspectionType' | 'customTypeName'>): string {
   return inspection.inspectionType === 'Other' && inspection.customTypeName
     ? inspection.customTypeName

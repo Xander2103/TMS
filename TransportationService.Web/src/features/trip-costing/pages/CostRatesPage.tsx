@@ -7,7 +7,8 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { ApiError } from '../../../api/apiClient'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { euro } from '../../invoices/types'
 import {
   createCostRateSet,
@@ -20,28 +21,28 @@ import '../components/trip-costing.css'
 
 interface RateField {
   key: keyof CostRateSetInput
-  label: string
-  hint?: string
+  labelKey: string
+  hintKey?: string
   step?: string
 }
 
 const RATE_FIELDS: RateField[] = [
-  { key: 'fuelPricePerLitre', label: 'Brandstofprijs (€/l)', step: '0.001' },
-  { key: 'defaultConsumptionLPer100Km', label: 'Standaardverbruik (l/100km)', hint: 'Gebruikt als het voertuig geen normverbruik heeft.', step: '0.1' },
-  { key: 'vehicleCostPerKm', label: 'Voertuigkost (€/km)', step: '0.01' },
-  { key: 'vehicleCostPerHour', label: 'Voertuigkost (€/uur)', step: '0.01' },
-  { key: 'driverCostPerHour', label: 'Chauffeursloon (€/uur)', step: '0.01' },
-  { key: 'employerCostMultiplier', label: 'Werkgeverslastenfactor', hint: 'Bijv. 1,35 = loon + 35% lasten.', step: '0.01' },
-  { key: 'maintenanceCostPerKm', label: 'Onderhoud (€/km)', step: '0.001' },
-  { key: 'depreciationPerDay', label: 'Afschrijving (€/dag)', step: '0.01' },
-  { key: 'trailerCostPerDay', label: 'Oplegger (€/dag)', step: '0.01' },
-  { key: 'equipmentCostPerDay', label: 'Uitrusting kraan/koeling (€/dag)', step: '0.01' },
-  { key: 'defaultTollPerTrip', label: 'Standaard tol per rit (€)', step: '0.01' },
-  { key: 'overtimeThresholdMinutesPerDay', label: 'Overurengrens (min/dag)', hint: '480 = 8 uur.', step: '1' },
-  { key: 'overtimeRateMultiplier', label: 'Overurenfactor', hint: 'Bijv. 1,5 = 150% van het uurloon.', step: '0.01' },
-  { key: 'waitingTimeCostPerHour', label: 'Wachttijd (€/uur)', step: '0.01' },
-  { key: 'co2KgPerLitreDiesel', label: 'CO₂ diesel (kg/l)', step: '0.001' },
-  { key: 'co2KgPerLitreOther', label: 'CO₂ benzine/overig (kg/l)', step: '0.001' },
+  { key: 'fuelPricePerLitre', labelKey: 'tripCosting.rates.fields.fuelPricePerLitre', step: '0.001' },
+  { key: 'defaultConsumptionLPer100Km', labelKey: 'tripCosting.rates.fields.defaultConsumptionLPer100Km', hintKey: 'tripCosting.rates.fields.defaultConsumptionLPer100KmHint', step: '0.1' },
+  { key: 'vehicleCostPerKm', labelKey: 'tripCosting.rates.fields.vehicleCostPerKm', step: '0.01' },
+  { key: 'vehicleCostPerHour', labelKey: 'tripCosting.rates.fields.vehicleCostPerHour', step: '0.01' },
+  { key: 'driverCostPerHour', labelKey: 'tripCosting.rates.fields.driverCostPerHour', step: '0.01' },
+  { key: 'employerCostMultiplier', labelKey: 'tripCosting.rates.fields.employerCostMultiplier', hintKey: 'tripCosting.rates.fields.employerCostMultiplierHint', step: '0.01' },
+  { key: 'maintenanceCostPerKm', labelKey: 'tripCosting.rates.fields.maintenanceCostPerKm', step: '0.001' },
+  { key: 'depreciationPerDay', labelKey: 'tripCosting.rates.fields.depreciationPerDay', step: '0.01' },
+  { key: 'trailerCostPerDay', labelKey: 'tripCosting.rates.fields.trailerCostPerDay', step: '0.01' },
+  { key: 'equipmentCostPerDay', labelKey: 'tripCosting.rates.fields.equipmentCostPerDay', step: '0.01' },
+  { key: 'defaultTollPerTrip', labelKey: 'tripCosting.rates.fields.defaultTollPerTrip', step: '0.01' },
+  { key: 'overtimeThresholdMinutesPerDay', labelKey: 'tripCosting.rates.fields.overtimeThresholdMinutesPerDay', hintKey: 'tripCosting.rates.fields.overtimeThresholdMinutesPerDayHint', step: '1' },
+  { key: 'overtimeRateMultiplier', labelKey: 'tripCosting.rates.fields.overtimeRateMultiplier', hintKey: 'tripCosting.rates.fields.overtimeRateMultiplierHint', step: '0.01' },
+  { key: 'waitingTimeCostPerHour', labelKey: 'tripCosting.rates.fields.waitingTimeCostPerHour', step: '0.01' },
+  { key: 'co2KgPerLitreDiesel', labelKey: 'tripCosting.rates.fields.co2KgPerLitreDiesel', step: '0.001' },
+  { key: 'co2KgPerLitreOther', labelKey: 'tripCosting.rates.fields.co2KgPerLitreOther', step: '0.001' },
 ]
 
 const EMPTY_INPUT: CostRateSetInput = {
@@ -70,12 +71,14 @@ const EMPTY_INPUT: CostRateSetInput = {
  * affects calculations from its effective date onwards.
  */
 export function CostRatesPage() {
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('trip_costs.manage')
 
   const [sets, setSets] = useState<CostRateSet[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [reloadToken, setReloadToken] = useState(0)
 
   const [editorOpen, setEditorOpen] = useState(false)
@@ -90,10 +93,10 @@ export function CostRatesPage() {
       .then((data) => {
         if (!mounted) return
         setSets(data)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('De tarieven konden niet worden geladen.')
+        if (mounted) setLoadErrorKey('tripCosting.rates.loadFailed')
       })
     return () => {
       mounted = false
@@ -117,22 +120,22 @@ export function CostRatesPage() {
   async function submit(event: FormEvent) {
     event.preventDefault()
     if (!form.effectiveFrom) {
-      showError('Een ingangsdatum is verplicht.')
+      showError(t('tripCosting.rates.effectiveFromRequired'))
       return
     }
     setBusy(true)
     try {
       if (editing) {
         await updateCostRateSet(editing.id, form)
-        showSuccess('Tarievenset bijgewerkt.')
+        showSuccess(t('tripCosting.rates.toasts.updated'))
       } else {
         await createCostRateSet(form)
-        showSuccess('Tarievenset aangemaakt.')
+        showSuccess(t('tripCosting.rates.toasts.created'))
       }
       setEditorOpen(false)
       setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(err instanceof ApiError ? err.message : 'De tarievenset kon niet worden opgeslagen.')
+      showError(localizeApiError(t, err, t('tripCosting.rates.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -143,35 +146,33 @@ export function CostRatesPage() {
     setForm((current) => ({ ...current, [key]: Number.isNaN(value) ? 0 : value }))
   }
 
-  if (loadError) return <p className="placeholder-text">{loadError}</p>
+  if (loadErrorKey) return <p className="placeholder-text">{t(loadErrorKey)}</p>
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Kostentarieven' }]} />
+      <Breadcrumbs items={[{ label: t('tripCosting.rates.title') }]} />
       <PageHeader
-        title="Kostentarieven"
-        subtitle="Tarievensets met ingangsdatum voeden de ritkostencalculatie. Historische ritten behouden hun berekende snapshots."
-        action={canManage && <Button onClick={openCreate}>Nieuwe tarievenset</Button>}
+        title={t('tripCosting.rates.title')}
+        subtitle={t('tripCosting.rates.subtitle')}
+        action={canManage && <Button onClick={openCreate}>{t('tripCosting.rates.newSet')}</Button>}
       />
 
-      {sets === null && <p className="placeholder-text">Tarieven laden…</p>}
+      {sets === null && <p className="placeholder-text">{t('tripCosting.rates.loading')}</p>}
       {sets !== null && sets.length === 0 && (
-        <p className="placeholder-text">
-          Nog geen tarievenset. Zonder tarieven worden er geen ritkosten berekend.
-        </p>
+        <p className="placeholder-text">{t('tripCosting.rates.empty')}</p>
       )}
       {sets !== null && sets.length > 0 && (
         <table className="tc-table">
           <thead>
             <tr>
-              <th>Ingangsdatum</th>
-              <th>Naam</th>
-              <th className="tc-num">Brandstof €/l</th>
-              <th className="tc-num">Chauffeur €/u</th>
-              <th className="tc-num">Voertuig €/km</th>
-              <th className="tc-num">Voertuig €/u</th>
-              <th className="tc-num">Afschrijving €/dag</th>
-              {canManage && <th aria-label="Acties" />}
+              <th>{t('tripCosting.rates.table.effectiveFrom')}</th>
+              <th>{t('tripCosting.rates.table.name')}</th>
+              <th className="tc-num">{t('tripCosting.rates.table.fuel')}</th>
+              <th className="tc-num">{t('tripCosting.rates.table.driver')}</th>
+              <th className="tc-num">{t('tripCosting.rates.table.vehicleKm')}</th>
+              <th className="tc-num">{t('tripCosting.rates.table.vehicleHour')}</th>
+              <th className="tc-num">{t('tripCosting.rates.table.depreciation')}</th>
+              {canManage && <th aria-label={t('tripCosting.rates.table.actions')} />}
             </tr>
           </thead>
           <tbody>
@@ -187,10 +188,10 @@ export function CostRatesPage() {
                 {canManage && (
                   <td className="tc-row-actions">
                     <button type="button" className="tc-link-button" onClick={() => openEdit(set)}>
-                      Bewerken
+                      {t('ui.actions.edit')}
                     </button>
                     <button type="button" className="tc-link-button tc-danger" onClick={() => setDeleteTarget(set)}>
-                      Verwijderen
+                      {t('ui.actions.delete')}
                     </button>
                   </td>
                 )}
@@ -202,23 +203,25 @@ export function CostRatesPage() {
 
       {editorOpen && (
         <Modal
-          title={editing ? `Tarievenset bewerken — vanaf ${editing.effectiveFrom}` : 'Nieuwe tarievenset'}
+          title={editing
+            ? t('tripCosting.rates.editor.editTitle', { date: editing.effectiveFrom })
+            : t('tripCosting.rates.newSet')}
           onClose={() => setEditorOpen(false)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setEditorOpen(false)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="cr-form" disabled={busy}>
-                {busy ? 'Bezig…' : 'Opslaan'}
+                {busy ? t('tripCosting.rates.editor.busy') : t('ui.actions.save')}
               </Button>
             </>
           }
         >
           <form id="cr-form" className="tc-form" onSubmit={submit} noValidate>
             <div className="tc-form-row">
-              <FormField label="Ingangsdatum" htmlFor="cr-effective" required hint="Ritten vanaf deze datum gebruiken deze tarieven.">
+              <FormField label={t('tripCosting.rates.editor.effectiveFrom')} htmlFor="cr-effective" required hint={t('tripCosting.rates.editor.effectiveFromHint')}>
                 <input
                   id="cr-effective"
                   type="date"
@@ -227,7 +230,7 @@ export function CostRatesPage() {
                   disabled={busy}
                 />
               </FormField>
-              <FormField label="Naam" htmlFor="cr-name">
+              <FormField label={t('tripCosting.rates.editor.name')} htmlFor="cr-name">
                 <input
                   id="cr-name"
                   value={form.name ?? ''}
@@ -239,7 +242,7 @@ export function CostRatesPage() {
             </div>
             <div className="tc-form-row">
               {RATE_FIELDS.map((field) => (
-                <FormField key={field.key} label={field.label} htmlFor={`cr-${field.key}`} hint={field.hint}>
+                <FormField key={field.key} label={t(field.labelKey)} htmlFor={`cr-${field.key}`} hint={field.hintKey ? t(field.hintKey) : undefined}>
                   <input
                     id={`cr-${field.key}`}
                     type="number"
@@ -258,20 +261,20 @@ export function CostRatesPage() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Tarievenset verwijderen"
-          message={`Tarievenset vanaf ${deleteTarget.effectiveFrom} verwijderen? Reeds berekende ritkosten blijven ongewijzigd.`}
-          confirmLabel="Verwijderen"
+          title={t('tripCosting.rates.deleteDialog.title')}
+          message={t('tripCosting.rates.deleteDialog.message', { date: deleteTarget.effectiveFrom })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={busy}
           onConfirm={async () => {
             setBusy(true)
             try {
               await deleteCostRateSet(deleteTarget.id)
-              showSuccess('Tarievenset verwijderd.')
+              showSuccess(t('tripCosting.rates.toasts.deleted'))
               setDeleteTarget(null)
               setReloadToken((token) => token + 1)
-            } catch {
-              showError('De tarievenset kon niet worden verwijderd.')
+            } catch (err) {
+              showError(localizeApiError(t, err, t('tripCosting.rates.deleteFailed')))
             } finally {
               setBusy(false)
             }

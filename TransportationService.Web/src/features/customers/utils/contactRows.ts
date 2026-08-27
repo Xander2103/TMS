@@ -86,7 +86,8 @@ export function payloadIndexByKey(rows: ContactRow[]): Map<string, number> {
 /**
  * Client-side validation, keyed by backend-style paths (`contacts[i].field`): names are
  * required on every filled row; at most one primary per type — the SECOND row of a type
- * gets the error on its checkbox.
+ * gets the error on its checkbox. Values are translation KEYS (customers.contactValidation.*);
+ * callers render via t(key).
  */
 export function validateContactRows(rows: ContactRow[]): Record<string, string> {
   const errors: Record<string, string> = {}
@@ -95,11 +96,11 @@ export function validateContactRows(rows: ContactRow[]): Record<string, string> 
   for (const row of rows) {
     const index = indexByKey.get(row.key)
     if (index === undefined) continue
-    if (!row.firstName.trim()) errors[`contacts[${index}].firstName`] = 'Voornaam van de contactpersoon is verplicht.'
-    if (!row.lastName.trim()) errors[`contacts[${index}].lastName`] = 'Achternaam van de contactpersoon is verplicht.'
+    if (!row.firstName.trim()) errors[`contacts[${index}].firstName`] = 'customers.contactValidation.firstNameRequired'
+    if (!row.lastName.trim()) errors[`contacts[${index}].lastName`] = 'customers.contactValidation.lastNameRequired'
     if (row.isPrimary) {
       if (primaryTypes.has(row.contactType)) {
-        errors[`contacts[${index}].isPrimary`] = 'Er is al een primaire contactpersoon van dit type.'
+        errors[`contacts[${index}].isPrimary`] = 'customers.contactValidation.duplicatePrimary'
       } else {
         primaryTypes.add(row.contactType)
       }

@@ -6,7 +6,9 @@ import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale, type TranslateFn } from '../../../i18n/localeContext'
+import { formatInteger } from '../../../utils/numbers'
 import { createMaintenancePolicy, deleteMaintenancePolicy, getEffectivePolicies } from '../api/maintenancePoliciesApi'
 import { POLICY_KIND_LABELS, type EffectivePolicies, type EffectivePolicy, type FleetAssetKind, type MaintenancePolicyKind } from '../types'
 import './maintenance-policy-summary.css'
@@ -24,11 +26,11 @@ interface OverrideDraft {
   description: string
 }
 
-function intervalText(policy: EffectivePolicy): string {
+function intervalText(t: TranslateFn, policy: EffectivePolicy): string {
   const parts: string[] = []
-  if (policy.intervalMonths !== null) parts.push(`elke ${policy.intervalMonths} maanden`)
-  if (policy.intervalKm !== null) parts.push(`elke ${policy.intervalKm.toLocaleString('nl-BE')} km`)
-  return parts.join(' of ') || '—'
+  if (policy.intervalMonths !== null) parts.push(t('maintenance.policy.everyMonths', { months: policy.intervalMonths }))
+  if (policy.intervalKm !== null) parts.push(t('maintenance.policy.everyKm', { km: formatInteger(policy.intervalKm) }))
+  return parts.join(` ${t('maintenance.policy.or')} `) || '—'
 }
 
 /**
@@ -39,6 +41,7 @@ function intervalText(policy: EffectivePolicy): string {
  */
 export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePolicySummaryProps) {
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('maintenance_policies.manage')
 
@@ -55,8 +58,8 @@ export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePoli
         setEffective(data)
         setLoadError(null)
       })
-      .catch(() => setLoadError('Onderhoudsbeleid kon niet worden geladen.'))
-  }, [assetKind, assetId])
+      .catch(() => setLoadError(t('maintenance.policy.loadFailed')))
+  }, [assetKind, assetId, t])
 
   useEffect(() => {
     reload()
@@ -68,7 +71,7 @@ export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePoli
     const months = draft.intervalMonths.trim() === '' ? null : Number(draft.intervalMonths)
     const km = draft.intervalKm.trim() === '' ? null : Number(draft.intervalKm)
     if (months === null && km === null) {
-      setDraftError('Geef een interval in maanden en/of kilometers op.')
+      setDraftError(t('maintenance.policy.intervalRequired'))
       return
     }
     setBusy(true)
@@ -85,11 +88,11 @@ export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePoli
         description: draft.description.trim() || null,
         isActive: true,
       })
-      showSuccess('Specifieke regel ingesteld.')
+      showSuccess(t('maintenance.policy.overrideSet'))
       setDraft(null)
       reload()
     } catch (err) {
-      setDraftError(describeApiError(err, 'De regel kon niet worden opgeslagen.').message)
+      setDraftError(localizeApiError(t, err, t('maintenance.policy.overrideSaveFailed')))
     } finally {
       setBusy(false)
     }
@@ -102,17 +105,17 @@ export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePoli
     setBusy(true)
     try {
       await deleteMaintenancePolicy(target.policyId)
-      showSuccess('De categorie-/bedrijfsstandaard geldt opnieuw.')
+      showSuccess(t('maintenance.policy.inheritedAgain'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De regel kon niet worden verwijderd.').message)
+      showError(localizeApiError(t, err, t('maintenance.policy.deleteFailed')))
     } finally {
       setBusy(false)
     }
   }
 
   if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (!effective) return <p className="placeholder-text">Onderhoudsbeleid laden…</p>
+  if (!effective) return <p className="placeholder-text">{t('maintenance.policy.loading')}</p>
 
   const rows: { kind: MaintenancePolicyKind; policy: EffectivePolicy | null }[] = [
     { kind: 'Maintenance', policy: effective.maintenance },
@@ -124,22 +127,22 @@ export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePoli
       {rows.map(({ kind, policy }) => (
         <div key={kind} className="policy-summary-row">
           <div className="policy-summary-main">
-            <strong>{POLICY_KIND_LABELS[kind]}</strong>
+            <strong>{t(POLICY_KIND_LABELS[kind])}</strong>
             {policy ? (
               <>
-                <span>{intervalText(policy)}</span>
+                <span>{intervalText(t, policy)}</span>
                 <Badge tone={policy.level === 'Asset' ? 'info' : 'neutral'}>{policy.sourceLabel}</Badge>
                 {policy.description && <span className="customer-form-muted">{policy.description}</span>}
               </>
             ) : (
-              <span className="customer-form-muted">Geen regel geconfigureerd.</span>
+              <span className="customer-form-muted">{t('maintenance.policy.noRule')}</span>
             )}
           </div>
           {canManage && (
             <div className="policy-summary-actions">
               {policy?.level === 'Asset' ? (
                 <Button variant="secondary" onClick={() => setResetTarget(policy)} disabled={busy}>
-                  Gebruik opnieuw categorie-/bedrijfsstandaard
+                  {t('maintenance.policy.useInherited')}
                 </Button>
               ) : (
                 <Button
@@ -150,7 +153,7 @@ export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePoli
                   }}
                   disabled={busy}
                 >
-                  Afwijkende regel instellen
+                  {t('maintenance.policy.setOverride')}
                 </Button>
               )}
             </div>
@@ -158,22 +161,21 @@ export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePoli
         </div>
       ))}
       <p className="customer-form-muted">
-        Voorrang: specifieke regel voor {assetKind === 'Vehicle' ? 'voertuig' : 'oplegger'} → categorieregel →
-        bedrijfsstandaard. Een categorie- of bedrijfsregel overschrijft nooit een specifieke regel.
+        {t('maintenance.policy.precedence', { asset: t(`maintenance.policy.assetLower.${assetKind}`) })}
       </p>
 
       {draft && (
         <Modal
-          title={`Afwijkende ${POLICY_KIND_LABELS[draft.kind].toLowerCase()}sregel`}
+          title={t(`maintenance.policy.overrideTitle.${draft.kind}`)}
           onClose={() => setDraft(null)}
           busy={busy}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDraft(null)} disabled={busy}>
-                Annuleren
+                {t('ui.actions.cancel')}
               </Button>
               <Button type="submit" form="policy-override-form" disabled={busy}>
-                Opslaan
+                {t('ui.actions.save')}
               </Button>
             </>
           }
@@ -184,18 +186,18 @@ export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePoli
                 {draftError}
               </div>
             )}
-            <FormField label="Interval (maanden)" htmlFor="ovr-months">
+            <FormField label={t('maintenance.policy.intervalMonths')} htmlFor="ovr-months">
               <input id="ovr-months" type="number" min={1} value={draft.intervalMonths} onChange={(e) => setDraft((d) => (d ? { ...d, intervalMonths: e.target.value } : d))} />
             </FormField>
             {assetKind === 'Vehicle' && (
-              <FormField label="Interval (km)" htmlFor="ovr-km" hint="Optioneel; wat eerst komt geldt.">
+              <FormField label={t('maintenance.policy.intervalKm')} htmlFor="ovr-km" hint={t('maintenance.policy.intervalKmHint')}>
                 <input id="ovr-km" type="number" min={1} value={draft.intervalKm} onChange={(e) => setDraft((d) => (d ? { ...d, intervalKm: e.target.value } : d))} />
               </FormField>
             )}
-            <FormField label="Waarschuwing (dagen vooraf)" htmlFor="ovr-warning">
+            <FormField label={t('maintenance.policy.warningDaysBefore')} htmlFor="ovr-warning">
               <input id="ovr-warning" type="number" min={0} max={365} value={draft.warningDays} onChange={(e) => setDraft((d) => (d ? { ...d, warningDays: e.target.value } : d))} />
             </FormField>
-            <FormField label="Omschrijving" htmlFor="ovr-desc">
+            <FormField label={t('maintenance.policy.description')} htmlFor="ovr-desc">
               <input id="ovr-desc" value={draft.description} onChange={(e) => setDraft((d) => (d ? { ...d, description: e.target.value } : d))} maxLength={300} />
             </FormField>
           </form>
@@ -204,9 +206,9 @@ export function MaintenancePolicySummary({ assetKind, assetId }: MaintenancePoli
 
       {resetTarget && (
         <ConfirmDialog
-          title="Specifieke regel verwijderen"
-          message="De specifieke regel wordt verwijderd; daarna geldt opnieuw de categorie- of bedrijfsstandaard."
-          confirmLabel="Verwijderen"
+          title={t('maintenance.policy.resetTitle')}
+          message={t('maintenance.policy.resetMessage')}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={resetToInherited}
           onCancel={() => setResetTarget(null)}

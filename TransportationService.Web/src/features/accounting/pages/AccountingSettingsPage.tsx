@@ -8,7 +8,8 @@ import { Modal } from '../../../components/ui/Modal'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
-import { describeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
+import { localizeApiError } from '../../../api/problemDetails'
 import {
   createLedgerAccount,
   createSalesCategory,
@@ -51,13 +52,15 @@ interface CategoryDraft {
  */
 export function AccountingSettingsPage() {
   const { hasPermission } = useAuth()
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const canManage = hasPermission('accounting.manage')
   const canView = hasPermission('accounting.view') || canManage
 
   const [accounts, setAccounts] = useState<LedgerAccount[] | null>(null)
   const [categories, setCategories] = useState<SalesCategory[] | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  // Vertaalsleutel in state; vertaling gebeurt pas bij render.
+  const [loadErrorKey, setLoadErrorKey] = useState<string | null>(null)
   const [accountDraft, setAccountDraft] = useState<AccountDraft | null>(null)
   const [categoryDraft, setCategoryDraft] = useState<CategoryDraft | null>(null)
   const [draftError, setDraftError] = useState<string | null>(null)
@@ -70,18 +73,18 @@ export function AccountingSettingsPage() {
       .then(([accountData, categoryData]) => {
         setAccounts(accountData)
         setCategories(categoryData)
-        setLoadError(null)
+        setLoadErrorKey(null)
       })
-      .catch(() => setLoadError('De boekhoudinstellingen konden niet worden geladen.'))
+      .catch(() => setLoadErrorKey('accounting.page.loadFailed'))
   }, [canView])
 
   useEffect(() => {
     reload()
   }, [reload])
 
-  if (!canView) return <p className="placeholder-text">Je hebt geen rechten om de boekhoudinstellingen te bekijken.</p>
-  if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (accounts === null || categories === null) return <p className="placeholder-text">Boekhouding laden…</p>
+  if (!canView) return <p className="placeholder-text">{t('accounting.page.noViewPermission')}</p>
+  if (loadErrorKey) return <p className="placeholder-text">{t(loadErrorKey)}</p>
+  if (accounts === null || categories === null) return <p className="placeholder-text">{t('accounting.page.loading')}</p>
 
   const activeAccounts = accounts.filter((a) => a.isActive)
   const unmapped = categories.filter((c) => c.isActive && c.ledgerAccountId === null)
@@ -96,10 +99,10 @@ export function AccountingSettingsPage() {
         isActive: category.isActive,
         sortOrder: category.sortOrder,
       })
-      showSuccess(`Grootboekrekening voor '${category.name}' bijgewerkt.`)
+      showSuccess(t('accounting.categories.mappingUpdated', { name: category.name }))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De mapping kon niet worden opgeslagen.').message)
+      showError(localizeApiError(t, err, t('accounting.categories.mappingSaveFailed')))
     }
   }
 
@@ -118,15 +121,15 @@ export function AccountingSettingsPage() {
       }
       if (accountDraft.account) {
         await updateLedgerAccount(accountDraft.account.id, input)
-        showSuccess('Grootboekrekening bijgewerkt.')
+        showSuccess(t('accounting.accounts.updated'))
       } else {
         await createLedgerAccount(input)
-        showSuccess('Grootboekrekening toegevoegd.')
+        showSuccess(t('accounting.accounts.created'))
       }
       setAccountDraft(null)
       reload()
     } catch (err) {
-      setDraftError(describeApiError(err, 'De grootboekrekening kon niet worden opgeslagen.').message)
+      setDraftError(localizeApiError(t, err, t('accounting.accounts.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -151,15 +154,15 @@ export function AccountingSettingsPage() {
       }
       if (categoryDraft.category) {
         await updateSalesCategory(categoryDraft.category.id, input)
-        showSuccess('Verkoopcategorie bijgewerkt.')
+        showSuccess(t('accounting.categories.updated'))
       } else {
         await createSalesCategory(input)
-        showSuccess('Verkoopcategorie toegevoegd.')
+        showSuccess(t('accounting.categories.created'))
       }
       setCategoryDraft(null)
       reload()
     } catch (err) {
-      setDraftError(describeApiError(err, 'De verkoopcategorie kon niet worden opgeslagen.').message)
+      setDraftError(localizeApiError(t, err, t('accounting.categories.saveFailed')))
     } finally {
       setBusy(false)
     }
@@ -167,23 +170,18 @@ export function AccountingSettingsPage() {
 
   return (
     <div>
-      <Breadcrumbs items={[{ label: 'Instellingen', to: '/settings' }, { label: 'Boekhouding' }]} />
-      <PageHeader
-        title="Boekhouding"
-        subtitle="Grootboekrekeningen en de koppeling per verkoopcategorie. Factuurlijnen bevriezen de rekening bij het versturen — latere wijzigingen raken bestaande facturen nooit."
-      />
+      <Breadcrumbs items={[{ label: t('navigation.menu.settings'), to: '/settings' }, { label: t('navigation.menu.accounting') }]} />
+      <PageHeader title={t('navigation.menu.accounting')} subtitle={t('accounting.page.subtitle')} />
 
       {unmapped.length > 0 && (
         <div className="accounting-warning" role="alert">
-          Geen grootboekrekening ingesteld voor{' '}
-          {unmapped.map((c) => `'${c.name}'`).join(', ')}. Kies hieronder een rekening per categorie —
-          zonder mapping kan de boekhoudexport deze lijnen niet meenemen.
+          {t('accounting.page.unmappedWarning', { names: unmapped.map((c) => `'${c.name}'`).join(', ') })}
         </div>
       )}
 
       <section className="accounting-card">
         <div className="accounting-card-head">
-          <h3>Verkoopcategorieën</h3>
+          <h3>{t('accounting.categories.title')}</h3>
           {canManage && (
             <Button variant="secondary" onClick={() => {
               setDraftError(null)
@@ -192,33 +190,33 @@ export function AccountingSettingsPage() {
                 invoiceDescriptionNl: '', defaultUnitCode: '', vatCategoryOverride: '',
               })
             }}>
-              + Verkoopcategorie
+              {t('accounting.categories.add')}
             </Button>
           )}
         </div>
         <table className="issued-items-table">
           <thead>
             <tr>
-              <th>Verkoopcategorie</th>
-              <th>Gebruik</th>
-              <th>Grootboekrekening</th>
-              <th>Status</th>
-              {canManage && <th aria-label="Acties" />}
+              <th>{t('accounting.categories.colCategory')}</th>
+              <th>{t('accounting.categories.colUsage')}</th>
+              <th>{t('accounting.categories.colLedgerAccount')}</th>
+              <th>{t('accounting.categories.colStatus')}</th>
+              {canManage && <th aria-label={t('accounting.page.actionsColumn')} />}
             </tr>
           </thead>
           <tbody>
             {categories.map((category) => (
               <tr key={category.id}>
                 <td>{category.name}</td>
-                <td className="customer-form-muted">{SYSTEM_ROLE_LABELS[category.systemRole]}</td>
+                <td className="customer-form-muted">{t(SYSTEM_ROLE_LABELS[category.systemRole])}</td>
                 <td>
                   {canManage ? (
                     <select
-                      aria-label={`Grootboekrekening voor ${category.name}`}
+                      aria-label={t('accounting.categories.mappingSelectLabel', { name: category.name })}
                       value={category.ledgerAccountId ?? ''}
                       onChange={(e) => void changeMapping(category, e.target.value || null)}
                     >
-                      <option value="">— Geen —</option>
+                      <option value="">{t('accounting.categories.noAccountOption')}</option>
                       {activeAccounts.map((account) => (
                         <option key={account.id} value={account.id}>
                           {account.accountNumber} — {account.name}
@@ -226,7 +224,10 @@ export function AccountingSettingsPage() {
                       ))}
                       {category.ledgerAccountId && !activeAccounts.some((a) => a.id === category.ledgerAccountId) && (
                         <option value={category.ledgerAccountId}>
-                          {category.ledgerAccountNumber} — {category.ledgerAccountName} (inactief)
+                          {t('accounting.categories.inactiveAccountOption', {
+                            number: category.ledgerAccountNumber ?? '',
+                            name: category.ledgerAccountName ?? '',
+                          })}
                         </option>
                       )}
                     </select>
@@ -239,12 +240,12 @@ export function AccountingSettingsPage() {
                 <td>
                   {category.isActive ? (
                     category.ledgerAccountId ? (
-                      <Badge tone="success">Gekoppeld</Badge>
+                      <Badge tone="success">{t('accounting.categories.badgeMapped')}</Badge>
                     ) : (
-                      <Badge tone="warning">Geen rekening</Badge>
+                      <Badge tone="warning">{t('accounting.categories.badgeNoAccount')}</Badge>
                     )
                   ) : (
-                    <Badge tone="neutral">Inactief</Badge>
+                    <Badge tone="neutral">{t('accounting.categories.badgeInactive')}</Badge>
                   )}
                 </td>
                 {canManage && (
@@ -266,7 +267,7 @@ export function AccountingSettingsPage() {
                         })
                       }}
                     >
-                      Bewerken
+                      {t('ui.actions.edit')}
                     </button>
                   </td>
                 )}
@@ -278,30 +279,28 @@ export function AccountingSettingsPage() {
 
       <section className="accounting-card">
         <div className="accounting-card-head">
-          <h3>Grootboekrekeningen</h3>
+          <h3>{t('accounting.accounts.title')}</h3>
           {canManage && (
             <Button variant="secondary" onClick={() => {
               setDraftError(null)
               setAccountDraft({ account: null, accountNumber: '', name: '', externalCode: '', description: '', isActive: true })
             }}>
-              + Grootboekrekening
+              {t('accounting.accounts.add')}
             </Button>
           )}
         </div>
         {accounts.length === 0 && (
-          <p className="placeholder-text">
-            Nog geen grootboekrekeningen. Voeg de rekeningen van jouw boekhoudpakket toe (bv. 700000 — Transportopbrengsten).
-          </p>
+          <p className="placeholder-text">{t('accounting.accounts.empty')}</p>
         )}
         {accounts.length > 0 && (
           <table className="issued-items-table">
             <thead>
               <tr>
-                <th>Nummer</th>
-                <th>Naam</th>
-                <th>Externe code</th>
-                <th>Status</th>
-                {canManage && <th aria-label="Acties" />}
+                <th>{t('accounting.accounts.colNumber')}</th>
+                <th>{t('accounting.accounts.colName')}</th>
+                <th>{t('accounting.accounts.colExternalCode')}</th>
+                <th>{t('accounting.accounts.colStatus')}</th>
+                {canManage && <th aria-label={t('accounting.page.actionsColumn')} />}
               </tr>
             </thead>
             <tbody>
@@ -311,7 +310,9 @@ export function AccountingSettingsPage() {
                   <td>{account.name}</td>
                   <td>{account.externalCode ?? '—'}</td>
                   <td>
-                    <Badge tone={account.isActive ? 'success' : 'neutral'}>{account.isActive ? 'Actief' : 'Inactief'}</Badge>
+                    <Badge tone={account.isActive ? 'success' : 'neutral'}>
+                      {account.isActive ? t('ui.statusBadges.active') : t('ui.statusBadges.inactive')}
+                    </Badge>
                   </td>
                   {canManage && (
                     <td className="issued-items-row-actions">
@@ -330,14 +331,14 @@ export function AccountingSettingsPage() {
                           })
                         }}
                       >
-                        Bewerken
+                        {t('ui.actions.edit')}
                       </button>
                       <button
                         type="button"
                         className="issued-items-link issued-items-link-danger"
                         onClick={() => setDeleteTarget(account)}
                       >
-                        Verwijderen
+                        {t('ui.actions.delete')}
                       </button>
                     </td>
                   )}
@@ -350,38 +351,42 @@ export function AccountingSettingsPage() {
 
       {accountDraft && (
         <Modal
-          title={accountDraft.account ? `Grootboekrekening bewerken — ${accountDraft.account.accountNumber}` : 'Grootboekrekening toevoegen'}
+          title={
+            accountDraft.account
+              ? t('accounting.accounts.editTitle', { number: accountDraft.account.accountNumber })
+              : t('accounting.accounts.addTitle')
+          }
           onClose={() => setAccountDraft(null)}
           busy={busy}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setAccountDraft(null)} disabled={busy}>Annuleren</Button>
-              <Button type="submit" form="ledger-account-form" disabled={busy}>Opslaan</Button>
+              <Button variant="secondary" onClick={() => setAccountDraft(null)} disabled={busy}>{t('ui.actions.cancel')}</Button>
+              <Button type="submit" form="ledger-account-form" disabled={busy}>{t('ui.actions.save')}</Button>
             </>
           }
         >
           <form id="ledger-account-form" onSubmit={submitAccount} noValidate>
             {draftError && <div role="alert" className="issued-items-form-error">{draftError}</div>}
-            <FormField label="Rekeningnummer" htmlFor="la-number" required hint="bv. 700000">
+            <FormField label={t('accounting.accounts.numberLabel')} htmlFor="la-number" required hint={t('accounting.accounts.numberHint')}>
               <input id="la-number" value={accountDraft.accountNumber} maxLength={30}
                 onChange={(e) => setAccountDraft((d) => (d ? { ...d, accountNumber: e.target.value } : d))} />
             </FormField>
-            <FormField label="Naam" htmlFor="la-name" required hint="bv. Transportopbrengsten">
+            <FormField label={t('accounting.accounts.nameLabel')} htmlFor="la-name" required hint={t('accounting.accounts.nameHint')}>
               <input id="la-name" value={accountDraft.name} maxLength={200}
                 onChange={(e) => setAccountDraft((d) => (d ? { ...d, name: e.target.value } : d))} />
             </FormField>
-            <FormField label="Externe code (boekhoudpakket)" htmlFor="la-external">
+            <FormField label={t('accounting.accounts.externalCodeLabel')} htmlFor="la-external">
               <input id="la-external" value={accountDraft.externalCode} maxLength={50}
                 onChange={(e) => setAccountDraft((d) => (d ? { ...d, externalCode: e.target.value } : d))} />
             </FormField>
-            <FormField label="Omschrijving" htmlFor="la-description">
+            <FormField label={t('accounting.accounts.descriptionLabel')} htmlFor="la-description">
               <input id="la-description" value={accountDraft.description} maxLength={1000}
                 onChange={(e) => setAccountDraft((d) => (d ? { ...d, description: e.target.value } : d))} />
             </FormField>
             <label className="tof-checkbox">
               <input type="checkbox" checked={accountDraft.isActive}
                 onChange={(e) => setAccountDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />
-              Actief (toewijsbaar aan categorieën)
+              {t('accounting.accounts.activeLabel')}
             </label>
           </form>
         </Modal>
@@ -389,66 +394,70 @@ export function AccountingSettingsPage() {
 
       {categoryDraft && (
         <Modal
-          title={categoryDraft.category ? `Verkoopcategorie bewerken — ${categoryDraft.category.name}` : 'Verkoopcategorie toevoegen'}
+          title={
+            categoryDraft.category
+              ? t('accounting.categories.editTitle', { name: categoryDraft.category.name })
+              : t('accounting.categories.addTitle')
+          }
           onClose={() => setCategoryDraft(null)}
           busy={busy}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setCategoryDraft(null)} disabled={busy}>Annuleren</Button>
-              <Button type="submit" form="sales-category-form" disabled={busy}>Opslaan</Button>
+              <Button variant="secondary" onClick={() => setCategoryDraft(null)} disabled={busy}>{t('ui.actions.cancel')}</Button>
+              <Button type="submit" form="sales-category-form" disabled={busy}>{t('ui.actions.save')}</Button>
             </>
           }
         >
           <form id="sales-category-form" onSubmit={submitCategory} noValidate>
             {draftError && <div role="alert" className="issued-items-form-error">{draftError}</div>}
-            <FormField label="Code" htmlFor="sc-code" required hint="bv. EUROPALLETS">
+            <FormField label={t('accounting.categories.codeLabel')} htmlFor="sc-code" required hint={t('accounting.categories.codeHint')}>
               <input id="sc-code" value={categoryDraft.code} maxLength={50}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, code: e.target.value } : d))} />
             </FormField>
-            <FormField label="Naam" htmlFor="sc-name" required>
+            <FormField label={t('accounting.categories.nameLabel')} htmlFor="sc-name" required>
               <input id="sc-name" value={categoryDraft.name} maxLength={200}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, name: e.target.value } : d))} />
             </FormField>
             <FormField
-              label="Gebruik"
+              label={t('accounting.categories.usageLabel')}
               htmlFor="sc-role"
-              hint="Automatische rollen bepalen welke factuurlijnen deze categorie vanzelf krijgen; per rol kan er maar één actieve categorie zijn."
+              hint={t('accounting.categories.usageHint')}
             >
               <select id="sc-role" value={categoryDraft.systemRole}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, systemRole: e.target.value as SalesCategorySystemRole } : d))}>
-                {Object.entries(SYSTEM_ROLE_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
+                {Object.entries(SYSTEM_ROLE_LABELS).map(([value, labelKey]) => (
+                  <option key={value} value={value}>{t(labelKey)}</option>
                 ))}
               </select>
             </FormField>
-            <FormField label="Factuuromschrijving" htmlFor="sc-invoice-desc" hint="Leeg = de naam van de categorie.">
+            <FormField label={t('accounting.categories.invoiceDescriptionLabel')} htmlFor="sc-invoice-desc" hint={t('accounting.categories.invoiceDescriptionHint')}>
               <input id="sc-invoice-desc" value={categoryDraft.invoiceDescriptionNl} maxLength={300}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, invoiceDescriptionNl: e.target.value } : d))} />
             </FormField>
-            <FormField label="Standaard eenheid" htmlFor="sc-unit" hint="UN/ECE-code voor handmatige factuurlijnen met deze code, bv. C62, HUR, KGM.">
+            <FormField label={t('accounting.categories.defaultUnitLabel')} htmlFor="sc-unit" hint={t('accounting.categories.defaultUnitHint')}>
               <input id="sc-unit" value={categoryDraft.defaultUnitCode} maxLength={10}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, defaultUnitCode: e.target.value } : d))} />
             </FormField>
             <FormField
-              label="Btw-categorie (afwijking)"
+              label={t('accounting.categories.vatOverrideLabel')}
               htmlFor="sc-vat"
-              hint="Dwingt de UNCL5305-btw-categorie voor lijnen met deze code af; leeg = de btw-regeling van de klant beslist (de norm)."
+              hint={t('accounting.categories.vatOverrideHint')}
             >
               <select id="sc-vat" value={categoryDraft.vatCategoryOverride}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, vatCategoryOverride: e.target.value } : d))}>
-                <option value="">— Geen (btw-regeling klant) —</option>
-                <option value="S">S — Standaardtarief</option>
-                <option value="Z">Z — Nultarief</option>
-                <option value="E">E — Vrijgesteld</option>
-                <option value="AE">AE — Btw verlegd</option>
-                <option value="K">K — Intracommunautair</option>
-                <option value="G">G — Export buiten EU</option>
+                <option value="">{t('accounting.vatCategory.none')}</option>
+                <option value="S">{t('accounting.vatCategory.S')}</option>
+                <option value="Z">{t('accounting.vatCategory.Z')}</option>
+                <option value="E">{t('accounting.vatCategory.E')}</option>
+                <option value="AE">{t('accounting.vatCategory.AE')}</option>
+                <option value="K">{t('accounting.vatCategory.K')}</option>
+                <option value="G">{t('accounting.vatCategory.G')}</option>
               </select>
             </FormField>
             <label className="tof-checkbox">
               <input type="checkbox" checked={categoryDraft.isActive}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />
-              Actief
+              {t('accounting.categories.activeLabel')}
             </label>
           </form>
         </Modal>
@@ -456,19 +465,19 @@ export function AccountingSettingsPage() {
 
       {deleteTarget && (
         <ConfirmDialog
-          title="Grootboekrekening verwijderen"
-          message={`Weet je zeker dat je '${deleteTarget.accountNumber} — ${deleteTarget.name}' wilt verwijderen? Een rekening die in gebruik is, kan alleen gedeactiveerd worden.`}
-          confirmLabel="Verwijderen"
+          title={t('accounting.accounts.deleteTitle')}
+          message={t('accounting.accounts.deleteMessage', { number: deleteTarget.accountNumber, name: deleteTarget.name })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           onConfirm={async () => {
             const target = deleteTarget
             setDeleteTarget(null)
             try {
               await deleteLedgerAccount(target.id)
-              showSuccess('Grootboekrekening verwijderd.')
+              showSuccess(t('accounting.accounts.deleted'))
               reload()
             } catch (err) {
-              showError(describeApiError(err, 'De grootboekrekening kon niet worden verwijderd.').message)
+              showError(localizeApiError(t, err, t('accounting.accounts.deleteFailed')))
             }
           }}
           onCancel={() => setDeleteTarget(null)}

@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { CustomerCommunicationPanel } from '../components/CustomerCommunicationPanel'
 import { communicationTypeLabel, type CustomerCommunicationRule, type CustomerContact } from '../types'
+import { DEFAULT_LOCALE_VALUE } from '../../../i18n/localeContext'
+
+// Nederlandse default-vertaler: labels blijven byte-identiek aan de pre-i18n teksten.
+const t = DEFAULT_LOCALE_VALUE.t
 
 const auth = vi.hoisted(() => ({ permissions: ['customers.view'] }))
 
@@ -67,17 +71,17 @@ function makeRule(overrides: Partial<CustomerCommunicationRule>): CustomerCommun
 
 describe('communicationTypeLabel', () => {
   it('returns the static label for known types', () => {
-    expect(communicationTypeLabel('Invoice', null)).toBe('Factuur')
-    expect(communicationTypeLabel('PlanningAlert', null)).toBe('Planningsmeldingen')
+    expect(communicationTypeLabel(t, 'Invoice', null)).toBe('Factuur')
+    expect(communicationTypeLabel(t, 'PlanningAlert', null)).toBe('Planningsmeldingen')
   })
 
   it('appends the custom label for the Other type', () => {
-    expect(communicationTypeLabel('Other', 'Speciale melding')).toBe('Andere: Speciale melding')
+    expect(communicationTypeLabel(t, 'Other', 'Speciale melding')).toBe('Andere: Speciale melding')
   })
 
   it('falls back to the generic Other label when no custom label is set', () => {
-    expect(communicationTypeLabel('Other', null)).toBe('Andere')
-    expect(communicationTypeLabel('Other', '   ')).toBe('Andere')
+    expect(communicationTypeLabel(t, 'Other', null)).toBe('Andere')
+    expect(communicationTypeLabel(t, 'Other', '   ')).toBe('Andere')
   })
 })
 

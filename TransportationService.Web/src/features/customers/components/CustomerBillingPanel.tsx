@@ -8,6 +8,7 @@ import { Modal } from '../../../components/ui/Modal'
 import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, type FieldErrors } from '../../../api/problemDetails'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import {
   addPoNumber,
   deletePoNumber,
@@ -19,10 +20,10 @@ import {
 } from '../api/customerBillingConfigApi'
 import { parsePercent, validateSurchargeForm, type SurchargeFormErrors } from '../utils/billingConfig'
 import {
-  DIESEL_BASIS_LABELS,
-  DIESEL_PRESENTATION_LABELS,
-  DIESEL_ROUNDING_LABELS,
-  PO_POLICY_LABELS,
+  DIESEL_BASIS_LABEL_KEYS,
+  DIESEL_PRESENTATION_LABEL_KEYS,
+  DIESEL_ROUNDING_LABEL_KEYS,
+  PO_POLICY_LABEL_KEYS,
   type CustomerDieselSurcharge,
   type CustomerPoNumber,
   type CustomerPoPolicy,
@@ -52,6 +53,7 @@ export function CustomerBillingPanel({ customerId }: CustomerBillingPanelProps) 
 
 function DieselSurchargeSection({ customerId }: { customerId: string }) {
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('customers.manage_surcharge')
 
@@ -85,7 +87,7 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
         setLoadError(null)
       })
       .catch(() => {
-        if (mounted) setLoadError('De dieseltoeslag kon niet worden geladen.')
+        if (mounted) setLoadError(t('customers.billing.dieselLoadFailed'))
       })
       .finally(() => {
         if (mounted) setLoading(false)
@@ -93,11 +95,16 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
     return () => {
       mounted = false
     }
-  }, [customerId])
+  }, [customerId, t])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    const validation = validateSurchargeForm({ percent, effectiveFrom, effectiveUntil })
+    // validateSurchargeForm levert vertaalsleutels; hier vertaald voor weergave.
+    const validationKeys = validateSurchargeForm({ percent, effectiveFrom, effectiveUntil })
+    const validation: SurchargeFormErrors = {
+      percent: validationKeys.percent ? t(validationKeys.percent) : undefined,
+      effectiveUntil: validationKeys.effectiveUntil ? t(validationKeys.effectiveUntil) : undefined,
+    }
     setErrors(validation)
     if (validation.percent || validation.effectiveUntil) return
 
@@ -116,9 +123,9 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
       const saved = await saveDieselSurcharge(customerId, payload)
       setEnabled(saved.enabled)
       setPercent(saved.percent ? String(saved.percent) : '')
-      toast.showSuccess('Dieseltoeslag opgeslagen.')
+      toast.showSuccess(t('customers.billing.dieselSaved'))
     } catch (err) {
-      toast.showError(describeApiError(err, 'De dieseltoeslag kon niet worden opgeslagen.').message)
+      toast.showError(describeApiError(err, t('customers.billing.dieselSaveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -128,9 +135,9 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
 
   return (
     <section className="customer-billing-section">
-      <h3>Dieseltoeslag</h3>
+      <h3>{t('customers.billing.dieselTitle')}</h3>
       {loading ? (
-        <p className="customer-form-muted">Laden…</p>
+        <p className="customer-form-muted">{t('customers.common.loading')}</p>
       ) : loadError ? (
         <p className="customer-import-message customer-import-message-error" role="alert">
           {loadError}
@@ -138,65 +145,65 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
       ) : (
         <form className="customer-form" onSubmit={handleSubmit}>
           {!canManage && (
-            <p className="customer-form-muted">Alleen-lezen — recht “dieseltoeslag beheren” vereist om te wijzigen.</p>
+            <p className="customer-form-muted">{t('customers.billing.readOnlyHint')}</p>
           )}
           <label className="customer-form-checkbox">
             <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} disabled={disabled} />
-            Actief
+            {t('ui.statusBadges.active')}
           </label>
           <div className="customer-billing-grid">
-            <FormField label="Percentage (%)" htmlFor="ds-percent" error={errors.percent}>
+            <FormField label={t('customers.billing.percentField')} htmlFor="ds-percent" error={errors.percent}>
               <input
                 id="ds-percent"
                 value={percent}
                 onChange={(e) => setPercent(e.target.value)}
                 inputMode="decimal"
-                placeholder="bv. 3,5"
+                placeholder={t('customers.billing.percentPlaceholder')}
                 disabled={disabled}
                 aria-invalid={errors.percent ? 'true' : undefined}
               />
             </FormField>
-            <FormField label="Basis" htmlFor="ds-basis">
+            <FormField label={t('customers.billing.basisField')} htmlFor="ds-basis">
               <select id="ds-basis" value={basis} onChange={(e) => setBasis(e.target.value as DieselSurchargeBasis)} disabled={disabled}>
-                {Object.entries(DIESEL_BASIS_LABELS).map(([value, label]) => (
+                {Object.entries(DIESEL_BASIS_LABEL_KEYS).map(([value, labelKey]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(labelKey)}
                   </option>
                 ))}
               </select>
             </FormField>
-            <FormField label="Weergave" htmlFor="ds-presentation">
+            <FormField label={t('customers.billing.presentationField')} htmlFor="ds-presentation">
               <select
                 id="ds-presentation"
                 value={presentation}
                 onChange={(e) => setPresentation(e.target.value as DieselSurchargePresentation)}
                 disabled={disabled}
               >
-                {Object.entries(DIESEL_PRESENTATION_LABELS).map(([value, label]) => (
+                {Object.entries(DIESEL_PRESENTATION_LABEL_KEYS).map(([value, labelKey]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(labelKey)}
                   </option>
                 ))}
               </select>
             </FormField>
-            <FormField label="Afronding" htmlFor="ds-rounding">
+            <FormField label={t('customers.billing.roundingField')} htmlFor="ds-rounding">
               <select
                 id="ds-rounding"
                 value={rounding}
                 onChange={(e) => setRounding(e.target.value as DieselSurchargeRounding)}
                 disabled={disabled}
               >
-                {Object.entries(DIESEL_ROUNDING_LABELS).map(([value, label]) => (
+                {Object.entries(DIESEL_ROUNDING_LABEL_KEYS).map(([value, labelKey]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {t(labelKey)}
                   </option>
                 ))}
               </select>
             </FormField>
-            <FormField label="Geldig van" htmlFor="ds-from">
+            <FormField label={t('customers.billing.validFrom')} htmlFor="ds-from">
               <input id="ds-from" type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} disabled={disabled} />
             </FormField>
-            <FormField label="Geldig tot" htmlFor="ds-until" error={errors.effectiveUntil}>
+            <FormField label={t('customers.billing.validUntil')} htmlFor="ds-until" error={errors.effectiveUntil}>
               <input
                 id="ds-until"
                 type="date"
@@ -208,9 +215,9 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
             </FormField>
           </div>
           <FormField
-            label="Formule-omschrijving"
+            label={t('customers.billing.formulaField')}
             htmlFor="ds-formula"
-            hint="Documentatie; de berekening gebeurt als percentage over de basis."
+            hint={t('customers.billing.formulaHint')}
           >
             <textarea
               id="ds-formula"
@@ -224,7 +231,7 @@ function DieselSurchargeSection({ customerId }: { customerId: string }) {
           {canManage && (
             <div className="customer-form-actions">
               <Button type="submit" disabled={disabled}>
-                {busy ? 'Opslaan…' : 'Opslaan'}
+                {busy ? t('customers.common.savingEllipsis') : t('ui.actions.save')}
               </Button>
             </div>
           )}
@@ -240,6 +247,7 @@ type PoDialogState = { mode: 'create' } | { mode: 'edit'; po: CustomerPoNumber }
 
 function PoPolicySection({ customerId }: { customerId: string }) {
   const toast = useToast()
+  const { t } = useLocale()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('customers.manage_po')
 
@@ -255,8 +263,8 @@ function PoPolicySection({ customerId }: { customerId: string }) {
         setData(result)
         setLoadError(null)
       })
-      .catch(() => setLoadError('Het PO-beleid kon niet worden geladen.'))
-  }, [customerId])
+      .catch(() => setLoadError(t('customers.billing.poLoadFailed')))
+  }, [customerId, t])
 
   useEffect(() => {
     reload()
@@ -267,9 +275,9 @@ function PoPolicySection({ customerId }: { customerId: string }) {
     try {
       const result = await setPoPolicy(customerId, policy)
       setData(result)
-      toast.showSuccess('PO-beleid opgeslagen.')
+      toast.showSuccess(t('customers.billing.poPolicySaved'))
     } catch (err) {
-      toast.showError(describeApiError(err, 'Het PO-beleid kon niet worden opgeslagen.').message)
+      toast.showError(describeApiError(err, t('customers.billing.poPolicySaveFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -283,11 +291,11 @@ function PoPolicySection({ customerId }: { customerId: string }) {
         ? await updatePoNumber(customerId, dialog.po.id, input)
         : await addPoNumber(customerId, input)
       setData(result)
-      toast.showSuccess(dialog.mode === 'edit' ? 'PO-nummer bijgewerkt.' : 'PO-nummer toegevoegd.')
+      toast.showSuccess(dialog.mode === 'edit' ? t('customers.billing.poUpdated') : t('customers.billing.poAdded'))
       setDialog(null)
       return { ok: true }
     } catch (err) {
-      const described = describeApiError(err, 'Het PO-nummer kon niet worden opgeslagen.')
+      const described = describeApiError(err, t('customers.billing.poSaveFailed'))
       return { ok: false, error: described.message, fieldErrors: described.fieldErrors }
     } finally {
       setBusy(false)
@@ -295,27 +303,27 @@ function PoPolicySection({ customerId }: { customerId: string }) {
   }
 
   const columns: Column<CustomerPoNumber>[] = [
-    { key: 'poNumber', header: 'PO-nummer', render: (po) => po.poNumber },
-    { key: 'validFrom', header: 'Geldig van', render: (po) => po.validFrom },
-    { key: 'validUntil', header: 'Geldig tot', render: (po) => po.validUntil ?? '—' },
+    { key: 'poNumber', header: t('customers.billing.poNumberColumn'), render: (po) => po.poNumber },
+    { key: 'validFrom', header: t('customers.billing.validFrom'), render: (po) => po.validFrom },
+    { key: 'validUntil', header: t('customers.billing.validUntil'), render: (po) => po.validUntil ?? '—' },
     {
       key: 'active',
-      header: 'Actief nu',
-      render: (po) => (po.isEffectiveToday ? <Badge tone="success">Actief nu</Badge> : '—'),
+      header: t('customers.billing.activeNow'),
+      render: (po) => (po.isEffectiveToday ? <Badge tone="success">{t('customers.billing.activeNow')}</Badge> : '—'),
     },
-    { key: 'notes', header: 'Notities', render: (po) => po.notes ?? '—' },
+    { key: 'notes', header: t('customers.billing.notesColumn'), render: (po) => po.notes ?? '—' },
     ...(canManage
       ? [
           {
             key: 'actions',
-            header: 'Acties',
+            header: t('customers.billing.actionsColumn'),
             render: (po: CustomerPoNumber) => (
               <span className="customer-contact-actions">
                 <Button variant="ghost" onClick={() => setDialog({ mode: 'edit', po })}>
-                  Bewerken
+                  {t('ui.actions.edit')}
                 </Button>
                 <Button variant="ghost" onClick={() => setRemoveTarget(po)}>
-                  Verwijderen
+                  {t('ui.actions.delete')}
                 </Button>
               </span>
             ),
@@ -327,10 +335,10 @@ function PoPolicySection({ customerId }: { customerId: string }) {
   return (
     <section className="customer-billing-section">
       <div className="page-header">
-        <h3 style={{ margin: 0 }}>PO-beleid</h3>
+        <h3 style={{ margin: 0 }}>{t('customers.billing.poTitle')}</h3>
         {canManage && (
           <Button variant="secondary" onClick={() => setDialog({ mode: 'create' })}>
-            + PO-nummer toevoegen
+            {t('customers.billing.addPoNumber')}
           </Button>
         )}
       </div>
@@ -342,9 +350,9 @@ function PoPolicySection({ customerId }: { customerId: string }) {
       ) : (
         <>
           <FormField
-            label="Beleid"
+            label={t('customers.billing.policyField')}
             htmlFor="po-policy"
-            hint="Bij 'Verplicht' kan een factuur zonder PO-nummer niet worden verzonden."
+            hint={t('customers.billing.policyHint')}
           >
             <select
               id="po-policy"
@@ -352,21 +360,21 @@ function PoPolicySection({ customerId }: { customerId: string }) {
               onChange={(e) => void handlePolicyChange(e.target.value as PurchaseOrderPolicy)}
               disabled={!canManage || busy || data === null}
             >
-              {Object.entries(PO_POLICY_LABELS).map(([value, label]) => (
+              {Object.entries(PO_POLICY_LABEL_KEYS).map(([value, labelKey]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(labelKey)}
                 </option>
               ))}
             </select>
           </FormField>
 
-          <h4 className="customer-billing-subtitle">PO-historiek</h4>
+          <h4 className="customer-billing-subtitle">{t('customers.billing.poHistoryTitle')}</h4>
           <DataTable
             columns={columns}
             rows={data?.history ?? []}
             rowKey={(po) => po.id}
             isLoading={data === null}
-            emptyMessage="Nog geen PO-nummers geregistreerd."
+            emptyMessage={t('customers.billing.poEmpty')}
           />
         </>
       )}
@@ -382,20 +390,20 @@ function PoPolicySection({ customerId }: { customerId: string }) {
 
       {removeTarget && (
         <ConfirmDialog
-          title="PO-nummer verwijderen"
-          message={`PO-nummer '${removeTarget.poNumber}' verwijderen?`}
-          confirmLabel="Verwijderen"
+          title={t('customers.billing.poRemoveTitle')}
+          message={t('customers.billing.poRemoveMessage', { number: removeTarget.poNumber })}
+          confirmLabel={t('ui.actions.delete')}
           destructive
           busy={busy}
           onConfirm={async () => {
             setBusy(true)
             try {
               await deletePoNumber(customerId, removeTarget.id)
-              toast.showSuccess('PO-nummer verwijderd.')
+              toast.showSuccess(t('customers.billing.poRemoved'))
               setRemoveTarget(null)
               reload()
             } catch (err) {
-              toast.showError(describeApiError(err, 'Het PO-nummer kon niet worden verwijderd.').message)
+              toast.showError(describeApiError(err, t('customers.billing.poRemoveFailed')).message)
             } finally {
               setBusy(false)
             }
@@ -418,6 +426,7 @@ function PoNumberDialog({
   onSubmit: (input: SaveCustomerPoNumberInput) => Promise<{ ok: boolean; error?: string; fieldErrors?: FieldErrors }>
   onClose: () => void
 }) {
+  const { t } = useLocale()
   const [poNumber, setPoNumber] = useState(po?.poNumber ?? '')
   const [validFrom, setValidFrom] = useState(po?.validFrom ?? new Date().toISOString().slice(0, 10))
   const [validUntil, setValidUntil] = useState(po?.validUntil ?? '')
@@ -426,14 +435,14 @@ function PoNumberDialog({
   const [serverError, setServerError] = useState<string | null>(null)
   const [serverFieldErrors, setServerFieldErrors] = useState<FieldErrors>({})
 
-  const title = useMemo(() => (po ? 'PO-nummer bewerken' : 'Nieuw PO-nummer'), [po])
+  const title = useMemo(() => (po ? t('customers.billing.poEditTitle') : t('customers.billing.poNewTitle')), [po, t])
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
     const next: { poNumber?: string; validFrom?: string; validUntil?: string } = {}
-    if (!poNumber.trim()) next.poNumber = 'Een PO-nummer is verplicht.'
-    if (!validFrom) next.validFrom = 'Een begindatum is verplicht.'
-    if (validFrom && validUntil && validUntil < validFrom) next.validUntil = 'De einddatum ligt vóór de begindatum.'
+    if (!poNumber.trim()) next.poNumber = t('customers.billing.poNumberRequired')
+    if (!validFrom) next.validFrom = t('customers.billing.startDateRequired')
+    if (validFrom && validUntil && validUntil < validFrom) next.validUntil = t('customers.billing.endBeforeStart')
     setLocalErrors(next)
     if (next.poNumber || next.validFrom || next.validUntil) return
 
@@ -459,10 +468,10 @@ function PoNumberDialog({
       footer={
         <>
           <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="po-number-form" disabled={isSubmitting}>
-            {isSubmitting ? 'Opslaan…' : 'Opslaan'}
+            {isSubmitting ? t('customers.common.savingEllipsis') : t('ui.actions.save')}
           </Button>
         </>
       }
@@ -473,7 +482,7 @@ function PoNumberDialog({
             {serverError}
           </p>
         )}
-        <FormField label="PO-nummer" htmlFor="po-number" required error={localErrors.poNumber ?? getFieldError(serverFieldErrors, 'poNumber')}>
+        <FormField label={t('customers.billing.poNumberColumn')} htmlFor="po-number" required error={localErrors.poNumber ?? getFieldError(serverFieldErrors, 'poNumber')}>
           <input
             id="po-number"
             value={poNumber}
@@ -482,7 +491,7 @@ function PoNumberDialog({
             aria-invalid={localErrors.poNumber ? 'true' : undefined}
           />
         </FormField>
-        <FormField label="Geldig van" htmlFor="po-from" required error={localErrors.validFrom ?? getFieldError(serverFieldErrors, 'validFrom')}>
+        <FormField label={t('customers.billing.validFrom')} htmlFor="po-from" required error={localErrors.validFrom ?? getFieldError(serverFieldErrors, 'validFrom')}>
           <input
             id="po-from"
             type="date"
@@ -491,7 +500,7 @@ function PoNumberDialog({
             aria-invalid={localErrors.validFrom ? 'true' : undefined}
           />
         </FormField>
-        <FormField label="Geldig tot" htmlFor="po-until" error={localErrors.validUntil ?? getFieldError(serverFieldErrors, 'validUntil')}>
+        <FormField label={t('customers.billing.validUntil')} htmlFor="po-until" error={localErrors.validUntil ?? getFieldError(serverFieldErrors, 'validUntil')}>
           <input
             id="po-until"
             type="date"
@@ -500,7 +509,7 @@ function PoNumberDialog({
             aria-invalid={localErrors.validUntil ? 'true' : undefined}
           />
         </FormField>
-        <FormField label="Notities" htmlFor="po-notes">
+        <FormField label={t('customers.billing.notesColumn')} htmlFor="po-notes">
           <textarea id="po-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} maxLength={500} />
         </FormField>
       </form>

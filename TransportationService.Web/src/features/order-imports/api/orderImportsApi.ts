@@ -1,6 +1,8 @@
 import { ApiError, apiClient } from '../../../api/apiClient'
 import type { PagedResult } from '../../../api/types'
 import { apiBaseUrl } from '../../../config/env'
+import { getActiveLocale } from '../../../i18n/activeLocale'
+import { translate } from '../../../i18n/translations'
 import { getAccessToken } from '../../auth/authStorage'
 
 export interface OrderImportProfile {
@@ -72,7 +74,7 @@ export async function uploadOrderImport(input: {
     body,
   })
   if (!response.ok) {
-    let message = 'De import is mislukt.'
+    let message = translate(getActiveLocale(), 'orderImports.form.uploadFailed')
     try {
       const data = (await response.json()) as { detail?: string; message?: string }
       message = data.detail ?? data.message ?? message

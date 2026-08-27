@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ApiError } from '../../../api/apiClient'
 import { Button } from '../../../components/ui/Button'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
+import { useLocale } from '../../../i18n/localeContext'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { updateTransportOrder } from '../../transport-orders/api/transportOrdersApi'
 import type { TransportOrderDetail } from '../../transport-orders/types'
@@ -31,6 +32,7 @@ interface GoodsDrawerProps {
 
 /** §11 goods drawer: hosts the Phase-6 GoodsSection against ONE linked order (see RouteDrawer). */
 export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
+  const { t } = useLocale()
   const [baseOrder, setBaseOrder] = useState(order)
   const [cargoItems, setCargoItems] = useState<CargoFormRow[]>(() => cargoFromOrder(order))
   const [goodsDescription, setGoodsDescription] = useState(order.goodsDescription ?? '')
@@ -103,7 +105,7 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
     const goodsErrors = validateOrderForm(values).filter((e) => e.section === 'goederen')
     setErrors(fieldErrorMap(goodsErrors))
     if (goodsErrors.length > 0) {
-      setError('Controleer de gemarkeerde goederenlijnen.')
+      setError(t('dossiers.orderDrawer.checkGoods'))
       return
     }
     setSaving(true)
@@ -116,7 +118,7 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
       if (err instanceof ApiError && err.status === 409 && err.body && typeof err.body === 'object' && 'stops' in err.body) {
         setConflict(err.body as TransportOrderDetail)
       } else {
-        setError(err instanceof Error ? err.message : 'De goederen konden niet worden opgeslagen.')
+        setError(err instanceof Error ? err.message : t('dossiers.orderDrawer.goodsSaveFailed'))
       }
     } finally {
       setSaving(false)
@@ -146,12 +148,18 @@ export function GoodsDrawer({ order, onClose, onSaved }: GoodsDrawerProps) {
   }
 
   return (
-    <SectionDrawer title={`Goederen — ${baseOrder.orderNumber}`} dirty={dirty} busy={saving} onClose={onClose} onSave={() => void save()}>
+    <SectionDrawer
+      title={t('dossiers.orderDrawer.goodsTitle', { orderNumber: baseOrder.orderNumber })}
+      dirty={dirty}
+      busy={saving}
+      onClose={onClose}
+      onSave={() => void save()}
+    >
       {conflict && (
         <div className="dossier-conflict-banner" role="alert">
-          <span>⚠ Deze opdracht is intussen gewijzigd door een collega. Uw wijzigingen zijn niet opgeslagen.</span>
+          <span>{t('dossiers.orderDrawer.conflict')}</span>
           <Button variant="secondary" onClick={reloadFromConflict}>
-            Herladen
+            {t('dossiers.orderDrawer.reload')}
           </Button>
         </div>
       )}

@@ -6,14 +6,19 @@ import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { FilterBar } from '../../../components/ui/FilterBar'
 import { Pagination } from '../../../components/ui/Pagination'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { listOutbox, rejectOutboxMessage, releaseOutboxMessage, retryOutboxMessage } from '../api/notificationAdminApi'
 import { kindLabel, type MessageChannel, type OutboxRow, type OutboxStatus } from '../types'
 import { formatDateTime } from '../../../utils/dates'
 
 const PAGE_SIZE = 25
 
-const CHANNEL_LABELS: Record<MessageChannel, string> = { Email: 'E-mail', Sms: 'SMS' }
+/** Translation keys per channel; render via t(CHANNEL_LABELS[channel]). */
+const CHANNEL_LABELS: Record<MessageChannel, string> = {
+  Email: 'notificationAdmin.outbox.channelEmail',
+  Sms: 'notificationAdmin.outbox.channelSms',
+}
 
 /** Routes with a known detail page; other related-entity types render as plain text. */
 const RELATED_ENTITY_ROUTES: Record<string, string> = {
@@ -40,6 +45,7 @@ interface OutboxTabProps {
  * (Status=Failed, with a toggle to Suppressed) and "Wacht op controle"
  * (Status=AwaitingReview) — same filters, different columns. */
 export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTabProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [search, setSearch] = useState('')
   const [channel, setChannel] = useState<MessageChannel | ''>('')
@@ -80,7 +86,7 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
       })
       .catch(() => {
         if (!mounted) return
-        setResult((current) => ({ ...current, error: 'De berichten konden niet worden geladen.', loadedKey: requestKey }))
+        setResult((current) => ({ ...current, error: t('notificationAdmin.outbox.loadFailed'), loadedKey: requestKey }))
       })
     return () => {
       mounted = false
@@ -94,42 +100,42 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
   async function retry(id: string) {
     try {
       await retryOutboxMessage(id)
-      showSuccess('Bericht opnieuw in de wachtrij gezet.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('notificationAdmin.outbox.retried'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'Opnieuw verzenden is mislukt.').message)
+      showError(localizeApiError(t, err, t('notificationAdmin.outbox.retryFailed')))
     }
   }
 
   async function release(id: string) {
     try {
       await releaseOutboxMessage(id)
-      showSuccess('Bericht vrijgegeven — het wordt verzonden.')
-      setReloadToken((t) => t + 1)
+      showSuccess(t('notificationAdmin.outbox.released'))
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'Vrijgeven is mislukt.').message)
+      showError(localizeApiError(t, err, t('notificationAdmin.outbox.releaseFailed')))
     }
   }
 
   async function confirmReject(id: string) {
     try {
       await rejectOutboxMessage(id, rejectReason.trim() || null)
-      showSuccess('Bericht afgewezen — het wordt niet verzonden.')
+      showSuccess(t('notificationAdmin.outbox.rejected'))
       setRejectTargetId(null)
       setRejectReason('')
-      setReloadToken((t) => t + 1)
+      setReloadToken((token) => token + 1)
     } catch (err) {
-      showError(describeApiError(err, 'Afwijzen is mislukt.').message)
+      showError(localizeApiError(t, err, t('notificationAdmin.outbox.rejectFailed')))
     }
   }
 
   const baseColumns: Column<OutboxRow>[] = [
-    { key: 'createdAt', header: 'Datum', render: (r) => formatDateTime(r.createdAt) },
-    { key: 'channel', header: 'Kanaal', render: (r) => CHANNEL_LABELS[r.channel] },
-    { key: 'kind', header: 'Soort', render: (r) => kindLabel(r.kind) },
+    { key: 'createdAt', header: t('notificationAdmin.outbox.columns.date'), render: (r) => formatDateTime(r.createdAt) },
+    { key: 'channel', header: t('notificationAdmin.outbox.columns.channel'), render: (r) => t(CHANNEL_LABELS[r.channel]) },
+    { key: 'kind', header: t('notificationAdmin.outbox.columns.kind'), render: (r) => kindLabel(t, r.kind) },
     {
       key: 'recipient',
-      header: 'Ontvanger',
+      header: t('notificationAdmin.outbox.columns.recipient'),
       render: (r) => (r.recipientName ? `${r.recipientName} · ${r.recipientAddress}` : r.recipientAddress),
     },
   ]
@@ -138,20 +144,20 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
     variant === 'sent'
       ? [
           ...baseColumns,
-          { key: 'subject', header: 'Onderwerp', render: (r) => r.subject ?? '—' },
+          { key: 'subject', header: t('notificationAdmin.outbox.columns.subject'), render: (r) => r.subject ?? '—' },
           {
             key: 'related',
-            header: 'Gekoppelde entiteit',
+            header: t('notificationAdmin.outbox.columns.related'),
             render: (r) => <RelatedEntityCell type={r.relatedEntityType} id={r.relatedEntityId} />,
           },
         ]
       : variant === 'review'
       ? [
           ...baseColumns,
-          { key: 'subject', header: 'Onderwerp', render: (r) => r.subject ?? '—' },
+          { key: 'subject', header: t('notificationAdmin.outbox.columns.subject'), render: (r) => r.subject ?? '—' },
           {
             key: 'related',
-            header: 'Gekoppelde entiteit',
+            header: t('notificationAdmin.outbox.columns.related'),
             render: (r) => <RelatedEntityCell type={r.relatedEntityType} id={r.relatedEntityId} />,
           },
           {
@@ -161,13 +167,13 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
               rejectTargetId === r.id ? (
                 <span className="notification-admin-inline-field">
                   <input
-                    aria-label={`Reden van afwijzing voor ${r.recipientAddress}`}
-                    placeholder="Reden van afwijzing"
+                    aria-label={t('notificationAdmin.outbox.rejectReasonAria', { recipient: r.recipientAddress })}
+                    placeholder={t('notificationAdmin.outbox.rejectReasonPlaceholder')}
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
                   />
                   <Button variant="ghost" onClick={() => void confirmReject(r.id)}>
-                    Bevestig afwijzen
+                    {t('notificationAdmin.outbox.confirmReject')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -176,13 +182,13 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
                       setRejectReason('')
                     }}
                   >
-                    Annuleren
+                    {t('ui.actions.cancel')}
                   </Button>
                 </span>
               ) : (
                 <>
                   <Button variant="ghost" onClick={() => void release(r.id)}>
-                    Vrijgeven
+                    {t('notificationAdmin.outbox.release')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -191,7 +197,7 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
                       setRejectReason('')
                     }}
                   >
-                    Afwijzen
+                    {t('notificationAdmin.outbox.reject')}
                   </Button>
                 </>
               ),
@@ -201,20 +207,20 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
           ...baseColumns,
           {
             key: 'failure',
-            header: 'Foutreden',
+            header: t('notificationAdmin.outbox.columns.failure'),
             render: (r) => (
               <span title={r.failureReason ?? undefined}>
-                {r.failureReason ?? (r.status === 'Suppressed' ? 'Onderdrukt (voorkeur/opt-out)' : '—')}
+                {r.failureReason ?? (r.status === 'Suppressed' ? t('notificationAdmin.outbox.suppressedReason') : '—')}
               </span>
             ),
           },
-          { key: 'attempts', header: 'Pogingen', align: 'right', render: (r) => r.attemptCount },
+          { key: 'attempts', header: t('notificationAdmin.outbox.columns.attempts'), align: 'right', render: (r) => r.attemptCount },
           {
             key: 'actions',
             header: '',
             render: (r) => (
               <Button variant="ghost" onClick={() => void retry(r.id)}>
-                Opnieuw proberen
+                {t('notificationAdmin.outbox.retry')}
               </Button>
             ),
           },
@@ -228,25 +234,25 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
           setSearch(value)
           setPage(1)
         }}
-        searchPlaceholder="Zoeken op ontvanger..."
+        searchPlaceholder={t('notificationAdmin.outbox.searchPlaceholder')}
       >
         <select
           className="ui-filter-select"
-          aria-label="Kanaal"
+          aria-label={t('notificationAdmin.outbox.channelFilter')}
           value={channel}
           onChange={(e) => {
             setChannel(e.target.value as MessageChannel | '')
             setPage(1)
           }}
         >
-          <option value="">Alle kanalen</option>
-          <option value="Email">E-mail</option>
-          <option value="Sms">SMS</option>
+          <option value="">{t('notificationAdmin.outbox.allChannels')}</option>
+          <option value="Email">{t('notificationAdmin.outbox.channelEmail')}</option>
+          <option value="Sms">{t('notificationAdmin.outbox.channelSms')}</option>
         </select>
         <input
           className="ui-filter-select"
-          aria-label="Soort"
-          placeholder="Filter op soort (code)"
+          aria-label={t('notificationAdmin.outbox.kindFilter')}
+          placeholder={t('notificationAdmin.outbox.kindPlaceholder')}
           value={kind}
           onChange={(e) => {
             setKind(e.target.value)
@@ -263,8 +269,8 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
                 setPage(1)
               }}
             />
-            Onderdrukte berichten tonen
-            {suppressedOnly && <Badge tone="neutral">onderdrukt</Badge>}
+            {t('notificationAdmin.outbox.showSuppressed')}
+            {suppressedOnly && <Badge tone="neutral">{t('notificationAdmin.outbox.suppressedBadge')}</Badge>}
           </label>
         )}
       </FilterBar>
@@ -275,7 +281,7 @@ export function OutboxTab({ variant, includeSuppressedToggle = false }: OutboxTa
         rowKey={(r) => r.id}
         isLoading={isLoading}
         error={loadError}
-        emptyMessage="Geen berichten gevonden."
+        emptyMessage={t('notificationAdmin.outbox.empty')}
       />
       <Pagination page={page} pageSize={PAGE_SIZE} totalCount={totalCount} onPageChange={setPage} />
     </div>

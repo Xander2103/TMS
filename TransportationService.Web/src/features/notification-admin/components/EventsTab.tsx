@@ -3,8 +3,10 @@ import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { DataTable, type Column } from '../../../components/ui/DataTable'
 import { useToast } from '../../../components/ui/toastContext'
-import { describeApiError } from '../../../api/problemDetails'
-import { COMMUNICATION_TYPE_LABELS, type CustomerCommunicationType } from '../../customers/types'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
+import type { TranslateFn } from '../../../i18n/localeContext'
+import { COMMUNICATION_TYPE_LABEL_KEYS, type CustomerCommunicationType } from '../../customers/types'
 import { listNotificationRules, updateNotificationRule } from '../api/notificationAdminApi'
 import { RECIPIENT_TYPE_LABELS, type NotificationRule, type RecipientSpec } from '../types'
 import { EventRuleModal } from './EventRuleModal'
@@ -22,21 +24,27 @@ function groupOrder(rules: NotificationRule[]): string[] {
   return order
 }
 
-function recipientChipLabel(spec: RecipientSpec): string {
+function recipientChipLabel(t: TranslateFn, spec: RecipientSpec): string {
   switch (spec.type) {
     case 'CustomerPrimaryContact':
-      return RECIPIENT_TYPE_LABELS.CustomerPrimaryContact
+      return t(RECIPIENT_TYPE_LABELS.CustomerPrimaryContact)
     case 'Driver':
-      return RECIPIENT_TYPE_LABELS.Driver
+      return t(RECIPIENT_TYPE_LABELS.Driver)
     case 'ExplicitEmail':
-      return spec.value ?? RECIPIENT_TYPE_LABELS.ExplicitEmail
+      return spec.value ?? t(RECIPIENT_TYPE_LABELS.ExplicitEmail)
     case 'InternalPermission':
-      return spec.value ? `Recht: ${spec.value}` : RECIPIENT_TYPE_LABELS.InternalPermission
+      return spec.value
+        ? t('notificationAdmin.events.chipPermission', { value: spec.value })
+        : t(RECIPIENT_TYPE_LABELS.InternalPermission)
     case 'InternalRole':
-      return spec.value ? `Rol: ${spec.value}` : RECIPIENT_TYPE_LABELS.InternalRole
+      return spec.value
+        ? t('notificationAdmin.events.chipRole', { value: spec.value })
+        : t(RECIPIENT_TYPE_LABELS.InternalRole)
     case 'CustomerCommunicationRule': {
-      const label = spec.value ? COMMUNICATION_TYPE_LABELS[spec.value as CustomerCommunicationType] : null
-      return label ? `Communicatie: ${label}` : RECIPIENT_TYPE_LABELS.CustomerCommunicationRule
+      const labelKey = spec.value ? COMMUNICATION_TYPE_LABEL_KEYS[spec.value as CustomerCommunicationType] : null
+      return labelKey
+        ? t('notificationAdmin.events.chipCommunication', { label: t(labelKey) })
+        : t(RECIPIENT_TYPE_LABELS.CustomerCommunicationRule)
     }
     default:
       return spec.type
@@ -50,6 +58,7 @@ interface EventsTabProps {
 /** "Gebeurtenissen" tab: every catalog event grouped, with inline channel/active toggles and a
  * recipients editor modal. Peppol-pending events show a badge and cannot be toggled yet. */
 export function EventsTab({ canManage }: EventsTabProps) {
+  const { t } = useLocale()
   const { showSuccess, showError } = useToast()
   const [rules, setRules] = useState<NotificationRule[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -61,8 +70,8 @@ export function EventsTab({ canManage }: EventsTabProps) {
         setRules(data)
         setLoadError(null)
       })
-      .catch(() => setLoadError('De meldingsregels konden niet worden geladen.'))
-  }, [])
+      .catch(() => setLoadError(t('notificationAdmin.events.loadFailed')))
+  }, [t])
 
   useEffect(() => {
     reload()
@@ -83,70 +92,80 @@ export function EventsTab({ canManage }: EventsTabProps) {
         // behaviour stable when another field is toggled, flipping it changes the review hold.
         requiresReview: field === 'requiresReview' ? !rule.requiresReview : rule.requiresReview,
       })
-      showSuccess('Meldingsregel bijgewerkt.')
+      showSuccess(t('notificationAdmin.events.updated'))
       reload()
     } catch (err) {
-      showError(describeApiError(err, 'De meldingsregel kon niet worden bijgewerkt.').message)
+      showError(localizeApiError(t, err, t('notificationAdmin.events.updateFailed')))
     }
   }
 
   if (loadError) return <p className="placeholder-text">{loadError}</p>
-  if (rules === null) return <p className="placeholder-text">Meldingsregels laden…</p>
+  if (rules === null) return <p className="placeholder-text">{t('notificationAdmin.events.loading')}</p>
 
   const groups = groupOrder(rules)
 
   const columns: Column<NotificationRule>[] = [
     {
       key: 'event',
-      header: 'Gebeurtenis',
+      header: t('notificationAdmin.events.columns.event'),
       render: (rule) => (
         <span className="notification-admin-event-label">
           {rule.label}
-          {rule.peppolPending && <Badge tone="warning">Nog niet actief</Badge>}
+          {rule.peppolPending && <Badge tone="warning">{t('notificationAdmin.events.peppolPending')}</Badge>}
         </span>
       ),
     },
     {
       key: 'channels',
-      header: 'Kanalen',
+      header: t('notificationAdmin.events.columns.channels'),
       render: (rule) => (
         <div className="notification-admin-channel-cell">
           <label className="notification-admin-checkbox">
             <input
               type="checkbox"
-              aria-label={`In-app voor ${rule.label}`}
+              aria-label={t('notificationAdmin.events.inAppAria', { label: rule.label })}
               checked={rule.inAppEnabled}
               disabled={!canManage || rule.peppolPending}
               onChange={() => void toggleField(rule, 'inAppEnabled')}
             />
-            In-app
+            {t('notificationAdmin.events.inApp')}
           </label>
           <label className="notification-admin-checkbox">
             <input
               type="checkbox"
-              aria-label={`E-mail voor ${rule.label}`}
+              aria-label={t('notificationAdmin.events.emailAria', { label: rule.label })}
               checked={rule.emailEnabled}
               disabled={!canManage || rule.peppolPending}
               onChange={() => void toggleField(rule, 'emailEnabled')}
             />
-            E-mail
+            {t('notificationAdmin.events.email')}
           </label>
-          <label className="notification-admin-checkbox notification-admin-checkbox-disabled" title="SMS is nog niet beschikbaar">
-            <input type="checkbox" checked={false} disabled aria-label={`SMS voor ${rule.label} (binnenkort)`} />
-            SMS
+          <label
+            className="notification-admin-checkbox notification-admin-checkbox-disabled"
+            title={t('notificationAdmin.events.smsUnavailable')}
+          >
+            <input
+              type="checkbox"
+              checked={false}
+              disabled
+              aria-label={t('notificationAdmin.events.smsAria', { label: rule.label })}
+            />
+            {t('notificationAdmin.events.sms')}
           </label>
         </div>
       ),
     },
     {
       key: 'recipients',
-      header: 'Ontvangers',
+      header: t('notificationAdmin.events.columns.recipients'),
       render: (rule) => (
         <div className="notification-admin-chip-row">
-          {rule.recipients.length === 0 && <span className="notification-admin-muted">Geen</span>}
+          {rule.recipients.length === 0 && (
+            <span className="notification-admin-muted">{t('notificationAdmin.events.noRecipients')}</span>
+          )}
           {rule.recipients.map((r, i) => (
             <Badge key={i} tone="neutral">
-              {recipientChipLabel(r)}
+              {recipientChipLabel(t, r)}
             </Badge>
           ))}
         </div>
@@ -154,12 +173,12 @@ export function EventsTab({ canManage }: EventsTabProps) {
     },
     {
       key: 'requiresReview',
-      header: 'Controle vóór verzenden',
+      header: t('notificationAdmin.events.columns.requiresReview'),
       render: (rule) => (
-        <label className="notification-admin-checkbox" title="Klantmail wordt vastgehouden tot een dispatcher die vrijgeeft (tab 'Wacht op controle').">
+        <label className="notification-admin-checkbox" title={t('notificationAdmin.events.reviewTitle')}>
           <input
             type="checkbox"
-            aria-label={`Controle vóór verzenden: ${rule.label}`}
+            aria-label={t('notificationAdmin.events.reviewAria', { label: rule.label })}
             checked={rule.requiresReview}
             disabled={!canManage || rule.peppolPending}
             onChange={() => void toggleField(rule, 'requiresReview')}
@@ -169,12 +188,12 @@ export function EventsTab({ canManage }: EventsTabProps) {
     },
     {
       key: 'active',
-      header: 'Actief',
+      header: t('notificationAdmin.events.columns.active'),
       render: (rule) => (
         <label className="notification-admin-checkbox">
           <input
             type="checkbox"
-            aria-label={`Actief: ${rule.label}`}
+            aria-label={t('notificationAdmin.events.activeAria', { label: rule.label })}
             checked={rule.enabled}
             disabled={!canManage || rule.peppolPending}
             onChange={() => void toggleField(rule, 'enabled')}
@@ -190,7 +209,7 @@ export function EventsTab({ canManage }: EventsTabProps) {
       header: '',
       render: (rule) => (
         <Button variant="ghost" onClick={() => setEditing(rule)}>
-          Bewerken
+          {t('ui.actions.edit')}
         </Button>
       ),
     })

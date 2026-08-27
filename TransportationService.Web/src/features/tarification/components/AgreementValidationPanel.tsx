@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button } from '../../../components/ui/Button'
-import { describeApiError } from '../../../api/problemDetails'
+import { localizeApiError } from '../../../api/problemDetails'
+import { useLocale } from '../../../i18n/localeContext'
 import { validateAgreementConfiguration, type PricingConfigCheck } from '../api/pricingApi'
 import './pricingTableDetail.css'
 
@@ -15,6 +16,7 @@ interface AgreementValidationPanelProps {
  * Never blocks the rest of the page: a failed check load just shows an inline error, not a crash.
  */
 export function AgreementValidationPanel({ agreementId }: AgreementValidationPanelProps) {
+  const { t } = useLocale()
   const [checks, setChecks] = useState<PricingConfigCheck[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -29,7 +31,7 @@ export function AgreementValidationPanel({ agreementId }: AgreementValidationPan
         setLoadError(null)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLoadError(describeApiError(err, 'De configuratie kon niet worden gecontroleerd.').message)
+        if (!cancelled) setLoadError(localizeApiError(t, err, t('tarification.validation.loadError')))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -37,6 +39,8 @@ export function AgreementValidationPanel({ agreementId }: AgreementValidationPan
     return () => {
       cancelled = true
     }
+    // `t` bewust buiten de deps: een taalwissel hoeft geen nieuwe API-call uit te lokken.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agreementId, reloadToken])
 
   // Loading is flipped here (not inside the effect) so the effect only synchronises with the API.
@@ -48,9 +52,9 @@ export function AgreementValidationPanel({ agreementId }: AgreementValidationPan
   return (
     <div className="pricing-table-validation">
       <div className="pricing-table-validation-header">
-        <h3>Controle</h3>
+        <h3>{t('tarification.validation.title')}</h3>
         <Button variant="secondary" onClick={reload} disabled={loading}>
-          {loading ? 'Bezig…' : 'Controleer configuratie'}
+          {loading ? t('tarification.common.busyEllipsis') : t('tarification.validation.check')}
         </Button>
       </div>
 
@@ -58,7 +62,7 @@ export function AgreementValidationPanel({ agreementId }: AgreementValidationPan
 
       {!loadError && checks !== null && checks.length === 0 && (
         <div className="pricing-table-validation-ok" role="status">
-          Geen problemen gevonden.
+          {t('tarification.validation.ok')}
         </div>
       )}
 

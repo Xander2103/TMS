@@ -1,18 +1,20 @@
 export type TrailerOwnershipType = 'Owned' | 'Rented' | 'Leased'
 export type TrailerOperationalStatus = 'Available' | 'InUse' | 'InMaintenance' | 'OutOfService'
 
+/** i18n-keys (trailers.ownership.*) — render via t(TRAILER_OWNERSHIP_LABELS[x]). */
 export const TRAILER_OWNERSHIP_LABELS: Record<TrailerOwnershipType, string> = {
-  Owned: 'Eigendom',
-  Rented: 'Huur',
-  Leased: 'Lease',
+  Owned: 'trailers.ownership.Owned',
+  Rented: 'trailers.ownership.Rented',
+  Leased: 'trailers.ownership.Leased',
 }
 
 // Deliberately no label "Actief" here — see vehicles/types.ts.
+/** i18n-keys (trailers.status.*) — render via t(TRAILER_STATUS_LABELS[x]). */
 export const TRAILER_STATUS_LABELS: Record<TrailerOperationalStatus, string> = {
-  Available: 'Beschikbaar',
-  InUse: 'In gebruik',
-  InMaintenance: 'In onderhoud',
-  OutOfService: 'Buiten dienst',
+  Available: 'trailers.status.Available',
+  InUse: 'trailers.status.InUse',
+  InMaintenance: 'trailers.status.InMaintenance',
+  OutOfService: 'trailers.status.OutOfService',
 }
 
 export const TRAILER_STATUS_TONES: Record<TrailerOperationalStatus, 'success' | 'info' | 'warning' | 'danger'> = {

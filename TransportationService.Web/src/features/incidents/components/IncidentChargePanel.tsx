@@ -4,6 +4,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { useToast } from '../../../components/ui/toastContext'
 import { useAuth } from '../../auth/authContextValue'
+import { useLocale } from '../../../i18n/localeContext'
 import { describeApiError } from '../../../api/problemDetails'
 import {
   createIncidentRedelivery,
@@ -25,6 +26,7 @@ interface IncidentChargePanelProps {
 export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanelProps) {
   const { hasPermission } = useAuth()
   const { showSuccess, showError } = useToast()
+  const { t } = useLocale()
   const canManage = hasPermission('incidents.manage')
   const canDecide = hasPermission('problems.approve_charge')
   const canRedeliver = hasPermission('orders.create') || hasPermission('orders.manage')
@@ -39,7 +41,7 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
       onUpdated(await action())
       showSuccess(message)
     } catch (err) {
-      showError(describeApiError(err, 'De actie kon niet worden uitgevoerd.').message)
+      showError(describeApiError(err, t('incidents.charge.actionFailed')).message)
     } finally {
       setBusy(false)
     }
@@ -55,22 +57,22 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
 
   return (
     <section className="ui-form-section">
-      <h3>Verantwoordelijkheid &amp; doorrekening</h3>
+      <h3>{t('incidents.charge.title')}</h3>
       <p>
-        Verantwoordelijke partij:{' '}
-        <strong>{RESPONSIBLE_PARTY_LABELS[incident.responsibleParty] ?? incident.responsibleParty}</strong>
+        {t('incidents.charge.responsibleParty')}{' '}
+        <strong>{t(RESPONSIBLE_PARTY_LABELS[incident.responsibleParty] ?? incident.responsibleParty)}</strong>
         {incident.responsibilityNotes && <span className="customer-form-muted"> — {incident.responsibilityNotes}</span>}
       </p>
       <p>
-        Doorrekening:{' '}
-        <Badge tone={chargeTone}>{CHARGE_DECISION_LABELS[incident.chargeDecision] ?? incident.chargeDecision}</Badge>
+        {t('incidents.charge.charge')}{' '}
+        <Badge tone={chargeTone}>{t(CHARGE_DECISION_LABELS[incident.chargeDecision] ?? incident.chargeDecision)}</Badge>
         {incident.chargeAmount !== null && <strong> € {incident.chargeAmount.toFixed(2)}</strong>}
         {incident.chargeDescription && <span className="customer-form-muted"> — {incident.chargeDescription}</span>}
       </p>
 
       {canManage && incident.responsibleParty === 'Customer' && incident.chargeDecision !== 'Approved' && (
         <div className="wh-trace-bar">
-          <FormField label="Bedrag (€)" htmlFor="inc-charge-amount">
+          <FormField label={t('incidents.charge.amountLabel')} htmlFor="inc-charge-amount">
             <input
               id="inc-charge-amount"
               type="number"
@@ -81,7 +83,7 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
               disabled={busy}
             />
           </FormField>
-          <FormField label="Omschrijving" htmlFor="inc-charge-desc">
+          <FormField label={t('incidents.charge.descriptionLabel')} htmlFor="inc-charge-desc">
             <input
               id="inc-charge-desc"
               value={description}
@@ -95,16 +97,16 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
             disabled={busy || !amount || Number(amount) <= 0 || !description.trim()}
             onClick={() => void run(
               () => proposeIncidentCharge(incident.id, Number(amount), description.trim()),
-              'Doorrekening voorgesteld.',
+              t('incidents.charge.proposed'),
             )}
           >
-            Doorrekening voorstellen
+            {t('incidents.charge.propose')}
           </Button>
         </div>
       )}
       {incident.responsibleParty !== 'Customer' && incident.chargeDecision === 'None' && (
         <p className="customer-form-muted">
-          Alleen problemen met verantwoordelijkheid &lsquo;Klant&rsquo; kunnen worden doorgerekend; interne kosten blijven intern.
+          {t('incidents.charge.onlyCustomer')}
         </p>
       )}
 
@@ -112,21 +114,21 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
         <div className="wh-trace-bar">
           <Button
             disabled={busy}
-            onClick={() => void run(() => decideIncidentCharge(incident.id, true), 'Doorrekening goedgekeurd — verkooplijn aangemaakt.')}
+            onClick={() => void run(() => decideIncidentCharge(incident.id, true), t('incidents.charge.approved'))}
           >
-            Goedkeuren
+            {t('incidents.charge.approve')}
           </Button>
           <Button
             variant="secondary"
             disabled={busy}
-            onClick={() => void run(() => decideIncidentCharge(incident.id, false), 'Doorrekening afgekeurd.')}
+            onClick={() => void run(() => decideIncidentCharge(incident.id, false), t('incidents.charge.rejected'))}
           >
-            Afkeuren
+            {t('incidents.charge.reject')}
           </Button>
         </div>
       )}
 
-      <h3>Herlevering</h3>
+      <h3>{t('incidents.charge.redeliveryTitle')}</h3>
       {incident.redeliverySuggested && !incident.linkedRedeliveryOrderNumber && (
         <p
           role="status"
@@ -139,27 +141,27 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
             fontWeight: 600,
           }}
         >
-          ⚠ Herlevering aanbevolen na mislukte levering — controleer en maak aan.
+          ⚠ {t('incidents.charge.redeliverySuggested')}
         </p>
       )}
       {incident.linkedRedeliveryOrderId ? (
         <p>
-          Herleveringsorder: <strong>{incident.linkedRedeliveryOrderNumber}</strong>
+          {t('incidents.charge.redeliveryOrder')} <strong>{incident.linkedRedeliveryOrderNumber}</strong>
         </p>
       ) : incident.transportOrderId ? (
         canRedeliver ? (
           <Button
             variant="secondary"
             disabled={busy}
-            onClick={() => void run(() => createIncidentRedelivery(incident.id), 'Herleveringsorder aangemaakt in hetzelfde dossier.')}
+            onClick={() => void run(() => createIncidentRedelivery(incident.id), t('incidents.charge.redeliveryCreated'))}
           >
-            Herlevering aanmaken
+            {t('incidents.charge.createRedelivery')}
           </Button>
         ) : (
-          <p className="customer-form-muted">Je hebt geen rechten om orders aan te maken.</p>
+          <p className="customer-form-muted">{t('incidents.charge.noOrderRights')}</p>
         )
       ) : (
-        <p className="customer-form-muted">Koppel eerst de originele order om een herlevering aan te maken.</p>
+        <p className="customer-form-muted">{t('incidents.charge.linkOrderFirst')}</p>
       )}
     </section>
   )

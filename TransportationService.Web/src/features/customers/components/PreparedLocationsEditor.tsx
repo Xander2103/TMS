@@ -3,7 +3,8 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
 import { CountryCombobox } from '../../reference/components/CountryCombobox'
-import { LOCATION_TYPE_LABELS, LOCATION_TYPES, type LocationType } from '../../locations/types'
+import { useLocale } from '../../../i18n/localeContext'
+import { LOCATION_TYPE_LABEL_KEYS, LOCATION_TYPES, type LocationType } from '../../locations/types'
 import { createPreparedLocation, type PreparedLocation } from '../utils/preparedLocations'
 
 interface PreparedLocationsEditorProps {
@@ -14,24 +15,25 @@ interface PreparedLocationsEditorProps {
 
 /**
  * Staged locations for the customer CREATE flow. Nothing is posted here: rows are held in
- * client-side state and created via POST /api/locations only AFTER the customer exists (the
- * quick-create dialog itself posts immediately, so create mode uses this staged variant with
- * the same compact field set instead).
+ * client-side state and created via POST /api/locations only AFTER the customer create succeeds
+ * (the quick-create dialog itself posts immediately, so create mode uses this staged variant
+ * with the same compact field set instead).
  */
 export function PreparedLocationsEditor({ value, onChange, disabled }: PreparedLocationsEditorProps) {
+  const { t } = useLocale()
   const [showDialog, setShowDialog] = useState(false)
 
   return (
     <div className="customer-staged-locations">
       {value.length === 0 && (
-        <p className="customer-form-muted">Nog geen locaties toegevoegd. Ze worden aangemaakt zodra je de klant opslaat.</p>
+        <p className="customer-form-muted">{t('customers.staged.empty')}</p>
       )}
       {value.map((row) => (
         <div key={row.key} className="customer-staged-location-card">
           <div className="customer-staged-location-info">
             <strong>{row.name}</strong>
             <span className="customer-form-muted">
-              {LOCATION_TYPE_LABELS[row.type]}
+              {t(LOCATION_TYPE_LABEL_KEYS[row.type])}
               {row.city.trim() ? ` · ${row.city.trim()}` : ''}
             </span>
           </div>
@@ -39,15 +41,15 @@ export function PreparedLocationsEditor({ value, onChange, disabled }: PreparedL
             variant="ghost"
             disabled={disabled}
             onClick={() => onChange(value.filter((r) => r.key !== row.key))}
-            aria-label={`Locatie ${row.name} verwijderen`}
+            aria-label={t('customers.staged.removeAria', { name: row.name })}
           >
-            Verwijderen
+            {t('ui.actions.delete')}
           </Button>
         </div>
       ))}
       <div>
         <Button variant="secondary" disabled={disabled} onClick={() => setShowDialog(true)}>
-          + Locatie toevoegen
+          {t('customers.staged.add')}
         </Button>
       </div>
 
@@ -65,6 +67,7 @@ export function PreparedLocationsEditor({ value, onChange, disabled }: PreparedL
 }
 
 function StagedLocationDialog({ onAdd, onClose }: { onAdd: (row: PreparedLocation) => void; onClose: () => void }) {
+  const { t } = useLocale()
   const [name, setName] = useState('')
   const [type, setType] = useState<LocationType>('CustomerLocation')
   const [street, setStreet] = useState('')
@@ -80,7 +83,7 @@ function StagedLocationDialog({ onAdd, onClose }: { onAdd: (row: PreparedLocatio
     // The staged dialog lives inside the customer <form>; never bubble the submit up.
     event.stopPropagation()
     if (!name.trim()) {
-      setNameError('Naam is verplicht.')
+      setNameError(t('customers.form.nameRequired'))
       return
     }
     onAdd({
@@ -98,24 +101,22 @@ function StagedLocationDialog({ onAdd, onClose }: { onAdd: (row: PreparedLocatio
 
   return (
     <Modal
-      title="Locatie toevoegen"
+      title={t('customers.staged.dialogTitle')}
       onClose={onClose}
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
-            Annuleren
+            {t('ui.actions.cancel')}
           </Button>
           <Button type="submit" form="staged-location-form">
-            Toevoegen
+            {t('ui.actions.add')}
           </Button>
         </>
       }
     >
-      <p className="customer-form-muted">
-        Deze locatie wordt aangemaakt zodra je de klant opslaat.
-      </p>
+      <p className="customer-form-muted">{t('customers.staged.dialogExplanation')}</p>
       <form id="staged-location-form" onSubmit={handleSubmit} noValidate>
-        <FormField label="Naam" htmlFor="sl-name" required error={nameError}>
+        <FormField label={t('customers.fields.name')} htmlFor="sl-name" required error={nameError}>
           <input
             id="sl-name"
             value={name}
@@ -125,31 +126,31 @@ function StagedLocationDialog({ onAdd, onClose }: { onAdd: (row: PreparedLocatio
             autoFocus
           />
         </FormField>
-        <FormField label="Type" htmlFor="sl-type">
+        <FormField label={t('customers.staged.type')} htmlFor="sl-type">
           <select id="sl-type" value={type} onChange={(e) => setType(e.target.value as LocationType)}>
-            {LOCATION_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {LOCATION_TYPE_LABELS[t]}
+            {LOCATION_TYPES.map((locationType) => (
+              <option key={locationType} value={locationType}>
+                {t(LOCATION_TYPE_LABEL_KEYS[locationType])}
               </option>
             ))}
           </select>
         </FormField>
-        <FormField label="Straat" htmlFor="sl-street">
+        <FormField label={t('customers.form.street')} htmlFor="sl-street">
           <input id="sl-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} />
         </FormField>
-        <FormField label="Nummer" htmlFor="sl-house">
+        <FormField label={t('customers.form.houseNumber')} htmlFor="sl-house">
           <input id="sl-house" value={houseNumber} onChange={(e) => setHouseNumber(e.target.value)} maxLength={20} />
         </FormField>
-        <FormField label="Postcode" htmlFor="sl-postal">
+        <FormField label={t('customers.form.postalCode')} htmlFor="sl-postal">
           <input id="sl-postal" value={postalCode} onChange={(e) => setPostalCode(e.target.value)} maxLength={20} />
         </FormField>
-        <FormField label="Gemeente" htmlFor="sl-city">
+        <FormField label={t('customers.form.city')} htmlFor="sl-city">
           <input id="sl-city" value={city} onChange={(e) => setCity(e.target.value)} maxLength={100} />
         </FormField>
-        <FormField label="Land" htmlFor="sl-country">
+        <FormField label={t('customers.fields.countryCode')} htmlFor="sl-country">
           <CountryCombobox id="sl-country" value={countryCode} onChange={setCountryCode} />
         </FormField>
-        <FormField label="Telefoon" htmlFor="sl-phone">
+        <FormField label={t('customers.contacts.phone')} htmlFor="sl-phone">
           <input id="sl-phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} maxLength={30} />
         </FormField>
       </form>
