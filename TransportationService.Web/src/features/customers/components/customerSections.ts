@@ -1,13 +1,28 @@
 /**
- * Single source of truth for the customer create/edit section navigation: the field keys
- * each section owns, driving the error badge on a section tab and the first-error routing
- * after a failed submit. The ordered section list itself is built inside CustomerForm (one
- * component, both modes) so create and edit always present the same configuration.
+ * Single source of truth for the customer create/edit section navigation: the ordered
+ * section list plus the field keys each section owns, driving the error badge on a section
+ * tab and the first-error routing after a failed submit. CustomerForm renders one component
+ * for both modes, so create and edit always present the same configuration.
  *
- * `klantgegevens` is the merged quick-entry section (bedrijfsgegevens + algemene
- * contactgegevens + contactpersonen + hoofdzetel-adres); contact-repeater errors use dynamic
- * paths (`contacts[i].…`), covered by `isKlantgegevensFieldKey` instead of the static list.
+ * Sprint 1C — the order follows the business question the user is answering:
+ * wie is de klant? → waar werken we? → wie spreken we aan? → financieel/commercieel.
+ * Adressen and Contactpersonen are sections of their own; they used to be buried inside the
+ * merged "Klantgegevens" quick-entry section.
  */
+export const CUSTOMER_SECTION_ORDER = [
+  'klantgegevens',
+  'adressen',
+  'contactpersonen',
+  'facturatie',
+  'fiscaal',
+  'bank',
+  'communicatie',
+  'tarieven',
+  'historiek',
+] as const
+
+export type CustomerSectionId = (typeof CUSTOMER_SECTION_ORDER)[number]
+
 export const CUSTOMER_SECTION_FIELD_KEYS: Record<string, string[]> = {
   klantgegevens: [
     'name',
@@ -21,12 +36,10 @@ export const CUSTOMER_SECTION_FIELD_KEYS: Record<string, string[]> = {
     'website',
     'defaultLanguageCode',
     'notes',
-    'street',
-    'houseNumber',
-    'postalCode',
-    'city',
-    'countryCode',
   ],
+  adressen: ['street', 'houseNumber', 'postalCode', 'city', 'countryCode'],
+  // Contact-repeater errors use dynamic paths; see isContactpersonenFieldKey.
+  contactpersonen: [],
   fiscaal: [
     'vatNumber',
     'companyNumber',
@@ -47,14 +60,10 @@ export const CUSTOMER_SECTION_FIELD_KEYS: Record<string, string[]> = {
 }
 
 /**
- * Whether a (client or server) error path belongs to the merged Klantgegevens section:
- * its static keys plus every contact-repeater path — `contacts[i].…` from the multi-contact
- * payload and legacy `initialContact.…` paths the backend may still emit.
+ * Whether a (client or server) error path belongs to the Contactpersonen section: every
+ * contact-repeater path — `contacts[i].…` from the multi-contact payload and legacy
+ * `initialContact.…` paths the backend may still emit.
  */
-export function isKlantgegevensFieldKey(key: string): boolean {
-  return (
-    CUSTOMER_SECTION_FIELD_KEYS.klantgegevens.includes(key) ||
-    key.startsWith('contacts[') ||
-    key.startsWith('initialContact.')
-  )
+export function isContactpersonenFieldKey(key: string): boolean {
+  return key.startsWith('contacts[') || key.startsWith('initialContact.')
 }

@@ -10,7 +10,6 @@ import { NavFilter } from './nav/NavFilter'
 import { NavModule } from './nav/NavModule'
 import { filterModule, findActiveModuleId, type VisibleModule } from './nav/navState'
 import { useExpandedModules } from './nav/useExpandedModules'
-import '../../features/notifications/pages/notifications.css'
 import './Sidebar.css'
 import './nav.css'
 

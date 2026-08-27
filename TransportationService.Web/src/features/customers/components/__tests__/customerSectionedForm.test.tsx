@@ -71,21 +71,29 @@ function saveButton() {
   return screen.getAllByRole('button', { name: 'Opslaan' })[0]
 }
 
+/** Sprint 1C: Adressen en Contactpersonen zijn eigen secties; eerst er naartoe. */
+async function openSection(name: RegExp) {
+  await userEvent.click(screen.getByRole('tab', { name }))
+}
+
 describe('CustomerForm section structure (quick-entry consolidation)', () => {
-  it('merges Algemeen/Contact/Contactpersonen/Adressen into one Klantgegevens section', () => {
+  it('keeps company data together and gives addresses and contacts their own section', async () => {
     renderForm()
     expect(screen.getByRole('tab', { name: /Klantgegevens/i })).toBeInTheDocument()
+    // The pre-consolidation tabs stay gone.
     expect(screen.queryByRole('tab', { name: /^Algemeen$/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: /^Contact$/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: /Adressen/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: /Notities/i })).not.toBeInTheDocument()
 
-    // The four subsections of the merged Klantgegevens section, in order.
+    // Klantgegevens keeps only the company identity + general contact details.
     expect(screen.getByText('Bedrijfsgegevens')).toBeInTheDocument()
     expect(screen.getByText('Algemene contactgegevens')).toBeInTheDocument()
-    expect(screen.getByText('Contactpersonen')).toBeInTheDocument()
-    expect(screen.getByText('Locaties & adressen')).toBeInTheDocument()
+
+    // Sprint 1C: adressen en contactpersonen zijn eigen secties.
+    await openSection(/Locaties & adressen/i)
     expect(screen.getByText('Hoofdzetel / algemeen adres')).toBeInTheDocument()
+    await openSection(/Contactpersonen/i)
+    expect(screen.getByRole('button', { name: '+ Contactpersoon toevoegen' })).toBeInTheDocument()
 
     // Specialized sections stay.
     expect(screen.getByRole('tab', { name: /Fiscaal & Peppol/i })).toBeInTheDocument()
@@ -195,6 +203,7 @@ describe('CustomerForm contacts repeater + payload', () => {
     const onSubmit = vi.fn()
     renderForm({ onSubmit })
     await userEvent.type(screen.getByRole('textbox', { name: 'Naam' }), 'Acme')
+    await openSection(/Contactpersonen/i)
 
     await userEvent.click(screen.getByRole('button', { name: '+ Contactpersoon toevoegen' }))
     await userEvent.click(screen.getByRole('button', { name: '+ Contactpersoon toevoegen' }))
@@ -233,6 +242,7 @@ describe('CustomerForm contacts repeater + payload', () => {
     const onSubmit = vi.fn()
     renderForm({ onSubmit })
     await userEvent.type(screen.getByRole('textbox', { name: 'Naam' }), 'Acme')
+    await openSection(/Contactpersonen/i)
 
     await userEvent.click(screen.getByRole('button', { name: '+ Contactpersoon toevoegen' }))
     const firstNames = screen.getAllByLabelText(/Voornaam/)
@@ -263,6 +273,7 @@ describe('CustomerForm contacts repeater + payload', () => {
     onSubmit.mockClear()
 
     // Partially filled row → names required.
+    await openSection(/Contactpersonen/i)
     await userEvent.type(screen.getByLabelText(/Voornaam/), 'An')
     await userEvent.click(saveButton())
     expect(onSubmit).not.toHaveBeenCalled()
@@ -271,6 +282,7 @@ describe('CustomerForm contacts repeater + payload', () => {
 
   it('adding and removing rows preserves the other rows values', async () => {
     renderForm()
+    await openSection(/Contactpersonen/i)
     await userEvent.type(screen.getAllByLabelText(/Voornaam/)[0], 'An')
 
     await userEvent.click(screen.getByRole('button', { name: '+ Contactpersoon toevoegen' }))

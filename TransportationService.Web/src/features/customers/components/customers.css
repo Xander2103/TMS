@@ -138,11 +138,8 @@
   gap: 8px;
 }
 
-.customer-vat-summary {
-  margin-top: 20px;
-}
-
-.customer-vat-summary h3 {
+/* Eén gedeeld kop-patroon voor elke samenvattingskaart. */
+.customer-summary h3 {
   margin: 0 0 12px;
   font-size: 16px;
   color: var(--text-h);
@@ -162,6 +159,9 @@
 }
 
 .customer-summary {
+  /* Vaste labelkolom: elke kaart is een eigen grid, dus met 'auto' berekent elke
+     kaart zijn eigen labelbreedte en starten de waardekolommen niet gelijk. */
+  --customer-summary-label: 11rem;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px;
@@ -169,7 +169,7 @@
 
 .customer-summary dl {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: var(--customer-summary-label) minmax(0, 1fr);
   gap: 8px 16px;
   margin: 0;
   font-size: 15px;
@@ -181,7 +181,16 @@
 
 .customer-summary dd {
   margin: 0;
+  min-width: 0;
   color: var(--text-h);
+  /* Lange IBAN's/e-mailadressen breken af i.p.v. de kaart open te duwen. */
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .customer-summary {
+    --customer-summary-label: 8rem;
+  }
 }
 
 .customer-contacts {

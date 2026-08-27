@@ -5,6 +5,11 @@
   padding: 24px 20px;
   box-sizing: border-box;
   overflow-y: auto;
+  /* overflow-y:auto maakt overflow-x berekend 'auto'; expliciet dicht zodat een
+     te brede rij nooit een horizontale scrollbar oplevert. De gutter is
+     gereserveerd zodat de verticale scrollbar de rijen niet overlapt. */
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
   max-height: 100vh;
   height: 100svh;
   position: sticky;

@@ -21,7 +21,7 @@ import { resolveRateOptions } from '../utils/vatTreatment'
 import { formatDateTime } from '../../../utils/dates'
 import { PeppolFieldGroup } from './PeppolFieldGroup'
 import { combinePeppolValue, peppolFormatError } from '../utils/peppolValue'
-import { CUSTOMER_SECTION_FIELD_KEYS, isKlantgegevensFieldKey } from './customerSections'
+import { CUSTOMER_SECTION_FIELD_KEYS, CUSTOMER_SECTION_ORDER, isContactpersonenFieldKey } from './customerSections'
 import { useLocale } from '../../../i18n/localeContext'
 import {
   addContactRow,
@@ -407,8 +407,8 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
   for (const key of Object.keys(contactRowErrors)) combinedErrorKeys.add(key)
   for (const key of Object.keys(serverFieldErrors ?? {})) combinedErrorKeys.add(key)
   const sectionHasError = (id: string) =>
-    id === 'klantgegevens'
-      ? [...combinedErrorKeys].some(isKlantgegevensFieldKey)
+    id === 'contactpersonen'
+      ? [...combinedErrorKeys].some(isContactpersonenFieldKey)
       : (CUSTOMER_SECTION_FIELD_KEYS[id] ?? []).some((key) => combinedErrorKeys.has(key))
 
   const isEdit = mode === 'edit'
@@ -540,7 +540,7 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     </>
   )
 
-  const sections: SectionDef[] = [
+  const sectionDefs: SectionDef[] = [
     {
       id: 'klantgegevens',
       label: t('customers.form.sections.klantgegevens'),
@@ -627,15 +627,15 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
               <textarea id="c-notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={2000} />
             </FormField>
           </FormSection>
-
-          <FormSection
-            title={t('customers.form.contactsSection')}
-            columns={1}
-            description={isEdit ? undefined : t('customers.form.contactsDescription')}
-          >
-            <div className="form-span-all">{isEdit ? (editPanels?.contactpersonen ?? null) : contactRepeater}</div>
-          </FormSection>
-
+        </>
+      ),
+    },
+    {
+      id: 'adressen',
+      label: t('customers.form.locationsSection'),
+      hasError: sectionHasError('adressen'),
+      render: () => (
+        <>
           <FormSection title={t('customers.form.locationsSection')} columns={3} description={t('customers.form.locationsDescription')}>
             <FormField label={t('customers.form.street')} htmlFor="c-street">
               <input id="c-street" value={street} onChange={(e) => setStreet(e.target.value)} maxLength={150} />
@@ -668,6 +668,20 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
             </div>
           </FormSection>
         </>
+      ),
+    },
+    {
+      id: 'contactpersonen',
+      label: t('customers.form.contactsSection'),
+      hasError: sectionHasError('contactpersonen'),
+      render: () => (
+        <FormSection
+          title={t('customers.form.contactsSection')}
+          columns={1}
+          description={isEdit ? undefined : t('customers.form.contactsDescription')}
+        >
+          <div className="form-span-all">{isEdit ? (editPanels?.contactpersonen ?? null) : contactRepeater}</div>
+        </FormSection>
       ),
     },
     {
@@ -1180,6 +1194,12 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
     },
   ]
 
+  // De zichtbare volgorde staat in CUSTOMER_SECTION_ORDER (sprint 1C), niet in de
+  // volgorde waarin de secties hierboven toevallig gedefinieerd zijn.
+  const sections: SectionDef[] = CUSTOMER_SECTION_ORDER.map(
+    (id) => sectionDefs.find((s) => s.id === id),
+  ).filter((s): s is SectionDef => s !== undefined)
+
   const { activeId, setActive } = useSectionNavigation(sections.map((s) => s.id), sections[0].id)
   const activeSection = sections.find((s) => s.id === activeId) ?? sections[0]
 
@@ -1240,11 +1260,8 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
         sections.map((s) => ({
           id: s.id,
           fieldKeys:
-            s.id === 'klantgegevens'
-              ? [
-                  ...CUSTOMER_SECTION_FIELD_KEYS.klantgegevens,
-                  ...Object.keys(errorKeys).filter(isKlantgegevensFieldKey),
-                ]
+            s.id === 'contactpersonen'
+              ? Object.keys(errorKeys).filter(isContactpersonenFieldKey)
               : CUSTOMER_SECTION_FIELD_KEYS[s.id],
         })),
         errorKeys,

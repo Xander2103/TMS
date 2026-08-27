@@ -270,8 +270,8 @@ export function CustomerDetailPage() {
             <Tabs
               tabs={[
                 { id: 'general', label: t('customers.detail.tabGeneral') },
-                { id: 'contacts', label: t('customers.contacts.title'), badge: customer.contacts.length || undefined },
                 ...(canViewLocations ? [{ id: 'locations', label: t('customers.detail.tabLocations') }] : []),
+                { id: 'contacts', label: t('customers.contacts.title'), badge: customer.contacts.length || undefined },
                 { id: 'communication', label: t('customers.form.sections.communicatie') },
                 ...(canViewBilling ? [{ id: 'billing', label: t('customers.form.sections.tarieven') }] : []),
                 { id: 'history', label: t('customers.form.sections.historiek') },
@@ -288,6 +288,7 @@ export function CustomerDetailPage() {
             <TabPanel tabId="general">
               <div className="customer-detail-layout">
             <div className="customer-summary">
+              <h3>{t('customers.form.sections.klantgegevens')}</h3>
               <dl>
                 <dt>{t('customers.fields.customerNumber')}</dt>
                 <dd>

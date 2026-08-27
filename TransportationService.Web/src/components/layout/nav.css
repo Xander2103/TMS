@@ -33,7 +33,7 @@
 .nav-modules { list-style: none; margin: 0; padding: 0; }
 
 /* Clear separation between modules. */
-.nav-module { margin-bottom: 6px; }
+.nav-module { margin-bottom: 10px; }
 
 /* Module header is visually distinct from items: heavier, uppercase, full-width band. */
 .nav-module-header {
@@ -41,22 +41,33 @@
   align-items: center;
   gap: 10px;
   width: 100%;
+  /* Geen globale border-box-reset in dit project: zonder dit is de rij
+     width:100% + 24px padding = breder dan de sidebar (afgeknipte badge,
+     overlopende actief-achtergrond, horizontale scrollbar). */
+  box-sizing: border-box;
   padding: 9px 12px;
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--text);
   font: inherit;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--text-h);
   cursor: pointer;
 }
 .nav-module-header:hover { background: var(--accent-bg); }
 .nav-module-header:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .nav-module-icon { flex-shrink: 0; opacity: 0.85; }
-.nav-module-title { flex: 1; text-align: left; }
+.nav-module-title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Active module: tinted band + accent left rail so "where am I" is unmistakable. */
 .nav-module-active > .nav-module-header {
@@ -66,6 +77,7 @@
 }
 
 .nav-module-dot {
+  flex-shrink: 0;
   width: 7px; height: 7px;
   border-radius: 50%;
   background: var(--accent);
@@ -90,6 +102,7 @@
   align-items: center;
   gap: 9px;
   width: 100%;
+  box-sizing: border-box;
   padding: 7px 12px;
   border: none;
   border-radius: 6px;
@@ -106,16 +119,39 @@
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
 .nav-item-icon { flex-shrink: 0; opacity: 0.7; }
-.nav-item-label { flex: 1; min-width: 0; }
+.nav-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Telbadge naast een navrij. Hoort bij de layout, niet bij de notificatiepagina:
+   die stylesheet wordt lui geladen en de badge stond er alleen daardoor goed. */
+.nav-badge {
+  flex-shrink: 0;
+  min-width: 18px;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--danger, #dc2626);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
 
 .nav-subgroup { margin-top: 4px; }
 .nav-subgroup-label {
-  margin: 6px 12px 2px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text);
-  opacity: 0.45;
+  margin: 10px 12px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-h);
+  opacity: 0.75;
 }
 
 .nav-empty { padding: 8px 12px; font-size: 13px; opacity: 0.6; }

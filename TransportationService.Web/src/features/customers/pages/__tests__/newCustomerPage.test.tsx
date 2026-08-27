@@ -87,6 +87,9 @@ function renderPage() {
 }
 
 async function stageLocation(name: string) {
+  // Sprint 1C: adressen zijn een eigen sectie; de staged-locations editor staat daar.
+  const addressTab = screen.queryByRole('tab', { name: /Locaties & adressen/i })
+  if (addressTab) await userEvent.click(addressTab)
   await userEvent.click(screen.getByRole('button', { name: '+ Locatie toevoegen' }))
   await userEvent.type(screen.getByLabelText(/^Naam/, { selector: '#sl-name' }), name)
   await userEvent.click(screen.getByRole('button', { name: 'Toevoegen' }))
