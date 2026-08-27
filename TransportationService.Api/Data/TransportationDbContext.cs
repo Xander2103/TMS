@@ -274,6 +274,12 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.CustomerServiceOptionPrice> CustomerServiceOptionPrices => Set<TransportationService.Api.Modules.Tarification.Entities.CustomerServiceOptionPrice>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.CustomerPreferredUnit> CustomerPreferredUnits => Set<TransportationService.Api.Modules.Tarification.Entities.CustomerPreferredUnit>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreement> PricingAgreements => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreement>();
+
+    /// <summary>Reusable column mappings for pricing Excel imports (sprint 4D).</summary>
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingImportProfile> PricingImportProfiles => Set<TransportationService.Api.Modules.Tarification.Entities.PricingImportProfile>();
+
+    /// <summary>Pricing-import history + checksums (sprint 4F).</summary>
+    public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingImportRun> PricingImportRuns => Set<TransportationService.Api.Modules.Tarification.Entities.PricingImportRun>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementSurcharge> PricingAgreementSurcharges => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementSurcharge>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementAssignment> PricingAgreementAssignments => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementAssignment>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementModifier> PricingAgreementModifiers => Set<TransportationService.Api.Modules.Tarification.Entities.PricingAgreementModifier>();

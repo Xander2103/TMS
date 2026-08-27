@@ -1,3 +1,4 @@
+import { apiClient } from '../../../api/apiClient'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import type { PricingAgreement } from './pricingApi'
@@ -28,6 +29,59 @@ export interface PricingImportPreview {
   added: PricingImportRuleChange[]
   updated: PricingImportRuleChange[]
   removed: PricingImportRuleChange[]
+  /** Sprint 4F: this exact file was already imported into this table before. */
+  alreadyImported: boolean
+  previousImportAt: string | null
+  previousImportFileName: string | null
+}
+
+// --- Mapping profiles (sprint 4D) ---
+
+/** One canonical field an uploaded column can be mapped onto. */
+export interface PricingImportField {
+  key: string
+  standardHeader: string
+  required: boolean
+}
+
+export interface PricingImportProfile {
+  id: string
+  name: string
+  notes: string | null
+  headerRow: number
+  sheetName: string | null
+  /** field key → header text in the customer's own workbook. */
+  mapping: Record<string, string>
+  isActive: boolean
+}
+
+export interface SavePricingImportProfileInput {
+  name: string
+  notes: string | null
+  headerRow: number
+  sheetName: string | null
+  mapping: Record<string, string>
+  isActive: boolean
+}
+
+// --- Import history (sprint 4F) ---
+
+export interface PricingImportRun {
+  id: string
+  agreementId: string
+  targetAgreementId: string
+  fileName: string
+  checksum: string
+  profileName: string | null
+  mode: PricingImportMode
+  rowsRead: number
+  rowsValid: number
+  created: number
+  updated: number
+  removed: number
+  failed: number
+  importedAt: string
+  importedByUserId: string | null
 }
 
 // --- Commit ---
@@ -37,6 +91,8 @@ export type PricingImportMode = 'UpdateAgreement' | 'DuplicateAsNewVersion'
 export interface PricingImportCommitOptions {
   mode: PricingImportMode
   applyRemovals: boolean
+  /** Mapping profile used to read the file, when it is not the standard template. */
+  profileId?: string | null
   /** Required for DuplicateAsNewVersion. */
   newName?: string | null
   newEffectiveFrom?: string | null
@@ -89,8 +145,56 @@ async function postWorkbook<T>(path: string, file: File, fields?: Record<string,
   return data as T
 }
 
-export function previewPricingImport(agreementId: string, file: File): Promise<PricingImportPreview> {
-  return postWorkbook<PricingImportPreview>(`/api/pricing/agreements/${agreementId}/import/preview`, file)
+export function previewPricingImport(
+  agreementId: string,
+  file: File,
+  profileId?: string | null,
+): Promise<PricingImportPreview> {
+  return postWorkbook<PricingImportPreview>(
+    `/api/pricing/agreements/${agreementId}/import/preview`,
+    file,
+    profileId ? { profileId } : undefined,
+  )
+}
+
+/** The header texts of an uploaded workbook plus the fields they can map onto (wizard step 2). */
+export function readPricingImportHeaders(
+  file: File,
+  profileId?: string | null,
+): Promise<{ headers: string[]; fields: PricingImportField[] }> {
+  return postWorkbook<{ headers: string[]; fields: PricingImportField[] }>(
+    '/api/pricing/import/headers',
+    file,
+    profileId ? { profileId } : undefined,
+  )
+}
+
+export function listPricingImportProfiles(): Promise<PricingImportProfile[]> {
+  return apiClient.getJson<PricingImportProfile[]>('/api/pricing/import/profiles')
+}
+
+export function createPricingImportProfile(input: SavePricingImportProfileInput): Promise<PricingImportProfile> {
+  return apiClient.postJson<PricingImportProfile, SavePricingImportProfileInput>('/api/pricing/import/profiles', input)
+}
+
+export function updatePricingImportProfile(
+  id: string,
+  input: SavePricingImportProfileInput,
+): Promise<PricingImportProfile> {
+  return apiClient.putJson<PricingImportProfile, SavePricingImportProfileInput>(
+    `/api/pricing/import/profiles/${id}`,
+    input,
+  )
+}
+
+export function deletePricingImportProfile(id: string): Promise<void> {
+  return apiClient.deleteRequest(`/api/pricing/import/profiles/${id}`)
+}
+
+/** Newest first; without an agreement id the whole tenant's history. */
+export function listPricingImportHistory(agreementId?: string): Promise<PricingImportRun[]> {
+  const query = agreementId ? `?agreementId=${agreementId}` : ''
+  return apiClient.getJson<PricingImportRun[]>(`/api/pricing/import/history${query}`)
 }
 
 export function commitPricingImport(
@@ -101,6 +205,7 @@ export function commitPricingImport(
   return postWorkbook<PricingImportCommitResult>(`/api/pricing/agreements/${agreementId}/import/commit`, file, {
     mode: options.mode,
     applyRemovals: String(options.applyRemovals),
+    ...(options.profileId ? { profileId: options.profileId } : {}),
     ...(options.newName ? { newName: options.newName } : {}),
     ...(options.newEffectiveFrom ? { newEffectiveFrom: options.newEffectiveFrom } : {}),
   })

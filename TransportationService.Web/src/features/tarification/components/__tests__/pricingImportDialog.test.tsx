@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PricingImportDialog } from '../PricingImportDialog'
 import type { PricingImportCommitResult, PricingImportPreview } from '../../api/pricingImportApi'
@@ -8,12 +8,17 @@ const state = vi.hoisted(() => ({
   preview: vi.fn(),
   commit: vi.fn(),
   download: vi.fn(),
+  profiles: [] as unknown[],
+  history: [] as unknown[],
 }))
 
 vi.mock('../../api/pricingImportApi', () => ({
   previewPricingImport: (...args: unknown[]) => state.preview(...args),
   commitPricingImport: (...args: unknown[]) => state.commit(...args),
   downloadAgreementExport: (...args: unknown[]) => state.download(...args),
+  // Sprint 4: the dialog also loads mapping profiles and this table's import history.
+  listPricingImportProfiles: () => Promise.resolve(state.profiles),
+  listPricingImportHistory: () => Promise.resolve(state.history),
 }))
 
 function makePreview(overrides: Partial<PricingImportPreview> = {}): PricingImportPreview {
@@ -22,6 +27,9 @@ function makePreview(overrides: Partial<PricingImportPreview> = {}): PricingImpo
     rowsValid: 3,
     warnings: [],
     errors: [],
+    alreadyImported: false,
+    previousImportAt: null,
+    previousImportFileName: null,
     added: [],
     updated: [],
     removed: [],
@@ -73,6 +81,8 @@ function selectFile(input: HTMLElement) {
 describe('PricingImportDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    state.profiles = []
+    state.history = []
   })
 
   it('renders the counts banner and added/updated/removed badges after preview', async () => {
@@ -163,6 +173,59 @@ describe('PricingImportDialog', () => {
         newEffectiveFrom: '2027-01-01',
       }),
     )
+  })
+
+  it('reads the file through a saved mapping profile when one is chosen', async () => {
+    state.profiles = [
+      { id: 'prof-1', name: 'Atlas Copco 2026', notes: null, headerRow: 2, sheetName: 'Tarieven', mapping: {}, isActive: true },
+    ]
+    state.preview.mockResolvedValue(makePreview())
+
+    render(<PricingImportDialog agreementId="agr-1" agreementName="Distributie België" onClose={vi.fn()} onImported={vi.fn()} />)
+    const user = userEvent.setup()
+
+    const profileSelect = await screen.findByLabelText('Mappingprofiel')
+    await user.selectOptions(profileSelect, 'prof-1')
+    await selectFile(screen.getByLabelText('Bestand (.xlsx)'))
+    await user.click(screen.getByRole('button', { name: 'Voorbeeld' }))
+
+    await waitFor(() => expect(state.preview).toHaveBeenCalled())
+    // The mapping decides how the file is read, so it must reach the server.
+    expect(state.preview).toHaveBeenCalledWith('agr-1', expect.anything(), 'prof-1')
+  })
+
+  it('warns when the exact same file was already imported into this table', async () => {
+    state.preview.mockResolvedValue(
+      makePreview({
+        alreadyImported: true,
+        previousImportAt: '2026-08-01T10:00:00Z',
+        previousImportFileName: 'atlas-2026.xlsx',
+      }),
+    )
+
+    render(<PricingImportDialog agreementId="agr-1" agreementName="Distributie België" onClose={vi.fn()} onImported={vi.fn()} />)
+    const user = userEvent.setup()
+    await selectFile(screen.getByLabelText('Bestand (.xlsx)'))
+    await user.click(screen.getByRole('button', { name: 'Voorbeeld' }))
+
+    expect(await screen.findByText(/al geïmporteerd/)).toHaveTextContent('atlas-2026.xlsx')
+  })
+
+  it('lists the import history for this table before a file is previewed', async () => {
+    state.history = [
+      {
+        id: 'run-1', agreementId: 'agr-1', targetAgreementId: 'agr-1', fileName: 'atlas-2026.xlsx',
+        checksum: 'abc', profileName: 'Atlas Copco 2026', mode: 'UpdateAgreement',
+        rowsRead: 12, rowsValid: 12, created: 10, updated: 2, removed: 0, failed: 0,
+        importedAt: '2026-08-01T10:00:00Z', importedByUserId: null,
+      },
+    ]
+
+    render(<PricingImportDialog agreementId="agr-1" agreementName="Distributie België" onClose={vi.fn()} onImported={vi.fn()} />)
+
+    const row = (await screen.findByText('atlas-2026.xlsx')).closest('tr')!
+    expect(within(row).getByText('Atlas Copco 2026')).toBeInTheDocument()
+    expect(within(row).getByText(/12 gelezen/)).toBeInTheDocument()
   })
 
   it('downloads the current table via the export link', async () => {

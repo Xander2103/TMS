@@ -36,7 +36,8 @@ public class PricingImportController : ControllerBase
     [HttpPost("api/pricing/agreements/{id:guid}/import/preview")]
     [RequirePermission(PermissionCodes.TariffsImport, PermissionCodes.TariffsManage)]
     [RequestSizeLimit(MaxUploadBytes + 1024)]
-    public async Task<IActionResult> Preview(Guid id, IFormFile file, CancellationToken cancellationToken)
+    public async Task<IActionResult> Preview(
+        Guid id, IFormFile file, [FromForm] Guid? profileId, CancellationToken cancellationToken)
     {
         if (file.Length == 0 || file.Length > MaxUploadBytes)
         {
@@ -49,8 +50,31 @@ public class PricingImportController : ControllerBase
         }
 
         await using var stream = file.OpenReadStream();
-        var (preview, error) = await _excelService.PreviewAsync(id, stream, cancellationToken);
+        var (preview, error) = await _excelService.PreviewAsync(id, stream, profileId, file.FileName, cancellationToken);
         return error is not null ? BadRequest(new { message = error }) : Ok(preview);
+    }
+
+    /// <summary>Sprint 4: the header texts of an uploaded file, for the mapping step.</summary>
+    [HttpPost("api/pricing/import/headers")]
+    [RequirePermission(PermissionCodes.TariffsImport, PermissionCodes.TariffsManage)]
+    [RequestSizeLimit(MaxUploadBytes + 1024)]
+    public async Task<IActionResult> Headers(IFormFile file, [FromForm] Guid? profileId, CancellationToken cancellationToken)
+    {
+        if (file.Length == 0 || file.Length > MaxUploadBytes)
+        {
+            return BadRequest(new { message = "Het bestand moet tussen 1 byte en 5 MB groot zijn." });
+        }
+
+        if (Modules.Security.UploadValidation.SignatureError(file) is { } signatureError)
+        {
+            return BadRequest(new { message = signatureError });
+        }
+
+        await using var stream = file.OpenReadStream();
+        var (headers, error) = await _excelService.ReadHeadersAsync(stream, profileId, cancellationToken);
+        return error is not null
+            ? BadRequest(new { message = error })
+            : Ok(new { headers, fields = PricingImportColumns.All });
     }
 
     [HttpPost("api/pricing/agreements/{id:guid}/import/commit")]
@@ -62,6 +86,7 @@ public class PricingImportController : ControllerBase
         [FromForm] bool applyRemovals,
         [FromForm] string? newName,
         [FromForm] DateOnly? newEffectiveFrom,
+        [FromForm] Guid? profileId,
         CancellationToken cancellationToken)
     {
         if (file.Length == 0 || file.Length > MaxUploadBytes)
@@ -81,7 +106,7 @@ public class PricingImportController : ControllerBase
 
         await using var stream = file.OpenReadStream();
         var request = new PricingImportCommitRequest(parsedMode, applyRemovals, newName, newEffectiveFrom);
-        var (result, error) = await _excelService.CommitAsync(id, request, stream, cancellationToken);
+        var (result, error) = await _excelService.CommitAsync(id, request, stream, profileId, file.FileName, cancellationToken);
         return error is not null ? BadRequest(new { message = error }) : result is null ? NotFound() : Ok(result);
     }
 }

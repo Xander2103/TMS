@@ -299,19 +299,22 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByText('Diensten & toeslagen')
+    await screen.findByText('Klantafwijkingen')
     // Table-wide warning is always visible, not a tooltip.
     expect(screen.getByText('Let op: wanneer u hier een waarde invult, wordt de algemene standaardregel voor deze klant overschreven.')).toBeInTheDocument()
     // Overridden service: global €15, override input 10, effective €10, source Klanttarief.
     expect(screen.getByText('€ 15.00')).toBeInTheDocument()
-    expect(screen.getByLabelText('Klantoverride voor Levering vóór 10:00')).toHaveValue(10)
+    expect(screen.getByLabelText('Klantprijs voor Levering vóór 10:00')).toHaveValue(10)
     expect(screen.getByText('€ 10.00')).toBeInTheDocument()
     expect(screen.getAllByText('Klanttarief').length).toBeGreaterThan(0)
     expect(screen.getByText(/deze klantprijs overschrijft.*€ 15\.00/)).toBeInTheDocument()
     // Disabled service warning + effective state.
     expect(screen.getByText('Let op: deze service is algemeen beschikbaar, maar wordt voor deze klant uitgeschakeld.')).toBeInTheDocument()
     expect(screen.getByText('Uitgeschakeld')).toBeInTheDocument()
-    // Inherited hourly service shows the global value and source.
+    // A service WITHOUT a customer deviation is not shown as if it were agreed with them.
+    expect(screen.queryByText('€ 45.00/uur')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByLabelText('Toon alle standaarddiensten'))
+    // With the full list shown it appears, clearly labelled as the general standard.
     expect(screen.getAllByText('€ 45.00/uur').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Algemene standaard').length).toBeGreaterThan(0)
   })
@@ -324,7 +327,7 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByText('Diensten & toeslagen')
+    await screen.findByText('Klantafwijkingen')
     const resetButtons = screen.getAllByRole('button', { name: 'Algemene waarde opnieuw gebruiken' })
     await user.click(resetButtons[0])
 
@@ -345,7 +348,9 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
       </MemoryRouter>,
     )
 
-    await screen.findByText('Diensten & toeslagen')
+    await screen.findByText('Klantafwijkingen')
+    // Picking has no customer deviation, so it lives under the full-list toggle.
+    await user.click(screen.getByLabelText('Toon alle standaarddiensten'))
     const autoSelect = screen.getByLabelText('Automatisch toepassen voor Picking')
     // Inherits the global AutoApply (true) with no override yet.
     expect(autoSelect).toHaveValue('inherit')

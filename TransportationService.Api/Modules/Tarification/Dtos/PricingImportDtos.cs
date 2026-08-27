@@ -23,7 +23,11 @@ public record PricingImportPreviewDto(
     IReadOnlyList<PricingImportRowMessageDto> Errors,
     IReadOnlyList<PricingImportRuleChangeDto> Added,
     IReadOnlyList<PricingImportRuleChangeDto> Updated,
-    IReadOnlyList<PricingImportRuleChangeDto> Removed);
+    IReadOnlyList<PricingImportRuleChangeDto> Removed,
+    /// <summary>Sprint 4F: this exact file was already imported into this table before.</summary>
+    bool AlreadyImported = false,
+    DateTime? PreviousImportAt = null,
+    string? PreviousImportFileName = null);
 
 /// <summary>
 /// Commit form fields (multipart, alongside the file). NewName/NewEffectiveFrom are required

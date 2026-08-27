@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { formatDateTime } from '../../../utils/dates'
 import { Badge, type BadgeTone } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
@@ -9,6 +10,10 @@ import {
   commitPricingImport,
   downloadAgreementExport,
   previewPricingImport,
+  listPricingImportProfiles,
+  listPricingImportHistory,
+  type PricingImportProfile,
+  type PricingImportRun,
   type PricingImportCommitResult,
   type PricingImportMode,
   type PricingImportPreview,
@@ -62,6 +67,24 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [committed, setCommitted] = useState<PricingImportCommitResult | null>(null)
+  // Sprint 4D/4F: read a customer's own layout through a saved mapping, and show what was
+  // imported into this table before.
+  const [profiles, setProfiles] = useState<PricingImportProfile[]>([])
+  const [profileId, setProfileId] = useState<string>('')
+  const [history, setHistory] = useState<PricingImportRun[]>([])
+
+  useEffect(() => {
+    void listPricingImportProfiles()
+      .then((data) => setProfiles(data.filter((profile) => profile.isActive)))
+      .catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    void listPricingImportHistory(agreementId)
+      .then(setHistory)
+      .catch(() => undefined)
+    // Refresh once an import lands so the history reflects it immediately.
+  }, [agreementId, committed])
 
   function handleFileChange(nextFile: File | null) {
     setFile(nextFile)
@@ -85,7 +108,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
     setError(null)
     setCommitted(null)
     try {
-      setPreview(await previewPricingImport(agreementId, file))
+      setPreview(await previewPricingImport(agreementId, file, profileId || null))
     } catch (err) {
       setError(localizeApiError(t, err, t('tarification.importDialog.previewError')))
     } finally {
@@ -106,6 +129,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
       const result = await commitPricingImport(agreementId, file, {
         mode,
         applyRemovals,
+        profileId: profileId || null,
         newName: mode === 'DuplicateAsNewVersion' ? newName.trim() : null,
         newEffectiveFrom: mode === 'DuplicateAsNewVersion' ? newEffectiveFrom : null,
       })
@@ -155,6 +179,30 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
             onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
             disabled={busy}
           />
+        </FormField>
+
+        <FormField
+          label={t('tarification.import.profileLabel')}
+          htmlFor="pricing-import-profile"
+          hint={t('tarification.import.profileHint')}
+        >
+          <select
+            id="pricing-import-profile"
+            value={profileId}
+            onChange={(e) => {
+              setProfileId(e.target.value)
+              // The mapping decides how the file is read, so an existing preview is stale.
+              setPreview(null)
+            }}
+            disabled={busy}
+          >
+            <option value="">{t('tarification.import.profileNone')}</option>
+            {profiles.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+          </select>
         </FormField>
 
         <fieldset className="pricing-import-mode">
@@ -220,8 +268,52 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
           </p>
         )}
 
+        {!committed && !preview && (
+          <details className="pricing-import-history">
+            <summary>{t('tarification.import.historyTitle')}</summary>
+            {history.length === 0 && <p className="placeholder-text">{t('tarification.import.historyEmpty')}</p>}
+            {history.length > 0 && (
+              <table className="issued-items-table">
+                <thead>
+                  <tr>
+                    <th>{t('tarification.import.historyColumnWhen')}</th>
+                    <th>{t('tarification.import.historyColumnFile')}</th>
+                    <th>{t('tarification.import.historyColumnProfile')}</th>
+                    <th>{t('tarification.import.historyColumnResult')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((run) => (
+                    <tr key={run.id}>
+                      <td>{formatDateTime(run.importedAt)}</td>
+                      <td>{run.fileName}</td>
+                      <td>{run.profileName ?? t('tarification.import.profileNone')}</td>
+                      <td>
+                        {t('tarification.import.historyResult', {
+                          read: run.rowsRead,
+                          created: run.created,
+                          updated: run.updated,
+                          failed: run.failed,
+                        })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </details>
+        )}
+
         {!committed && preview && (
           <>
+            {preview.alreadyImported && (
+              <p className="customer-form-warning" role="status">
+                {t('tarification.import.alreadyImported', {
+                  when: preview.previousImportAt ? formatDateTime(preview.previousImportAt) : '—',
+                  file: preview.previousImportFileName ?? '—',
+                })}
+              </p>
+            )}
             <p className="pricing-import-summary">
               <strong>{preview.rowsFound}</strong> {t('tarification.importDialog.rowsFoundTail', { valid: preview.rowsValid })}{' '}
               {t('tarification.importDialog.warningCount', { count: preview.warnings.length })},{' '}

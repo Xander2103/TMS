@@ -17,11 +17,16 @@ public interface IPricingExcelService
 
     /// <summary>Null preview + non-null error = a file-level problem (not a workbook, empty, too big).</summary>
     Task<(PricingImportPreviewDto? Preview, string? Error)> PreviewAsync(
-        Guid agreementId, Stream workbook, CancellationToken cancellationToken);
+        Guid agreementId, Stream workbook, Guid? profileId, string? fileName, CancellationToken cancellationToken);
+
+    /// <summary>The header texts of an uploaded workbook, for the mapping step of the wizard.</summary>
+    Task<(IReadOnlyList<string>? Headers, string? Error)> ReadHeadersAsync(
+        Stream workbook, Guid? profileId, CancellationToken cancellationToken);
 
     /// <summary>Null result + null error = the agreement does not exist. Row errors throw DomainValidationException.</summary>
     Task<(PricingImportCommitResultDto? Result, string? Error)> CommitAsync(
-        Guid agreementId, PricingImportCommitRequest request, Stream workbook, CancellationToken cancellationToken);
+        Guid agreementId, PricingImportCommitRequest request, Stream workbook, Guid? profileId, string? fileName,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -192,6 +197,79 @@ public class PricingExcelService : IPricingExcelService
         return (unitCodes, zoneCodes, unitIdsByCode, zoneIdsByCode);
     }
 
+    /// <summary>Null id (or an unknown/inactive one) simply means "standard headers".</summary>
+    private async Task<PricingImportProfile?> LoadProfileAsync(Guid? profileId, CancellationToken cancellationToken)
+    {
+        if (profileId is not { } id) return null;
+        return await _dbContext.Set<PricingImportProfile>().AsNoTracking()
+            .FirstOrDefaultAsync(p => p.TenantId == TenantId && p.Id == id && p.IsActive, cancellationToken);
+    }
+
+    /// <summary>SHA-256 over the uploaded bytes; the stream is rewound for the parser.</summary>
+    private static async Task<string> ChecksumAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        if (stream.CanSeek) stream.Position = 0;
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        var hash = await sha.ComputeHashAsync(stream, cancellationToken);
+        if (stream.CanSeek) stream.Position = 0;
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    public async Task<(IReadOnlyList<string>? Headers, string? Error)> ReadHeadersAsync(
+        Stream stream, Guid? profileId, CancellationToken cancellationToken)
+    {
+        var profile = await LoadProfileAsync(profileId, cancellationToken);
+        XLWorkbook workbook;
+        try
+        {
+            workbook = new XLWorkbook(stream);
+        }
+        catch
+        {
+            return (null, "Het bestand is geen geldig Excel-werkboek (.xlsx).");
+        }
+
+        using var _ = workbook;
+        var sheetName = profile?.SheetName;
+        var sheet = (string.IsNullOrWhiteSpace(sheetName)
+                ? workbook.Worksheets.FirstOrDefault(w => w.Name == "Tarieven")
+                : workbook.Worksheets.FirstOrDefault(w => string.Equals(w.Name, sheetName, StringComparison.OrdinalIgnoreCase)))
+            ?? workbook.Worksheets.FirstOrDefault();
+        if (sheet is null) return (null, "Het werkboek bevat geen werkblad.");
+
+        var headerRow = profile?.HeaderRow is { } configured && configured > 0 ? configured : 1;
+        return (PricingImportColumns.ReadHeaders(sheet, headerRow), null);
+    }
+
+    /// <summary>
+    /// Records what an import did (sprint 4F). Written inside the import transaction, so a
+    /// rolled-back import leaves no history claiming it happened.
+    /// </summary>
+    private void RecordRun(
+        Guid agreementId, Guid targetAgreementId, string? fileName, string checksum,
+        PricingImportProfile? profile, PricingImportCommitRequest request, ParseOutcome outcome,
+        int added, int updated, int removed)
+    {
+        _dbContext.Set<PricingImportRun>().Add(new PricingImportRun
+        {
+            Id = Guid.NewGuid(),
+            TenantId = TenantId,
+            AgreementId = agreementId,
+            TargetAgreementId = targetAgreementId,
+            FileName = string.IsNullOrWhiteSpace(fileName) ? "onbekend.xlsx" : fileName.Trim(),
+            Checksum = checksum,
+            ProfileId = profile?.Id,
+            ProfileName = profile?.Name,
+            RowsRead = outcome.RowsFound,
+            RowsValid = outcome.RowsFound - outcome.Errors.Select(e => e.Row).Distinct().Count(),
+            Created = added,
+            Updated = updated,
+            Removed = removed,
+            Failed = outcome.Errors.Select(e => e.Row).Distinct().Count(),
+            Mode = request.Mode.ToString(),
+        });
+    }
+
     private static string SanitizeFileName(string name)
     {
         var invalid = Path.GetInvalidFileNameChars().Concat([' ', '/', '\\']).ToHashSet();
@@ -210,7 +288,7 @@ public class PricingExcelService : IPricingExcelService
     // ======================================================================
 
     public async Task<(PricingImportPreviewDto? Preview, string? Error)> PreviewAsync(
-        Guid agreementId, Stream workbook, CancellationToken cancellationToken)
+        Guid agreementId, Stream workbook, Guid? profileId, string? fileName, CancellationToken cancellationToken)
     {
         var agreement = await _dbContext.PricingAgreements.AsNoTracking()
             .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == agreementId, cancellationToken);
@@ -219,16 +297,25 @@ public class PricingExcelService : IPricingExcelService
             return (null, "De tarieventabel bestaat niet.");
         }
 
-        var outcome = await ParseWorkbookAsync(agreementId, agreement.EffectiveFrom, workbook, cancellationToken);
+        var profile = await LoadProfileAsync(profileId, cancellationToken);
+        var checksum = await ChecksumAsync(workbook, cancellationToken);
+        var outcome = await ParseWorkbookAsync(agreementId, agreement.EffectiveFrom, workbook, profile, cancellationToken);
         if (outcome.FileError is not null)
         {
             return (null, outcome.FileError);
         }
 
-        return (BuildPreviewDto(outcome), null);
+        // Sprint 4F: importing the identical file again is usually a mistake, so it is surfaced
+        // as a warning on the preview rather than silently repeated.
+        var previousImport = await _dbContext.Set<PricingImportRun>().AsNoTracking()
+            .Where(r => r.TenantId == TenantId && r.Checksum == checksum && r.AgreementId == agreementId)
+            .OrderByDescending(r => r.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return (BuildPreviewDto(outcome, previousImport), null);
     }
 
-    private static PricingImportPreviewDto BuildPreviewDto(ParseOutcome outcome)
+    private static PricingImportPreviewDto BuildPreviewDto(ParseOutcome outcome, PricingImportRun? previousImport = null)
     {
         // Preview always evaluates against the SOURCE agreement (the id in the URL), so the
         // file's Geldig van/tot are the rule's own real dates here — no window-preservation needed.
@@ -240,7 +327,10 @@ public class PricingExcelService : IPricingExcelService
                 .Select(w => new PricingImportRowMessageDto(w.Row, w.Message)).ToList(),
             outcome.Errors.OrderBy(e => e.Row)
                 .Select(e => new PricingImportRowMessageDto(e.Row, e.Message)).ToList(),
-            changes.AddedDto, changes.UpdatedDto, changes.RemovedDto);
+            changes.AddedDto, changes.UpdatedDto, changes.RemovedDto,
+            previousImport is not null,
+            previousImport?.CreatedAt,
+            previousImport?.FileName);
     }
 
     // ======================================================================
@@ -248,7 +338,8 @@ public class PricingExcelService : IPricingExcelService
     // ======================================================================
 
     public async Task<(PricingImportCommitResultDto? Result, string? Error)> CommitAsync(
-        Guid agreementId, PricingImportCommitRequest request, Stream workbook, CancellationToken cancellationToken)
+        Guid agreementId, PricingImportCommitRequest request, Stream workbook, Guid? profileId, string? fileName,
+        CancellationToken cancellationToken)
     {
         var agreement = await _dbContext.PricingAgreements
             .FirstOrDefaultAsync(a => a.TenantId == TenantId && a.Id == agreementId, cancellationToken);
@@ -263,7 +354,9 @@ public class PricingExcelService : IPricingExcelService
                 "Een afgeleide tabel heeft geen eigen regels; importeer in de basistabel.");
         }
 
-        var outcome = await ParseWorkbookAsync(agreementId, agreement.EffectiveFrom, workbook, cancellationToken);
+        var profile = await LoadProfileAsync(profileId, cancellationToken);
+        var checksum = await ChecksumAsync(workbook, cancellationToken);
+        var outcome = await ParseWorkbookAsync(agreementId, agreement.EffectiveFrom, workbook, profile, cancellationToken);
         if (outcome.FileError is not null)
         {
             throw new DomainValidationException(outcome.FileError);
@@ -346,11 +439,17 @@ public class PricingExcelService : IPricingExcelService
             }
         }
 
+        // Written before the save so the history row shares the import's transaction: a
+        // rollback must not leave history claiming the import happened.
+        RecordRun(agreementId, targetAgreement.Id, fileName, checksum, profile, request, outcome,
+            changes.ToAdd.Count, changes.ToUpdate.Count, removedCount);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
         await _auditService.RecordAsync("PricingAgreement", targetAgreement.Id.ToString(), "imported", null,
             new
             {
-                request.Mode, SourceAgreementId = agreementId,
+                request.Mode, SourceAgreementId = agreementId, FileName = fileName, Checksum = checksum,
+                ProfileId = profile?.Id,
                 Added = changes.ToAdd.Count, Updated = changes.ToUpdate.Count, Removed = removedCount,
             }, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
@@ -581,7 +680,8 @@ public class PricingExcelService : IPricingExcelService
     }
 
     private async Task<ParseOutcome> ParseWorkbookAsync(
-        Guid agreementId, DateOnly agreementEffectiveFrom, Stream stream, CancellationToken cancellationToken)
+        Guid agreementId, DateOnly agreementEffectiveFrom, Stream stream, PricingImportProfile? profile,
+        CancellationToken cancellationToken)
     {
         XLWorkbook workbook;
         try
@@ -594,16 +694,34 @@ public class PricingExcelService : IPricingExcelService
         }
 
         using var _ = workbook;
-        var sheet = workbook.Worksheets.FirstOrDefault(w => w.Name == "Tarieven") ?? workbook.Worksheets.FirstOrDefault();
+        var sheetName = profile?.SheetName;
+        var sheet = (string.IsNullOrWhiteSpace(sheetName)
+                ? workbook.Worksheets.FirstOrDefault(w => w.Name == "Tarieven")
+                : workbook.Worksheets.FirstOrDefault(w => string.Equals(w.Name, sheetName, StringComparison.OrdinalIgnoreCase)))
+            ?? workbook.Worksheets.FirstOrDefault();
         if (sheet is null)
         {
             return ParseOutcome.ForFileError("Het werkboek bevat geen werkblad.");
         }
 
-        var lastRow = sheet.LastRowUsed()?.RowNumber() ?? 1;
-        if (lastRow - 1 > MaxRows)
+        // Sprint 4D: columns are matched on their HEADER (optionally renamed by a mapping
+        // profile) instead of on a fixed position, so a customer's own layout imports as-is.
+        var headerRow = profile?.HeaderRow is { } configured && configured > 0 ? configured : 1;
+        var mapping = PricingImportColumns.ParseMapping(profile?.MappingJson);
+        var resolution = PricingImportColumns.Resolve(sheet, headerRow, mapping);
+        if (resolution.MissingRequired.Count > 0)
         {
-            return ParseOutcome.ForFileError($"Maximaal {MaxRows} rijen per import; dit bestand bevat er {lastRow - 1}.");
+            return ParseOutcome.ForFileError(
+                "Deze kolommen ontbreken in het bestand: " + string.Join(", ", resolution.MissingRequired)
+                + ". Kies een mappingprofiel of gebruik het standaardsjabloon.");
+        }
+
+        var columns = resolution.ColumnByField;
+
+        var lastRow = sheet.LastRowUsed()?.RowNumber() ?? headerRow;
+        if (lastRow - headerRow > MaxRows)
+        {
+            return ParseOutcome.ForFileError($"Maximaal {MaxRows} rijen per import; dit bestand bevat er {lastRow - headerRow}.");
         }
 
         var existingRules = await _dbContext.PriceRules.Include(r => r.Brackets)
@@ -616,7 +734,7 @@ public class PricingExcelService : IPricingExcelService
         var warnings = new List<(int Row, string Message)>();
         var rawRows = new List<RawRow>();
 
-        for (var rowNumber = 2; rowNumber <= lastRow; rowNumber += 1)
+        for (var rowNumber = headerRow + 1; rowNumber <= lastRow; rowNumber += 1)
         {
             var row = sheet.Row(rowNumber);
             if (row.CellsUsed().All(c => string.IsNullOrWhiteSpace(c.GetString())))
@@ -624,32 +742,34 @@ public class PricingExcelService : IPricingExcelService
                 continue;
             }
 
-            string Text(int column) => row.Cell(column).GetString().Trim();
+            // A column the file does not have reads as empty rather than shifting the layout.
+            IXLCell? Cell(string field) => columns.TryGetValue(field, out var column) ? row.Cell(column) : null;
+            string Text(string field) => Cell(field)?.GetString().Trim() ?? string.Empty;
 
-            var regelIdText = Text(1);
-            var name = Text(2);
-            var basisText = Text(3);
-            var unitCode = NullIfEmpty(Text(4))?.ToUpperInvariant();
-            var zoneCode = NullIfEmpty(Text(5))?.ToUpperInvariant();
-            var priorityValue = ParseDecimalCell(row.Cell(6), "Prioriteit", rowNumber, errors);
-            var staffelVan = ParseDecimalCell(row.Cell(7), "Staffel van", rowNumber, errors);
-            var staffelTot = ParseDecimalCell(row.Cell(8), "Staffel tot", rowNumber, errors);
-            var gewichtTot = ParseDecimalCell(row.Cell(9), "Gewicht tot (kg)", rowNumber, errors);
-            var volumeTot = ParseDecimalCell(row.Cell(10), "Volume tot (m³)", rowNumber, errors);
-            var laadmeterTot = ParseDecimalCell(row.Cell(11), "Laadmeter tot", rowNumber, errors);
+            var regelIdText = Text("regelId");
+            var name = Text("naam");
+            var basisText = Text("basis");
+            var unitCode = NullIfEmpty(Text("eenheid"))?.ToUpperInvariant();
+            var zoneCode = NullIfEmpty(Text("zone"))?.ToUpperInvariant();
+            var priorityValue = ParseDecimalCell(Cell("prioriteit"), "Prioriteit", rowNumber, errors);
+            var staffelVan = ParseDecimalCell(Cell("staffelVan"), "Staffel van", rowNumber, errors);
+            var staffelTot = ParseDecimalCell(Cell("staffelTot"), "Staffel tot", rowNumber, errors);
+            var gewichtTot = ParseDecimalCell(Cell("gewichtTot"), "Gewicht tot (kg)", rowNumber, errors);
+            var volumeTot = ParseDecimalCell(Cell("volumeTot"), "Volume tot (m³)", rowNumber, errors);
+            var laadmeterTot = ParseDecimalCell(Cell("laadmeterTot"), "Laadmeter tot", rowNumber, errors);
             // Monetary columns round to 2 decimals (the app-wide convention for EUR amounts);
             // quantity/measure columns above keep their parsed precision.
-            var staffelprijs = Round2(ParseDecimalCell(row.Cell(12), "Staffelprijs", rowNumber, errors));
-            var prijsPerExtra = Round2(ParseDecimalCell(row.Cell(13), "Prijs per extra", rowNumber, errors));
-            var eenheidsprijs = Round2(ParseDecimalCell(row.Cell(14), "Eenheidsprijs", rowNumber, errors));
-            var basisbedrag = Round2(ParseDecimalCell(row.Cell(15), "Basisbedrag", rowNumber, errors));
-            var minimum = Round2(ParseDecimalCell(row.Cell(16), "Minimum", rowNumber, errors));
-            var maximum = Round2(ParseDecimalCell(row.Cell(17), "Maximum", rowNumber, errors));
-            var minAantal = ParseDecimalCell(row.Cell(18), "Min. aantal", rowNumber, errors);
-            var afrondingsstap = ParseDecimalCell(row.Cell(19), "Afrondingsstap", rowNumber, errors);
-            var staffelmodusText = Text(20);
-            var geldigVan = ParseDateCell(row.Cell(21), "Geldig van", rowNumber, errors);
-            var geldigTot = ParseDateCell(row.Cell(22), "Geldig tot", rowNumber, errors);
+            var staffelprijs = Round2(ParseDecimalCell(Cell("staffelprijs"), "Staffelprijs", rowNumber, errors));
+            var prijsPerExtra = Round2(ParseDecimalCell(Cell("prijsPerExtra"), "Prijs per extra", rowNumber, errors));
+            var eenheidsprijs = Round2(ParseDecimalCell(Cell("eenheidsprijs"), "Eenheidsprijs", rowNumber, errors));
+            var basisbedrag = Round2(ParseDecimalCell(Cell("basisbedrag"), "Basisbedrag", rowNumber, errors));
+            var minimum = Round2(ParseDecimalCell(Cell("minimum"), "Minimum", rowNumber, errors));
+            var maximum = Round2(ParseDecimalCell(Cell("maximum"), "Maximum", rowNumber, errors));
+            var minAantal = ParseDecimalCell(Cell("minAantal"), "Min. aantal", rowNumber, errors);
+            var afrondingsstap = ParseDecimalCell(Cell("afrondingsstap"), "Afrondingsstap", rowNumber, errors);
+            var staffelmodusText = Text("staffelmodus");
+            var geldigVan = ParseDateCell(Cell("geldigVan"), "Geldig van", rowNumber, errors);
+            var geldigTot = ParseDateCell(Cell("geldigTot"), "Geldig tot", rowNumber, errors);
 
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -818,9 +938,9 @@ public class PricingExcelService : IPricingExcelService
     /// locale) are parsed with the invariant culture first, then nl-BE (comma decimals) as a
     /// fallback, since Belgian spreadsheets commonly use a comma.
     /// </summary>
-    private static decimal? ParseDecimalCell(IXLCell cell, string label, int rowNumber, List<(int Row, string Message)> errors)
+    private static decimal? ParseDecimalCell(IXLCell? cell, string label, int rowNumber, List<(int Row, string Message)> errors)
     {
-        if (cell.IsEmpty())
+        if (cell is null || cell.IsEmpty())
         {
             return null;
         }
@@ -850,9 +970,9 @@ public class PricingExcelService : IPricingExcelService
         return null;
     }
 
-    private static DateOnly? ParseDateCell(IXLCell cell, string label, int rowNumber, List<(int Row, string Message)> errors)
+    private static DateOnly? ParseDateCell(IXLCell? cell, string label, int rowNumber, List<(int Row, string Message)> errors)
     {
-        if (cell.IsEmpty())
+        if (cell is null || cell.IsEmpty())
         {
             return null;
         }

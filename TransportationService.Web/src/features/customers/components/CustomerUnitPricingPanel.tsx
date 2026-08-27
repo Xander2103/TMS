@@ -155,6 +155,10 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   const canManage = hasPermission('tariffs.manage')
 
   const [config, setConfig] = useState<CustomerPricingConfig | null>(null)
+  // Sprint 4A: the services table lists the tenant's GENERAL prices. Showing all of them made a
+  // company-wide default look like a price agreed with this customer, so only real customer
+  // deviations are listed unless the user asks for the full list.
+  const [showAllServices, setShowAllServices] = useState(false)
   const [rules, setRules] = useState<PriceRule[]>([])
   const [agreements, setAgreements] = useState<PricingAgreement[]>([])
   const [sharedAssigned, setSharedAssigned] = useState<AssignedSharedAgreement[]>([])
@@ -214,6 +218,14 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   if (!canView) return null
   if (loadError) return <p className="placeholder-text">{loadError}</p>
   if (!config) return <p className="placeholder-text">{t('customers.pricing.loading')}</p>
+
+  // A row is a customer DEVIATION when something was set for this customer specifically:
+  // an own value, a deliberate switch-off, or an own validity window.
+  const hasCustomerDeviation = (option: (typeof config.serviceOptions)[number]) =>
+    option.customerValue !== null || option.disabled || option.effectiveFrom !== null || option.effectiveUntil !== null
+  const visibleServiceOptions = showAllServices
+    ? config.serviceOptions
+    : config.serviceOptions.filter(hasCustomerDeviation)
 
   const now = today()
   const currentRules = rules.filter(
@@ -582,10 +594,11 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
   return (
     <section className="customer-panel">
       <div className="customer-panel-header">
-        <h3>{t('customers.pricing.agreementsTitle')}</h3>
+        <h3>{t('customers.pricing.basisTitle')}</h3>
         {canManage && <Button variant="secondary" onClick={() => openAgreementDraft(null)}>{t('customers.pricing.addAgreement')}</Button>}
       </div>
-      {agreements.length === 0 && sharedAssigned.length === 0 && (
+      {true && <p className="customer-form-muted">{t('customers.pricing.basisHint')}</p>}
+        {agreements.length === 0 && sharedAssigned.length === 0 && (
         <p className="placeholder-text">{t('customers.pricing.agreementsEmpty')}</p>
       )}
       {(agreements.length > 0 || sharedAssigned.length > 0) && (
@@ -683,14 +696,25 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
         </details>
       )}
 
-      <h4>{t('customers.pricing.servicesTitle')}</h4>
+      <h4>{t('customers.pricing.deviationsTitle')}</h4>
+      <p className="customer-form-muted">{t('customers.pricing.deviationsHint')}</p>
       <p className="customer-form-muted">{t('customers.pricing.servicesOverrideWarning')}</p>
+      <label className="customer-form-checkbox">
+        <input type="checkbox" checked={showAllServices} onChange={(e) => setShowAllServices(e.target.checked)} />
+        {t('customers.pricing.showAllStandardServices')}
+      </label>
+      {visibleServiceOptions.length === 0 && (
+        <p className="placeholder-text">
+          {showAllServices ? t('customers.pricing.noServices') : t('customers.pricing.noDeviations')}
+        </p>
+      )}
+      {visibleServiceOptions.length > 0 && (
       <table className="issued-items-table">
         <thead>
           <tr>
             <th>{t('customers.pricing.columnService')}</th>
-            <th>{t('customers.pricing.columnGeneralPrice')}</th>
-            <th>{t('customers.pricing.columnCustomerOverride')}</th>
+            <th>{t('customers.pricing.columnGeneralStandard')}</th>
+            <th>{t('customers.pricing.columnCustomerPrice')}</th>
             <th>{t('customers.pricing.columnValidity')}</th>
             <th>{t('customers.pricing.columnEffectivePrice')}</th>
             <th>{t('customers.pricing.columnSource')}</th>
@@ -699,9 +723,8 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
           </tr>
         </thead>
         <tbody>
-          {config.serviceOptions.map((option) => {
-            const hasOverride = option.customerValue !== null || option.disabled
-              || option.effectiveFrom !== null || option.effectiveUntil !== null
+          {visibleServiceOptions.map((option) => {
+            const hasOverride = hasCustomerDeviation(option)
             return (
               <tr key={option.serviceOptionId}>
                 <td>
@@ -814,6 +837,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
           })}
         </tbody>
       </table>
+      )}
 
       {draft && (
         <Modal

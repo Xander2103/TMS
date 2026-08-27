@@ -186,7 +186,7 @@ public class PricingExcelTests
         var (agreementId, _, _) = await SeedAgreementAsync(h);
         var (file, _) = await h.Excel.ExportAsync(agreementId, CancellationToken.None);
 
-        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(file!), CancellationToken.None);
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(file!), null, "test.xlsx", CancellationToken.None);
 
         Assert.Null(error);
         Assert.NotNull(preview);
@@ -211,7 +211,7 @@ public class PricingExcelTests
         var perKmRow = RowOf(file!, perKmRuleId);
         var modified = SetDecimal(file!, perKmRow, 14, 1.40m); // Eenheidsprijs column
 
-        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(modified), CancellationToken.None);
+        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(modified), null, "test.xlsx", CancellationToken.None);
         Assert.NotNull(preview);
         Assert.Empty(preview!.Added);
         Assert.Empty(preview.Removed);
@@ -222,7 +222,7 @@ public class PricingExcelTests
 
         var (commit, commitError) = await h.Excel.CommitAsync(
             agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
-            ToStream(modified), CancellationToken.None);
+            ToStream(modified), null, "test.xlsx", CancellationToken.None);
         Assert.Null(commitError);
         Assert.NotNull(commit);
         Assert.Equal(0, commit!.Added);
@@ -244,7 +244,7 @@ public class PricingExcelTests
         var withNewRow = AppendRow(file!,
             (2, "Statiegeld"), (3, "Fixed"), (14, 25m), (21, "2026-01-01"));
 
-        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(withNewRow), CancellationToken.None);
+        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(withNewRow), null, "test.xlsx", CancellationToken.None);
         Assert.NotNull(preview);
         Assert.Single(preview!.Added);
         Assert.Equal("Statiegeld", preview.Added[0].Name);
@@ -254,7 +254,7 @@ public class PricingExcelTests
 
         var (commit, _) = await h.Excel.CommitAsync(
             agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
-            ToStream(withNewRow), CancellationToken.None);
+            ToStream(withNewRow), null, "test.xlsx", CancellationToken.None);
         Assert.NotNull(commit);
         Assert.Equal(1, commit!.Added);
 
@@ -275,21 +275,21 @@ public class PricingExcelTests
         var perKmRow = RowOf(file!, perKmRuleId);
         var trimmed = DeleteRow(file!, perKmRow);
 
-        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(trimmed), CancellationToken.None);
+        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(trimmed), null, "test.xlsx", CancellationToken.None);
         Assert.NotNull(preview);
         Assert.Single(preview!.Removed);
         Assert.Equal(perKmRuleId, preview.Removed[0].RuleId);
 
         var (keepResult, _) = await h.Excel.CommitAsync(
             agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
-            ToStream(trimmed), CancellationToken.None);
+            ToStream(trimmed), null, "test.xlsx", CancellationToken.None);
         Assert.NotNull(keepResult);
         Assert.Equal(0, keepResult!.Removed);
         Assert.True(await h.Db.Context.PriceRules.AnyAsync(r => r.Id == perKmRuleId));
 
         var (deleteResult, _) = await h.Excel.CommitAsync(
             agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, true, null, null),
-            ToStream(trimmed), CancellationToken.None);
+            ToStream(trimmed), null, "test.xlsx", CancellationToken.None);
         Assert.NotNull(deleteResult);
         Assert.Equal(1, deleteResult!.Removed);
         Assert.False(await h.Db.Context.PriceRules.AnyAsync(r => r.Id == perKmRuleId));
@@ -307,14 +307,14 @@ public class PricingExcelTests
 
     private static async Task AssertBlocksWithRowErrorAsync(Harness h, Guid agreementId, byte[] badFile, int expectedRow, string messageFragment)
     {
-        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(badFile), CancellationToken.None);
+        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(badFile), null, "test.xlsx", CancellationToken.None);
         Assert.NotNull(preview);
         Assert.Contains(preview!.Errors, e => e.Row == expectedRow && e.Message.Contains(messageFragment));
         Assert.True(preview.RowsValid < preview.RowsFound);
 
         var ex = await Assert.ThrowsAsync<DomainValidationException>(() => h.Excel.CommitAsync(
             agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
-            ToStream(badFile), CancellationToken.None));
+            ToStream(badFile), null, "test.xlsx", CancellationToken.None));
         Assert.Contains($"Rij {expectedRow}", ex.Message);
     }
 
@@ -437,7 +437,7 @@ public class PricingExcelTests
         var duplicateRow = sheetForRowLookup.LastRowUsed()!.RowNumber();
         lookupWorkbook.Dispose();
 
-        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(withDuplicate), CancellationToken.None);
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(withDuplicate), null, "test.xlsx", CancellationToken.None);
         Assert.Null(error);
         Assert.NotNull(preview);
         Assert.Contains(preview!.Warnings, w => w.Row == duplicateRow && w.Message.Contains("Dubbele rij"));
@@ -446,7 +446,7 @@ public class PricingExcelTests
 
         var (commit, commitError) = await h.Excel.CommitAsync(
             agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
-            ToStream(withDuplicate), CancellationToken.None);
+            ToStream(withDuplicate), null, "test.xlsx", CancellationToken.None);
         Assert.Null(commitError);
         Assert.NotNull(commit);
         Assert.Equal(0, commit!.Added);
@@ -478,7 +478,7 @@ public class PricingExcelTests
         var priorityRow = RowOf(file!, priorityRule.Id);
         var cleared = Clear(file!, priorityRow, 6); // Prioriteit column, for the non-zero-priority rule
 
-        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(cleared), CancellationToken.None);
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(cleared), null, "test.xlsx", CancellationToken.None);
         Assert.Null(error);
         Assert.NotNull(preview);
         Assert.Empty(preview!.Errors); // a warning never blocks
@@ -489,12 +489,12 @@ public class PricingExcelTests
         // Clearing the ALREADY-zero perKmRule's priority cell must not warn — nothing changed.
         var perKmRow = RowOf(cleared, perKmRuleId);
         var alsoCleared = Clear(cleared, perKmRow, 6);
-        var (preview2, _) = await h.Excel.PreviewAsync(agreementId, ToStream(alsoCleared), CancellationToken.None);
+        var (preview2, _) = await h.Excel.PreviewAsync(agreementId, ToStream(alsoCleared), null, "test.xlsx", CancellationToken.None);
         Assert.DoesNotContain(preview2!.Warnings, w => w.Row == perKmRow);
 
         var (commit, commitError) = await h.Excel.CommitAsync(
             agreementId, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
-            ToStream(cleared), CancellationToken.None);
+            ToStream(cleared), null, "test.xlsx", CancellationToken.None);
         Assert.Null(commitError);
         Assert.NotNull(commit);
         var updatedRule = await h.Db.Context.PriceRules.SingleAsync(r => r.Id == priorityRule.Id);
@@ -548,7 +548,7 @@ public class PricingExcelTests
         var (result, error) = await h.Excel.CommitAsync(
             agreementId,
             new PricingImportCommitRequest(PricingImportMode.DuplicateAsNewVersion, false, "Distributie België 2027", new DateOnly(2027, 1, 1)),
-            ToStream(modified), CancellationToken.None);
+            ToStream(modified), null, "test.xlsx", CancellationToken.None);
 
         Assert.Null(error);
         Assert.NotNull(result);
@@ -582,7 +582,7 @@ public class PricingExcelTests
 
         var ex = await Assert.ThrowsAsync<DomainValidationException>(() => h.Excel.CommitAsync(
             derived.Id, new PricingImportCommitRequest(PricingImportMode.UpdateAgreement, false, null, null),
-            new MemoryStream(baseFile!), CancellationToken.None));
+            new MemoryStream(baseFile!), null, "test.xlsx", CancellationToken.None));
         Assert.Contains("afgeleide tabel", ex.Message);
     }
 
@@ -602,7 +602,7 @@ public class PricingExcelTests
         var ruleCountBefore = await h.Db.Context.PriceRules.CountAsync();
         var bracketCountBefore = await h.Db.Context.PriceRuleBrackets.CountAsync();
 
-        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(withNewRow), CancellationToken.None);
+        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(withNewRow), null, "test.xlsx", CancellationToken.None);
         Assert.NotNull(preview);
         Assert.NotEmpty(preview!.Added);
 
@@ -628,7 +628,7 @@ public class PricingExcelTests
         var foreignAdmin = new PricingAdminService(h.Db.Context, foreignTenant, foreignAudit);
         var foreignExcel = new PricingExcelService(h.Db.Context, foreignTenant, foreignAudit, foreignAdmin);
 
-        var (preview, error) = await foreignExcel.PreviewAsync(agreementId, new MemoryStream(file!), CancellationToken.None);
+        var (preview, error) = await foreignExcel.PreviewAsync(agreementId, new MemoryStream(file!), null, "test.xlsx", CancellationToken.None);
         Assert.Null(preview);
         Assert.NotNull(error);
 
