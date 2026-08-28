@@ -154,13 +154,19 @@ public class AccountingService : IAccountingService
     {
         await EnsureSeededAsync(cancellationToken);
         return await _db.SalesCategories.AsNoTracking()
+            .Include(c => c.LedgerMappings)
             .Where(c => c.TenantId == TenantId && (includeInactive || c.IsActive))
             .OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
             .Select(c => new SalesCategoryDto(
                 c.Id, c.Code, c.Name, c.SystemRole,
                 c.LedgerAccountId, c.LedgerAccount!.AccountNumber, c.LedgerAccount.Name,
                 c.IsActive, c.SortOrder,
-                c.InvoiceDescriptionNl, c.DefaultUnitCode, c.VatCategoryOverride))
+                c.InvoiceDescriptionNl, c.DefaultUnitCode, c.VatCategoryOverride,
+                c.InvoiceDescriptionFr, c.InvoiceDescriptionEn, c.InvoiceDescriptionDe,
+                c.IncludeInDieselBase, c.VatTreatmentOverride,
+                c.CostCentre, c.DefaultUnitPrice, c.DefaultPricingBasis, c.Notes,
+                c.LedgerMappings.Select(m => new SalesCategoryLedgerMappingDto(
+                    m.LegalEntityId, m.LedgerAccountId, m.CostCentre)).ToList()))
             .ToListAsync(cancellationToken);
     }
 
@@ -170,6 +176,7 @@ public class AccountingService : IAccountingService
         await ValidateCategoryAsync(request, existingId: null, cancellationToken);
         var category = new SalesCategory { Id = Guid.NewGuid(), TenantId = TenantId };
         await ApplyCategoryAsync(category, request, cancellationToken);
+        ApplyLedgerMappings(category, request.LedgerMappings);
         _db.SalesCategories.Add(category);
         await _db.SaveChangesAsync(cancellationToken);
         await _audit.RecordAsync("SalesCategory", category.Id.ToString(), "Created", null,
@@ -195,6 +202,7 @@ public class AccountingService : IAccountingService
         var oldValues = new { category.Code, category.Name, category.SystemRole, category.IsActive, Grootboekrekening = oldAccount };
 
         await ApplyCategoryAsync(category, request, cancellationToken);
+        ApplyLedgerMappings(category, request.LedgerMappings);
         await _db.SaveChangesAsync(cancellationToken);
 
         var newAccount = category.LedgerAccountId is { } newId
@@ -315,6 +323,44 @@ public class AccountingService : IAccountingService
         category.DefaultUnitCode = string.IsNullOrWhiteSpace(request.DefaultUnitCode)
             ? null : request.DefaultUnitCode.Trim().ToUpperInvariant();
         category.VatCategoryOverride = vatOverride;
+
+        // Sprint 5: the commercial article fields. Empty strings are stored as null so a
+        // missing description falls through the language chain instead of printing blank.
+        category.InvoiceDescriptionFr = Blank(request.InvoiceDescriptionFr);
+        category.InvoiceDescriptionEn = Blank(request.InvoiceDescriptionEn);
+        category.InvoiceDescriptionDe = Blank(request.InvoiceDescriptionDe);
+        category.IncludeInDieselBase = request.IncludeInDieselBase;
+        category.VatTreatmentOverride = request.VatTreatmentOverride;
+        category.CostCentre = Blank(request.CostCentre);
+        category.DefaultUnitPrice = request.DefaultUnitPrice;
+        category.DefaultPricingBasis = Blank(request.DefaultPricingBasis);
+        category.Notes = Blank(request.Notes);
+    }
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    /// Replaces the per-entity ledger overrides wholesale: nothing outside the sales code
+    /// references an individual mapping row, and a diff would only add ceremony.
+    /// </summary>
+    private void ApplyLedgerMappings(SalesCategory category, IReadOnlyList<SalesCategoryLedgerMappingDto>? mappings)
+    {
+        _db.RemoveRange(category.LedgerMappings);
+        category.LedgerMappings.Clear();
+        if (mappings is null) return;
+
+        foreach (var mapping in mappings.DistinctBy(m => m.LegalEntityId))
+        {
+            category.LedgerMappings.Add(new SalesCategoryLedgerMapping
+            {
+                Id = Guid.NewGuid(),
+                TenantId = TenantId,
+                SalesCategoryId = category.Id,
+                LegalEntityId = mapping.LegalEntityId,
+                LedgerAccountId = mapping.LedgerAccountId,
+                CostCentre = Blank(mapping.CostCentre),
+            });
+        }
     }
 
     private static LedgerAccountDto Map(LedgerAccount account) =>
@@ -330,6 +376,12 @@ public class AccountingService : IAccountingService
             category.Id, category.Code, category.Name, category.SystemRole,
             category.LedgerAccountId, account?.AccountNumber, account?.Name,
             category.IsActive, category.SortOrder,
-            category.InvoiceDescriptionNl, category.DefaultUnitCode, category.VatCategoryOverride);
+            category.InvoiceDescriptionNl, category.DefaultUnitCode, category.VatCategoryOverride,
+            category.InvoiceDescriptionFr, category.InvoiceDescriptionEn, category.InvoiceDescriptionDe,
+            category.IncludeInDieselBase, category.VatTreatmentOverride,
+            category.CostCentre, category.DefaultUnitPrice, category.DefaultPricingBasis, category.Notes,
+            category.LedgerMappings
+                .Select(m => new SalesCategoryLedgerMappingDto(m.LegalEntityId, m.LedgerAccountId, m.CostCentre))
+                .ToList());
     }
 }

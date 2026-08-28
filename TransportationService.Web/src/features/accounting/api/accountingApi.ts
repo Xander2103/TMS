@@ -30,7 +30,36 @@ export interface SalesCategoryWave2Fields {
   vatCategoryOverride?: string | null
 }
 
-export interface SalesCategory extends SalesCategoryWave2Fields {
+/** The four supported invoice languages for an approved sales-code description. */
+export const SALES_CODE_LANGUAGES = ['nl', 'fr', 'en', 'de'] as const
+
+/**
+ * Sprint 5 — the commercial article master. Descriptions are APPROVED master data: the invoice
+ * uses the customer's invoice language and never translates on the fly.
+ */
+export interface SalesCodeFields {
+  invoiceDescriptionFr?: string | null
+  invoiceDescriptionEn?: string | null
+  invoiceDescriptionDe?: string | null
+  /** "Meetellen in basis dieseltoeslag". */
+  includeInDieselBase?: boolean
+  /** Exceptional statutory classification; null = the customer's treatment decides. */
+  vatTreatmentOverride?: string | null
+  costCentre?: string | null
+  defaultUnitPrice?: number | null
+  defaultPricingBasis?: string | null
+  notes?: string | null
+  /** Per-invoicing-entity ledger overrides. */
+  ledgerMappings?: SalesCategoryLedgerMapping[] | null
+}
+
+export interface SalesCategoryLedgerMapping {
+  legalEntityId: string
+  ledgerAccountId: string
+  costCentre: string | null
+}
+
+export interface SalesCategory extends SalesCategoryWave2Fields, SalesCodeFields {
   id: string
   code: string
   name: string
@@ -42,7 +71,7 @@ export interface SalesCategory extends SalesCategoryWave2Fields {
   sortOrder: number
 }
 
-export interface SalesCategoryInput {
+export interface SalesCategoryInput extends SalesCodeFields {
   code: string
   name: string
   systemRole: SalesCategorySystemRole

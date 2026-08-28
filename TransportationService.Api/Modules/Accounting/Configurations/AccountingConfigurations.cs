@@ -37,3 +37,24 @@ public class SalesCategoryConfiguration : IEntityTypeConfiguration<SalesCategory
         builder.HasQueryFilter(c => !c.IsDeleted);
     }
 }
+
+/// <summary>
+/// Sprint 5G: per-invoicing-entity ledger mapping for a sales code, so one code can book to a
+/// different account per legal entity without duplicating the code.
+/// </summary>
+public class SalesCategoryLedgerMappingConfiguration : IEntityTypeConfiguration<SalesCategoryLedgerMapping>
+{
+    public void Configure(EntityTypeBuilder<SalesCategoryLedgerMapping> builder)
+    {
+        builder.ToTable("sales_category_ledger_mappings");
+        builder.HasKey(m => m.Id);
+
+        builder.Property(m => m.CostCentre).HasMaxLength(40);
+
+        // One mapping per code per invoicing entity.
+        builder.HasIndex(m => new { m.TenantId, m.SalesCategoryId, m.LegalEntityId })
+            .IsUnique().HasFilter("\"IsDeleted\" = false");
+
+        builder.HasQueryFilter(m => !m.IsDeleted);
+    }
+}

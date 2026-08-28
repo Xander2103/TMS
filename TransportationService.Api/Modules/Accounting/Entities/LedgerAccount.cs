@@ -1,4 +1,5 @@
 using TransportationService.Api.Common.Abstractions;
+using TransportationService.Api.Modules.Partners.Entities;
 
 namespace TransportationService.Api.Modules.Accounting.Entities;
 
@@ -64,4 +65,58 @@ public class SalesCategory : AuditableTenantEntity
     /// treatment decides (VatTreatmentCatalog chain, the default and the norm).
     /// </summary>
     public string? VatCategoryOverride { get; set; }
+
+    // --- Sprint 5: commercial article master ---------------------------------
+    // The sales code IS this record; these fields complete it rather than introducing a
+    // second article table. InvoiceDescriptionNl above is the Dutch member of the set below.
+
+    /// <summary>Approved French invoice description; null falls back to Dutch, then to Name.</summary>
+    public string? InvoiceDescriptionFr { get; set; }
+
+    /// <inheritdoc cref="InvoiceDescriptionFr"/>
+    public string? InvoiceDescriptionEn { get; set; }
+
+    /// <inheritdoc cref="InvoiceDescriptionFr"/>
+    public string? InvoiceDescriptionDe { get; set; }
+
+    /// <summary>
+    /// "Meetellen in basis dieseltoeslag". Transport counts; an administrative fee does not.
+    /// The diesel code itself is excluded structurally by its <see cref="SystemRole"/>, so the
+    /// surcharge can never be charged over itself.
+    /// </summary>
+    public bool IncludeInDieselBase { get; set; }
+
+    /// <summary>
+    /// EXCEPTIONAL statutory classification for this code. Null (the normal case) leaves the
+    /// customer's fiscal treatment in charge; set it only for codes that are always treated
+    /// differently regardless of the customer.
+    /// </summary>
+    public VatTreatment? VatTreatmentOverride { get; set; }
+
+    /// <summary>Optional cost centre for the accounting export.</summary>
+    public string? CostCentre { get; set; }
+
+    /// <summary>Optional simple default price for codes with one fixed amount.</summary>
+    public decimal? DefaultUnitPrice { get; set; }
+
+    /// <summary>Free-form pricing-basis hint (e.g. "Hourly", "PerKm") for the pricing engine.</summary>
+    public string? DefaultPricingBasis { get; set; }
+
+    public string? Notes { get; set; }
+
+    /// <summary>Per-invoicing-entity ledger overrides; empty = every entity uses <see cref="LedgerAccountId"/>.</summary>
+    public List<SalesCategoryLedgerMapping> LedgerMappings { get; set; } = [];
+}
+
+/// <summary>
+/// Per-invoicing-entity ledger mapping for the SAME sales code — entity A books ADM on
+/// 700000, entity B on 704100. Exists so a code is never duplicated just because the
+/// accounting export differs.
+/// </summary>
+public class SalesCategoryLedgerMapping : AuditableTenantEntity
+{
+    public Guid SalesCategoryId { get; set; }
+    public Guid LegalEntityId { get; set; }
+    public Guid LedgerAccountId { get; set; }
+    public string? CostCentre { get; set; }
 }

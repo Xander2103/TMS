@@ -267,6 +267,9 @@ public class TransportationDbContext : DbContext
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.ServiceOptionCondition> ServiceOptionConditions => Set<TransportationService.Api.Modules.Tarification.Entities.ServiceOptionCondition>();
     public DbSet<TransportationService.Api.Modules.Accounting.Entities.LedgerAccount> LedgerAccounts => Set<TransportationService.Api.Modules.Accounting.Entities.LedgerAccount>();
     public DbSet<TransportationService.Api.Modules.Accounting.Entities.SalesCategory> SalesCategories => Set<TransportationService.Api.Modules.Accounting.Entities.SalesCategory>();
+
+    /// <summary>Per-invoicing-entity ledger mapping for the same sales code (sprint 5G).</summary>
+    public DbSet<TransportationService.Api.Modules.Accounting.Entities.SalesCategoryLedgerMapping> SalesCategoryLedgerMappings => Set<TransportationService.Api.Modules.Accounting.Entities.SalesCategoryLedgerMapping>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.ServiceOption> ServiceOptions => Set<TransportationService.Api.Modules.Tarification.Entities.ServiceOption>();
     public DbSet<TransportationService.Api.Modules.Tarification.Entities.TenantHoliday> TenantHolidays => Set<TransportationService.Api.Modules.Tarification.Entities.TenantHoliday>();
     public DbSet<TransportationService.Api.Modules.Warehousing.Entities.WarehouseLocation> WarehouseLocations => Set<TransportationService.Api.Modules.Warehousing.Entities.WarehouseLocation>();

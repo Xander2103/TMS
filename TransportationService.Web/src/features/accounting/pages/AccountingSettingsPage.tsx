@@ -43,6 +43,13 @@ interface CategoryDraft {
   invoiceDescriptionNl: string
   defaultUnitCode: string
   vatCategoryOverride: string
+  // Sprint 5: the commercial article fields.
+  invoiceDescriptionFr: string
+  invoiceDescriptionEn: string
+  invoiceDescriptionDe: string
+  includeInDieselBase: boolean
+  vatTreatmentOverride: string
+  costCentre: string
 }
 
 /**
@@ -151,6 +158,14 @@ export function AccountingSettingsPage() {
         invoiceDescriptionNl: categoryDraft.invoiceDescriptionNl.trim() || null,
         defaultUnitCode: categoryDraft.defaultUnitCode.trim() || null,
         vatCategoryOverride: categoryDraft.vatCategoryOverride || null,
+        invoiceDescriptionFr: categoryDraft.invoiceDescriptionFr.trim() || null,
+        invoiceDescriptionEn: categoryDraft.invoiceDescriptionEn.trim() || null,
+        invoiceDescriptionDe: categoryDraft.invoiceDescriptionDe.trim() || null,
+        includeInDieselBase: categoryDraft.includeInDieselBase,
+        vatTreatmentOverride: categoryDraft.vatTreatmentOverride || null,
+        costCentre: categoryDraft.costCentre.trim() || null,
+        // Untouched here: the per-entity ledger overrides keep whatever is configured.
+        ledgerMappings: categoryDraft.category?.ledgerMappings ?? null,
       }
       if (categoryDraft.category) {
         await updateSalesCategory(categoryDraft.category.id, input)
@@ -188,6 +203,8 @@ export function AccountingSettingsPage() {
               setCategoryDraft({
                 category: null, code: '', name: '', systemRole: 'None', isActive: true,
                 invoiceDescriptionNl: '', defaultUnitCode: '', vatCategoryOverride: '',
+                invoiceDescriptionFr: '', invoiceDescriptionEn: '', invoiceDescriptionDe: '',
+                includeInDieselBase: false, vatTreatmentOverride: '', costCentre: '',
               })
             }}>
               {t('accounting.categories.add')}
@@ -262,6 +279,12 @@ export function AccountingSettingsPage() {
                           systemRole: category.systemRole,
                           isActive: category.isActive,
                           invoiceDescriptionNl: category.invoiceDescriptionNl ?? '',
+                          invoiceDescriptionFr: category.invoiceDescriptionFr ?? '',
+                          invoiceDescriptionEn: category.invoiceDescriptionEn ?? '',
+                          invoiceDescriptionDe: category.invoiceDescriptionDe ?? '',
+                          includeInDieselBase: category.includeInDieselBase ?? false,
+                          vatTreatmentOverride: category.vatTreatmentOverride ?? '',
+                          costCentre: category.costCentre ?? '',
                           defaultUnitCode: category.defaultUnitCode ?? '',
                           vatCategoryOverride: category.vatCategoryOverride ?? '',
                         })
@@ -434,6 +457,46 @@ export function AccountingSettingsPage() {
               <input id="sc-invoice-desc" value={categoryDraft.invoiceDescriptionNl} maxLength={300}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, invoiceDescriptionNl: e.target.value } : d))} />
             </FormField>
+            <FormField label={t('accounting.categories.invoiceDescriptionFr')} htmlFor="sc-desc-fr">
+              <input id="sc-desc-fr" value={categoryDraft.invoiceDescriptionFr} maxLength={300}
+                onChange={(e) => setCategoryDraft((d) => (d ? { ...d, invoiceDescriptionFr: e.target.value } : d))} />
+            </FormField>
+            <FormField label={t('accounting.categories.invoiceDescriptionEn')} htmlFor="sc-desc-en">
+              <input id="sc-desc-en" value={categoryDraft.invoiceDescriptionEn} maxLength={300}
+                onChange={(e) => setCategoryDraft((d) => (d ? { ...d, invoiceDescriptionEn: e.target.value } : d))} />
+            </FormField>
+            <FormField label={t('accounting.categories.invoiceDescriptionDe')} htmlFor="sc-desc-de">
+              <input id="sc-desc-de" value={categoryDraft.invoiceDescriptionDe} maxLength={300}
+                onChange={(e) => setCategoryDraft((d) => (d ? { ...d, invoiceDescriptionDe: e.target.value } : d))} />
+            </FormField>
+            <FormField
+              label={t('accounting.categories.vatTreatmentOverrideLabel')}
+              htmlFor="sc-vat-treatment"
+              hint={t('accounting.categories.vatTreatmentOverrideHint')}
+            >
+              <select id="sc-vat-treatment" value={categoryDraft.vatTreatmentOverride}
+                onChange={(e) => setCategoryDraft((d) => (d ? { ...d, vatTreatmentOverride: e.target.value } : d))}>
+                <option value="">{t('accounting.categories.vatTreatmentFollowsCustomer')}</option>
+                <option value="DomesticVat">{t('customers.vatTreatment.DomesticVat')}</option>
+                <option value="ReverseCharge">{t('customers.vatTreatment.ReverseCharge')}</option>
+                <option value="IntraCommunitySupply">{t('customers.vatTreatment.IntraCommunitySupply')}</option>
+                <option value="ExportOutsideEu">{t('customers.vatTreatment.ExportOutsideEu')}</option>
+                <option value="VatExempt">{t('customers.vatTreatment.VatExempt')}</option>
+              </select>
+            </FormField>
+            <FormField label={t('accounting.categories.costCentreLabel')} htmlFor="sc-cost-centre">
+              <input id="sc-cost-centre" value={categoryDraft.costCentre} maxLength={40}
+                onChange={(e) => setCategoryDraft((d) => (d ? { ...d, costCentre: e.target.value } : d))} />
+            </FormField>
+            <label className="customer-form-checkbox">
+              <input
+                type="checkbox"
+                checked={categoryDraft.includeInDieselBase}
+                onChange={(e) => setCategoryDraft((d) => (d ? { ...d, includeInDieselBase: e.target.checked } : d))}
+              />
+              {t('accounting.categories.includeInDieselBase')}
+            </label>
+            <p className="customer-form-muted">{t('accounting.categories.includeInDieselBaseHint')}</p>
             <FormField label={t('accounting.categories.defaultUnitLabel')} htmlFor="sc-unit" hint={t('accounting.categories.defaultUnitHint')}>
               <input id="sc-unit" value={categoryDraft.defaultUnitCode} maxLength={10}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, defaultUnitCode: e.target.value } : d))} />

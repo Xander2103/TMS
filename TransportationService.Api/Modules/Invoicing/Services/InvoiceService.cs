@@ -829,6 +829,10 @@ public class InvoiceService : IInvoiceService
             // exclusively from these snapshots.
             await FreezeLedgerSnapshotsAsync(invoice, cancellationToken);
             FreezeVatCategories(invoice);
+            // Sprint 5H: freeze the sales-code, description-language, fiscal-treatment and
+            // cost-centre snapshot too, so a finalized invoice stays reproducible after the
+            // sales code, its translations or its ledger mapping are edited.
+            await FreezeSalesCodeSnapshotsAsync(invoice, cancellationToken);
         }
 
         if (target == InvoiceStatus.Cancelled)
@@ -1108,6 +1112,85 @@ public class InvoiceService : IInvoiceService
             // Wave 2: a sales code can force the UNCL5305 VAT category; an explicit line value
             // always wins, and null keeps the customer's VAT-treatment chain authoritative.
             line.VatCategoryCode ??= category.VatCategoryOverride;
+        }
+    }
+
+    /// <summary>
+    /// Sprint 5H — freezes everything a line needs to be reproduced later: the sales code as it
+    /// read at finalization, the language its customer-facing description was taken in, the
+    /// fiscal treatment WITH the level that decided it, its statutory wording, and the ledger /
+    /// cost centre of the invoicing entity. Never overwrites an already-frozen value, so a
+    /// re-run (or a later correction flow) cannot rewrite history.
+    /// </summary>
+    private async Task FreezeSalesCodeSnapshotsAsync(Invoice invoice, CancellationToken cancellationToken)
+    {
+        var lines = invoice.Lines.Where(l => !l.IsDeleted && l.SalesCategoryId is not null && l.VatTreatmentSnapshot is null).ToList();
+        if (lines.Count == 0)
+        {
+            return;
+        }
+
+        var codeIds = lines.Select(l => l.SalesCategoryId!.Value).Distinct().ToList();
+        var salesCodes = await _dbContext.SalesCategories
+            .Include(c => c.LedgerMappings)
+            .Where(c => c.TenantId == _tenantContext.TenantId && codeIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, cancellationToken);
+
+        var customerTreatment = Enum.TryParse<VatTreatment>(invoice.CustomerVatTreatment, out var parsed)
+            ? (VatTreatment?)parsed
+            : null;
+
+        var ledgerNumbers = await _dbContext.LedgerAccounts.AsNoTracking()
+            .Where(a => a.TenantId == _tenantContext.TenantId)
+            .Select(a => new { a.Id, a.AccountNumber, a.Name })
+            .ToDictionaryAsync(a => a.Id, cancellationToken);
+
+        foreach (var line in lines)
+        {
+            if (!salesCodes.TryGetValue(line.SalesCategoryId!.Value, out var salesCode))
+            {
+                continue;
+            }
+
+            var lineOverride = Enum.TryParse<VatTreatment>(line.VatTreatmentOverride, out var overridden)
+                ? (VatTreatment?)overridden
+                : null;
+
+            var resolution = Modules.Accounting.Services.InvoiceLineFiscalResolver.Resolve(
+                lineOverride, salesCode, customerTreatment, line.VatRatePercent, line.VatRatePercent);
+
+            line.SalesCodeSnapshot = salesCode.Code;
+            line.DescriptionLanguageSnapshot = invoice.LanguageCode;
+
+            // Sprint 5E/5F: put the APPROVED description for the invoice language on the line —
+            // but only when the current text is still the code's own default. A label typed or
+            // configured specifically for this line/order is the user's wording and is kept.
+            var approved = Modules.Accounting.Services.InvoiceLineFiscalResolver.DescriptionFor(salesCode, invoice.LanguageCode);
+            var isDefaultText = string.IsNullOrWhiteSpace(line.Description)
+                || string.Equals(line.Description, salesCode.Name, StringComparison.Ordinal)
+                || string.Equals(line.Description, salesCode.InvoiceDescriptionNl, StringComparison.Ordinal);
+            if (isDefaultText && !string.IsNullOrWhiteSpace(approved))
+            {
+                line.Description = approved;
+            }
+            line.VatTreatmentSnapshot = resolution.Treatment.ToString();
+            line.VatTreatmentSourceSnapshot = resolution.Source.ToString();
+            line.VatLegalTextSnapshot = resolution.LegalText;
+            line.VatCategoryCode ??= resolution.VatCategoryCode;
+
+            var (ledgerAccountId, costCentre) =
+                Modules.Accounting.Services.InvoiceLineFiscalResolver.LedgerFor(salesCode, invoice.LegalEntityId);
+            line.CostCentreSnapshot = costCentre;
+
+            // The sales code's entity-specific mapping wins over the category default, but only
+            // when the line has not already frozen an account.
+            if (ledgerAccountId is { } accountId && line.LedgerAccountNumberSnapshot is null
+                && ledgerNumbers.TryGetValue(accountId, out var account))
+            {
+                line.LedgerAccountId = accountId;
+                line.LedgerAccountNumberSnapshot = account.AccountNumber;
+                line.LedgerAccountNameSnapshot = account.Name;
+            }
         }
     }
 

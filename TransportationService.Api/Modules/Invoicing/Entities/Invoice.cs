@@ -160,4 +160,38 @@ public class InvoiceLine : AuditableTenantEntity
     public Guid? LedgerAccountId { get; set; }
     public string? LedgerAccountNumberSnapshot { get; set; }
     public string? LedgerAccountNameSnapshot { get; set; }
+
+    // --- Sales code + fiscal snapshot (sprint 5H) ---
+    // Everything needed to reproduce this line's commercial and fiscal meaning later, even
+    // after the sales code, its translations or its ledger mapping have been edited.
+
+    /// <summary>
+    /// The sales code as it read at finalization ("ADM"), independent of later renames. The
+    /// code itself is <see cref="SalesCategoryId"/> above — this freezes its printed code.
+    /// </summary>
+    public string? SalesCodeSnapshot { get; set; }
+
+    /// <summary>The invoice language the customer-facing <see cref="Description"/> was taken in.</summary>
+    public string? DescriptionLanguageSnapshot { get; set; }
+
+    /// <summary>The fiscal treatment that applied, as text (e.g. "ReverseCharge").</summary>
+    public string? VatTreatmentSnapshot { get; set; }
+
+    /// <summary>Which level decided it: LineOverride | SalesCode | Customer | TenantDefault.</summary>
+    public string? VatTreatmentSourceSnapshot { get; set; }
+
+    /// <summary>Statutory wording printed for this line's treatment, frozen with it.</summary>
+    public string? VatLegalTextSnapshot { get; set; }
+
+    /// <summary>Cost centre resolved from the sales code / entity mapping at finalization.</summary>
+    public string? CostCentreSnapshot { get; set; }
+
+    /// <summary>
+    /// An authorised, explicit deviation from the resolved treatment for THIS line. Normal
+    /// users never set this; it exists so an exception is recorded as an exception.
+    /// </summary>
+    public string? VatTreatmentOverride { get; set; }
+
+    /// <summary>Why the override was applied; required when one is set.</summary>
+    public string? VatTreatmentOverrideReason { get; set; }
 }

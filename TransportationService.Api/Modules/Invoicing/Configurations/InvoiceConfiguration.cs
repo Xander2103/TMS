@@ -123,6 +123,16 @@ public class InvoiceLineConfiguration : IEntityTypeConfiguration<InvoiceLine>
         builder.HasIndex(l => new { l.TenantId, l.LedgerAccountId });
 
         builder.Property(l => l.SalesCategoryNameSnapshot).HasMaxLength(200);
+
+        // Sprint 5H: sales code + fiscal snapshot, frozen at finalization.
+        builder.Property(l => l.SalesCodeSnapshot).HasMaxLength(30);
+        builder.Property(l => l.DescriptionLanguageSnapshot).HasMaxLength(10);
+        builder.Property(l => l.VatTreatmentSnapshot).HasMaxLength(40);
+        builder.Property(l => l.VatTreatmentSourceSnapshot).HasMaxLength(30);
+        builder.Property(l => l.VatLegalTextSnapshot).HasMaxLength(500);
+        builder.Property(l => l.CostCentreSnapshot).HasMaxLength(40);
+        builder.Property(l => l.VatTreatmentOverride).HasMaxLength(40);
+        builder.Property(l => l.VatTreatmentOverrideReason).HasMaxLength(500);
         builder.Property(l => l.LedgerAccountNumberSnapshot).HasMaxLength(30);
         builder.Property(l => l.LedgerAccountNameSnapshot).HasMaxLength(200);
 
