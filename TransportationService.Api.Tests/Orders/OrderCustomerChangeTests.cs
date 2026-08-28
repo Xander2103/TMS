@@ -319,6 +319,16 @@ public class OrderCustomerChangeTests
 
         var impact = await h.Sut.PreviewAsync(h.OrderId, h.RealCustomerId, CancellationToken.None);
         Assert.Null(impact!.BlockedReason);
+        // The user is told the concept invoice will be released.
+        Assert.Equal(1, impact.DraftInvoiceLinesReleased);
+
+        await h.Sut.ApplyAsync(h.OrderId, Request(h.RealCustomerId), CancellationToken.None);
+
+        // Sprint 6E: the concept invoice no longer holds an order of another customer.
+        Assert.Empty(await h.Db.Context.InvoiceLines.AsNoTracking()
+            .Where(l => l.TransportOrderId == h.OrderId).ToListAsync());
+        // The invoice itself is kept so the invoicing user can rebuild the proposal.
+        Assert.True(await h.Db.Context.Invoices.AsNoTracking().AnyAsync(i => i.Id == invoiceId));
     }
 
     // -------------------------------------------------------------- guards

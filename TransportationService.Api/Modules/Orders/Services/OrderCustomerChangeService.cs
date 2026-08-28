@@ -33,7 +33,12 @@ public record CustomerChangeImpactDto(
     /// <summary>Operational data that is explicitly NOT touched.</summary>
     int StopsKept,
     int GoodsKept,
-    int DocumentsKept);
+    int DocumentsKept,
+    /// <summary>
+    /// Draft invoice lines for this order that will be released, so no concept invoice is left
+    /// holding an order that now belongs to a different customer (sprint 6E).
+    /// </summary>
+    int DraftInvoiceLinesReleased = 0);
 
 public record ChangeOrderCustomerRequest(Guid NewCustomerId, string Reason);
 
@@ -133,6 +138,11 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
 
         order.AgreedPrice = null;
 
+        // Sprint 6E: a concept invoice must never end up holding an order that now belongs to
+        // another customer. The order's lines are released from the draft; the invoice itself
+        // stays (possibly empty) so the invoicing user sees what happened and can rebuild it.
+        _dbContext.RemoveRange(context.DraftInvoiceLines);
+
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await _auditService.RecordAsync(EntityType, order.Id.ToString(), "CustomerChanged",
@@ -145,6 +155,7 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
                 AutomaticLinesInvalidated = automatic.Count,
                 context.Impact.ManualLinesKept,
                 context.Impact.NeedsPricingReview,
+                DraftInvoiceLinesReleased = context.DraftInvoiceLines.Count,
             },
             cancellationToken);
 
@@ -156,6 +167,7 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
         TransportOrder Order,
         IReadOnlyList<TransportOrderPricingLine> PricingLines,
         TransportOrderPricingSnapshot? Snapshot,
+        IReadOnlyList<InvoiceLine> DraftInvoiceLines,
         CustomerChangeImpactDto Impact);
 
     private async Task<ChangeContext?> LoadAsync(Guid orderId, Guid newCustomerId, CancellationToken cancellationToken)
@@ -181,6 +193,7 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
             .FirstOrDefaultAsync(s => s.TenantId == TenantId && s.TransportOrderId == orderId, cancellationToken);
 
         var blocked = await BlockingReasonAsync(order, newCustomerId, cancellationToken);
+        var draftLines = await DraftInvoiceLinesAsync(order.Id, cancellationToken);
 
         // The new customer's default entity applies, unless it is not allowed for them.
         var newEntityId = target.DefaultLegalEntityId ?? order.LegalEntityId;
@@ -215,9 +228,23 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
             await _dbContext.CargoItems.AsNoTracking()
                 .CountAsync(c => c.TenantId == TenantId && c.TransportOrderId == orderId, cancellationToken),
             await _dbContext.TransportOrderDocuments.AsNoTracking()
-                .CountAsync(d => d.TenantId == TenantId && d.TransportOrderId == orderId, cancellationToken));
+                .CountAsync(d => d.TenantId == TenantId && d.TransportOrderId == orderId, cancellationToken),
+            draftLines.Count);
 
-        return new ChangeContext(order, pricingLines, snapshot, impact);
+        return new ChangeContext(order, pricingLines, snapshot, draftLines, impact);
+    }
+
+    /// <summary>The order's lines on invoices that are still Draft — released on a customer change.</summary>
+    private async Task<IReadOnlyList<InvoiceLine>> DraftInvoiceLinesAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        var draftInvoiceIds = await _dbContext.Invoices.AsNoTracking()
+            .Where(i => i.TenantId == TenantId && i.Status == InvoiceStatus.Draft)
+            .Select(i => i.Id)
+            .ToListAsync(cancellationToken);
+
+        return await _dbContext.InvoiceLines
+            .Where(l => l.TenantId == TenantId && l.TransportOrderId == orderId && draftInvoiceIds.Contains(l.InvoiceId))
+            .ToListAsync(cancellationToken);
     }
 
     /// <summary>
