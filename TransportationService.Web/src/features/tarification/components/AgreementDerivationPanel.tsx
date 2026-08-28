@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { formatCurrency } from '../../../utils/numbers'
 import { Button } from '../../../components/ui/Button'
 import { EmptyState } from '../../../components/ui/EmptyState'
 import { FormField } from '../../../components/ui/FormField'
@@ -120,7 +121,7 @@ export function AgreementDerivationPanel({ agreement, canManage, onUpdated }: Ag
         <ul>
           {agreement.modifiers.map((m) => (
             <li key={m.id}>
-              {m.name}: {m.percent !== null ? `${m.percent}%` : `€ ${m.fixedAmount?.toFixed(2)}`}
+              {m.name}: {m.percent !== null ? `${m.percent}%` : formatCurrency(m.fixedAmount)}
               {m.countryCode ? ` (${m.countryCode})` : ''}
             </li>
           ))}

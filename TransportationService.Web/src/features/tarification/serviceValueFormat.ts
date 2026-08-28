@@ -1,5 +1,6 @@
 import type { SurchargeKind } from './types'
 import { translate } from '../../i18n/translations'
+import { formatCurrency } from '../../utils/numbers'
 
 type TranslateLike = (key: string, params?: Record<string, string | number>) => string
 
@@ -21,26 +22,26 @@ export const formatServiceValue = (
     case 'Percent':
       return `${value}%`
     case 'PerHour':
-      return `€ ${value.toFixed(2)}/${t('tarification.unitSuffix.hour')}`
+      return `${formatCurrency(value)}/${t('tarification.unitSuffix.hour')}`
     case 'PerStop':
-      return `€ ${value.toFixed(2)}/${t('tarification.unitSuffix.stop')}`
+      return `${formatCurrency(value)}/${t('tarification.unitSuffix.stop')}`
     case 'PerUnit':
-      return `€ ${value.toFixed(2)}/${unitName ?? t('tarification.unitSuffix.fallback')}`
+      return `${formatCurrency(value)}/${unitName ?? t('tarification.unitSuffix.fallback')}`
     case 'PerOrderLine':
-      return `€ ${value.toFixed(2)}/${t('tarification.unitSuffix.orderLine')}`
+      return `${formatCurrency(value)}/${t('tarification.unitSuffix.orderLine')}`
     case 'PerKg':
-      return `€ ${value.toFixed(2)}/${t('tarification.unitSuffix.kg')}`
+      return `${formatCurrency(value)}/${t('tarification.unitSuffix.kg')}`
     case 'PerM3':
-      return `€ ${value.toFixed(2)}/${t('tarification.unitSuffix.m3')}`
+      return `${formatCurrency(value)}/${t('tarification.unitSuffix.m3')}`
     case 'PerLdm':
-      return `€ ${value.toFixed(2)}/${t('tarification.unitSuffix.ldm')}`
+      return `${formatCurrency(value)}/${t('tarification.unitSuffix.ldm')}`
     case 'PerDay':
-      return `€ ${value.toFixed(2)}/${t('tarification.unitSuffix.day')}`
+      return `${formatCurrency(value)}/${t('tarification.unitSuffix.day')}`
     case 'PerPalletDay':
-      return `€ ${value.toFixed(2)}/${t('tarification.unitSuffix.palletDay')}`
+      return `${formatCurrency(value)}/${t('tarification.unitSuffix.palletDay')}`
     case 'PerKm':
-      return `€ ${value.toFixed(2)}/${t('tarification.unitSuffix.km')}`
+      return `${formatCurrency(value)}/${t('tarification.unitSuffix.km')}`
     default:
-      return `€ ${value.toFixed(2)}`
+      return `${formatCurrency(value)}`
   }
 }

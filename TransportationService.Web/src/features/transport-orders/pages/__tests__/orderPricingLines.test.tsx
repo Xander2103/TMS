@@ -166,7 +166,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
     await screen.findByText('Basisregel')
 
     expect(screen.getByText('AUTO')).toBeInTheDocument()
-    expect(screen.getByText('OVERRIDE')).toBeInTheDocument()
+    expect(screen.getByText('AANGEPAST')).toBeInTheDocument() // was 'OVERRIDE' (terminologie-opschoning)
     expect(screen.getByText('MANUEEL')).toBeInTheDocument()
     expect(screen.getByText('VOORSTEL')).toBeInTheDocument()
   })
@@ -288,7 +288,7 @@ describe('TransportOrderDetailPage pricing lines', () => {
     const row = screen.getByText('Dieseltoeslag 8% (wordt bij facturatie toegevoegd)').closest('tr')!
     expect(row).toBeTruthy()
     expect(row.className).toContain('tof-price-informational')
-    expect(within(row).getByText(`€ ${(7.2).toFixed(2)}`)).toBeInTheDocument()
+    expect(within(row).getByText('€ 7,20')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Niet toegepast' })).not.toBeInTheDocument()
   })
 
@@ -443,12 +443,28 @@ describe('TransportOrderDetailPage pricing lines', () => {
     renderPage()
 
     await screen.findByText('Totaalprijs')
-    expect(screen.getAllByText('€ 132.50').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('€ 132,50').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(/Opdracht:/)).toBeInTheDocument()
     expect(screen.getByText(/^Prijs:/)).toBeInTheDocument()
     // Order status (Bevestigd) and price status (Bevestigd) are separate badges.
     expect(screen.getAllByText('Bevestigd').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(/Bevestigd op .* door Dev Admin\./)).toBeInTheDocument()
+  })
+
+  it('renders amounts in the tenant notation (comma decimal, "€ 0,00" — never "€ 0.00")', async () => {
+    // UX-correctie punt 5: bedragen lopen uitsluitend via utils/numbers.formatCurrency.
+    api.getTransportOrder.mockResolvedValue(
+      baseOrder({
+        agreedPrice: 0,
+        pricingSnapshot: { ...baseOrder().pricingSnapshot!, linesTotal: 0 },
+      }),
+    )
+    renderPage()
+
+    await screen.findByText('Totaalprijs')
+    expect(screen.getAllByText('€ 0,00').length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByText('€ 0.00')).not.toBeInTheDocument()
+    expect(screen.queryByText(/€\s0\.00/)).not.toBeInTheDocument()
   })
 
   it('shows the price status as Onvolledig when unconfirmed goods lack pricing', async () => {
@@ -594,7 +610,7 @@ describe('TransportOrderDetailPage pricing coverage (wave 2026-08-04 §7)', () =
     await screen.findByText('Niet alle goederen zijn geprijsd.')
     expect(screen.getByText(/2 Doos: geen passend basistarief/)).toBeInTheDocument()
     // A billed service must never read as transport pricing.
-    expect(screen.getByText(/alleen diensten \(€ 2\.50\), geen transportprijs/)).toBeInTheDocument()
+    expect(screen.getByText(/alleen diensten \(€ 2,50\), geen transportprijs/)).toBeInTheDocument()
   })
 
   it('shows per-goods-line coverage with status badges and the base rule of a fully priced line', async () => {
@@ -606,7 +622,7 @@ describe('TransportOrderDetailPage pricing coverage (wave 2026-08-04 §7)', () =
     await screen.findByText('Prijsdekking per goederenlijn')
     expect(screen.getByText('Volledig geprijsd')).toBeInTheDocument()
     expect(screen.getByText('Gedeeltelijk geprijsd')).toBeInTheDocument()
-    expect(screen.getByText(/Palletstaffel: € 100\.00/)).toBeInTheDocument()
+    expect(screen.getByText(/Palletstaffel: € 100,00/)).toBeInTheDocument()
   })
 
   it('renders no coverage blocks when the snapshot carries no coverage', async () => {

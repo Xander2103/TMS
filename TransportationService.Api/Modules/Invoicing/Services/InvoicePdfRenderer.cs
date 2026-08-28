@@ -34,7 +34,9 @@ public sealed record InvoicePdfSnapshot(
     bool IsCreditNote = false,
     string? CreditedInvoiceNumber = null,
     /// <summary>Wave 2: document language frozen on the invoice; unknown/missing = Dutch.</summary>
-    string? LanguageCode = null);
+    string? LanguageCode = null,
+    /// <summary>Draft preview: the document is stamped as such so it can never pass for the final invoice.</summary>
+    bool IsDraft = false);
 
 /// <summary>
 /// Renders a one-page-per-overflow invoice PDF: header (seller + optional logo), invoice meta,
@@ -109,7 +111,9 @@ public static class InvoicePdfRenderer
 
         // --- Invoice meta + customer block, side by side ---
         var metaX = margin + width * 0.55;
-        gfx.DrawString(invoice.IsCreditNote ? strings.CreditNoteTitle : strings.Title, Heading, XBrushes.Black, new XPoint(metaX, y + 9));
+        var documentTitle = invoice.IsCreditNote ? strings.CreditNoteTitle : strings.Title;
+        if (invoice.IsDraft) documentTitle = $"{documentTitle} — {strings.DraftLabel}";
+        gfx.DrawString(documentTitle, Heading, XBrushes.Black, new XPoint(metaX, y + 9));
         y += 16;
         gfx.DrawString(
             $"{(invoice.IsCreditNote ? strings.CreditNoteNumberLabel : strings.InvoiceNumberLabel)}: {invoice.InvoiceNumber}",

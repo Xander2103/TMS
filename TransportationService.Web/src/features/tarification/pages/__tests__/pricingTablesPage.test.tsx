@@ -167,3 +167,29 @@ describe('PricingTablesPage', () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/pricing/tables/new-agr'))
   })
 })
+
+describe('PricingTablesPage — Excel-import vanaf de lijst', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    auth.permissions = new Set(['tariffs.view', 'tariffs.manage'])
+  })
+
+  it('offers an Importeren action per table that opens the table with the import dialog', async () => {
+    renderPage()
+    await screen.findByText('Distributie België 2026')
+    const buttons = screen.getAllByRole('button', { name: 'Importeren' })
+    expect(buttons).toHaveLength(2)
+
+    await userEvent.click(buttons[0])
+    expect(navigateMock).toHaveBeenCalledWith('/pricing/tables/agr-1?import=1')
+    // The row click underneath must not fire as well (that would navigate without ?import=1).
+    expect(navigateMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the Importeren action without import/manage rights', async () => {
+    auth.permissions = new Set(['tariffs.view'])
+    renderPage()
+    await screen.findByText('Distributie België 2026')
+    expect(screen.queryByRole('button', { name: 'Importeren' })).not.toBeInTheDocument()
+  })
+})

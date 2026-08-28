@@ -3,6 +3,7 @@ import { FormField } from '../../../../components/ui/FormField'
 import { useLocale } from '../../../../i18n/localeContext'
 import { UNIT_TYPE_LABELS, type PackageUnitType } from '../../../packages/types'
 import { computeVolumeM3 } from '../../../../utils/volume'
+import { formatQuantity } from '../../../../utils/numbers'
 import type { CustomerPreferredUnit } from '../../../tarification/api/pricingApi'
 import { UnitSelect, type UnitOptionItem } from '../UnitSelect'
 import { numberOrNullFrom, type CargoFormRow, type CargoSummary, type StopFormRow } from './orderFormState'
@@ -171,7 +172,7 @@ export function GoodsSection({
           <ul className="tof-lading-list">
             {cargoSummary.units.map(([label, qty]) => (
               <li key={label}>
-                {qty.toLocaleString('nl-BE')} {label}
+                {formatQuantity(qty)} {label}
               </li>
             ))}
           </ul>
@@ -180,13 +181,13 @@ export function GoodsSection({
           <p className="tof-cargo-hint">
             {[
               t('transportOrders.goods.summaryWeight', {
-                value: cargoSummary.weight !== null ? `${cargoSummary.weight.toLocaleString('nl-BE')} kg` : '—',
+                value: cargoSummary.weight !== null ? `${formatQuantity(cargoSummary.weight)} kg` : '—',
               }),
               t('transportOrders.goods.summaryVolume', {
-                value: cargoSummary.volume !== null ? `${cargoSummary.volume.toLocaleString('nl-BE')} m³` : '—',
+                value: cargoSummary.volume !== null ? `${formatQuantity(cargoSummary.volume)} m³` : '—',
               }),
               t('transportOrders.goods.summaryPallets', {
-                value: cargoSummary.pallets !== null ? cargoSummary.pallets.toLocaleString('nl-BE') : '—',
+                value: cargoSummary.pallets !== null ? formatQuantity(cargoSummary.pallets) : '—',
               }),
             ].join(' · ')}
           </p>

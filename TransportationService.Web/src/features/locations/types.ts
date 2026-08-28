@@ -82,6 +82,12 @@ export interface LocationOption {
   isDefaultLoadingLocation: boolean
   isDefaultUnloadingLocation: boolean
   isDefaultBillingLocation: boolean
+  /** Central address master (additive, optional): provenance relative to the requested customer. */
+  isLinkedToCustomer?: boolean
+  /** Total customer relationships on the address; 0 = company-wide address. */
+  linkedCustomerCount?: number
+  /** Up to three names of OTHER customers using the address, comma-separated. */
+  linkedCustomerNames?: string | null
 }
 
 export interface LocationDetail {

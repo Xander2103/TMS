@@ -124,6 +124,76 @@ public class InvoiceFiscalSnapshotTests
         Assert.Equal("ADM", line.SalesCodeSnapshot);
     }
 
+    /// <summary>
+    /// UX-correctie 3: the draft already shows what the customer WILL read, and Send freezes
+    /// exactly that text — preview and final document can never diverge.
+    /// </summary>
+    [Fact]
+    public async Task Draft_ExposesTheFrenchCustomerDescription_AndSendFreezesTheSameText()
+    {
+        var h = await SeedAsync("fr");
+        using var _ = h.Db;
+        var admId = await AddAdmAsync(h);
+        var created = await h.Invoices.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null, h.LegalEntityId),
+            CancellationToken.None);
+        var invoiceId = created.Invoice!.Id;
+        h.Db.Context.Set<InvoiceLine>().Add(new InvoiceLine
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, InvoiceId = invoiceId,
+            Sequence = 99, Description = "Administratieve kost", Quantity = 1m, UnitPrice = 25m,
+            VatRatePercent = 21m, SalesCategoryId = admId,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var draft = await h.Invoices.GetByIdAsync(invoiceId, CancellationToken.None);
+        var draftLine = draft!.Lines.Single(l => l.SalesCategoryId == admId);
+        Assert.Equal("Administratieve kost", draftLine.Description);      // stored text untouched
+        Assert.Equal("Frais administratifs", draftLine.CustomerDescription); // what the customer reads
+
+        await h.Invoices.ChangeStatusAsync(invoiceId, InvoiceStatus.Sent, CancellationToken.None);
+        var sent = await h.Invoices.GetByIdAsync(invoiceId, CancellationToken.None);
+        var sentLine = sent!.Lines.Single(l => l.SalesCategoryId == admId);
+        Assert.Equal(draftLine.CustomerDescription, sentLine.Description);
+        Assert.Equal(sentLine.Description, sentLine.CustomerDescription);
+    }
+
+    [Fact]
+    public async Task Draft_KeepsTextTypedForThisLine_InsteadOfTranslatingIt()
+    {
+        var h = await SeedAsync("fr");
+        using var _ = h.Db;
+        var admId = await AddAdmAsync(h);
+        var created = await h.Invoices.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId], [], null, h.LegalEntityId),
+            CancellationToken.None);
+        h.Db.Context.Set<InvoiceLine>().Add(new InvoiceLine
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, InvoiceId = created.Invoice!.Id,
+            Sequence = 99, Description = "Dossierkost project X", Quantity = 1m, UnitPrice = 25m,
+            VatRatePercent = 21m, SalesCategoryId = admId,
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var draft = await h.Invoices.GetByIdAsync(created.Invoice.Id, CancellationToken.None);
+        Assert.Equal("Dossierkost project X", draft!.Lines.Single(l => l.SalesCategoryId == admId).CustomerDescription);
+    }
+
+    [Fact]
+    public void InvoiceLineDescriptions_TreatsNameAndDutchTextAsDefault_AndAnythingElseAsUserWording()
+    {
+        var code = new SalesCategory
+        {
+            Id = Guid.NewGuid(), Code = "ADM", Name = "Administratieve kost",
+            InvoiceDescriptionNl = "Administratieve kost", InvoiceDescriptionDe = "Verwaltungsgebühr",
+        };
+        Assert.Equal("Verwaltungsgebühr", InvoiceLineDescriptions.CustomerFacing("", code, "de"));
+        Assert.Equal("Verwaltungsgebühr", InvoiceLineDescriptions.CustomerFacing("Administratieve kost", code, "DE"));
+        Assert.Equal("Administratieve kost", InvoiceLineDescriptions.CustomerFacing("Administratieve kost", code, "fr")); // no FR → NL
+        Assert.Equal("Eigen tekst", InvoiceLineDescriptions.CustomerFacing("Eigen tekst", code, "de"));
+        Assert.Equal("Los", InvoiceLineDescriptions.CustomerFacing("Los", null, "de"));
+    }
+
     [Fact]
     public async Task A_DutchCustomer_GetsTheDutchDescription()
     {

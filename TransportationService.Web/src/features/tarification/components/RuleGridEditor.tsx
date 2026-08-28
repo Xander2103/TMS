@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
+import { formatCurrency } from '../../../utils/numbers'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
@@ -726,8 +727,8 @@ export function RuleGridEditor({ agreementId, agreementCustomerId, canManage }: 
                               ↳ <Badge tone="info">{t('tarification.grid.overrideBadge')}</Badge> <span>{override.customerName}</span>
                             </td>
                             <td colSpan={6}>—</td>
-                            <td>€ {override.price.toFixed(2)}</td>
-                            <td>{override.pricePerExtraUnit !== null ? `€ ${override.pricePerExtraUnit.toFixed(2)}` : '—'}</td>
+                            <td>{formatCurrency(override.price)}</td>
+                            <td>{override.pricePerExtraUnit !== null ? formatCurrency(override.pricePerExtraUnit) : '—'}</td>
                             <td colSpan={5}>—</td>
                             <td colSpan={5}>—</td>
                             <td>{override.effectiveFrom ?? '—'}</td>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { formatDate } from '../../../utils/dates'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -53,8 +54,8 @@ export function InvoicesPage() {
 
   const columns: Column<InvoiceListItem>[] = [
     { key: 'number', header: t('invoices.internalList.columns.number'), width: '110px', render: (row) => <code>{row.invoiceNumber}</code> },
-    { key: 'date', header: t('invoices.internalList.columns.date'), width: '110px', render: (row) => row.invoiceDate },
-    { key: 'due', header: t('invoices.internalList.columns.due'), width: '110px', render: (row) => row.dueDate },
+    { key: 'date', header: t('invoices.internalList.columns.date'), width: '110px', render: (row) => formatDate(row.invoiceDate) },
+    { key: 'due', header: t('invoices.internalList.columns.due'), width: '110px', render: (row) => formatDate(row.dueDate) },
     { key: 'customer', header: t('invoices.internalList.columns.customer'), render: (row) => row.customerName },
     { key: 'total', header: t('invoices.internalList.columns.total'), width: '150px', render: (row) => euro(row.total, row.currency) },
     {

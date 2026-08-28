@@ -21,7 +21,7 @@
     "Draft": "Retour au brouillon",
     "Sent": "Envoyer",
     "Paid": "Marquer comme payée",
-    "Cancelled": "Annuler"
+    "Cancelled": "Annuler la facture"
   },
   "common": {
     "busy": "En cours…",
@@ -82,7 +82,30 @@
     "deleteMessage": "Voulez-vous vraiment supprimer la facture {number} ?",
     "ledgerAction": "Compléter les données comptables",
     "ledgerCompleted": "Les données comptables manquantes ont été complétées là où un mappage existe.",
-    "ledgerError": "Les données comptables n'ont pas pu être complétées."
+    "ledgerError": "Les données comptables n'ont pas pu être complétées.",
+    "creditNoteAction": "Créer une note de crédit",
+    "creditNoteHint": "Crée une note de crédit (brouillon) qui crédite entièrement cette facture. La facture envoyée reste inchangée.",
+    "creditNoteCreated": "Note de crédit (brouillon) {number} créée.",
+    "creditNoteError": "La note de crédit n'a pas pu être créée.",
+    "creditsInvoice": "Crédite la facture",
+    "creditNotesTitle": "Notes de crédit sur cette facture",
+    "cancelSentMessage": "La facture {number} a déjà été envoyée. L'annuler la rend invalide sans document de correction et libère les commandes. Utilisez normalement 'Créer une note de crédit' pour corriger une facture envoyée.",
+    "pdfPreview": "Aperçu (pdf)",
+    "pdfPreviewHint": "Ouvre la facture telle que le client la recevra, dans la langue de facturation. N'envoie rien.",
+    "pdfError": "L'aperçu pdf n'a pas pu être ouvert.",
+    "customerReads": "Le client lit",
+    "sendConfirm": {
+      "title": "Envoyer la facture",
+      "intro": "Vérifiez les données. L'envoi rend cette facture définitive : numéro, client, entité, traitement TVA et descriptions sont figés et ne pourront plus être modifiés.",
+      "number": "Numéro de facture",
+      "customer": "Client",
+      "entity": "Entité de facturation",
+      "total": "Montant total (TVA incl.)",
+      "language": "Langue de facturation",
+      "treatment": "Traitement TVA",
+      "confirm": "Envoyer la facture",
+      "busy": "Envoi…"
+    }
   },
   "internalLines": {
     "addLine": "+ Ajouter une ligne",

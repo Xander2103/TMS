@@ -256,3 +256,36 @@ describe('customer communication overview', () => {
     expect(await screen.findByText('cc@klant.be')).toBeInTheDocument()
   })
 })
+
+describe('contact — meldingen vereisen een e-mailadres', () => {
+  it('blocks saving a contact that should receive notifications but has no e-mail address', async () => {
+    const onAdd = vi.fn().mockResolvedValue(contact({ id: 'new-1' }))
+    render(
+      <CustomerContactsPanel
+        customerId="c1"
+        contacts={[]}
+        isSubmitting={false}
+        onAdd={onAdd}
+        onUpdate={vi.fn().mockResolvedValue(true)}
+        onRemove={vi.fn().mockResolvedValue(true)}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: '+ Contact toevoegen' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(within(dialog).getByLabelText(/Voornaam/), 'Jan')
+    await userEvent.type(within(dialog).getByLabelText(/Achternaam/), 'Logistiek')
+    await userEvent.click(within(dialog).getByLabelText('Planning / levervenster'))
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+
+    // Notifications go out by e-mail only: a recipient without an address is refused up front.
+    expect(await within(dialog).findByText(/Meldingen worden per e-mail verstuurd/)).toBeInTheDocument()
+    expect(onAdd).not.toHaveBeenCalled()
+    expect(api.set).not.toHaveBeenCalled()
+
+    // With an address the same form saves.
+    await userEvent.type(within(dialog).getByLabelText(/E-mail/), 'jan@test.example')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Opslaan' }))
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1))
+  })
+})

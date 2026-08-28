@@ -308,3 +308,18 @@
   align-items: center;
   flex-wrap: wrap;
 }
+
+/* Send confirmation summary (irreversible action → explicit facts before the click). */
+.inv-send-summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 12px 0 0;
+}
+.inv-send-summary dt {
+  color: var(--text-muted, #6b7280);
+}
+.inv-send-summary dd {
+  margin: 0;
+  font-weight: 600;
+}

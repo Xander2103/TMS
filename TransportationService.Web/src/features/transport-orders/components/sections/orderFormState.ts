@@ -46,7 +46,7 @@ export interface StopFormRow {
   key: string
   /** Existing stop id (Phase 7): echoed on submit so the backend can carry the location snapshot over. */
   id: string | null
-  /** Phase 7: pending "Opnieuw overnemen van locatie" — applied by the backend on save. */
+  /** Phase 7: pending "Adres opnieuw overnemen" — applied by the backend on save. */
   refreshSnapshot: boolean
   /** Snapshot display line for a master-location stop ("Magazijn Antwerpen"). */
   snapshotName: string

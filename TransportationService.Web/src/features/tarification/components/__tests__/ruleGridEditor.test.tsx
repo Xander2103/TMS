@@ -208,7 +208,7 @@ describe('RuleGridEditor', () => {
     // The override renders under its bracket row with badge, customer and price.
     expect(await screen.findByText('Klantafwijking')).toBeInTheDocument()
     expect(screen.getByText('Klant X')).toBeInTheDocument()
-    expect(screen.getByText('€ 39.00')).toBeInTheDocument()
+    expect(screen.getByText('€ 39,00')).toBeInTheDocument()
     // Shared bracket rows offer the create action for shared rules.
     expect(screen.getAllByRole('button', { name: 'Klantafwijking…' }).length).toBeGreaterThan(0)
 

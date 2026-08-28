@@ -41,7 +41,23 @@ function optionLabel(t: TranslateFn, option: LocationOptionWithAddress): string 
     option.isDefaultLoadingLocation ? t('locations.select.defaultLoading') : null,
     option.isDefaultUnloadingLocation ? t('locations.select.defaultUnloading') : null,
   ].filter(Boolean)
-  return markers.length > 0 ? `${withAddress} — ${markers.join(' + ')}` : withAddress
+  const withMarkers = markers.length > 0 ? `${withAddress} — ${markers.join(' + ')}` : withAddress
+  const provenance = provenanceSuffix(t, option)
+  return provenance ? `${withMarkers} — ${provenance}` : withMarkers
+}
+
+/**
+ * Central address master: the options endpoint offers every address of the tenant, sorted
+ * customer-first. Addresses of this customer need no marker (they are on top); a company-wide
+ * address and an address shared by other customers say so in plain words.
+ */
+function provenanceSuffix(t: TranslateFn, option: LocationOptionWithAddress): string | null {
+  if (option.linkedCustomerCount === undefined) return null // older payload without provenance
+  if (option.isLinkedToCustomer) return null
+  if (option.linkedCustomerCount === 0) return t('locations.select.companyAddress')
+  return option.linkedCustomerNames
+    ? t('locations.select.sharedAddressWith', { names: option.linkedCustomerNames })
+    : t('locations.select.sharedAddress')
 }
 
 function toSelectOption(t: TranslateFn, option: LocationOptionWithAddress): SearchableSelectOption {

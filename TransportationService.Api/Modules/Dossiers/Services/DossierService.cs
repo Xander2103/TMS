@@ -308,7 +308,7 @@ public class DossierService : IDossierService
         var legalEntityName = dossier.LegalEntityId is { } entityId
             ? await _dbContext.LegalEntities.AsNoTracking()
                 .Where(e => e.Id == entityId && e.TenantId == tenantId)
-                .Select(e => (string?)e.LegalName).FirstOrDefaultAsync(cancellationToken)
+                .Select(e => (string?)(e.TradingName ?? e.LegalName)).FirstOrDefaultAsync(cancellationToken)
             : null;
 
         var activityRows = await _dbContext.DossierActivities.AsNoTracking()

@@ -38,7 +38,9 @@ public sealed record InvoicePdfStrings(
     /// <summary>Label of a diesel-surcharge line ("Dieseltoeslag 12%").</summary>
     string DieselSurcharge = "Dieseltoeslag",
     /// <summary>Suffix for a diesel surcharge computed over the invoice subtotal.</summary>
-    string OnInvoiceSubtotal = "op factuursubtotaal")
+    string OnInvoiceSubtotal = "op factuursubtotaal",
+    /// <summary>Stamp next to the title on a draft preview ("FACTUUR — CONCEPT").</summary>
+    string DraftLabel = "CONCEPT")
 {
     public static readonly InvoicePdfStrings Nl = new(
         "FACTUUR", "CREDITNOTA", "Factuurnummer", "Creditnotanummer", "Datum", "Vervaldatum",
@@ -46,7 +48,7 @@ public sealed record InvoicePdfStrings(
         "Omschrijving", "Aantal", "Prijs", "BTW%", "Totaal",
         "BTW-overzicht", "over", "Subtotaal", "BTW", "Totaal",
         "Betaalgegevens", "Mededeling", "dd-MM-yyyy",
-        "uur", "stops", "Dieseltoeslag", "op factuursubtotaal");
+        "uur", "stops", "Dieseltoeslag", "op factuursubtotaal", "CONCEPT");
 
     public static readonly InvoicePdfStrings Fr = new(
         "FACTURE", "NOTE DE CRÉDIT", "Numéro de facture", "Numéro de note de crédit", "Date", "Échéance",
@@ -54,7 +56,7 @@ public sealed record InvoicePdfStrings(
         "Description", "Quantité", "Prix", "TVA%", "Total",
         "Récapitulatif TVA", "sur", "Sous-total", "TVA", "Total",
         "Informations de paiement", "Communication", "dd/MM/yyyy",
-        "h", "arrêts", "Surcharge gasoil", "sur le sous-total de la facture");
+        "h", "arrêts", "Surcharge gasoil", "sur le sous-total de la facture", "BROUILLON");
 
     public static readonly InvoicePdfStrings En = new(
         "INVOICE", "CREDIT NOTE", "Invoice number", "Credit note number", "Date", "Due date",
@@ -62,7 +64,7 @@ public sealed record InvoicePdfStrings(
         "Description", "Quantity", "Price", "VAT%", "Total",
         "VAT breakdown", "on", "Subtotal", "VAT", "Total",
         "Payment details", "Reference", "dd/MM/yyyy",
-        "h", "stops", "Diesel surcharge", "on invoice subtotal");
+        "h", "stops", "Diesel surcharge", "on invoice subtotal", "DRAFT");
 
     public static readonly InvoicePdfStrings De = new(
         "RECHNUNG", "GUTSCHRIFT", "Rechnungsnummer", "Gutschriftnummer", "Datum", "Fälligkeitsdatum",
@@ -70,7 +72,7 @@ public sealed record InvoicePdfStrings(
         "Beschreibung", "Menge", "Preis", "USt.%", "Gesamt",
         "USt.-Übersicht", "auf", "Zwischensumme", "USt.", "Gesamt",
         "Zahlungsinformationen", "Verwendungszweck", "dd.MM.yyyy",
-        "Std.", "Stopps", "Dieselzuschlag", "auf Rechnungszwischensumme");
+        "Std.", "Stopps", "Dieselzuschlag", "auf Rechnungszwischensumme", "ENTWURF");
 
     public static InvoicePdfStrings For(string? languageCode) =>
         languageCode?.Trim().ToLowerInvariant() switch

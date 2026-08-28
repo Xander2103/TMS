@@ -303,19 +303,19 @@ describe('CustomerUnitPricingPanel — service overrides', () => {
     // Table-wide warning is always visible, not a tooltip.
     expect(screen.getByText('Let op: wanneer u hier een waarde invult, wordt de algemene standaardregel voor deze klant overschreven.')).toBeInTheDocument()
     // Overridden service: global €15, override input 10, effective €10, source Klanttarief.
-    expect(screen.getByText('€ 15.00')).toBeInTheDocument()
+    expect(screen.getByText('€ 15,00')).toBeInTheDocument()
     expect(screen.getByLabelText('Klantprijs voor Levering vóór 10:00')).toHaveValue(10)
-    expect(screen.getByText('€ 10.00')).toBeInTheDocument()
+    expect(screen.getByText('€ 10,00')).toBeInTheDocument()
     expect(screen.getAllByText('Klanttarief').length).toBeGreaterThan(0)
-    expect(screen.getByText(/deze klantprijs overschrijft.*€ 15\.00/)).toBeInTheDocument()
+    expect(screen.getByText(/deze klantprijs overschrijft.*€ 15,00/)).toBeInTheDocument()
     // Disabled service warning + effective state.
     expect(screen.getByText('Let op: deze service is algemeen beschikbaar, maar wordt voor deze klant uitgeschakeld.')).toBeInTheDocument()
     expect(screen.getByText('Uitgeschakeld')).toBeInTheDocument()
     // A service WITHOUT a customer deviation is not shown as if it were agreed with them.
-    expect(screen.queryByText('€ 45.00/uur')).not.toBeInTheDocument()
+    expect(screen.queryByText('€ 45,00/uur')).not.toBeInTheDocument()
     await userEvent.click(screen.getByLabelText('Toon alle standaarddiensten'))
     // With the full list shown it appears, clearly labelled as the general standard.
-    expect(screen.getAllByText('€ 45.00/uur').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('€ 45,00/uur').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Algemene standaard').length).toBeGreaterThan(0)
   })
 
@@ -394,7 +394,7 @@ describe('CustomerUnitPricingPanel', () => {
     expect(screen.getByText('Europallet Brussel (+4%)')).toBeInTheDocument()
     // Agreement table shows the commercial identity incl. minimum and surcharge.
     expect(screen.getAllByText('Distributie 2026').length).toBeGreaterThan(0)
-    expect(screen.getByText('€ 60.00')).toBeInTheDocument()
+    expect(screen.getByText('€ 60,00')).toBeInTheDocument()
     expect(screen.getByText('Duurtoeslag (5%)')).toBeInTheDocument()
     expect(screen.getByText('Historisch gunstig contract')).toBeInTheDocument()
   })
@@ -646,8 +646,8 @@ describe('CustomerPriceAdjustmentsPanel', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Preview' }))
 
     // Every affected value is shown as old → new before anything is saved.
-    expect(await within(dialog).findByText('€ 45.00 → € 46.80')).toBeInTheDocument()
-    expect(within(dialog).getByText('€ 70.00 → € 72.80')).toBeInTheDocument()
+    expect(await within(dialog).findByText('€ 45,00 → € 46,80')).toBeInTheDocument()
+    expect(within(dialog).getByText('€ 70,00 → € 72,80')).toBeInTheDocument()
     expect(state.createAdjustment).not.toHaveBeenCalled()
 
     await user.click(within(dialog).getByRole('button', { name: 'Bevestigen' }))

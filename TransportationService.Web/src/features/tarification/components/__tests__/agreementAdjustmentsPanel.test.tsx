@@ -64,8 +64,8 @@ describe('AgreementAdjustmentsPanel', () => {
     await user.type(within(dialog).getByLabelText(/Waarde/), '4')
     await user.click(within(dialog).getByRole('button', { name: 'Voorbeeld' }))
 
-    expect(await within(dialog).findByText('€ 45.00')).toBeInTheDocument()
-    expect(within(dialog).getByText('€ 46.80')).toBeInTheDocument()
+    expect(await within(dialog).findByText('€ 45,00')).toBeInTheDocument()
+    expect(within(dialog).getByText('€ 46,80')).toBeInTheDocument()
     expect(state.create).not.toHaveBeenCalled()
 
     await user.click(within(dialog).getByRole('button', { name: 'Bevestigen' }))

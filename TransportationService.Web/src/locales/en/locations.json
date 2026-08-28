@@ -250,6 +250,9 @@
     "defaultLoading": "default loading",
     "defaultUnloading": "default unloading",
     "empty": "No addresses found",
+    "companyAddress": "company address",
+    "sharedAddress": "shared address",
+    "sharedAddressWith": "shared address ({names})",
     "placeholder": "— Select an address —"
   },
   "type": {

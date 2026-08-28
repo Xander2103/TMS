@@ -31,7 +31,7 @@ function NavItemRow({ item, depth, unreadCount, onNavigate }: NavItemRowProps) {
           onClick={() => setOpen((o) => !o)}
         >
           {Icon && <Icon className="nav-item-icon" size={16} aria-hidden />}
-          <span className="nav-item-label">{t(item.label)}</span>
+          <span className="nav-item-label" title={t(item.label)}>{t(item.label)}</span>
           <ChevronDown className={`nav-chevron${open ? ' nav-chevron-open' : ''}`} size={14} aria-hidden />
         </button>
         {open && (
@@ -55,7 +55,7 @@ function NavItemRow({ item, depth, unreadCount, onNavigate }: NavItemRowProps) {
         onClick={onNavigate}
       >
         {Icon && <Icon className="nav-item-icon" size={16} aria-hidden />}
-        <span className="nav-item-label">{t(item.label)}</span>
+        <span className="nav-item-label" title={t(item.label)}>{t(item.label)}</span>
         {badgeCount > 0 && <span className="nav-badge">{badgeCount > 99 ? '99+' : badgeCount}</span>}
       </NavLink>
     </li>
@@ -88,7 +88,7 @@ export function NavModule({ vm, expanded, active, unreadCount, onToggle, onNavig
         onClick={() => onToggle(module.id)}
       >
         <Icon className="nav-module-icon" size={18} aria-hidden />
-        <span className="nav-module-title">{t(module.label)}</span>
+        <span className="nav-module-title" title={t(module.label)}>{t(module.label)}</span>
         {collapsedDot && <span className="nav-module-dot" aria-hidden />}
         <ChevronDown className={`nav-chevron${expanded ? ' nav-chevron-open' : ''}`} size={16} aria-hidden />
       </button>
@@ -107,7 +107,7 @@ export function NavModule({ vm, expanded, active, unreadCount, onToggle, onNavig
             ))}
             {vm.subgroups.map((sg) => (
               <li key={sg.label} className="nav-subgroup">
-                <div className="nav-subgroup-label">{t(sg.label)}</div>
+                <div className="nav-subgroup-label" role="presentation" title={t(sg.label)}>{t(sg.label)}</div>
                 <ul className="nav-subitems">
                   {sg.items.map((item) => (
                     <NavItemRow key={item.to} item={item} depth={0} unreadCount={unreadCount} onNavigate={onNavigate} />

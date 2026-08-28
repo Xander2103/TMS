@@ -1388,11 +1388,14 @@ export function CustomerForm({ mode, initial, isSubmitting, submitError, serverF
           top bar also disappears on self-saving panel sections. */}
       {!activeSection.panel && actionBar('top')}
 
+      {/* Left rail (same pattern as EmployeeForm/LocationForm): nine sections never fit a
+          single horizontal row at 900–1100px, which clipped labels and forced a scrollbar. */}
       <SectionedForm
         sections={sections}
         activeId={activeId}
         onActiveChange={setActive}
         actions={actionBar('bottom')}
+        orientation="left"
       />
     </form>
   )

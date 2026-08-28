@@ -52,7 +52,7 @@ describe('filterModule', () => {
   it('filters subgroup items and drops emptied subgroups', () => {
     const parameters = modules.find((m) => m.id === 'parameters')!
     const vm = filterModule(parameters, { hasAnyPermission: allowAll, hasEmployee: false, query: 'categorie', translate: nl })!
-    expect(vm.subgroups.map((s) => nl(s.label))).toEqual(['Stamgegevens'])
+    expect(vm.subgroups.map((s) => nl(s.label))).toEqual(['Basisgegevens'])
   })
 })
 

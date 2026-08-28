@@ -84,4 +84,19 @@ public class InvoicePdfRendererTests
 
         Assert.True(bytes.Length > 500);
     }
+
+    /// <summary>UX-correctie 3: a draft preview renders (stamped) — same renderer, same catalog, never a different document shape.</summary>
+    [Theory]
+    [InlineData("nl")]
+    [InlineData("fr")]
+    [InlineData("en")]
+    [InlineData("de")]
+    public void Render_DraftPreview_RendersInEveryLanguage_NoException(string language)
+    {
+        var bytes = InvoicePdfRenderer.Render(Snapshot() with { IsDraft = true, LanguageCode = language });
+
+        Assert.True(bytes.Length > 1000);
+        Assert.Equal("%PDF-", System.Text.Encoding.ASCII.GetString(bytes, 0, 5));
+        Assert.False(string.IsNullOrWhiteSpace(InvoicePdfStrings.For(language).DraftLabel));
+    }
 }

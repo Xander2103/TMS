@@ -56,3 +56,34 @@ describe('LocationSelect (Phase 7 address line)', () => {
     expect(screen.queryByText('Depot Gent (LOC-2)')).not.toBeInTheDocument()
   })
 })
+
+describe('LocationSelect (central address master provenance)', () => {
+  // The backend already sorts customer → company → other customers; the picker must keep that
+  // order and say in plain words where a non-customer address comes from.
+  const ownAddress = { ...bare, id: 'own', code: 'OWN', name: 'Eigen kade', isLinkedToCustomer: true, linkedCustomerCount: 1, linkedCustomerNames: null }
+  const companyAddress = { ...bare, id: 'company', code: 'CMP', name: 'Hoofddepot', isLinkedToCustomer: false, linkedCustomerCount: 0, linkedCustomerNames: null }
+  const foreignAddress = {
+    ...bare, id: 'foreign', code: 'FRN', name: 'Aankomsthal',
+    isLinkedToCustomer: false, linkedCustomerCount: 2, linkedCustomerNames: 'Distri-Frais SPRL, Euro Retail Group',
+  }
+
+  beforeEach(() => {
+    api.getLocationOptions.mockReset().mockResolvedValue([ownAddress, companyAddress, foreignAddress])
+  })
+
+  it('marks addresses of other customers as shared and company addresses as such, customer addresses first', async () => {
+    render(<LocationSelect value="" onChange={() => {}} customerId="cust-1" />)
+    await userEvent.click(screen.getByRole('combobox'))
+
+    const shared = await screen.findByText('Aankomsthal (FRN) — gedeeld adres (Distri-Frais SPRL, Euro Retail Group)')
+    const company = screen.getByText('Hoofddepot (CMP) — bedrijfsadres')
+    const own = screen.getByText('Eigen kade (OWN)')
+    expect(shared).toBeInTheDocument()
+    expect(api.getLocationOptions).toHaveBeenCalledWith(undefined, 'cust-1')
+
+    // Own address stays unmarked and precedes the company and shared ones in the list.
+    const labels = screen.getAllByRole('option').map((o) => o.textContent)
+    expect(labels.indexOf(own.textContent!)).toBeLessThan(labels.indexOf(company.textContent!))
+    expect(labels.indexOf(company.textContent!)).toBeLessThan(labels.indexOf(shared.textContent!))
+  })
+})

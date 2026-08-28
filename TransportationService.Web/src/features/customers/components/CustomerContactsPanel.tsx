@@ -243,7 +243,7 @@ function ContactDialog({
   const [isPrimary, setIsPrimary] = useState(contact?.isPrimary ?? false)
   const [isActive, setIsActive] = useState(contact?.isActive ?? true)
   const [notes, setNotes] = useState(contact?.notes ?? '')
-  const [errors, setErrors] = useState<{ firstName?: string; lastName?: string }>({})
+  const [errors, setErrors] = useState<{ firstName?: string; lastName?: string; email?: string }>({})
   // "Ontvangt meldingen" (sprint 3): the business question, not a routing rule.
   const [options, setOptions] = useState<CustomerNotificationOption[]>([])
   const [notificationKeys, setNotificationKeys] = useState<string[]>([])
@@ -287,9 +287,12 @@ function ContactDialog({
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault()
-    const next: { firstName?: string; lastName?: string } = {}
+    const next: { firstName?: string; lastName?: string; email?: string } = {}
     if (!firstName.trim()) next.firstName = t('customers.contacts.firstNameRequired')
     if (!lastName.trim()) next.lastName = t('customers.contacts.lastNameRequired')
+    // Notifications are delivered by e-mail only (CustomerContactSubscriptionService → rule
+    // channel "Email"): a recipient without an address would silently receive nothing.
+    if (notificationKeys.length > 0 && !email.trim()) next.email = t('customers.contacts.emailRequiredForNotifications')
     if (Object.keys(next).length > 0) {
       setErrors(next)
       return
@@ -365,8 +368,8 @@ function ContactDialog({
             placeholder={t('customers.contacts.noDepartment')}
           />
         </FormField>
-        <FormField label={t('customers.contacts.email')} htmlFor="ct-email">
-          <input id="ct-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} />
+        <FormField label={t('customers.contacts.email')} htmlFor="ct-email" error={errors.email}>
+          <input id="ct-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={250} aria-invalid={errors.email ? true : undefined} />
         </FormField>
         <FormField label={t('customers.contacts.phone')} htmlFor="ct-phone">
           <input id="ct-phone" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} maxLength={30} />

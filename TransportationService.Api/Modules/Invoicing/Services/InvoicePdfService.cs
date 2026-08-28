@@ -71,10 +71,28 @@ public class InvoicePdfService : IInvoicePdfService
             }
         }
 
-        var lines = invoice.Lines
-            .Where(l => !l.IsDeleted)
-            .OrderBy(l => l.Sequence)
-            .Select(l => new InvoicePdfLine(l.Description, l.Quantity, l.UnitPrice, l.VatRatePercent, Math.Round(l.Quantity * l.UnitPrice, 2)))
+        // A draft renders the description the customer WILL read (same rule Send freezes with);
+        // after Send the line text is already frozen and the sales code is not consulted.
+        var isDraft = invoice.Status == InvoiceStatus.Draft;
+        var liveLines = invoice.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.Sequence).ToList();
+        var codeIds = isDraft
+            ? liveLines.Where(l => l.SalesCategoryId is not null).Select(l => l.SalesCategoryId!.Value).Distinct().ToList()
+            : [];
+        var salesCodes = codeIds.Count == 0
+            ? new Dictionary<Guid, Modules.Accounting.Entities.SalesCategory>()
+            : await _dbContext.SalesCategories.AsNoTracking()
+                .Where(c => c.TenantId == tenantId && codeIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, cancellationToken);
+
+        var lines = liveLines
+            .Select(l => new InvoicePdfLine(
+                isDraft
+                    ? InvoiceLineDescriptions.CustomerFacing(
+                        l.Description,
+                        l.SalesCategoryId is { } codeId ? salesCodes.GetValueOrDefault(codeId) : null,
+                        invoice.LanguageCode)
+                    : l.Description,
+                l.Quantity, l.UnitPrice, l.VatRatePercent, Math.Round(l.Quantity * l.UnitPrice, 2)))
             .ToList();
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
         var vat = InvoiceTotals.VatTotal(invoice.Lines, invoice.CustomerVatTreatment);
@@ -119,10 +137,12 @@ public class InvoicePdfService : IInvoicePdfService
             invoice.Notes,
             invoice.Kind == InvoiceKind.CreditNote,
             creditedInvoiceNumber,
-            invoice.LanguageCode);
+            invoice.LanguageCode,
+            IsDraft: isDraft);
 
         var bytes = InvoicePdfRenderer.Render(snapshot);
         var prefix = invoice.Kind == InvoiceKind.CreditNote ? "creditnota" : "factuur";
+        if (isDraft) prefix = "concept-" + prefix;
         var fileName = $"{prefix}-{invoice.InvoiceNumber.Replace('/', '-')}.pdf";
         return (bytes, fileName);
     }

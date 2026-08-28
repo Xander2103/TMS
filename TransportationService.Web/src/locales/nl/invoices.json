@@ -21,7 +21,7 @@
     "Draft": "Terug naar concept",
     "Sent": "Verzenden",
     "Paid": "Markeer als betaald",
-    "Cancelled": "Annuleren"
+    "Cancelled": "Factuur annuleren"
   },
   "common": {
     "busy": "Bezig…",
@@ -80,9 +80,32 @@
     "cancelMessage": "Weet je zeker dat je factuur {number} wilt annuleren? Gefactureerde opdrachten komen weer vrij.",
     "deleteTitle": "Factuur verwijderen",
     "deleteMessage": "Weet je zeker dat je factuur {number} wilt verwijderen?",
-    "ledgerAction": "Boekhoudsnapshot aanvullen",
-    "ledgerCompleted": "Ontbrekende boekhoudsnapshots aangevuld waar een mapping bestaat.",
-    "ledgerError": "De snapshots konden niet worden aangevuld."
+    "ledgerAction": "Grootboekgegevens aanvullen",
+    "ledgerCompleted": "Ontbrekende grootboekgegevens aangevuld waar een koppeling bestaat.",
+    "ledgerError": "De grootboekgegevens konden niet worden aangevuld.",
+    "creditNoteAction": "Creditnota maken",
+    "creditNoteHint": "Maakt een conceptcreditnota die deze factuur volledig crediteert. De verzonden factuur zelf blijft ongewijzigd.",
+    "creditNoteCreated": "Conceptcreditnota {number} aangemaakt.",
+    "creditNoteError": "De creditnota kon niet worden aangemaakt.",
+    "creditsInvoice": "Crediteert factuur",
+    "creditNotesTitle": "Creditnota's op deze factuur",
+    "cancelSentMessage": "Factuur {number} is al verzonden. Annuleren maakt ze ongeldig zonder correctiedocument en geeft de opdrachten weer vrij. Gebruik normaal 'Creditnota maken' om een verzonden factuur te corrigeren.",
+    "pdfPreview": "Voorbeeld (pdf)",
+    "pdfPreviewHint": "Opent de factuur zoals de klant ze ontvangt, in de factuurtaal. Verzendt niets.",
+    "pdfError": "Het pdf-voorbeeld kon niet worden geopend.",
+    "customerReads": "Klant leest",
+    "sendConfirm": {
+      "title": "Factuur verzenden",
+      "intro": "Controleer de gegevens. Verzenden maakt deze factuur definitief: nummer, klant, entiteit, btw-behandeling en omschrijvingen worden vastgelegd en kunnen daarna niet meer gewijzigd worden.",
+      "number": "Factuurnummer",
+      "customer": "Klant",
+      "entity": "Facturerende entiteit",
+      "total": "Totaalbedrag (incl. btw)",
+      "language": "Factuurtaal",
+      "treatment": "Btw-behandeling",
+      "confirm": "Factuur verzenden",
+      "busy": "Verzenden…"
+    }
   },
   "internalLines": {
     "addLine": "+ Lijn toevoegen",
@@ -143,7 +166,7 @@
     "poHint": "Optioneel referentienummer van de klant.",
     "poRequired": "Deze klant vereist een PO-nummer.",
     "billableOrders": "Factureerbare opdrachten ({total})",
-    "noOrders": "Geen afgeronde, onggefactureerde opdrachten voor deze klant.",
+    "noOrders": "Geen afgeronde, ongefactureerde opdrachten voor deze klant.",
     "selectOrder": "Selecteer {number}",
     "orderColumns": {
       "selection": "Selectie",
@@ -298,7 +321,7 @@
     "lineException": "Afwijkend: {treatment} via {source}",
     "source": {
       "Customer": "klant",
-      "LineOverride": "lijnoverride",
+      "LineOverride": "afwijking op deze lijn",
       "SalesCode": "verkoopcategorie",
       "TenantDefault": "bedrijfsstandaard"
     },

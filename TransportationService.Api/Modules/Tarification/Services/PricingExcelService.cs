@@ -1262,11 +1262,13 @@ public class PricingExcelService : IPricingExcelService
             ? date
             : null;
 
+    private static readonly string AllowedBasisValues = string.Join(", ", Enum.GetNames<PriceRuleBasis>());
+
     private static PriceRuleBasis? ParseBasisCell(string text, int rowNumber, List<(int Row, string Message)> errors)
     {
         if (text.Length == 0)
         {
-            errors.Add((rowNumber, "Basis is verplicht."));
+            errors.Add((rowNumber, $"Basis is verplicht. Toegestane waarden: {AllowedBasisValues}."));
             return null;
         }
 
@@ -1275,7 +1277,7 @@ public class PricingExcelService : IPricingExcelService
             return basis;
         }
 
-        errors.Add((rowNumber, $"Basis '{text}' is onbekend."));
+        errors.Add((rowNumber, $"Basis '{text}' is onbekend. Toegestane waarden: {AllowedBasisValues}."));
         return null;
     }
 

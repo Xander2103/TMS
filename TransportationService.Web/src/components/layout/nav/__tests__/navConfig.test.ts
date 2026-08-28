@@ -140,11 +140,11 @@ describe('getNavModules — §14 target tree', () => {
     const parameters = modules.find((m) => m.id === 'parameters')!
     expect(parameters.items!.map((i) => i.to)).toEqual(['/settings'])
     expect(parameters.subgroups!.map((s) => nl(s.label))).toEqual([
-      'Prijzen', 'Koppelingen & meldingen', 'Beheer', 'Personeel', 'Stamgegevens',
+      'Prijzen', 'Koppelingen & meldingen', 'Beheer', 'Personeel', 'Basisgegevens',
     ])
     const prijzen = parameters.subgroups!.find((s) => nl(s.label) === 'Prijzen')!
     expect(prijzen.items.map((i) => i.to)).toEqual(['/pricing/tables', '/settings/pricing', '/cost-rates'])
-    const stamgegevens = parameters.subgroups!.find((s) => nl(s.label) === 'Stamgegevens')!
+    const stamgegevens = parameters.subgroups!.find((s) => nl(s.label) === 'Basisgegevens')!
     const stamRoutes = stamgegevens.items.map((i) => i.to)
     expect(stamRoutes).toContain('/settings/activity-types')
     expect(stamRoutes).toContain('/master-data/eenheden')

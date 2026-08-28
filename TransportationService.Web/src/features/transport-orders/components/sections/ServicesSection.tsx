@@ -1,4 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
+import { formatCurrency } from '../../../../utils/numbers'
 import { Badge } from '../../../../components/ui/Badge'
 import { Button } from '../../../../components/ui/Button'
 import { FormField } from '../../../../components/ui/FormField'
@@ -263,12 +264,12 @@ export function ServicesSection({
     if (!draftServiceOption) return null
     const price = effectiveOptionPrice(draftServiceOption)
     if (draftServiceOption.kind === 'Percent') return formatServiceValue(draftServiceOption.kind, price)
-    if (draftServiceOption.kind === 'Fixed') return `€ ${price.toFixed(2)}`
+    if (draftServiceOption.kind === 'Fixed') return formatCurrency(price)
     const quantity = draftServiceOption.kind === 'PerDay'
       ? (serviceDays[draftServiceOption.id]?.trim() ? Number(serviceDays[draftServiceOption.id]) : null)
       : (serviceQuantities[draftServiceOption.id]?.trim() ? Number(serviceQuantities[draftServiceOption.id]) : null)
     return quantity != null
-      ? `€ ${(price * quantity).toFixed(2)}`
+      ? formatCurrency(price * quantity)
       : t('transportOrders.services.indicationFillQuantity', { value: formatServiceValue(draftServiceOption.kind, price) })
   })()
 
@@ -334,7 +335,7 @@ export function ServicesSection({
                     {line.name} <Badge>{t('transportOrders.lineKind.Auto')}</Badge>{' '}
                     <span className="customer-form-muted">
                       ({formatServiceValue(line.kind, line.value)}
-                      {line.quantity != null ? ` × ${line.quantity}` : ''} = € {line.amount.toFixed(2)})
+                      {line.quantity != null ? ` × ${line.quantity}` : ''} = {formatCurrency(line.amount)})
                     </span>
                   </span>
                 </label>

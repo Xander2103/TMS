@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { formatDate } from '../../../utils/dates'
+import { formatCurrency } from '../../../utils/numbers'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../../components/ui/EmptyState'
@@ -37,7 +39,7 @@ function adjustmentLabel(assignment: PricingAssignment): string {
     return `${assignment.percentAdjustment > 0 ? '+' : ''}${assignment.percentAdjustment}%`
   }
   if (assignment.fixedAdjustment !== null) {
-    return `${assignment.fixedAdjustment > 0 ? '+' : ''}€ ${assignment.fixedAdjustment.toFixed(2)}`
+    return `${assignment.fixedAdjustment > 0 ? '+' : ''}${formatCurrency(assignment.fixedAdjustment)}`
   }
   return '—'
 }
@@ -171,8 +173,8 @@ export function AgreementAssignmentsPanel({ agreementId, isShared, canManage }: 
               <tr key={a.id}>
                 <td>{a.customerName}</td>
                 <td>{adjustmentLabel(a)}</td>
-                <td>{a.effectiveFrom ?? '—'}</td>
-                <td>{a.effectiveUntil ?? '—'}</td>
+                <td>{formatDate(a.effectiveFrom) || '—'}</td>
+                <td>{formatDate(a.effectiveUntil) || '—'}</td>
                 <td>{a.notes ?? '—'}</td>
                 {canManage && (
                   <td className="issued-items-row-actions">

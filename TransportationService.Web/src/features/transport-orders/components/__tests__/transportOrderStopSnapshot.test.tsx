@@ -184,7 +184,7 @@ describe('TransportOrderForm stop snapshot (Phase 7)', () => {
   it('shows the snapshot chip with name and address for a master-location stop', async () => {
     renderForm()
     await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
-    expect(screen.getByText('Overgenomen van klantlocatie')).toBeInTheDocument()
+    expect(screen.getByText('Overgenomen van adres')).toBeInTheDocument()
     expect(screen.getByText(/Magazijn Antwerpen — Noorderlaan 10, 2030 Antwerpen/)).toBeInTheDocument()
   })
 
@@ -193,7 +193,7 @@ describe('TransportOrderForm stop snapshot (Phase 7)', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
     await userEvent.click(screen.getAllByRole('button', { name: 'Inklappen' })[0])
     expect(screen.getByText(/Magazijn Antwerpen — Noorderlaan 10, 2030 Antwerpen · 2026-07-20/)).toBeInTheDocument()
-    expect(screen.queryByText('Locatie uit stamgegevens')).not.toBeInTheDocument()
+    expect(screen.queryByText('Adres uit het adresbestand')).not.toBeInTheDocument()
   })
 
   it('echoes the stop id and refreshSnapshot=false in the submit payload by default', async () => {
@@ -207,18 +207,18 @@ describe('TransportOrderForm stop snapshot (Phase 7)', () => {
     expect(input.stops[1]).toEqual(expect.objectContaining({ id: 'stop-2', refreshSnapshot: false, locationId: null }))
   })
 
-  it('sets refreshSnapshot after confirming "Opnieuw overnemen van locatie" and shows the pending badge', async () => {
+  it('sets refreshSnapshot after confirming "Adres opnieuw overnemen" and shows the pending badge', async () => {
     const { onSubmit } = renderForm()
     await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Opnieuw overnemen van locatie' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Adres opnieuw overnemen' }))
     expect(
-      screen.getByText('Lokale aanpassingen op deze stop worden vervangen door de actuele locatiegegevens.'),
+      screen.getByText('Lokale aanpassingen op deze stop worden vervangen door de actuele gegevens van het adres.'),
     ).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Opnieuw overnemen' }))
 
-    expect(screen.getByText('Wordt opnieuw overgenomen bij opslaan')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Opnieuw overnemen van locatie' })).not.toBeInTheDocument()
+    expect(screen.getByText('Wordt bij opslaan opnieuw overgenomen')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Adres opnieuw overnemen' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Opslaan' }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
@@ -228,10 +228,10 @@ describe('TransportOrderForm stop snapshot (Phase 7)', () => {
   it('cancelling the confirm dialog leaves the refresh flag untouched', async () => {
     renderForm()
     await userEvent.click(screen.getByRole('tab', { name: /Route & stops/ }))
-    await userEvent.click(screen.getByRole('button', { name: 'Opnieuw overnemen van locatie' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Adres opnieuw overnemen' }))
     await userEvent.click(screen.getByRole('button', { name: 'Annuleren' }))
-    expect(screen.queryByText('Wordt opnieuw overgenomen bij opslaan')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Opnieuw overnemen van locatie' })).toBeInTheDocument()
+    expect(screen.queryByText('Wordt bij opslaan opnieuw overgenomen')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Adres opnieuw overnemen' })).toBeInTheDocument()
   })
 
   it('shows a client-side opening-hours hint when the planned time falls outside the fetched hours', async () => {

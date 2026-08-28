@@ -21,7 +21,8 @@ import {
   type PeppolTransmission,
 } from '../../peppol/api/peppolApi'
 import { euro, type InvoiceStatus } from '../types'
-import { formatDateTime } from '../../../utils/dates'
+import { formatDate, formatDateTime } from '../../../utils/dates'
+import { formatQuantity } from '../../../utils/numbers'
 import '../../peppol/pages/peppol.css'
 
 interface InvoicePeppolPanelProps {
@@ -271,11 +272,11 @@ export function InvoicePeppolPanel({ invoiceId, invoiceNumber, invoiceStatus }: 
                 <tr key={line.sequence}>
                   <td>{line.sequence}</td>
                   <td>{line.description}</td>
-                  <td>{line.quantity.toLocaleString('nl-BE')}</td>
+                  <td>{formatQuantity(line.quantity)}</td>
                   <td>{line.unitCode}</td>
                   <td>{euro(line.unitPrice, preview.currency)}</td>
                   <td>
-                    {line.vatCategoryCode} {line.vatRatePercent.toLocaleString('nl-BE')}%
+                    {line.vatCategoryCode} {formatQuantity(line.vatRatePercent)}%
                   </td>
                   <td>{euro(line.lineTotal, preview.currency)}</td>
                 </tr>
@@ -297,7 +298,7 @@ export function InvoicePeppolPanel({ invoiceId, invoiceNumber, invoiceStatus }: 
                 {preview.vatGroups.map((group) => (
                   <tr key={`${group.vatCategoryCode}-${group.vatRatePercent}`}>
                     <td>{group.vatCategoryCode}</td>
-                    <td>{group.vatRatePercent.toLocaleString('nl-BE')}%</td>
+                    <td>{formatQuantity(group.vatRatePercent)}%</td>
                     <td>{euro(group.taxableAmount, preview.currency)}</td>
                     <td>{euro(group.vatAmount, preview.currency)}</td>
                   </tr>
@@ -314,7 +315,7 @@ export function InvoicePeppolPanel({ invoiceId, invoiceNumber, invoiceStatus }: 
             {t('invoices.peppolPanel.type')}: {PEPPOL_KIND_LABEL_KEYS[preview.kind as PeppolDocumentKind]
               ? t(PEPPOL_KIND_LABEL_KEYS[preview.kind as PeppolDocumentKind])
               : preview.kind} · {t('invoices.peppolPanel.date')}:{' '}
-            {preview.invoiceDate}
+            {formatDate(preview.invoiceDate)}
             {preview.buyerReference && <> · {t('invoices.peppolPanel.buyerReference')}: {preview.buyerReference}</>}
             {preview.purchaseOrderNumber && <> · {t('invoices.detail.poNumber', { number: preview.purchaseOrderNumber })}</>}
             {preview.creditedInvoiceNumber && <> · {t('invoices.peppolPanel.creditsInvoice')}: {preview.creditedInvoiceNumber}</>}

@@ -31,7 +31,15 @@ public record LocationOptionDto(
     bool IsDefaultBillingLocation = false,
     /// <summary>Street + house number ("Noorderlaan 10") so pickers can render a full address line.</summary>
     string? Address = null,
-    string? PostalCode = null);
+    string? PostalCode = null,
+    // Central address master: every active address of the tenant is offered; these fields tell
+    // the picker where an address comes from (requested customer / company-wide / other customers).
+    /// <summary>True when the address is linked to the customer passed in the request.</summary>
+    bool IsLinkedToCustomer = false,
+    /// <summary>Total number of customer relationships on this address (0 = company-wide).</summary>
+    int LinkedCustomerCount = 0,
+    /// <summary>Up to three names of OTHER customers using this address, comma-separated; null when none.</summary>
+    string? LinkedCustomerNames = null);
 
 /// <summary>
 /// One structured opening window. Times travel as "HH:mm" strings (JSON friendly, exactly what

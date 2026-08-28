@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { formatDate } from '../../../utils/dates'
 import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../../../components/layout/PageHeader'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
@@ -333,7 +334,7 @@ export function NewInvoicePage() {
                       <td>
                         <code>{order.orderNumber}</code>
                       </td>
-                      <td>{order.orderDate}</td>
+                      <td>{formatDate(order.orderDate)}</td>
                       <td className="inv-goods">{order.goodsDescription}</td>
                       <td>
                         {order.firstLoadingCity ?? '?'} → {order.lastUnloadingCity ?? '?'}

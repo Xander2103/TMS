@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { formatCurrency } from '../../../utils/numbers'
 import { Link } from 'react-router-dom'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
@@ -117,7 +118,7 @@ function assignmentAdjustmentLabel(t: TranslateFn, assignment: PricingAssignment
     parts.push(`${assignment.percentAdjustment > 0 ? '+' : ''}${assignment.percentAdjustment}%`)
   }
   if (assignment.fixedAdjustment !== null) {
-    parts.push(`${assignment.fixedAdjustment > 0 ? '+' : ''}€ ${assignment.fixedAdjustment.toFixed(2)}`)
+    parts.push(`${assignment.fixedAdjustment > 0 ? '+' : ''}${formatCurrency(assignment.fixedAdjustment)}`)
   }
   return parts.length > 0 ? parts.join(', ') : t('customers.pricing.noAdjustment')
 }
@@ -136,9 +137,9 @@ function moveItem<T>(list: T[], from: number, to: number): T[] {
 function ruleValueSummary(t: TranslateFn, rule: PriceRule): string {
   if (rule.brackets.length > 0) return t('customers.pricing.bracketCount', { count: rule.brackets.length })
   const parts: string[] = []
-  if (rule.baseAmount !== null) parts.push(t('customers.pricing.baseAmountSummary', { amount: rule.baseAmount.toFixed(2) }))
-  if (rule.unitPrice !== null) parts.push(`€ ${rule.unitPrice.toFixed(2)}`)
-  if (rule.minimumAmount !== null) parts.push(t('customers.pricing.minAmountSummary', { amount: rule.minimumAmount.toFixed(2) }))
+  if (rule.baseAmount !== null) parts.push(t('customers.pricing.baseAmountSummary', { amount: formatCurrency(rule.baseAmount) }))
+  if (rule.unitPrice !== null) parts.push(formatCurrency(rule.unitPrice))
+  if (rule.minimumAmount !== null) parts.push(t('customers.pricing.minAmountSummary', { amount: formatCurrency(rule.minimumAmount) }))
   return parts.join(', ') || '—'
 }
 
@@ -626,7 +627,7 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                   {agreement.effectiveFrom}
                   {agreement.effectiveUntil ? ` – ${agreement.effectiveUntil}` : ' →'}
                 </td>
-                <td>{agreement.minimumAmount !== null ? `€ ${agreement.minimumAmount.toFixed(2)}` : '—'}</td>
+                <td>{agreement.minimumAmount !== null ? formatCurrency(agreement.minimumAmount) : '—'}</td>
                 <td>{assignmentAdjustmentLabel(t, assignment)}</td>
                 <td>{agreement.notes ?? '—'}</td>
                 {canManage && <td className="issued-items-row-actions">—</td>}
@@ -646,12 +647,12 @@ export function CustomerUnitPricingPanel({ customerId }: CustomerUnitPricingPane
                   {agreement.effectiveFrom}
                   {agreement.effectiveUntil ? ` – ${agreement.effectiveUntil}` : ' →'}
                 </td>
-                <td>{agreement.minimumAmount !== null ? `€ ${agreement.minimumAmount.toFixed(2)}` : '—'}</td>
+                <td>{agreement.minimumAmount !== null ? formatCurrency(agreement.minimumAmount) : '—'}</td>
                 <td>
                   {agreement.surcharges.length === 0
                     ? '—'
                     : agreement.surcharges
-                        .map((s) => `${s.name} (${s.kind === 'Percent' ? `${s.value}%` : `€ ${s.value.toFixed(2)}`})`)
+                        .map((s) => `${s.name} (${s.kind === 'Percent' ? `${s.value}%` : formatCurrency(s.value)})`)
                         .join(', ')}
                 </td>
                 <td>{agreement.notes ?? '—'}</td>

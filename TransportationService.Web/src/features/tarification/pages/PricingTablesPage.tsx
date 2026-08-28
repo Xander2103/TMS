@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { formatDate } from '../../../utils/dates'
 import { useNavigate } from 'react-router-dom'
 import { Breadcrumbs } from '../../../components/layout/Breadcrumbs'
 import { PageHeader } from '../../../components/layout/PageHeader'
@@ -21,6 +22,7 @@ export function PricingTablesPage() {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const canManage = hasPermission('tariffs.manage')
+  const canImport = hasPermission('tariffs.import') || canManage
 
   const [agreements, setAgreements] = useState<PricingAgreement[] | null>(null)
   // Vertaalsleutel in state; vertaling gebeurt pas bij render.
@@ -64,7 +66,7 @@ export function PricingTablesPage() {
     {
       key: 'validity',
       header: t('tarification.tables.colValidity'),
-      render: (a) => `${a.effectiveFrom} — ${a.effectiveUntil ?? t('tarification.common.unlimited')}`,
+      render: (a) => `${formatDate(a.effectiveFrom)} — ${a.effectiveUntil ? formatDate(a.effectiveUntil) : t('tarification.common.unlimited')}`,
     },
     {
       key: 'status',
@@ -80,6 +82,28 @@ export function PricingTablesPage() {
       render: (a) => t('tarification.tables.usedBy', { count: a.customerCount }),
     },
     { key: 'surcharges', header: t('tarification.tables.colSurcharges'), render: (a) => a.surcharges.length, align: 'right' },
+    // Excel import lives on the table itself (a file always targets ONE table); the list
+    // offers the entry point so nobody has to know that first.
+    ...(canImport
+      ? [
+          {
+            key: 'import',
+            header: '',
+            align: 'right' as const,
+            render: (a: PricingAgreement) => (
+              <Button
+                variant="ghost"
+                onClick={(event: React.MouseEvent) => {
+                  event.stopPropagation()
+                  navigate(`/pricing/tables/${a.id}?import=1`)
+                }}
+              >
+                {t('tarification.importDialog.importFromList')}
+              </Button>
+            ),
+          } satisfies Column<PricingAgreement>,
+        ]
+      : []),
   ]
 
   return (

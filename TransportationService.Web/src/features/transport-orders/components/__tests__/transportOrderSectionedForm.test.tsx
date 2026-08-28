@@ -422,7 +422,7 @@ describe('TransportOrderForm sections + pricing', () => {
     expect(screen.getByLabelText('Berekeningswijze')).toHaveValue('Per uur')
     const quantityInput = await screen.findByLabelText('Aantal uur — Wachttijd')
     await userEvent.type(quantityInput, '3')
-    expect(screen.getByText(/Prijsindicatie: € 135\.00/)).toBeInTheDocument()
+    expect(screen.getByText(/Prijsindicatie: € 135,00/)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Toevoegen' }))
 
@@ -620,7 +620,7 @@ describe('TransportOrderForm sections + pricing', () => {
     await waitFor(() => expect(previewSpy).toHaveBeenCalled(), { timeout: 3000 })
     await waitFor(() => expect(screen.getByText('3 × Europallet (zone Z3)')).toBeInTheDocument())
     expect(screen.getByText(/^Totaal/)).toBeInTheDocument()
-    expect(screen.getAllByText('€ 145.00').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('€ 145,00').length).toBeGreaterThan(0)
     // Without the permission there is no manual-override checkbox.
     expect(screen.queryByLabelText(/Handmatige prijs/)).not.toBeInTheDocument()
   })
@@ -640,7 +640,7 @@ describe('TransportOrderForm sections + pricing', () => {
     await userEvent.selectOptions(screen.getByLabelText('Dienst of toeslag'), 'opt-8')
 
     expect(screen.getByLabelText('Berekeningswijze')).toHaveValue('Vast bedrag')
-    expect(screen.getByText(/Prijsindicatie: € 25\.00/)).toBeInTheDocument()
+    expect(screen.getByText(/Prijsindicatie: € 25,00/)).toBeInTheDocument()
   })
 
   it('shows an auto-applied (contract) service as a read-only checked row with an AUTO badge', async () => {
@@ -782,7 +782,7 @@ describe('TransportOrderForm sections + pricing', () => {
     await waitFor(() => expect(screen.getByText(/Extra laadtijd: 60 min/)).toBeInTheDocument())
     expect(screen.getByText('VOORSTEL')).toBeInTheDocument()
     expect(screen.getByText('Totaal incl. voorstellen')).toBeInTheDocument()
-    expect(screen.getByText('€ 487.50')).toBeInTheDocument()
+    expect(screen.getByText('€ 487,50')).toBeInTheDocument()
   })
 })
 

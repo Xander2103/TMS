@@ -1,4 +1,6 @@
-import { apiClient } from '../../../api/apiClient'
+import { ApiError, apiClient } from '../../../api/apiClient'
+import { apiBaseUrl } from '../../../config/env'
+import { getAccessToken } from '../../auth/authStorage'
 import type { PagedResult } from '../../../api/types'
 import type {
   InvoiceDetail,
@@ -154,4 +156,25 @@ export function completeInvoiceLedgerSnapshots(id: string): Promise<InvoiceDetai
 
 export function deleteInvoice(id: string): Promise<void> {
   return apiClient.deleteRequest(`/api/invoices/${id}`)
+}
+
+/**
+ * Fetches the invoice PDF as rendered for the customer (draft = stamped preview, same
+ * description/language rules as Send). Presentation only: never changes invoice state.
+ * Returns an object URL the caller must revoke.
+ */
+export async function fetchInvoicePdfUrl(id: string): Promise<string> {
+  const response = await fetch(`${apiBaseUrl}/api/invoices/${id}/pdf`, {
+    headers: { Authorization: `Bearer ${getAccessToken() ?? ''}` },
+  })
+  if (!response.ok) {
+    throw new ApiError('', response.status)
+  }
+  const blob = await response.blob()
+  return URL.createObjectURL(blob)
+}
+
+/** Creates a DRAFT credit note against a Sent/Paid invoice; the original is never modified. */
+export function createCreditNote(id: string): Promise<InvoiceDetail> {
+  return apiClient.postJson<InvoiceDetail, Record<string, never>>(`/api/invoices/${id}/credit-note`, {})
 }

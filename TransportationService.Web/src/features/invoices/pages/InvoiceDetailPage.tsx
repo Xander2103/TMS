@@ -13,7 +13,9 @@ import { useToast } from '../../../components/ui/toastContext'
 import { describeApiError, getFieldError, localizeApiError, type FieldErrors } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
 import { useAuth } from '../../auth/authContextValue'
-import { changeInvoiceStatus, completeInvoiceLedgerSnapshots, deleteInvoice, getInvoice, overrideInvoiceNumber, updateInvoice } from '../api/invoicesApi'
+import { changeInvoiceStatus, completeInvoiceLedgerSnapshots, createCreditNote, deleteInvoice, fetchInvoicePdfUrl, getInvoice, overrideInvoiceNumber, updateInvoice } from '../api/invoicesApi'
+import { formatQuantity } from '../../../utils/numbers'
+import { fiscalTreatmentLabel } from '../utils/invoiceFiscal'
 import {
   deleteInvoiceAttachment,
   downloadInvoiceAttachment,
@@ -69,6 +71,11 @@ export function InvoiceDetailPage() {
   const [lines, setLines] = useState<EditableLine[]>([])
 
   const [confirmTransition, setConfirmTransition] = useState<InvoiceStatus | null>(null)
+  // Send is irreversible (number, snapshots, descriptions freeze): it always goes through an
+  // explicit summary dialog, and a single in-flight guard makes a double click a no-op.
+  const [confirmSend, setConfirmSend] = useState(false)
+  const sendInFlight = useRef(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   // Active sales categories for the per-line select in edit mode; empty when the caller
   // lacks the accounting/invoice read permissions — the select simply doesn't render then.
@@ -160,6 +167,32 @@ export function InvoiceDetailPage() {
     }
   }
 
+  async function handleSend() {
+    if (!invoice || sendInFlight.current) return
+    sendInFlight.current = true
+    try {
+      await applyTransition('Sent')
+    } finally {
+      sendInFlight.current = false
+      setConfirmSend(false)
+    }
+  }
+
+  async function openPdfPreview() {
+    if (!invoice || pdfBusy) return
+    setPdfBusy(true)
+    try {
+      const url = await fetchInvoicePdfUrl(invoice.id)
+      window.open(url, '_blank', 'noopener')
+      // Give the new tab time to take the blob before it is released.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (err) {
+      showError(localizeApiError(t, err, t('invoices.internalDetail.pdfError')))
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
   async function applyTransition(target: InvoiceStatus) {
     if (!invoice) return
     setBusy(true)
@@ -231,18 +264,34 @@ export function InvoiceDetailPage() {
       <Breadcrumbs items={[{ label: t('invoices.list.title'), to: '/invoices' }, { label: invoice.invoiceNumber }]} />
       <PageHeader
         title={`${invoice.invoiceNumber} — ${invoice.customerName}`}
-        subtitle={`${t('invoices.internalDetail.subtitle', { date: invoice.invoiceDate, dueDate: invoice.dueDate })}${invoice.customerVatNumber ? ` · ${invoice.customerVatNumber}` : ''}`}
+        subtitle={`${t('invoices.internalDetail.subtitle', { date: formatDate(invoice.invoiceDate), dueDate: formatDate(invoice.dueDate) })}${invoice.customerVatNumber ? ` · ${invoice.customerVatNumber}` : ''}`}
         action={
           <span className="inv-header-actions">
             <Badge tone={INVOICE_STATUS_TONE[invoice.status]}>{t(INVOICE_STATUS_LABELS[invoice.status])}</Badge>
             {invoice.numberIsManual && <Badge tone="warning">{t('invoices.internalDetail.manualNumber')}</Badge>}
+            {!editing && (
+              <Button
+                variant="secondary"
+                onClick={() => void openPdfPreview()}
+                disabled={busy || pdfBusy}
+                title={t('invoices.internalDetail.pdfPreviewHint')}
+              >
+                {pdfBusy ? t('invoices.common.busy') : t('invoices.internalDetail.pdfPreview')}
+              </Button>
+            )}
             {hasPermission('invoices.change_status') &&
               !editing &&
               invoice.allowedTransitions.map((target) => (
                 <Button
                   key={target}
                   variant={target === 'Cancelled' ? 'secondary' : 'primary'}
-                  onClick={() => (target === 'Cancelled' ? setConfirmTransition(target) : void applyTransition(target))}
+                  onClick={() =>
+                    target === 'Cancelled'
+                      ? setConfirmTransition(target)
+                      : target === 'Sent'
+                        ? setConfirmSend(true)
+                        : void applyTransition(target)
+                  }
                   disabled={busy}
                 >
                   {t(INVOICE_TRANSITION_LABELS[target])}
@@ -258,6 +307,32 @@ export function InvoiceDetailPage() {
         {invoice.purchaseOrderNumber && <> · {t('invoices.detail.poNumber', { number: invoice.purchaseOrderNumber })}</>}
       </p>
       <InvoiceFiscalSummary invoice={invoice} />
+      {(invoice.creditedInvoiceId || (invoice.creditNotes && invoice.creditNotes.length > 0)) && (
+        <p className="inv-meta inv-relations" data-testid="invoice-relations">
+          {invoice.creditedInvoiceId && (
+            <>
+              {t('invoices.internalDetail.creditsInvoice')}:{' '}
+              <button type="button" className="inv-link" onClick={() => navigate(`/invoices/${invoice.creditedInvoiceId}`)}>
+                {invoice.creditedInvoiceNumber ?? invoice.creditedInvoiceId}
+              </button>
+            </>
+          )}
+          {invoice.creditNotes && invoice.creditNotes.length > 0 && (
+            <>
+              {t('invoices.internalDetail.creditNotesTitle')}:{' '}
+              {invoice.creditNotes.map((note, index) => (
+                <span key={note.id}>
+                  {index > 0 && ', '}
+                  <button type="button" className="inv-link" onClick={() => navigate(`/invoices/${note.id}`)}>
+                    {note.invoiceNumber}
+                  </button>{' '}
+                  <Badge tone={INVOICE_STATUS_TONE[note.status]}>{t(INVOICE_STATUS_LABELS[note.status])}</Badge>
+                </span>
+              ))}
+            </>
+          )}
+        </p>
+      )}
 
       {editing ? (
         <div className="inv-edit">
@@ -387,7 +462,12 @@ export function InvoiceDetailPage() {
                         {line.orderNumber}
                       </button>
                     )}{' '}
-                    {line.description}
+                    {line.customerDescription ?? line.description}
+                    {line.customerDescription && line.customerDescription !== line.description && (
+                      <div className="customer-form-muted">
+                        {line.description}
+                      </div>
+                    )}
                     {(line.salesCategoryName || line.ledgerAccountNumber) && (
                       <div className="customer-form-muted">
                         {line.salesCategoryName}
@@ -401,9 +481,9 @@ export function InvoiceDetailPage() {
                     )}
                     <InvoiceLineFiscalBadge line={line} />
                   </td>
-                  <td>{line.quantity.toLocaleString('nl-BE')}</td>
+                  <td>{formatQuantity(line.quantity)}</td>
                   <td>{euro(line.unitPrice, invoice.currency)}</td>
-                  <td>{line.vatRatePercent.toLocaleString('nl-BE')}%</td>
+                  <td>{formatQuantity(line.vatRatePercent)}%</td>
                   <td>{euro(line.lineTotal, invoice.currency)}</td>
                 </tr>
               ))}
@@ -442,6 +522,30 @@ export function InvoiceDetailPage() {
                 {t('ui.actions.delete')}
               </Button>
             )}
+            {(invoice.status === 'Sent' || invoice.status === 'Paid')
+              && invoice.kind !== 'CreditNote'
+              && hasPermission('invoices.create')
+              && !(invoice.creditNotes ?? []).some((note) => note.status !== 'Cancelled') && (
+                <Button
+                  variant="secondary"
+                  title={t('invoices.internalDetail.creditNoteHint')}
+                  onClick={async () => {
+                    setBusy(true)
+                    try {
+                      const created = await createCreditNote(invoice.id)
+                      showSuccess(t('invoices.internalDetail.creditNoteCreated', { number: created.invoiceNumber }))
+                      navigate(`/invoices/${created.id}`)
+                    } catch (err) {
+                      showError(localizeApiError(t, err, t('invoices.internalDetail.creditNoteError')))
+                    } finally {
+                      setBusy(false)
+                    }
+                  }}
+                  disabled={busy}
+                >
+                  {t('invoices.internalDetail.creditNoteAction')}
+                </Button>
+              )}
             {(invoice.status === 'Sent' || invoice.status === 'Paid')
               && hasPermission('accounting.manage')
               && invoice.lines.some((line) => !line.ledgerAccountNumber) && (
@@ -538,10 +642,53 @@ export function InvoiceDetailPage() {
         </Modal>
       )}
 
+      {confirmSend && (
+        <Modal
+          title={t('invoices.internalDetail.sendConfirm.title')}
+          onClose={() => !busy && setConfirmSend(false)}
+          busy={busy}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setConfirmSend(false)} disabled={busy}>
+                {t('ui.actions.cancel')}
+              </Button>
+              <Button onClick={() => void handleSend()} disabled={busy} data-testid="invoice-send-confirm">
+                {busy ? t('invoices.internalDetail.sendConfirm.busy') : t('invoices.internalDetail.sendConfirm.confirm')}
+              </Button>
+            </>
+          }
+        >
+          <p>{t('invoices.internalDetail.sendConfirm.intro')}</p>
+          <dl className="inv-send-summary" data-testid="invoice-send-summary">
+            <dt>{t('invoices.internalDetail.sendConfirm.number')}</dt>
+            <dd>{invoice.invoiceNumber}</dd>
+            <dt>{t('invoices.internalDetail.sendConfirm.customer')}</dt>
+            <dd>{invoice.customerName}</dd>
+            <dt>{t('invoices.internalDetail.sendConfirm.entity')}</dt>
+            <dd>{invoice.legalEntityName ?? '—'}</dd>
+            <dt>{t('invoices.internalDetail.sendConfirm.total')}</dt>
+            <dd>{euro(invoice.total, invoice.currency)}</dd>
+            <dt>{t('invoices.internalDetail.sendConfirm.language')}</dt>
+            <dd>
+              {invoice.languageCode && ['nl', 'fr', 'en', 'de'].includes(invoice.languageCode.toLowerCase())
+                ? t(`invoices.fiscal.languages.${invoice.languageCode.toLowerCase()}`)
+                : (invoice.languageCode?.toUpperCase() ?? '—')}
+            </dd>
+            <dt>{t('invoices.internalDetail.sendConfirm.treatment')}</dt>
+            <dd>{fiscalTreatmentLabel(t, invoice.customerVatTreatment) ?? '—'}</dd>
+          </dl>
+        </Modal>
+      )}
+
       {confirmTransition && (
         <ConfirmDialog
           title={t('invoices.internalDetail.cancelTitle')}
-          message={t('invoices.internalDetail.cancelMessage', { number: invoice.invoiceNumber })}
+          message={t(
+            invoice.status === 'Sent' || invoice.status === 'Paid'
+              ? 'invoices.internalDetail.cancelSentMessage'
+              : 'invoices.internalDetail.cancelMessage',
+            { number: invoice.invoiceNumber },
+          )}
           confirmLabel={t('ui.actions.cancel')}
           destructive
           onConfirm={() => void applyTransition(confirmTransition)}

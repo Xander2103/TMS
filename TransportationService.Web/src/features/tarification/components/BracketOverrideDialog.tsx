@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { formatCurrency } from '../../../utils/numbers'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
 import { Modal } from '../../../components/ui/Modal'
@@ -121,7 +122,7 @@ export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: Brack
         </>
       }
     >
-      <p className="placeholder-text">{t('tarification.override.intro', { price: bracket.price.toFixed(2) })}</p>
+      <p className="placeholder-text">{t('tarification.override.intro', { price: formatCurrency(bracket.price) })}</p>
       <FormField label={t('tarification.common.customer')} required error={!customerId && error ? error : undefined}>
         <SearchableSelect
           value={customerId}
@@ -146,7 +147,7 @@ export function BracketOverrideDialog({ rule, bracket, onSaved, onClose }: Brack
         <FormField
           label={t('tarification.override.extraLabel')}
           hint={t('tarification.override.extraHint', {
-            suffix: bracket.pricePerExtraUnit !== null ? ` (€ ${bracket.pricePerExtraUnit.toFixed(2)})` : '',
+            suffix: bracket.pricePerExtraUnit !== null ? ` (${formatCurrency(bracket.pricePerExtraUnit)})` : '',
           })}
         >
           <input

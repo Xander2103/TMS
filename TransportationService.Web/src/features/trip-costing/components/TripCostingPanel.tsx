@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { formatQuantity } from '../../../utils/numbers'
 import { ApiError } from '../../../api/apiClient'
 import { localizeApiError } from '../../../api/problemDetails'
 import { Badge } from '../../../components/ui/Badge'
@@ -342,7 +343,7 @@ export function TripCostingPanel({ tripId, tripStatus }: TripCostingPanelProps) 
                     </span>
                   )}
                 </td>
-                <td className="tc-num">{line.quantity.toLocaleString('nl-BE')}</td>
+                <td className="tc-num">{formatQuantity(line.quantity)}</td>
                 <td>{line.unit}</td>
                 <td className="tc-num">{euro(line.unitRate)}</td>
                 <td className="tc-num">{euro(line.amount)}</td>

@@ -45,7 +45,13 @@ public record InvoiceLineDto(
     /// <summary>Statutory text printed for an exempt/reverse-charged line.</summary>
     string? VatLegalText = null,
     /// <summary>The sales code (article code) on the line: snapshot after Send, live while Draft.</summary>
-    string? SalesCode = null);
+    string? SalesCode = null,
+    /// <summary>
+    /// What the CUSTOMER reads for this line in the invoice language. While Draft this is what
+    /// Send will freeze into <see cref="Description"/> (same rule, see InvoiceLineDescriptions);
+    /// after Send it equals <see cref="Description"/>.
+    /// </summary>
+    string? CustomerDescription = null);
 
 public record InvoiceDetailDto(
     Guid Id,
@@ -78,7 +84,12 @@ public record InvoiceDetailDto(
     /// <summary>Document language frozen at creation.</summary>
     string? LanguageCode = null,
     /// <summary>Statutory text for the header treatment, when it has one.</summary>
-    string? VatLegalText = null);
+    string? VatLegalText = null,
+    /// <summary>Credit notes issued against THIS invoice (any status), so the relation is visible both ways.</summary>
+    IReadOnlyList<InvoiceReferenceDto>? CreditNotes = null);
+
+/// <summary>A related document reference (original ↔ credit note).</summary>
+public record InvoiceReferenceDto(Guid Id, string InvoiceNumber, InvoiceStatus Status);
 
 /// <summary>Completed, not-yet-invoiced order offered in the invoice builder.</summary>
 public record UninvoicedOrderDto(

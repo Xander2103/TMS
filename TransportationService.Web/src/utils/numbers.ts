@@ -69,3 +69,19 @@ export function formatCurrency(value: number | null | undefined, currencySymbol 
       return `${currencySymbol} ${body}`
   }
 }
+
+/**
+ * Hoeveelheid (kg, m³, aantallen, ldm …) volgens tenant-instelling, ZONDER overbodige
+ * nullen: 12 → "12", 12.5 → "12,5", 1234.25 → "1.234,25". Max. `maxFractionDigits`
+ * decimalen (afgerond), null → ''.
+ */
+export function formatQuantity(value: number | null | undefined, maxFractionDigits = 3): string {
+  if (value == null || Number.isNaN(value)) return ''
+  const rounded = Number(Math.abs(value).toFixed(maxFractionDigits))
+  const [integerPart, fractionPart = ''] = String(rounded).includes('e')
+    ? rounded.toFixed(maxFractionDigits).replace(/\.?0+$/, '').split('.')
+    : String(rounded).split('.')
+  const grouped = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, groupingSeparator())
+  const body = fractionPart ? `${grouped}${activeSeparator}${fractionPart}` : grouped
+  return value < 0 && rounded !== 0 ? `-${body}` : body
+}

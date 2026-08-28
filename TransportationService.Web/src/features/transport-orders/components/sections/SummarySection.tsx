@@ -1,4 +1,5 @@
 import { FormField } from '../../../../components/ui/FormField'
+import { formatCurrency } from '../../../../utils/numbers'
 import type { CustomerListItem } from '../../../customers/types'
 import type { PriceCalculationResult, ServiceOption } from '../../../tarification/api/pricingApi'
 import type { UnitOptionItem } from '../UnitSelect'
@@ -87,11 +88,11 @@ export function SummarySection({
           <dt>Prijs</dt>
           <dd>
             {priceIsManual
-              ? `€ ${agreedPrice || '0'} (handmatig)`
+              ? `${formatCurrency(Number(agreedPrice) || 0)} (handmatig)`
               : preview
-                ? `€ ${preview.total.toFixed(2)} (berekend)`
+                ? `${formatCurrency(preview.total)} (berekend)`
                 : agreedPrice
-                  ? `€ ${agreedPrice}`
+                  ? formatCurrency(Number(agreedPrice) || 0)
                   : '—'}
           </dd>
         </div>

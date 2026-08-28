@@ -204,13 +204,17 @@ public class LocationServiceTests
     }
 
     [Fact]
-    public async Task Options_CustomerScope_IncludesOwnAndCompanyLocations_NeverOtherCustomers()
+    public async Task Options_CustomerScope_CustomerAddressesFirst_ThenCompany_ThenOtherCustomers()
     {
         var h = await SeedAsync();
         using var _ = h.Db;
         var customerId = await SeedCustomerAsync(h);
         var otherCustomerId = await SeedCustomerAsync(h, "KL-0002", "Andere Klant BV");
         await h.Sut.CreateAsync(CreateRequest("DEP-001", "Eigen depot"), CancellationToken.None);
+        // Name sorts BEFORE the default site, so the default-first rule within the group is proven too.
+        var plain = await h.Sut.CreateAsync(
+            CreateRequest("LOC-C", "Aankomsthal") with { CustomerId = customerId, Type = LocationType.CustomerLocation },
+            CancellationToken.None);
         var site = await h.Sut.CreateAsync(
             CreateRequest("LOC-A", "Klantsite") with
             {
@@ -218,19 +222,90 @@ public class LocationServiceTests
                 Type = LocationType.CustomerLocation,
                 IsDefaultLoadingLocation = true,
             }, CancellationToken.None);
-        await h.Sut.CreateAsync(
-            CreateRequest("LOC-B", "Site van andere klant") with { CustomerId = otherCustomerId, Type = LocationType.CustomerLocation },
+        // Name sorts first alphabetically — must still land LAST because it belongs to another customer.
+        var foreign = await h.Sut.CreateAsync(
+            CreateRequest("LOC-B", "AAA Site van andere klant") with { CustomerId = otherCustomerId, Type = LocationType.CustomerLocation },
             CancellationToken.None);
 
         var options = await h.Sut.GetOptionsAsync(null, customerId, CancellationToken.None);
 
-        Assert.Equal(2, options.Count);
-        Assert.DoesNotContain(options, o => o.Name == "Site van andere klant");
+        Assert.Equal(
+            new[] { site.Location!.Id, plain.Location!.Id },
+            options.Take(2).Select(o => o.Id));
+        Assert.Equal("Eigen depot", options[2].Name);
+        Assert.Equal(foreign.Location!.Id, options[3].Id);
         // Defaults sort first and carry their flags + city for display.
-        Assert.Equal(site.Location!.Id, options[0].Id);
         Assert.True(options[0].IsDefaultLoadingLocation);
         Assert.False(options[0].IsDefaultUnloadingLocation);
         Assert.Equal("Antwerpen", options[0].City);
+        // Provenance flags per group.
+        Assert.True(options[0].IsLinkedToCustomer);
+        Assert.Null(options[0].LinkedCustomerNames);
+        Assert.False(options[2].IsLinkedToCustomer);
+        Assert.Equal(0, options[2].LinkedCustomerCount);
+        Assert.False(options[3].IsLinkedToCustomer);
+    }
+
+    [Fact]
+    public async Task Options_AddressOfAnotherCustomer_IsOffered_WithProvenance()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerId = await SeedCustomerAsync(h);
+        var otherA = await SeedCustomerAsync(h, "KL-0002", "Euro Retail Group");
+        var otherB = await SeedCustomerAsync(h, "KL-0003", "Distri-Frais SPRL");
+        var shared = await h.Sut.CreateAsync(
+            CreateRequest("LOC-S", "Gedeeld magazijn") with { CustomerId = otherA, Type = LocationType.CustomerLocation },
+            CancellationToken.None);
+        await LinkAsync(h, otherB, shared.Location!.Id);
+
+        var options = await h.Sut.GetOptionsAsync(null, customerId, CancellationToken.None);
+
+        var option = Assert.Single(options, o => o.Id == shared.Location.Id);
+        Assert.False(option.IsLinkedToCustomer);
+        Assert.Equal(2, option.LinkedCustomerCount);
+        Assert.Equal("Distri-Frais SPRL, Euro Retail Group", option.LinkedCustomerNames);
+        // No relationship is created merely by offering the address.
+        Assert.False(await h.Db.Context.CustomerLocationLinks.AnyAsync(l => l.LocationId == shared.Location.Id && l.CustomerId == customerId));
+    }
+
+    [Fact]
+    public async Task Options_SharedAddress_ListsOnlyTheOtherCustomers()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerId = await SeedCustomerAsync(h);
+        var other = await SeedCustomerAsync(h, "KL-0002", "Euro Retail Group");
+        var shared = await h.Sut.CreateAsync(
+            CreateRequest("LOC-S", "Gedeeld magazijn") with { CustomerId = customerId, Type = LocationType.CustomerLocation },
+            CancellationToken.None);
+        await LinkAsync(h, other, shared.Location!.Id);
+
+        var option = Assert.Single(await h.Sut.GetOptionsAsync(null, customerId, CancellationToken.None));
+
+        Assert.True(option.IsLinkedToCustomer);
+        Assert.Equal(2, option.LinkedCustomerCount);
+        Assert.Equal("Euro Retail Group", option.LinkedCustomerNames);
+    }
+
+    [Fact]
+    public async Task Options_NeverOffersAddressesOfAnotherTenant()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var customerId = await SeedCustomerAsync(h);
+        await h.Sut.CreateAsync(CreateRequest("DEP-001", "Eigen depot"), CancellationToken.None);
+
+        var otherTenant = Guid.NewGuid();
+        h.Db.Context.Tenants.Add(new Tenant { Id = otherTenant, Name = "Other", Slug = "other", IsActive = true, CreatedAt = Now.UtcDateTime });
+        h.Db.Context.Set<Location>().Add(new Location { Id = Guid.NewGuid(), TenantId = otherTenant, Code = "X", Name = "Depot elders", Type = LocationType.Depot, IsActive = true });
+        await h.Db.Context.SaveChangesAsync();
+
+        var withCustomer = await h.Sut.GetOptionsAsync(null, customerId, CancellationToken.None);
+        var withoutCustomer = await h.Sut.GetOptionsAsync(null, null, CancellationToken.None);
+
+        Assert.Equal("Eigen depot", Assert.Single(withCustomer).Name);
+        Assert.Equal("Eigen depot", Assert.Single(withoutCustomer).Name);
     }
 
     // --- Locations-UX wave: customer sort + per-customer grouping ---------------------------

@@ -249,29 +249,76 @@ public class LocationService : ILocationService
     public async Task<IReadOnlyList<LocationOptionDto>> GetOptionsAsync(
         LocationType? type, Guid? customerId, CancellationToken cancellationToken)
     {
+        var tenantId = _tenantContext.TenantId;
         var query = TenantScoped().AsNoTracking().Where(l => l.IsActive);
         if (type is { } t) query = query.Where(l => l.Type == t);
-        // Customer scope = the customer's own sites plus company-wide (unlinked) locations;
-        // other customers' sites are never offered.
-        if (customerId is { } cust)
-        {
-            query = query.Where(l =>
-                _dbContext.CustomerLocationLinks.Any(link => link.LocationId == l.Id && link.CustomerId == cust)
-                || !_dbContext.CustomerLocationLinks.Any(link => link.LocationId == l.Id));
-        }
 
-        return await query
-            .OrderByDescending(l => l.IsDefaultLoadingLocation || l.IsDefaultUnloadingLocation)
-            .ThenBy(l => l.Name)
-            .Select(l => new LocationOptionDto(
-                l.Id, l.Code, l.Name, l.Type, l.City,
-                l.IsDefaultLoadingLocation, l.IsDefaultUnloadingLocation, l.IsDefaultBillingLocation,
-                // Street + house number as one display line ("Noorderlaan 10"); null when both empty.
-                (l.Street ?? "") == "" && (l.HouseNumber ?? "") == ""
-                    ? null
-                    : ((l.Street ?? "") + " " + (l.HouseNumber ?? "")).Trim(),
-                l.PostalCode))
+        // Central address master: ONE physical address, many customer relationships. Every active
+        // address of the tenant is offered (never another tenant's); the customer only steers the
+        // ORDER and the provenance flags: the customer's own addresses first (defaults on top),
+        // then company-wide (unlinked) addresses, then addresses of other customers. Picking an
+        // address of another customer on a stop creates no relationship — that stays a deliberate
+        // action in Klant › Adressen.
+        var hasCustomer = customerId.HasValue;
+        var cust = customerId ?? Guid.Empty;
+        var links = _dbContext.CustomerLocationLinks.AsNoTracking().Where(x => x.TenantId == tenantId);
+
+        var rows = await query
+            .Select(l => new
+            {
+                Location = l,
+                IsLinkedToCustomer = hasCustomer && links.Any(x => x.LocationId == l.Id && x.CustomerId == cust),
+                LinkedCustomerCount = links.Count(x => x.LocationId == l.Id),
+            })
+            .OrderByDescending(x => x.IsLinkedToCustomer)
+            .ThenByDescending(x => x.LinkedCustomerCount == 0)
+            .ThenByDescending(x => x.Location.IsDefaultLoadingLocation || x.Location.IsDefaultUnloadingLocation)
+            .ThenBy(x => x.Location.Name)
+            .Select(x => new
+            {
+                Dto = new LocationOptionDto(
+                    x.Location.Id, x.Location.Code, x.Location.Name, x.Location.Type, x.Location.City,
+                    x.Location.IsDefaultLoadingLocation, x.Location.IsDefaultUnloadingLocation, x.Location.IsDefaultBillingLocation,
+                    // Street + house number as one display line ("Noorderlaan 10"); null when both empty.
+                    (x.Location.Street ?? "") == "" && (x.Location.HouseNumber ?? "") == ""
+                        ? null
+                        : ((x.Location.Street ?? "") + " " + (x.Location.HouseNumber ?? "")).Trim(),
+                    x.Location.PostalCode,
+                    x.IsLinkedToCustomer,
+                    x.LinkedCustomerCount),
+            })
             .ToListAsync(cancellationToken);
+
+        // Names of OTHER customers, one extra query for the whole list (no N+1), max three per address.
+        var otherLinkedIds = rows
+            .Where(r => r.Dto.LinkedCustomerCount > (r.Dto.IsLinkedToCustomer ? 1 : 0))
+            .Select(r => r.Dto.Id)
+            .ToList();
+        var otherNames = await OtherCustomerNamesAsync(otherLinkedIds, hasCustomer ? cust : null, cancellationToken);
+
+        return rows
+            .Select(r => otherNames.TryGetValue(r.Dto.Id, out var names)
+                ? r.Dto with { LinkedCustomerNames = string.Join(", ", names.Take(3)) }
+                : r.Dto)
+            .ToList();
+    }
+
+    /// <summary>Names of the customers linked to the given addresses, EXCLUDING one customer (sorted, distinct).</summary>
+    private async Task<Dictionary<Guid, List<string>>> OtherCustomerNamesAsync(
+        List<Guid> locationIds, Guid? excludeCustomerId, CancellationToken cancellationToken)
+    {
+        if (locationIds.Count == 0) return [];
+
+        var rows = await _dbContext.CustomerLocationLinks.AsNoTracking()
+            .Where(l => l.TenantId == _tenantContext.TenantId && locationIds.Contains(l.LocationId)
+                && (excludeCustomerId == null || l.CustomerId != excludeCustomerId))
+            .Join(_dbContext.Customers.AsNoTracking().Where(c => c.TenantId == _tenantContext.TenantId),
+                l => l.CustomerId, c => c.Id, (l, c) => new { l.LocationId, c.Name })
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(r => r.LocationId)
+            .ToDictionary(g => g.Key, g => g.Select(r => r.Name).Distinct().OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList());
     }
 
     public async Task<LocationDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken, bool canViewSensitive = false)

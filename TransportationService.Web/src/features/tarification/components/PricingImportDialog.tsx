@@ -387,8 +387,15 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
             <div className="pricing-import-badges">
               <ChangeBadge label={t('tarification.importDialog.badgeAdd')} tone="success" count={preview.added.length} />
               <ChangeBadge label={t('tarification.importDialog.badgeUpdate')} tone="info" count={preview.updated.length} />
-              <ChangeBadge label={t('tarification.importDialog.badgeRemove')} tone="warning" count={preview.removed.length} />
+              {applyRemovals && (
+                <ChangeBadge label={t('tarification.importDialog.badgeRemove')} tone="warning" count={preview.removed.length} />
+              )}
             </div>
+            {!applyRemovals && preview.removed.length > 0 && (
+              <p className="customer-form-muted" data-testid="pricing-import-removals-skipped">
+                {t('tarification.importDialog.removalsSkipped', { count: preview.removed.length })}
+              </p>
+            )}
 
             {preview.errors.length > 0 && (
               <div className="pricing-import-table-wrapper customer-import-table-wrapper">
@@ -472,7 +479,7 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
               </div>
             )}
 
-            {preview.removed.length > 0 && (
+            {applyRemovals && preview.removed.length > 0 && (
               <div className="pricing-import-table-wrapper customer-import-table-wrapper">
                 <h4>{t('tarification.importDialog.badgeRemove')}</h4>
                 <table className="customer-import-table">

@@ -1,4 +1,6 @@
 import { Badge } from '../../../../components/ui/Badge'
+import { formatCurrency, formatQuantity } from '../../../../utils/numbers'
+import { formatDate } from '../../../../utils/dates'
 import { FormField } from '../../../../components/ui/FormField'
 import type { PriceCalculationResult } from '../../../tarification/api/pricingApi'
 
@@ -207,7 +209,7 @@ export function PriceSection({
       {preview ? (
         <div className="tof-price-breakdown">
           <p className="customer-form-muted">
-            Tariefdatum: {preview.tariffDate ?? (orderDate || '—')}
+            Tariefdatum: {formatDate(preview.tariffDate ?? orderDate) || '—'}
             {preview.zoneName ? ` · Zone: ${preview.zoneName} (${preview.zoneCode})` : ''}
             {(() => {
               const agreementNames = [...new Set(preview.lines.map((l) => l.agreementName).filter(Boolean))]
@@ -241,14 +243,14 @@ export function PriceSection({
                     )}
                   </td>
                   <td>{line.source}</td>
-                  <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
+                  <td className="tof-price-amount">{formatCurrency(line.amount)}</td>
                 </tr>
               ))}
               {preview.lines.some((line) => line.proposed) && (
                 <>
                   <tr>
                     <th colSpan={2}>Subtotaal</th>
-                    <th className="tof-price-amount">€ {preview.total.toFixed(2)}</th>
+                    <th className="tof-price-amount">{formatCurrency(preview.total)}</th>
                   </tr>
                   {preview.lines.filter((line) => line.proposed).map((line, index) => (
                     <tr key={`proposed-${index}`} className="tof-price-proposed">
@@ -256,7 +258,7 @@ export function PriceSection({
                         {line.label} <Badge tone="warning">VOORSTEL</Badge>
                       </td>
                       <td>{line.source}</td>
-                      <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
+                      <td className="tof-price-amount">{formatCurrency(line.amount)}</td>
                     </tr>
                   ))}
                 </>
@@ -269,13 +271,13 @@ export function PriceSection({
                   {preview.zoneCode ? ` (zone ${preview.zoneCode})` : ''}
                 </th>
                 <th />
-                <th className="tof-price-amount">€ {preview.total.toFixed(2)}</th>
+                <th className="tof-price-amount">{formatCurrency(preview.total)}</th>
               </tr>
               {preview.lines.some((line) => line.proposed) && (
                 <tr>
                   <th>Totaal incl. voorstellen</th>
                   <th />
-                  <th className="tof-price-amount">€ {preview.totalWithProposed.toFixed(2)}</th>
+                  <th className="tof-price-amount">{formatCurrency(preview.totalWithProposed)}</th>
                 </tr>
               )}
             </tfoot>
@@ -288,9 +290,9 @@ export function PriceSection({
                   .filter((c) => c.status !== 'Full')
                   .map((c, index) => (
                     <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
-                      {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}:{' '}
+                      {formatQuantity(c.quantity)} {c.unitLabel}:{' '}
                       {(c.reason ?? 'geen passend basistarief').toLowerCase()}
-                      {c.servicesAmount > 0 && ` — alleen diensten (€ ${c.servicesAmount.toFixed(2)}), geen transportprijs`}
+                      {c.servicesAmount > 0 && ` — alleen diensten (${formatCurrency(c.servicesAmount)}), geen transportprijs`}
                     </li>
                   ))}
               </ul>

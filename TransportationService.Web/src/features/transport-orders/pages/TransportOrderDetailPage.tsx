@@ -63,6 +63,7 @@ import {
   type TransportOrderStop,
 } from '../types'
 import { formatDate, formatDateTime, parseIsoDate } from '../../../utils/dates'
+import { formatCurrency, formatQuantity } from '../../../utils/numbers'
 import { useLocale } from '../../../i18n/localeContext'
 import './transport-orders.css'
 
@@ -74,7 +75,7 @@ function formatWindow(from: string | null, to: string | null): string {
 }
 
 function money(amount: number): string {
-  return amount.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
+  return formatCurrency(amount)
 }
 
 /** §15 badge ("Vóór 10:00") for a stop's simple time requirement; '' when none. */
@@ -113,7 +114,7 @@ function calculationLabel(line: OrderPricingLine): string {
     const computed = Math.round(line.quantity * line.unitPrice * 100) / 100
     if (computed === line.amount) {
       const unit = line.unit ? ` ${line.unit}` : ''
-      return `${line.quantity.toLocaleString('nl-BE')}${unit} × ${money(line.unitPrice)}`
+      return `${formatQuantity(line.quantity)}${unit} × ${money(line.unitPrice)}`
     }
   }
   return line.kind === 'Manual' ? 'Vast bedrag' : '—'
@@ -534,7 +535,7 @@ export function TransportOrderDetailPage() {
       ? round2(addQuantityNum * addUnitPriceNum)
       : null
   const computedAddTotalDisplay =
-    computedAddTotal !== null ? computedAddTotal.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' }) : '—'
+    computedAddTotal !== null ? formatCurrency(computedAddTotal) : '—'
 
   const editQuantityNum = parseNum(editQuantity)
   const editUnitPriceNum = parseNum(editUnitPrice)
@@ -542,7 +543,7 @@ export function TransportOrderDetailPage() {
     editQuantityNum !== null && editUnitPriceNum !== null ? round2(editQuantityNum * editUnitPriceNum) : null
   const editAmountIsComputed = computedEditAmount !== null
   const computedEditAmountDisplay =
-    computedEditAmount !== null ? computedEditAmount.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' }) : '—'
+    computedEditAmount !== null ? formatCurrency(computedEditAmount) : '—'
 
   return (
     <div>
@@ -550,7 +551,7 @@ export function TransportOrderDetailPage() {
       <BackButton to="/transport-orders" label="Terug naar opdrachten" />
       <PageHeader
         title={`${order.orderNumber} — ${order.customerName}`}
-        subtitle={`Opdracht van ${order.orderDate}${order.customerReference ? ` · ref. ${order.customerReference}` : ''}`}
+        subtitle={`Opdracht van ${formatDate(order.orderDate)}${order.customerReference ? ` · ref. ${order.customerReference}` : ''}`}
         action={
           <span className="to-header-actions">
             {/* Wave 1: the containing dossier (wrapper or user-created) is one click away. */}
@@ -706,7 +707,7 @@ export function TransportOrderDetailPage() {
         <section className={`to-price-summary to-price-summary-${priceDisplay.tone}`}>
           <div className="to-price-summary-main">
             <span className="to-price-summary-label">Totaalprijs</span>
-            <span className="to-price-summary-amount">€ {(totalPrice ?? 0).toFixed(2)}</span>
+            <span className="to-price-summary-amount">{formatCurrency(totalPrice ?? 0)}</span>
           </div>
           <div className="to-price-summary-status">
             <span>
@@ -768,7 +769,7 @@ export function TransportOrderDetailPage() {
                   <dd>
                     <ul className="to-lading-list">
                       {aggregateCargo(order.cargoItems).map(({ unit, total }) => (
-                        <li key={unit}>{total.toLocaleString('nl-BE')} {unit}</li>
+                        <li key={unit}>{formatQuantity(total)} {unit}</li>
                       ))}
                     </ul>
                   </dd>
@@ -781,11 +782,11 @@ export function TransportOrderDetailPage() {
               )}
               <div>
                 <dt>Gewicht</dt>
-                <dd>{order.weightKg !== null ? `${order.weightKg.toLocaleString('nl-BE')} kg` : '—'}</dd>
+                <dd>{order.weightKg !== null ? `${formatQuantity(order.weightKg)} kg` : '—'}</dd>
               </div>
               <div>
                 <dt>Volume</dt>
-                <dd>{order.volumeM3 !== null ? `${order.volumeM3.toLocaleString('nl-BE')} m³` : '—'}</dd>
+                <dd>{order.volumeM3 !== null ? `${formatQuantity(order.volumeM3)} m³` : '—'}</dd>
               </div>
               <div>
                 <dt>Paletten</dt>
@@ -795,7 +796,7 @@ export function TransportOrderDetailPage() {
                 <dt>Prijs</dt>
                 <dd>
                   {order.agreedPrice !== null
-                    ? order.agreedPrice.toLocaleString('nl-BE', { style: 'currency', currency: 'EUR' })
+                    ? formatCurrency(order.agreedPrice)
                     : '—'}
                 </dd>
               </div>
@@ -860,9 +861,9 @@ export function TransportOrderDetailPage() {
                   <ul>
                     {unpricedCoverage.map((c, index) => (
                       <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
-                        {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}:{' '}
+                        {formatQuantity(c.quantity)} {c.unitLabel}:{' '}
                         {(c.reason ?? 'geen passend basistarief').toLowerCase()}
-                        {c.servicesAmount > 0 && ` — alleen diensten (€ ${c.servicesAmount.toFixed(2)}), geen transportprijs`}
+                        {c.servicesAmount > 0 && ` — alleen diensten (${formatCurrency(c.servicesAmount)}), geen transportprijs`}
                       </li>
                     ))}
                   </ul>
@@ -875,10 +876,10 @@ export function TransportOrderDetailPage() {
                     {coverage.map((c, index) => (
                       <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
                         <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{t(PRICING_COVERAGE_LABELS[c.status])}</Badge>{' '}
-                        {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}
-                        {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: € ${c.baseAmount.toFixed(2)}`}
+                        {formatQuantity(c.quantity)} {c.unitLabel}
+                        {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: ${formatCurrency(c.baseAmount)}`}
                         {c.status !== 'Full' && c.reason ? ` — ${c.reason}` : ''}
-                        {c.servicesAmount > 0 && ` · diensten € ${c.servicesAmount.toFixed(2)}`}
+                        {c.servicesAmount > 0 && ` · diensten ${formatCurrency(c.servicesAmount)}`}
                       </li>
                     ))}
                   </ul>
@@ -906,13 +907,13 @@ export function TransportOrderDetailPage() {
                           <div className="to-price-original">
                             <s>
                               {line.originalQuantity != null && line.originalUnitPrice != null
-                                ? `${line.originalQuantity} × € ${line.originalUnitPrice.toFixed(2)}`
-                                : `€ ${(line.originalAmount ?? 0).toFixed(2)}`}
+                                ? `${formatQuantity(line.originalQuantity)} × ${formatCurrency(line.originalUnitPrice)}`
+                                : formatCurrency(line.originalAmount ?? 0)}
                             </s>
                             {' → '}
                             {line.quantity != null && line.unitPrice != null
-                              ? `${line.quantity} × € ${line.unitPrice.toFixed(2)}`
-                              : `€ ${line.amount.toFixed(2)}`}
+                              ? `${formatQuantity(line.quantity)} × ${formatCurrency(line.unitPrice)}`
+                              : formatCurrency(line.amount)}
                           </div>
                         )}
                       </td>
@@ -920,7 +921,7 @@ export function TransportOrderDetailPage() {
                         <Badge tone={ORDER_PRICE_LINE_KIND_TONE[line.kind]}>{t(lineBadge(line))}</Badge>
                       </td>
                       <td>{calculationLabel(line)}</td>
-                      <td className="tof-price-amount">€ {line.amount.toFixed(2)}</td>
+                      <td className="tof-price-amount">{formatCurrency(line.amount)}</td>
                       {canEditPricingLines && !pricingLocked && (
                         <td className="to-price-line-actions">
                           {line.kind === 'Proposed' ? (
@@ -948,7 +949,7 @@ export function TransportOrderDetailPage() {
                     <th />
                     <th />
                     <th className="tof-price-amount">
-                      € {(order.pricingSnapshot?.linesTotal ?? order.agreedPrice ?? 0).toFixed(2)}
+                      {formatCurrency(order.pricingSnapshot?.linesTotal ?? order.agreedPrice ?? 0)}
                     </th>
                     {canEditPricingLines && !pricingLocked && <th />}
                   </tr>
@@ -1091,8 +1092,8 @@ export function TransportOrderDetailPage() {
                       <td>
                         {item.expectedQuantity} {unitLabel(item.quantityUnitCode, item.quantityUnit)}
                       </td>
-                      <td>{item.totalWeightKg !== null ? `${item.totalWeightKg.toLocaleString('nl-BE')} kg` : '—'}</td>
-                      <td>{item.volumeM3 !== null ? `${item.volumeM3.toLocaleString('nl-BE')} m³` : '—'}</td>
+                      <td>{item.totalWeightKg !== null ? `${formatQuantity(item.totalWeightKg)} kg` : '—'}</td>
+                      <td>{item.volumeM3 !== null ? `${formatQuantity(item.volumeM3)} m³` : '—'}</td>
                       <td>
                         {item.adrRequired && <Badge tone="danger">ADR</Badge>}{' '}
                         {!item.stackable && <Badge tone="warning">Niet stapelbaar</Badge>}
@@ -1452,10 +1453,10 @@ export function TransportOrderDetailPage() {
                 {coverage.map((c, index) => (
                   <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
                     <Badge tone={PRICING_COVERAGE_TONE[c.status]}>{t(PRICING_COVERAGE_LABELS[c.status])}</Badge>{' '}
-                    {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}
-                    {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: € ${c.baseAmount.toFixed(2)}`}
+                    {formatQuantity(c.quantity)} {c.unitLabel}
+                    {c.status === 'Full' && ` — ${c.baseRuleName ?? 'basistarief'}: ${formatCurrency(c.baseAmount)}`}
                     {c.status !== 'Full' && c.reason ? ` — ${c.reason}` : ''}
-                    {c.servicesAmount > 0 && ` · diensten € ${c.servicesAmount.toFixed(2)}`}
+                    {c.servicesAmount > 0 && ` · diensten ${formatCurrency(c.servicesAmount)}`}
                   </li>
                 ))}
               </ul>
@@ -1509,7 +1510,7 @@ export function TransportOrderDetailPage() {
           <ul>
             {unpricedCoverage.map((c, index) => (
               <li key={c.unitTypeId ?? `${c.unitLabel}-${index}`}>
-                {c.quantity.toLocaleString('nl-BE')} {c.unitLabel}:{' '}
+                {formatQuantity(c.quantity)} {c.unitLabel}:{' '}
                 {(c.reason ?? 'geen passend basistarief').toLowerCase()}
               </li>
             ))}

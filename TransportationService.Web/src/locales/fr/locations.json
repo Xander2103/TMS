@@ -250,6 +250,9 @@
     "defaultLoading": "chargement par défaut",
     "defaultUnloading": "déchargement par défaut",
     "empty": "Aucune adresse trouvée",
+    "companyAddress": "adresse de l'entreprise",
+    "sharedAddress": "adresse partagée",
+    "sharedAddressWith": "adresse partagée ({names})",
     "placeholder": "— Sélectionner une adresse —"
   },
   "type": {

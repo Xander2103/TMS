@@ -21,7 +21,7 @@ interface RouteSectionProps {
   setStop: (key: string, patch: Partial<StopFormRow>) => void
   moveStop: (index: number, delta: number) => void
   onRemoveStop: (key: string) => void
-  /** Opens the "Opnieuw overnemen van locatie" confirmation for one stop row. */
+  /** Opens the "Adres opnieuw overnemen" confirmation for one stop row. */
   onRequestRefresh: (key: string) => void
   /** Inline location creation; undefined when the user lacks the permission or no customer is set. */
   onQuickCreate?: (name: string) => Promise<LocationOption | null>

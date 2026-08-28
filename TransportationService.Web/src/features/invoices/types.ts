@@ -1,3 +1,5 @@
+import { formatCurrency } from '../../utils/numbers'
+
 export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Cancelled'
 
 /** Vertaalsleutels — renderen als t(INVOICE_STATUS_LABELS[status]). */
@@ -63,6 +65,8 @@ export interface InvoiceLine {
   vatTreatmentSource?: string | null
   vatLegalText?: string | null
   salesCode?: string | null
+  /** What the customer reads in the invoice language: what Send will freeze while Draft, frozen after. */
+  customerDescription?: string | null
 }
 
 export interface InvoiceDetail {
@@ -91,6 +95,11 @@ export interface InvoiceDetail {
   customerVatTreatment?: string | null
   languageCode?: string | null
   vatLegalText?: string | null
+  /** Invoice or CreditNote; a credit note points at the invoice it credits, an invoice lists its credit notes. */
+  kind?: 'Invoice' | 'CreditNote'
+  creditedInvoiceId?: string | null
+  creditedInvoiceNumber?: string | null
+  creditNotes?: { id: string; invoiceNumber: string; status: InvoiceStatus }[] | null
 }
 
 /** Mirrors InvoiceNumberPreviewDto (GET /api/invoices/next-number). */
@@ -133,5 +142,6 @@ export interface UpdateLineInput {
 }
 
 export function euro(value: number, currency = 'EUR'): string {
-  return value.toLocaleString('nl-BE', { style: 'currency', currency })
+  // Central tenant-aware notation ("€ 1.234,56"); non-EUR currencies show their ISO code as symbol.
+  return formatCurrency(value, currency === 'EUR' ? '€' : currency)
 }

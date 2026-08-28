@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { formatDate } from '../../../utils/dates'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { BackButton } from '../../../components/ui/BackButton'
 import { Badge } from '../../../components/ui/Badge'
@@ -164,7 +165,7 @@ export function PricingTableDetailPage() {
         title={agreement.name}
         subtitle={
           <span className="pricing-table-header-meta">
-            {agreement.effectiveFrom} — {agreement.effectiveUntil ?? t('tarification.common.unlimited')}
+            {formatDate(agreement.effectiveFrom)} — {agreement.effectiveUntil ? formatDate(agreement.effectiveUntil) : t('tarification.common.unlimited')}
             <Badge tone={AGREEMENT_STATUS_TONE[status]}>{t(AGREEMENT_STATUS_LABELS[status])}</Badge>
             <Badge tone="neutral">{t(composition.key, composition.params)}</Badge>
           </span>

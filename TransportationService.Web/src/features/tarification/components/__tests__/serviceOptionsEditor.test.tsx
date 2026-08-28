@@ -81,7 +81,7 @@ describe('ServiceOptionsEditor — warehouse calculation bases', () => {
     render(<ServiceOptionsEditor />)
 
     expect(await screen.findByText('Picking')).toBeInTheDocument()
-    expect(screen.getByText('€ 1.25/colli')).toBeInTheDocument()
+    expect(screen.getByText('€ 1,25/colli')).toBeInTheDocument()
     expect(screen.getByText('Automatisch')).toBeInTheDocument()
   })
 

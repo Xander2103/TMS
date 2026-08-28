@@ -250,6 +250,9 @@
     "defaultLoading": "standaard laden",
     "defaultUnloading": "standaard lossen",
     "empty": "Geen adressen gevonden",
+    "companyAddress": "bedrijfsadres",
+    "sharedAddress": "gedeeld adres",
+    "sharedAddressWith": "gedeeld adres ({names})",
     "placeholder": "— Selecteer een adres —"
   },
   "type": {

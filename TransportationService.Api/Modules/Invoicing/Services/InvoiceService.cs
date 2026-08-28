@@ -1195,14 +1195,9 @@ public class InvoiceService : IInvoiceService
             // Sprint 5E/5F: put the APPROVED description for the invoice language on the line —
             // but only when the current text is still the code's own default. A label typed or
             // configured specifically for this line/order is the user's wording and is kept.
-            var approved = Modules.Accounting.Services.InvoiceLineFiscalResolver.DescriptionFor(salesCode, invoice.LanguageCode);
-            var isDefaultText = string.IsNullOrWhiteSpace(line.Description)
-                || string.Equals(line.Description, salesCode.Name, StringComparison.Ordinal)
-                || string.Equals(line.Description, salesCode.InvoiceDescriptionNl, StringComparison.Ordinal);
-            if (isDefaultText && !string.IsNullOrWhiteSpace(approved))
-            {
-                line.Description = approved;
-            }
+            // Same function as the draft preview/PDF — the customer never sees a different text
+            // after Send than before it.
+            line.Description = InvoiceLineDescriptions.CustomerFacing(line.Description, salesCode, invoice.LanguageCode);
             line.VatTreatmentSnapshot = resolution.Treatment.ToString();
             line.VatTreatmentSourceSnapshot = resolution.Source.ToString();
             line.VatLegalTextSnapshot = resolution.LegalText;
@@ -1467,7 +1462,9 @@ public class InvoiceService : IInvoiceService
                 l.UnitCode,
                 // Frozen after Send; live-derived while Draft so the preview shows what WILL freeze.
                 l.VatCategoryCode ?? Partners.Services.VatTreatmentCatalog.ResolveVatCategory(mappedTreatment, l.VatRatePercent).Code,
-                fiscalTreatment, fiscalSource, fiscalLegalText, salesCode);
+                fiscalTreatment, fiscalSource, fiscalLegalText, salesCode,
+                // Draft: what Send will freeze (same rule as Send and the draft PDF); Sent: frozen.
+                isDraft ? InvoiceLineDescriptions.CustomerFacing(l.Description, live, invoice.LanguageCode) : l.Description);
         }).ToList();
 
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
@@ -1487,6 +1484,15 @@ public class InvoiceService : IInvoiceService
                 .FirstOrDefaultAsync(cancellationToken)
             : null;
 
+        // The relation the other way round: which credit notes were issued against this invoice.
+        var creditNotes = invoice.Kind == InvoiceKind.Invoice
+            ? await _dbContext.Invoices.AsNoTracking()
+                .Where(i => i.TenantId == tenantId && i.CreditedInvoiceId == invoice.Id)
+                .OrderBy(i => i.InvoiceDate).ThenBy(i => i.InvoiceNumber)
+                .Select(i => new InvoiceReferenceDto(i.Id, i.InvoiceNumber, i.Status))
+                .ToListAsync(cancellationToken)
+            : [];
+
         return new InvoiceDetailDto(
             invoice.Id, invoice.InvoiceNumber, invoice.InvoiceDate, invoice.DueDate,
             invoice.CustomerId, customer?.Name ?? string.Empty, customer?.VatNumber,
@@ -1497,7 +1503,8 @@ public class InvoiceService : IInvoiceService
             invoice.PurchaseOrderNumber,
             invoice.Kind, invoice.CreditedInvoiceId, creditedInvoiceNumber, invoice.PaymentReference,
             invoice.CustomerVatTreatment, invoice.LanguageCode,
-            Partners.Services.VatTreatmentCatalog.Resolve(mappedTreatment).InvoiceLegalText);
+            Partners.Services.VatTreatmentCatalog.Resolve(mappedTreatment).InvoiceLegalText,
+            creditNotes);
     }
 
     private static string GenerateInvoiceNumber(TenantSettings? settings)

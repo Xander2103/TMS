@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { formatCurrency } from '../../../utils/numbers'
 import { Badge } from '../../../components/ui/Badge'
 import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormField'
@@ -66,7 +67,7 @@ export function IncidentChargePanel({ incident, onUpdated }: IncidentChargePanel
       <p>
         {t('incidents.charge.charge')}{' '}
         <Badge tone={chargeTone}>{t(CHARGE_DECISION_LABELS[incident.chargeDecision] ?? incident.chargeDecision)}</Badge>
-        {incident.chargeAmount !== null && <strong> € {incident.chargeAmount.toFixed(2)}</strong>}
+        {incident.chargeAmount !== null && <strong> {formatCurrency(incident.chargeAmount)}</strong>}
         {incident.chargeDescription && <span className="customer-form-muted"> — {incident.chargeDescription}</span>}
       </p>
 

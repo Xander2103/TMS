@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { formatDate } from '../../../utils/dates'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { EmptyState } from '../../../components/ui/EmptyState'
@@ -211,8 +212,8 @@ export function CombinedDiscountsPanel({ customerId, agreementId }: CombinedDisc
                 <td>{t(DEGRESSION_SCOPE_LABELS[d.scope])}</td>
                 <td>{d.units.map((u) => u.unitTypeName ?? unitName(u.unitTypeId)).join(', ')}</td>
                 <td>{d.tiers.length}</td>
-                <td>{d.effectiveFrom}</td>
-                <td>{d.effectiveUntil ?? '—'}</td>
+                <td>{formatDate(d.effectiveFrom)}</td>
+                <td>{formatDate(d.effectiveUntil) || '—'}</td>
                 <td>{d.isActive ? t('tarification.common.yes') : t('tarification.common.no')}</td>
                 {canManage && (
                   <td className="issued-items-row-actions">

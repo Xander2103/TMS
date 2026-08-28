@@ -119,7 +119,8 @@ describe('PricingImportDialog', () => {
 
     expect(screen.getByText('Toevoegen: 1')).toBeInTheDocument()
     expect(screen.getByText('Wijzigen: 1')).toBeInTheDocument()
-    expect(screen.getByText('Verwijderen: 0')).toBeInTheDocument()
+    // Removals are only presented once 'Verwijderingen toepassen' is on.
+    expect(screen.queryByText('Verwijderen: 0')).not.toBeInTheDocument()
 
     expect(screen.getByText("Basis 'Bogus' is onbekend.")).toBeInTheDocument()
     expect(screen.getByText('Eenheidsprijs: 1,25 → 1,40')).toBeInTheDocument()
@@ -293,8 +294,38 @@ describe('PricingImportDialog', () => {
     render(<PricingImportDialog agreementId="agr-1" agreementName="Distributie België" onClose={vi.fn()} onImported={vi.fn()} />)
 
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Huidige tabel downloaden' }))
+    await user.click(screen.getByRole('button', { name: /Huidige tabel downloaden/ }))
 
     await waitFor(() => expect(state.download).toHaveBeenCalledWith('agr-1', 'Distributie België'))
+  })
+})
+
+describe('PricingImportDialog — verwijderingen', () => {
+  it('does not present rows missing from the file as removals while "Verwijderingen toepassen" is off', async () => {
+    state.preview.mockResolvedValue(
+      makePreview({
+        rowsFound: 1,
+        rowsValid: 1,
+        added: [],
+        updated: [],
+        removed: [{ name: 'Palletstaffel', summary: null, ruleId: 'rule-9', fieldChanges: null }],
+      }),
+    )
+    render(<PricingImportDialog agreementId="agr-1" agreementName="Distributie België" onClose={vi.fn()} onImported={vi.fn()} />)
+    const user = userEvent.setup()
+    await selectFile(screen.getByLabelText('Bestand (.xlsx)'))
+    await user.click(screen.getByRole('button', { name: 'Voorbeeld' }))
+
+    expect(await screen.findByTestId('pricing-import-removals-skipped')).toHaveTextContent(
+      "1 regel(s) uit deze tabel staan niet in het bestand. Ze blijven staan omdat 'Verwijderingen toepassen' uit staat.",
+    )
+    expect(screen.queryByText('Verwijderen: 1')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Verwijderen' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByLabelText(/Verwijderingen toepassen/))
+    expect(await screen.findByText('Verwijderen: 1')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Verwijderen' })).toBeInTheDocument()
+    expect(screen.getByText('Palletstaffel')).toBeInTheDocument()
+    expect(screen.queryByTestId('pricing-import-removals-skipped')).not.toBeInTheDocument()
   })
 })

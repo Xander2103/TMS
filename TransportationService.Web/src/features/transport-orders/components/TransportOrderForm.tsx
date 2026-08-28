@@ -71,7 +71,7 @@ export function TransportOrderForm({ order, onSubmit, onCancel, submitLabel, doc
     name: string
     resolve: (created: LocationOption | null) => void
   } | null>(null)
-  // Pending "Opnieuw overnemen van locatie" confirmation for one stop row (keyed by row key).
+  // Pending "Adres opnieuw overnemen" confirmation for one stop row (keyed by row key).
   const [refreshTarget, setRefreshTarget] = useState<string | null>(null)
 
   const [customerId, setCustomerId] = useState(order?.customerId ?? '')

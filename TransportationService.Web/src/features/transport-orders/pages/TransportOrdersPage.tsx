@@ -14,6 +14,7 @@ import { useAuth } from '../../auth/authContextValue'
 import { apiBaseUrl } from '../../../config/env'
 import { getAccessToken } from '../../auth/authStorage'
 import { bulkChangeOrderStatus, searchTransportOrders } from '../api/transportOrdersApi'
+import { formatDate } from '../../../utils/dates'
 import {
   ORDER_STATUS_LABELS,
   ORDER_STATUS_TONE,
@@ -131,7 +132,7 @@ export function TransportOrdersPage() {
         ]
       : []),
     { key: 'number', header: t('transportOrders.list.columns.number'), width: '110px', render: (row) => <code>{row.orderNumber}</code> },
-    { key: 'date', header: t('transportOrders.list.columns.date'), width: '110px', render: (row) => row.orderDate },
+    { key: 'date', header: t('transportOrders.list.columns.date'), width: '110px', render: (row) => formatDate(row.orderDate) },
     { key: 'customer', header: t('transportOrders.list.columns.customer'), render: (row) => row.customerName },
     {
       key: 'route',

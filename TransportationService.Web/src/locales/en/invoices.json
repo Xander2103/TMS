@@ -21,7 +21,7 @@
     "Draft": "Back to draft",
     "Sent": "Send",
     "Paid": "Mark as paid",
-    "Cancelled": "Cancel"
+    "Cancelled": "Cancel invoice"
   },
   "common": {
     "busy": "Working…",
@@ -82,7 +82,30 @@
     "deleteMessage": "Are you sure you want to delete invoice {number}?",
     "ledgerAction": "Complete ledger snapshot",
     "ledgerCompleted": "Missing ledger snapshots completed where a mapping exists.",
-    "ledgerError": "The snapshots could not be completed."
+    "ledgerError": "The snapshots could not be completed.",
+    "creditNoteAction": "Create credit note",
+    "creditNoteHint": "Creates a draft credit note that fully credits this invoice. The sent invoice itself stays unchanged.",
+    "creditNoteCreated": "Draft credit note {number} created.",
+    "creditNoteError": "The credit note could not be created.",
+    "creditsInvoice": "Credits invoice",
+    "creditNotesTitle": "Credit notes on this invoice",
+    "cancelSentMessage": "Invoice {number} has already been sent. Cancelling makes it invalid without a correction document and releases the orders. Normally use 'Create credit note' to correct a sent invoice.",
+    "pdfPreview": "Preview (pdf)",
+    "pdfPreviewHint": "Opens the invoice as the customer will receive it, in the invoice language. Sends nothing.",
+    "pdfError": "The pdf preview could not be opened.",
+    "customerReads": "Customer reads",
+    "sendConfirm": {
+      "title": "Send invoice",
+      "intro": "Check the details. Sending makes this invoice final: number, customer, entity, VAT treatment and descriptions are frozen and can no longer be changed.",
+      "number": "Invoice number",
+      "customer": "Customer",
+      "entity": "Billing entity",
+      "total": "Total amount (incl. VAT)",
+      "language": "Invoice language",
+      "treatment": "VAT treatment",
+      "confirm": "Send invoice",
+      "busy": "Sending…"
+    }
   },
   "internalLines": {
     "addLine": "+ Add line",
