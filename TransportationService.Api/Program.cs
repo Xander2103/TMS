@@ -417,6 +417,9 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IAbsenc
     TransportationService.Api.Modules.Hr.Services.AbsenceService>();
 
 // Transport orders
+// Sprint 6: moving an order to the customer it really belongs to.
+builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.IOrderCustomerChangeService,
+    TransportationService.Api.Modules.Orders.Services.OrderCustomerChangeService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderService,
     TransportationService.Api.Modules.Orders.Services.TransportOrderService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderTimelineService,
