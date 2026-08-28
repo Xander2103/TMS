@@ -93,6 +93,16 @@ public class CustomersController : ControllerBase
         return customer is null ? NotFound() : Ok(customer);
     }
 
+    /// <summary>Advisory fiscal-configuration warnings for the Fiscaal &amp; Peppol card; never changes anything.</summary>
+    [HttpGet("{id:guid}/fiscal-warnings")]
+    [RequirePermission(PermissionCodes.CustomersView)]
+    public async Task<ActionResult<IReadOnlyList<Modules.Accounting.Services.FiscalWarning>>> GetFiscalWarnings(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var warnings = await _customerService.GetFiscalWarningsAsync(id, cancellationToken);
+        return warnings is null ? NotFound() : Ok(warnings);
+    }
+
     /// <summary>Readable change history (old/new values, actor, Dutch labels) for the Historiek tab.</summary>
     [HttpGet("{id:guid}/history")]
     [RequirePermission(PermissionCodes.CustomersView)]

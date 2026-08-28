@@ -868,6 +868,9 @@ public class PricingExcelService : IPricingExcelService
 
         var groups = new List<RuleGroup>();
         var groupIndexByKey = new Dictionary<string, int>();
+        // Source rows that contributed a bracket per group, so bracket-level errors can be
+        // attributed to every row involved instead of only the group's first row.
+        var bracketRowsByGroup = new Dictionary<int, List<int>>();
         foreach (var row in cleanRows)
         {
             var key = row.RegelId is { } id ? $"ID:{id}" : $"NEW:{row.Name.Trim().ToUpperInvariant()}|{row.Basis}";
@@ -901,6 +904,8 @@ public class PricingExcelService : IPricingExcelService
                 }
                 else
                 {
+                    bracketRowsByGroup.TryAdd(index, []);
+                    bracketRowsByGroup[index].Add(row.RowNumber);
                     group.Brackets.Add(new PriceRuleBracket
                     {
                         FromQuantity = from, ToQuantity = row.StaffelTot, Price = row.Staffelprijs ?? 0,
@@ -917,6 +922,51 @@ public class PricingExcelService : IPricingExcelService
             if (!hasPrice)
             {
                 errors.Add((group.AnchorRow, "Ontbrekende prijs: vul Staffelprijs of Eenheidsprijs in."));
+            }
+
+            // Audit fix (4E): overlapping brackets would make the engine's bracket selection
+            // ambiguous, so they are an error, not a silently accepted row.
+            var ordered = group.Brackets.OrderBy(b => b.FromQuantity).ToList();
+            for (var i = 1; i < ordered.Count; i += 1)
+            {
+                var previousTo = ordered[i - 1].ToQuantity;
+                if (previousTo is null || ordered[i].FromQuantity < previousTo.Value)
+                {
+                    var message = $"Staffels van '{group.Name}' overlappen ({ordered[i - 1].FromQuantity}–{previousTo?.ToString() ?? "open"} en {ordered[i].FromQuantity}–{ordered[i].ToQuantity?.ToString() ?? "open"}).";
+                    IEnumerable<int> involvedRows = bracketRowsByGroup.TryGetValue(groups.IndexOf(group), out var rows)
+                        ? rows.Append(group.AnchorRow).Distinct()
+                        : [group.AnchorRow];
+                    foreach (var involvedRow in involvedRows)
+                    {
+                        errors.Add((involvedRow, message));
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Audit fix (4E): equal-specificity conflicts — two rules with the same name, basis,
+        // unit and zone whose validity windows overlap. The engine would pick by priority (or
+        // arbitrarily at equal priority), so the operator is told instead of finding out later.
+        foreach (var pair in groups
+            .GroupBy(g => (Name: g.Name.Trim().ToUpperInvariant(), g.Basis, g.UnitCode, g.ZoneCode))
+            .Where(g => g.Count() > 1))
+        {
+            var list = pair.ToList();
+            for (var i = 0; i < list.Count; i += 1)
+            {
+                for (var j = i + 1; j < list.Count; j += 1)
+                {
+                    var aFrom = list[i].EffectiveFrom ?? DateOnly.MinValue;
+                    var aTo = list[i].EffectiveUntil ?? DateOnly.MaxValue;
+                    var bFrom = list[j].EffectiveFrom ?? DateOnly.MinValue;
+                    var bTo = list[j].EffectiveUntil ?? DateOnly.MaxValue;
+                    if (aFrom <= bTo && bFrom <= aTo && list[i].Priority == list[j].Priority)
+                    {
+                        warnings.Add((list[j].AnchorRow,
+                            $"Conflict: '{list[j].Name}' komt met dezelfde basis, eenheid, zone en prioriteit ook voor op rij {list[i].AnchorRow} met een overlappende geldigheid."));
+                    }
+                }
             }
         }
 

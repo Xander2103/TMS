@@ -10,6 +10,13 @@ public interface ICustomerService
 
     Task<CustomerDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Sprint 5 (completion): what looks inconsistent about the customer's fiscal setup, judged
+    /// against the invoicing entity's country. Advisory only — never changes the treatment.
+    /// Null when the customer does not exist.
+    /// </summary>
+    Task<IReadOnlyList<Modules.Accounting.Services.FiscalWarning>?> GetFiscalWarningsAsync(Guid id, CancellationToken cancellationToken);
+
     Task<CustomerDetailDto> CreateAsync(CreateCustomerRequest request, CancellationToken cancellationToken, bool canManageFiscal = true);
 
     Task<CustomerDetailDto?> UpdateAsync(Guid id, UpdateCustomerRequest request, CancellationToken cancellationToken, bool canManageFiscal = true);

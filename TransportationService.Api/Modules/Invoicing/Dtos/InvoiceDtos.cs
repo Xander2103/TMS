@@ -37,7 +37,15 @@ public record InvoiceLineDto(
     /// <summary>UN/ECE rec 20 unit code for the quantity (default C62 = stuk).</summary>
     string UnitCode = "C62",
     /// <summary>UNCL5305 VAT category: frozen after Send, live-derived while Draft.</summary>
-    string? VatCategoryCode = null);
+    string? VatCategoryCode = null,
+    /// <summary>Fiscal treatment of this line (VatTreatment name): snapshot after Send, live while Draft.</summary>
+    string? VatTreatment = null,
+    /// <summary>Where the treatment came from (FiscalTreatmentSource name): LineOverride, SalesCode, Customer, TenantDefault.</summary>
+    string? VatTreatmentSource = null,
+    /// <summary>Statutory text printed for an exempt/reverse-charged line.</summary>
+    string? VatLegalText = null,
+    /// <summary>The sales code (article code) on the line: snapshot after Send, live while Draft.</summary>
+    string? SalesCode = null);
 
 public record InvoiceDetailDto(
     Guid Id,
@@ -64,7 +72,13 @@ public record InvoiceDetailDto(
     InvoiceKind Kind = InvoiceKind.Invoice,
     Guid? CreditedInvoiceId = null,
     string? CreditedInvoiceNumber = null,
-    string? PaymentReference = null);
+    string? PaymentReference = null,
+    /// <summary>The customer treatment frozen on the invoice header (VatTreatment name).</summary>
+    string? CustomerVatTreatment = null,
+    /// <summary>Document language frozen at creation.</summary>
+    string? LanguageCode = null,
+    /// <summary>Statutory text for the header treatment, when it has one.</summary>
+    string? VatLegalText = null);
 
 /// <summary>Completed, not-yet-invoiced order offered in the invoice builder.</summary>
 public record UninvoicedOrderDto(

@@ -94,6 +94,7 @@ public class CustomerContactSubscriptionService : ICustomerContactSubscriptionSe
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var before = (await GetForContactAsync(customerId, contactId, cancellationToken))!.OptionKeys;
+        var currentlyOn = before.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var rules = await Rules(customerId).ToListAsync(cancellationToken);
 
         // Links are added through the DbSet with an explicit RuleId rather than through the
@@ -104,6 +105,10 @@ public class CustomerContactSubscriptionService : ICustomerContactSubscriptionSe
         foreach (var option in CustomerNotificationCatalog.Options)
         {
             var subscribe = wanted.Contains(option.Key);
+            // Only options whose state actually changes are touched (audit fix): re-applying an
+            // unchanged ON option would subscribe the contact to every type behind it, even if
+            // an administrator had deliberately limited them to one on the advanced screen.
+            if (subscribe == currentlyOn.Contains(option.Key)) continue;
             foreach (var type in option.Types)
             {
                 var rule = rules.FirstOrDefault(r => r.Type == type);

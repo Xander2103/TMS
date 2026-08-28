@@ -252,10 +252,13 @@ public class InvoiceService : IInvoiceService
             .FirstOrDefaultAsync(s => s.TenantId == tenantId, cancellationToken);
         // Default line VAT: the customer's own rate wins; without one, non-domestic VAT
         // treatments (reverse charge, intra-community, export, exempt) default to 0%.
-        var vatRate = customerVat.DefaultVatRatePercent
-            ?? (customerVat.VatTreatment == VatTreatment.DomesticVat
-                ? settings?.DefaultVatRatePercent ?? 21m
-                : 0m);
+        // Audit fix: the resolver is the ONE place deciding a line's treatment (override → sales
+        // code → customer → tenant). The invoice-level rate below is what the customer's own
+        // treatment yields; a sales code with a statutory classification deviates per line.
+        var tenantDefaultRate = settings?.DefaultVatRatePercent ?? 21m;
+        var vatRate = Modules.Accounting.Services.InvoiceLineFiscalResolver
+            .Resolve(null, null, customerVat.VatTreatment, customerVat.DefaultVatRatePercent, tenantDefaultRate)
+            .RatePercent;
         var invoiceDate = request.InvoiceDate ?? DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
         // Issuing entity: explicit choice → customer default → tenant default.
@@ -360,6 +363,15 @@ public class InvoiceService : IInvoiceService
         Guid? CategoryForRole(Modules.Accounting.Entities.SalesCategorySystemRole role) =>
             salesCategories.FirstOrDefault(c => c.SystemRole == role)?.Id;
 
+        // Per-line rate: identical to the invoice rate unless the line's sales code carries a
+        // statutory classification of its own (sprint 5D).
+        decimal RateFor(Guid? categoryId) =>
+            categoryId is { } cid && activeCategoryById.TryGetValue(cid, out var category)
+                ? Modules.Accounting.Services.InvoiceLineFiscalResolver
+                    .Resolve(null, category, customerVat.VatTreatment, customerVat.DefaultVatRatePercent, tenantDefaultRate)
+                    .RatePercent
+                : vatRate;
+
         // The stamped codes of the lines that make up the aggregated base transport amount: one
         // unanimous code moves the base line off the Transport role; a mix stays on the role
         // (one aggregate line cannot represent two codes — Wave 3 may split it).
@@ -406,7 +418,7 @@ public class InvoiceService : IInvoiceService
                 Description = $"{order.OrderNumber} — {order.GoodsDescription}{route}",
                 Quantity = 1m,
                 UnitPrice = (order.AgreedPrice ?? 0m) - serviceTotal,
-                VatRatePercent = vatRate,
+                VatRatePercent = RateFor(StampedBaseCategory(order.Id) ?? transportCategoryId),
                 SalesCategoryId = StampedBaseCategory(order.Id) ?? transportCategoryId,
             });
             foreach (var serviceLine in orderServiceLines)
@@ -425,7 +437,10 @@ public class InvoiceService : IInvoiceService
                     Description = $"{order.OrderNumber} — {description}{quantitySuffix}",
                     Quantity = 1m,
                     UnitPrice = serviceLine.Amount,
-                    VatRatePercent = vatRate,
+                    VatRatePercent = RateFor(
+                        serviceLine.SalesCategoryId is { } stampedForRate && activeCategoryById.ContainsKey(stampedForRate)
+                            ? stampedForRate
+                            : surchargeCategoryId),
                     SalesCategoryId = serviceLine.SalesCategoryId is { } stamped && activeCategoryById.ContainsKey(stamped)
                         ? stamped
                         : surchargeCategoryId,
@@ -444,7 +459,7 @@ public class InvoiceService : IInvoiceService
                 Description = manual.Description.Trim(),
                 Quantity = manual.Quantity,
                 UnitPrice = manual.UnitPrice,
-                VatRatePercent = manual.VatRatePercent ?? vatRate,
+                VatRatePercent = manual.VatRatePercent ?? RateFor(manual.SalesCategoryId),
                 SalesCategoryId = manual.SalesCategoryId,
                 // Wave 2: the sales code's default unit fills in when the caller gave none
                 // (NormalizeUnitCode itself falls back to C62 when both are empty).
@@ -828,11 +843,12 @@ public class InvoiceService : IInvoiceService
             // Later mapping changes never rewrite these lines; the accounting export reads
             // exclusively from these snapshots.
             await FreezeLedgerSnapshotsAsync(invoice, cancellationToken);
-            FreezeVatCategories(invoice);
-            // Sprint 5H: freeze the sales-code, description-language, fiscal-treatment and
-            // cost-centre snapshot too, so a finalized invoice stays reproducible after the
-            // sales code, its translations or its ledger mapping are edited.
+            // Sprint 5H: the sales-code resolver freezes treatment, rate, category, description
+            // language and cost centre for every line WITH a sales code. It must run before the
+            // customer-level category fallback below, otherwise a sales code's statutory
+            // exception could never win (audit fix).
             await FreezeSalesCodeSnapshotsAsync(invoice, cancellationToken);
+            FreezeVatCategories(invoice);
         }
 
         if (target == InvoiceStatus.Cancelled)
@@ -1176,7 +1192,12 @@ public class InvoiceService : IInvoiceService
             line.VatTreatmentSnapshot = resolution.Treatment.ToString();
             line.VatTreatmentSourceSnapshot = resolution.Source.ToString();
             line.VatLegalTextSnapshot = resolution.LegalText;
-            line.VatCategoryCode ??= resolution.VatCategoryCode;
+            // Finalization: the rate and UBL category are what the resolved treatment dictates.
+            // For the customer's own (domestic) treatment this echoes the line's rate; for a
+            // statutory treatment it corrects a draft rate that would otherwise be charged
+            // while the line declares itself exempt/reverse-charged.
+            line.VatRatePercent = resolution.RatePercent;
+            line.VatCategoryCode = resolution.VatCategoryCode;
 
             var (ledgerAccountId, costCentre) =
                 Modules.Accounting.Services.InvoiceLineFiscalResolver.LedgerFor(salesCode, invoice.LegalEntityId);
@@ -1377,18 +1398,14 @@ public class InvoiceService : IInvoiceService
         // Live category/mapping info while Draft; frozen snapshots afterwards (§7.3).
         var lineCategoryIds = liveLines.Where(l => l.SalesCategoryId is not null)
             .Select(l => l.SalesCategoryId!.Value).Distinct().ToList();
+        // The whole sales code is needed while Draft: the fiscal preview resolves through the
+        // same hierarchy that Send will freeze (line override → code → customer → tenant).
         var liveCategories = lineCategoryIds.Count == 0
-            ? new Dictionary<Guid, (string Name, string? AccountNumber, string? AccountName)>()
-            : (await _dbContext.SalesCategories.AsNoTracking()
+            ? new Dictionary<Guid, Modules.Accounting.Entities.SalesCategory>()
+            : await _dbContext.SalesCategories.AsNoTracking()
+                .Include(c => c.LedgerAccount)
                 .Where(c => c.TenantId == tenantId && lineCategoryIds.Contains(c.Id))
-                .Select(c => new
-                {
-                    c.Id, c.Name,
-                    AccountNumber = (string?)c.LedgerAccount!.AccountNumber,
-                    AccountName = (string?)c.LedgerAccount.Name,
-                })
-                .ToListAsync(cancellationToken))
-                .ToDictionary(c => c.Id, c => (c.Name, c.AccountNumber, c.AccountName));
+                .ToDictionaryAsync(c => c.Id, cancellationToken);
 
         var isDraft = invoice.Status == InvoiceStatus.Draft;
         var mappedTreatment = Enum.TryParse<VatTreatment>(invoice.CustomerVatTreatment, out var parsedTreatment)
@@ -1396,10 +1413,30 @@ public class InvoiceService : IInvoiceService
             : VatTreatment.DomesticVat;
         var lines = liveLines.Select(l =>
         {
-            var live = l.SalesCategoryId is { } categoryId ? liveCategories.GetValueOrDefault(categoryId) : default;
-            var categoryName = isDraft ? live.Name : l.SalesCategoryNameSnapshot ?? live.Name;
-            var accountNumber = isDraft ? live.AccountNumber : l.LedgerAccountNumberSnapshot;
-            var accountName = isDraft ? live.AccountName : l.LedgerAccountNameSnapshot;
+            var live = l.SalesCategoryId is { } categoryId ? liveCategories.GetValueOrDefault(categoryId) : null;
+            var categoryName = isDraft ? live?.Name : l.SalesCategoryNameSnapshot ?? live?.Name;
+            var accountNumber = isDraft ? live?.LedgerAccount?.AccountNumber : l.LedgerAccountNumberSnapshot;
+            var accountName = isDraft ? live?.LedgerAccount?.Name : l.LedgerAccountNameSnapshot;
+
+            // Fiscal source: the frozen snapshot once sent; while Draft, what Send WOULD freeze.
+            string? fiscalTreatment, fiscalSource, fiscalLegalText, salesCode;
+            if (isDraft)
+            {
+                var lineOverride = Enum.TryParse<VatTreatment>(l.VatTreatmentOverride, out var overridden) ? (VatTreatment?)overridden : null;
+                var resolution = Modules.Accounting.Services.InvoiceLineFiscalResolver.Resolve(
+                    lineOverride, live, mappedTreatment, l.VatRatePercent, l.VatRatePercent);
+                fiscalTreatment = resolution.Treatment.ToString();
+                fiscalSource = resolution.Source.ToString();
+                fiscalLegalText = resolution.LegalText;
+                salesCode = live?.Code;
+            }
+            else
+            {
+                fiscalTreatment = l.VatTreatmentSnapshot;
+                fiscalSource = l.VatTreatmentSourceSnapshot;
+                fiscalLegalText = l.VatLegalTextSnapshot;
+                salesCode = l.SalesCodeSnapshot;
+            }
             var warning = isDraft
                 ? l.SalesCategoryId is null
                     ? "Geen verkoopcategorie gekozen voor deze lijn."
@@ -1415,7 +1452,8 @@ public class InvoiceService : IInvoiceService
                 l.SalesCategoryId, categoryName, accountNumber, accountName, warning,
                 l.UnitCode,
                 // Frozen after Send; live-derived while Draft so the preview shows what WILL freeze.
-                l.VatCategoryCode ?? Partners.Services.VatTreatmentCatalog.ResolveVatCategory(mappedTreatment, l.VatRatePercent).Code);
+                l.VatCategoryCode ?? Partners.Services.VatTreatmentCatalog.ResolveVatCategory(mappedTreatment, l.VatRatePercent).Code,
+                fiscalTreatment, fiscalSource, fiscalLegalText, salesCode);
         }).ToList();
 
         var subtotal = Math.Round(lines.Sum(l => l.LineTotal), 2);
@@ -1443,7 +1481,9 @@ public class InvoiceService : IInvoiceService
             invoice.LegalEntityId, legalEntityName,
             invoice.InvoicePeriodYear, invoice.InvoicePeriodMonth, invoice.NumberIsManual,
             invoice.PurchaseOrderNumber,
-            invoice.Kind, invoice.CreditedInvoiceId, creditedInvoiceNumber, invoice.PaymentReference);
+            invoice.Kind, invoice.CreditedInvoiceId, creditedInvoiceNumber, invoice.PaymentReference,
+            invoice.CustomerVatTreatment, invoice.LanguageCode,
+            Partners.Services.VatTreatmentCatalog.Resolve(mappedTreatment).InvoiceLegalText);
     }
 
     private static string GenerateInvoiceNumber(TenantSettings? settings)

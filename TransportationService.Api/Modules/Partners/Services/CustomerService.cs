@@ -72,6 +72,31 @@ public class CustomerService : ICustomerService
         return await projected.ToPagedResultAsync(page, dto => dto, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Modules.Accounting.Services.FiscalWarning>?> GetFiscalWarningsAsync(
+        Guid id, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        var customer = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && c.Id == id)
+            .Select(c => new { c.VatTreatment, c.VatNumber, c.CountryCode, c.VatCountryCode, c.DefaultLegalEntityId })
+            .FirstOrDefaultAsync(cancellationToken);
+        if (customer is null)
+        {
+            return null;
+        }
+
+        // The comparison country is the entity that will invoice this customer: its own
+        // default entity, else the tenant default.
+        var entityCountry = await _dbContext.LegalEntities.AsNoTracking()
+            .Where(e => e.TenantId == tenantId && e.IsActive
+                && (customer.DefaultLegalEntityId != null ? e.Id == customer.DefaultLegalEntityId : e.IsDefault))
+            .Select(e => e.CountryCode)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return Modules.Accounting.Services.InvoiceLineFiscalResolver.Inspect(
+            customer.VatTreatment, customer.VatNumber, customer.VatCountryCode ?? customer.CountryCode, entityCountry);
+    }
+
     public async Task<CustomerDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         var customer = await TenantScoped()

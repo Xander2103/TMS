@@ -359,8 +359,21 @@ public class DossierService : IDossierService
         }
 
         dossier.Description = Trim(request.Description);
-        if (request.CustomerId is { } newCustomerId)
+        if (request.CustomerId is { } newCustomerId && newCustomerId != dossier.CustomerId)
         {
+            // Audit fix (sprint 6): a customer change re-evaluates pricing, entity policy,
+            // draft invoices and every linked order. That lives in the dedicated customer-change
+            // flow; the header edit may only SET a customer on a dossier that has none and no
+            // orders yet — anything else would silently bypass those rules.
+            var hasOrders = await _dbContext.DossierOrders
+                .AnyAsync(l => l.TenantId == tenantId && l.DossierId == dossier.Id, cancellationToken);
+            if (dossier.CustomerId is not null || hasOrders)
+            {
+                throw new DomainValidationException("customerId",
+                    "Gebruik 'Klant wijzigen' om dit dossier naar een andere klant te verplaatsen; "
+                    + "prijzen, facturatie-entiteit en gekoppelde orders worden dan mee herbeoordeeld.");
+            }
+
             dossier.CustomerId = newCustomerId;
         }
 

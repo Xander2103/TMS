@@ -304,6 +304,79 @@ public class PricingImportMappingTests
         Assert.NotNull(error);
     }
 
+    // ---------------------------------------------------------------- overlaps
+
+    private static byte[] StandardWorkbook(params (string Name, string Basis, decimal From, decimal? To, decimal Price, string From2, string? Until)[] rows)
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.Worksheets.Add("Tarieven");
+        var headers = new[] { "Naam", "Basis", "Staffel van", "Staffel tot", "Staffelprijs", "Geldig van", "Geldig tot" };
+        for (var i = 0; i < headers.Length; i += 1) sheet.Cell(1, i + 1).SetValue(headers[i]);
+        var r = 2;
+        foreach (var row in rows)
+        {
+            sheet.Cell(r, 1).SetValue(row.Name);
+            sheet.Cell(r, 2).SetValue(row.Basis);
+            sheet.Cell(r, 3).SetValue(row.From);
+            if (row.To is { } to) sheet.Cell(r, 4).SetValue(to);
+            sheet.Cell(r, 5).SetValue(row.Price);
+            sheet.Cell(r, 6).SetValue(row.From2);
+            if (row.Until is { } until) sheet.Cell(r, 7).SetValue(until);
+            r += 1;
+        }
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    [Fact]
+    public async Task OverlappingBrackets_AreAnError_NotSilentlyAccepted()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        var file = StandardWorkbook(
+            ("Pallets", "QuantityBracket", 1m, 10m, 50m, "2026-01-01", null),
+            ("Pallets", "QuantityBracket", 5m, 20m, 40m, "2026-01-01", null));
+
+        var (preview, _) = await h.Excel.PreviewAsync(agreementId, ToStream(file), null, "x.xlsx", CancellationToken.None);
+
+        Assert.Contains(preview!.Errors, e => e.Message.Contains("overlappen"));
+        Assert.Equal(0, preview.RowsValid);
+    }
+
+    [Fact]
+    public async Task SameRuleWithOverlappingValidity_IsReportedAsAConflict()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var agreementId = await SeedAgreementAsync(h);
+        // Distinct groups (RegelId-less rows group by Name+Basis, so use differing basis to keep
+        // them separate) would not conflict; two identical name+basis rows land in ONE group.
+        // The conflict case is two EXISTING rules re-imported with overlapping windows — build
+        // them through the admin service first.
+        var first = await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            null, h.UnitId, PriceRuleBasis.PerUnit, null, "Rit", new DateOnly(2026, 1, 1), new DateOnly(2026, 6, 30), true, 10m, null, null, AgreementId: agreementId), CancellationToken.None);
+        var second = await h.Admin.CreateRuleAsync(new SavePriceRuleRequest(
+            null, h.UnitId, PriceRuleBasis.PerUnit, null, "Rit", new DateOnly(2026, 7, 1), null, true, 12m, null, null, AgreementId: agreementId), CancellationToken.None);
+
+        var (exported, _) = await h.Excel.ExportAsync(agreementId, CancellationToken.None);
+        // Move the second rule's start INTO the first one's window.
+        using var workbook = new XLWorkbook(new MemoryStream(exported!));
+        var sheet = workbook.Worksheet("Tarieven");
+        for (var r = 2; r <= 3; r += 1)
+        {
+            if (sheet.Cell(r, 1).GetString() == second!.Id.ToString()) sheet.Cell(r, 21).SetValue("2026-03-01");
+        }
+        using var edited = new MemoryStream();
+        workbook.SaveAs(edited);
+
+        var (preview, error) = await h.Excel.PreviewAsync(agreementId, ToStream(edited.ToArray()), null, "x.xlsx", CancellationToken.None);
+
+        Assert.Null(error);
+        Assert.Contains(preview!.Warnings, w => w.Message.Contains("Conflict"));
+    }
+
     // ----------------------------------------------------------------- columns
 
     [Fact]

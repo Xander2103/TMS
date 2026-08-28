@@ -418,8 +418,12 @@ builder.Services.AddScoped<TransportationService.Api.Modules.Hr.Services.IAbsenc
 
 // Transport orders
 // Sprint 6: moving an order to the customer it really belongs to.
-builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.IOrderCustomerChangeService,
-    TransportationService.Api.Modules.Orders.Services.OrderCustomerChangeService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.OrderCustomerChangeService>();
+builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.IOrderCustomerChangeService>(sp =>
+    sp.GetRequiredService<TransportationService.Api.Modules.Orders.Services.OrderCustomerChangeService>());
+// The dossier-level change reuses the order service inside one transaction — no second engine.
+builder.Services.AddScoped<TransportationService.Api.Modules.Dossiers.Services.IDossierCustomerChangeService,
+    TransportationService.Api.Modules.Dossiers.Services.DossierCustomerChangeService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderService,
     TransportationService.Api.Modules.Orders.Services.TransportOrderService>();
 builder.Services.AddScoped<TransportationService.Api.Modules.Orders.Services.ITransportOrderTimelineService,

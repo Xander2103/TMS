@@ -283,6 +283,33 @@ public class CustomerContactSubscriptionServiceTests
         Assert.Contains(CustomerCommunicationType.Other, CustomerNotificationCatalog.AdvancedOnlyTypes);
     }
 
+    [Fact]
+    public async Task SavingTheContactWithoutTouchingTheBoxes_DoesNotWidenAnAdvancedRule()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var jan = await AddContactAsync(h, "Jan", "Peeters");
+
+        // An administrator limited Jan to PlanningAlert ONLY on the advanced screen; the simple
+        // "planning" option also covers DeliveryChange.
+        h.Db.Context.CustomerCommunicationRules.Add(new CustomerCommunicationRule
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.CustomerId,
+            Type = CustomerCommunicationType.PlanningAlert, Channel = "Email", IsActive = true,
+            Contacts = [new CustomerCommunicationRuleContact { Id = Guid.NewGuid(), TenantId = h.TenantId, ContactId = jan }],
+        });
+        await h.Db.Context.SaveChangesAsync();
+
+        var shown = await h.Sut.GetForContactAsync(h.CustomerId, jan, CancellationToken.None);
+        Assert.Equal(["planning"], shown!.OptionKeys);
+
+        // The contact card is saved with exactly what it showed.
+        await h.Sut.SetForContactAsync(h.CustomerId, jan, shown.OptionKeys, CancellationToken.None);
+
+        Assert.False(await h.Db.Context.CustomerCommunicationRules
+            .AnyAsync(r => r.Type == CustomerCommunicationType.DeliveryChange));
+    }
+
     // ------------------------------------------------------------- overview
 
     [Fact]

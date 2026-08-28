@@ -72,6 +72,29 @@ public class DossiersController : ControllerBase
         return dossier is null ? NotFound() : Ok(dossier);
     }
 
+    /// <summary>Sprint 6: what moving this dossier (and its orders) to another customer would do.</summary>
+    [HttpGet("{id:guid}/customer/impact")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierCustomerChangeImpactDto>> CustomerChangeImpact(
+        Guid id, [FromQuery] Guid newCustomerId, [FromServices] IDossierCustomerChangeService customerChange,
+        CancellationToken cancellationToken)
+    {
+        var impact = await customerChange.PreviewAsync(id, newCustomerId, cancellationToken);
+        return impact is null ? NotFound() : Ok(impact);
+    }
+
+    [HttpPut("{id:guid}/customer")]
+    [RequirePermission(PermissionCodes.DossiersManage)]
+    public async Task<ActionResult<DossierDetailDto>> ChangeCustomer(
+        Guid id, ChangeDossierCustomerRequest request, [FromServices] IDossierCustomerChangeService customerChange,
+        CancellationToken cancellationToken)
+    {
+        var result = await customerChange.ApplyAsync(id, request, cancellationToken);
+        if (result is null) return NotFound();
+        var dossier = await _service.GetAsync(id, cancellationToken);
+        return dossier is null ? NotFound() : Ok(dossier);
+    }
+
     [HttpPut("{id:guid}/legal-entity")]
     [RequirePermission(PermissionCodes.DossiersManage)]
     public async Task<ActionResult<DossierDetailDto>> ChangeLegalEntity(

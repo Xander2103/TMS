@@ -196,11 +196,15 @@ public class OrderCustomerChangeTests
         Assert.Equal(OrderPriceLineKind.Manual, manual.Kind);
         Assert.Equal(60m, manual.Amount);
 
-        // The adjusted line keeps its amount but loses its claim to an automatic basis.
+        // The adjusted line keeps its amount but is visibly flagged: its basis was the OLD
+        // customer's tariff, so it is a manual line that names where it came from and must be
+        // reviewed — never a clean price for the new customer.
         var adjusted = Assert.Single(lines, l => l.Label == "Extra stop");
         Assert.Equal(OrderPriceLineKind.Manual, adjusted.Kind);
         Assert.Null(adjusted.RuleName);
         Assert.Null(adjusted.AgreementName);
+        Assert.Contains("VCB tijdelijk", adjusted.AdjustReason);
+        Assert.Contains("controleren", adjusted.AdjustReason);
 
         // The order needs a price decision again.
         var order = await h.Db.Context.TransportOrders.AsNoTracking().FirstAsync(o => o.Id == h.OrderId);
@@ -232,6 +236,36 @@ public class OrderCustomerChangeTests
         var impact = await h.Sut.PreviewAsync(h.OrderId, h.RealCustomerId, CancellationToken.None);
 
         Assert.False(impact!.NeedsPricingReview);
+    }
+
+    [Fact]
+    public async Task CarriedOverAdjustedAmounts_AlwaysRequireReview_EvenWithATariff()
+    {
+        var h = await SeedAsync(realCustomerHasTariff: true);
+        using var _ = h.Db;
+        await AddPricingAsync(h);
+
+        var impact = await h.Sut.PreviewAsync(h.OrderId, h.RealCustomerId, CancellationToken.None);
+
+        Assert.Equal(1, impact!.AdjustedLinesFlaggedForReview);
+        Assert.True(impact.NeedsPricingReview);
+    }
+
+    [Fact]
+    public async Task WithoutADefaultEntityForTheNewCustomer_TheTenantDefaultApplies_NeverNull()
+    {
+        var h = await SeedAsync();
+        using var _ = h.Db;
+        var target = await h.Db.Context.Customers.FirstAsync(c => c.Id == h.RealCustomerId);
+        target.DefaultLegalEntityId = null;
+        // …and the old entity is not allowed for the new customer.
+        h.Db.Context.Set<CustomerAllowedLegalEntity>().Add(new CustomerAllowedLegalEntity
+        { Id = Guid.NewGuid(), TenantId = h.TenantId, CustomerId = h.RealCustomerId, LegalEntityId = h.EntityB });
+        await h.Db.Context.SaveChangesAsync();
+
+        var impact = await h.Sut.PreviewAsync(h.OrderId, h.RealCustomerId, CancellationToken.None);
+
+        Assert.Equal(h.EntityA, impact!.NewLegalEntityId); // tenant default (IsDefault = true)
     }
 
     // ------------------------------------------------------- scenarios D & H

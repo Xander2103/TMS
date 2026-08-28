@@ -23,6 +23,11 @@ public record CustomerChangeImpactDto(
     int AutomaticLinesInvalidated,
     /// <summary>Manual lines that stay, and stay visibly manual.</summary>
     int ManualLinesKept,
+    /// <summary>
+    /// Lines that were an automatic price the user adjusted. Their amount was DERIVED from the
+    /// old customer's tariff, so they are kept only as flagged manual lines that need review.
+    /// </summary>
+    int AdjustedLinesFlaggedForReview,
     /// <summary>True when the new customer has no usable tariff, so the order lands in pricing review.</summary>
     bool NeedsPricingReview,
     /// <summary>The invoicing entity that will apply after the change.</summary>
@@ -38,7 +43,10 @@ public record CustomerChangeImpactDto(
     /// Draft invoice lines for this order that will be released, so no concept invoice is left
     /// holding an order that now belongs to a different customer (sprint 6E).
     /// </summary>
-    int DraftInvoiceLinesReleased = 0);
+    int DraftInvoiceLinesReleased = 0,
+    /// <summary>Set when the order belongs to a dossier whose customer it shares — change it there.</summary>
+    Guid? OwningDossierId = null,
+    string? OwningDossierNumber = null);
 
 public record ChangeOrderCustomerRequest(Guid NewCustomerId, string Reason);
 
@@ -101,11 +109,17 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
             throw new DomainValidationException("customerId", blocked);
         }
 
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+        await ApplyCoreAsync(context, request, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return context.Impact;
+    }
+
+    private async Task ApplyCoreAsync(ChangeContext context, ChangeOrderCustomerRequest request, CancellationToken cancellationToken)
+    {
         var order = context.Order;
         var previousCustomerId = order.CustomerId;
         var previousEntityId = order.LegalEntityId;
-
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
         order.CustomerId = request.NewCustomerId;
         order.LegalEntityId = context.Impact.NewLegalEntityId;
@@ -118,14 +132,22 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
             .ToList();
         _dbContext.RemoveRange(automatic);
 
-        // An auto line the user had adjusted keeps its amount, but loses its automatic basis:
-        // it becomes plainly manual so nobody mistakes it for a current tariff result.
+        // An auto line the user had adjusted started from the OLD customer's tariff, so its
+        // amount is commercially suspect for the new one. It is kept (the user's work is not
+        // thrown away) but becomes an explicitly flagged manual line: the review note names the
+        // old customer, and the order stays in pricing review until someone confirms it.
+        var oldCustomerName = context.Impact.CurrentCustomerName;
         foreach (var adjusted in context.PricingLines.Where(l => l.Kind == OrderPriceLineKind.AutoAdjusted))
         {
             adjusted.Kind = OrderPriceLineKind.Manual;
             adjusted.Proposed = false;
             adjusted.RuleName = null;
             adjusted.AgreementName = null;
+            adjusted.Source = "Klantwijziging — te controleren";
+            var note = $"Overgenomen bij klantwijziging van '{oldCustomerName}' — bedrag controleren.";
+            adjusted.AdjustReason = string.IsNullOrWhiteSpace(adjusted.AdjustReason)
+                ? note
+                : $"{note} ({adjusted.AdjustReason})";
         }
 
         // The order goes back to needing a price decision under the new customer.
@@ -154,13 +176,11 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
                 Reason = request.Reason.Trim(),
                 AutomaticLinesInvalidated = automatic.Count,
                 context.Impact.ManualLinesKept,
+                context.Impact.AdjustedLinesFlaggedForReview,
                 context.Impact.NeedsPricingReview,
                 DraftInvoiceLinesReleased = context.DraftInvoiceLines.Count,
             },
             cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
-        return context.Impact;
     }
 
     private sealed record ChangeContext(
@@ -170,7 +190,32 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
         IReadOnlyList<InvoiceLine> DraftInvoiceLines,
         CustomerChangeImpactDto Impact);
 
-    private async Task<ChangeContext?> LoadAsync(Guid orderId, Guid newCustomerId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Applies the change for one order inside a transaction the CALLER owns (the dossier-level
+    /// change moves every linked order in one unit of work). Skips the dossier guard, because
+    /// the caller IS the dossier. Returns null when the order does not exist.
+    /// </summary>
+    public async Task<CustomerChangeImpactDto?> ApplyWithinDossierAsync(
+        Guid orderId, Guid newCustomerId, string reason, CancellationToken cancellationToken)
+    {
+        var context = await LoadAsync(orderId, newCustomerId, cancellationToken, allowWithinDossier: true);
+        if (context is null) return null;
+        if (context.Impact.BlockedReason is { } blocked)
+        {
+            throw new DomainValidationException("customerId", blocked);
+        }
+
+        await ApplyCoreAsync(context, new ChangeOrderCustomerRequest(newCustomerId, reason), cancellationToken);
+        return context.Impact;
+    }
+
+    /// <summary>Preview for the dossier flow: the dossier guard does not apply to itself.</summary>
+    public async Task<CustomerChangeImpactDto?> PreviewWithinDossierAsync(
+        Guid orderId, Guid newCustomerId, CancellationToken cancellationToken)
+        => (await LoadAsync(orderId, newCustomerId, cancellationToken, allowWithinDossier: true))?.Impact;
+
+    private async Task<ChangeContext?> LoadAsync(
+        Guid orderId, Guid newCustomerId, CancellationToken cancellationToken, bool allowWithinDossier = false)
     {
         var order = await _dbContext.TransportOrders
             .Include(o => o.Stops)
@@ -195,13 +240,32 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
         var blocked = await BlockingReasonAsync(order, newCustomerId, cancellationToken);
         var draftLines = await DraftInvoiceLinesAsync(order.Id, cancellationToken);
 
-        // The new customer's default entity applies, unless it is not allowed for them.
+        // The new customer's default entity applies; the current entity is kept only when the
+        // new customer has no default AND is allowed to be invoiced from it; otherwise the
+        // tenant's default entity — an order is never left without an invoicing entity.
         var newEntityId = target.DefaultLegalEntityId ?? order.LegalEntityId;
-        if (newEntityId is { } candidate)
+        if (newEntityId is { } candidate
+            && await Modules.Partners.Services.CustomerEntityPolicy.ValidateAsync(
+                _dbContext, TenantId, newCustomerId, candidate, cancellationToken) is not null)
         {
-            var policyError = await Modules.Partners.Services.CustomerEntityPolicy.ValidateAsync(
-                _dbContext, TenantId, newCustomerId, candidate, cancellationToken);
-            if (policyError is not null) newEntityId = target.DefaultLegalEntityId;
+            newEntityId = target.DefaultLegalEntityId;
+        }
+        newEntityId ??= await _dbContext.LegalEntities.AsNoTracking()
+            .Where(e => e.TenantId == TenantId && e.IsActive && e.IsDefault)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        // The dossier is the commercial authority for its orders: an order sharing its dossier's
+        // customer is changed on the dossier, so linked orders never drift apart silently.
+        var owningDossier = await _dbContext.DossierOrders.AsNoTracking()
+            .Where(l => l.TenantId == TenantId && l.TransportOrderId == orderId)
+            .Join(_dbContext.TransportDossiers.AsNoTracking().Where(d => d.TenantId == TenantId),
+                l => l.DossierId, d => d.Id, (l, d) => new { d.Id, d.DossierNumber, d.CustomerId })
+            .FirstOrDefaultAsync(d => d.CustomerId == order.CustomerId, cancellationToken);
+        if (blocked is null && owningDossier is not null && !allowWithinDossier)
+        {
+            blocked = $"Deze order maakt deel uit van dossier {owningDossier.DossierNumber}. "
+                      + "Wijzig de klant op het dossier, zodat alle gekoppelde orders samen blijven.";
         }
 
         // "Does the new customer actually have a price for this?" — an assigned agreement or an
@@ -218,8 +282,11 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
             newCustomerId, target.Name,
             blocked,
             pricingLines.Count(l => l.Kind is OrderPriceLineKind.Auto or OrderPriceLineKind.Proposed),
-            pricingLines.Count(l => l.Kind is OrderPriceLineKind.Manual or OrderPriceLineKind.AutoAdjusted),
-            !hasTariff,
+            pricingLines.Count(l => l.Kind is OrderPriceLineKind.Manual),
+            pricingLines.Count(l => l.Kind is OrderPriceLineKind.AutoAdjusted),
+            // Review is needed when no tariff exists OR when adjusted amounts of the old
+            // customer are being carried across for confirmation.
+            !hasTariff || pricingLines.Any(l => l.Kind == OrderPriceLineKind.AutoAdjusted),
             newEntityId,
             newEntityId != order.LegalEntityId,
             target.InvoiceLanguageCode ?? target.DefaultLanguageCode,
@@ -229,7 +296,9 @@ public class OrderCustomerChangeService : IOrderCustomerChangeService
                 .CountAsync(c => c.TenantId == TenantId && c.TransportOrderId == orderId, cancellationToken),
             await _dbContext.TransportOrderDocuments.AsNoTracking()
                 .CountAsync(d => d.TenantId == TenantId && d.TransportOrderId == orderId, cancellationToken),
-            draftLines.Count);
+            draftLines.Count,
+            owningDossier?.Id,
+            owningDossier?.DossierNumber);
 
         return new ChangeContext(order, pricingLines, snapshot, draftLines, impact);
     }

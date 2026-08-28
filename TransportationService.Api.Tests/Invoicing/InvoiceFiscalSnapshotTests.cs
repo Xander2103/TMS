@@ -176,6 +176,56 @@ public class InvoiceFiscalSnapshotTests
         Assert.False(string.IsNullOrWhiteSpace(line.VatLegalTextSnapshot));
     }
 
+    /// <summary>
+    /// Audit regression: a sales code with a statutory exemption on a DOMESTIC-VAT customer. The
+    /// resolver was right, but the pipeline charged 21% and froze category "S" on that line
+    /// while declaring it exempt — the customer-level category freeze ran first and the rate was
+    /// never written back.
+    /// </summary>
+    [Fact]
+    public async Task D_ExemptSalesCode_OnADomesticCustomer_IsZeroRatedOnThatLineOnly()
+    {
+        var h = await SeedAsync("nl", VatTreatment.DomesticVat);
+        using var _ = h.Db;
+        var admId = await AddAdmAsync(h);
+        var exempt = new SalesCategory
+        {
+            Id = Guid.NewGuid(), TenantId = h.TenantId, Code = "DOORREK", Name = "Doorrekening", IsActive = true,
+            VatTreatmentOverride = VatTreatment.VatExempt,
+        };
+        h.Db.Context.SalesCategories.Add(exempt);
+        await h.Db.Context.SaveChangesAsync();
+
+        var created = await h.Invoices.CreateAsync(
+            new CreateInvoiceRequest(h.CustomerId, null, [h.OrderId],
+                [
+                    new ManualInvoiceLineInput("Administratieve kost", 1m, 25m, null, admId, null),
+                    new ManualInvoiceLineInput("Doorrekening tol", 1m, 40m, null, exempt.Id, null),
+                ],
+                null, h.LegalEntityId),
+            CancellationToken.None);
+        var invoiceId = created.Invoice!.Id;
+
+        // Already at draft time the exempt line must not pretend to be 21%.
+        var draft = await h.Db.Context.Set<InvoiceLine>().AsNoTracking().Where(l => l.InvoiceId == invoiceId).ToListAsync();
+        Assert.Equal(0m, draft.Single(l => l.SalesCategoryId == exempt.Id).VatRatePercent);
+        Assert.Equal(21m, draft.Single(l => l.SalesCategoryId == admId).VatRatePercent);
+
+        await h.Invoices.ChangeStatusAsync(invoiceId, InvoiceStatus.Sent, CancellationToken.None);
+
+        var sent = await h.Db.Context.Set<InvoiceLine>().AsNoTracking().Where(l => l.InvoiceId == invoiceId).ToListAsync();
+        var exemptLine = sent.Single(l => l.SalesCategoryId == exempt.Id);
+        Assert.Equal(0m, exemptLine.VatRatePercent);
+        Assert.Equal("E", exemptLine.VatCategoryCode);
+        Assert.Equal("VatExempt", exemptLine.VatTreatmentSnapshot);
+        Assert.Equal("SalesCode", exemptLine.VatTreatmentSourceSnapshot);
+
+        var normalLine = sent.Single(l => l.SalesCategoryId == admId);
+        Assert.Equal(21m, normalLine.VatRatePercent);
+        Assert.Equal("S", normalLine.VatCategoryCode);
+        Assert.Equal("Customer", normalLine.VatTreatmentSourceSnapshot);
+    }
+
     [Fact]
     public async Task ALineWithADeliberateLabel_KeepsIt()
     {
