@@ -192,3 +192,75 @@ export function reopenOrderPricing(orderId: string, reason: string): Promise<Tra
   return apiClient.postJson<TransportOrderDetail, { reason: string }>(
     `/api/transport-orders/${orderId}/pricing/reopen`, { reason })
 }
+
+// --- Sprint 6: customer change & invoicing-entity change ---------------------------------------
+
+/** Mirrors CustomerChangeImpactDto (GET /api/transport-orders/{id}/customer/impact). */
+export interface OrderCustomerChangeImpact {
+  orderId: string
+  orderNumber: string
+  currentCustomerId: string
+  currentCustomerName: string
+  newCustomerId: string
+  newCustomerName: string
+  /** When set the change is refused; the text says why. */
+  blockedReason: string | null
+  automaticLinesInvalidated: number
+  manualLinesKept: number
+  adjustedLinesFlaggedForReview: number
+  needsPricingReview: boolean
+  newLegalEntityId: string | null
+  legalEntityChanges: boolean
+  newInvoiceLanguage: string | null
+  newVatTreatment: string | null
+  stopsKept: number
+  goodsKept: number
+  documentsKept: number
+  draftInvoiceLinesReleased: number
+  /** Set when the order follows a dossier's customer: change it on the dossier instead. */
+  owningDossierId: string | null
+  owningDossierNumber: string | null
+}
+
+export function getOrderCustomerChangeImpact(id: string, newCustomerId: string): Promise<OrderCustomerChangeImpact> {
+  return apiClient.getJson<OrderCustomerChangeImpact>(
+    `/api/transport-orders/${id}/customer/impact?newCustomerId=${encodeURIComponent(newCustomerId)}`,
+  )
+}
+
+export function changeOrderCustomer(id: string, newCustomerId: string, reason: string): Promise<OrderCustomerChangeImpact> {
+  return apiClient.putJson<OrderCustomerChangeImpact, { newCustomerId: string; reason: string }>(
+    `/api/transport-orders/${id}/customer`,
+    { newCustomerId, reason },
+  )
+}
+
+/** Mirrors OrderLegalEntityChangeImpactDto (GET /api/transport-orders/{id}/legal-entity/impact). */
+export interface OrderLegalEntityChangeImpact {
+  orderId: string
+  currentLegalEntityId: string | null
+  targetLegalEntityId: string
+  customerDefaultLegalEntityId: string | null
+  deviatesFromCustomerDefault: boolean
+  requiresOverridePermission: boolean
+  blockedReason: string | null
+  draftInvoiceLinesReleased: number
+}
+
+export function getOrderLegalEntityChangeImpact(id: string, legalEntityId: string): Promise<OrderLegalEntityChangeImpact> {
+  return apiClient.getJson<OrderLegalEntityChangeImpact>(
+    `/api/transport-orders/${id}/legal-entity/impact?legalEntityId=${encodeURIComponent(legalEntityId)}`,
+  )
+}
+
+export function changeOrderLegalEntity(
+  id: string,
+  legalEntityId: string,
+  reason: string | null,
+  version?: string,
+): Promise<TransportOrderDetail> {
+  return apiClient.putJson<TransportOrderDetail, { legalEntityId: string; reason: string | null; version?: string }>(
+    `/api/transport-orders/${id}/legal-entity`,
+    { legalEntityId, reason, version },
+  )
+}

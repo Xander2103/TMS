@@ -676,5 +676,61 @@
     "loadInstr": "Instructions de chargement",
     "unloadInstr": "Instructions de déchargement",
     "saving": "Enregistrement…"
+  },
+  "commercial": {
+    "change": "Modifier",
+    "changeCustomerAria": "Modifier le client de cette commande",
+    "changeEntityAria": "Modifier l’entité facturante de cette commande",
+    "changedCustomer": "Client remplacé par {name}.",
+    "changedEntity": "Entité facturante modifiée.",
+    "customerDefault": "Défaut du client",
+    "customerLabel": "Client",
+    "entityLabel": "Entité facturante",
+    "placeholderCustomer": "Client temporaire",
+    "placeholderHint": "Cette commande est liée à un client temporaire. Associez le vrai client dès qu’il est connu."
+  },
+  "customerChange": {
+    "blocked": "Cette modification est impossible",
+    "confirm": "Modifier le client",
+    "currentCustomer": "Client actuel",
+    "failed": "Le client n’a pas pu être modifié.",
+    "impact": {
+      "adjustedReview": "{count} ligne(s) ajustée(s) sont conservée(s), marquée(s) « à vérifier ».",
+      "autoInvalidated": "{count} ligne(s) de prix automatique(s) de l’ancien client sont annulée(s).",
+      "draftReleased": "{count} ligne(s) sur une facture brouillon sont détachée(s).",
+      "entityChanges": "L’entité facturante passe à celle par défaut du nouveau client.",
+      "entitySame": "L’entité facturante reste inchangée.",
+      "kept": "Inchangé : {stops} arrêt(s), {goods} ligne(s) de marchandises, {documents} document(s).",
+      "language": "Langue de facturation : {language}",
+      "manualKept": "{count} ligne(s) manuelle(s) sont conservée(s) et restent visiblement manuelles.",
+      "needsReview": "Le prix passe en contrôle : aucun tarif utilisable chez le nouveau client ou lignes ajustées.",
+      "priceRecalc": "Le prix est recalculé avec le tarif du nouveau client.",
+      "vatTreatment": "Régime TVA : {treatment}"
+    },
+    "impactFailed": "Les conséquences n’ont pas pu être calculées.",
+    "impactLoading": "Calcul des conséquences…",
+    "impactTitle": "Conséquences",
+    "newCustomer": "Nouveau client",
+    "openDossier": "Ouvrir le dossier {number}",
+    "reasonHint": "Enregistré dans l’historique de la commande.",
+    "reasonLabel": "Motif",
+    "reasonRequired": "Indiquez un motif.",
+    "title": "Modifier le client — {number}"
+  },
+  "entityChange": {
+    "allowedHint": "Uniquement les entités autorisées pour ce client.",
+    "chooseEntity": "Choisissez une entité",
+    "confirm": "Modifier l’entité",
+    "defaultSuffix": "(défaut du client)",
+    "deviates": "Cette entité diffère du défaut du client : un motif est obligatoire et la modification est enregistrée.",
+    "draftReleased": "{count} ligne(s) sur une facture brouillon de l’ancienne entité sont détachée(s).",
+    "entityLabel": "Entité facturante",
+    "failed": "L’entité facturante n’a pas pu être modifiée.",
+    "impactFailed": "Les conséquences n’ont pas pu être calculées.",
+    "noDraftImpact": "Aucune facture brouillon n’est concernée.",
+    "noOverrideRight": "Vous n’avez pas le droit de déroger au défaut du client.",
+    "reasonLabel": "Motif",
+    "reasonRequired": "Un motif est obligatoire pour une entité dérogatoire.",
+    "title": "Modifier l’entité facturante — {number}"
   }
 }

@@ -76,26 +76,30 @@
     }
   },
   "header": {
-    "title": "File {number}",
-    "noCustomer": "No customer",
-    "reference": "ref. {reference}",
-    "entity": "Entity: {name}",
-    "changeEntityAria": "Change entity",
-    "change": "change",
-    "operational": "Operational:",
-    "price": "Price:",
     "addActivity": "+ Activity",
-    "more": "More ▾",
-    "entityDialogTitle": "Change invoicing entity",
-    "entityRequired": "Choose an entity.",
-    "entityChangeFailed": "The entity could not be changed.",
-    "entityField": "Entity",
-    "entityFieldHint": "The change is logged (old → new).",
+    "change": "change",
+    "changeAction": "Change",
+    "changeEntityAria": "Change entity",
     "chooseEntity": "— Choose an entity —",
     "defaultSuffix": "(default)",
+    "entity": "Entity: {name}",
+    "entityAllowedHint": "Only the entities allowed for this customer.",
+    "entityChangeFailed": "The entity could not be changed.",
+    "entityDeviates": "This entity deviates from the customer default: a reason is required and the change is recorded.",
+    "entityDialogTitle": "Change invoicing entity",
+    "entityField": "Entity",
+    "entityFieldHint": "The change is logged (old → new).",
+    "entityNoOverride": "You are not allowed to deviate from the customer default.",
+    "entityReasonRequired": "A reason is required for a deviating entity.",
+    "entityRequired": "Choose an entity.",
+    "more": "More ▾",
+    "noCustomer": "No customer",
+    "operational": "Operational:",
+    "price": "Price:",
     "reason": "Reason",
     "reasonHint": "Required for an entity other than the customer default (needs the 'override entity' permission; the reason is logged).",
-    "changeAction": "Change"
+    "reference": "ref. {reference}",
+    "title": "File {number}"
   },
   "drawer": {
     "durationInvalid": "The duration must be a number of at least 0.",
@@ -316,5 +320,16 @@
     "box": "Package / box",
     "ship": "Ship (container)",
     "snowflake": "Refrigerated transport"
+  },
+  "customerChange": {
+    "action": "Change customer",
+    "changed": "Dossier customer changed.",
+    "entity": "The dossier’s invoicing entity becomes: {name}",
+    "failed": "The dossier customer could not be changed.",
+    "leftAlone": "Stay on their own customer: {orders}",
+    "lockedHint": "Change this dossier's customer via 'Change customer'; pricing, entity and linked orders are then re-evaluated.",
+    "noOrders": "No linked orders; only the dossier changes.",
+    "ordersTitle": "Linked orders that move along ({count})",
+    "title": "Change dossier customer — {number}"
   }
 }

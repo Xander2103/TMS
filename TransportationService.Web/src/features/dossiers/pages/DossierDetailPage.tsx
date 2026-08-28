@@ -34,6 +34,7 @@ import { ActivityList } from '../components/ActivityList'
 import { AddActivityDialog } from '../components/AddActivityDialog'
 import { AttentionPanel } from '../components/AttentionPanel'
 import { DossierHeader, type DossierMenuAction } from '../components/DossierHeader'
+import { DossierCustomerChangeDialog } from '../components/DossierCustomerChangeDialog'
 import { DossierGoodsSummary } from '../components/DossierGoodsSummary'
 import { AddRelationDialog, LinkOrderDialog } from '../components/DossierLinkDialogs'
 import { DossierMoreSection } from '../components/DossierMoreSection'
@@ -91,6 +92,9 @@ export function DossierDetailPage() {
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [responsibleUserId, setResponsibleUserId] = useState<string | null>(null)
   const [customerOptions, setCustomerOptions] = useState<SearchableSelectOption[]>([])
+  // Sprint 6: once a dossier has a customer or orders, the customer only changes via the
+  // previewed flow (pricing, entity and linked orders are re-evaluated together).
+  const [customerChangeOpen, setCustomerChangeOpen] = useState(false)
   const [userOptions, setUserOptions] = useState<SearchableSelectOption[]>([])
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
@@ -254,6 +258,9 @@ export function DossierDetailPage() {
 
   const menuActions: DossierMenuAction[] = []
   if (canManage && isOpen) menuActions.push({ key: 'edit', label: t('dossiers.detail.menuEdit'), onSelect: startEdit })
+  if (canManage && isOpen && dossier.customerId) {
+    menuActions.push({ key: 'change-customer', label: t('dossiers.customerChange.action'), onSelect: () => setCustomerChangeOpen(true) })
+  }
   if (canManage) {
     menuActions.push(
       isOpen
@@ -505,9 +512,27 @@ export function DossierDetailPage() {
                 maxLength={2000}
               />
             </FormField>
-            <FormField label={t('dossiers.detail.customerField')} htmlFor="edit-customer" error={getFieldError(fieldErrors, 'customerId')}>
-              <SearchableSelect id="edit-customer" value={customerId} onChange={setCustomerId} options={customerOptions} />
-            </FormField>
+            {dossier.customerId || dossier.orders.length > 0 ? (
+              <FormField label={t('dossiers.detail.customerField')} htmlFor="edit-customer-locked" hint={t('dossiers.customerChange.lockedHint')}>
+                <div className="dossier-customer-locked">
+                  <span id="edit-customer-locked">{dossier.customerName ?? '—'}</span>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setEditing(false)
+                      setCustomerChangeOpen(true)
+                    }}
+                    disabled={busy}
+                  >
+                    {t('dossiers.customerChange.action')}
+                  </Button>
+                </div>
+              </FormField>
+            ) : (
+              <FormField label={t('dossiers.detail.customerField')} htmlFor="edit-customer" error={getFieldError(fieldErrors, 'customerId')}>
+                <SearchableSelect id="edit-customer" value={customerId} onChange={setCustomerId} options={customerOptions} />
+              </FormField>
+            )}
             <FormField label={t('dossiers.detail.responsibleField')} htmlFor="edit-responsible" error={getFieldError(fieldErrors, 'responsibleUserId')}>
               <SearchableSelect
                 id="edit-responsible"
@@ -521,6 +546,18 @@ export function DossierDetailPage() {
             </FormField>
           </form>
         </Modal>
+      )}
+
+      {customerChangeOpen && (
+        <DossierCustomerChangeDialog
+          dossier={dossier}
+          onClose={() => setCustomerChangeOpen(false)}
+          onChanged={(updated) => {
+            applyDossier(updated)
+            setCustomerChangeOpen(false)
+            toast.showSuccess(t('dossiers.customerChange.changed'))
+          }}
+        />
       )}
 
       {showLinkOrder && (

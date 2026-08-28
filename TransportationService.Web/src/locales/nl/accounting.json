@@ -88,5 +88,15 @@
     "S": "S — Standaardtarief",
     "Z": "Z — Nultarief",
     "none": "— Geen (btw-regeling klant) —"
+  },
+  "ledgerMappings": {
+    "account": "Grootboekrekening",
+    "costCentre": "Kostenplaats",
+    "entity": "Entiteit",
+    "intro": "Per facturerende entiteit een eigen grootboekrekening en kostenplaats. Zonder koppeling geldt de standaardrekening van de verkoopcode.",
+    "loadFailed": "Entiteiten konden niet worden geladen.",
+    "noEntities": "Geen actieve entiteiten.",
+    "title": "Boekhoudkundige koppeling per entiteit",
+    "useDefault": "— standaardrekening —"
   }
 }

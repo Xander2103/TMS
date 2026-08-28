@@ -41,6 +41,12 @@ import { UNIT_TYPE_LABELS } from '../../packages/types'
 import { useLookupOptions } from '../../master-data/hooks/useLookupOptions'
 import { CustomerPackagesSummary } from '../../packages/components/CustomerPackagesSummary'
 import { downloadOrderDocument } from '../api/transportDocumentsApi'
+import { OrderCustomerChangeDialog } from '../components/OrderCustomerChangeDialog'
+import { OrderLegalEntityDialog } from '../components/OrderLegalEntityDialog'
+import { isPlaceholderCustomerName } from '../components/placeholderCustomer'
+import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
+import type { LegalEntityOption } from '../../legal-entities/types'
+import '../components/commercialChange.css'
 import {
   ORDER_PRICE_LINE_KIND_TONE,
   ORDER_STATUS_LABELS,
@@ -147,6 +153,11 @@ export function TransportOrderDetailPage() {
   const [correctTarget, setCorrectTarget] = useState<TransportOrderStatus | ''>('')
   const [correctReason, setCorrectReason] = useState('')
   const [planStop, setPlanStop] = useState<TransportOrderStop | null>(null)
+  // Sprint 6: commercial identity of the order (customer / invoicing entity) changes through
+  // explicit, previewed flows — never through the edit form.
+  const [customerChangeOpen, setCustomerChangeOpen] = useState(false)
+  const [entityChangeOpen, setEntityChangeOpen] = useState(false)
+  const [entities, setEntities] = useState<LegalEntityOption[]>([])
 
   // --- Pricing lines / status (spec ch. 24-26) --------------------------------------------
   const [editLine, setEditLine] = useState<OrderPricingLine | null>(null)
@@ -172,6 +183,18 @@ export function TransportOrderDetailPage() {
   const [confirmPriceReason, setConfirmPriceReason] = useState('')
   const [reopenPriceOpen, setReopenPriceOpen] = useState(false)
   const [reopenPriceReason, setReopenPriceReason] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    getLegalEntityOptions()
+      .then((options) => {
+        if (mounted) setEntities(options)
+      })
+      .catch(() => undefined)
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -592,6 +615,82 @@ export function TransportOrderDetailPage() {
           </span>
         }
       />
+
+      <p className="to-commercial-bar" data-testid="order-commercial-bar">
+        <span>
+          {t('transportOrders.commercial.customerLabel')}:{' '}
+          <Link to={`/customers/${order.customerId}`}>
+            <strong>{order.customerName}</strong>
+          </Link>
+          {isPlaceholderCustomerName(order.customerName) && (
+            <>
+              {' '}
+              <Badge tone="warning">{t('transportOrders.commercial.placeholderCustomer')}</Badge>
+            </>
+          )}
+          {hasPermission('orders.edit') && (
+            <button
+              type="button"
+              className="to-inline-action"
+              onClick={() => setCustomerChangeOpen(true)}
+              disabled={busy || editing}
+              aria-label={t('transportOrders.commercial.changeCustomerAria')}
+            >
+              {t('transportOrders.commercial.change')}
+            </button>
+          )}
+        </span>
+        <span>
+          {t('transportOrders.commercial.entityLabel')}:{' '}
+          <strong>
+            {order.legalEntityId
+              ? entities.find((e) => e.id === order.legalEntityId)?.displayName ?? '…'
+              : t('transportOrders.commercial.customerDefault')}
+          </strong>
+          {hasPermission('orders.edit') && (
+            <button
+              type="button"
+              className="to-inline-action"
+              onClick={() => setEntityChangeOpen(true)}
+              disabled={busy || editing}
+              aria-label={t('transportOrders.commercial.changeEntityAria')}
+            >
+              {t('transportOrders.commercial.change')}
+            </button>
+          )}
+        </span>
+      </p>
+      {isPlaceholderCustomerName(order.customerName) && (
+        <p className="customer-form-muted" role="note">
+          {t('transportOrders.commercial.placeholderHint')}
+        </p>
+      )}
+
+      {customerChangeOpen && (
+        <OrderCustomerChangeDialog
+          orderId={order.id}
+          orderNumber={order.orderNumber}
+          currentCustomerId={order.customerId}
+          currentCustomerName={order.customerName}
+          onClose={() => setCustomerChangeOpen(false)}
+          onChanged={(impact) => {
+            setCustomerChangeOpen(false)
+            showSuccess(t('transportOrders.commercial.changedCustomer', { name: impact.newCustomerName }))
+            void getTransportOrder(order.id).then(setOrder).catch(() => undefined)
+          }}
+        />
+      )}
+      {entityChangeOpen && (
+        <OrderLegalEntityDialog
+          order={order}
+          onClose={() => setEntityChangeOpen(false)}
+          onChanged={(updated) => {
+            setEntityChangeOpen(false)
+            setOrder(updated)
+            showSuccess(t('transportOrders.commercial.changedEntity'))
+          }}
+        />
+      )}
 
       {order.status === 'Cancelled' && order.cancellationReason && (
         <p className="to-cancel-reason" role="note">

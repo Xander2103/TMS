@@ -110,13 +110,20 @@ export function GeneralSection({
         >
           <select id="to-legal-entity" value={legalEntityId} onChange={(e) => setLegalEntityId(e.target.value)} disabled={saving}>
             <option value="">{t('transportOrders.general.customerDefault')}</option>
-            {legalEntities.map((entity) => (
+            {/* Sprint 6: only the entities this customer allows (empty set = no restriction); the
+                current value stays listed so an existing order never loses its entity silently. */}
+            {legalEntities
+              .filter((entity) => {
+                const allowed = customerRequirements?.allowedLegalEntityIds ?? []
+                return allowed.length === 0 || allowed.includes(entity.id) || entity.id === legalEntityId
+              })
+              .map((entity) => (
               <option key={entity.id} value={entity.id}>
                 {entity.displayName}
                 {entity.isDefault ? ` ${t('transportOrders.general.defaultSuffix')}` : ''}
                 {!entity.isActive ? ` ${t('transportOrders.general.inactiveSuffix')}` : ''}
               </option>
-            ))}
+              ))}
           </select>
         </FormField>
       </div>

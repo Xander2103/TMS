@@ -1,0 +1,251 @@
+/* Sprint 6 — customer / invoicing-entity change flows and the commercial bar on the order. */
+
+.to-commercial-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.to-commercial-bar a {
+  color: inherit;
+}
+
+.to-inline-action {
+  margin-left: 0.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary, #1d4ed8);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.to-inline-action:disabled {
+  color: var(--color-text-muted, #6b7280);
+  cursor: default;
+  text-decoration: none;
+}
+
+.to-summary-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.to-summary-list dt {
+  color: var(--color-text-muted, #6b7280);
+}
+
+.to-summary-list dd {
+  margin: 0;
+}
+
+.to-impact {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+  background: var(--color-surface-muted, #f9fafb);
+}
+
+.to-impact h3,
+.to-impact h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.to-impact h4 {
+  margin-top: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.to-impact-list {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.to-impact-list li {
+  margin: 0.15rem 0;
+}
+
+.to-impact-warning {
+  color: var(--color-warning-text, #92400e);
+  font-weight: 600;
+}
+
+.to-impact-blocked {
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--color-danger, #b91c1c);
+  background: var(--color-danger-bg, #fef2f2);
+}
+
+.to-impact-blocked p {
+  margin: 0.25rem 0;
+}
+
+.to-impact-order {
+  margin: 0.35rem 0;
+}
+
+.to-impact-order summary {
+  cursor: pointer;
+}
+
+/* Server-side customer search (customer-change dialogs). */
+.customer-picker input[type='search'] {
+  width: 100%;
+}
+
+.customer-picker-selected {
+  margin: 0.35rem 0;
+}
+
+.customer-picker-selected .link-button,
+.customer-picker .link-button {
+  margin-left: 0.5rem;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.customer-picker-results {
+  max-height: 14rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.375rem;
+}
+
+.customer-picker-results li {
+  padding: 0;
+}
+
+.customer-picker-results li.customer-form-muted {
+  padding: 0.5rem 0.75rem;
+}
+
+.customer-picker-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.75rem;
+  border: 0;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.customer-picker-row:hover:not(:disabled),
+.customer-picker-row.is-selected {
+  background: var(--color-surface-muted, #f3f4f6);
+}
+
+.customer-picker-row:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* Dossier edit dialog: customer is locked once the dossier has a customer or orders. */
+.dossier-customer-locked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+/* Customer detail: advisory fiscal notices. */
+.customer-fiscal-warnings {
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--color-border, #e5e7eb);
+}
+
+.customer-fiscal-warnings h4 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.customer-fiscal-warnings ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.25rem;
+}
+
+/* Pricing import: mapping profile panel. */
+.pricing-import-profile {
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+}
+
+.pricing-import-profile h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.pricing-import-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.pricing-import-mapping-table {
+  width: 100%;
+  margin: 0.5rem 0;
+  border-collapse: collapse;
+}
+
+.pricing-import-mapping-table th,
+.pricing-import-mapping-table td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.pricing-import-mapping-table select {
+  width: 100%;
+}
+
+/* Accounting: ledger mapping per entity. */
+.sc-ledger-mappings {
+  margin: 1rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 0.5rem;
+}
+
+.sc-ledger-mappings legend {
+  padding: 0 0.25rem;
+  font-weight: 600;
+}
+
+.sc-ledger-mappings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sc-ledger-mappings-table th,
+.sc-ledger-mappings-table td {
+  padding: 0.3rem 0.4rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.sc-ledger-mappings-table select,
+.sc-ledger-mappings-table input {
+  width: 100%;
+}

@@ -76,26 +76,30 @@
     }
   },
   "header": {
-    "title": "Dossier {number}",
-    "noCustomer": "Geen klant",
-    "reference": "ref. {reference}",
-    "entity": "Entiteit: {name}",
-    "changeEntityAria": "Entiteit wijzigen",
-    "change": "wijzigen",
-    "operational": "Operationeel:",
-    "price": "Prijs:",
     "addActivity": "+ Activiteit",
-    "more": "Meer ▾",
-    "entityDialogTitle": "Facturerende entiteit wijzigen",
-    "entityRequired": "Kies een entiteit.",
-    "entityChangeFailed": "De entiteit kon niet worden gewijzigd.",
-    "entityField": "Entiteit",
-    "entityFieldHint": "De wijziging wordt gelogd (oud → nieuw).",
+    "change": "wijzigen",
+    "changeAction": "Wijzigen",
+    "changeEntityAria": "Entiteit wijzigen",
     "chooseEntity": "— Kies een entiteit —",
     "defaultSuffix": "(standaard)",
+    "entity": "Entiteit: {name}",
+    "entityAllowedHint": "Enkel de entiteiten die voor deze klant zijn toegestaan.",
+    "entityChangeFailed": "De entiteit kon niet worden gewijzigd.",
+    "entityDeviates": "Deze entiteit wijkt af van de klantstandaard: een reden is verplicht en de wijziging wordt vastgelegd.",
+    "entityDialogTitle": "Facturerende entiteit wijzigen",
+    "entityField": "Entiteit",
+    "entityFieldHint": "De wijziging wordt gelogd (oud → nieuw).",
+    "entityNoOverride": "Je hebt geen rechten om af te wijken van de klantstandaard.",
+    "entityReasonRequired": "Een reden is verplicht bij een afwijkende entiteit.",
+    "entityRequired": "Kies een entiteit.",
+    "more": "Meer ▾",
+    "noCustomer": "Geen klant",
+    "operational": "Operationeel:",
+    "price": "Prijs:",
     "reason": "Reden",
     "reasonHint": "Verplicht bij een andere entiteit dan de klantstandaard (vereist het recht 'entiteit overschrijven'; wordt mee gelogd).",
-    "changeAction": "Wijzigen"
+    "reference": "ref. {reference}",
+    "title": "Dossier {number}"
   },
   "drawer": {
     "durationInvalid": "De duur moet een getal van minstens 0 zijn.",
@@ -316,5 +320,16 @@
     "box": "Colli / doos",
     "ship": "Schip (container)",
     "snowflake": "Koeltransport"
+  },
+  "customerChange": {
+    "action": "Klant wijzigen",
+    "changed": "Klant van het dossier gewijzigd.",
+    "entity": "Facturerende entiteit van het dossier wordt: {name}",
+    "failed": "De klant van het dossier kon niet worden gewijzigd.",
+    "leftAlone": "Blijven op hun eigen klant: {orders}",
+    "lockedHint": "De klant van dit dossier wijzig je via 'Klant wijzigen'; prijzen, entiteit en gekoppelde orders worden dan mee herbeoordeeld.",
+    "noOrders": "Geen gekoppelde orders; enkel het dossier wijzigt.",
+    "ordersTitle": "Gekoppelde orders die mee verhuizen ({count})",
+    "title": "Klant van dossier wijzigen — {number}"
   }
 }

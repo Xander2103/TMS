@@ -283,5 +283,26 @@
     "attachmentsTitle": "Attachments",
     "loading": "Loading invoice...",
     "loadError": "The invoice could not be loaded."
+  },
+  "fiscal": {
+    "draftNote": "Preview — frozen on send.",
+    "frozenNote": "Frozen on send.",
+    "language": "Invoice language",
+    "languages": {
+      "de": "German",
+      "en": "English",
+      "fr": "French",
+      "nl": "Dutch"
+    },
+    "legalText": "Statutory text",
+    "lineException": "Exception: {treatment} via {source}",
+    "source": {
+      "Customer": "customer",
+      "LineOverride": "line override",
+      "SalesCode": "sales code",
+      "TenantDefault": "company default"
+    },
+    "sourceLabel": "source",
+    "treatment": "VAT treatment"
   }
 }

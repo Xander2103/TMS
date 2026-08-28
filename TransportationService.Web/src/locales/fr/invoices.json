@@ -283,5 +283,26 @@
     "attachmentsTitle": "Pièces jointes",
     "loading": "Chargement de la facture...",
     "loadError": "La facture n'a pas pu être chargée."
+  },
+  "fiscal": {
+    "draftNote": "Aperçu — figé à l’envoi.",
+    "frozenNote": "Figé à l’envoi.",
+    "language": "Langue de facturation",
+    "languages": {
+      "de": "Allemand",
+      "en": "Anglais",
+      "fr": "Français",
+      "nl": "Néerlandais"
+    },
+    "legalText": "Mention légale",
+    "lineException": "Dérogation : {treatment} via {source}",
+    "source": {
+      "Customer": "client",
+      "LineOverride": "dérogation de ligne",
+      "SalesCode": "code de vente",
+      "TenantDefault": "défaut de l’entreprise"
+    },
+    "sourceLabel": "source",
+    "treatment": "Régime TVA"
   }
 }

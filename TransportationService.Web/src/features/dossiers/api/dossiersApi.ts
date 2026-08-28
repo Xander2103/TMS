@@ -1,4 +1,5 @@
 import { apiClient } from '../../../api/apiClient'
+import type { OrderCustomerChangeImpact } from '../../transport-orders/api/transportOrdersApi'
 import type { DossierActivityInput, DossierDetail, DossierInput, DossierListItem, NewDossierInput } from '../types'
 
 export function listDossiers(params: { search?: string; status?: string; customerId?: string } = {}): Promise<DossierListItem[]> {
@@ -34,6 +35,36 @@ export function changeDossierLegalEntity(
   return apiClient.putJson<DossierDetail, { legalEntityId: string; version?: string; reason?: string }>(
     `/api/dossiers/${id}/legal-entity`,
     { legalEntityId, version, reason },
+  )
+}
+
+/** Mirrors DossierCustomerChangeImpactDto (GET /api/dossiers/{id}/customer/impact). */
+export interface DossierCustomerChangeImpact {
+  dossierId: string
+  dossierNumber: string
+  currentCustomerId: string | null
+  currentCustomerName: string | null
+  newCustomerId: string
+  newCustomerName: string
+  blockedReason: string | null
+  newLegalEntityId: string | null
+  newInvoiceLanguage: string | null
+  newVatTreatment: string | null
+  orders: OrderCustomerChangeImpact[]
+  ordersLeftOnOtherCustomer: string[]
+}
+
+export function getDossierCustomerChangeImpact(id: string, newCustomerId: string): Promise<DossierCustomerChangeImpact> {
+  return apiClient.getJson<DossierCustomerChangeImpact>(
+    `/api/dossiers/${id}/customer/impact?newCustomerId=${encodeURIComponent(newCustomerId)}`,
+  )
+}
+
+/** Sprint 6: the dossier is the commercial authority — every linked order moves with it, in one transaction. */
+export function changeDossierCustomer(id: string, newCustomerId: string, reason: string, version?: string): Promise<DossierDetail> {
+  return apiClient.putJson<DossierDetail, { newCustomerId: string; reason: string; version?: string }>(
+    `/api/dossiers/${id}/customer`,
+    { newCustomerId, reason, version },
   )
 }
 

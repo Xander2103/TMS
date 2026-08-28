@@ -38,6 +38,7 @@ import {
 } from '../types'
 import { formatPeriod, monthInputToPeriod, periodToMonthInput } from '../utils/invoicePeriod'
 import { formatDate } from '../../../utils/dates'
+import { InvoiceFiscalSummary, InvoiceLineFiscalBadge } from '../components/InvoiceFiscalSummary'
 import './invoices.css'
 
 interface EditableLine extends UpdateLineInput {
@@ -256,6 +257,7 @@ export function InvoiceDetailPage() {
         {t('invoices.internalDetail.periodLabel')}: {formatPeriod(invoice.invoicePeriodYear, invoice.invoicePeriodMonth)}
         {invoice.purchaseOrderNumber && <> · {t('invoices.detail.poNumber', { number: invoice.purchaseOrderNumber })}</>}
       </p>
+      <InvoiceFiscalSummary invoice={invoice} />
 
       {editing ? (
         <div className="inv-edit">
@@ -397,6 +399,7 @@ export function InvoiceDetailPage() {
                         <Badge tone="warning">{line.ledgerWarning}</Badge>
                       </div>
                     )}
+                    <InvoiceLineFiscalBadge line={line} />
                   </td>
                   <td>{line.quantity.toLocaleString('nl-BE')}</td>
                   <td>{euro(line.unitPrice, invoice.currency)}</td>

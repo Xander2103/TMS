@@ -855,5 +855,23 @@
     "beStructure": "A Belgian VAT number must consist of BE + 10 digits (e.g. BE0123456749).",
     "genericFormat": "The VAT number has an invalid format.",
     "peppolFormat": "Invalid Peppol ID. Use \"scheme:number\", e.g. 0208:0123456789."
+  },
+  "fiscalWarnings": {
+    "domestic-vat-foreign-customer": "This customer is located in {country} but is invoiced with domestic VAT. Check whether that is right.",
+    "intra-community-same-country": "Intra-Community supply with a customer in the same country as the invoicing entity.",
+    "intro": "These notices do not change the VAT treatment; they point at a setting worth checking.",
+    "loadFailed": "The review notices could not be loaded.",
+    "none": "Nothing to review.",
+    "title": "To review",
+    "vat-number-missing": "The chosen VAT treatment requires a VAT number. Without one, no invoice can be sent."
+  },
+  "picker": {
+    "blocked": "blocked",
+    "current": "current",
+    "loadFailed": "Customers could not be loaded.",
+    "noResults": "No customers found.",
+    "placeholder": "Search by name or customer number…",
+    "searching": "Searching…",
+    "typeToSearch": "Type to search."
   }
 }

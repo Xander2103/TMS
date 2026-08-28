@@ -57,6 +57,12 @@ export interface InvoiceLine {
   ledgerAccountName: string | null
   /** Draft-stage warning when the category is missing or unmapped; null = ok. */
   ledgerWarning: string | null
+  /** Sprint 5: fiscal treatment of the line (VatTreatment name) — snapshot after Send, live while Draft. */
+  vatTreatment?: string | null
+  /** Where the treatment came from: LineOverride | SalesCode | Customer | TenantDefault. */
+  vatTreatmentSource?: string | null
+  vatLegalText?: string | null
+  salesCode?: string | null
 }
 
 export interface InvoiceDetail {
@@ -81,6 +87,10 @@ export interface InvoiceDetail {
   invoicePeriodYear: number
   invoicePeriodMonth: number
   numberIsManual: boolean
+  /** Sprint 5: the customer treatment frozen on the header, the document language and its statutory text. */
+  customerVatTreatment?: string | null
+  languageCode?: string | null
+  vatLegalText?: string | null
 }
 
 /** Mirrors InvoiceNumberPreviewDto (GET /api/invoices/next-number). */

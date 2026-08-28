@@ -676,5 +676,61 @@
     "loadInstr": "Laadinstructies",
     "unloadInstr": "Losinstructies",
     "saving": "Opslaan…"
+  },
+  "commercial": {
+    "change": "Wijzigen",
+    "changeCustomerAria": "Klant van deze opdracht wijzigen",
+    "changeEntityAria": "Facturerende entiteit van deze opdracht wijzigen",
+    "changedCustomer": "Klant gewijzigd naar {name}.",
+    "changedEntity": "Facturerende entiteit gewijzigd.",
+    "customerDefault": "Klantstandaard",
+    "customerLabel": "Klant",
+    "entityLabel": "Facturerende entiteit",
+    "placeholderCustomer": "Tijdelijke klant",
+    "placeholderHint": "Deze opdracht staat op een tijdelijke klant. Koppel de echte klant zodra die bekend is."
+  },
+  "customerChange": {
+    "blocked": "Deze wijziging is niet mogelijk",
+    "confirm": "Klant wijzigen",
+    "currentCustomer": "Huidige klant",
+    "failed": "De klant kon niet worden gewijzigd.",
+    "impact": {
+      "adjustedReview": "{count} aangepaste lijn(en) blijven staan, gemarkeerd als 'te controleren'.",
+      "autoInvalidated": "{count} automatische prijslijn(en) van de oude klant vervallen.",
+      "draftReleased": "{count} lijn(en) op een conceptfactuur worden losgekoppeld.",
+      "entityChanges": "De facturerende entiteit wijzigt naar de standaard van de nieuwe klant.",
+      "entitySame": "De facturerende entiteit blijft gelijk.",
+      "kept": "Blijft ongewijzigd: {stops} stop(s), {goods} goederenlijn(en), {documents} document(en).",
+      "language": "Factuurtaal: {language}",
+      "manualKept": "{count} handmatige lijn(en) blijven staan en blijven zichtbaar handmatig.",
+      "needsReview": "De prijs komt in prijscontrole: geen bruikbaar tarief bij de nieuwe klant of aangepaste lijnen.",
+      "priceRecalc": "De prijs wordt opnieuw berekend met het tarief van de nieuwe klant.",
+      "vatTreatment": "Btw-behandeling: {treatment}"
+    },
+    "impactFailed": "De gevolgen konden niet worden berekend.",
+    "impactLoading": "Gevolgen berekenen…",
+    "impactTitle": "Gevolgen",
+    "newCustomer": "Nieuwe klant",
+    "openDossier": "Open dossier {number}",
+    "reasonHint": "Wordt vastgelegd in de historiek van de opdracht.",
+    "reasonLabel": "Reden",
+    "reasonRequired": "Geef een reden op.",
+    "title": "Klant wijzigen — {number}"
+  },
+  "entityChange": {
+    "allowedHint": "Enkel de entiteiten die voor deze klant zijn toegestaan.",
+    "chooseEntity": "Kies een entiteit",
+    "confirm": "Entiteit wijzigen",
+    "defaultSuffix": "(klantstandaard)",
+    "deviates": "Deze entiteit wijkt af van de klantstandaard: een reden is verplicht en de wijziging wordt vastgelegd.",
+    "draftReleased": "{count} lijn(en) op een conceptfactuur van de oude entiteit worden losgekoppeld.",
+    "entityLabel": "Facturerende entiteit",
+    "failed": "De facturerende entiteit kon niet worden gewijzigd.",
+    "impactFailed": "De gevolgen konden niet worden berekend.",
+    "noDraftImpact": "Geen conceptfacturen worden geraakt.",
+    "noOverrideRight": "Je hebt geen rechten om af te wijken van de klantstandaard.",
+    "reasonLabel": "Reden",
+    "reasonRequired": "Een reden is verplicht bij een afwijkende entiteit.",
+    "title": "Facturerende entiteit wijzigen — {number}"
   }
 }

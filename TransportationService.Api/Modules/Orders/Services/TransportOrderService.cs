@@ -401,6 +401,134 @@ public class TransportOrderService : ITransportOrderService
         return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
     }
 
+    public async Task<OrderLegalEntityChangeImpactDto?> PreviewLegalEntityChangeAsync(
+        Guid id, Guid legalEntityId, CancellationToken cancellationToken)
+    {
+        var order = await TenantScoped().FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null)
+        {
+            return null;
+        }
+
+        var (impact, _) = await LoadLegalEntityChangeAsync(order, legalEntityId, cancellationToken);
+        return impact;
+    }
+
+    public async Task<TransportOrderOperationResult> ChangeLegalEntityAsync(
+        Guid id, ChangeOrderLegalEntityRequest request, CancellationToken cancellationToken)
+    {
+        var order = await TenantScoped()
+            .Include(o => o.Stops)
+            .FirstOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null)
+        {
+            return TransportOrderOperationResult.NotFound;
+        }
+
+        if (request.Version is { } expectedVersion && expectedVersion != order.Version)
+        {
+            return TransportOrderOperationResult.Conflict(await MapDetailAsync(order, cancellationToken));
+        }
+
+        if (request.LegalEntityId == order.LegalEntityId)
+        {
+            return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+        }
+
+        var (impact, draftLines) = await LoadLegalEntityChangeAsync(order, request.LegalEntityId, cancellationToken);
+        if (impact.BlockedReason is { } blocked)
+        {
+            return TransportOrderOperationResult.InvalidState(blocked);
+        }
+
+        var reason = string.IsNullOrWhiteSpace(request.Reason) ? null : request.Reason.Trim();
+        if (impact.DeviatesFromCustomerDefault)
+        {
+            if (impact.RequiresOverridePermission)
+            {
+                return TransportOrderOperationResult.Invalid(
+                    "Je hebt geen rechten om deze order naar een andere entiteit dan de klantstandaard te verplaatsen.");
+            }
+
+            if (reason is null)
+            {
+                return TransportOrderOperationResult.Invalid("Een reden is verplicht bij een afwijkende facturerende entiteit.");
+            }
+        }
+
+        var previousEntityId = order.LegalEntityId;
+        // Draft coherence: a concept invoice belongs to ONE entity, so lines of this order on a
+        // concept of the old entity are released (the sent-invoice case was refused above).
+        _dbContext.InvoiceLines.RemoveRange(draftLines);
+        order.LegalEntityId = request.LegalEntityId;
+        order.Version = Guid.NewGuid();
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await _auditService.RecordAsync(EntityType, order.Id.ToString(), "LegalEntityChanged",
+            new { LegalEntityId = previousEntityId },
+            new { order.LegalEntityId, Reason = reason, DraftInvoiceLinesReleased = draftLines.Count },
+            cancellationToken);
+
+        return TransportOrderOperationResult.Success(await MapDetailAsync(order, cancellationToken));
+    }
+
+    private async Task<(OrderLegalEntityChangeImpactDto Impact, List<Modules.Invoicing.Entities.InvoiceLine> DraftLines)>
+        LoadLegalEntityChangeAsync(TransportOrder order, Guid legalEntityId, CancellationToken cancellationToken)
+    {
+        var tenantId = _tenantContext.TenantId;
+        string? blocked = null;
+
+        if (order.Status is TransportOrderStatus.Cancelled or TransportOrderStatus.Invoiced)
+        {
+            blocked = "Een gefactureerde of geannuleerde opdracht kan niet van facturerende entiteit wijzigen.";
+        }
+        else if (!await _dbContext.LegalEntities.AnyAsync(
+                     e => e.TenantId == tenantId && e.Id == legalEntityId && e.IsActive, cancellationToken))
+        {
+            blocked = "De gekozen facturerende entiteit bestaat niet of is niet actief.";
+        }
+        else if (await _dbContext.InvoiceLines.AsNoTracking()
+                     .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id)
+                     .Join(_dbContext.Invoices.AsNoTracking().Where(i => i.TenantId == tenantId),
+                         line => line.InvoiceId, invoice => invoice.Id, (line, invoice) => invoice)
+                     .AnyAsync(i => i.Status != Modules.Invoicing.Entities.InvoiceStatus.Draft, cancellationToken))
+        {
+            blocked = "Deze opdracht staat op een verzonden of geboekte factuur; de entiteit kan niet meer wijzigen. "
+                      + "Corrigeer via een creditnota; de historische factuur blijft ongewijzigd.";
+        }
+        else if (await Modules.Partners.Services.CustomerEntityPolicy.ValidateAsync(
+                     _dbContext, tenantId, order.CustomerId, legalEntityId, cancellationToken) is { } policyError)
+        {
+            blocked = policyError;
+        }
+
+        var customerDefault = await _dbContext.Customers.AsNoTracking()
+            .Where(c => c.TenantId == tenantId && c.Id == order.CustomerId)
+            .Select(c => c.DefaultLegalEntityId)
+            .FirstOrDefaultAsync(cancellationToken);
+        var deviates = customerDefault is null || legalEntityId != customerDefault;
+
+        // Fail-closed: no wired authorization service means NO override rights.
+        var userId = _currentUser?.CurrentUserId;
+        var mayOverride = deviates
+            && _permissionService is not null
+            && userId is { } uid
+            && await _permissionService.UserHasPermissionAsync(uid, PermissionCodes.DossiersOverrideEntity, cancellationToken);
+
+        var draftInvoiceIds = await _dbContext.Invoices.AsNoTracking()
+            .Where(i => i.TenantId == tenantId && i.Status == Modules.Invoicing.Entities.InvoiceStatus.Draft
+                        && i.LegalEntityId != legalEntityId)
+            .Select(i => i.Id)
+            .ToListAsync(cancellationToken);
+        var draftLines = await _dbContext.InvoiceLines
+            .Where(l => l.TenantId == tenantId && l.TransportOrderId == order.Id && draftInvoiceIds.Contains(l.InvoiceId))
+            .ToListAsync(cancellationToken);
+
+        return (new OrderLegalEntityChangeImpactDto(
+            order.Id, order.LegalEntityId, legalEntityId, customerDefault,
+            deviates, deviates && !mayOverride, blocked, draftLines.Count), draftLines);
+    }
+
     public async Task<TransportOrderOperationResult> UpdateAsync(
         Guid id, UpdateTransportOrderRequest request, CancellationToken cancellationToken)
     {

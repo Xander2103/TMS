@@ -239,6 +239,29 @@ public record OrderServiceInput(
 /// <summary>Body for the dedicated cancel action; the reason is mandatory and audited.</summary>
 public record CancelTransportOrderRequest(string Reason);
 
+/// <summary>Sprint 6 (completion): explicit, audited change of the invoicing entity of ONE order.</summary>
+public record ChangeOrderLegalEntityRequest(
+    Guid LegalEntityId,
+    /// <summary>Mandatory when the target differs from the customer default (the audited override path).</summary>
+    string? Reason = null,
+    Guid? Version = null);
+
+/// <summary>What changing the order's invoicing entity would do; never writes.</summary>
+public record OrderLegalEntityChangeImpactDto(
+    Guid OrderId,
+    Guid? CurrentLegalEntityId,
+    Guid TargetLegalEntityId,
+    /// <summary>The customer's default entity, when configured.</summary>
+    Guid? CustomerDefaultLegalEntityId,
+    /// <summary>True when the target is not the customer default: needs the override right AND a reason.</summary>
+    bool DeviatesFromCustomerDefault,
+    /// <summary>True when the caller lacks the override right for a deviating target.</summary>
+    bool RequiresOverridePermission,
+    /// <summary>Refusal reason (sent invoice, policy violation, inactive entity); null = allowed.</summary>
+    string? BlockedReason,
+    /// <summary>Draft invoice lines of this order on a concept invoice of ANOTHER entity; released on apply.</summary>
+    int DraftInvoiceLinesReleased);
+
 /// <summary>Body for the controlled status-correction action; the reason is mandatory and audited.</summary>
 public record CorrectTransportOrderStatusRequest(TransportOrderStatus TargetStatus, string Reason);
 

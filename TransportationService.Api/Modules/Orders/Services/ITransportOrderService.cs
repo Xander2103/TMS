@@ -24,6 +24,17 @@ public interface ITransportOrderService
     /// <summary>Cancels the order with a mandatory reason. Allowed from every non-final status.</summary>
     Task<TransportOrderOperationResult> CancelAsync(Guid id, string reason, CancellationToken cancellationToken);
 
+    /// <summary>Sprint 6 (completion): preview of an invoicing-entity change; null when the order is unknown.</summary>
+    Task<OrderLegalEntityChangeImpactDto?> PreviewLegalEntityChangeAsync(Guid id, Guid legalEntityId, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sprint 6 (completion): moves the order to another invoicing entity. Inside the customer's
+    /// allowed set always; away from the customer default only with dossiers.override_entity AND
+    /// a reason (audited). Refused once the order sits on a sent/booked invoice; draft invoice
+    /// lines on a concept of another entity are released so no concept stays incoherent.
+    /// </summary>
+    Task<TransportOrderOperationResult> ChangeLegalEntityAsync(Guid id, ChangeOrderLegalEntityRequest request, CancellationToken cancellationToken);
+
     Task<TransportOrderOperationResult> CorrectStatusAsync(Guid id, TransportOrderStatus target, string reason, CancellationToken cancellationToken);
 
     /// <summary>All orders matching the filters (bounded), for CSV export.</summary>

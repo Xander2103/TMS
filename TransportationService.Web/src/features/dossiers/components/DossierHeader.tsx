@@ -6,6 +6,8 @@ import { Modal } from '../../../components/ui/Modal'
 import { ValidationSummary } from '../../../components/ui/ValidationSummary'
 import { describeApiError } from '../../../api/problemDetails'
 import { useLocale } from '../../../i18n/localeContext'
+import { useAuth } from '../../auth/authContextValue'
+import { getCustomer } from '../../customers/api/customersApi'
 import { getLegalEntityOptions } from '../../legal-entities/api/legalEntitiesApi'
 import type { LegalEntityOption } from '../../legal-entities/types'
 import { changeDossierLegalEntity } from '../api/dossiersApi'
@@ -36,6 +38,12 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
   const [entities, setEntities] = useState<LegalEntityOption[]>([])
   const [entityId, setEntityId] = useState('')
   const [entityReason, setEntityReason] = useState('')
+  // Sprint 6: the customer's allowed entities and default decide what is offered and whether
+  // the choice is the privileged override path (right + reason).
+  const [allowedIds, setAllowedIds] = useState<string[]>([])
+  const [customerDefaultId, setCustomerDefaultId] = useState<string | null>(null)
+  const { hasPermission } = useAuth()
+  const mayOverride = hasPermission('dossiers.override_entity')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const menuRef = useRef<HTMLDetailsElement>(null)
@@ -45,10 +53,24 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
 
   useEffect(() => {
     if (!entityDialog) return
-    getLegalEntityOptions()
-      .then((options) => setEntities(options.filter((o) => o.isActive)))
+    Promise.all([
+      getLegalEntityOptions(),
+      dossier.customerId ? getCustomer(dossier.customerId) : Promise.resolve(null),
+    ])
+      .then(([options, customer]) => {
+        setEntities(options.filter((o) => o.isActive))
+        setAllowedIds(customer?.allowedLegalEntityIds ?? [])
+        setCustomerDefaultId(customer?.defaultLegalEntityId ?? null)
+      })
       .catch(() => setEntities([]))
-  }, [entityDialog])
+  }, [entityDialog, dossier.customerId])
+
+  const visibleEntities = allowedIds.length > 0
+    ? entities.filter((e) => allowedIds.includes(e.id) || e.id === dossier.legalEntityId)
+    : entities
+  const entityDeviates = entityId !== '' && entityId !== dossier.legalEntityId
+    && (customerDefaultId === null || entityId !== customerDefaultId)
+  const lacksOverrideRight = entityDeviates && !mayOverride
 
   function openEntityDialog() {
     setEntityId(dossier.legalEntityId ?? '')
@@ -60,6 +82,10 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
   async function saveEntity() {
     if (!entityId) {
       setError(t('dossiers.header.entityRequired'))
+      return
+    }
+    if (entityDeviates && !entityReason.trim()) {
+      setError(t('dossiers.header.entityReasonRequired'))
       return
     }
     setBusy(true)
@@ -157,24 +183,34 @@ export function DossierHeader({ dossier, canManage, onAddActivity, menuActions, 
               <Button variant="secondary" onClick={() => setEntityDialog(false)} disabled={busy}>
                 {t('ui.actions.cancel')}
               </Button>
-              <Button onClick={() => void saveEntity()} disabled={busy || !entityId}>
+              <Button onClick={() => void saveEntity()} disabled={busy || !entityId || lacksOverrideRight}>
                 {t('dossiers.header.changeAction')}
               </Button>
             </>
           }
         >
           <ValidationSummary message={error} />
-          <FormField label={t('dossiers.header.entityField')} htmlFor="dh-entity" required hint={t('dossiers.header.entityFieldHint')}>
+          <FormField
+            label={t('dossiers.header.entityField')}
+            htmlFor="dh-entity"
+            required
+            hint={dossier.customerId ? t('dossiers.header.entityAllowedHint') : t('dossiers.header.entityFieldHint')}
+          >
             <select id="dh-entity" value={entityId} onChange={(event) => setEntityId(event.target.value)} disabled={busy}>
               <option value="">{t('dossiers.header.chooseEntity')}</option>
-              {entities.map((entity) => (
+              {visibleEntities.map((entity) => (
                 <option key={entity.id} value={entity.id}>
                   {entity.displayName}
-                  {entity.isDefault ? ` ${t('dossiers.header.defaultSuffix')}` : ''}
+                  {(customerDefaultId ? entity.id === customerDefaultId : entity.isDefault) ? ` ${t('dossiers.header.defaultSuffix')}` : ''}
                 </option>
               ))}
             </select>
           </FormField>
+          {entityDeviates && (
+            <p className={lacksOverrideRight ? 'customer-import-message customer-import-message-error' : 'customer-form-muted'} role={lacksOverrideRight ? 'alert' : undefined}>
+              {lacksOverrideRight ? t('dossiers.header.entityNoOverride') : t('dossiers.header.entityDeviates')}
+            </p>
+          )}
           <FormField
             label={t('dossiers.header.reason')}
             htmlFor="dh-entity-reason"

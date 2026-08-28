@@ -283,5 +283,26 @@
     "attachmentsTitle": "Bijlagen",
     "loading": "Factuur laden...",
     "loadError": "De factuur kon niet worden geladen."
+  },
+  "fiscal": {
+    "draftNote": "Voorbeeld — wordt vastgelegd bij verzenden.",
+    "frozenNote": "Vastgelegd bij verzenden.",
+    "language": "Factuurtaal",
+    "languages": {
+      "de": "Duits",
+      "en": "Engels",
+      "fr": "Frans",
+      "nl": "Nederlands"
+    },
+    "legalText": "Wettelijke vermelding",
+    "lineException": "Afwijkend: {treatment} via {source}",
+    "source": {
+      "Customer": "klant",
+      "LineOverride": "lijnoverride",
+      "SalesCode": "verkoopcode",
+      "TenantDefault": "bedrijfsstandaard"
+    },
+    "sourceLabel": "bron",
+    "treatment": "Btw-behandeling"
   }
 }

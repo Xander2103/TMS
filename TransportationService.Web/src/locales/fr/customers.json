@@ -855,5 +855,23 @@
     "beStructure": "Le numéro de TVA belge doit se composer de BE + 10 chiffres (p. ex. BE0123456749).",
     "genericFormat": "Le numéro de TVA a un format invalide.",
     "peppolFormat": "Identifiant Peppol invalide. Utilisez « schéma:numéro », p. ex. 0208:0123456789."
+  },
+  "fiscalWarnings": {
+    "domestic-vat-foreign-customer": "Ce client est établi en {country} mais est facturé avec la TVA nationale. Vérifiez que c’est correct.",
+    "intra-community-same-country": "Livraison intracommunautaire avec un client situé dans le même pays que l’entité facturante.",
+    "intro": "Ces avertissements ne modifient pas le régime TVA ; ils signalent un paramètre qui mérite un contrôle.",
+    "loadFailed": "Les points d’attention n’ont pas pu être chargés.",
+    "none": "Aucun point d’attention.",
+    "title": "À vérifier",
+    "vat-number-missing": "Le régime TVA choisi exige un numéro de TVA. Sans numéro, aucune facture ne peut être envoyée."
+  },
+  "picker": {
+    "blocked": "bloqué",
+    "current": "actuel",
+    "loadFailed": "Les clients n’ont pas pu être chargés.",
+    "noResults": "Aucun client trouvé.",
+    "placeholder": "Rechercher par nom ou numéro de client…",
+    "searching": "Recherche…",
+    "typeToSearch": "Tapez pour rechercher."
   }
 }

@@ -855,5 +855,23 @@
     "beStructure": "Belgisch BTW-nummer moet uit BE + 10 cijfers bestaan (bv. BE0123456749).",
     "genericFormat": "BTW-nummer heeft een ongeldig formaat.",
     "peppolFormat": "Ongeldig Peppol-ID. Gebruik \"schema:nummer\", bv. 0208:0123456789."
+  },
+  "fiscalWarnings": {
+    "domestic-vat-foreign-customer": "Deze klant staat in {country} maar wordt met binnenlandse btw gefactureerd. Controleer of dat klopt.",
+    "intra-community-same-country": "Intracommunautaire levering met een klant in hetzelfde land als de facturerende entiteit.",
+    "intro": "Deze meldingen wijzigen niets aan de btw-behandeling; ze wijzen op een instelling die het nazien waard is.",
+    "loadFailed": "Aandachtspunten konden niet worden geladen.",
+    "none": "Geen aandachtspunten.",
+    "title": "Ter controle",
+    "vat-number-missing": "De gekozen btw-behandeling vereist een btw-nummer. Zonder nummer kan een factuur niet worden verzonden."
+  },
+  "picker": {
+    "blocked": "geblokkeerd",
+    "current": "huidig",
+    "loadFailed": "Klanten konden niet worden geladen.",
+    "noResults": "Geen klanten gevonden.",
+    "placeholder": "Zoek op naam of klantnummer…",
+    "searching": "Zoeken…",
+    "typeToSearch": "Typ om te zoeken."
   }
 }

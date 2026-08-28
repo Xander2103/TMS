@@ -23,6 +23,8 @@ import {
   type SalesCategory,
   type SalesCategorySystemRole,
 } from '../api/accountingApi'
+import { SalesCategoryLedgerMappingEditor } from '../components/SalesCategoryLedgerMappingEditor'
+import type { SalesCategoryLedgerMapping } from '../api/accountingApi'
 import './accounting.css'
 
 interface AccountDraft {
@@ -50,6 +52,8 @@ interface CategoryDraft {
   includeInDieselBase: boolean
   vatTreatmentOverride: string
   costCentre: string
+  /** Sprint 5: per-entity ledger account/cost centre overrides (edited in the dialog). */
+  ledgerMappings: SalesCategoryLedgerMapping[]
 }
 
 /**
@@ -164,8 +168,9 @@ export function AccountingSettingsPage() {
         includeInDieselBase: categoryDraft.includeInDieselBase,
         vatTreatmentOverride: categoryDraft.vatTreatmentOverride || null,
         costCentre: categoryDraft.costCentre.trim() || null,
-        // Untouched here: the per-entity ledger overrides keep whatever is configured.
-        ledgerMappings: categoryDraft.category?.ledgerMappings ?? null,
+        // Sprint 5: the per-entity ledger overrides as edited in the dialog (rows without an
+        // account are already dropped by the editor = "use the default account").
+        ledgerMappings: categoryDraft.ledgerMappings,
       }
       if (categoryDraft.category) {
         await updateSalesCategory(categoryDraft.category.id, input)
@@ -205,6 +210,7 @@ export function AccountingSettingsPage() {
                 invoiceDescriptionNl: '', defaultUnitCode: '', vatCategoryOverride: '',
                 invoiceDescriptionFr: '', invoiceDescriptionEn: '', invoiceDescriptionDe: '',
                 includeInDieselBase: false, vatTreatmentOverride: '', costCentre: '',
+                ledgerMappings: [],
               })
             }}>
               {t('accounting.categories.add')}
@@ -287,6 +293,7 @@ export function AccountingSettingsPage() {
                           costCentre: category.costCentre ?? '',
                           defaultUnitCode: category.defaultUnitCode ?? '',
                           vatCategoryOverride: category.vatCategoryOverride ?? '',
+                          ledgerMappings: category.ledgerMappings ?? [],
                         })
                       }}
                     >
@@ -517,6 +524,12 @@ export function AccountingSettingsPage() {
                 <option value="G">{t('accounting.vatCategory.G')}</option>
               </select>
             </FormField>
+            <SalesCategoryLedgerMappingEditor
+              accounts={accounts ?? []}
+              value={categoryDraft.ledgerMappings}
+              onChange={(ledgerMappings) => setCategoryDraft((d) => (d ? { ...d, ledgerMappings } : d))}
+              disabled={busy}
+            />
             <label className="tof-checkbox">
               <input type="checkbox" checked={categoryDraft.isActive}
                 onChange={(e) => setCategoryDraft((d) => (d ? { ...d, isActive: e.target.checked } : d))} />

@@ -76,26 +76,30 @@
     }
   },
   "header": {
-    "title": "Dossier {number}",
-    "noCustomer": "Aucun client",
-    "reference": "réf. {reference}",
-    "entity": "Entité : {name}",
-    "changeEntityAria": "Modifier l'entité",
-    "change": "modifier",
-    "operational": "Opérationnel :",
-    "price": "Prix :",
     "addActivity": "+ Activité",
-    "more": "Plus ▾",
-    "entityDialogTitle": "Modifier l'entité de facturation",
-    "entityRequired": "Choisissez une entité.",
-    "entityChangeFailed": "L'entité n'a pas pu être modifiée.",
-    "entityField": "Entité",
-    "entityFieldHint": "La modification est journalisée (ancien → nouveau).",
+    "change": "modifier",
+    "changeAction": "Modifier",
+    "changeEntityAria": "Modifier l'entité",
     "chooseEntity": "— Choisissez une entité —",
     "defaultSuffix": "(par défaut)",
+    "entity": "Entité : {name}",
+    "entityAllowedHint": "Uniquement les entités autorisées pour ce client.",
+    "entityChangeFailed": "L'entité n'a pas pu être modifiée.",
+    "entityDeviates": "Cette entité diffère du défaut du client : un motif est obligatoire et la modification est enregistrée.",
+    "entityDialogTitle": "Modifier l'entité de facturation",
+    "entityField": "Entité",
+    "entityFieldHint": "La modification est journalisée (ancien → nouveau).",
+    "entityNoOverride": "Vous n’avez pas le droit de déroger au défaut du client.",
+    "entityReasonRequired": "Un motif est obligatoire pour une entité dérogatoire.",
+    "entityRequired": "Choisissez une entité.",
+    "more": "Plus ▾",
+    "noCustomer": "Aucun client",
+    "operational": "Opérationnel :",
+    "price": "Prix :",
     "reason": "Motif",
     "reasonHint": "Obligatoire pour une entité autre que celle par défaut du client (nécessite le droit « remplacer l'entité » ; le motif est journalisé).",
-    "changeAction": "Modifier"
+    "reference": "réf. {reference}",
+    "title": "Dossier {number}"
   },
   "drawer": {
     "durationInvalid": "La durée doit être un nombre supérieur ou égal à 0.",
@@ -316,5 +320,16 @@
     "box": "Colis / boîte",
     "ship": "Navire (conteneur)",
     "snowflake": "Transport frigorifique"
+  },
+  "customerChange": {
+    "action": "Modifier le client",
+    "changed": "Client du dossier modifié.",
+    "entity": "L’entité facturante du dossier devient : {name}",
+    "failed": "Le client du dossier n’a pas pu être modifié.",
+    "leftAlone": "Restent sur leur propre client : {orders}",
+    "lockedHint": "Le client de ce dossier se modifie via « Modifier le client » ; les prix, l’entité et les commandes liées sont alors réévalués.",
+    "noOrders": "Aucune commande liée ; seul le dossier change.",
+    "ordersTitle": "Commandes liées qui suivent ({count})",
+    "title": "Modifier le client du dossier — {number}"
   }
 }

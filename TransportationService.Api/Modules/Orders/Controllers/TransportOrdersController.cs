@@ -232,6 +232,25 @@ public class TransportOrdersController : ControllerBase
         return Handle(result, created: false);
     }
 
+    /// <summary>Sprint 6 (completion): what moving this order to another invoicing entity would do.</summary>
+    [HttpGet("{id:guid}/legal-entity/impact")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<OrderLegalEntityChangeImpactDto>> LegalEntityChangeImpact(
+        Guid id, [FromQuery] Guid legalEntityId, CancellationToken cancellationToken)
+    {
+        var impact = await _service.PreviewLegalEntityChangeAsync(id, legalEntityId, cancellationToken);
+        return impact is null ? NotFound() : Ok(impact);
+    }
+
+    [HttpPut("{id:guid}/legal-entity")]
+    [RequirePermission(PermissionCodes.OrdersEdit, PermissionCodes.OrdersManage)]
+    public async Task<ActionResult<TransportOrderDetailDto>> ChangeLegalEntity(
+        Guid id, ChangeOrderLegalEntityRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _service.ChangeLegalEntityAsync(id, request, cancellationToken);
+        return Handle(result, created: false);
+    }
+
     [HttpGet("{id:guid}/timeline")]
     [RequirePermission(PermissionCodes.OrdersView, PermissionCodes.OrdersManage)]
     public async Task<ActionResult<IReadOnlyList<OrderTimelineEventDto>>> Timeline(Guid id, CancellationToken cancellationToken)

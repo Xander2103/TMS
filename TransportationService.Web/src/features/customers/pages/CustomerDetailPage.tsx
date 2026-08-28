@@ -28,6 +28,7 @@ import { CustomerBillingPanel } from '../components/CustomerBillingPanel'
 import { CustomerPriceAdjustmentsPanel } from '../components/CustomerPriceAdjustmentsPanel'
 import { CustomerUnitPricingPanel } from '../components/CustomerUnitPricingPanel'
 import { CustomerUnitsPanel } from '../components/CustomerUnitsPanel'
+import { CustomerFiscalWarnings } from '../components/CustomerFiscalWarnings'
 import { CombinedDiscountsPanel } from '../../tarification/components/CombinedDiscountsPanel'
 import { useCustomer } from '../hooks/useCustomer'
 import { useCustomerMutations } from '../hooks/useCustomerMutations'
@@ -420,6 +421,11 @@ export function CustomerDetailPage() {
                   </>
                 )}
               </dl>
+              <CustomerFiscalWarnings
+                customerId={customer.id}
+                countryCode={customer.vatCountryCode ?? customer.countryCode}
+                refreshKey={`${customer.vatTreatment}|${customer.vatNumber ?? ''}|${customer.countryCode ?? ''}|${customer.vatCountryCode ?? ''}|${customer.defaultLegalEntityId ?? ''}`}
+              />
             </div>
               </div>
               {canViewOrders && id && <CustomerDayDocumentsCard customerId={id} />}

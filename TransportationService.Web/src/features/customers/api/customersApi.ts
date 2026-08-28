@@ -154,3 +154,13 @@ export function updateCustomerContact(
 export function removeCustomerContact(customerId: string, contactId: string): Promise<void> {
   return apiClient.deleteRequest(`/api/customers/${customerId}/contacts/${contactId}`)
 }
+
+/** Mirrors FiscalWarning (GET /api/customers/{id}/fiscal-warnings): advisory only, never changes the treatment. */
+export interface CustomerFiscalWarning {
+  code: string
+  message: string
+}
+
+export function getCustomerFiscalWarnings(id: string): Promise<CustomerFiscalWarning[]> {
+  return apiClient.getJson<CustomerFiscalWarning[]>(`/api/customers/${id}/fiscal-warnings`)
+}

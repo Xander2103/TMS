@@ -37,6 +37,8 @@ function customer(): CustomerDetail {
 vi.mock('../../api/customersApi', () => ({
   getCustomer: () => Promise.resolve(customer()),
   changeCustomerNumber: vi.fn(),
+  // Sprint 5: the Fiscaal & Peppol card asks for advisory warnings; none here.
+  getCustomerFiscalWarnings: () => Promise.resolve([]),
 }))
 
 const unreadCount = vi.hoisted(() => ({ value: 3 }))

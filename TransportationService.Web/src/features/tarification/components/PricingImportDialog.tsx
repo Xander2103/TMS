@@ -19,6 +19,7 @@ import {
   type PricingImportPreview,
   type PricingImportRuleChange,
 } from '../api/pricingImportApi'
+import { PricingImportProfilePanel } from './PricingImportProfilePanel'
 import './pricingImportDialog.css'
 
 interface PricingImportDialogProps {
@@ -72,6 +73,19 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
   const [profiles, setProfiles] = useState<PricingImportProfile[]>([])
   const [profileId, setProfileId] = useState<string>('')
   const [history, setHistory] = useState<PricingImportRun[]>([])
+  // Sprint 4 (completion): the mapping profile is managed here, where it is used.
+  const [profilePanelOpen, setProfilePanelOpen] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  function reloadProfiles(select: PricingImportProfile | null) {
+    void listPricingImportProfiles()
+      .then((data) => {
+        setProfiles(data.filter((profile) => profile.isActive))
+        setProfileId(select?.id ?? '')
+        setPreview(null)
+      })
+      .catch(() => undefined)
+  }
 
   useEffect(() => {
     void listPricingImportProfiles()
@@ -204,6 +218,20 @@ export function PricingImportDialog({ agreementId, agreementName, onClose, onImp
             ))}
           </select>
         </FormField>
+        <button type="button" className="customer-import-template-link" onClick={() => setProfilePanelOpen((open) => !open)} disabled={busy}>
+          {profilePanelOpen ? t('tarification.importProfiles.hide') : t('tarification.importProfiles.manage')}
+        </button>
+        {notice && <p className="customer-form-muted" role="status">{notice}</p>}
+        {profilePanelOpen && (
+          <PricingImportProfilePanel
+            key={profileId || 'new'}
+            file={file}
+            profile={profiles.find((p) => p.id === profileId) ?? null}
+            onProfilesChanged={reloadProfiles}
+            onMessage={setNotice}
+            disabled={busy}
+          />
+        )}
 
         <fieldset className="pricing-import-mode">
           <label className="tof-checkbox">

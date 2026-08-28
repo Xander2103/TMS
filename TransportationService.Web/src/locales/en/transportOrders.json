@@ -676,5 +676,61 @@
     "loadInstr": "Loading instructions",
     "unloadInstr": "Unloading instructions",
     "saving": "Saving…"
+  },
+  "commercial": {
+    "change": "Change",
+    "changeCustomerAria": "Change the customer of this order",
+    "changeEntityAria": "Change the invoicing entity of this order",
+    "changedCustomer": "Customer changed to {name}.",
+    "changedEntity": "Invoicing entity changed.",
+    "customerDefault": "Customer default",
+    "customerLabel": "Customer",
+    "entityLabel": "Invoicing entity",
+    "placeholderCustomer": "Temporary customer",
+    "placeholderHint": "This order sits on a temporary customer. Link the real customer as soon as it is known."
+  },
+  "customerChange": {
+    "blocked": "This change is not possible",
+    "confirm": "Change customer",
+    "currentCustomer": "Current customer",
+    "failed": "The customer could not be changed.",
+    "impact": {
+      "adjustedReview": "{count} adjusted line(s) are kept, flagged 'to review'.",
+      "autoInvalidated": "{count} automatic price line(s) of the old customer are invalidated.",
+      "draftReleased": "{count} line(s) on a draft invoice are released.",
+      "entityChanges": "The invoicing entity changes to the new customer’s default.",
+      "entitySame": "The invoicing entity stays the same.",
+      "kept": "Unchanged: {stops} stop(s), {goods} goods line(s), {documents} document(s).",
+      "language": "Invoice language: {language}",
+      "manualKept": "{count} manual line(s) are kept and stay visibly manual.",
+      "needsReview": "The price goes into pricing review: no usable tariff for the new customer, or adjusted lines.",
+      "priceRecalc": "The price is recalculated with the new customer’s tariff.",
+      "vatTreatment": "VAT treatment: {treatment}"
+    },
+    "impactFailed": "The consequences could not be calculated.",
+    "impactLoading": "Calculating consequences…",
+    "impactTitle": "Consequences",
+    "newCustomer": "New customer",
+    "openDossier": "Open dossier {number}",
+    "reasonHint": "Recorded in the order history.",
+    "reasonLabel": "Reason",
+    "reasonRequired": "Enter a reason.",
+    "title": "Change customer — {number}"
+  },
+  "entityChange": {
+    "allowedHint": "Only the entities allowed for this customer.",
+    "chooseEntity": "Choose an entity",
+    "confirm": "Change entity",
+    "defaultSuffix": "(customer default)",
+    "deviates": "This entity deviates from the customer default: a reason is required and the change is recorded.",
+    "draftReleased": "{count} line(s) on a draft invoice of the old entity are released.",
+    "entityLabel": "Invoicing entity",
+    "failed": "The invoicing entity could not be changed.",
+    "impactFailed": "The consequences could not be calculated.",
+    "noDraftImpact": "No draft invoices are affected.",
+    "noOverrideRight": "You are not allowed to deviate from the customer default.",
+    "reasonLabel": "Reason",
+    "reasonRequired": "A reason is required for a deviating entity.",
+    "title": "Change invoicing entity — {number}"
   }
 }
